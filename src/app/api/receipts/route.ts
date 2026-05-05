@@ -15,17 +15,10 @@ import { sendReceiptChannels } from "@/workers/receiptSender";
 import { getSiteUrl, notifyInternalPodAlerts, notifyInternalReceipt } from "@/lib/receiptInternalNotifications";
 import { randomUUID } from "crypto";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
-import { getPosProfitReceiptIdsForAdminFilters } from "@/lib/adminReceiptsSummary";
-
-type ProfitReceiptContributor = {
-  source: "pos" | "marketing" | "support";
-  id?: string;
-  key: string;
-  receiptNumber?: string | null;
-  sellingTotal: number;
-  buyingTotal: number;
-  profit: number | null;
-};
+import {
+  getProfitReceiptContributorsForAdminFilters,
+  type ProfitReceiptContributor,
+} from "@/lib/adminReceiptsSummary";
 
 const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" | null => {
   if (typeof value !== "string") return null;
@@ -41,31 +34,45 @@ const IMMEDIATE_THRESHOLD = Number(process.env.IMMEDIATE_COMMISSION_THRESHOLD ||
 
 export async function GET(req: NextRequest) {
   try {
-    await auth(); // soft guard: require session but allow attendants/supervisors/admins
-  } catch (e) {
-    // allow unauthenticated fetch to still fall through if middleware handled already
-  }
+    try {
+      await auth(); // soft guard: require session but allow attendants/supervisors/admins
+    } catch (e) {
+      // allow unauthenticated fetch to still fall through if middleware handled already
+    }
 
-  const url = new URL(req.url);
-  const q = url.searchParams.get("q") || undefined;
+    const url = new URL(req.url);
+    const q = url.searchParams.get("q") || undefined;
   const phoneParam = url.searchParams.get("phone") || undefined;
   const docTypeParam = url.searchParams.get("docType") || undefined;
-  const requestedAttendantId = url.searchParams.get("attendantId") || undefined;
+  const includeLedgerParam = url.searchParams.get("includeLedger");
+  const includeLedger = includeLedgerParam === null ? true : includeLedgerParam !== "false";
+  const paidOnly = ["1", "true", "yes"].includes((url.searchParams.get("paidOnly") || "").toLowerCase());
   const start = url.searchParams.get("start");
   const end = url.searchParams.get("end");
-  const issuerOnly = url.searchParams.get("issuerOnly") === "true";
   const paymentMethodParam = normalizePaymentMethod(url.searchParams.get("paymentMethod"));
   const includeItems = url.searchParams.get("includeItems") === "true";
+  const attendantFilterParam = (url.searchParams.get("attendantId") || "").trim() || undefined;
   const onlyPos = ["1", "true", "yes"].includes((url.searchParams.get("onlyPos") || "").toLowerCase());
-  const summaryView = (url.searchParams.get("summaryView") || "").toLowerCase();
+  const summaryView = (url.searchParams.get("summaryView") || "all").toLowerCase();
+  const isProfitSummaryView = summaryView === "profit";
   const page = Math.max(1, Number(url.searchParams.get("page") || "1"));
   const size = Math.min(200, Math.max(1, Number(url.searchParams.get("size") || "50")));
-  const customerType = url.searchParams.get("customerType") || undefined;
-  const podStatus = url.searchParams.get("status") || undefined; // expected values: 'pending'|'delivered'|'delivery_failed'
   const identity = await resolveTargetUserId(req);
   const meta = identity;
-  const resolvedUserId = identity.resolvedUserId;
-  if (!resolvedUserId) {
+  // Allow public callers to specify an attendantId via querystring so
+  // the receipts listing can be viewed without a session (public page).
+  // Prefer resolved session user id when present, otherwise use explicit param.
+  const explicitAttendant = attendantFilterParam;
+  let attendantId = identity.resolvedUserId ?? undefined;
+  const role = identity.actorRole;
+  const canGlobal = role === "ADMIN" || role === "SUPERVISOR";
+  if (explicitAttendant && attendantId && explicitAttendant !== attendantId && !canGlobal) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if ((!attendantId || canGlobal) && explicitAttendant) {
+    attendantId = explicitAttendant;
+  }
+  if (!attendantId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -80,12 +87,12 @@ export async function GET(req: NextRequest) {
   const normalizedDocType = docTypeParam ? docTypeParam.toUpperCase() : undefined;
   const isMarketingDocType = normalizedDocType === "MARKETING";
   const isSupportDocType = normalizedDocType === "SUPPORT";
-  const includePosReceipts = onlyPos ? true : !normalizedDocType || (!isMarketingDocType && !isSupportDocType);
-  const includeMarketingReceipts = !onlyPos && (!normalizedDocType || isMarketingDocType);
-  const includeSupportReceipts = !onlyPos && (!normalizedDocType || isSupportDocType);
+  const includePosReceipts = !normalizedDocType || (!isMarketingDocType && !isSupportDocType);
+  const includeMarketingReceipts = !onlyPos && (isMarketingDocType || (includeLedger && !normalizedDocType));
+  const includeSupportReceipts = !onlyPos && (isSupportDocType || (includeLedger && !normalizedDocType));
+  let profitContributors: ProfitReceiptContributor[] = [];
   const profitContributorBySourceId = new Map<string, ProfitReceiptContributor>();
   const profitContributorBySourceKey = new Map<string, ProfitReceiptContributor>();
-  let profitContributors: ProfitReceiptContributor[] = [];
 
   const registerProfitContributor = (contributor: ProfitReceiptContributor) => {
     if (contributor.id) {
@@ -121,25 +128,6 @@ export async function GET(req: NextRequest) {
       if (contributor) return contributor;
     }
     return null;
-  };
-
-  const collectReceiptVariants = (...values: Array<string | null | undefined>) =>
-    Array.from(
-      new Set(
-        values.flatMap((value) => {
-          const raw = typeof value === "string" ? value.trim() : "";
-          const canonical = canonicalReceiptNumber(raw);
-          return [raw, canonical].filter((entry): entry is string => Boolean(entry));
-        }),
-      ),
-    );
-
-  const extractReceiptKeyTailVariants = (value?: string | null) => {
-    if (!value) return [] as string[];
-    const raw = String(value).trim();
-    if (!raw) return [] as string[];
-    const tail = raw.includes(":") ? raw.split(":").pop() : raw;
-    return collectReceiptVariants(raw, tail ?? undefined);
   };
 
   const and: Prisma.ReceiptWhereInput[] = [];
@@ -179,34 +167,34 @@ export async function GET(req: NextRequest) {
   if (searchOr.length) and.push({ OR: searchOr });
 
   // Scope decision (strict)
-  const role = identity.actorRole;
   const isImpersonating = Boolean(identity.impersonateId && identity.resolvedUserId && identity.actorId && identity.resolvedUserId !== identity.actorId);
   const requestedScope = url.searchParams.get("scope"); // "mine" | "global"
   const wantsGlobal = requestedScope === "global";
-  const canGlobal = role === "ADMIN" || role === "SUPERVISOR";
-  const specialGlobalViewer = identity.actorEmail === "jeniffer@betech.co.ke";
-  const allowGlobalScope =
-    specialGlobalViewer || (wantsGlobal && canGlobal);
+  const allowGlobalScope = canGlobal && (wantsGlobal || Boolean(attendantFilterParam && attendantFilterParam !== identity.resolvedUserId));
   // Rules: impersonating forces mine; otherwise admins/supervisors (or the special viewer) may request global explicitly (or automatically)
   const scope = isImpersonating ? "mine" : allowGlobalScope ? "global" : "mine";
   const metaWithScope = { ...meta, scope };
 
   if (scope === "mine") {
-    const ownerOr: Prisma.ReceiptWhereInput[] = [];
-    ownerOr.push(
-      { issuedById: resolvedUserId },
-      { order: { attendantId: resolvedUserId } },
-      { data: { path: ["attendantId"], equals: resolvedUserId } },
-    );
-    // If issuerOnly requested, restrict to issuedById only
-    if (issuerOnly) {
-      and.push({ issuedById: resolvedUserId });
-    } else {
-      and.push({ OR: ownerOr });
-    }
+    and.push({
+      OR: [
+        { order: { attendantId } },
+        { data: { path: ["attendantId"], equals: attendantId } },
+      ],
+    });
+  }
+  if (scope === "global" && attendantFilterParam) {
+    and.push({
+      OR: [
+        { order: { attendantId: attendantFilterParam } },
+        { data: { path: ["attendantId"], equals: attendantFilterParam } as any },
+      ],
+    });
   }
 
   // Optional filter: customerType=pod to show POD receipts only, with optional status filter
+  const customerType = url.searchParams.get('customerType') || undefined;
+  const podStatus = url.searchParams.get('status') || undefined; // expected values: 'pending'|'delivered'|'delivery_failed'
     if (customerType === 'pod') {
     if (podStatus) {
       and.push({ data: { path: ['podDelivery', 'status'], equals: podStatus } });
@@ -223,86 +211,32 @@ export async function GET(req: NextRequest) {
     // the earlier branch above will apply the appropriate filter.
   }
 
-  if (summaryView === "profit") {
-    const helperReceiptIds = await getPosProfitReceiptIdsForAdminFilters({
-      start: startDate,
-      end: endDate,
-      attendantId: scope === "mine" ? undefined : requestedAttendantId,
-      paymentMethod: paymentMethodParam,
-      search: q,
-      docType: normalizedDocType,
-      scope: scope as "mine" | "global",
-      currentUserId: scope === "mine" ? resolvedUserId : null,
-      customerType,
-      podStatus,
-      onlyPos,
-    });
+  if (isProfitSummaryView) {
+    try {
+      const summaryOptions = {
+        start: startDate,
+        end: endDate,
+        attendantId,
+        paymentMethod: paymentMethodParam,
+        search: q,
+        docType: normalizedDocType,
+        includeLedger: true,
+        scope,
+        currentUserId: identity.resolvedUserId ?? null,
+        customerType,
+        podStatus,
+        onlyPos,
+      } as const;
 
-    const supportPricingWhere: any = {
-      items: { some: { pricedAt: { gte: startDate, lte: endDate } } },
-    };
-    if (scope === "mine" && resolvedUserId) {
-      supportPricingWhere.dailyEntry = { submittedById: resolvedUserId };
-    } else if (scope === "global" && requestedAttendantId) {
-      supportPricingWhere.dailyEntry = { submittedById: requestedAttendantId };
-    }
-    if (q) supportPricingWhere.OR = [
-      { receiptNumber: { contains: q, mode: "insensitive" } },
-      { receiptKey: { contains: q, mode: "insensitive" } },
-    ];
+      profitContributors = await getProfitReceiptContributorsForAdminFilters(summaryOptions);
 
-    const latePricedSupportReceipts = await prisma.supportReceipt.findMany({
-      where: supportPricingWhere,
-      select: {
-        receiptNumber: true,
-        receiptKey: true,
-      },
-    });
-
-    const lateReceiptNumbers = Array.from(
-      new Set(
-        latePricedSupportReceipts.flatMap((row) => [
-          ...collectReceiptVariants(row.receiptNumber ?? undefined),
-          ...extractReceiptKeyTailVariants(row.receiptKey),
-        ]),
-      ),
-    );
-
-    const latePosIds =
-      lateReceiptNumbers.length > 0
-        ? await prisma.receipt.findMany({
-            where: {
-              AND: [
-                ...and.filter((clause) => !("generatedAt" in clause)),
-                {
-                  OR: [
-                    { order: { orderNumber: { in: lateReceiptNumbers } } },
-                    { receiptNumber: { in: lateReceiptNumbers } },
-                  ],
-                },
-              ],
-            },
-            select: { id: true },
-          })
-        : [];
-
-    const receiptIds = Array.from(
-      new Set([
-        ...helperReceiptIds,
-        ...latePosIds.map((receipt) => receipt.id),
-      ].filter(Boolean)),
-    );
-
-    profitContributors = receiptIds.map((id) => ({
-      source: "pos" as const,
-      id,
-      key: id,
-      sellingTotal: 0,
-      buyingTotal: 0,
-      profit: null,
-    }));
-    for (const contributor of profitContributors) {
-      registerProfitContributor(contributor);
+      for (const contributor of profitContributors) {
+        registerProfitContributor(contributor);
+      }
+    } catch (err: any) {
+      // eslint-disable-next-line no-console
+      console.warn("/api/receipts: failed to compute profit contributors:", err?.message ?? err);
+      profitContributors = [];
     }
   }
 
@@ -393,21 +327,17 @@ export async function GET(req: NextRequest) {
         } else {
           posReceipts = [];
         }
-
-        const effectiveWhere =
-          receiptIds && receiptIds.length > 0
-            ? {
-                AND: [
-                  ...and.filter((clause) => !("generatedAt" in clause)),
-                  { id: { in: receiptIds } },
-                ],
-              }
-            : where;
-
-        return prisma.receipt.findMany({
-          where: effectiveWhere,
+      } catch (err: any) {
+        // eslint-disable-next-line no-console
+        console.warn("/api/receipts: failed to query profit receipts:", err?.message ?? err);
+        posReceipts = [];
+      }
+    } else {
+      try {
+        posReceipts = await prisma.receipt.findMany({
+          where,
           include: {
-            order: includeItems || summaryView === "profit"
+            order: includeItems || isProfitSummaryView
               ? {
                   include: {
                     items: {
@@ -428,6 +358,7 @@ export async function GET(req: NextRequest) {
                   select: {
                     orderNumber: true,
                     customerName: true,
+                    attendantId: true,
                     attendant: { select: { id: true, name: true } },
                     status: true,
                     paymentStatus: true,
@@ -438,36 +369,101 @@ export async function GET(req: NextRequest) {
           },
           orderBy: { generatedAt: "desc" },
         });
-      })()
-    : [];
+      } catch (err: any) {
+        const msg = String(err?.message ?? err);
+        // eslint-disable-next-line no-console
+        console.warn("/api/receipts: failed to query receipts table:", msg);
+        if (msg.includes("does not exist")) {
+          posReceipts = [];
+        } else {
+          throw err;
+        }
+      }
+    }
+  }
+
+  const isPodPaidReceipt = (row: any) => Boolean((row?.data as any)?.podDelivery?.paidAt);
+  const podStatusOf = (row: any) => ((row?.data as any)?.podDelivery?.status ?? "").toString().toLowerCase();
+  const isPodReceipt = (row: any) => Boolean((row?.data as any)?.podDelivery);
+  const isPosPaidReceipt = (row: any) =>
+    ((row?.order?.paymentStatus ?? "").toString().toUpperCase().trim() === "PAID");
+  const isPodSettledForSales = (row: any) => {
+    if (!isPodReceipt(row)) return false;
+    if (podStatusOf(row) === "pending") return false;
+    return isPodPaidReceipt(row) || isPosPaidReceipt(row);
+  };
+  const issuerLockedPosReceipts =
+    onlyPos && attendantFilterParam
+      ? posReceipts.filter((row: any) => {
+          const dataAttendantId =
+            row?.data && typeof row.data === "object" ? String((row.data as any).attendantId ?? "").trim() : "";
+          return row?.order?.attendantId === attendantFilterParam || dataAttendantId === attendantFilterParam;
+        })
+      : posReceipts;
+  const filteredPosReceipts = paidOnly
+    ? issuerLockedPosReceipts.filter((row: any) => {
+        if (isPodReceipt(row)) {
+          return isPodSettledForSales(row);
+        }
+        return isPosPaidReceipt(row);
+      })
+    : issuerLockedPosReceipts;
 
   const canonicalPosReceiptNumbers = Array.from(
     new Set(
-      posReceipts.flatMap((row: any) => {
-        const orderNumber = canonicalReceiptNumber((row?.order as any)?.orderNumber ?? "");
-        const receiptNumber = canonicalReceiptNumber(row?.receiptNumber ?? "");
-        return [orderNumber, receiptNumber].filter((value): value is string => Boolean(value));
-      }),
+      filteredPosReceipts
+        .flatMap((row: any) => {
+          const orderNumber = canonicalReceiptNumber((row?.order as any)?.orderNumber ?? "");
+          const receiptNumber = canonicalReceiptNumber(row?.receiptNumber ?? "");
+          return [orderNumber, receiptNumber].filter((value): value is string => Boolean(value));
+        })
+        .filter((value): value is string => Boolean(value)),
     ),
   );
-  const supportReceiptProfitRows =
-    canonicalPosReceiptNumbers.length > 0
-      ? await prisma.supportReceipt.findMany({
-          where: {
-            OR: [
-              { receiptNumber: { in: canonicalPosReceiptNumbers } },
-              { receiptKey: { in: canonicalPosReceiptNumbers } },
-              ...canonicalPosReceiptNumbers.map((value) => ({ receiptKey: { endsWith: `:${value}` } })),
-            ],
-          },
-          select: {
-            receiptNumber: true,
-            receiptKey: true,
-            buyingTotal: true,
-            items: { select: { buyingPrice: true } },
-          },
+  const datedPosReceiptKeys = Array.from(
+    new Set(
+      filteredPosReceipts
+        .flatMap((row: any) => {
+          const createdAt = row?.generatedAt instanceof Date ? row.generatedAt : row?.createdAt instanceof Date ? row.createdAt : null;
+          const orderNumber = canonicalReceiptNumber((row?.order as any)?.orderNumber ?? "");
+          const receiptNumber = canonicalReceiptNumber(row?.receiptNumber ?? "");
+          if (!createdAt) return [orderNumber, receiptNumber].filter((value): value is string => Boolean(value));
+          const businessDate = createdAt.toISOString().slice(0, 10);
+          return [orderNumber, receiptNumber]
+            .filter((value): value is string => Boolean(value))
+            .map((value) => `${businessDate}:${value}`);
         })
-      : [];
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+  let supportReceiptProfitRows: any[] = [];
+  if (canonicalPosReceiptNumbers.length || datedPosReceiptKeys.length) {
+    try {
+      supportReceiptProfitRows = await prisma.supportReceipt.findMany({
+        where: {
+          OR: [
+            ...(canonicalPosReceiptNumbers.length ? [{ receiptNumber: { in: canonicalPosReceiptNumbers } }] : []),
+            ...(datedPosReceiptKeys.length ? [{ receiptKey: { in: datedPosReceiptKeys } }] : []),
+          ],
+        },
+        select: {
+          receiptNumber: true,
+          receiptKey: true,
+          buyingTotal: true,
+          items: { select: { buyingPrice: true } },
+        },
+      });
+    } catch (err: any) {
+      const msg = String(err?.message ?? err);
+      // eslint-disable-next-line no-console
+      console.warn("/api/receipts: failed to query supportReceipt table:", msg);
+      if (msg.includes("does not exist")) {
+        supportReceiptProfitRows = [];
+      } else {
+        throw err;
+      }
+    }
+  }
   const supportBuyingTotalsByReceipt = new Map<string, number>();
   for (const row of supportReceiptProfitRows) {
     const itemsBuyingTotal = Array.isArray(row.items)
@@ -503,6 +499,7 @@ export async function GET(req: NextRequest) {
           return sum + unitCost * qty;
         }, 0)
       : 0;
+    const buyingTotal = supportBuyingTotal > 0 ? supportBuyingTotal : itemBuyingTotal;
     const contributor = getProfitContributorForRow({
       id: r.id,
       source: "pos",
@@ -516,8 +513,8 @@ export async function GET(req: NextRequest) {
         : typeof explicitProfitRaw === "string" && explicitProfitRaw.trim() !== "" && !Number.isNaN(Number(explicitProfitRaw))
           ? Number(explicitProfitRaw)
           : null;
-    const buyingTotal = Number(contributor?.buyingTotal ?? 0) || supportBuyingTotal || itemBuyingTotal;
-    const profit = contributor?.profit ?? explicitProfit ?? (buyingTotal > 0 ? total - buyingTotal : null);
+    const resolvedBuyingTotal = contributor?.buyingTotal ?? buyingTotal;
+    const profit = contributor?.profit ?? explicitProfit ?? (resolvedBuyingTotal > 0 ? total - resolvedBuyingTotal : null);
     return {
       id: r.id,
       source: "pos" as const,
@@ -528,7 +525,7 @@ export async function GET(req: NextRequest) {
       customerName: r.order?.customerName,
       customerPhone: (r.order as any)?.customerPhone ?? null,
       total,
-      buyingTotal: buyingTotal > 0 ? buyingTotal : null,
+      buyingTotal: resolvedBuyingTotal > 0 ? resolvedBuyingTotal : null,
       profit,
       attendantName: (r.order as any)?.attendant?.name ?? r.issuedBy?.name ?? null,
       status: r.order?.status ?? r.order?.paymentStatus ?? null,
@@ -550,7 +547,12 @@ export async function GET(req: NextRequest) {
       orderRef: receipt.receiptNumber ?? null,
       receiptNumber: receipt.receiptNumber ?? null,
     });
-    const buyingTotal = Number(contributor?.buyingTotal ?? receipt.buyingTotal ?? 0);
+    const itemBuyingTotal = Array.isArray(receipt.items)
+      ? receipt.items.reduce((sum: number, item: any) => sum + Number(item.buyingPrice ?? 0) * (Number(item.quantity ?? 1) || 1), 0)
+      : 0;
+    const storedBuyingTotal = Number(receipt.buyingTotal ?? (receipt.data as any)?.buyingTotal ?? 0);
+    const buyingTotal = contributor?.buyingTotal ?? (storedBuyingTotal > 0 ? storedBuyingTotal : itemBuyingTotal);
+    const profit = contributor?.profit ?? (buyingTotal > 0 ? total - buyingTotal : null);
     return {
       id: `marketing-${receipt.id}`,
       source: "marketing" as const,
@@ -562,7 +564,7 @@ export async function GET(req: NextRequest) {
       customerPhone: null,
       total,
       buyingTotal: buyingTotal > 0 ? buyingTotal : null,
-      profit: contributor?.profit ?? (buyingTotal > 0 ? total - buyingTotal : null),
+      profit,
       attendantName:
         receipt.dailyEntry?.submittedBy?.name ?? receipt.dailyEntry?.submittedByName ?? null,
       status: "COMPLETED",
@@ -575,7 +577,7 @@ export async function GET(req: NextRequest) {
         : undefined,
       paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
       paymentStatus: "PAID",
-      detailUrl: null,
+      detailUrl: `/receipts/history/marketing/${receipt.id}`,
     };
   };
 
@@ -587,7 +589,12 @@ export async function GET(req: NextRequest) {
       orderRef: receipt.receiptNumber ?? null,
       receiptNumber: receipt.receiptNumber ?? null,
     });
-    const buyingTotal = Number(contributor?.buyingTotal ?? receipt.buyingTotal ?? 0);
+    const itemBuyingTotal = Array.isArray(receipt.items)
+      ? receipt.items.reduce((sum: number, item: any) => sum + Number(item.buyingPrice ?? 0) * (Number(item.quantity ?? 1) || 1), 0)
+      : 0;
+    const storedBuyingTotal = Number(receipt.buyingTotal ?? (receipt.data as any)?.buyingTotal ?? 0);
+    const buyingTotal = contributor?.buyingTotal ?? (storedBuyingTotal > 0 ? storedBuyingTotal : itemBuyingTotal);
+    const profit = contributor?.profit ?? (buyingTotal > 0 ? total - buyingTotal : null);
     return {
       id: `support-${receipt.id}`,
       source: "support" as const,
@@ -599,7 +606,7 @@ export async function GET(req: NextRequest) {
       customerPhone: null,
       total,
       buyingTotal: buyingTotal > 0 ? buyingTotal : null,
-      profit: contributor?.profit ?? (buyingTotal > 0 ? total - buyingTotal : null),
+      profit,
       attendantName:
         receipt.dailyEntry?.submittedBy?.name ?? receipt.dailyEntry?.submittedByName ?? null,
       status: "COMPLETED",
@@ -612,7 +619,7 @@ export async function GET(req: NextRequest) {
         : undefined,
       paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
       paymentStatus: "PAID",
-      detailUrl: null,
+      detailUrl: `/receipts/history/support/${receipt.id}`,
     };
   };
 
@@ -621,8 +628,8 @@ export async function GET(req: NextRequest) {
       date: { gte: startDate, lte: endDate },
     },
   };
-  if (scope === "mine" && resolvedUserId) marketingFilter.dailyEntry.submittedById = resolvedUserId;
-  else if (scope === "global" && requestedAttendantId) marketingFilter.dailyEntry.submittedById = requestedAttendantId;
+  const marketingStaffId = scope === "mine" ? attendantId : attendantFilterParam;
+  if (marketingStaffId) marketingFilter.dailyEntry.submittedById = marketingStaffId;
   if (paymentMethodParam) marketingFilter.paymentMethod = paymentMethodParam;
   if (q) {
     marketingFilter.OR = [
@@ -637,8 +644,8 @@ export async function GET(req: NextRequest) {
       date: { gte: startDate, lte: endDate },
     },
   };
-  if (scope === "mine" && resolvedUserId) supportFilter.dailyEntry.submittedById = resolvedUserId;
-  else if (scope === "global" && requestedAttendantId) supportFilter.dailyEntry.submittedById = requestedAttendantId;
+  const supportStaffId = scope === "mine" ? attendantId : attendantFilterParam;
+  if (supportStaffId) supportFilter.dailyEntry.submittedById = supportStaffId;
   if (paymentMethodParam) supportFilter.paymentMethod = paymentMethodParam;
   if (q) {
     supportFilter.OR = [
@@ -694,7 +701,23 @@ export async function GET(req: NextRequest) {
             },
           },
         },
-      })
+      });
+    } catch (err: any) {
+      const msg = String(err?.message ?? err);
+      // eslint-disable-next-line no-console
+      console.warn("/api/receipts: failed to query marketingReceipt table:", msg);
+      if (msg.includes("does not exist")) {
+        marketingReceipts = [];
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  const profitSupportIds = isProfitSummaryView
+    ? profitContributors
+        .filter((contributor) => contributor.source === "support" && contributor.id)
+        .map((contributor) => contributor.id as string)
     : [];
   const profitSupportReceiptNumbers = isProfitSummaryView
     ? Array.from(
@@ -738,7 +761,7 @@ export async function GET(req: NextRequest) {
     : [];
 
   const combined = [
-    ...posReceipts.map(mapPosRow),
+    ...filteredPosReceipts.map(mapPosRow),
     ...marketingReceipts.map(mapMarketingRow),
     ...supportReceipts.map(mapSupportRow),
   ];
@@ -764,18 +787,45 @@ export async function GET(req: NextRequest) {
   }
 
   const deduped = Array.from(uniqueReceipts.values()).filter((row) => {
-    if (summaryView !== "profit") return true;
-    if (getProfitContributorForRow(row)) return true;
+    if (!isProfitSummaryView) return true;
+    const contributor = getProfitContributorForRow(row);
+    if (contributor) return true;
     const explicitProfit = (row as any).profit;
     const buyingTotal = Number((row as any).buyingTotal ?? 0);
-    return (typeof explicitProfit === "number" && Number.isFinite(explicitProfit)) || buyingTotal > 0;
+    return (
+      (typeof explicitProfit === 'number' && Number.isFinite(explicitProfit)) ||
+      buyingTotal > 0
+    );
   });
+
+  // Ensure each returned row has a computed `profit` where possible so the
+  // UI can always sum and display a meaningful value.
+  for (const row of deduped) {
+    const total = Number(row.total ?? 0);
+    const buying = Number((row as any).buyingTotal ?? 0);
+    const explicit = typeof (row as any).profit === 'number' ? (row as any).profit : undefined;
+    if (explicit !== undefined) {
+      (row as any).profit = explicit;
+    } else if (buying > 0) {
+      (row as any).profit = total - buying;
+    } else {
+      (row as any).profit = undefined;
+    }
+  }
+
   deduped.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const totalCount = deduped.length;
   const paged = deduped.slice((page - 1) * size, page * size);
   const totalPages = Math.max(1, Math.ceil(totalCount / size));
-  const data = { receipts: paged, paging: { page, size, totalCount, totalPages } };
-  return NextResponse.json(composeIdentityResponse(metaWithScope, data));
+    const data = { receipts: paged, paging: { page, size, totalCount, totalPages } };
+    return NextResponse.json(composeIdentityResponse(metaWithScope, data));
+  } catch (err: any) {
+    // Log and return error details to help debugging during development
+    // eslint-disable-next-line no-console
+    console.error("/api/receipts GET error:", err);
+    const body = { error: String(err?.message ?? err), stack: err?.stack ?? null };
+    return NextResponse.json(body, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -816,6 +866,21 @@ export async function POST(req: NextRequest) {
   // issuedById MUST be the logged-in user (who clicked Save). Do not trust payload. This prevents
   // admins or impersonation sessions from altering the recorded creator/issuer of a receipt.
   const issuedById = resolvedUserId;
+
+  // Diagnostic logging: capture incoming attribution candidates to help debug misattributed sales
+  try {
+    console.info('[receipts] incoming save attribution', {
+      serial: serial ?? null,
+      docType: docType ?? null,
+      payloadAttendantId: payload?.attendantId ?? null,
+      payloadServedBy: payload?.servedBy ?? null,
+      resolvedUserId,
+      computedAttendantId: attendantId ?? null,
+      computedIssuedById: issuedById ?? null,
+    });
+  } catch (e) {
+    // ignore logging errors
+  }
 
   // compute totals
   const items = Array.isArray(payload?.items) ? payload.items : [];
@@ -880,26 +945,48 @@ export async function POST(req: NextRequest) {
       }
       if (!shopId) throw new Error("No active shop found for receipt");
 
-      // ensure products exist for items (create lightweight product records if needed)
+      // ensure products exist for items (prefer selected catalog products, otherwise create lightweight manual records)
       const createdItems: any[] = [];
       for (const it of items) {
         const title = String(it.title || it.product || it.name || "Item").slice(0, 255);
-        let product = await tx.product.findFirst({ where: { name: title } });
+        const selectedProductId = typeof it.productId === "string" ? it.productId.trim() : "";
+        let product = selectedProductId
+          ? await tx.product.findUnique({ where: { id: selectedProductId } })
+          : await tx.product.findFirst({ where: { name: title } });
         if (!product) {
-          product = await tx.product.create({ data: { sku: `manual-${generateRandomId()}`, name: title, category: "manual", sellingPrice: Number(it.unitPrice || it.sellingPrice || 0) || 0 } });
+          product = await tx.product.create({
+            data: {
+              sku: `manual-${generateRandomId()}`,
+              name: title,
+              category: "manual",
+              sellingPrice: Number(it.unitPrice || it.sellingPrice || 0) || 0,
+            },
+          });
         }
         const quantity = Math.max(1, parseIntLike(it.quantity ?? 1, 1));
         const unitPrice = parseNumber(it.unitPrice ?? it.sellingPrice ?? 0);
         const itemSerial = typeof it.serial === "string" ? it.serial.trim() || null : null;
         const itemWarranty = typeof it.warranty === "string" ? it.warranty.trim() || null : null;
+        const variableCost = Boolean((product as any).variableCost);
+        const unitBuyingPrice = variableCost
+          ? null
+          : parseNumber(it.costPrice ?? it.buyingPrice ?? product.lastBuyingPrice ?? 0);
+        const commissionEnabled = Boolean((product as any).commissionEnabled);
+        const commissionAmount = commissionEnabled ? parseNumber((product as any).commissionAmount ?? 0) : 0;
+        const commissionRequiresApproval = Boolean((product as any).commissionRequiresApproval);
         createdItems.push({
           product,
+          selectedProductId: selectedProductId || null,
           quantity,
           unitPrice,
           serial: itemSerial,
           warranty: itemWarranty,
           title,
-          costPrice: parseNumber(it.costPrice ?? it.buyingPrice ?? 0),
+          costPrice: unitBuyingPrice,
+          variableCost,
+          commissionEnabled,
+          commissionAmount,
+          commissionRequiresApproval,
         });
       }
 
@@ -940,7 +1027,10 @@ export async function POST(req: NextRequest) {
       await tx.orderItem.deleteMany({ where: { orderId: orderUpsert.id } });
 
       const createdOrderItems: any[] = [];
+      let totalBuying = 0;
+      let hasVariableCostItems = false;
       for (const it of createdItems) {
+        if (it.variableCost) hasVariableCostItems = true;
         // Ensure numeric and integer types are strictly coerced for Prisma
         const qty = Math.max(1, Math.trunc(Number(it.quantity ?? 1)));
         const rawUnitPriceInput = it.unitPrice ?? '';
@@ -1023,6 +1113,21 @@ export async function POST(req: NextRequest) {
           }
           const item = await tx.orderItem.create({ data: safePayload });
           createdOrderItems.push(item);
+          const unitCost = it.variableCost ? 0 : Number(it.costPrice || 0);
+          totalBuying += unitCost * qty;
+          if (unitCost > 0 && (tx as any).orderCost) {
+            try {
+              await (tx as any).orderCost.create({
+                data: {
+                  orderItemId: item.id,
+                  unitCost,
+                  costSource: it.selectedProductId ? "POS_CATALOG" : "MANUAL_RECEIPT",
+                },
+              });
+            } catch {
+              // best-effort for DBs without the relation available
+            }
+          }
         } catch (orderItemError) {
           const orderItemErrorMsg = (orderItemError as any)?.message ?? String(orderItemError);
           console.error('[receipts] failed to persist order item', {
@@ -1081,14 +1186,33 @@ export async function POST(req: NextRequest) {
         paymentDetailsShown: Boolean(payload?.paymentDetailsShown),
         notes: payload?.notes ?? null,
         warrantyText: payload?.warrantyText ?? null,
-        totals: { subtotal, tax: taxAmount, total, balance },
+        totals: {
+          subtotal,
+          tax: taxAmount,
+          total,
+          balance,
+          buyingTotal: hasVariableCostItems ? 0 : totalBuying,
+          profit: hasVariableCostItems ? null : totalBuying > 0 ? total - totalBuying : 0,
+          needsPricing: hasVariableCostItems,
+        },
         data: {
           ...payload,
           orderRef: serial,
-          totals: { subtotal, tax: taxAmount, total, balance },
+          needsPricing: hasVariableCostItems,
+          totals: {
+            subtotal,
+            tax: taxAmount,
+            total,
+            balance,
+            buyingTotal: hasVariableCostItems ? 0 : totalBuying,
+            profit: hasVariableCostItems ? null : totalBuying > 0 ? total - totalBuying : 0,
+            needsPricing: hasVariableCostItems,
+          },
           attendantId,
           issuedById,
           items,
+          buyingTotal: hasVariableCostItems ? 0 : totalBuying,
+          profit: hasVariableCostItems ? null : totalBuying > 0 ? total - totalBuying : 0,
           ...(isPodDelivery
             ? {
                 podDelivery: {
@@ -1196,9 +1320,16 @@ export async function POST(req: NextRequest) {
 
             const supportReceiptItems = createdItems.map((it) => ({
               productName: String(it.title || "Item").trim(),
-              buyingPrice: Math.max(0, Math.round(Number(it.costPrice || 0))),
+              buyingPrice: it.variableCost
+                ? null
+                : Math.max(0, Math.round(Number(it.costPrice || 0) * Number(it.quantity || 1))),
             }));
             const supportReceiptBuyingTotal = supportReceiptItems.reduce((sum, item) => sum + (item.buyingPrice || 0), 0);
+            const supportHasVariableCostItem = createdItems.some((it) => Boolean(it.variableCost));
+            const supportReceiptFullyPriced =
+              !supportHasVariableCostItem ||
+              (supportReceiptItems.length > 0 &&
+                supportReceiptItems.every((item) => Number(item.buyingPrice ?? 0) > 0));
             const supportSellingTotal = Math.round(Number(total) || 0);
 
             const normalizedSerial = canonicalReceiptNumber(serial);
@@ -1221,7 +1352,7 @@ export async function POST(req: NextRequest) {
             ).id;
 
             let deltaSales = supportSellingTotal;
-            let deltaProfit = supportSellingTotal - supportReceiptBuyingTotal;
+            let deltaProfit = supportReceiptFullyPriced ? supportSellingTotal - supportReceiptBuyingTotal : 0;
 
             if (receiptKey) {
               const prev = await tx.supportReceipt.findUnique({
@@ -1233,7 +1364,9 @@ export async function POST(req: NextRequest) {
               const prevBuying = Number(prev?.buyingTotal ?? 0);
 
               deltaSales = supportSellingTotal - prevSelling;
-              deltaProfit = (supportSellingTotal - supportReceiptBuyingTotal) - (prevSelling - prevBuying);
+              const prevProfit = prevBuying > 0 ? prevSelling - prevBuying : 0;
+              const nextProfit = supportReceiptFullyPriced ? supportSellingTotal - supportReceiptBuyingTotal : 0;
+              deltaProfit = nextProfit - prevProfit;
 
               await tx.supportReceipt.upsert({
                 where: { receiptKey },
@@ -1293,9 +1426,16 @@ export async function POST(req: NextRequest) {
           const receiptSellingTotal = Math.round(Number(total) || 0);
           const receiptItemsPayload = createdItems.map((it) => ({
             productName: String(it.title || "Item").trim(),
-            buyingPrice: Math.max(0, Math.round(Number(it.costPrice || 0))),
+            buyingPrice: it.variableCost
+              ? 0
+              : Math.max(0, Math.round(Number(it.costPrice || 0) * Number(it.quantity || 1))),
           }));
           const receiptBuyingTotal = receiptItemsPayload.reduce((s, i) => s + i.buyingPrice, 0);
+          const receiptHasVariableCostItem = createdItems.some((it) => Boolean(it.variableCost));
+          const receiptFullyPriced =
+            !receiptHasVariableCostItem ||
+            (receiptItemsPayload.length > 0 &&
+              receiptItemsPayload.every((item) => Number(item.buyingPrice ?? 0) > 0));
           const receiptKey = buildReceiptKey(entryDate, normalizedSerial);
           const paymentMethod = parsePaymentMethod(payload?.paymentMethod, PaymentMethod);
 
@@ -1321,7 +1461,7 @@ export async function POST(req: NextRequest) {
           }
 
           let deltaSales = receiptSellingTotal;
-          let deltaProfit = receiptSellingTotal - receiptBuyingTotal;
+          let deltaProfit = receiptFullyPriced ? receiptSellingTotal - receiptBuyingTotal : 0;
 
           if (receiptKey) {
             const prev = await tx.marketingReceipt.findUnique({
@@ -1333,7 +1473,9 @@ export async function POST(req: NextRequest) {
             const prevBuying = Number(prev?.buyingTotal ?? 0);
 
             deltaSales = receiptSellingTotal - prevSelling;
-            deltaProfit = (receiptSellingTotal - receiptBuyingTotal) - (prevSelling - prevBuying);
+            const prevProfit = prevBuying > 0 ? prevSelling - prevBuying : 0;
+            const nextProfit = receiptFullyPriced ? receiptSellingTotal - receiptBuyingTotal : 0;
+            deltaProfit = nextProfit - prevProfit;
 
             await tx.marketingReceipt.upsert({
               where: { receiptKey },
@@ -1392,7 +1534,7 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // Seed CommissionEarning rows (gross-based) for this order's items; recompute jobs can overwrite
+      // Preserve the existing gross-based commission seed behavior, then add POS product commissions.
       if (createdOrderItems.length && attendantId && tx.commissionEarning && typeof tx.commissionEarning.createMany === 'function') {
         try {
           if (!isPodDelivery) {
@@ -1418,6 +1560,43 @@ export async function POST(req: NextRequest) {
               return { staffId: attendantId, orderItemId: it.id, basis: "gross", qty: it.quantity, amount: gross, status: "PENDING", calcDetail: { reason: "receipt_seed_pod", total } };
             });
             await tx.commissionEarning.createMany({ data: perItemEarnings });
+          }
+
+          const posProductEarnings = createdOrderItems
+            .map((orderItem, index) => {
+              const sourceItem = createdItems[index];
+              const amount = Number(sourceItem?.commissionAmount || 0) * Number(orderItem.quantity || 1);
+              if (!sourceItem?.commissionEnabled || amount <= 0) return null;
+              const requiresAdminApproval = isPodDelivery || Boolean(sourceItem.commissionRequiresApproval);
+              const status =
+                requiresAdminApproval
+                  ? "PENDING_APPROVAL"
+                  : docType === "LAYAWAY"
+                    ? "PENDING"
+                    : "RELEASED";
+              return {
+                staffId: attendantId,
+                orderItemId: orderItem.id,
+                basis: "product_flat",
+                qty: orderItem.quantity,
+                amount,
+                status,
+                calcDetail: {
+                  reason: "pos_product_commission",
+                  productId: sourceItem.product.id,
+                  productName: sourceItem.title,
+                  orderNumber: serial,
+                  receiptId: receipt.id,
+                  requiresApproval: requiresAdminApproval,
+                  unitCommission: Number(sourceItem.commissionAmount || 0),
+                  customerType: payload?.customerType ?? null,
+                },
+              };
+            })
+            .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+
+          if (posProductEarnings.length) {
+            await tx.commissionEarning.createMany({ data: posProductEarnings });
           }
         } catch (e) {
           // ignore commission earnings in partial tx mocks
@@ -1462,25 +1641,11 @@ export async function POST(req: NextRequest) {
         // Create a CommissionLedger entry for audit (best-effort)
         if (tx.commissionLedger) {
           try {
-            await tx.commissionLedger.upsert({
-              where: {
-                userId_periodStart_periodEnd: {
-                  userId: attendantId,
-                  periodStart: period.startDate,
-                  periodEnd: period.endDate,
-                },
-              },
-              create: {
+            await tx.commissionLedger.create({
+              data: {
                 userId: attendantId,
                 periodStart: period.startDate,
                 periodEnd: period.endDate,
-                grossCommission: Number(salesCommission),
-                penalties: 0,
-                netCommission: Number(salesCommission),
-                commissionTotal: Number(salesCommission),
-                detail: { reason: "Immediate release on threshold" },
-              },
-              update: {
                 grossCommission: Number(salesCommission),
                 penalties: 0,
                 netCommission: Number(salesCommission),
@@ -1493,6 +1658,17 @@ export async function POST(req: NextRequest) {
           }
         }
       }
+
+            try {
+              console.info('[receipts] created order/receipt', {
+                orderNumber: orderUpsert.orderNumber,
+                orderAttendantId: orderUpsert.attendantId ?? null,
+                receiptId: receipt?.id ?? null,
+                receiptDataAttendantId: (receipt && receipt.data && receipt.data.attendantId) ? receipt.data.attendantId : null,
+              });
+            } catch (e) {
+              // ignore
+            }
 
       return { orderRef: orderUpsert.orderNumber, receiptId: receipt.id };
     });
