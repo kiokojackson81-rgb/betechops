@@ -25,6 +25,7 @@ const canonicalCategories = new Set(attendantCategoryDefinitions.map((def) => de
 
 function resolveCanonical(candidate: string): string | null {
   const normalized = toUpperSnake(candidate);
+  if (normalized === "BETECH_OPS") return "GENERAL_OPS";
   return canonicalCategories.has(normalized) ? normalized : null;
 }
 

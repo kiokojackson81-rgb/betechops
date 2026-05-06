@@ -98,6 +98,7 @@ function buildCommissionLines(row: PayrollRow) {
     case "SUPPORT_OPS":
       return [{ label: "Support commission", amount: row.commissionDirect || row.commissionTotal }];
     case "BETECH_OPS":
+    case "GENERAL_OPS":
       return [
         { label: "POS commission", amount: row.commissionDirect },
         { label: "Jumia commission", amount: row.commissionMarketplaceJumia },
@@ -185,6 +186,7 @@ function buildWorkSummary(row: PayrollRow) {
         { label: "Items handled", value: row.totalItems.toLocaleString("en-US") },
       ];
     case "BETECH_OPS":
+    case "GENERAL_OPS":
       return [
         { label: "Total sales", value: currency.format(row.totalSales) },
         { label: "Direct receipts", value: row.totalReceipts.toLocaleString("en-US") },

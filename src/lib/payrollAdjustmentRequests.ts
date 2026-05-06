@@ -28,7 +28,8 @@ export function canSubmitPayrollAdjustmentRequest(user?: {
     role === "ADMIN" ||
     role === "SUPERVISOR" ||
     email === "benjamin@betech.co.ke" ||
-    category === "BETECH_OPS"
+    category === "BETECH_OPS" ||
+    category === "GENERAL_OPS"
   );
 }
 

@@ -52,9 +52,17 @@ export const attendantCategoryDefinitions: AttendantCategoryDefinition[] = [
     highlight: "orange",
   },
   {
+    id: "GENERAL_OPS",
+    label: "General User Ops",
+    description: "General operations users with tracker dashboard, receipts, and wellness/payroll tools.",
+    primaryMetrics: ["CUSTOM"],
+    defaultWidgets: ["QUEUE", "PRICING", "RETURNS", "ANNOUNCEMENTS", "SHORTCUTS"],
+    highlight: "slate",
+  },
+  {
     id: "BETECH_OPS",
-    label: "Betech Operations",
-    description: "Backend operations and general oversight.",
+    label: "Betech Ops (Legacy)",
+    description: "Legacy category alias retained for backwards compatibility.",
     primaryMetrics: ["CUSTOM"],
     defaultWidgets: ["QUEUE", "PRICING", "RETURNS", "ANNOUNCEMENTS", "SHORTCUTS"],
     highlight: "slate",
@@ -66,7 +74,9 @@ export const attendantCategoryById = attendantCategoryDefinitions.reduce<Record<
   return acc;
 }, {} as Record<string, AttendantCategoryDefinition>);
 
-export const attendantCategoryOptions = attendantCategoryDefinitions.map((def) => ({
+export const attendantCategoryOptions = attendantCategoryDefinitions
+  .filter((def) => def.id !== "BETECH_OPS")
+  .map((def) => ({
   id: def.id,
   label: def.label,
   description: def.description,

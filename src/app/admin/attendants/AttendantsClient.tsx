@@ -22,7 +22,7 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
     name: "",
     email: "",
     password: "",
-    category: "BETECH_OPS",
+    category: "GENERAL_OPS",
     baseSalary: "",
     isActive: true,
   });
@@ -31,7 +31,13 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
   const filtered = rows.filter((a) => {
-    if (filterCategory !== "ALL" && a.attendantCategory !== filterCategory) return false;
+    if (filterCategory !== "ALL") {
+      const rowCategory = String(a.attendantCategory ?? "").toUpperCase();
+      const wanted = String(filterCategory ?? "").toUpperCase();
+      const rowNormalized = rowCategory === "BETECH_OPS" ? "GENERAL_OPS" : rowCategory;
+      const wantedNormalized = wanted === "BETECH_OPS" ? "GENERAL_OPS" : wanted;
+      if (rowNormalized !== wantedNormalized) return false;
+    }
     if (filterStatus === "ACTIVE" && !a.isActive) return false;
     if (filterStatus === "DISABLED" && a.isActive) return false;
     return true;
@@ -98,7 +104,7 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
         name: "",
         email: "",
         password: "",
-        category: "BETECH_OPS",
+        category: "GENERAL_OPS",
         baseSalary: "",
         isActive: true,
       });
@@ -126,7 +132,7 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
           </button>
           <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm">
             <option value="ALL">All categories</option>
-            <option value="BETECH_OPS">General User Ops</option>
+            <option value="GENERAL_OPS">General User Ops</option>
             <option value="DIRECT_SALES_OPS">Direct Sales Ops</option>
             <option value="MARKETING_OPS">Marketing Ops</option>
             <option value="JUMIA_KILIMALL_OPS">Jumia / Kilimall Ops</option>
@@ -173,7 +179,7 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
             value={createForm.category}
             onChange={(e) => setCreateForm((s) => ({ ...s, category: e.target.value }))}
           >
-            <option value="BETECH_OPS">General User Ops</option>
+            <option value="GENERAL_OPS">General User Ops</option>
             <option value="DIRECT_SALES_OPS">Direct Sales Ops</option>
             <option value="MARKETING_OPS">Marketing Ops</option>
             <option value="JUMIA_KILIMALL_OPS">Jumia / Kilimall Ops</option>

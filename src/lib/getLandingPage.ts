@@ -4,7 +4,7 @@ export function getLandingPage(category?: string | null, role?: string): string 
   const cat = normalizeCategory(category);
 
   if (role === "ADMIN") {
-    if (cat === "JUMIA_KILIMALL_OPS" || cat === "BETECH_OPS") {
+    if (cat === "JUMIA_KILIMALL_OPS" || cat === "BETECH_OPS" || cat === "GENERAL_OPS") {
       return "/admin/online/summary";
     }
     return "/admin";
@@ -21,6 +21,7 @@ export function getLandingPage(category?: string | null, role?: string): string 
       return "/attendant/online";
     case "SUPPORT_OPS":
       return "/attendant/support";
+    case "GENERAL_OPS":
     case "BETECH_OPS":
       return "/attendant/online";
     default:
@@ -41,6 +42,7 @@ export function getAdminLandingPage(category?: string | null): string {
       return "/admin/online/summary";
     case "SUPPORT_OPS":
       return "/admin/support-report";
+    case "GENERAL_OPS":
     case "BETECH_OPS":
       return "/admin/online/summary";
     default:
@@ -58,8 +60,10 @@ export function getCategoryLabel(category?: string | null) {
       return "Jumia / Kilimall Ops";
     case "SUPPORT_OPS":
       return "Support Ops";
-    case "BETECH_OPS":
+    case "GENERAL_OPS":
       return "General User Ops";
+    case "BETECH_OPS":
+      return "Betech Ops (Legacy)";
     default:
       return "Unassigned";
   }

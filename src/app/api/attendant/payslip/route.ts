@@ -17,6 +17,7 @@ export async function GET(req: Request) {
     "MARKETING_OPS",
     "JUMIA_KILIMALL_OPS",
     "SUPPORT_OPS",
+    "GENERAL_OPS",
     "BETECH_OPS",
   ]);
   if (!auth.ok) return auth.res;

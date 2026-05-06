@@ -12,12 +12,13 @@ const categoryOrder = [
   "MARKETING_OPS",
   "JUMIA_KILIMALL_OPS",
   "SUPPORT_OPS",
+  "GENERAL_OPS",
   "BETECH_OPS",
 ];
 
 const formatCurrency = (value: number) => `KES ${value.toLocaleString("en-US")}`;
 const getDirectCommissionLabel = (category?: string | null) =>
-  category === "JUMIA_KILIMALL_OPS" || category === "BETECH_OPS" ? "POS" : "Direct";
+  category === "JUMIA_KILIMALL_OPS" || category === "BETECH_OPS" || category === "GENERAL_OPS" ? "POS" : "Direct";
 
 const getDisplayName = (row?: PayrollRow | null) => {
   if (!row) return "—";

@@ -129,7 +129,7 @@ function summarizeAdjustments(adjustments: Array<{
 }
 
 function isOnlineCategory(category?: string | null) {
-  return category === "JUMIA_KILIMALL_OPS" || category === "BETECH_OPS";
+  return category === "JUMIA_KILIMALL_OPS" || category === "BETECH_OPS" || category === "GENERAL_OPS";
 }
 
 function isDirectSalesCategory(category?: string | null) {

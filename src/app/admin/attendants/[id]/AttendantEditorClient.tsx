@@ -93,7 +93,8 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
           <option value="MARKETING_OPS">Marketing Ops</option>
           <option value="JUMIA_KILIMALL_OPS">Jumia / Kilimall Ops</option>
           <option value="SUPPORT_OPS">Support Ops</option>
-          <option value="BETECH_OPS">Betech Ops</option>
+          <option value="GENERAL_OPS">General User Ops</option>
+          <option value="BETECH_OPS">Betech Ops (Legacy)</option>
         </select>
 
         <label className="inline-flex items-center gap-2">
