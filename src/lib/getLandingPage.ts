@@ -59,7 +59,7 @@ export function getCategoryLabel(category?: string | null) {
     case "SUPPORT_OPS":
       return "Support Ops";
     case "BETECH_OPS":
-      return "Betech Ops (Supervisor)";
+      return "General User Ops";
     default:
       return "Unassigned";
   }

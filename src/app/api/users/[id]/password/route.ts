@@ -8,7 +8,9 @@ export async function POST(request: Request) {
   if (!auth.ok) return auth.res;
 
   const pathname = new URL(request.url).pathname;
-  const id = pathname.substring(pathname.lastIndexOf("/") + 1);
+  const segments = pathname.split("/").filter(Boolean);
+  const usersIndex = segments.lastIndexOf("users");
+  const id = usersIndex >= 0 ? segments[usersIndex + 1] : "";
   if (!id) return NextResponse.json({ error: "missing_id" }, { status: 400 });
 
   const body = (await request.json().catch(() => ({}))) as { password?: string };

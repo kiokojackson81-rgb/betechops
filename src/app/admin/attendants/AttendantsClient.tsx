@@ -17,6 +17,15 @@ type AttendantRow = {
 export default function AttendantsClient({ attendants }: { attendants: AttendantRow[] }) {
   const router = useRouter();
   const [rows, setRows] = useState<AttendantRow[]>(attendants);
+  const [creating, setCreating] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    category: "BETECH_OPS",
+    baseSalary: "",
+    isActive: true,
+  });
   const [filterCategory, setFilterCategory] = useState<any>("ALL");
   const [filterStatus, setFilterStatus] = useState<"ALL" | "ACTIVE" | "DISABLED">("ALL");
   const [loadingId, setLoadingId] = useState<string | null>(null);
@@ -27,6 +36,79 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
     if (filterStatus === "DISABLED" && a.isActive) return false;
     return true;
   });
+
+  async function createUser() {
+    const email = createForm.email.trim().toLowerCase();
+    const name = createForm.name.trim();
+    const password = createForm.password;
+    const baseSalary = Number(createForm.baseSalary || 0);
+    if (!email) return alert("Email is required");
+    if (!password || password.length < 6) return alert("Password must be at least 6 characters");
+    if (!Number.isFinite(baseSalary) || baseSalary < 0) return alert("Base salary must be a valid number");
+
+    setCreating(true);
+    try {
+      const createRes = await fetch("/api/users", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email,
+          name: name || undefined,
+          role: "ATTENDANT",
+          category: createForm.category,
+          categories: [createForm.category],
+        }),
+      });
+      const createJson = await createRes.json().catch(() => ({}));
+      if (!createRes.ok || !createJson?.user?.id) {
+        throw new Error(String(createJson?.error || "Failed to create user"));
+      }
+
+      const userId = String(createJson.user.id);
+
+      const passwordRes = await fetch(`/api/users/${userId}/password`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (!passwordRes.ok) {
+        const passwordJson = await passwordRes.json().catch(() => ({}));
+        throw new Error(String(passwordJson?.error || "Failed to set password"));
+      }
+
+      const planRes = await fetch(`/api/admin/attendants/${userId}/comp-plan`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ baseSalary, frequency: "PERIOD" }),
+      });
+      if (!planRes.ok) {
+        const planJson = await planRes.json().catch(() => ({}));
+        throw new Error(String(planJson?.error || "Failed to save salary"));
+      }
+
+      if (!createForm.isActive) {
+        await fetch(`/api/admin/attendants/${userId}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "deactivate" }),
+        });
+      }
+
+      setCreateForm({
+        name: "",
+        email: "",
+        password: "",
+        category: "BETECH_OPS",
+        baseSalary: "",
+        isActive: true,
+      });
+      router.refresh();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to create user");
+    } finally {
+      setCreating(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
@@ -44,11 +126,11 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
           </button>
           <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm">
             <option value="ALL">All categories</option>
+            <option value="BETECH_OPS">General User Ops</option>
             <option value="DIRECT_SALES_OPS">Direct Sales Ops</option>
             <option value="MARKETING_OPS">Marketing Ops</option>
             <option value="JUMIA_KILIMALL_OPS">Jumia / Kilimall Ops</option>
             <option value="SUPPORT_OPS">Support Ops</option>
-            <option value="BETECH_OPS">Betech Ops</option>
           </select>
           <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as any)} className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm">
             <option value="ALL">All statuses</option>
@@ -57,6 +139,73 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
           </select>
         </div>
       </header>
+
+      <section className="mb-6 rounded-2xl border border-white/10 bg-slate-900/60 p-4">
+        <div className="mb-3">
+          <h2 className="text-lg font-semibold">Create user</h2>
+          <p className="text-xs text-slate-400">
+            Use <strong>General User Ops</strong> for the tracker-style dashboard and payroll/commission flow.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <input
+            className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
+            placeholder="Full name"
+            value={createForm.name}
+            onChange={(e) => setCreateForm((s) => ({ ...s, name: e.target.value }))}
+          />
+          <input
+            className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
+            placeholder="Email"
+            type="email"
+            value={createForm.email}
+            onChange={(e) => setCreateForm((s) => ({ ...s, email: e.target.value }))}
+          />
+          <input
+            className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
+            placeholder="Password (min 6)"
+            type="password"
+            value={createForm.password}
+            onChange={(e) => setCreateForm((s) => ({ ...s, password: e.target.value }))}
+          />
+          <select
+            className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
+            value={createForm.category}
+            onChange={(e) => setCreateForm((s) => ({ ...s, category: e.target.value }))}
+          >
+            <option value="BETECH_OPS">General User Ops</option>
+            <option value="DIRECT_SALES_OPS">Direct Sales Ops</option>
+            <option value="MARKETING_OPS">Marketing Ops</option>
+            <option value="JUMIA_KILIMALL_OPS">Jumia / Kilimall Ops</option>
+            <option value="SUPPORT_OPS">Support Ops</option>
+          </select>
+          <input
+            className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
+            placeholder="Base salary (KES)"
+            type="number"
+            min="0"
+            value={createForm.baseSalary}
+            onChange={(e) => setCreateForm((s) => ({ ...s, baseSalary: e.target.value }))}
+          />
+          <label className="flex items-center gap-2 rounded-lg border border-slate-700 bg-black/30 px-3 py-2 text-sm">
+            <input
+              type="checkbox"
+              checked={createForm.isActive}
+              onChange={(e) => setCreateForm((s) => ({ ...s, isActive: e.target.checked }))}
+            />
+            Active account
+          </label>
+        </div>
+        <div className="mt-3">
+          <button
+            className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black disabled:opacity-60"
+            disabled={creating}
+            onClick={() => void createUser()}
+          >
+            {creating ? "Creating..." : "Create user"}
+          </button>
+        </div>
+      </section>
 
       <div className="rounded-2xl border border-white/10 bg-slate-900/60 shadow-xl overflow-hidden">
         <table className="min-w-full text-sm">
