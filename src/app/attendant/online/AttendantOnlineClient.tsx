@@ -265,7 +265,7 @@ const formatNairobiParam = (date: Date, endOfDay = false) => {
   return endOfDay ? `${ymd}T23:59:59.999+03:00` : `${ymd}T00:00:00+03:00`;
 };
 
-export default function AttendantOnlineClient() {
+export default function AttendantOnlineClient({ mode = "online" }: { mode?: "online" | "general" }) {
   const router = useRouter();
   const { currentPeriod, selectedPeriod, selectedPeriodKey, setSelectedPeriod } =
     useTradingPeriodQueryState();
@@ -403,6 +403,7 @@ export default function AttendantOnlineClient() {
   }, [appendImpersonateParam]);
 
   const isBenjaminSupervisor = supervisorPerformanceTools;
+  const isGeneralOpsView = mode === "general";
 
   const getActiveWeekRange = useCallback(() => {
     const keys = activeWeekKeys.length ? activeWeekKeys : ["period"];
@@ -846,20 +847,19 @@ export default function AttendantOnlineClient() {
 
   const refreshAllOnlineStats = useCallback(async () => {
     if (!userId) return;
-    await Promise.allSettled([
-      loadWeeklyEarnings(),
-      loadOnlineSummary(),
-      loadPayrollSummary(),
-      loadCommissionPreview(),
-    ]);
-  }, [loadCommissionPreview, loadOnlineSummary, loadPayrollSummary, loadWeeklyEarnings, userId]);
+    const jobs = [loadPayrollSummary(), loadCommissionPreview()];
+    if (!isGeneralOpsView) {
+      jobs.push(loadWeeklyEarnings(), loadOnlineSummary());
+    }
+    await Promise.allSettled(jobs);
+  }, [isGeneralOpsView, loadCommissionPreview, loadOnlineSummary, loadPayrollSummary, loadWeeklyEarnings, userId]);
 
   useEffect(() => {
     if (!userId) return;
-    void loadShopSales();
+    if (!isGeneralOpsView) void loadShopSales();
     void loadReceiptStats();
     void refreshAllOnlineStats();
-  }, [loadReceiptStats, loadShopSales, refreshAllOnlineStats, userId]);
+  }, [isGeneralOpsView, loadReceiptStats, loadShopSales, refreshAllOnlineStats, userId]);
 
   useEffect(() => {
     if (!userId) return;
@@ -979,10 +979,13 @@ export default function AttendantOnlineClient() {
       <main className="mx-auto max-w-6xl space-y-6 p-6">
         <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-3xl font-semibold">Online Operations</h1>
+            <h1 className="text-3xl font-semibold">
+              {isGeneralOpsView ? "General Operations" : "Online Operations"}
+            </h1>
             <p className="text-sm text-slate-300">
-              Track marketplace shop sales, receipt activity, and payroll-linked
-              earnings in one place.
+              {isGeneralOpsView
+                ? "Track receipts, direct sales performance, and payroll-linked earnings in one place."
+                : "Track marketplace shop sales, receipt activity, and payroll-linked earnings in one place."}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3 rounded-full border border-slate-800 bg-slate-950/50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">
@@ -992,6 +995,14 @@ export default function AttendantOnlineClient() {
             >
               Receipts
             </Link>
+            <a
+              href={performanceReportHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-full border border-transparent px-3 py-1 transition hover:border-slate-500"
+            >
+              Download report
+            </a>
             <Link
               href={wellnessHref}
               className="rounded-full border border-transparent px-3 py-1 transition hover:border-slate-500"
@@ -1068,7 +1079,7 @@ export default function AttendantOnlineClient() {
         {/* Payroll earnings period banner removed */}
 
         <div className="grid gap-6 lg:grid-cols-12">
-          <div className="space-y-6 lg:col-span-8">
+          {!isGeneralOpsView ? <div className="space-y-6 lg:col-span-8">
             {/* Render the receipts editor as a single card (it contains its own header/totals) */}
             <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
               <div className="flex flex-col gap-1">
@@ -1186,13 +1197,14 @@ export default function AttendantOnlineClient() {
                 </div>
               </div>
             </Card>
-          </div>
+          </div> : null}
 
-          <div className="space-y-4 lg:col-span-4">
+          <div className={`space-y-4 ${isGeneralOpsView ? "lg:col-span-12" : "lg:col-span-4"}`}>
             <QuickStatsCard
               variant="onlineOps"
               loading={receiptStatsLoading || weeklyLoading || onlineSummaryLoading || payrollLoading}
               onlineOps={quickStatsPayload}
+              hideMarketplace={isGeneralOpsView}
             />
 
             <PayrollEarningsCard

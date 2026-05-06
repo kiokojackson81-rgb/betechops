@@ -23,7 +23,7 @@ export function getLandingPage(category?: string | null, role?: string): string 
       return "/attendant/support";
     case "GENERAL_OPS":
     case "BETECH_OPS":
-      return "/attendant/online";
+      return "/attendant/general";
     default:
       return "/attendant";
   }

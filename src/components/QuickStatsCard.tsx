@@ -26,10 +26,12 @@ export function QuickStatsCard({
   variant = "onlineOps",
   onlineOps = null,
   loading = false,
+  hideMarketplace = false,
 }: {
   variant?: "onlineOps";
   onlineOps?: OnlineOpsQuickStats | null;
   loading?: boolean;
+  hideMarketplace?: boolean;
 }) {
   const { locked, toggle } = useCardLock("onlineops:quickstats");
   if (variant !== "onlineOps") return null;
@@ -38,18 +40,22 @@ export function QuickStatsCard({
     ? [
         { label: "Direct sales (POS receipts)", value: formatKES(onlineOps.directSales) },
         { label: "POS receipts", value: Number(onlineOps.receiptsCount || 0).toLocaleString("en-KE") },
-        { label: "Jumia + Kilimall sales (selected range)", value: formatKES(onlineOps.marketplaceSales) },
-        {
-          label:
-            onlineOps.marketplaceCommission != null
-              ? "Jumia + Kilimall commission"
-              : "Kilimall sales (online performance)",
-          value:
-            onlineOps.marketplaceCommission != null
-              ? formatKES(onlineOps.marketplaceCommission)
-              : formatKES(onlineOps.kilimallSales),
-        },
-        { label: "Total sales (all channels)", value: formatKES(onlineOps.totalSales) },
+        ...(!hideMarketplace
+          ? [
+              { label: "Jumia + Kilimall sales (selected range)", value: formatKES(onlineOps.marketplaceSales) },
+              {
+                label:
+                  onlineOps.marketplaceCommission != null
+                    ? "Jumia + Kilimall commission"
+                    : "Kilimall sales (online performance)",
+                value:
+                  onlineOps.marketplaceCommission != null
+                    ? formatKES(onlineOps.marketplaceCommission)
+                    : formatKES(onlineOps.kilimallSales),
+              },
+              { label: "Total sales (all channels)", value: formatKES(onlineOps.totalSales) },
+            ]
+          : [{ label: "Total sales (selected range)", value: formatKES(onlineOps.directSales) }]),
         {
           label:
             onlineOps.directCommission != null
@@ -81,9 +87,11 @@ export function QuickStatsCard({
             {onlineOps?.periodLabel ?? (loading ? "Loading." : "No data")}
             {loading ? "  Refreshing." : ""}
           </p>
-          <p className="mt-1 text-[11px] text-slate-500">
-            Direct sales come from POS receipts. Jumia and Kilimall totals come from online performance for your assigned marketplace accounts.
-          </p>
+          {!hideMarketplace ? (
+            <p className="mt-1 text-[11px] text-slate-500">
+              Direct sales come from POS receipts. Jumia and Kilimall totals come from online performance for your assigned marketplace accounts.
+            </p>
+          ) : null}
         </div>
         <LockButton locked={locked} onToggle={toggle} />
       </div>
@@ -102,24 +110,26 @@ export function QuickStatsCard({
         ))}
       </div>
 
-      <div className="space-y-2">
-        <p className="text-[10px] uppercase tracking-wide text-slate-400">To next tier</p>
-        <p className="text-base font-semibold text-slate-100">
-          {locked
-            ? ""
-            : onlineOps?.tierMessage ??
-              (onlineOps?.toNextTier != null
-                ? `${formatKES(onlineOps.toNextTier)} more to hit next tier`
-                : "KES 0 more to hit next tier")}
-        </p>
-        <p className="text-[11px] text-slate-400">Memo ladder only; discretionary &amp; may be withheld.</p>
-        <div className="h-2 rounded-full bg-slate-800">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-200"
-            style={{ width: `${Math.round(progress * 100)}%` }}
-          />
+      {!hideMarketplace ? (
+        <div className="space-y-2">
+          <p className="text-[10px] uppercase tracking-wide text-slate-400">To next tier</p>
+          <p className="text-base font-semibold text-slate-100">
+            {locked
+              ? ""
+              : onlineOps?.tierMessage ??
+                (onlineOps?.toNextTier != null
+                  ? `${formatKES(onlineOps.toNextTier)} more to hit next tier`
+                  : "KES 0 more to hit next tier")}
+          </p>
+          <p className="text-[11px] text-slate-400">Memo ladder only; discretionary &amp; may be withheld.</p>
+          <div className="h-2 rounded-full bg-slate-800">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-200"
+              style={{ width: `${Math.round(progress * 100)}%` }}
+            />
+          </div>
         </div>
-      </div>
+      ) : null}
     </Card>
   );
 }
