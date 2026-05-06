@@ -4,11 +4,21 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-export async function PUT(req: Request, ctx: any) {
+type ParamsContext = { params: { id: string } } | { params: Promise<{ id: string }> } | Record<string, unknown>;
+
+async function resolveId(context: ParamsContext) {
+  const raw = (context as any)?.params ?? context;
+  if (raw && typeof raw?.then === "function") {
+    const awaited = await raw;
+    return typeof awaited?.id === "string" ? awaited.id : undefined;
+  }
+  return typeof (raw as any)?.id === "string" ? (raw as any).id : undefined;
+}
+
+export async function PUT(req: Request, ctx: ParamsContext) {
   const auth = await requireRole("ADMIN");
   if (!auth.ok) return auth.res;
 
-  const params = (ctx && (ctx.params || ctx)) || {};
   let body: any;
   try {
     body = await req.json();
@@ -16,7 +26,6 @@ export async function PUT(req: Request, ctx: any) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
   const bodyAttendantId = body?.attendantId as string | undefined;
-  const attendantId = (params.id as string | undefined) ?? bodyAttendantId;
 
   const {
     baseSalary,
@@ -30,6 +39,8 @@ export async function PUT(req: Request, ctx: any) {
   if (typeof baseSalary !== "number") return NextResponse.json({ error: "baseSalary required" }, { status: 400 });
 
   try {
+    const paramId = await resolveId(ctx);
+    const attendantId = paramId ?? bodyAttendantId;
     if (!attendantId) {
       return NextResponse.json({ error: "attendantId required" }, { status: 400 });
     }
