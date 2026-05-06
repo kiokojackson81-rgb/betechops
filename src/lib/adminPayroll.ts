@@ -34,6 +34,84 @@ type PayrollBuildOptions = {
   carryDepth: number;
 };
 
+function toDateOnly(value: Date) {
+  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
+}
+
+function datesBetween(start: Date, end: Date): Date[] {
+  const out: Date[] = [];
+  const cursor = toDateOnly(start);
+  const endDate = toDateOnly(end);
+  while (cursor <= endDate) {
+    out.push(new Date(cursor));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return out;
+}
+
+async function ensureRecurringAdjustmentsForPeriod(attendantId: string, period: TradingPeriod) {
+  const recurringItems = await prisma.attendantRecurringPayrollItem.findMany({
+    where: { attendantId, isActive: true },
+  });
+  if (!recurringItems.length) return;
+
+  const periodDates = datesBetween(period.start, period.end);
+  for (const item of recurringItems) {
+    const startGate = item.startDate ? toDateOnly(item.startDate) : null;
+    const endGate = item.endDate ? toDateOnly(item.endDate) : null;
+    let occurrence: Date | null = null;
+
+    for (const day of periodDates) {
+      if (startGate && day < startGate) continue;
+      if (endGate && day > endGate) continue;
+      if (item.cadence === "WEEKLY") {
+        const targetDow = Number(item.dayOfWeek ?? 1);
+        if (day.getUTCDay() === targetDow) {
+          occurrence = day;
+          break;
+        }
+      } else {
+        const targetDom = Number(item.dayOfMonth ?? 1);
+        if (day.getUTCDate() === targetDom) {
+          occurrence = day;
+          break;
+        }
+      }
+    }
+
+    if (!occurrence) continue;
+
+    await prisma.attendantPayrollAdjustment.upsert({
+      where: {
+        recurringItemId_periodKey: {
+          recurringItemId: item.id,
+          periodKey: period.key,
+        },
+      },
+      update: {
+        periodLabel: period.label,
+        adjustmentType: item.adjustmentType,
+        adjustmentKind: item.adjustmentKind,
+        label: item.label,
+        amount: item.amount,
+        occurrenceDate: occurrence,
+      },
+      create: {
+        attendantId,
+        periodKey: period.key,
+        periodLabel: period.label,
+        adjustmentType: item.adjustmentType,
+        adjustmentKind: item.adjustmentKind,
+        label: item.label,
+        amount: item.amount,
+        createdById: item.createdById,
+        recurringItemId: item.id,
+        occurrenceDate: occurrence,
+      },
+    });
+  }
+}
+
 function baseAdjustmentSummary() {
   return {
     totalBonus: 0,
@@ -189,6 +267,7 @@ async function buildPayrollRowResolved(
 ): Promise<PayrollRow> {
   const periodKeyVariants = getPeriodKeyVariantsFromDates(period.start, period.end);
   await ensurePayrollAdjustmentStorage();
+  await ensureRecurringAdjustmentsForPeriod(attendant.id, period);
   const [plan, ledger, adjustments] = await Promise.all([
     prisma.attendantCompPlan.findUnique({ where: { attendantId: attendant.id } }),
     prisma.commissionLedger.findUnique({

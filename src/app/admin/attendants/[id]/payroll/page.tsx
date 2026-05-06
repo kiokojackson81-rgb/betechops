@@ -144,6 +144,10 @@ export default async function PayrollPage({
     where: { attendantId, periodKey: { in: adjustmentKeys } },
     orderBy: { createdAt: "desc" },
   });
+  const recurringItems = await prisma.attendantRecurringPayrollItem.findMany({
+    where: { attendantId },
+    orderBy: [{ isActive: "desc" }, { createdAt: "desc" }],
+  });
   const currentLedger =
     currentLedgerRaw === null
       ? {
@@ -321,6 +325,7 @@ export default async function PayrollPage({
         periodKey={periodKey}
         periodLabel={periodLabel}
         initialAdjustments={adjustments as any}
+        initialRecurringItems={recurringItems as any}
         initialSummary={summary}
         ledger={currentLedger}
         previousLedger={previousLedger ?? null}

@@ -24,6 +24,7 @@ model User {
   attendantCommissions                 AttendantCommission[]
   attendantCompPlan                    AttendantCompPlan?
   attendantPayrollAdjustments          AttendantPayrollAdjustment[]
+  recurringPayrollItems               AttendantRecurringPayrollItem[]
   payrollAdjustmentRequests            PayrollAdjustmentRequest[]     @relation("PayrollAdjustmentRequestAttendant")
   submittedPayrollAdjustmentRequests   PayrollAdjustmentRequest[]     @relation("PayrollAdjustmentRequestRequester")
   decidedPayrollAdjustmentRequests     PayrollAdjustmentRequest[]     @relation("PayrollAdjustmentRequestDecider")
@@ -101,12 +102,39 @@ model AttendantPayrollAdjustment {
   label          String
   amount         Int
   createdById    String
+  recurringItemId String?
+  occurrenceDate DateTime?
   createdAt      DateTime              @default(now())
   adjustmentKind PayrollAdjustmentKind @default(DEDUCTION)
   attendant      User                  @relation(fields: [attendantId], references: [id])
+  recurringItem  AttendantRecurringPayrollItem? @relation(fields: [recurringItemId], references: [id])
   request        PayrollAdjustmentRequest?
 
   @@index([attendantId, periodKey])
+  @@index([recurringItemId, periodKey])
+  @@unique([recurringItemId, periodKey])
+}
+
+model AttendantRecurringPayrollItem {
+  id             String                @id @default(cuid())
+  attendantId    String
+  label          String
+  adjustmentType PayrollAdjustmentType
+  adjustmentKind PayrollAdjustmentKind @default(DEDUCTION)
+  amount         Int
+  cadence        PayrollAdjustmentCadence
+  dayOfWeek      Int?
+  dayOfMonth     Int?
+  startDate      DateTime?
+  endDate        DateTime?
+  isActive       Boolean               @default(true)
+  createdById    String
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  attendant      User                  @relation(fields: [attendantId], references: [id])
+  adjustments    AttendantPayrollAdjustment[]
+
+  @@index([attendantId, isActive])
 }
 
 model PayrollAdjustmentRequest {
@@ -1554,6 +1582,11 @@ enum WellnessRequestStatus {
 enum PayrollAdjustmentKind {
   ADDITION
   DEDUCTION
+}
+
+enum PayrollAdjustmentCadence {
+  WEEKLY
+  MONTHLY
 }
 
 enum PosTotalsMode {
