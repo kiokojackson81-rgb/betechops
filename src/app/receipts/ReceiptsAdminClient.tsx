@@ -2101,6 +2101,41 @@ export default function ReceiptsAdminClient({
                             )}
                           </div>
                         )}
+                        {allowEdit && commissionEditorOpen && (
+                          <div className="mt-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-2">
+                            <p className="text-[10px] uppercase tracking-wide text-emerald-200">Manual POS commission</p>
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <input
+                                type="number"
+                                min="0"
+                                step="1"
+                                value={commissionInput}
+                                onChange={(e) => setCommissionInput(e.target.value)}
+                                className="w-32 rounded-lg border border-white/15 bg-slate-950/60 px-2 py-1 text-xs text-white"
+                                placeholder="Amount"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => void saveManualCommission()}
+                                disabled={commissionSaving}
+                                className="rounded-lg bg-emerald-500 px-2 py-1 text-xs font-semibold text-black disabled:opacity-50"
+                              >
+                                {commissionSaving ? "Saving..." : "Save"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCommissionEditorOpen(false);
+                                  setCommissionInput("");
+                                }}
+                                disabled={commissionSaving}
+                                className="rounded-lg border border-white/15 px-2 py-1 text-xs text-slate-100 disabled:opacity-50"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <div>
                         <p className="text-xs text-slate-500">Profit</p>
@@ -2286,42 +2321,6 @@ export default function ReceiptsAdminClient({
                     </button>
                   )}
                 </div>
-
-                {allowEdit && commissionEditorOpen && (
-                  <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-3">
-                    <p className="text-xs uppercase tracking-wide text-emerald-200">Manual POS commission</p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={commissionInput}
-                        onChange={(e) => setCommissionInput(e.target.value)}
-                        className="w-40 rounded-lg border border-white/15 bg-slate-950/60 px-3 py-2 text-sm text-white"
-                        placeholder="Amount"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => void saveManualCommission()}
-                        disabled={commissionSaving}
-                        className="rounded-lg bg-emerald-500 px-3 py-2 text-sm font-semibold text-black disabled:opacity-50"
-                      >
-                        {commissionSaving ? "Saving..." : "Save"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCommissionEditorOpen(false);
-                          setCommissionInput("");
-                        }}
-                        disabled={commissionSaving}
-                        className="rounded-lg border border-white/15 px-3 py-2 text-sm text-slate-100 disabled:opacity-50"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
 
                 {detail.receipt.notes && (
                   <div className="rounded-2xl border border-white/5 bg-slate-900/60 p-3 text-sm">
