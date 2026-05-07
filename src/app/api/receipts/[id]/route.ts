@@ -73,10 +73,16 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
   let supportReceiptSummary: { id: string; buyingTotal?: number | null } | null = null;
   const orderItemIds = (receipt.order?.items ?? []).map((item) => item.id);
   const posCommissionByOrderItemId = await getReleasedPosProductCommissionTotalsByOrderItemIds(orderItemIds);
-  const posCommissionTotal = Array.from(posCommissionByOrderItemId.values()).reduce(
+  const earnedPosCommissionTotal = Array.from(posCommissionByOrderItemId.values()).reduce(
     (sum, amount) => sum + Number(amount ?? 0),
     0,
   );
+  const manualPosCommission = Number(
+    receipt?.data && typeof receipt.data === "object"
+      ? (receipt.data as Record<string, unknown>)?.manualPosCommissionAmount ?? 0
+      : 0,
+  );
+  const posCommissionTotal = earnedPosCommissionTotal + (Number.isFinite(manualPosCommission) ? manualPosCommission : 0);
   try {
     if (receipt?.order?.orderNumber) {
       const candidates = new Set<string>();
@@ -137,7 +143,14 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
   } catch (e) {
     // best-effort; ignore support lookup failures
   }
-  return NextResponse.json({ receipt, supportItems, supportReceiptSummary, posCommissionTotal });
+  return NextResponse.json({
+    receipt,
+    supportItems,
+    supportReceiptSummary,
+    posCommissionTotal,
+    earnedPosCommissionTotal,
+    manualPosCommissionAmount: Number.isFinite(manualPosCommission) ? manualPosCommission : 0,
+  });
 }
 
 export async function PATCH(req: NextRequest, context: ParamsContext) {

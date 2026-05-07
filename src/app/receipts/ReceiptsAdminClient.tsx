@@ -70,6 +70,8 @@ type ReceiptDetailPayload = {
   supportItems?: SupportItemDetail[];
   supportReceiptSummary?: { id: string; buyingTotal?: number | null } | null;
   posCommissionTotal?: number;
+  earnedPosCommissionTotal?: number;
+  manualPosCommissionAmount?: number;
 };
 
 type ItemWithCost = {
@@ -386,6 +388,9 @@ export default function ReceiptsAdminClient({
   const [detail, setDetail] = useState<ReceiptDetailPayload | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [recalculatingReceiptId, setRecalculatingReceiptId] = useState<string | null>(null);
+  const [commissionEditorOpen, setCommissionEditorOpen] = useState(false);
+  const [commissionInput, setCommissionInput] = useState("");
+  const [commissionSaving, setCommissionSaving] = useState(false);
   const [sendingChannel, setSendingChannel] = useState<"email" | "whatsapp" | null>(null);
   const [pendingEditId, setPendingEditId] = useState<string | null>(null);
   const [editState, setEditState] = useState<{ open: boolean; draft: EditDraft | null; saving: boolean }>({
@@ -922,6 +927,61 @@ export default function ReceiptsAdminClient({
     [fetchReceiptDetail, fetchSummary, loadRows, page, selected, showToast],
   );
 
+  const openCommissionEditor = useCallback(() => {
+    const current = Number(detail?.manualPosCommissionAmount ?? 0);
+    setCommissionInput(current > 0 ? String(current) : "");
+    setCommissionEditorOpen(true);
+  }, [detail?.manualPosCommissionAmount]);
+
+  const saveManualCommission = useCallback(async () => {
+    if (!selected?.id) return;
+    const amount = Math.max(0, Number(commissionInput || 0));
+    if (!Number.isFinite(amount)) {
+      showToast("Invalid commission amount", "warn");
+      return;
+    }
+    setCommissionSaving(true);
+    try {
+      const res = await fetch(`/api/receipts/${selected.id}/commission`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to save commission");
+      showToast("POS commission updated", "success");
+      setCommissionEditorOpen(false);
+      await loadRows(page, { silent: true });
+      await fetchSummary();
+      await fetchReceiptDetail(selected.id);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to save commission";
+      showToast(message, "error");
+    } finally {
+      setCommissionSaving(false);
+    }
+  }, [commissionInput, fetchReceiptDetail, fetchSummary, loadRows, page, selected, showToast]);
+
+  const deleteManualCommission = useCallback(async () => {
+    if (!selected?.id) return;
+    setCommissionSaving(true);
+    try {
+      const res = await fetch(`/api/receipts/${selected.id}/commission`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to delete commission");
+      showToast("POS commission removed", "success");
+      setCommissionEditorOpen(false);
+      await loadRows(page, { silent: true });
+      await fetchSummary();
+      await fetchReceiptDetail(selected.id);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to delete commission";
+      showToast(message, "error");
+    } finally {
+      setCommissionSaving(false);
+    }
+  }, [fetchReceiptDetail, fetchSummary, loadRows, page, selected, showToast]);
+
   const handleSend = async (channel: "email" | "whatsapp") => {
     if (!selected) return;
     if (!canTreatAsSalesReceipt(selected)) {
@@ -1392,6 +1452,10 @@ export default function ReceiptsAdminClient({
   const { itemsWithCost, supportBuyingTotal, hasCompleteCosts, hasAuthoritativeBuyingTotal } = costSummary;
   const receiptGrandTotal = Number(detail?.receipt?.totals?.total ?? detail?.receipt?.order?.totalAmount ?? 0);
   const posCommissionTotal = Number(detail?.posCommissionTotal ?? 0);
+  const manualPosCommissionAmount = Number(detail?.manualPosCommissionAmount ?? 0);
+  const earnedPosCommissionTotal = Number(
+    detail?.earnedPosCommissionTotal ?? Math.max(0, posCommissionTotal - manualPosCommissionAmount),
+  );
   const canShowReceiptProfit = hasCompleteCosts || hasAuthoritativeBuyingTotal;
   const profitAmount = canShowReceiptProfit ? receiptGrandTotal - supportBuyingTotal - posCommissionTotal : 0;
   const profitColor =
@@ -2013,12 +2077,37 @@ export default function ReceiptsAdminClient({
                       <div>
                         <p className="text-xs text-slate-500">POS commission</p>
                         <p className="font-semibold text-white">{formatCurrency(posCommissionTotal)}</p>
+                        <p className="text-[11px] text-slate-500">
+                          Earned {formatCurrency(earnedPosCommissionTotal)} {manualPosCommissionAmount > 0 ? `+ Manual ${formatCurrency(manualPosCommissionAmount)}` : ""}
+                        </p>
+                        {allowEdit && (
+                          <div className="mt-1 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={openCommissionEditor}
+                              className="rounded-lg border border-white/15 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-100 hover:bg-white/10"
+                            >
+                              {manualPosCommissionAmount > 0 ? "Edit" : "Add"}
+                            </button>
+                            {manualPosCommissionAmount > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => void deleteManualCommission()}
+                                disabled={commissionSaving}
+                                className="rounded-lg border border-rose-500/40 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-rose-200 hover:bg-rose-500/20 disabled:opacity-50"
+                              >
+                                Delete
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <div>
                         <p className="text-xs text-slate-500">Profit</p>
                         <p className={`text-lg font-semibold ${profitColor}`}>
                           {canShowReceiptProfit ? formatCurrency(profitAmount) : "Awaiting cost data"}
                         </p>
+                      </div>
                     </div>
                   </div>
                   {detail.receipt.docType === "LAYAWAY" && (
@@ -2027,7 +2116,6 @@ export default function ReceiptsAdminClient({
                     </p>
                   )}
                 </div>
-              </div>
 
                 {detail.receipt.data?.podDelivery && (
                   <div className="rounded-2xl border border-yellow-500/40 bg-yellow-500/5 p-4 text-sm text-yellow-100">
@@ -2198,6 +2286,42 @@ export default function ReceiptsAdminClient({
                     </button>
                   )}
                 </div>
+
+                {allowEdit && commissionEditorOpen && (
+                  <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-3">
+                    <p className="text-xs uppercase tracking-wide text-emerald-200">Manual POS commission</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={commissionInput}
+                        onChange={(e) => setCommissionInput(e.target.value)}
+                        className="w-40 rounded-lg border border-white/15 bg-slate-950/60 px-3 py-2 text-sm text-white"
+                        placeholder="Amount"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void saveManualCommission()}
+                        disabled={commissionSaving}
+                        className="rounded-lg bg-emerald-500 px-3 py-2 text-sm font-semibold text-black disabled:opacity-50"
+                      >
+                        {commissionSaving ? "Saving..." : "Save"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCommissionEditorOpen(false);
+                          setCommissionInput("");
+                        }}
+                        disabled={commissionSaving}
+                        className="rounded-lg border border-white/15 px-3 py-2 text-sm text-slate-100 disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {detail.receipt.notes && (
                   <div className="rounded-2xl border border-white/5 bg-slate-900/60 p-3 text-sm">
