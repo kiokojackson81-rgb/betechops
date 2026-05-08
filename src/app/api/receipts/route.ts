@@ -15,6 +15,7 @@ import { sendReceiptChannels } from "@/workers/receiptSender";
 import { getSiteUrl, notifyInternalPodAlerts, notifyInternalReceipt } from "@/lib/receiptInternalNotifications";
 import { randomUUID } from "crypto";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
+import { isDeliveryFeePayloadItem } from "@/lib/supportPricing";
 import {
   getProfitReceiptContributorsForAdminFilters,
   type ProfitReceiptContributor,
@@ -979,6 +980,7 @@ export async function POST(req: NextRequest) {
           selectedProductId: selectedProductId || null,
           quantity,
           unitPrice,
+          isDeliveryFee: isDeliveryFeePayloadItem(it),
           serial: itemSerial,
           warranty: itemWarranty,
           title,
@@ -1325,7 +1327,7 @@ export async function POST(req: NextRequest) {
               buyingPrice: it.variableCost
                 ? null
                 : Math.max(0, Math.round(Number(it.costPrice || 0) * Number(it.quantity || 1))),
-            }));
+            })).filter((item, index) => !createdItems[index]?.isDeliveryFee);
             const supportReceiptBuyingTotal = supportReceiptItems.reduce((sum, item) => sum + (item.buyingPrice || 0), 0);
             const supportSellingTotal = Math.round(Number(total) || 0);
 

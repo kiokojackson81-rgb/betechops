@@ -579,6 +579,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       title: it.title.trim(),
       quantity: Number(it.quantity || 1),
       unitPrice: Number(it.unitPrice || 0),
+      isDeliveryFee: Boolean(it.isDeliveryFee),
       serial: showSerials ? it.serial || null : null,
       warranty: showWarranty ? it.warranty || null : null,
       productId: it.productId || null,

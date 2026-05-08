@@ -358,27 +358,42 @@ async function computePosOnlyReceiptSummary({
     ),
   );
 
-  const supportContexts = new Map<string, { buyingTotal: number; latestPricedAt: Date | null; hasPendingItems: boolean }>();
+  const supportPendingByReceipt = new Map<string, { hasPendingItems: boolean }>();
+  const supportProfitByReceipt = new Map<string, { buyingTotal: number; profit: number }>();
   if (candidateReceiptNumbers.length > 0) {
-    const supportRows = await prisma.supportReceipt.findMany({
-      where: {
-        OR: [
-          { receiptNumber: { in: candidateReceiptNumbers } },
-          { receiptKey: { in: candidateReceiptNumbers } },
-        ],
-      },
-      select: {
-        receiptNumber: true,
-        receiptKey: true,
-        buyingTotal: true,
-        items: {
-          select: {
-            buyingPrice: true,
-            pricedAt: true,
+    const [supportRows, supportSales] = await Promise.all([
+      prisma.supportReceipt.findMany({
+        where: {
+          OR: [
+            { receiptNumber: { in: candidateReceiptNumbers } },
+            { receiptKey: { in: candidateReceiptNumbers } },
+          ],
+        },
+        select: {
+          receiptNumber: true,
+          receiptKey: true,
+          buyingTotal: true,
+          items: {
+            select: {
+              buyingPrice: true,
+              pricedAt: true,
+            },
           },
         },
-      },
-    });
+      }),
+      prisma.supportSale.findMany({
+        where: {
+          ...(Object.keys(supportDailyEntryWhere).length ? { entry: supportDailyEntryWhere } : {}),
+          createdAt: { gte: start, lte: end },
+          receiptNumber: { in: candidateReceiptNumbers },
+        },
+        select: {
+          receiptNumber: true,
+          sellingPrice: true,
+          buyingPrice: true,
+        },
+      }),
+    ]);
 
     const supportRowsWithLatePricing = [...supportRows, ...latePricedSupportReceipts];
     for (const row of supportRowsWithLatePricing) {
@@ -396,18 +411,28 @@ async function computePosOnlyReceiptSummary({
       for (const rawKey of [...collectReceiptVariants(row.receiptNumber ?? undefined), ...extractReceiptKeyTailVariants(row.receiptKey)]) {
         const canonical = canonicalReceiptNumber(rawKey);
         if (!canonical) continue;
-        const existing = supportContexts.get(canonical);
+        const existing = supportPendingByReceipt.get(canonical);
+        supportPendingByReceipt.set(canonical, {
+          hasPendingItems: Boolean(existing?.hasPendingItems || hasPendingItems),
+        });
+      }
+    }
+
+    for (const sale of supportSales) {
+      for (const rawKey of collectReceiptVariants(sale.receiptNumber ?? undefined)) {
+        const canonical = canonicalReceiptNumber(rawKey);
+        if (!canonical) continue;
+        const existing = supportProfitByReceipt.get(canonical);
         if (!existing) {
-          supportContexts.set(canonical, { buyingTotal, latestPricedAt, hasPendingItems });
+          supportProfitByReceipt.set(canonical, {
+            buyingTotal: Number(sale.buyingPrice ?? 0),
+            profit: Number(sale.sellingPrice ?? 0) - Number(sale.buyingPrice ?? 0),
+          });
           continue;
         }
-        supportContexts.set(canonical, {
-          buyingTotal: Math.max(existing.buyingTotal, buyingTotal),
-          hasPendingItems: existing.hasPendingItems || hasPendingItems,
-          latestPricedAt:
-            latestPricedAt && (!existing.latestPricedAt || latestPricedAt.getTime() > existing.latestPricedAt.getTime())
-              ? latestPricedAt
-              : existing.latestPricedAt,
+        supportProfitByReceipt.set(canonical, {
+          buyingTotal: existing.buyingTotal + Number(sale.buyingPrice ?? 0),
+          profit: existing.profit + (Number(sale.sellingPrice ?? 0) - Number(sale.buyingPrice ?? 0)),
         });
       }
     }
@@ -440,7 +465,8 @@ async function computePosOnlyReceiptSummary({
       canonicalReceiptNumber(receipt.order?.orderNumber) ??
       canonicalReceiptNumber(receipt.receiptNumber) ??
       null;
-    const supportContext = canonicalOrderNumber ? supportContexts.get(canonicalOrderNumber) : undefined;
+    const supportPending = canonicalOrderNumber ? supportPendingByReceipt.get(canonicalOrderNumber) : undefined;
+    const supportProfit = canonicalOrderNumber ? supportProfitByReceipt.get(canonicalOrderNumber) : undefined;
 
     const items = (receipt.order?.items ?? []).map((item: any) => {
       const costs = Array.isArray(item?.orderCosts) ? item.orderCosts : [];
@@ -460,7 +486,7 @@ async function computePosOnlyReceiptSummary({
       };
     });
 
-    const supportBuyingTotal = Number(supportContext?.buyingTotal ?? 0);
+    const supportBuyingTotal = Number(supportProfit?.buyingTotal ?? 0);
     const aggregateBuyingTotal = Number((receipt as any)?.buyingTotal ?? (receipt.data as any)?.buyingTotal ?? 0);
     const resolvedBuyingTotal = supportBuyingTotal > 0 ? supportBuyingTotal : aggregateBuyingTotal;
     const costFromItems = items.reduce(
@@ -468,7 +494,7 @@ async function computePosOnlyReceiptSummary({
       0,
     );
     const allItemsPriced = items.length > 0 && items.every((item: any) => Number(item?.buyingPrice ?? 0) > 0);
-    const hasPendingItems = supportContext?.hasPendingItems ?? !allItemsPriced;
+    const hasPendingItems = supportPending?.hasPendingItems ?? !allItemsPriced;
     const hasAggregateCost = resolvedBuyingTotal > 0;
     const buyingTotalForContributor = hasAggregateCost ? resolvedBuyingTotal : costFromItems;
     const explicitProfitRaw = (receipt as any)?.profit ?? (receipt.data as any)?.profit;
@@ -479,13 +505,15 @@ async function computePosOnlyReceiptSummary({
           ? Number(explicitProfitRaw)
           : undefined;
 
-    const hasRecognizableProfit = hasAggregateCost || allItemsPriced || explicitProfit !== undefined;
-    const profitRecognizedAt =
-      supportContext?.latestPricedAt ??
-      (hasRecognizableProfit && salesDate instanceof Date ? salesDate : null);
+    const hasRecognizableProfit = Boolean(supportProfit) || hasAggregateCost || allItemsPriced || explicitProfit !== undefined;
+    const profitRecognizedAt = supportProfit ? start : hasRecognizableProfit && salesDate instanceof Date ? salesDate : null;
 
     let receiptProfit = 0;
-    if (hasAggregateCost || allItemsPriced) {
+    if (supportProfit) {
+      receiptProfit = supportProfit.profit;
+      totalCost += supportProfit.buyingTotal;
+      totalProfitPriced += receiptProfit;
+    } else if (hasAggregateCost || allItemsPriced) {
       const buyingSum = hasAggregateCost ? resolvedBuyingTotal : costFromItems;
       receiptProfit = salesValue - buyingSum;
       if (profitRecognizedAt && isDateInRange(profitRecognizedAt, start, end)) {

@@ -489,55 +489,38 @@ export async function summarizePosReceiptsForPeriod(period: {
     ),
   );
 
-  const supportContexts = new Map<string, { buyingTotal: number; latestPricedAt: Date | null }>();
+  const supportProfitByReceipt = new Map<string, { profit: number; buyingTotal: number }>();
   if (candidateReceiptNumbers.length > 0) {
-    const supportRows = await prisma.supportReceipt.findMany({
+    const supportRows = await prisma.supportSale.findMany({
       where: {
-        ...(Object.keys(supportDailyEntryWhere).length ? { dailyEntry: supportDailyEntryWhere } : {}),
-        OR: [
-          { receiptNumber: { in: candidateReceiptNumbers } },
-          { receiptKey: { in: candidateReceiptNumbers } },
-        ],
+        ...(Object.keys(supportDailyEntryWhere).length ? { entry: supportDailyEntryWhere } : {}),
+        createdAt: { gte: period.start, lte: period.end },
+        receiptNumber: { in: candidateReceiptNumbers },
       },
       select: {
         receiptNumber: true,
-        receiptKey: true,
-        buyingTotal: true,
-        items: {
-          select: {
-            buyingPrice: true,
-            pricedAt: true,
-          },
-        },
+        sellingPrice: true,
+        buyingPrice: true,
       },
     });
 
     for (const row of supportRows) {
-      const items = Array.isArray(row.items) ? row.items : [];
-      const aggregateBuying = Number(row.buyingTotal ?? 0);
-      const fallbackBuying = items.reduce((sum, item) => sum + Number(item.buyingPrice ?? 0), 0);
-      const latestPricedAt = items.reduce<Date | null>((latest, item) => {
-        if (!(item.pricedAt instanceof Date)) return latest;
-        if (!latest || item.pricedAt.getTime() > latest.getTime()) return item.pricedAt;
-        return latest;
-      }, null);
-      if (!latestPricedAt) continue;
-      const buyingTotal = aggregateBuying > 0 ? aggregateBuying : fallbackBuying;
-      if (buyingTotal <= 0) continue;
-      for (const rawKey of [...collectReceiptVariants(row.receiptNumber ?? undefined), ...extractReceiptKeyTailVariants(row.receiptKey)]) {
+      const selling = Number(row.sellingPrice ?? 0);
+      const buying = Number(row.buyingPrice ?? 0);
+      for (const rawKey of collectReceiptVariants(row.receiptNumber ?? undefined)) {
         const canonical = canonicalReceiptNumber(rawKey);
         if (!canonical) continue;
-        const existing = supportContexts.get(canonical);
+        const existing = supportProfitByReceipt.get(canonical);
         if (!existing) {
-          supportContexts.set(canonical, { buyingTotal, latestPricedAt });
+          supportProfitByReceipt.set(canonical, {
+            profit: selling - buying,
+            buyingTotal: buying,
+          });
           continue;
         }
-        supportContexts.set(canonical, {
-          buyingTotal: Math.max(existing.buyingTotal, buyingTotal),
-          latestPricedAt:
-            latestPricedAt.getTime() > (existing.latestPricedAt?.getTime() ?? 0)
-              ? latestPricedAt
-              : existing.latestPricedAt,
+        supportProfitByReceipt.set(canonical, {
+          profit: existing.profit + (selling - buying),
+          buyingTotal: existing.buyingTotal + buying,
         });
       }
     }
@@ -563,11 +546,10 @@ export async function summarizePosReceiptsForPeriod(period: {
       canonicalReceiptNumber(receipt.order?.orderNumber ?? undefined) ??
       canonicalReceiptNumber(receipt.receiptNumber ?? undefined) ??
       null;
-    const supportContext = canonicalOrderNumber ? supportContexts.get(canonicalOrderNumber) : undefined;
-    const recognizedAt = supportContext?.latestPricedAt ?? salesDate;
+    const supportContext = canonicalOrderNumber ? supportProfitByReceipt.get(canonicalOrderNumber) : undefined;
     const profit =
-      supportContext?.buyingTotal && supportContext.buyingTotal > 0
-        ? sales - supportContext.buyingTotal
+      supportContext
+        ? supportContext.profit
         : extractProfit(receipt, sales);
 
     if (salesIncluded && sales > 0) {
@@ -592,7 +574,7 @@ export async function summarizePosReceiptsForPeriod(period: {
     const profitIncluded =
       period.profitRecognitionMode === "salesDate"
         ? salesIncluded
-        : isDateInRange(recognizedAt, period.start, period.end);
+        : Boolean(supportContext) || isDateInRange(salesDate, period.start, period.end);
     if (profit && profitIncluded) {
       totalProfit += profit;
     }

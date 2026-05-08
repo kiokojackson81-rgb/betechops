@@ -59,6 +59,52 @@ export async function getSupportPeriodAggregates(opts: { userId: string; period:
     },
   });
 
+  const allReceiptCanonicals = new Set<string>();
+  const saleReceiptCanonicals = new Set<string>();
+  for (const entry of entries) {
+    for (const receipt of entry.receipts ?? []) {
+      const canonical =
+        canonicalReceiptNumber(receipt.receiptNumber ?? undefined) ??
+        canonicalReceiptNumber(receipt.receiptKey ?? undefined);
+      if (canonical) allReceiptCanonicals.add(canonical);
+    }
+    for (const sale of entry.sales ?? []) {
+      const canonical = canonicalReceiptNumber(sale.receiptNumber ?? undefined);
+      if (canonical) saleReceiptCanonicals.add(canonical);
+    }
+  }
+
+  const receiptsWithRecognizedSales = new Set<string>();
+  if (saleReceiptCanonicals.size > 0) {
+    const saleRows = await prisma.supportSale.findMany({
+      where: { receiptNumber: { in: Array.from(saleReceiptCanonicals) } },
+      select: { receiptNumber: true },
+    });
+    for (const sale of saleRows) {
+      const canonical = canonicalReceiptNumber(sale.receiptNumber ?? undefined);
+      if (canonical) receiptsWithRecognizedSales.add(canonical);
+    }
+  }
+
+  const receiptExistenceByCanonical = new Set<string>(allReceiptCanonicals);
+  if (saleReceiptCanonicals.size > 0) {
+    const receiptRows = await prisma.supportReceipt.findMany({
+      where: {
+        OR: [
+          { receiptNumber: { in: Array.from(saleReceiptCanonicals) } },
+          { receiptKey: { in: Array.from(saleReceiptCanonicals) } },
+        ],
+      },
+      select: { receiptNumber: true, receiptKey: true },
+    });
+    for (const row of receiptRows) {
+      const canonical =
+        canonicalReceiptNumber(row.receiptNumber ?? undefined) ??
+        canonicalReceiptNumber(row.receiptKey ?? undefined);
+      if (canonical) receiptExistenceByCanonical.add(canonical);
+    }
+  }
+
   const aggregates: SupportPeriodAggregates = {
     totalSales: 0,
     totalProfit: 0,
@@ -89,12 +135,14 @@ export async function getSupportPeriodAggregates(opts: { userId: string; period:
       const buying = Number(r.buyingTotal ?? 0);
       const itemsCount = Array.isArray(r.items) ? r.items.length : 0;
       const method = normalizePaymentMethod(r.paymentMethod);
+      const recognizedProfit =
+        canonical && receiptsWithRecognizedSales.has(canonical) ? 0 : selling - buying;
 
       const existing = seen.get(key);
       if (existing) {
         // merge stats (do not increment receipt count)
         existing.sales += selling;
-        existing.profit += selling - buying;
+        existing.profit += recognizedProfit;
         existing.items += itemsCount;
         if (method === "CASH") {
           existing.cash += selling;
@@ -105,7 +153,7 @@ export async function getSupportPeriodAggregates(opts: { userId: string; period:
         seen.set(key, {
           id: r.id,
           sales: selling,
-          profit: selling - buying,
+          profit: recognizedProfit,
           items: itemsCount,
           mpesa: method === "MPESA" ? selling : 0,
           cash: method === "CASH" ? selling : 0,
@@ -122,7 +170,6 @@ export async function getSupportPeriodAggregates(opts: { userId: string; period:
         const receiptNumber = (sale as any).receiptNumber ?? null;
         const saleCanonical = canonicalReceiptNumber(receiptNumber);
         if (saleCanonical && excludedCanonicals.has(saleCanonical)) continue;
-        if (saleCanonical && entryReceiptCanonicals.has(saleCanonical)) continue;
 
         const receiptIdBase = (receiptNumber && String(receiptNumber).trim().length > 0) ? String(receiptNumber).trim() : String((sale as any).id ?? "");
         if (!receiptIdBase) continue;
@@ -136,22 +183,25 @@ export async function getSupportPeriodAggregates(opts: { userId: string; period:
         const selling = Number((sale as any).sellingPrice ?? 0);
         const buying = Number((sale as any).buyingPrice ?? 0);
         const itemsCount = Math.max(1, Math.trunc(Number((sale as any).itemsCount ?? 1)));
+        const salesValue =
+          saleCanonical && receiptExistenceByCanonical.has(saleCanonical) ? 0 : selling;
+        const profitValue = buying > 0 ? selling - buying : 0;
 
         const existing = seen.get(key);
         if (existing) {
-          existing.sales += selling;
-          if (buying > 0) existing.profit += selling - buying;
+          existing.sales += salesValue;
+          if (buying > 0) existing.profit += profitValue;
           existing.items += itemsCount;
-          if (method === "CASH") existing.cash += selling;
-          else existing.mpesa += selling;
+          if (method === "CASH") existing.cash += salesValue;
+          else existing.mpesa += salesValue;
         } else {
           seen.set(key, {
             id: String((sale as any).id ?? key),
-            sales: selling,
-            profit: buying > 0 ? selling - buying : 0,
+            sales: salesValue,
+            profit: profitValue,
             items: itemsCount,
-            mpesa: method === "MPESA" ? selling : 0,
-            cash: method === "CASH" ? selling : 0,
+            mpesa: method === "MPESA" ? salesValue : 0,
+            cash: method === "CASH" ? salesValue : 0,
           });
         }
       }

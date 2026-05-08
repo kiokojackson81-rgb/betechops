@@ -9,6 +9,7 @@ import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 import { cleanupMarketingReceipts, recalcSupportEntry } from "@/lib/marketingReceiptCleanup";
 import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers } from "@/lib/commission";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
+import { allocateSupportSellingShares, encodeSupportSaleProduct } from "@/lib/supportPricing";
 
 export const dynamic = "force-dynamic";
 
@@ -83,6 +84,7 @@ export async function POST(req: Request) {
   let submitterId = receiptItem.receipt.dailyEntry.submittedById ?? null;
   let finalizedPodOrderId: string | null = null;
   let finalizedPodAt: Date | null = null;
+  let recognizedSaleValue = sellingPrice;
 
   await prisma.$transaction(async (tx) => {
     // update the receipt item
@@ -132,6 +134,7 @@ export async function POST(req: Request) {
       linkedReceipt?.data && typeof linkedReceipt.data === "object"
         ? (linkedReceipt.data as Record<string, any>)
         : {};
+    const linkedReceiptItems = Array.isArray(linkedData.items) ? linkedData.items as Array<Record<string, unknown>> : [];
     const linkedPod = linkedData?.podDelivery && typeof linkedData.podDelivery === "object"
       ? (linkedData.podDelivery as Record<string, any>)
       : null;
@@ -166,6 +169,77 @@ export async function POST(req: Request) {
         },
       });
     };
+
+    const sellingShares = allocateSupportSellingShares(linkedReceiptItems, refreshedReceipt.items);
+    const productLabel = encodeSupportSaleProduct(receiptItem.productName ?? "Item", receiptItem.id);
+    const itemSellingPrice = Math.max(0, Math.round(Number(sellingShares.get(receiptItem.id) ?? sellingPrice)));
+    recognizedSaleValue = itemSellingPrice;
+    const entryIdsToRecalc = new Set<string>([entryId]);
+
+    if (submitterId && itemSellingPrice > 0) {
+      const startOfToday = new Date(now);
+      startOfToday.setHours(0, 0, 0, 0);
+      const endOfToday = new Date(now);
+      endOfToday.setHours(23, 59, 59, 999);
+      const dayOfWeek = now.toLocaleDateString("en-KE", { weekday: "long" });
+
+      const pricingEntry =
+        await tx.supportDailyEntry.findFirst({
+          where: { submittedById: submitterId, date: { gte: startOfToday, lte: endOfToday } },
+          select: { id: true },
+        }) ??
+        await tx.supportDailyEntry.create({
+          data: {
+            date: now,
+            dayOfWeek,
+            totalSales: 0,
+            totalProfit: 0,
+            newBatteries: 0,
+            changedBatteries: 0,
+            submittedById: submitterId,
+          },
+          select: { id: true },
+        });
+
+      const existingSale = await tx.supportSale.findFirst({
+        where: { product: productLabel },
+        select: { id: true, entryId: true },
+      });
+
+      entryIdsToRecalc.add(pricingEntry.id);
+      if (existingSale?.entryId) {
+        entryIdsToRecalc.add(existingSale.entryId);
+      }
+
+      if (existingSale) {
+        await tx.supportSale.update({
+          where: { id: existingSale.id },
+          data: {
+            entryId: pricingEntry.id,
+            product: productLabel,
+            buyingPrice: roundedPrice,
+            sellingPrice: itemSellingPrice,
+            receiptNumber: canonicalReceipt ?? refreshedReceipt.receiptNumber ?? null,
+            paymentMethod: refreshedReceipt.paymentMethod,
+            itemsCount: 1,
+            createdAt: now,
+          },
+        });
+      } else {
+        await tx.supportSale.create({
+          data: {
+            entryId: pricingEntry.id,
+            product: productLabel,
+            buyingPrice: roundedPrice,
+            sellingPrice: itemSellingPrice,
+            receiptNumber: canonicalReceipt ?? refreshedReceipt.receiptNumber ?? null,
+            paymentMethod: refreshedReceipt.paymentMethod,
+            itemsCount: 1,
+            createdAt: now,
+          },
+        });
+      }
+    }
 
     if (isDeliveredPod && allItemsPriced && submitterId) {
       const startOfToday = new Date(now);
@@ -214,6 +288,8 @@ export async function POST(req: Request) {
       if (todayEntry.id !== oldEntryId) {
         await recalcSupportEntry(tx as any, todayEntry.id);
       }
+      entryIdsToRecalc.delete(oldEntryId);
+      entryIdsToRecalc.delete(todayEntry.id);
 
       await updateLinkedReceiptTotals({
         podDelivery: {
@@ -233,9 +309,13 @@ export async function POST(req: Request) {
         where: { id: entryId },
         data: { totalProfit: 0 },
       });
+      entryIdsToRecalc.delete(entryId);
     } else {
       await updateLinkedReceiptTotals();
-      await recalcSupportEntry(tx as any, entryId);
+    }
+
+    for (const targetEntryId of entryIdsToRecalc) {
+      await recalcSupportEntry(tx as any, targetEntryId);
     }
   });
 
@@ -293,7 +373,7 @@ export async function POST(req: Request) {
     ok: true,
     entryId: finalEntryId,
     profitDelta,
-    saleValue: sellingPrice,
+    saleValue: recognizedSaleValue,
     receiptTotal: sellingTotal,
     paymentMethod: receipt.paymentMethod ?? null,
   });

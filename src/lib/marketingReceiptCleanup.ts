@@ -33,12 +33,64 @@ export async function recalcMarketingEntry(tx: Prisma.TransactionClient, entryId
 };
 
 export async function recalcSupportEntry(tx: Prisma.TransactionClient, entryId: string) {
-  const entryReceipts = await tx.supportReceipt.findMany({
-    where: { dailyEntryId: entryId },
-    include: { items: true },
-  });
-  const totalSales = entryReceipts.reduce((sum, r) => sum + Number(r.sellingTotal ?? 0), 0);
-  const totalProfit = entryReceipts.reduce((sum, r) => {
+  const [entryReceipts, entrySales] = await Promise.all([
+    tx.supportReceipt.findMany({
+      where: { dailyEntryId: entryId },
+      include: { items: true },
+    }),
+    tx.supportSale.findMany({
+      where: { entryId },
+      select: { receiptNumber: true, sellingPrice: true, buyingPrice: true },
+    }),
+  ]);
+
+  const receiptCanonicals = new Set(
+    entryReceipts
+      .flatMap((receipt) => [receipt.receiptNumber, receipt.receiptKey])
+      .map((value) => canonicalReceiptNumber(value ?? undefined))
+      .filter((value): value is string => Boolean(value)),
+  );
+
+  const salesReceiptCandidates = Array.from(
+    new Set(
+      entrySales
+        .map((sale) => canonicalReceiptNumber(sale.receiptNumber ?? undefined))
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+
+  const receiptsWithRecognizedSales = new Set<string>();
+  if (salesReceiptCandidates.length > 0) {
+    const matchingSales = await tx.supportSale.findMany({
+      where: { receiptNumber: { in: salesReceiptCandidates } },
+      select: { receiptNumber: true },
+    });
+    for (const sale of matchingSales) {
+      const canonical = canonicalReceiptNumber(sale.receiptNumber ?? undefined);
+      if (canonical) receiptsWithRecognizedSales.add(canonical);
+    }
+  }
+
+  const totalSales =
+    entryReceipts.reduce((sum, r) => sum + Number(r.sellingTotal ?? 0), 0) +
+    entrySales.reduce((sum, sale) => {
+      const canonical = canonicalReceiptNumber(sale.receiptNumber ?? undefined);
+      if (canonical && receiptCanonicals.has(canonical)) return sum;
+      return sum + Number(sale.sellingPrice ?? 0);
+    }, 0);
+
+  const salesProfit = entrySales.reduce(
+    (sum, sale) => sum + Number(sale.sellingPrice ?? 0) - Number(sale.buyingPrice ?? 0),
+    0,
+  );
+
+  const receiptProfit = entryReceipts.reduce((sum, r) => {
+    const canonical =
+      canonicalReceiptNumber(r.receiptNumber ?? undefined) ??
+      canonicalReceiptNumber(r.receiptKey ?? undefined);
+    if (canonical && receiptsWithRecognizedSales.has(canonical)) {
+      return sum;
+    }
     const items = r.items ?? [];
     const allItemsPriced = items.length > 0 && items.every((it) => Number(it.buyingPrice ?? 0) > 0);
     const aggregateCost = Number((r as any).buyingTotal ?? 0);
@@ -49,6 +101,7 @@ export async function recalcSupportEntry(tx: Prisma.TransactionClient, entryId: 
     }
     return sum;
   }, 0);
+  const totalProfit = salesProfit + receiptProfit;
   await tx.supportDailyEntry.update({
     where: { id: entryId },
     data: { totalSales, totalProfit },

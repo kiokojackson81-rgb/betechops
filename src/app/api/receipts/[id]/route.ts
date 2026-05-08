@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/api";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 import { getReleasedPosProductCommissionTotalsByOrderItemIds } from "@/lib/posProductCommission";
+import { isDeliveryFeePayloadItem } from "@/lib/supportPricing";
 import {
   cleanupMarketingReceipts,
   cleanupSupportReceipts,
@@ -354,7 +355,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
       const receiptItemsData = createdItems.map((item) => ({
         productName: item.title || "Item",
         buyingPrice: item.costPrice,
-      }));
+      })).filter((item) => !isDeliveryFeePayloadItem({ title: item.productName }));
       const totalBuying = createdItems.reduce((sum, item) => sum + item.costPrice * item.quantity, 0);
       const existingReceiptCandidates = Array.from(
         new Set(
