@@ -233,50 +233,6 @@ async function resolveShopForAccount(account: {
 }
 
 async function resolveDividedTargets(): Promise<TargetResolved[]> {
-  const targetResolved = await resolveDividedTargets();
-
-  return targetResolved;
-}
-
-export function getWeekEndInputFromExclusive(weekEndExclusive: Date) {
-  return new Date(weekEndExclusive.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-}
-
-export function buildDividedReference(weekEndInput: string) {
-  return `DIV-${weekEndInput}`;
-}
-
-export function computeDividedValues(report: Pick<DividedReportPayload, "accounts" | "totals" | "week">): DividedComputedValues {
-  const totalSales = money(report.totals.sales);
-  const returns = money(report.totals.returns);
-  const grossProfit = money(report.totals.grossProfit);
-  const baseProfit = grossProfit - DIVIDED_FIXED_DEDUCTION;
-  const divided = Math.max(0, Math.round((baseProfit * DIVIDED_RATE_PCT) / 100));
-  const hitechPayout = money(report.accounts.find((row) => row.key === "hitech-power")?.salesNetPayout);
-  const equity = Math.round(hitechPayout - divided - DIVIDED_FIXED_DEDUCTION);
-  const reference = buildDividedReference(report.week.weekEndInput);
-
-  return {
-    totalSales,
-    returns,
-    grossProfit,
-    baseProfit,
-    divided,
-    hitechPayout,
-    equity,
-    reference,
-  };
-}
-
-export async function getDividedReportForWeek(weekStartRaw: string): Promise<DividedReportPayload> {
-  const parsed = parseDateOnlyUtc(weekStartRaw);
-  if (!parsed) {
-    throw new Error("Invalid weekStart");
-  }
-  const weekStart = canonicalNairobiWeekStartUtc(parsed);
-  const { weekEnd } = mondayToSundayNairobiWindow(weekStart);
-  const weekEndInput = getWeekEndInputFromExclusive(weekEnd);
-
   const accounts = await prisma.marketplaceAccount.findMany({
     where: {
       isActive: true,
@@ -322,6 +278,50 @@ export async function getDividedReportForWeek(weekStartRaw: string): Promise<Div
       shopIds: [...shopIdsSet],
     });
   }
+
+  return targetResolved;
+}
+
+export function getWeekEndInputFromExclusive(weekEndExclusive: Date) {
+  return new Date(weekEndExclusive.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+export function buildDividedReference(weekEndInput: string) {
+  return `DIV-${weekEndInput}`;
+}
+
+export function computeDividedValues(report: Pick<DividedReportPayload, "accounts" | "totals" | "week">): DividedComputedValues {
+  const totalSales = money(report.totals.sales);
+  const returns = money(report.totals.returns);
+  const grossProfit = money(report.totals.grossProfit);
+  const baseProfit = grossProfit - DIVIDED_FIXED_DEDUCTION;
+  const divided = Math.max(0, Math.round((baseProfit * DIVIDED_RATE_PCT) / 100));
+  const hitechPayout = money(report.accounts.find((row) => row.key === "hitech-power")?.salesNetPayout);
+  const equity = Math.round(hitechPayout - divided - DIVIDED_FIXED_DEDUCTION);
+  const reference = buildDividedReference(report.week.weekEndInput);
+
+  return {
+    totalSales,
+    returns,
+    grossProfit,
+    baseProfit,
+    divided,
+    hitechPayout,
+    equity,
+    reference,
+  };
+}
+
+export async function getDividedReportForWeek(weekStartRaw: string): Promise<DividedReportPayload> {
+  const parsed = parseDateOnlyUtc(weekStartRaw);
+  if (!parsed) {
+    throw new Error("Invalid weekStart");
+  }
+  const weekStart = canonicalNairobiWeekStartUtc(parsed);
+  const { weekEnd } = mondayToSundayNairobiWindow(weekStart);
+  const weekEndInput = getWeekEndInputFromExclusive(weekEnd);
+
+  const targetResolved = await resolveDividedTargets();
 
   const allAccountIds = [...new Set(targetResolved.flatMap((t) => t.accountIds))];
   const allShopIds = [...new Set(targetResolved.flatMap((t) => t.shopIds))];
