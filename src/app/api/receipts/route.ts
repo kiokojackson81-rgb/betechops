@@ -1174,6 +1174,8 @@ export async function POST(req: NextRequest) {
         canonicalReceiptNumber(orderUpsert.orderNumber) ??
         `ID:${orderUpsert.id}`;
 
+      const computedBuyingTotal = totalBuying;
+      const computedProfit = computedBuyingTotal > 0 ? total - computedBuyingTotal : 0;
       const receiptData = {
         orderId: orderUpsert.id,
         receiptNumber: receiptSerialCanonical,
@@ -1191,8 +1193,8 @@ export async function POST(req: NextRequest) {
           tax: taxAmount,
           total,
           balance,
-          buyingTotal: hasVariableCostItems ? 0 : totalBuying,
-          profit: hasVariableCostItems ? null : totalBuying > 0 ? total - totalBuying : 0,
+          buyingTotal: computedBuyingTotal,
+          profit: computedProfit,
           needsPricing: hasVariableCostItems,
         },
         data: {
@@ -1204,15 +1206,15 @@ export async function POST(req: NextRequest) {
             tax: taxAmount,
             total,
             balance,
-            buyingTotal: hasVariableCostItems ? 0 : totalBuying,
-            profit: hasVariableCostItems ? null : totalBuying > 0 ? total - totalBuying : 0,
+            buyingTotal: computedBuyingTotal,
+            profit: computedProfit,
             needsPricing: hasVariableCostItems,
           },
           attendantId,
           issuedById,
           items,
-          buyingTotal: hasVariableCostItems ? 0 : totalBuying,
-          profit: hasVariableCostItems ? null : totalBuying > 0 ? total - totalBuying : 0,
+          buyingTotal: computedBuyingTotal,
+          profit: computedProfit,
           ...(isPodDelivery
             ? {
                 podDelivery: {
@@ -1325,11 +1327,6 @@ export async function POST(req: NextRequest) {
                 : Math.max(0, Math.round(Number(it.costPrice || 0) * Number(it.quantity || 1))),
             }));
             const supportReceiptBuyingTotal = supportReceiptItems.reduce((sum, item) => sum + (item.buyingPrice || 0), 0);
-            const supportHasVariableCostItem = createdItems.some((it) => Boolean(it.variableCost));
-            const supportReceiptFullyPriced =
-              !supportHasVariableCostItem ||
-              (supportReceiptItems.length > 0 &&
-                supportReceiptItems.every((item) => Number(item.buyingPrice ?? 0) > 0));
             const supportSellingTotal = Math.round(Number(total) || 0);
 
             const normalizedSerial = canonicalReceiptNumber(serial);
@@ -1352,7 +1349,7 @@ export async function POST(req: NextRequest) {
             ).id;
 
             let deltaSales = supportSellingTotal;
-            let deltaProfit = supportReceiptFullyPriced ? supportSellingTotal - supportReceiptBuyingTotal : 0;
+            let deltaProfit = supportReceiptBuyingTotal > 0 ? supportSellingTotal - supportReceiptBuyingTotal : 0;
 
             if (receiptKey) {
               const prev = await tx.supportReceipt.findUnique({
@@ -1365,7 +1362,7 @@ export async function POST(req: NextRequest) {
 
               deltaSales = supportSellingTotal - prevSelling;
               const prevProfit = prevBuying > 0 ? prevSelling - prevBuying : 0;
-              const nextProfit = supportReceiptFullyPriced ? supportSellingTotal - supportReceiptBuyingTotal : 0;
+              const nextProfit = supportReceiptBuyingTotal > 0 ? supportSellingTotal - supportReceiptBuyingTotal : 0;
               deltaProfit = nextProfit - prevProfit;
 
               await tx.supportReceipt.upsert({
@@ -1431,11 +1428,6 @@ export async function POST(req: NextRequest) {
               : Math.max(0, Math.round(Number(it.costPrice || 0) * Number(it.quantity || 1))),
           }));
           const receiptBuyingTotal = receiptItemsPayload.reduce((s, i) => s + i.buyingPrice, 0);
-          const receiptHasVariableCostItem = createdItems.some((it) => Boolean(it.variableCost));
-          const receiptFullyPriced =
-            !receiptHasVariableCostItem ||
-            (receiptItemsPayload.length > 0 &&
-              receiptItemsPayload.every((item) => Number(item.buyingPrice ?? 0) > 0));
           const receiptKey = buildReceiptKey(entryDate, normalizedSerial);
           const paymentMethod = parsePaymentMethod(payload?.paymentMethod, PaymentMethod);
 
@@ -1461,7 +1453,7 @@ export async function POST(req: NextRequest) {
           }
 
           let deltaSales = receiptSellingTotal;
-          let deltaProfit = receiptFullyPriced ? receiptSellingTotal - receiptBuyingTotal : 0;
+          let deltaProfit = receiptBuyingTotal > 0 ? receiptSellingTotal - receiptBuyingTotal : 0;
 
           if (receiptKey) {
             const prev = await tx.marketingReceipt.findUnique({
@@ -1474,7 +1466,7 @@ export async function POST(req: NextRequest) {
 
             deltaSales = receiptSellingTotal - prevSelling;
             const prevProfit = prevBuying > 0 ? prevSelling - prevBuying : 0;
-            const nextProfit = receiptFullyPriced ? receiptSellingTotal - receiptBuyingTotal : 0;
+            const nextProfit = receiptBuyingTotal > 0 ? receiptSellingTotal - receiptBuyingTotal : 0;
             deltaProfit = nextProfit - prevProfit;
 
             await tx.marketingReceipt.upsert({

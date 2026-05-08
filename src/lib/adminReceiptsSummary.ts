@@ -358,7 +358,7 @@ async function computePosOnlyReceiptSummary({
     ),
   );
 
-  const supportContexts = new Map<string, { buyingTotal: number; latestPricedAt: Date | null }>();
+  const supportContexts = new Map<string, { buyingTotal: number; latestPricedAt: Date | null; hasPendingItems: boolean }>();
   if (candidateReceiptNumbers.length > 0) {
     const supportRows = await prisma.supportReceipt.findMany({
       where: {
@@ -386,6 +386,7 @@ async function computePosOnlyReceiptSummary({
       const itemsBuyingTotal = items.reduce((sum, item) => sum + Number(item.buyingPrice ?? 0), 0);
       const aggregateBuyingTotal = Number(row.buyingTotal ?? 0);
       const buyingTotal = aggregateBuyingTotal > 0 ? aggregateBuyingTotal : itemsBuyingTotal;
+      const hasPendingItems = items.length > 0 && items.some((item) => Number(item.buyingPrice ?? 0) <= 0);
       const latestPricedAt = items.reduce<Date | null>((latest, item) => {
         if (!(item.pricedAt instanceof Date)) return latest;
         if (!latest || item.pricedAt.getTime() > latest.getTime()) return item.pricedAt;
@@ -397,11 +398,12 @@ async function computePosOnlyReceiptSummary({
         if (!canonical) continue;
         const existing = supportContexts.get(canonical);
         if (!existing) {
-          supportContexts.set(canonical, { buyingTotal, latestPricedAt });
+          supportContexts.set(canonical, { buyingTotal, latestPricedAt, hasPendingItems });
           continue;
         }
         supportContexts.set(canonical, {
           buyingTotal: Math.max(existing.buyingTotal, buyingTotal),
+          hasPendingItems: existing.hasPendingItems || hasPendingItems,
           latestPricedAt:
             latestPricedAt && (!existing.latestPricedAt || latestPricedAt.getTime() > existing.latestPricedAt.getTime())
               ? latestPricedAt
@@ -466,6 +468,7 @@ async function computePosOnlyReceiptSummary({
       0,
     );
     const allItemsPriced = items.length > 0 && items.every((item: any) => Number(item?.buyingPrice ?? 0) > 0);
+    const hasPendingItems = supportContext?.hasPendingItems ?? !allItemsPriced;
     const hasAggregateCost = resolvedBuyingTotal > 0;
     const buyingTotalForContributor = hasAggregateCost ? resolvedBuyingTotal : costFromItems;
     const explicitProfitRaw = (receipt as any)?.profit ?? (receipt.data as any)?.profit;
@@ -494,7 +497,9 @@ async function computePosOnlyReceiptSummary({
       if (profitRecognizedAt && isDateInRange(profitRecognizedAt, start, end)) {
         totalProfitPriced += receiptProfit;
       }
-    } else if (salesIncluded) {
+    }
+
+    if (salesIncluded && hasPendingItems) {
       awaitingPricingCount += 1;
       hasIncompleteCosts = true;
     }
@@ -1076,6 +1081,7 @@ export async function computeAdminReceiptSummary({
       0,
     );
     const allItemsPriced = items.length > 0 && items.every((it) => Number(it?.buyingPrice ?? 0) > 0);
+    const hasPendingItems = items.length > 0 && items.some((it) => Number(it?.buyingPrice ?? 0) <= 0);
     const hasAggregateCost = aggregateCost > 0;
     const sell = Number(receipt.sellingTotal ?? 0);
 
@@ -1098,7 +1104,9 @@ export async function computeAdminReceiptSummary({
       receiptProfit = explicitProfit;
       totalProfitPriced += receiptProfit;
       addProfitContributor(receipt, aggregateCost > 0 ? aggregateCost : costFromItems, receiptProfit);
-    } else {
+    }
+
+    if (hasPendingItems) {
       awaitingPricingCount += 1;
       hasIncompleteCosts = true;
     }

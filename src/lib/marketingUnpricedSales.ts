@@ -237,9 +237,6 @@ export async function getUnpricedDailySalesForCurrentPeriod(): Promise<UnpricedS
         payloadItemNamesByReceiptNumber.get(receiptNumber) ??
         payloadItemNamesByReceiptNumber.get(canonicalReceiptNumber(receiptNumber) ?? "") ??
         [];
-      if (Number(receipt.buyingTotal ?? 0) > 0 || Number(linkedReceiptContext?.aggregateBuyingTotal ?? 0) > 0) {
-        return null;
-      }
       const linkedReceiptItems = linkedReceiptContext?.items ?? [];
       const pendingItems = (receipt.items || []).filter((item, index) => {
         if (Number(item.buyingPrice ?? 0) > 0) return false;
