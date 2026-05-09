@@ -267,12 +267,14 @@ function DetailsPanel({
   row,
   details,
   loading,
+  error,
   onPrint,
   printBusy,
 }: {
   row: OrdersRow;
   details?: OrderDetails;
   loading: boolean;
+  error?: string;
   onPrint: () => void;
   printBusy: boolean;
 }) {
@@ -283,8 +285,10 @@ function DetailsPanel({
         <div className="space-y-2">
           <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Send To</p>
           <div className="space-y-1 text-sm text-slate-200">
-            <div className="font-medium text-white">{details?.recipientName ?? "Loading recipient..."}</div>
-            <div>{details?.recipientAddress ?? (loading ? "Fetching address..." : "No address available")}</div>
+            <div className="font-medium text-white">
+              {details?.recipientName ?? (loading ? "Loading recipient..." : error ? "Recipient unavailable" : "No recipient available")}
+            </div>
+            <div>{details?.recipientAddress ?? (loading ? "Fetching address..." : error ? "Could not load address." : "No address available")}</div>
             {details?.recipientPhone && <div>{details.recipientPhone}</div>}
           </div>
         </div>
@@ -338,6 +342,12 @@ function DetailsPanel({
               <tr>
                 <td colSpan={6} className="py-5 text-slate-400">
                   Loading order details...
+                </td>
+              </tr>
+            ) : error ? (
+              <tr>
+                <td colSpan={6} className="py-5 text-amber-300">
+                  {error}
                 </td>
               </tr>
             ) : items.length === 0 ? (
@@ -402,6 +412,7 @@ export default function OrdersTable({ rows, nextToken, isLastPage }: Props) {
   const [details, setDetails] = useState<Record<string, OrderDetails>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [loadingDetails, setLoadingDetails] = useState<Record<string, boolean>>({});
+  const [detailsError, setDetailsError] = useState<Record<string, string>>({});
   const pathname = usePathname();
   const router = useRouter();
   const sp = useSearchParams();
@@ -499,40 +510,45 @@ export default function OrdersTable({ rows, nextToken, isLastPage }: Props) {
     router.push(target);
   }
 
-  const idsNeedingDetails = useMemo(() => {
-    return rows
-      .filter((r) => !details[r.id] && !loadingDetails[r.id])
-      .map((r) => ({ id: r.id, shopId: r.shopId || (Array.isArray(r.shopIds) ? r.shopIds[0] : undefined) }));
-  }, [rows, details, loadingDetails]);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      for (const { id, shopId } of idsNeedingDetails) {
-        setLoadingDetails((prev) => ({ ...prev, [id]: true }));
-        try {
-          const url = shopId
-            ? `/api/jumia/orders/${encodeURIComponent(id)}/items?shopId=${encodeURIComponent(shopId)}`
-            : `/api/jumia/orders/${encodeURIComponent(id)}/items`;
-          const res = await fetch(url, { cache: "no-store" });
-          if (!res.ok) continue;
-          const payload = await res.json();
-          if (cancelled) return;
-          setDetails((prev) => ({ ...prev, [id]: parseDetailsResponse(payload) }));
-        } catch {
-          // ignore
-        } finally {
-          if (!cancelled) {
-            setLoadingDetails((prev) => ({ ...prev, [id]: false }));
-          }
-        }
+  async function ensureDetails(row: OrdersRow) {
+    const id = row.id;
+    if (details[id] || loadingDetails[id]) return;
+    const shopId = row.shopId || (Array.isArray(row.shopIds) ? row.shopIds[0] : undefined);
+    setLoadingDetails((prev) => ({ ...prev, [id]: true }));
+    setDetailsError((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
+    try {
+      const url = shopId
+        ? `/api/jumia/orders/${encodeURIComponent(id)}/items?shopId=${encodeURIComponent(shopId)}`
+        : `/api/jumia/orders/${encodeURIComponent(id)}/items`;
+      const res = await fetch(url, { cache: "no-store", signal: controller.signal });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          typeof payload?.error === "string" && payload.error.trim()
+            ? payload.error
+            : `Failed to load order details (${res.status})`,
+        );
       }
+      setDetails((prev) => ({ ...prev, [id]: parseDetailsResponse(payload) }));
+    } catch (error) {
+      const message =
+        error instanceof Error && error.name === "AbortError"
+          ? "Loading order details timed out."
+          : error instanceof Error && error.message
+            ? error.message
+            : "Failed to load order details.";
+      setDetailsError((prev) => ({ ...prev, [id]: message }));
+    } finally {
+      window.clearTimeout(timeout);
+      setLoadingDetails((prev) => ({ ...prev, [id]: false }));
     }
-    if (idsNeedingDetails.length) void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [idsNeedingDetails]);
+  }
 
   useEffect(() => {
     try {
@@ -564,8 +580,10 @@ export default function OrdersTable({ rows, nextToken, isLastPage }: Props) {
     });
   }
 
-  function toggleExpand(id: string) {
-    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+  function toggleExpand(row: OrdersRow) {
+    const willExpand = !expanded[row.id];
+    setExpanded((prev) => ({ ...prev, [row.id]: willExpand }));
+    if (willExpand) void ensureDetails(row);
   }
 
   function toggleAllOnPage() {
@@ -720,7 +738,7 @@ export default function OrdersTable({ rows, nextToken, isLastPage }: Props) {
                     <td className="px-2 py-4">
                       <button
                         type="button"
-                        onClick={() => toggleExpand(row.id)}
+                        onClick={() => toggleExpand(row)}
                         className="flex h-6 w-6 items-center justify-center rounded-md border border-white/10 bg-white/5 text-sm text-slate-100 transition hover:bg-white/10"
                         aria-label={expandedRow ? "Collapse order details" : "Expand order details"}
                       >
@@ -790,6 +808,7 @@ export default function OrdersTable({ rows, nextToken, isLastPage }: Props) {
                           row={row}
                           details={rowDetails}
                           loading={!!loadingDetails[row.id]}
+                          error={detailsError[row.id]}
                           onPrint={() => callAction(row, "print")}
                           printBusy={printBusy}
                         />
