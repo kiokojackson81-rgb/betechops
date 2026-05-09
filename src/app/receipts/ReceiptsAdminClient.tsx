@@ -514,10 +514,9 @@ export default function ReceiptsAdminClient({
         if (startParam) params.set("start", startParam);
         if (endParam) params.set("end", endParam);
         const isProfitDrilldown = activeSummaryView === "profit";
-        if (!isProfitDrilldown) {
-          params.set("scope", scopeMode);
-          if (activeOnlyPos) params.set("onlyPos", "1");
-        } else {
+        params.set("scope", scopeMode);
+        if (activeOnlyPos) params.set("onlyPos", "1");
+        if (isProfitDrilldown) {
           params.set("summaryView", "profit");
         }
         if (!activeLedgerEnabled) params.set("includeLedger", "false");
