@@ -5,6 +5,7 @@ import Button from "@/app/_components/Button";
 import Card from "@/app/_components/Card";
 import Input from "@/app/_components/Input";
 import { showToast } from "@/lib/ui/toast";
+import { getPreviousTradingPeriod, getTradingPeriodFor } from "@/lib/tradingPeriod";
 
 type CompPlan = {
   id?: string;
@@ -86,6 +87,12 @@ type PayrollAppraisal = {
 const formatCurrency = (value: number) => `KES ${Number(value ?? 0).toLocaleString("en-US")}`;
 const formatPercent = (value: number) => `${Number(value ?? 0).toFixed(1)}%`;
 const rankText = (rank: number, total: number) => `${rank}/${total}`;
+const ymd = (date: Date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
 
 export default function PayrollClient({
   attendant,
@@ -137,6 +144,8 @@ export default function PayrollClient({
   const [loadingAdjustments, setLoadingAdjustments] = useState(false);
   const [addingAdjustment, setAddingAdjustment] = useState(false);
   const [addingRecurring, setAddingRecurring] = useState(false);
+  const [recurringStartPeriod, setRecurringStartPeriod] = useState<"CURRENT" | "PREVIOUS">("CURRENT");
+  const [weeklyStartWeek, setWeeklyStartWeek] = useState("");
   const [savingRecurringEdit, setSavingRecurringEdit] = useState(false);
   const [editingRecurringId, setEditingRecurringId] = useState<string | null>(null);
   const [editingRecurring, setEditingRecurring] = useState<{
@@ -171,6 +180,24 @@ export default function PayrollClient({
     startDate: "",
     endDate: "",
   });
+
+  const currentTradingPeriod = useMemo(() => getTradingPeriodFor(new Date()), []);
+  const previousTradingPeriod = useMemo(() => getPreviousTradingPeriod(currentTradingPeriod), [currentTradingPeriod]);
+  const selectedStartPeriod = recurringStartPeriod === "CURRENT" ? currentTradingPeriod : previousTradingPeriod;
+  const weeklyStartOptions = useMemo(() => {
+    const options: Array<{ value: string; label: string }> = [];
+    const cursor = new Date(selectedStartPeriod.start);
+    cursor.setHours(0, 0, 0, 0);
+    const periodEnd = new Date(selectedStartPeriod.end);
+    periodEnd.setHours(0, 0, 0, 0);
+    while (cursor.getTime() <= periodEnd.getTime()) {
+      const start = new Date(cursor);
+      const end = new Date(Math.min(cursor.getTime() + 6 * 24 * 60 * 60 * 1000, periodEnd.getTime()));
+      options.push({ value: ymd(start), label: `${ymd(start)} to ${ymd(end)}` });
+      cursor.setDate(cursor.getDate() + 7);
+    }
+    return options;
+  }, [selectedStartPeriod]);
 
   const [newAdjustment, setNewAdjustment] = useState<{ adjustmentType: string; label: string; amount: number | ""; adjustmentKind?: "ADDITION" | "DEDUCTION" }>(
     { adjustmentType: "BONUS", label: "", amount: "", adjustmentKind: "ADDITION" }
@@ -249,6 +276,14 @@ export default function PayrollClient({
     fetchRecurringItems();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (newRecurring.cadence !== "WEEKLY") return;
+    if (!weeklyStartOptions.length) return;
+    if (!weeklyStartWeek || !weeklyStartOptions.some((opt) => opt.value === weeklyStartWeek)) {
+      setWeeklyStartWeek(weeklyStartOptions[0].value);
+    }
+  }, [newRecurring.cadence, weeklyStartOptions, weeklyStartWeek]);
 
   async function fetchAdjustments() {
     setLoadingAdjustments(true);
@@ -385,9 +420,20 @@ export default function PayrollClient({
         adjustmentKind: newRecurring.adjustmentKind,
         cadence: newRecurring.cadence,
       };
-      if (newRecurring.cadence === "WEEKLY") body.dayOfWeek = newRecurring.dayOfWeek;
-      if (newRecurring.cadence === "MONTHLY") body.dayOfMonth = newRecurring.dayOfMonth;
-      if (newRecurring.startDate) body.startDate = newRecurring.startDate;
+      if (newRecurring.cadence === "WEEKLY") {
+        const startWeek = weeklyStartWeek || weeklyStartOptions[0]?.value;
+        if (startWeek) {
+          body.startDate = startWeek;
+          const dow = new Date(`${startWeek}T00:00:00`).getDay();
+          body.dayOfWeek = Number.isFinite(dow) ? dow : newRecurring.dayOfWeek;
+        } else {
+          body.dayOfWeek = newRecurring.dayOfWeek;
+        }
+      }
+      if (newRecurring.cadence === "MONTHLY") {
+        body.dayOfMonth = newRecurring.dayOfMonth;
+        body.startDate = ymd(selectedStartPeriod.start);
+      }
       if (newRecurring.endDate) body.endDate = newRecurring.endDate;
       const res = await fetch(`/api/admin/attendants/${attendant.id}/payroll-recurring`, {
         method: "POST",
@@ -399,7 +445,7 @@ export default function PayrollClient({
         throw new Error(err.error || "Failed to add recurring item");
       }
       showToast("Recurring item added", "success");
-      setNewRecurring((s) => ({ ...s, label: "", amount: "", startDate: "", endDate: "" }));
+      setNewRecurring((s) => ({ ...s, label: "", amount: "", endDate: "" }));
       await fetchRecurringItems();
       await fetchAdjustments();
       await fetchSummary();
@@ -884,8 +930,16 @@ export default function PayrollClient({
               </div>
               {newRecurring.cadence === "WEEKLY" ? (
                 <div>
-                  <label className="text-xs text-slate-400">Day of week (0-6)</label>
-                  <Input type="number" value={String(newRecurring.dayOfWeek)} onChange={(e) => setNewRecurring((s) => ({ ...s, dayOfWeek: Number(e.target.value || 1) }))} />
+                  <label className="text-xs text-slate-400">Start trading week</label>
+                  <select
+                    value={weeklyStartWeek}
+                    onChange={(e) => setWeeklyStartWeek(e.target.value)}
+                    className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-slate-100"
+                  >
+                    {weeklyStartOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
                 </div>
               ) : (
                 <div>
@@ -894,8 +948,15 @@ export default function PayrollClient({
                 </div>
               )}
               <div>
-                <label className="text-xs text-slate-400">Effective from</label>
-                <Input type="date" value={newRecurring.startDate} onChange={(e) => setNewRecurring((s) => ({ ...s, startDate: e.target.value }))} />
+                <label className="text-xs text-slate-400">Start trading period</label>
+                <select
+                  value={recurringStartPeriod}
+                  onChange={(e) => setRecurringStartPeriod(e.target.value as "CURRENT" | "PREVIOUS")}
+                  className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-slate-100"
+                >
+                  <option value="CURRENT">Current ({ymd(currentTradingPeriod.start)} to {ymd(currentTradingPeriod.end)})</option>
+                  <option value="PREVIOUS">Previous ({ymd(previousTradingPeriod.start)} to {ymd(previousTradingPeriod.end)})</option>
+                </select>
               </div>
               <div>
                 <label className="text-xs text-slate-400">Effective to</label>

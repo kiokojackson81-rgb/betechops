@@ -112,7 +112,7 @@ model AttendantPayrollAdjustment {
 
   @@index([attendantId, periodKey])
   @@index([recurringItemId, periodKey])
-  @@unique([recurringItemId, periodKey])
+  @@unique([recurringItemId, periodKey, occurrenceDate])
 }
 
 model AttendantRecurringPayrollItem {

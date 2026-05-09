@@ -59,7 +59,7 @@ async function ensureRecurringAdjustmentsForPeriod(attendantId: string, period: 
   for (const item of recurringItems) {
     const startGate = item.startDate ? toDateOnly(item.startDate) : null;
     const endGate = item.endDate ? toDateOnly(item.endDate) : null;
-    let occurrence: Date | null = null;
+    const occurrences: Date[] = [];
 
     for (const day of periodDates) {
       if (startGate && day < startGate) continue;
@@ -67,48 +67,73 @@ async function ensureRecurringAdjustmentsForPeriod(attendantId: string, period: 
       if (item.cadence === "WEEKLY") {
         const targetDow = Number(item.dayOfWeek ?? 1);
         if (day.getUTCDay() === targetDow) {
-          occurrence = day;
-          break;
+          occurrences.push(day);
         }
       } else {
         const targetDom = Number(item.dayOfMonth ?? 1);
         if (day.getUTCDate() === targetDom) {
-          occurrence = day;
-          break;
+          occurrences.push(day);
+          break; // monthly: single occurrence per trading period
         }
       }
     }
 
-    if (!occurrence) continue;
-
-    await prisma.attendantPayrollAdjustment.upsert({
-      where: {
-        recurringItemId_periodKey: {
-          recurringItemId: item.id,
+    if (!occurrences.length) {
+      await prisma.attendantPayrollAdjustment.deleteMany({
+        where: {
+          attendantId,
           periodKey: period.key,
+          recurringItemId: item.id,
         },
-      },
-      update: {
-        periodLabel: period.label,
-        adjustmentType: item.adjustmentType,
-        adjustmentKind: item.adjustmentKind,
-        label: item.label,
-        amount: item.amount,
-        occurrenceDate: occurrence,
-      },
-      create: {
+      });
+      continue;
+    }
+
+    const occurrenceIsoSet = new Set(occurrences.map((d) => d.toISOString()));
+
+    await prisma.attendantPayrollAdjustment.deleteMany({
+      where: {
         attendantId,
         periodKey: period.key,
-        periodLabel: period.label,
-        adjustmentType: item.adjustmentType,
-        adjustmentKind: item.adjustmentKind,
-        label: item.label,
-        amount: item.amount,
-        createdById: item.createdById,
         recurringItemId: item.id,
-        occurrenceDate: occurrence,
+        NOT: {
+          occurrenceDate: {
+            in: Array.from(occurrenceIsoSet).map((iso) => new Date(iso)),
+          },
+        },
       },
     });
+
+    for (const occurrence of occurrences) {
+      await prisma.attendantPayrollAdjustment.upsert({
+        where: {
+          recurringItemId_periodKey_occurrenceDate: {
+            recurringItemId: item.id,
+            periodKey: period.key,
+            occurrenceDate: occurrence,
+          },
+        },
+        update: {
+          periodLabel: period.label,
+          adjustmentType: item.adjustmentType,
+          adjustmentKind: item.adjustmentKind,
+          label: item.label,
+          amount: item.amount,
+        },
+        create: {
+          attendantId,
+          periodKey: period.key,
+          periodLabel: period.label,
+          adjustmentType: item.adjustmentType,
+          adjustmentKind: item.adjustmentKind,
+          label: item.label,
+          amount: item.amount,
+          createdById: item.createdById,
+          recurringItemId: item.id,
+          occurrenceDate: occurrence,
+        },
+      });
+    }
   }
 }
 
