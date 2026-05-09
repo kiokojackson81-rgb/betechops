@@ -8,8 +8,13 @@ function resolveAttendantId(req: Request, ctx: any, body?: any) {
   const params = (ctx && (ctx.params || ctx)) || {};
   const paramsId = params.id as string | undefined;
   const url = new URL(req.url);
+  const urlPathSegments = url.pathname.split("/").filter(Boolean);
+  const pathAttendantId = (() => {
+    const idx = urlPathSegments.findIndex((segment) => segment === "attendants");
+    return idx >= 0 && urlPathSegments.length > idx + 1 ? urlPathSegments[idx + 1] : undefined;
+  })();
   const queryAttendantId = url.searchParams.get("attendantId") || undefined;
-  return paramsId ?? body?.attendantId ?? queryAttendantId;
+  return paramsId ?? body?.attendantId ?? queryAttendantId ?? pathAttendantId;
 }
 
 export async function GET(req: Request, ctx: any) {
