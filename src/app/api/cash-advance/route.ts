@@ -4,7 +4,11 @@ import { Prisma } from "@prisma/client";
 import { requireRole } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
-import { assertCashAdvanceRepaymentPeriod, assertCashAdvanceWithinSalaryCap } from "@/lib/wellness";
+import {
+  assertCashAdvanceRepaymentPeriod,
+  assertCashAdvanceWithinSalaryCap,
+  normalizeCashAdvanceRepaymentPeriodValue,
+} from "@/lib/wellness";
 
 export const dynamic = "force-dynamic";
 
@@ -27,10 +31,15 @@ export async function GET(req: Request) {
     orderBy: [{ createdAt: "desc" }],
   });
 
+  const normalizedAdvances = advances.map((item) => ({
+    ...item,
+    repaymentPeriod: normalizeCashAdvanceRepaymentPeriodValue(item.repaymentPeriod),
+  }));
+
   return NextResponse.json(
     composeIdentityResponse(identity, {
-      rows: advances,
-      outstandingBalance: advances.reduce((sum, item) => sum + Number(item.remainingBalance ?? 0), 0),
+      rows: normalizedAdvances,
+      outstandingBalance: normalizedAdvances.reduce((sum, item) => sum + Number(item.remainingBalance ?? 0), 0),
     }),
   );
 }

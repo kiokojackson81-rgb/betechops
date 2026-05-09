@@ -5,6 +5,7 @@ import {
   computeEffectiveCashAdvanceRemainingBalance,
   ensureLeaveBalance,
   isCashAdvanceInstallmentOutstanding,
+  normalizeCashAdvanceRepaymentPeriodValue,
   normalizePaidLeaveEntitlements,
 } from "@/lib/wellness";
 
@@ -85,6 +86,7 @@ export async function GET() {
   const outstandingAdvances = approvedAdvances
     .map((row) => ({
       ...row,
+      repaymentPeriod: normalizeCashAdvanceRepaymentPeriodValue(row.repaymentPeriod),
       remainingBalance: computeEffectiveCashAdvanceRemainingBalance(row),
       installments: (row.installments ?? []).filter((item) =>
         isCashAdvanceInstallmentOutstanding(item, row.approvedAt),

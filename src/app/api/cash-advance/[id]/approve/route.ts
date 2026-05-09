@@ -6,6 +6,7 @@ import {
   assertCashAdvanceRepaymentPeriod,
   assertCashAdvanceWithinSalaryCap,
   buildCashAdvanceInstallments,
+  normalizeCashAdvanceRepaymentPeriodValue,
 } from "@/lib/wellness";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 
@@ -136,7 +137,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
             periodKey: immediateInstallment.periodKey,
             periodLabel: immediateInstallment.periodLabel,
             adjustmentType: "CASH_ADVANCE",
-            label: `Cash advance repayment ${immediateInstallment.sequenceNumber}/${updated.repaymentPeriod ?? "?"}`,
+            label: `Cash advance repayment ${immediateInstallment.sequenceNumber}/${normalizeCashAdvanceRepaymentPeriodValue(updated.repaymentPeriod)}`,
             amount: immediateInstallment.amount,
             createdById: actorId,
             adjustmentKind: "DEDUCTION",
@@ -157,7 +158,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
               periodKey: installment.periodKey,
               periodLabel: installment.periodLabel,
               adjustmentType: "CASH_ADVANCE",
-              label: `Cash advance repayment ${installment.sequenceNumber}/${updated.repaymentPeriod ?? "?"}`,
+              label: `Cash advance repayment ${installment.sequenceNumber}/${normalizeCashAdvanceRepaymentPeriodValue(updated.repaymentPeriod)}`,
               amount: installment.amount,
               createdById: actorId,
               adjustmentKind: "DEDUCTION",

@@ -359,10 +359,10 @@ export default function AdminWellnessClient() {
                   <Button variant="secondary" onClick={() => void decideAdvance(row.id, "REJECTED")}>Reject</Button>
                 </div>
                 <div className="mt-2 text-xs text-slate-400">
-                  Maximum repayment period is {MAX_CASH_ADVANCE_REPAYMENT_PERIOD} month(s).
+                  Maximum repayment period is {MAX_CASH_ADVANCE_REPAYMENT_PERIOD} month.
                 </div>
                 <div className="mt-1 text-xs text-slate-400">
-                  Approval deducts the first installment immediately and schedules the next one for the next trading period.
+                  Approval schedules the deduction for the current payroll.
                 </div>
               </div>
             ))}
@@ -495,7 +495,7 @@ export default function AdminWellnessClient() {
                       Approved {currency.format(row.approvedAmount ?? 0)} · Remaining {currency.format(row.remainingBalance)}
                     </div>
                   </div>
-                    <div className="text-xs text-slate-400">{row.repaymentPeriod ?? 0} month(s)</div>
+                    <div className="text-xs text-slate-400">{row.repaymentPeriod ?? 0} month</div>
                 </div>
                 <div className="mt-3 space-y-2">
                   {(row.installments ?? []).map((item) => (

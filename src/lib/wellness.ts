@@ -338,6 +338,13 @@ export function assertCashAdvanceRepaymentPeriod(period: number) {
   return repaymentPeriod;
 }
 
+export function normalizeCashAdvanceRepaymentPeriodValue(period: number | null | undefined) {
+  if (period == null) return MAX_CASH_ADVANCE_REPAYMENT_PERIOD;
+  const normalized = Math.trunc(Number(period ?? 0));
+  if (!Number.isFinite(normalized) || normalized <= 0) return MAX_CASH_ADVANCE_REPAYMENT_PERIOD;
+  return Math.min(MAX_CASH_ADVANCE_REPAYMENT_PERIOD, normalized);
+}
+
 export async function assertCashAdvanceWithinSalaryCap(
   userId: string,
   amount: number,
@@ -385,6 +392,7 @@ export async function getEmployeeWellnessOverview(userId: string, db: DbClient =
 
   const normalizedCashAdvances = cashAdvances.map((item) => ({
     ...item,
+    repaymentPeriod: normalizeCashAdvanceRepaymentPeriodValue(item.repaymentPeriod),
     remainingBalance: computeEffectiveCashAdvanceRemainingBalance(item),
   }));
   const upcomingInstallments = normalizedCashAdvances
@@ -453,7 +461,7 @@ export async function applyDueCashAdvanceInstallments(input: {
               periodKey: fresh.periodKey,
               periodLabel: fresh.periodLabel,
               adjustmentType: "CASH_ADVANCE",
-              label: `Cash advance repayment ${fresh.sequenceNumber}/${fresh.cashAdvance.repaymentPeriod ?? "?"}`,
+              label: `Cash advance repayment ${fresh.sequenceNumber}/${normalizeCashAdvanceRepaymentPeriodValue(fresh.cashAdvance.repaymentPeriod)}`,
               amount: fresh.amount,
               createdById: input.actorId,
               adjustmentKind: "DEDUCTION",

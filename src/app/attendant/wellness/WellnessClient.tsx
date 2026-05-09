@@ -488,10 +488,10 @@ export default function WellnessClient() {
                 <p className={sectionEyebrow}>Cash Advance</p>
                 <h2 className="text-2xl font-semibold text-white">Request Cash Advance</h2>
                 <p className="text-sm leading-6 text-slate-400">
-                  You cannot borrow more than your salary, and repayment cannot exceed {MAX_CASH_ADVANCE_REPAYMENT_PERIOD} months.
+                  You cannot borrow more than your salary, and repayment cannot exceed {MAX_CASH_ADVANCE_REPAYMENT_PERIOD} month.
                 </p>
                 <p className="text-sm leading-6 text-slate-400">
-                  Once approved, the first deduction goes to the current payroll immediately and the next one starts in the next trading period.
+                  Once approved, the deduction goes to the current payroll immediately.
                 </p>
               </div>
               <div className="grid gap-4 md:grid-cols-2">
@@ -539,10 +539,7 @@ export default function WellnessClient() {
               {requestedAdvanceAmount > 0 ? (
                 <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/55 px-4 py-3 text-sm text-slate-300">
                   <div>
-                    Preview: {currency.format(requestedInstallments[0] ?? 0)} will be deducted from the current payroll
-                    {requestedRepaymentMonths > 1
-                      ? ` and ${currency.format(requestedInstallments[1] ?? 0)} will be deducted at the beginning of the next trading period.`
-                      : "."}
+                    Preview: {currency.format(requestedInstallments[0] ?? 0)} will be deducted from the current payroll.
                   </div>
                   {requestExcessAmount > 0 ? (
                     <div className="mt-2 text-rose-300">
@@ -885,7 +882,7 @@ function HistorySection({
                 <div className="mt-3 grid gap-2 text-sm text-slate-300 sm:grid-cols-3">
                   <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">Approved: {currency.format(row.approvedAmount ?? 0)}</div>
                   <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">Remaining: {currency.format(row.remainingBalance ?? 0)}</div>
-                  <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">Months: {row.repaymentPeriod ?? "-"}</div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">Repayment: {row.repaymentPeriod ?? "-"} month</div>
                 </div>
                 {row.hrComment ? <div className="mt-2 text-sm text-amber-200">HR: {row.hrComment}</div> : null}
               </div>
