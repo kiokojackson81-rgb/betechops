@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
-import { ensureLeaveBalance, normalizePaidLeaveEntitlements } from "@/lib/wellness";
+import {
+  computeEffectiveCashAdvanceRemainingBalance,
+  ensureLeaveBalance,
+  isCashAdvanceInstallmentOutstanding,
+  normalizePaidLeaveEntitlements,
+} from "@/lib/wellness";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +14,7 @@ export async function GET() {
   const auth = await requireRole(["ADMIN", "SUPERVISOR"]);
   if (!auth.ok) return auth.res;
 
-  const [pendingLeaveRequests, pendingCashAdvances, pendingAdjustmentRequests, outstandingAdvances, staff] = await Promise.all([
+  const [pendingLeaveRequests, pendingCashAdvances, pendingAdjustmentRequests, approvedAdvances, staff] = await Promise.all([
     prisma.leaveRequest.findMany({
       where: { status: "PENDING" },
       include: {
@@ -36,16 +41,16 @@ export async function GET() {
       take: 50,
     }),
     prisma.cashAdvance.findMany({
-      where: { status: "APPROVED", remainingBalance: { gt: 0 } },
+      where: { status: "APPROVED" },
       include: {
         user: { select: { id: true, name: true, email: true, attendantCategory: true } },
         installments: {
-          where: { isPaid: false },
           orderBy: [{ dueDate: "asc" }],
           take: 3,
         },
+        approvedBy: { select: { id: true } },
       },
-      orderBy: [{ remainingBalance: "desc" }],
+      orderBy: [{ approvedAt: "desc" }],
       take: 50,
     }),
     prisma.user.findMany({
@@ -76,6 +81,17 @@ export async function GET() {
       };
     }),
   );
+
+  const outstandingAdvances = approvedAdvances
+    .map((row) => ({
+      ...row,
+      remainingBalance: computeEffectiveCashAdvanceRemainingBalance(row),
+      installments: (row.installments ?? []).filter((item) =>
+        isCashAdvanceInstallmentOutstanding(item, row.approvedAt),
+      ),
+    }))
+    .filter((row) => Number(row.remainingBalance ?? 0) > 0)
+    .sort((a, b) => Number(b.remainingBalance ?? 0) - Number(a.remainingBalance ?? 0));
 
   return NextResponse.json({
     pendingLeaveRequests,

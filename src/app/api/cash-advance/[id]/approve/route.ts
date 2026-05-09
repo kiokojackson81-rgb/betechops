@@ -146,8 +146,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         await tx.cashAdvanceInstallment.update({
           where: { id: immediateInstallment.id },
           data: {
-            isPaid: true,
-            deductedAt: new Date(),
             payrollAdjustmentId: immediateAdjustment.id,
           },
         });
@@ -174,12 +172,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           });
         }
 
-        await tx.cashAdvance.update({
-          where: { id: updated.id },
-          data: {
-            remainingBalance: Math.max(0, approvedAmount - immediateInstallment.amount),
-          },
-        });
       }
 
       await tx.actionLog.create({

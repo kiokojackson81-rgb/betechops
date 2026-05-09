@@ -4,6 +4,7 @@ import { getNextTradingPeriod, getTradingPeriodFor, type TradingPeriod } from "@
 import { MAX_CASH_ADVANCE_REPAYMENT_PERIOD, TOTAL_PAID_LEAVE_DAYS } from "@/lib/wellnessPolicy";
 
 type DbClient = typeof prisma | Prisma.TransactionClient;
+const APPROVAL_HOLD_SETTLEMENT_GRACE_MS = 5 * 60 * 1000;
 
 const DEFAULT_LEAVE_ENTITLEMENTS = {
   annual: TOTAL_PAID_LEAVE_DAYS,
@@ -186,6 +187,60 @@ function sanitizeDateOnly(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
 }
 
+type CashAdvanceInstallmentLike = {
+  amount?: number | null;
+  isPaid?: boolean | null;
+  deductedAt?: Date | string | null;
+  payrollAdjustmentId?: string | null;
+  sequenceNumber?: number | null;
+};
+
+type CashAdvanceLike = {
+  approvedAmount?: number | null;
+  approvedAt?: Date | string | null;
+  remainingBalance?: number | null;
+  installments?: CashAdvanceInstallmentLike[] | null;
+};
+
+function parseOptionalDate(value: Date | string | null | undefined) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function isCashAdvanceInstallmentReservedAtApproval(
+  installment: CashAdvanceInstallmentLike,
+  approvedAt?: Date | string | null,
+) {
+  if (!installment?.isPaid) return false;
+  if (!installment?.payrollAdjustmentId) return false;
+  if (Number(installment?.sequenceNumber ?? 0) !== 1) return false;
+  const approved = parseOptionalDate(approvedAt);
+  const deducted = parseOptionalDate(installment?.deductedAt);
+  if (!approved || !deducted) return false;
+  return Math.abs(deducted.getTime() - approved.getTime()) <= APPROVAL_HOLD_SETTLEMENT_GRACE_MS;
+}
+
+export function isCashAdvanceInstallmentOutstanding(
+  installment: CashAdvanceInstallmentLike,
+  approvedAt?: Date | string | null,
+) {
+  if (!installment?.isPaid) return true;
+  return isCashAdvanceInstallmentReservedAtApproval(installment, approvedAt);
+}
+
+export function computeEffectiveCashAdvanceRemainingBalance(cashAdvance: CashAdvanceLike) {
+  const installments = Array.isArray(cashAdvance?.installments) ? cashAdvance.installments : [];
+  if (!installments.length) {
+    return Math.max(0, Number(cashAdvance?.remainingBalance ?? 0));
+  }
+  const derived = installments.reduce((sum, installment) => {
+    if (!isCashAdvanceInstallmentOutstanding(installment, cashAdvance?.approvedAt)) return sum;
+    return sum + Math.max(0, Number(installment?.amount ?? 0));
+  }, 0);
+  return Math.max(derived, Math.max(0, Number(cashAdvance?.remainingBalance ?? 0)));
+}
+
 export function buildCashAdvanceInstallments(input: {
   approvedAmount: number;
   repaymentPeriod: number;
@@ -243,13 +298,26 @@ export async function getCashAdvanceCapacity(
       },
       select: {
         id: true,
+        approvedAt: true,
         remainingBalance: true,
+        installments: {
+          select: {
+            amount: true,
+            isPaid: true,
+            deductedAt: true,
+            payrollAdjustmentId: true,
+            sequenceNumber: true,
+          },
+        },
       },
     }),
   ]);
 
   const salary = Math.max(0, Number(user?.attendantCompPlan?.baseSalary ?? 0));
-  const outstandingBalance = approvedAdvances.reduce((sum, item) => sum + Math.max(0, Number(item.remainingBalance ?? 0)), 0);
+  const outstandingBalance = approvedAdvances.reduce(
+    (sum, item) => sum + computeEffectiveCashAdvanceRemainingBalance(item),
+    0,
+  );
   const availableToBorrow = Math.max(0, salary - outstandingBalance);
 
   return {
@@ -293,7 +361,7 @@ export async function assertCashAdvanceWithinSalaryCap(
 export async function getEmployeeWellnessOverview(userId: string, db: DbClient = prisma) {
   const balance = await ensureLeaveBalance(userId, db);
 
-  const [leaveRequests, cashAdvances, upcomingInstallments, cashAdvanceCapacity] = await Promise.all([
+  const [leaveRequests, cashAdvances, cashAdvanceCapacity] = await Promise.all([
     db.leaveRequest.findMany({
       where: { userId },
       orderBy: [{ createdAt: "desc" }],
@@ -312,32 +380,35 @@ export async function getEmployeeWellnessOverview(userId: string, db: DbClient =
       orderBy: [{ createdAt: "desc" }],
       take: 12,
     }),
-    db.cashAdvanceInstallment.findMany({
-      where: {
-        isPaid: false,
-        cashAdvance: { userId },
-      },
-      include: {
-        cashAdvance: {
-          select: {
-            id: true,
-            approvedAmount: true,
-            remainingBalance: true,
-          },
-        },
-      },
-      orderBy: [{ dueDate: "asc" }],
-      take: 6,
-    }),
     getCashAdvanceCapacity(userId, { db }),
   ]);
+
+  const normalizedCashAdvances = cashAdvances.map((item) => ({
+    ...item,
+    remainingBalance: computeEffectiveCashAdvanceRemainingBalance(item),
+  }));
+  const upcomingInstallments = normalizedCashAdvances
+    .flatMap((item) =>
+      (item.installments ?? [])
+        .filter((installment) => isCashAdvanceInstallmentOutstanding(installment, item.approvedAt))
+        .map((installment) => ({
+          ...installment,
+          cashAdvance: {
+            id: item.id,
+            approvedAmount: item.approvedAmount,
+            remainingBalance: item.remainingBalance,
+          },
+        })),
+    )
+    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+    .slice(0, 6);
 
   return {
     leaveBalance: buildLeaveBalanceSummary(balance),
     leaveRequests,
-    cashAdvances,
+    cashAdvances: normalizedCashAdvances,
     upcomingInstallments,
-    outstandingAdvanceBalance: cashAdvances.reduce((sum, item) => sum + Number(item.remainingBalance ?? 0), 0),
+    outstandingAdvanceBalance: normalizedCashAdvances.reduce((sum, item) => sum + Number(item.remainingBalance ?? 0), 0),
     cashAdvanceCapacity,
   };
 }
