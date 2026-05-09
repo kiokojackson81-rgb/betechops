@@ -359,6 +359,7 @@ async function computePosOnlyReceiptSummary({
   );
 
   const supportPendingByReceipt = new Map<string, { hasPendingItems: boolean }>();
+  const supportBuyingByReceipt = new Map<string, { buyingTotal: number; recognizedAt: Date | null }>();
   const supportProfitByReceipt = new Map<string, { buyingTotal: number; profit: number }>();
   if (candidateReceiptNumbers.length > 0) {
     const [supportRows, supportSales] = await Promise.all([
@@ -415,6 +416,17 @@ async function computePosOnlyReceiptSummary({
         supportPendingByReceipt.set(canonical, {
           hasPendingItems: Boolean(existing?.hasPendingItems || hasPendingItems),
         });
+        const existingBuying = supportBuyingByReceipt.get(canonical);
+        const shouldReplaceBuying =
+          !existingBuying ||
+          buyingTotal > existingBuying.buyingTotal ||
+          ((latestPricedAt?.getTime() ?? 0) > (existingBuying.recognizedAt?.getTime() ?? 0));
+        if (buyingTotal > 0 && shouldReplaceBuying) {
+          supportBuyingByReceipt.set(canonical, {
+            buyingTotal,
+            recognizedAt: latestPricedAt,
+          });
+        }
       }
     }
 
@@ -466,6 +478,7 @@ async function computePosOnlyReceiptSummary({
       canonicalReceiptNumber(receipt.receiptNumber) ??
       null;
     const supportPending = canonicalOrderNumber ? supportPendingByReceipt.get(canonicalOrderNumber) : undefined;
+    const supportBuying = canonicalOrderNumber ? supportBuyingByReceipt.get(canonicalOrderNumber) : undefined;
     const supportProfit = canonicalOrderNumber ? supportProfitByReceipt.get(canonicalOrderNumber) : undefined;
 
     const items = (receipt.order?.items ?? []).map((item: any) => {
@@ -486,7 +499,7 @@ async function computePosOnlyReceiptSummary({
       };
     });
 
-    const supportBuyingTotal = Number(supportProfit?.buyingTotal ?? 0);
+    const supportBuyingTotal = Number(supportProfit?.buyingTotal ?? supportBuying?.buyingTotal ?? 0);
     const aggregateBuyingTotal = Number((receipt as any)?.buyingTotal ?? (receipt.data as any)?.buyingTotal ?? 0);
     const resolvedBuyingTotal = supportBuyingTotal > 0 ? supportBuyingTotal : aggregateBuyingTotal;
     const costFromItems = items.reduce(
@@ -505,8 +518,15 @@ async function computePosOnlyReceiptSummary({
           ? Number(explicitProfitRaw)
           : undefined;
 
+    const supportRecognizedAt = supportBuying?.recognizedAt ?? null;
     const hasRecognizableProfit = Boolean(supportProfit) || hasAggregateCost || allItemsPriced || explicitProfit !== undefined;
-    const profitRecognizedAt = supportProfit ? start : hasRecognizableProfit && salesDate instanceof Date ? salesDate : null;
+    const profitRecognizedAt = supportProfit
+      ? start
+      : supportRecognizedAt instanceof Date
+        ? supportRecognizedAt
+        : hasRecognizableProfit && salesDate instanceof Date
+          ? salesDate
+          : null;
 
     let receiptProfit = 0;
     if (supportProfit) {
