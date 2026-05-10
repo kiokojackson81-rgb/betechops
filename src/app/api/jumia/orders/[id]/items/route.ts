@@ -41,10 +41,28 @@ function extractItems(payload: unknown): Array<Record<string, unknown>> {
   return [];
 }
 
+function hasUsableCredentials(auth: unknown): auth is { clientId: string; refreshToken: string } {
+  const record = asRecord(auth);
+  return Boolean(
+    record &&
+    typeof record.clientId === "string" &&
+    record.clientId.trim() &&
+    typeof record.refreshToken === "string" &&
+    record.refreshToken.trim(),
+  );
+}
+
 async function loadFallbackItems(orderId: string) {
   const orderRow = await prisma.jumiaOrder.findUnique({
     where: { id: orderId },
-    select: { id: true, number: true, isPrepayment: true, totalAmountLocalCurrency: true, totalAmountLocalValue: true },
+    select: {
+      id: true,
+      number: true,
+      shopId: true,
+      isPrepayment: true,
+      totalAmountLocalCurrency: true,
+      totalAmountLocalValue: true,
+    },
   });
 
   const orderKeys = Array.from(
@@ -77,7 +95,7 @@ async function loadFallbackItems(orderId: string) {
       sellingPrice: true,
       currency: true,
       rawPayload: true,
-      account: { select: { displayName: true } },
+      account: { select: { displayName: true, jumiaShopSid: true } },
     },
   });
 
@@ -124,12 +142,70 @@ async function loadFallbackItems(orderId: string) {
     } satisfies Record<string, unknown>;
   });
 
-  return { items, orderMeta: orderRow };
+  const marketplaceShopSids = Array.from(
+    new Set(
+      marketplaceRows
+        .map((row) => String(row.account.jumiaShopSid ?? "").trim())
+        .filter(Boolean),
+    ),
+  );
+
+  return { items, orderMeta: orderRow, marketplaceShopSids };
+}
+
+async function resolveShopAuthForOrder({
+  orderId,
+  requestedShopId,
+  fallbackShopId,
+  marketplaceShopSids,
+}: {
+  orderId: string;
+  requestedShopId?: string;
+  fallbackShopId?: string | null;
+  marketplaceShopSids?: string[];
+}) {
+  const candidateShopIds = new Set<string>();
+
+  if (requestedShopId) {
+    candidateShopIds.add(requestedShopId);
+
+    const [shopRow, marketplaceAccountRow] = await Promise.all([
+      prisma.shop.findUnique({
+        where: { id: requestedShopId },
+        select: { jumiaShopSid: true },
+      }).catch(() => null),
+      prisma.marketplaceAccount.findUnique({
+        where: { id: requestedShopId },
+        select: { jumiaShopSid: true },
+      }).catch(() => null),
+    ]);
+
+    if (shopRow?.jumiaShopSid) candidateShopIds.add(shopRow.jumiaShopSid);
+    if (marketplaceAccountRow?.jumiaShopSid) candidateShopIds.add(marketplaceAccountRow.jumiaShopSid);
+  }
+
+  if (fallbackShopId) candidateShopIds.add(fallbackShopId);
+  for (const shopSid of marketplaceShopSids ?? []) candidateShopIds.add(shopSid);
+
+  for (const candidateShopId of candidateShopIds) {
+    const auth = await loadShopAuthById(candidateShopId).catch(() => undefined);
+    if (hasUsableCredentials(auth)) {
+      return { shopAuth: auth, shopKey: candidateShopId, source: "shop" as const };
+    }
+  }
+
+  const defaultAuth = await loadDefaultShopAuth().catch(() => undefined);
+  if (hasUsableCredentials(defaultAuth)) {
+    return { shopAuth: defaultAuth, shopKey: requestedShopId ?? fallbackShopId ?? orderId, source: "default" as const };
+  }
+
+  return { shopAuth: undefined, shopKey: requestedShopId ?? fallbackShopId ?? orderId, source: "none" as const };
 }
 
 async function fetchItemsPayload(
   orderId: string,
   shopAuth?: unknown,
+  shopKey?: string,
   fallbackOrderNumber?: string | null,
 ) {
   const candidates = Array.from(
@@ -143,7 +219,7 @@ async function fetchItemsPayload(
     try {
       const payload = await jumiaFetch(
         `/orders/items?orderId=${encodeURIComponent(candidate)}`,
-        shopAuth ? ({ shopAuth } as any) : ({} as any),
+        shopAuth ? ({ shopAuth, shopKey } as any) : ({} as any),
       );
       lastPayload = payload;
       if (extractItems(payload).length > 0) {
@@ -165,18 +241,33 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
   try {
     const url = new URL(req.url);
-    const shopId = url.searchParams.get("shopId") || undefined;
-    const shopAuth = shopId ? await loadShopAuthById(shopId).catch(() => undefined) : await loadDefaultShopAuth().catch(() => undefined);
+    const requestedShopId = url.searchParams.get("shopId") || undefined;
     const fallback = await loadFallbackItems(id);
+    const authResolution = await resolveShopAuthForOrder({
+      orderId: id,
+      requestedShopId,
+      fallbackShopId: fallback.orderMeta?.shopId,
+      marketplaceShopSids: fallback.marketplaceShopSids,
+    });
 
-    let fetched = await fetchItemsPayload(id, shopAuth, fallback.orderMeta?.number ? String(fallback.orderMeta.number) : null);
+    let fetched = await fetchItemsPayload(
+      id,
+      authResolution.shopAuth,
+      authResolution.shopKey,
+      fallback.orderMeta?.number ? String(fallback.orderMeta.number) : null,
+    );
     let resp = fetched.payload;
     let items = extractItems(resp);
 
-    if (items.length === 0 && shopId) {
+    if (items.length === 0 && requestedShopId && authResolution.source !== "default") {
       const defaultAuth = await loadDefaultShopAuth().catch(() => undefined);
-      if (defaultAuth && defaultAuth !== shopAuth) {
-        fetched = await fetchItemsPayload(id, defaultAuth, fallback.orderMeta?.number ? String(fallback.orderMeta.number) : null);
+      if (hasUsableCredentials(defaultAuth)) {
+        fetched = await fetchItemsPayload(
+          id,
+          defaultAuth,
+          requestedShopId,
+          fallback.orderMeta?.number ? String(fallback.orderMeta.number) : null,
+        );
         resp = fetched.payload;
         items = extractItems(resp);
       }
