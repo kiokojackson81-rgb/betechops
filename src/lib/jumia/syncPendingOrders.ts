@@ -24,7 +24,25 @@ type SyncResult = {
   error?: string | null;
 };
 
-const TRACE_ORDER_NUMBER = "352137425";
+const TRACE_ORDER_NUMBERS = new Set(["352137425", "375645425"]);
+const ORDER_ID_CANDIDATE_KEYS = new Set([
+  "id",
+  "orderId",
+  "order_id",
+  "number",
+  "orderNumber",
+  "displayOrderNumber",
+  "customerOrderId",
+  "customer_order_id",
+  "orderNo",
+  "order_no",
+  "orderNr",
+  "incrementId",
+  "increment_id",
+  "reference",
+  "referenceId",
+  "reference_id",
+]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -119,18 +137,61 @@ function buildProductUrl(countryCode: string | undefined, sellerSku: string | un
 }
 
 function traceHydration(orderNumber: string | number | undefined, stage: string, payload: Record<string, unknown>) {
-  if (String(orderNumber ?? "").trim() !== TRACE_ORDER_NUMBER) return;
-  console.info(`[jumia.sync][${TRACE_ORDER_NUMBER}] ${stage}`, payload);
+  const normalizedOrderNumber = String(orderNumber ?? "").trim();
+  if (!TRACE_ORDER_NUMBERS.has(normalizedOrderNumber)) return;
+  console.info(`[jumia.sync][${normalizedOrderNumber}] ${stage}`, payload);
+}
+
+function collectOrderIdCandidates(...sources: unknown[]): string[] {
+  const results = new Set<string>();
+  const visited = new Set<unknown>();
+
+  const visit = (value: unknown, depth: number) => {
+    if (value == null || depth > 3) return;
+    if (typeof value === "string" || typeof value === "number") {
+      const resolved = readString(value);
+      if (resolved) results.add(resolved);
+      return;
+    }
+    if (typeof value !== "object") return;
+    if (visited.has(value)) return;
+    visited.add(value);
+
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, depth + 1);
+      return;
+    }
+
+    for (const [key, nested] of Object.entries(value)) {
+      if (ORDER_ID_CANDIDATE_KEYS.has(key)) {
+        const resolved = readString(nested);
+        if (resolved) results.add(resolved);
+      }
+      if (
+        key === "order" ||
+        key === "data" ||
+        key === "payload" ||
+        key === "meta" ||
+        key === "result"
+      ) {
+        visit(nested, depth + 1);
+      }
+    }
+  };
+
+  for (const source of sources) visit(source, 0);
+  return Array.from(results);
 }
 
 async function fetchOrderItemsPayload(client: JumiaClient, rawOrder: Record<string, unknown>) {
-  const candidates = Array.from(
-    new Set(
-      [rawOrder.id, rawOrder.orderId, rawOrder.order_id, rawOrder.number]
-        .map((value) => readString(value))
-        .filter((value): value is string => Boolean(value)),
-    ),
+  const orderNumber = readString(
+    rawOrder.number,
+    rawOrder.orderNumber,
+    rawOrder.displayOrderNumber,
+    rawOrder.customerOrderId,
   );
+  const candidates = collectOrderIdCandidates(rawOrder);
+  traceHydration(orderNumber, "detail/items candidates", { candidates });
 
   let lastPayload: unknown = null;
   let lastError: unknown = null;
@@ -140,9 +201,18 @@ async function fetchOrderItemsPayload(client: JumiaClient, rawOrder: Record<stri
       const payload = await client.call<unknown>(`/orders/items?orderId=${encodeURIComponent(candidate)}`);
       lastPayload = payload;
       const items = extractItemsArray(payload);
+      traceHydration(orderNumber, "detail/items fetched", {
+        candidate,
+        itemCount: items.length,
+        payloadKeys: isRecord(payload) ? Object.keys(payload).slice(0, 20) : [],
+      });
       if (items.length > 0) return { payload, items, resolvedOrderId: candidate };
     } catch (error) {
       lastError = error;
+      traceHydration(orderNumber, "detail/items candidate failed", {
+        candidate,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
@@ -150,13 +220,13 @@ async function fetchOrderItemsPayload(client: JumiaClient, rawOrder: Record<stri
     return {
       payload: lastPayload,
       items: extractItemsArray(lastPayload),
-      resolvedOrderId: readString(rawOrder.id, rawOrder.number) ?? "",
+      resolvedOrderId: orderNumber ?? readString(rawOrder.id, rawOrder.number) ?? "",
     };
   }
 
   if (lastError) throw lastError;
 
-  return { payload: null, items: [], resolvedOrderId: readString(rawOrder.id, rawOrder.number) ?? "" };
+  return { payload: null, items: [], resolvedOrderId: orderNumber ?? readString(rawOrder.id, rawOrder.number) ?? "" };
 }
 
 type HydratedPendingOrder = {

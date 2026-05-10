@@ -6,6 +6,25 @@ import { Platform } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
+const ORDER_ID_CANDIDATE_KEYS = new Set([
+  "id",
+  "orderId",
+  "order_id",
+  "number",
+  "orderNumber",
+  "displayOrderNumber",
+  "customerOrderId",
+  "customer_order_id",
+  "orderNo",
+  "order_no",
+  "orderNr",
+  "incrementId",
+  "increment_id",
+  "reference",
+  "referenceId",
+  "reference_id",
+]);
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -50,6 +69,55 @@ function hasUsableCredentials(auth: unknown): auth is { clientId: string; refres
     typeof record.refreshToken === "string" &&
     record.refreshToken.trim(),
   );
+}
+
+function readString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return undefined;
+}
+
+function collectOrderIdCandidates(...sources: unknown[]): string[] {
+  const results = new Set<string>();
+  const visited = new Set<unknown>();
+
+  const visit = (value: unknown, depth: number) => {
+    if (value == null || depth > 3) return;
+    if (typeof value === "string" || typeof value === "number") {
+      const resolved = readString(value);
+      if (resolved) results.add(resolved);
+      return;
+    }
+    if (typeof value !== "object") return;
+    if (visited.has(value)) return;
+    visited.add(value);
+
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, depth + 1);
+      return;
+    }
+
+    for (const [key, nested] of Object.entries(value)) {
+      if (ORDER_ID_CANDIDATE_KEYS.has(key)) {
+        const resolved = readString(nested);
+        if (resolved) results.add(resolved);
+      }
+      if (
+        key === "order" ||
+        key === "data" ||
+        key === "payload" ||
+        key === "meta" ||
+        key === "result"
+      ) {
+        visit(nested, depth + 1);
+      }
+    }
+  };
+
+  for (const source of sources) visit(source, 0);
+  return Array.from(results);
 }
 
 async function loadFallbackItems(orderId: string) {
@@ -207,9 +275,11 @@ async function fetchItemsPayload(
   shopAuth?: unknown,
   shopKey?: string,
   fallbackOrderNumber?: string | null,
+  fallbackItems?: Array<Record<string, unknown>>,
 ) {
-  const candidates = Array.from(
-    new Set([orderId, fallbackOrderNumber ?? null].filter((value): value is string => Boolean(value && value.trim()))),
+  const candidates = collectOrderIdCandidates(
+    { id: orderId, number: fallbackOrderNumber ?? undefined },
+    ...(fallbackItems ?? []),
   );
 
   let lastPayload: unknown = null;
@@ -255,6 +325,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       authResolution.shopAuth,
       authResolution.shopKey,
       fallback.orderMeta?.number ? String(fallback.orderMeta.number) : null,
+      fallback.items,
     );
     let resp = fetched.payload;
     let items = extractItems(resp);
@@ -267,6 +338,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
           defaultAuth,
           requestedShopId,
           fallback.orderMeta?.number ? String(fallback.orderMeta.number) : null,
+          fallback.items,
         );
         resp = fetched.payload;
         items = extractItems(resp);
