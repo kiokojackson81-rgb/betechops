@@ -127,6 +127,38 @@ async function loadFallbackItems(orderId: string) {
   return { items, orderMeta: orderRow };
 }
 
+async function fetchItemsPayload(
+  orderId: string,
+  shopAuth?: unknown,
+  fallbackOrderNumber?: string | null,
+) {
+  const candidates = Array.from(
+    new Set([orderId, fallbackOrderNumber ?? null].filter((value): value is string => Boolean(value && value.trim()))),
+  );
+
+  let lastPayload: unknown = null;
+  let lastError: unknown = null;
+
+  for (const candidate of candidates) {
+    try {
+      const payload = await jumiaFetch(
+        `/orders/items?orderId=${encodeURIComponent(candidate)}`,
+        shopAuth ? ({ shopAuth } as any) : ({} as any),
+      );
+      lastPayload = payload;
+      if (extractItems(payload).length > 0) {
+        return { payload, resolvedOrderId: candidate, error: null };
+      }
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (lastPayload) return { payload: lastPayload, resolvedOrderId: orderId, error: null };
+  if (lastError) throw lastError;
+  return { payload: null, resolvedOrderId: orderId, error: null };
+}
+
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   if (!id) return NextResponse.json({ error: "order id required" }, { status: 400 });
@@ -134,11 +166,22 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   try {
     const url = new URL(req.url);
     const shopId = url.searchParams.get("shopId") || undefined;
-    const shopAuth = shopId ? await loadShopAuthById(shopId).catch(() => undefined) : await loadDefaultShopAuth();
+    const shopAuth = shopId ? await loadShopAuthById(shopId).catch(() => undefined) : await loadDefaultShopAuth().catch(() => undefined);
+    const fallback = await loadFallbackItems(id);
 
-    const resp = await jumiaFetch(`/orders/items?orderId=${encodeURIComponent(id)}`, shopAuth ? ({ shopAuth } as any) : ({} as any));
+    let fetched = await fetchItemsPayload(id, shopAuth, fallback.orderMeta?.number ? String(fallback.orderMeta.number) : null);
+    let resp = fetched.payload;
     let items = extractItems(resp);
-    const fallback = items.length === 0 ? await loadFallbackItems(id) : null;
+
+    if (items.length === 0 && shopId) {
+      const defaultAuth = await loadDefaultShopAuth().catch(() => undefined);
+      if (defaultAuth && defaultAuth !== shopAuth) {
+        fetched = await fetchItemsPayload(id, defaultAuth, fallback.orderMeta?.number ? String(fallback.orderMeta.number) : null);
+        resp = fetched.payload;
+        items = extractItems(resp);
+      }
+    }
+
     if (fallback?.items.length) items = fallback.items;
 
     // Try to infer country code from first item
@@ -153,7 +196,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     const agg = aggregateItemsDetails(items, { countryCode });
 
     return NextResponse.json({
-      orderId: id,
+      orderId: fetched.resolvedOrderId ?? id,
       itemsCount: items.length,
       items,
       isPrepayment:
@@ -171,6 +214,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
               value: Number(fallback.orderMeta.totalAmountLocalValue),
             }
           : undefined),
+      error:
+        items.length === 0
+          ? readSoftError(resp)
+          : undefined,
       ...agg,
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error: unknown) {
@@ -198,4 +245,14 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       items: [],
     }, { status: 500 });
   }
+}
+
+function readSoftError(payload: unknown): string | undefined {
+  const root = asRecord(payload);
+  if (!root) return undefined;
+  const direct = typeof root.error === "string" && root.error.trim() ? root.error.trim() : undefined;
+  if (direct) return direct;
+  const data = asRecord(root.data);
+  if (data && typeof data.error === "string" && data.error.trim()) return data.error.trim();
+  return undefined;
 }

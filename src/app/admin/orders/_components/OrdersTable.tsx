@@ -542,6 +542,9 @@ export default function OrdersTable({ rows, nextToken, isLastPage }: Props) {
             : `Failed to load order details (${res.status})`,
         );
       }
+      if ((!Array.isArray(payload?.items) || payload.items.length === 0) && typeof payload?.error === "string" && payload.error.trim()) {
+        throw new Error(payload.error.trim());
+      }
       setDetails((prev) => ({ ...prev, [id]: parseDetailsResponse(payload) }));
     } catch (error) {
       const message =
