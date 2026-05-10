@@ -123,44 +123,50 @@ function parseItem(item: Record<string, unknown>): OrderItemDetail {
   const receiver = toRecord(item.receiver);
   const customer = toRecord(item.customer);
   const address = toRecord(item.address);
+  const shippingAddress = toRecord(item.shippingAddress);
+  const pickupStation = toRecord(item.pickupStation);
   const shipping = toRecord(item.shipping);
   const shipment = toRecord(item.shipment);
   const delivery = toRecord(item.delivery);
+  const store = toRecord(item.store);
+  const shop = toRecord(item.shop);
 
   const recipientName = pickNestedString(
-    [item, receiver, customer, address, shipping, shipment, delivery],
+    [item, receiver, customer, address, shippingAddress, shipping, shipment, delivery, pickupStation],
     [
       ["customerName"],
       ["recipientName"],
       ["fullName"],
       ["name"],
       ["receiverName"],
+      ["firstName"],
     ],
   );
 
   const recipientPhone = pickNestedString(
-    [item, receiver, customer, address, shipping, shipment, delivery],
+    [item, receiver, customer, address, shippingAddress, shipping, shipment, delivery, pickupStation],
     [
       ["customerPhone"],
       ["phone"],
       ["phoneNumber"],
       ["mobile"],
       ["recipientPhone"],
+      ["phoneNo"],
     ],
   );
 
   const recipientAddress = joinAddress([
-    pickNestedString([item, address, shipping, shipment, delivery], [["address1"], ["line1"], ["street"], ["address"]]),
-    pickNestedString([item, address, shipping, shipment, delivery], [["address2"], ["line2"]]),
-    pickNestedString([item, address, shipping, shipment, delivery], [["city"], ["town"]]),
-    pickNestedString([item, address, shipping, shipment, delivery], [["state"], ["county"], ["region"]]),
-    pickNestedString([item, address, shipping, shipment, delivery], [["country"], ["countryName"]]),
+    pickNestedString([item, address, shippingAddress, shipping, shipment, delivery, pickupStation], [["address1"], ["line1"], ["street"], ["address"], ["addressLine1"], ["stationName"]]),
+    pickNestedString([item, address, shippingAddress, shipping, shipment, delivery, pickupStation], [["address2"], ["line2"], ["addressLine2"]]),
+    pickNestedString([item, address, shippingAddress, shipping, shipment, delivery, pickupStation], [["city"], ["town"]]),
+    pickNestedString([item, address, shippingAddress, shipping, shipment, delivery, pickupStation], [["state"], ["county"], ["region"]]),
+    pickNestedString([item, address, shippingAddress, shipping, shipment, delivery, pickupStation], [["country"], ["countryName"]]),
   ]);
 
   const shippingInformation = joinAddress([
-    pickNestedString([item, shipping, shipment, delivery], [["type"], ["mode"], ["shippingType"]]),
-    pickNestedString([item, shipping, shipment, delivery], [["provider"], ["carrier"], ["providerName"]]),
-    pickNestedString([item, shipping, shipment, delivery], [["station"], ["stationName"], ["pickupStation"]]),
+    pickNestedString([item, shipping, shipment, delivery, pickupStation], [["shipmentMethod"], ["shippingMethod"], ["type"], ["mode"], ["shippingType"], ["method"]]),
+    pickNestedString([item, shipping, shipment, delivery, pickupStation], [["provider"], ["carrier"], ["providerName"]]),
+    pickNestedString([item, shipping, shipment, delivery, pickupStation], [["station"], ["stationName"], ["pickupStation"], ["name"]]),
   ]);
 
   const money =
@@ -182,8 +188,9 @@ function parseItem(item: Record<string, unknown>): OrderItemDetail {
         item.productName,
         item.name,
         item.title,
+        item.details,
       ) ?? "Item",
-    sellerSku: readString(item.sellerSku, item.sku, item.shopSku, product?.sellerSku, product?.sku),
+    sellerSku: readString(item.sellerSku, item.sku, item.shopSku, product?.sellerSku, product?.sku, item.sellerSKU),
     quantity: readNumber(item.quantity, item.qty),
     imageUrl: readString(
       item.imageUrl,
@@ -192,7 +199,7 @@ function parseItem(item: Record<string, unknown>): OrderItemDetail {
       product?.imageUrl,
       product?.thumbnail,
     ),
-    shopName: readString(item.shopName, item.shop, product?.shopName),
+    shopName: readString(item.shopName, product?.shopName, store?.name, shop?.name, item.shop),
     shipmentMethod: readString(
       item.shipmentMethod,
       item.shippingMethod,
