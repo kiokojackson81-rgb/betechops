@@ -6,6 +6,8 @@ import { Platform } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
+const UUID_LIKE_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ORDER_ID_CANDIDATE_KEYS = new Set([
   "id",
   "orderId",
@@ -77,6 +79,10 @@ function readString(...values: unknown[]): string | undefined {
     if (typeof value === "number" && Number.isFinite(value)) return String(value);
   }
   return undefined;
+}
+
+function isUuidLike(value: string | undefined | null): value is string {
+  return Boolean(value && UUID_LIKE_PATTERN.test(value.trim()));
 }
 
 function collectOrderIdCandidates(...sources: unknown[]): string[] {
@@ -281,11 +287,16 @@ async function fetchItemsPayload(
     { id: orderId, number: fallbackOrderNumber ?? undefined },
     ...(fallbackItems ?? []),
   );
+  const uuidCandidates = candidates.filter((candidate) => isUuidLike(candidate));
+
+  if (!uuidCandidates.length) {
+    return { payload: null, resolvedOrderId: orderId, error: null };
+  }
 
   let lastPayload: unknown = null;
   let lastError: unknown = null;
 
-  for (const candidate of candidates) {
+  for (const candidate of uuidCandidates) {
     try {
       const payload = await jumiaFetch(
         `/orders/items?orderId=${encodeURIComponent(candidate)}`,

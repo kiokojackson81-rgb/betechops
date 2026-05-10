@@ -8,7 +8,9 @@ import { writePendingSnapshot, type PendingSnapshot } from "./pendingSnapshot";
 
 const API_BASE = "https://vendor-api.jumia.com";
 const TOKEN_URL = "https://vendor-api.jumia.com/token";
-const LIMIT_RPS = 4;
+// Vendor Center applies limits at mastershop level. Keep worker fanout below the
+// documented ceiling so sequential item hydration does not burst above it.
+const LIMIT_RPS = 2;
 // Sync window for PENDING orders. Some pending orders can linger for weeks.
 // Make this configurable via env JUMIA_PENDING_WINDOW_DAYS, defaulting to 90 days (~3 months of coverage).
 const WINDOW_DAYS = Number(process.env.JUMIA_PENDING_WINDOW_DAYS || 90);
@@ -25,6 +27,8 @@ type SyncResult = {
 };
 
 const TRACE_ORDER_NUMBERS = new Set(["352137425", "375645425"]);
+const UUID_LIKE_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ORDER_ID_CANDIDATE_KEYS = new Set([
   "id",
   "orderId",
@@ -142,6 +146,10 @@ function traceHydration(orderNumber: string | number | undefined, stage: string,
   console.info(`[jumia.sync][${normalizedOrderNumber}] ${stage}`, payload);
 }
 
+function isUuidLike(value: string | undefined | null): value is string {
+  return Boolean(value && UUID_LIKE_PATTERN.test(value.trim()));
+}
+
 function collectOrderIdCandidates(...sources: unknown[]): string[] {
   const results = new Set<string>();
   const visited = new Set<unknown>();
@@ -191,12 +199,26 @@ async function fetchOrderItemsPayload(client: JumiaClient, rawOrder: Record<stri
     rawOrder.customerOrderId,
   );
   const candidates = collectOrderIdCandidates(rawOrder);
-  traceHydration(orderNumber, "detail/items candidates", { candidates });
+  const uuidCandidates = candidates.filter((candidate) => isUuidLike(candidate));
+  const skippedCandidates = candidates.filter((candidate) => !isUuidLike(candidate));
+  traceHydration(orderNumber, "detail/items candidates", {
+    candidates,
+    uuidCandidates,
+    skippedCandidates,
+  });
+
+  if (!uuidCandidates.length) {
+    return {
+      payload: null,
+      items: [],
+      resolvedOrderId: readString(rawOrder.id, rawOrder.orderId, rawOrder.number) ?? orderNumber ?? "",
+    };
+  }
 
   let lastPayload: unknown = null;
   let lastError: unknown = null;
 
-  for (const candidate of candidates) {
+  for (const candidate of uuidCandidates) {
     try {
       const payload = await client.call<unknown>(`/orders/items?orderId=${encodeURIComponent(candidate)}`);
       lastPayload = payload;
@@ -220,13 +242,22 @@ async function fetchOrderItemsPayload(client: JumiaClient, rawOrder: Record<stri
     return {
       payload: lastPayload,
       items: extractItemsArray(lastPayload),
-      resolvedOrderId: orderNumber ?? readString(rawOrder.id, rawOrder.number) ?? "",
+      resolvedOrderId: readString(rawOrder.id, rawOrder.orderId, orderNumber, rawOrder.number) ?? "",
     };
   }
 
-  if (lastError) throw lastError;
+  if (lastError) {
+    traceHydration(orderNumber, "detail/items unresolved", {
+      error: lastError instanceof Error ? lastError.message : String(lastError),
+      attemptedCandidates: uuidCandidates,
+    });
+  }
 
-  return { payload: null, items: [], resolvedOrderId: orderNumber ?? readString(rawOrder.id, rawOrder.number) ?? "" };
+  return {
+    payload: null,
+    items: [],
+    resolvedOrderId: readString(rawOrder.id, rawOrder.orderId, orderNumber, rawOrder.number) ?? "",
+  };
 }
 
 type HydratedPendingOrder = {

@@ -11,6 +11,7 @@ import { requestWithRetry } from "@/lib/fetchWithRetry";
 const DEFAULT_API_BASE = process.env.JUMIA_VENDOR_API_BASE ?? "https://vendor-api.jumia.com";
 const DEFAULT_LOOKBACK_DAYS = Number(process.env.JUMIA_MARKETPLACE_SYNC_LOOKBACK_DAYS ?? 70);
 const TIME_BUDGET_MS = 260_000;
+const MAX_JUMIA_ORDER_WINDOW_DAYS = 89;
 
 // Temporary ops toggle: when disabled, weekly sales totals must be entered manually by admins via
 // /admin/online/manual. Automatic sync will still ingest payout weeks/orders, but will not create/update WeeklySale.
@@ -1036,6 +1037,29 @@ function statementTimestamp(statement: JumiaStatement): number {
   return 0;
 }
 
+function addUtcDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+function buildOrderFetchWindows(createdAfter: Date, createdBefore: Date): Array<{ start: Date; end: Date }> {
+  const windows: Array<{ start: Date; end: Date }> = [];
+  let cursor = new Date(createdAfter);
+
+  while (cursor <= createdBefore) {
+    const windowEndCandidate = addUtcDays(cursor, MAX_JUMIA_ORDER_WINDOW_DAYS);
+    const end =
+      windowEndCandidate.getTime() < createdBefore.getTime()
+        ? windowEndCandidate
+        : new Date(createdBefore);
+    windows.push({ start: new Date(cursor), end });
+    cursor = addUtcDays(end, 1);
+  }
+
+  return windows;
+}
+
 async function fetchStatementsForPaidFlag(
   apiBase: string,
   authHeader: string,
@@ -1085,26 +1109,33 @@ async function fetchOrders(
   createdAfter: Date,
   createdBefore: Date,
 ): Promise<JumiaOrder[]> {
-  const orders: JumiaOrder[] = [];
-  let nextToken: string | null = null;
+  const ordersById = new Map<string, JumiaOrder>();
+  const windows = buildOrderFetchWindows(createdAfter, createdBefore);
 
-  do {
-    const url = new URL("/orders", apiBase);
-    url.searchParams.set("createdAfter", createdAfter.toISOString().split("T")[0]);
-    url.searchParams.set("createdBefore", createdBefore.toISOString().split("T")[0]);
-    url.searchParams.set("size", "200");
-    if (nextToken) url.searchParams.set("token", nextToken);
+  for (const window of windows) {
+    let nextToken: string | null = null;
 
-    const res = await requestWithRetry(url.toString(), { headers: { Authorization: authHeader } });
-    if (!res.ok) throw new Error(`Failed to fetch orders (${res.status})`);
+    do {
+      const url = new URL("/orders", apiBase);
+      url.searchParams.set("createdAfter", window.start.toISOString().split("T")[0]);
+      url.searchParams.set("createdBefore", window.end.toISOString().split("T")[0]);
+      url.searchParams.set("size", "200");
+      if (nextToken) url.searchParams.set("token", nextToken);
 
-    const data = (await res.json()) as { orders?: JumiaOrder[]; nextToken?: string | null; isLastPage?: boolean };
-    if (data.orders?.length) orders.push(...data.orders);
-    nextToken = data.nextToken ?? null;
-    if (data.isLastPage) break;
-  } while (nextToken);
+      const res = await requestWithRetry(url.toString(), { headers: { Authorization: authHeader } });
+      if (!res.ok) throw new Error(`Failed to fetch orders (${res.status})`);
 
-  return orders;
+      const data = (await res.json()) as { orders?: JumiaOrder[]; nextToken?: string | null; isLastPage?: boolean };
+      for (const order of data.orders ?? []) {
+        if (!order?.id) continue;
+        ordersById.set(order.id, order);
+      }
+      nextToken = data.nextToken ?? null;
+      if (data.isLastPage) break;
+    } while (nextToken);
+  }
+
+  return Array.from(ordersById.values());
 }
 
 async function fetchOrderItems(apiBase: string, authHeader: string, orderId: string): Promise<JumiaOrderItem[]> {
