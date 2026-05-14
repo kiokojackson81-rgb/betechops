@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import ToastContainer from './_components/ToastContainer';
 import ConfirmProvider from './_components/ConfirmProvider';
+import AuthProvider from "@/components/AuthProvider";
 
 const geistSans = { variable: "--font-geist-sans" } as const;
 const geistMono = { variable: "--font-geist-mono" } as const;
@@ -35,11 +36,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-slate-950 text-slate-50`}>
-        <div className="flex min-h-screen flex-col">
-          <ToastContainer />
-          <ConfirmProvider />
-          <main className="flex-1 w-full">{children}</main>
-        </div>
+        <AuthProvider>
+          <div className="flex min-h-screen flex-col">
+            <ToastContainer />
+            <ConfirmProvider />
+            <main className="flex-1 w-full">{children}</main>
+          </div>
+        </AuthProvider>
       </body>
     </html>
   );

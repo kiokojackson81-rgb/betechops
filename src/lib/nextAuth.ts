@@ -11,6 +11,8 @@ type ExtendedToken = {
   role?: string;
   attendantCategory?: string;
   isActive?: boolean;
+  isAgent?: boolean;
+  agentStatus?: string | null;
 };
 
 const REQUIRED_DOMAIN = "@betech.co.ke";
@@ -29,19 +31,29 @@ export const authOptions = {
         const password = credentials?.password || "";
 
         if (!email || !password) return null;
-        if (!email.endsWith(REQUIRED_DOMAIN)) {
-          // enforce corporate domain
-          return null;
-        }
 
         const user = await prisma.user.findUnique({
           where: { email },
-          // avoid selecting `attendantCategory` here — if the DB enum doesn't match
-          // the Prisma schema this can throw on read. Omit for now to allow login.
-          select: { id: true, email: true, name: true, password: true, role: true, isActive: true },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            password: true,
+            role: true,
+            isActive: true,
+            agentProfile: {
+              select: {
+                id: true,
+                status: true,
+              },
+            },
+          },
         });
 
         if (!user || !user.isActive || !user.password) return null;
+        const isCorporateUser = email.endsWith(REQUIRED_DOMAIN);
+        const isAgentUser = Boolean(user.agentProfile);
+        if (!isCorporateUser && !isAgentUser) return null;
 
         const valid = await bcrypt.compare(password, user.password);
         if (!valid) return null;
@@ -51,19 +63,23 @@ export const authOptions = {
           email: user.email,
           name: user.name,
           role: user.role,
-        } as any;
+          isAgent: isAgentUser,
+          agentStatus: user.agentProfile?.status ?? null,
+        };
       },
     }),
   ],
   session: { strategy: "jwt" },
   callbacks: {
-    async jwt({ token, user }: { token: ExtendedToken; user?: { role?: string; attendantCategory?: string; email?: string; id?: string; isActive?: boolean } }) {
+    async jwt({ token, user }: { token: ExtendedToken; user?: { role?: string; attendantCategory?: string; email?: string; id?: string; isActive?: boolean; isAgent?: boolean; agentStatus?: string | null } }) {
       if (user) {
         token.role = user.role ?? token.role;
         token.attendantCategory = user.attendantCategory ?? token.attendantCategory;
         token.email = user.email ?? token.email;
         token.sub = user.id ?? token.sub;
-        token.isActive = (user as any).isActive ?? token.isActive ?? true;
+        token.isActive = user.isActive ?? token.isActive ?? true;
+        token.isAgent = user.isAgent ?? token.isAgent ?? false;
+        token.agentStatus = user.agentStatus ?? token.agentStatus ?? null;
         return token;
       }
 
@@ -74,12 +90,19 @@ export const authOptions = {
       try {
         const existing = await prisma.user.findUnique({
           where: { email: token.email },
-          select: { id: true, role: true, isActive: true },
+          select: {
+            id: true,
+            role: true,
+            isActive: true,
+            agentProfile: { select: { id: true, status: true } },
+          },
         });
         if (existing) {
           token.role = existing.role ?? token.role;
           token.sub = existing.id ?? token.sub;
           token.isActive = existing.isActive ?? token.isActive ?? true;
+          token.isAgent = Boolean(existing.agentProfile);
+          token.agentStatus = existing.agentProfile?.status ?? null;
         }
       } catch (err) {
         console.error("nextAuth: safe user lookup failed:", err);
@@ -111,6 +134,8 @@ export const authOptions = {
       (s.user as Record<string, unknown>).isActive = token.isActive ?? true;
       // expose the attendant id so API routes depending on session.user.id keep working
       (s.user as Record<string, unknown>).id = token.sub ?? null;
+      (s.user as Record<string, unknown>).isAgent = token.isAgent ?? false;
+      (s.user as Record<string, unknown>).agentStatus = token.agentStatus ?? null;
       return s;
     },
   },

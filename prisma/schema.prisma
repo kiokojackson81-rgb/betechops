@@ -8,14 +8,14 @@ datasource db {
 }
 
 model User {
-  id                                   String                         @id @default(cuid())
-  email                                String                         @unique
+  id                                   String                          @id @default(cuid())
+  email                                String                          @unique
   name                                 String?
   image                                String?
-  role                                 Role                           @default(ATTENDANT)
-  isActive                             Boolean                        @default(true)
-  createdAt                            DateTime                       @default(now())
-  updatedAt                            DateTime                       @updatedAt
+  role                                 Role                            @default(ATTENDANT)
+  isActive                             Boolean                         @default(true)
+  createdAt                            DateTime                        @default(now())
+  updatedAt                            DateTime                        @updatedAt
   attendantCategory                    AttendantCategory?
   password                             String?
   actionLogs                           ActionLog[]
@@ -24,42 +24,116 @@ model User {
   attendantCommissions                 AttendantCommission[]
   attendantCompPlan                    AttendantCompPlan?
   attendantPayrollAdjustments          AttendantPayrollAdjustment[]
-  recurringPayrollItems               AttendantRecurringPayrollItem[]
-  payrollAdjustmentRequests            PayrollAdjustmentRequest[]     @relation("PayrollAdjustmentRequestAttendant")
-  submittedPayrollAdjustmentRequests   PayrollAdjustmentRequest[]     @relation("PayrollAdjustmentRequestRequester")
-  decidedPayrollAdjustmentRequests     PayrollAdjustmentRequest[]     @relation("PayrollAdjustmentRequestDecider")
-  leaveRequests                        LeaveRequest[]                 @relation("LeaveRequestUser")
-  approvedLeaveRequests                LeaveRequest[]                 @relation("LeaveRequestApprover")
+  recurringPayrollItems                AttendantRecurringPayrollItem[]
+  payrollAdjustmentRequests            PayrollAdjustmentRequest[]      @relation("PayrollAdjustmentRequestAttendant")
+  submittedPayrollAdjustmentRequests   PayrollAdjustmentRequest[]      @relation("PayrollAdjustmentRequestRequester")
+  decidedPayrollAdjustmentRequests     PayrollAdjustmentRequest[]      @relation("PayrollAdjustmentRequestDecider")
+  leaveRequests                        LeaveRequest[]                  @relation("LeaveRequestUser")
+  approvedLeaveRequests                LeaveRequest[]                  @relation("LeaveRequestApprover")
   leaveBalance                         LeaveBalance?
-  cashAdvances                         CashAdvance[]                  @relation("CashAdvanceUser")
-  approvedCashAdvances                 CashAdvance[]                  @relation("CashAdvanceApprover")
-  leaveBalancesUpdated                 LeaveBalance[]                 @relation("LeaveBalanceUpdatedBy")
+  cashAdvances                         CashAdvance[]                   @relation("CashAdvanceUser")
+  approvedCashAdvances                 CashAdvance[]                   @relation("CashAdvanceApprover")
+  leaveBalancesUpdated                 LeaveBalance[]                  @relation("LeaveBalanceUpdatedBy")
   balance                              Balance?
   commissionConfig                     UserCommissionConfig?
   commissionEarnings                   CommissionEarning[]
   commissionRecords                    CommissionRecord[]
   dailyReports                         DailyReport[]
   marketingEntries                     MarketingDailyEntry[]
-  marketplaceAccountAssignments        MarketplaceAccountAssignment[] @relation("MarketplaceAccountAssignment_attendant")
-  marketplaceOrdersPriced              MarketplaceOrder[]             @relation("MarketplaceOrder_pricedBy")
-  marketplacePricingTemplatesUpdated   MarketplacePricingTemplate[]   @relation("MarketplacePricingTemplate_updatedBy")
-  marketplaceReturnsAttended           MarketplaceReturn[]            @relation("MarketplaceReturn_attendant")
-  marketplaceReturnsProcessed          MarketplaceReturn[]            @relation("MarketplaceReturn_processedBy")
-  marketplaceReturnAttachmentsUploaded MarketplaceReturnAttachment[]  @relation("MarketplaceReturnAttachment_uploadedBy")
+  marketplaceAccountAssignments        MarketplaceAccountAssignment[]  @relation("MarketplaceAccountAssignment_attendant")
+  marketplaceOrdersPriced              MarketplaceOrder[]              @relation("MarketplaceOrder_pricedBy")
+  marketplacePricingTemplatesUpdated   MarketplacePricingTemplate[]    @relation("MarketplacePricingTemplate_updatedBy")
+  marketplaceReturnsAttended           MarketplaceReturn[]             @relation("MarketplaceReturn_attendant")
+  marketplaceReturnsProcessed          MarketplaceReturn[]             @relation("MarketplaceReturn_processedBy")
+  marketplaceReturnAttachmentsUploaded MarketplaceReturnAttachment[]   @relation("MarketplaceReturnAttachment_uploadedBy")
   orders                               Order[]
-  issuedReceipts                       Receipt[]                      @relation("issuedBy")
-  returnsApproved                      ReturnCase[]                   @relation("ReturnApprovedBy")
-  returnsCreated                       ReturnCase[]                   @relation("ReturnCreatedBy")
-  evidenceTaken                        ReturnEvidence[]               @relation("EvidenceTaker")
-  returnPickups                        ReturnPickup[]                 @relation("PickupAssignee")
+  issuedReceipts                       Receipt[]                       @relation("issuedBy")
+  returnsApproved                      ReturnCase[]                    @relation("ReturnApprovedBy")
+  returnsCreated                       ReturnCase[]                    @relation("ReturnCreatedBy")
+  evidenceTaken                        ReturnEvidence[]                @relation("EvidenceTaker")
+  returnPickups                        ReturnPickup[]                  @relation("PickupAssignee")
   assignments                          ShopAssignment[]
   supportEntries                       SupportDailyEntry[]
   userShops                            UserShop[]
-  weeklySalesApproved                  WeeklySale[]                   @relation("WeeklySaleApproval")
-  weeklySales                          WeeklySale[]                   @relation("WeeklySaleAttendant")
-  marketplaceProfitEntries             MarketplaceProfitEntry[]       @relation("MarketplaceProfitEntryEnteredBy")
-  marketplaceStatementDraftsCreated    MarketplaceStatementDraft[]    @relation("MarketplaceStatementDraftCreatedBy")
-  managedShops                         Shop[]                         @relation("ManagedBy")
+  weeklySalesApproved                  WeeklySale[]                    @relation("WeeklySaleApproval")
+  weeklySales                          WeeklySale[]                    @relation("WeeklySaleAttendant")
+  marketplaceProfitEntries             MarketplaceProfitEntry[]        @relation("MarketplaceProfitEntryEnteredBy")
+  marketplaceStatementDraftsCreated    MarketplaceStatementDraft[]     @relation("MarketplaceStatementDraftCreatedBy")
+  managedShops                         Shop[]                          @relation("ManagedBy")
+  agentProfile                         AgentProfile?
+  agentCommissions                     AgentCommission[]               @relation("AgentCommissionAgent")
+  agentPayouts                         AgentPayout[]                   @relation("AgentPayoutAgent")
+  agentActivityLogs                    AgentActivityLog[]              @relation("AgentActivityAgent")
+}
+
+model AgentProfile {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  referralCode    String    @unique
+  firstName       String?
+  lastName        String?
+  email           String?
+  phone           String?
+  nationalId      String?
+  kraPin          String?
+  gender          String?
+  dateOfBirth     DateTime?
+  country         String?
+  county          String?
+  city            String?
+  address         String?
+  idFrontUrl      String?
+  idBackUrl       String?
+  profilePhotoUrl String?
+  status          String    @default("pending")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+}
+
+model AgentCommission {
+  id            String   @id @default(cuid())
+  agentId       String
+  sourceType    String
+  sourceId      String?
+  orderNumber   String?
+  saleAmount    Float    @default(0)
+  commissionPct Float    @default(0)
+  commissionAmt Float    @default(0)
+  status        String   @default("pending")
+  createdAt     DateTime @default(now())
+  agent         User     @relation("AgentCommissionAgent", fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, createdAt])
+  @@index([status, createdAt])
+}
+
+model AgentPayout {
+  id        String   @id @default(cuid())
+  agentId   String
+  amount    Float
+  method    String?
+  phone     String?
+  reference String?
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+  agent     User     @relation("AgentPayoutAgent", fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, createdAt])
+  @@index([status, createdAt])
+}
+
+model AgentActivityLog {
+  id          String   @id @default(cuid())
+  agentId     String
+  action      String
+  description String?
+  createdAt   DateTime @default(now())
+  agent       User     @relation("AgentActivityAgent", fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, createdAt])
 }
 
 model AttendantActivity {
@@ -94,73 +168,73 @@ model AttendantCompPlan {
 }
 
 model AttendantPayrollAdjustment {
-  id             String                @id @default(cuid())
-  attendantId    String
-  periodKey      String
-  periodLabel    String
-  adjustmentType PayrollAdjustmentType
-  label          String
-  amount         Int
-  createdById    String
+  id              String                         @id @default(cuid())
+  attendantId     String
+  periodKey       String
+  periodLabel     String
+  adjustmentType  PayrollAdjustmentType
+  label           String
+  amount          Int
+  createdById     String
   recurringItemId String?
-  occurrenceDate DateTime?
-  createdAt      DateTime              @default(now())
-  adjustmentKind PayrollAdjustmentKind @default(DEDUCTION)
-  attendant      User                  @relation(fields: [attendantId], references: [id])
-  recurringItem  AttendantRecurringPayrollItem? @relation(fields: [recurringItemId], references: [id])
-  request        PayrollAdjustmentRequest?
+  occurrenceDate  DateTime?
+  createdAt       DateTime                       @default(now())
+  adjustmentKind  PayrollAdjustmentKind          @default(DEDUCTION)
+  attendant       User                           @relation(fields: [attendantId], references: [id])
+  recurringItem   AttendantRecurringPayrollItem? @relation(fields: [recurringItemId], references: [id])
+  request         PayrollAdjustmentRequest?
 
+  @@unique([recurringItemId, periodKey, occurrenceDate])
   @@index([attendantId, periodKey])
   @@index([recurringItemId, periodKey])
-  @@unique([recurringItemId, periodKey, occurrenceDate])
 }
 
 model AttendantRecurringPayrollItem {
-  id             String                @id @default(cuid())
+  id             String                       @id @default(cuid())
   attendantId    String
   label          String
   adjustmentType PayrollAdjustmentType
-  adjustmentKind PayrollAdjustmentKind @default(DEDUCTION)
+  adjustmentKind PayrollAdjustmentKind        @default(DEDUCTION)
   amount         Int
   cadence        PayrollAdjustmentCadence
   dayOfWeek      Int?
   dayOfMonth     Int?
   startDate      DateTime?
   endDate        DateTime?
-  isActive       Boolean               @default(true)
+  isActive       Boolean                      @default(true)
   createdById    String
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
-  attendant      User                  @relation(fields: [attendantId], references: [id])
+  createdAt      DateTime                     @default(now())
+  updatedAt      DateTime                     @updatedAt
+  attendant      User                         @relation(fields: [attendantId], references: [id])
   adjustments    AttendantPayrollAdjustment[]
 
   @@index([attendantId, isActive])
 }
 
 model PayrollAdjustmentRequest {
-  id                  String                @id @default(cuid())
+  id                  String                      @id @default(cuid())
   attendantId         String
   requestedById       String
   decidedById         String?
-  payrollAdjustmentId String?               @unique
+  payrollAdjustmentId String?                     @unique
   periodKey           String
   periodLabel         String
   adjustmentType      PayrollAdjustmentType
-  adjustmentKind      PayrollAdjustmentKind @default(DEDUCTION)
+  adjustmentKind      PayrollAdjustmentKind       @default(DEDUCTION)
   offenseType         String
   label               String
   amount              Int
   incidentDate        DateTime?
   details             String
   evidenceUrl         String?
-  status              WellnessRequestStatus @default(PENDING)
+  status              WellnessRequestStatus       @default(PENDING)
   adminComment        String?
   decidedAt           DateTime?
-  createdAt           DateTime              @default(now())
-  updatedAt           DateTime              @updatedAt
-  attendant           User                  @relation("PayrollAdjustmentRequestAttendant", fields: [attendantId], references: [id])
-  requestedBy         User                  @relation("PayrollAdjustmentRequestRequester", fields: [requestedById], references: [id])
-  decidedBy           User?                 @relation("PayrollAdjustmentRequestDecider", fields: [decidedById], references: [id])
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+  attendant           User                        @relation("PayrollAdjustmentRequestAttendant", fields: [attendantId], references: [id])
+  requestedBy         User                        @relation("PayrollAdjustmentRequestRequester", fields: [requestedById], references: [id])
+  decidedBy           User?                       @relation("PayrollAdjustmentRequestDecider", fields: [decidedById], references: [id])
   payrollAdjustment   AttendantPayrollAdjustment? @relation(fields: [payrollAdjustmentId], references: [id])
 
   @@index([attendantId, periodKey])
@@ -207,22 +281,22 @@ model LeaveRequest {
 }
 
 model CashAdvance {
-  id                String                  @id @default(cuid())
+  id                String                   @id @default(cuid())
   userId            String
   requestedAmount   Int
   approvedAmount    Int?
-  status            WellnessRequestStatus   @default(PENDING)
+  status            WellnessRequestStatus    @default(PENDING)
   reason            String
   repaymentPeriod   Int?
   installmentAmount Int?
-  remainingBalance  Int                     @default(0)
+  remainingBalance  Int                      @default(0)
   hrComment         String?
   approvedById      String?
   approvedAt        DateTime?
-  createdAt         DateTime                @default(now())
-  updatedAt         DateTime                @updatedAt
-  user              User                    @relation("CashAdvanceUser", fields: [userId], references: [id], onDelete: Cascade)
-  approvedBy        User?                   @relation("CashAdvanceApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  user              User                     @relation("CashAdvanceUser", fields: [userId], references: [id], onDelete: Cascade)
+  approvedBy        User?                    @relation("CashAdvanceApprover", fields: [approvedById], references: [id], onDelete: SetNull)
   installments      CashAdvanceInstallment[]
 
   @@index([userId, createdAt])
@@ -249,13 +323,13 @@ model CashAdvanceInstallment {
 }
 
 model UserCommissionConfig {
-  id                  String               @id @default(cuid())
-  userId              String               @unique
-  posTotalsMode       PosTotalsMode        @default(NONE)
-  salesCommissionMode SalesCommissionMode  @default(DEFAULT_TIERS)
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                  String              @id @default(cuid())
+  userId              String              @unique
+  posTotalsMode       PosTotalsMode       @default(NONE)
+  salesCommissionMode SalesCommissionMode @default(DEFAULT_TIERS)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  user                User                @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model DailyReport {
@@ -674,23 +748,23 @@ model ShopApiConfig {
 }
 
 model Product {
-  id              String      @id @default(cuid())
-  sku             String      @unique
-  name            String
-  category        String
-  sellingPrice    Float
-  lastBuyingPrice Float?
-  defaultWarranty String?
-  variableCost    Boolean     @default(false)
-  commissionEnabled Boolean   @default(false)
-  commissionAmount Decimal?   @db.Decimal(12, 2)
-  commissionRequiresApproval Boolean @default(false)
-  minStockLevel   Int         @default(5)
-  stockQuantity   Int         @default(0)
-  isActive        Boolean     @default(true)
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  orders          OrderItem[]
+  id                         String      @id @default(cuid())
+  sku                        String      @unique
+  name                       String
+  category                   String
+  sellingPrice               Float
+  lastBuyingPrice            Float?
+  defaultWarranty            String?
+  variableCost               Boolean     @default(false)
+  commissionEnabled          Boolean     @default(false)
+  commissionAmount           Decimal?    @db.Decimal(12, 2)
+  commissionRequiresApproval Boolean     @default(false)
+  minStockLevel              Int         @default(5)
+  stockQuantity              Int         @default(0)
+  isActive                   Boolean     @default(true)
+  createdAt                  DateTime    @default(now())
+  updatedAt                  DateTime    @updatedAt
+  orders                     OrderItem[]
 }
 
 model Order {

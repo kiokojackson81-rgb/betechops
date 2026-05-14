@@ -12,10 +12,12 @@ export async function GET(req: Request) {
     return NextResponse.redirect(loginUrl);
   }
 
-  const role = (session.user as any)?.role ?? '';
-  const category = (session.user as any)?.attendantCategory ?? null;
+  const user = session.user as { role?: string; attendantCategory?: string | null; isAgent?: boolean } | undefined;
+  const role = user?.role ?? '';
+  const category = user?.attendantCategory ?? null;
+  const isAgent = Boolean(user?.isAgent);
   const rawCallback = url.searchParams.get('callbackUrl') ?? url.searchParams.get('callback');
-  let target = getLandingPage(category, role);
+  let target = isAgent ? "/agents/dashboard" : getLandingPage(category, role);
 
   if (rawCallback) {
     let decoded = rawCallback;
