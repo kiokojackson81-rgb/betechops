@@ -22,9 +22,9 @@ type AgentSaleFormProps = {
 };
 
 const paymentTypes = [
-  { value: "transport_fee", label: "Transport fee", note: "Use when customer is outside Nairobi and needs dispatch arrangement started." },
-  { value: "deposit", label: "Deposit", note: "Use when customer is committing to an order before final balance is cleared." },
-  { value: "full_payment", label: "Full payment", note: "Use when customer has cleared the full order amount." },
+  { value: "transport_fee", label: "Delivery fee", note: "Useful when the customer is outside Nairobi and wants dispatch started before clearing the full balance." },
+  { value: "deposit", label: "Partial payment / deposit", note: "Use when the customer is confirming the order with part payment first." },
+  { value: "full_payment", label: "Full payment", note: "Use when the customer is ready to clear the full amount immediately." },
 ];
 
 const deliveryMethods = [
@@ -337,18 +337,12 @@ export default function AgentSaleForm({ useRootPaths = false }: AgentSaleFormPro
                     className={fieldClassName()}
                   />
                 </label>
-                <label className="space-y-2">
-                  <span className={labelClassName()}>Amount paid so far</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    required
-                    value={form.amountPaid}
-                    onChange={(event) => update("amountPaid", event.target.value)}
-                    className={fieldClassName()}
-                  />
-                </label>
+                <div className="rounded-[24px] border border-[#ecd8b1] bg-[#fff8e8] p-4">
+                  <div className="text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">Pricing note</div>
+                  <p className="mt-3 text-sm leading-6 text-slate-700">
+                    Keep the quoted total accurate here. Payment progress and M-Pesa reference are captured in the next section once the customer confirms how they want to pay.
+                  </p>
+                </div>
               </div>
             </section>
 
@@ -408,26 +402,47 @@ export default function AgentSaleForm({ useRootPaths = false }: AgentSaleFormPro
                 </label>
               </div>
 
+              <div className="mt-4 grid gap-4 md:grid-cols-3">
+                <label className="space-y-2 md:col-span-1">
+                  <span className={labelClassName()}>Amount paid so far</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    required
+                    value={form.amountPaid}
+                    onChange={(event) => update("amountPaid", event.target.value)}
+                    className={fieldClassName()}
+                  />
+                </label>
+                <div className="rounded-[24px] border border-[#ead9ce] bg-[#fffdfb] p-4 md:col-span-2">
+                  <div className="text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">Payment update</div>
+                  <p className="mt-3 text-sm leading-6 text-slate-700">
+                    Every customer payment should be guided to the Betech paybill. Record the amount already received here and add the M-Pesa reference once the customer sends it.
+                  </p>
+                </div>
+              </div>
+
               <div className="mt-5 grid gap-4 lg:grid-cols-2">
                 <div className="rounded-[24px] border border-[#ecd8b1] bg-[#fff8e8] p-5">
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#f2b20f] text-slate-950">
                       {isNairobi ? <Truck className="h-5 w-5" /> : <Building2 className="h-5 w-5" />}
                     </div>
-                    <div className="text-lg font-black text-slate-950">{isNairobi ? "Nairobi order flow" : "Outside Nairobi order flow"}</div>
+                    <div className="text-lg font-black text-slate-950">{isNairobi ? "Nairobi delivery and collection" : "Outside Nairobi delivery options"}</div>
                   </div>
                   <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-700">
                     {isNairobi ? (
                       <>
-                        <li>Customer can pay on delivery within Nairobi after being guided to paybill <span className="font-bold text-[#7a0000]">516600</span>, account <span className="font-bold text-[#7a0000]">0710098001</span>.</li>
-                        <li>Customer may also collect from the Betech shop in Nairobi CBD.</li>
-                        <li>Once the order is confirmed, admin issues the receipt immediately.</li>
+                        <li>For delivery within Nairobi and its environment, the customer can pay on delivery after the order is confirmed.</li>
+                        <li>If the customer prefers shop pickup, there is no extra pickup cost. Just place the order and indicate the expected pickup date.</li>
+                        <li>Once the customer collects from the shop or receives the order successfully, your commission can move toward completion.</li>
                       </>
                     ) : (
                       <>
-                        <li>Ask the customer to pay a deposit first when the order is being delivered.</li>
-                        <li>If needed, collect transport fee first so dispatch can be arranged.</li>
-                        <li>Order can be sent through SpeedAF or to the nearest agent / pickup point, then the balance is cleared.</li>
+                        <li>For customers outside Nairobi, they may pay full amount, partial amount, or delivery fee first depending on what is most convenient for them.</li>
+                        <li>Betech can dispatch through SpeedAF or coordinate the nearest suitable pickup arrangement.</li>
+                        <li>The remaining balance can then be completed on delivery where applicable, based on the customer’s preferred payment plan.</li>
                       </>
                     )}
                   </ul>
@@ -438,13 +453,13 @@ export default function AgentSaleForm({ useRootPaths = false }: AgentSaleFormPro
                     <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#7a0000] text-white">
                       <ReceiptText className="h-5 w-5" />
                     </div>
-                    <div className="text-lg font-black text-slate-950">Recommended procedure</div>
+                    <div className="text-lg font-black text-slate-950">Customer assurance notes</div>
                   </div>
                   <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-700">
-                    <li><span className="font-semibold text-slate-950">Payment type:</span> {selectedPaymentType?.note || "Choose the correct customer payment stage."}</li>
-                    <li><span className="font-semibold text-slate-950">Delivery route:</span> {selectedDeliveryMethod?.label || "Select how the order will move to the customer."}</li>
-                    <li><span className="font-semibold text-slate-950">Full payment:</span> If customer clears full amount, admin can parcel using the preferred courier.</li>
-                    <li><span className="font-semibold text-slate-950">Commission:</span> Potential commission shows now, but stays locked until payment is complete and delivery is confirmed.</li>
+                    <li><span className="font-semibold text-slate-950">Payment guidance:</span> always inform the customer about the available payment procedure before the order is processed.</li>
+                    <li><span className="font-semibold text-slate-950">Current payment choice:</span> {selectedPaymentType?.note || "Choose the customer’s preferred payment stage."}</li>
+                    <li><span className="font-semibold text-slate-950">Delivery choice:</span> {selectedDeliveryMethod?.label || "Select the customer’s preferred delivery or pickup method."}</li>
+                    <li><span className="font-semibold text-slate-950">Confirmation call:</span> the Betech team will call the customer to confirm the preferred payment method and next step before fulfillment.</li>
                   </ul>
                 </div>
               </div>
@@ -523,13 +538,13 @@ export default function AgentSaleForm({ useRootPaths = false }: AgentSaleFormPro
               </div>
             </div>
             <div className="mt-5 space-y-4">
-              {[
+              {[ 
                 "Choose the county, then the exact town or market centre.",
                 "Confirm the product name, quantity, and agreed selling price.",
-                "Record how much the customer has already paid.",
-                "For outside Nairobi, ask for deposit or transport fee before dispatch.",
-                "For Nairobi, customer may pay on delivery or collect from the shop.",
-                "Add the M-Pesa reference once payment is made.",
+                "Inform the customer that all payments are submitted through the Betech paybill.",
+                "For outside Nairobi, explain they can pay full amount, partial amount, or delivery fee first.",
+                "For Nairobi, explain pay-on-delivery or Nairobi CBD shop pickup options.",
+                "Capture the M-Pesa reference once any payment has been made.",
               ].map((item, index) => (
                 <div key={item} className="flex gap-3">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f2b20f] text-sm font-black text-slate-950">
@@ -539,19 +554,6 @@ export default function AgentSaleForm({ useRootPaths = false }: AgentSaleFormPro
                 </div>
               ))}
             </div>
-          </div>
-
-          <div className="rounded-[30px] border border-[#ead9ce] bg-white p-6 shadow-[0_12px_34px_rgba(72,36,19,0.06)]">
-            <div className="text-lg font-black text-slate-950">Payment instructions</div>
-            <div className="mt-4 rounded-[22px] border border-[#ead9ce] bg-[#fffaf3] p-4">
-              <div className="text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">Paybill</div>
-              <div className="mt-2 text-3xl font-black text-slate-950">516600</div>
-              <div className="mt-4 text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">Account number</div>
-              <div className="mt-2 text-2xl font-black text-slate-950">0710098001</div>
-            </div>
-            <p className="mt-4 text-sm leading-6 text-slate-600">
-              Use the customer’s confirmed payment stage on the form. Admin will validate the money received and issue a receipt once the order is confirmed.
-            </p>
           </div>
 
           <div className="rounded-[30px] border border-[#ead9ce] bg-white p-6 shadow-[0_12px_34px_rgba(72,36,19,0.06)]">
@@ -574,6 +576,19 @@ export default function AgentSaleForm({ useRootPaths = false }: AgentSaleFormPro
                 </div>
               ))}
             </div>
+          </div>
+
+          <div className="rounded-[30px] border border-[#ead9ce] bg-white p-6 shadow-[0_12px_34px_rgba(72,36,19,0.06)]">
+            <div className="text-lg font-black text-slate-950">Payment instructions</div>
+            <div className="mt-4 rounded-[22px] border border-[#ead9ce] bg-[#fffaf3] p-4">
+              <div className="text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">All payments go to paybill</div>
+              <div className="mt-2 text-3xl font-black text-slate-950">516600</div>
+              <div className="mt-4 text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">Account number</div>
+              <div className="mt-2 text-2xl font-black text-slate-950">0710098001</div>
+            </div>
+            <p className="mt-4 text-sm leading-6 text-slate-600">
+              Always guide the customer to use this paybill for any order payment. Once payment is confirmed, Betech validates it, confirms the order, and issues the receipt through the normal process.
+            </p>
           </div>
         </aside>
       </div>
