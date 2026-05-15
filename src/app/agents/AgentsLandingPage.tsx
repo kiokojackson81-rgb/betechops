@@ -1,9 +1,9 @@
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowRight,
   BadgeCheck,
   Banknote,
-  BatteryCharging,
   CircleDollarSign,
   Headphones,
   House,
@@ -13,8 +13,6 @@ import {
   PhoneCall,
   PlayCircle,
   ShieldCheck,
-  SunMedium,
-  TrendingUp,
   Truck,
   Users,
   WalletCards,
@@ -50,11 +48,11 @@ const steps = [
 ];
 
 const earnings = [
-  { title: "5KW Solar Kit", amount: "Ksh 12,000+", note: "Earn up to", accent: "from-[#fff3d8] to-[#fffaf0]" },
-  { title: "Inverter", amount: "Ksh 3,000+", note: "Earn up to", accent: "from-[#fff8ee] to-[#ffffff]" },
-  { title: "Battery", amount: "Ksh 3,000+", note: "Earn up to", accent: "from-[#fff5df] to-[#fffdf8]" },
-  { title: "Water Pump", amount: "Ksh 1,500+", note: "Earn up to", accent: "from-[#fff7ea] to-[#ffffff]" },
-  { title: "Accessories", amount: "Ksh 500+", note: "Earn up to", accent: "from-[#fff8ef] to-[#ffffff]" },
+  { title: "5KW Solar Kit", amount: "Ksh 12,000+", note: "Earn up to", accent: "from-[#fff3d8] to-[#fffaf0]", image: "/agents/product-solar-kit.png" },
+  { title: "Inverter", amount: "Ksh 3,000+", note: "Earn up to", accent: "from-[#fff8ee] to-[#ffffff]", image: "/agents/product-inverter.png" },
+  { title: "Battery", amount: "Ksh 3,000+", note: "Earn up to", accent: "from-[#fff5df] to-[#fffdf8]", image: "/agents/product-battery.png" },
+  { title: "Water Pump", amount: "Ksh 1,500+", note: "Earn up to", accent: "from-[#fff7ea] to-[#ffffff]", image: "/agents/product-water-pump.png" },
+  { title: "Accessories", amount: "Ksh 500+", note: "Earn up to", accent: "from-[#fff8ef] to-[#ffffff]", image: "/agents/product-accessories.png" },
 ];
 
 const benefits = [
@@ -98,18 +96,21 @@ const testimonials = [
     location: "Kisumu",
     quote: "I started referring customers through WhatsApp and now earn extra monthly income without leaving my main work.",
     accent: "from-[#7a0000] to-[#a11d1d]",
+    image: "/agents/testimonial-james.png",
   },
   {
     name: "Mercy W.",
     location: "Nakuru",
     quote: "The system is simple. I submit the customer, Betech handles delivery and installation, then I track my commission.",
     accent: "from-[#f3b205] to-[#ffd761]",
+    image: "/agents/testimonial-mercy.png",
   },
   {
     name: "Brian K.",
     location: "Eldoret",
     quote: "Fast payouts and genuine products make it easy to build trust with customers and keep referrals growing.",
     accent: "from-[#163b3d] to-[#2d7377]",
+    image: "/agents/testimonial-brian.png",
   },
 ];
 
@@ -160,8 +161,8 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
       <header className="sticky top-0 z-40 border-b border-[#7a0000]/10 bg-white/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
           <Link href={agentPath("/", useRootPaths)} className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#f2b20f] via-[#f6cd58] to-[#7a0000] text-white shadow-[0_16px_30px_rgba(122,0,0,0.22)]">
-              <SunMedium className="h-6 w-6" />
+            <div className="overflow-hidden rounded-2xl border border-[#7a0000]/10 bg-white shadow-[0_16px_30px_rgba(122,0,0,0.12)]">
+              <Image src="/agents/betech-logo-crop.png" alt="Betech Solar Solutions" width={58} height={58} className="h-12 w-12 object-cover" />
             </div>
             <div className="leading-tight">
               <div className="text-sm font-black uppercase tracking-[0.18em] text-[#7a0000]">Betech Solar</div>
@@ -245,101 +246,21 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
               <div className="absolute -left-4 top-10 h-40 w-40 rounded-full bg-[#f2b20f]/20 blur-3xl" />
               <div className="absolute right-0 top-0 h-48 w-48 rounded-full bg-[#7a0000]/14 blur-3xl" />
               <div className="relative overflow-hidden rounded-[36px] border border-white/70 bg-[linear-gradient(160deg,#fff_0%,#fff7ef_45%,#fff0dc_100%)] p-5 shadow-[0_35px_90px_rgba(122,0,0,0.16)] sm:p-7">
-                <div className="rounded-[30px] border border-white/70 bg-[radial-gradient(circle_at_top,#fffaf1_0%,#fff_44%,#fff6ea_100%)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
-                  <div className="grid gap-5 lg:grid-cols-[0.6fr_0.4fr]">
-                    <div className="rounded-[28px] bg-gradient-to-br from-[#f5e6d6] via-[#fff6ec] to-[#fff] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
-                      <div className="relative overflow-hidden rounded-[26px] bg-[linear-gradient(155deg,#f7ecdc_0%,#fff8f1_22%,#cf6b3d_24%,#8f2f1e_54%,#5f2e20_100%)] px-5 pb-4 pt-5">
-                        <div className="absolute inset-x-0 bottom-0 h-28 bg-[radial-gradient(circle_at_bottom,rgba(15,157,88,0.18),transparent_56%)]" />
-                        <div className="absolute right-4 top-4 h-24 w-24 rounded-full bg-white/18 blur-2xl" />
-                        <div className="relative flex items-start justify-between gap-3">
-                          <div className="max-w-[13rem]">
-                            <div className="text-xs font-bold uppercase tracking-[0.22em] text-white/80">Refer → Earn → Withdraw</div>
-                            <div className="mt-3 text-3xl font-black leading-tight text-white">Solar income opportunity for Kenyan agents</div>
-                          </div>
-                          <div className="rounded-2xl border border-white/20 bg-white/12 px-3 py-2 text-xs font-semibold text-white">
-                            Kenya Wide
-                          </div>
-                        </div>
-
-                        <div className="relative mt-8 grid grid-cols-[1.05fr_0.95fr] items-end gap-4">
-                          <div className="relative h-[18rem] overflow-hidden rounded-[26px] bg-[linear-gradient(180deg,#f0c8a5_0%,#8c311f_54%,#5a2217_100%)] shadow-[0_28px_40px_rgba(0,0,0,0.18)]">
-                            <div className="absolute inset-x-6 top-5 h-16 rounded-[22px] bg-white/10" />
-                            <div className="absolute inset-x-4 bottom-0 top-14 rounded-t-[32px] bg-[linear-gradient(180deg,#7a0000_0%,#5e0000_100%)]" />
-                            <div className="absolute left-1/2 top-[5.25rem] h-6 w-6 -translate-x-1/2 rounded-full bg-[#1d1311]" />
-                            <div className="absolute left-1/2 top-[6rem] h-16 w-20 -translate-x-1/2 rounded-[40px] bg-[#6a281a]" />
-                            <div className="absolute left-1/2 top-[9rem] h-20 w-28 -translate-x-1/2 rounded-[40px] bg-[#7a2f1f]" />
-                            <div className="absolute left-[2.1rem] top-[8.8rem] h-24 w-8 rotate-[18deg] rounded-full bg-[#7a2f1f]" />
-                            <div className="absolute right-[2.1rem] top-[8.8rem] h-24 w-8 -rotate-[18deg] rounded-full bg-[#7a2f1f]" />
-                            <div className="absolute left-[4.6rem] top-[12.8rem] h-28 w-8 rotate-[8deg] rounded-full bg-[#7a2f1f]" />
-                            <div className="absolute right-[4.6rem] top-[12.8rem] h-28 w-8 -rotate-[8deg] rounded-full bg-[#7a2f1f]" />
-                            <div className="absolute left-[3.2rem] top-[6.1rem] h-10 w-10 rounded-full bg-[#2b1a17]" />
-                            <div className="absolute inset-x-0 bottom-0 h-16 bg-[linear-gradient(180deg,transparent_0%,rgba(0,0,0,0.22)_100%)]" />
-                          </div>
-
-                          <div className="space-y-4">
-                            <div className="mx-auto w-[11rem] rounded-[28px] border border-slate-200 bg-white p-3 shadow-[0_24px_50px_rgba(15,23,42,0.14)]">
-                              <div className="rounded-[22px] border border-slate-100 bg-[#f8fafc] p-3">
-                                <div className="mx-auto h-1.5 w-12 rounded-full bg-slate-300" />
-                                <div className="mt-4 rounded-2xl bg-white p-3 shadow-[0_12px_24px_rgba(15,23,42,0.06)]">
-                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Dashboard</div>
-                                  <div className="mt-3 text-2xl font-black text-slate-950">Ksh 45,680</div>
-                                  <div className="mt-1 text-xs text-emerald-600">+ 6 successful sales</div>
-                                  <div className="mt-4 space-y-2">
-                                    <div className="h-2 rounded-full bg-slate-100"><div className="h-2 w-[74%] rounded-full bg-[#0f9d58]" /></div>
-                                    <div className="h-2 rounded-full bg-slate-100"><div className="h-2 w-[58%] rounded-full bg-[#f2b20f]" /></div>
-                                    <div className="h-2 rounded-full bg-slate-100"><div className="h-2 w-[81%] rounded-full bg-[#7a0000]" /></div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="rounded-[26px] border border-white/70 bg-white p-4 shadow-[0_20px_50px_rgba(122,0,0,0.14)]">
-                              <div className="text-sm font-bold uppercase tracking-[0.22em] text-[#7a0000]">Earn Up To</div>
-                              <div className="mt-2 text-5xl font-black text-[#7a0000]">6%</div>
-                              <div className="mt-1 text-base font-semibold text-slate-900">Commission</div>
-                              <div className="mt-1 text-sm text-slate-500">On every successful sale</div>
-                              <div className="mt-4 flex items-center gap-2 text-[#0f9d58]">
-                                <TrendingUp className="h-5 w-5" />
-                                <span className="text-sm font-semibold">Grow your monthly side income</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                          {heroCard("Solar Leads", "Daily", "High demand in homes and farms")}
-                          {heroCard("Fast Payout", "M-Pesa", "Withdraw after successful completion")}
-                          {heroCard("Top Agents", "100K+", "Monthly potential across Kenya")}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="rounded-[26px] border border-[#7a0000]/10 bg-white p-4 shadow-[0_20px_40px_rgba(15,23,42,0.07)]">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#fff3d8] text-[#7a0000]">
-                            <House className="h-6 w-6" />
-                          </div>
-                          <div>
-                            <div className="text-sm font-bold text-slate-950">Solar-ready customers</div>
-                            <div className="text-xs text-slate-500">Homes, shops, farms, and schools</div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="rounded-[26px] border border-[#7a0000]/10 bg-white p-4 shadow-[0_20px_40px_rgba(15,23,42,0.07)]">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="rounded-2xl bg-[#f8fafc] p-3">
-                            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Free to join</div>
-                            <div className="mt-2 text-xl font-black text-slate-950">0 Ksh</div>
-                          </div>
-                          <div className="rounded-2xl bg-[#fff8e3] p-3">
-                            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7a0000]/70">Commission rate</div>
-                            <div className="mt-2 text-xl font-black text-[#7a0000]">Up to 6%</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                <div className="rounded-[30px] border border-white/70 bg-[radial-gradient(circle_at_top,#fffaf1_0%,#fff_44%,#fff6ea_100%)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] sm:p-5">
+                  <div className="overflow-hidden rounded-[28px] border border-[#7a0000]/10 bg-white shadow-[0_24px_60px_rgba(122,0,0,0.14)]">
+                    <Image
+                      src="/agents/hero-mockup-crop.png"
+                      alt="Betech Solar agent holding a phone with earnings dashboard in front of a solar home"
+                      width={425}
+                      height={704}
+                      className="h-auto w-full object-cover"
+                      priority
+                    />
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    {heroCard("Solar Leads", "Daily", "High demand in homes and farms")}
+                    {heroCard("Fast Payout", "M-Pesa", "Withdraw after successful completion")}
+                    {heroCard("Top Agents", "100K+", "Monthly potential across Kenya")}
                   </div>
                 </div>
               </div>
@@ -387,18 +308,8 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
                     key={item.title}
                     className={`rounded-[28px] border border-white/10 bg-gradient-to-br ${item.accent} p-5 text-slate-950 shadow-[0_24px_50px_rgba(0,0,0,0.16)] transition duration-300 hover:-translate-y-1.5`}
                   >
-                    <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-white text-[#7a0000] shadow-[0_12px_24px_rgba(122,0,0,0.12)]">
-                      {item.title.includes("Battery") ? (
-                        <BatteryCharging className="h-8 w-8" />
-                      ) : item.title.includes("Inverter") ? (
-                        <WalletCards className="h-8 w-8" />
-                      ) : item.title.includes("Pump") ? (
-                        <TrendingUp className="h-8 w-8" />
-                      ) : item.title.includes("Accessories") ? (
-                        <BadgeCheck className="h-8 w-8" />
-                      ) : (
-                        <PanelsTopLeft className="h-8 w-8" />
-                      )}
+                    <div className="overflow-hidden rounded-[22px] border border-white/70 bg-white shadow-[0_12px_24px_rgba(122,0,0,0.10)]">
+                      <Image src={item.image} alt={item.title} width={109} height={263} className="h-36 w-full object-cover" />
                     </div>
                     <div className="mt-5 text-xl font-black">{item.title}</div>
                     <div className="mt-3 text-sm text-slate-500">{item.note}</div>
@@ -411,8 +322,8 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
             <div className="flex">
               <div className="flex w-full flex-col justify-between rounded-[34px] bg-[#f2b20f] p-8 text-slate-950 shadow-[0_35px_80px_rgba(0,0,0,0.22)]">
                 <div>
-                  <div className="flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-[24px] bg-white/70 p-4 text-[#7a0000]">
-                    <TrendingUp className="h-10 w-10" />
+                  <div className="overflow-hidden rounded-[26px] border border-white/50 bg-white/80 shadow-[0_20px_40px_rgba(0,0,0,0.12)]">
+                    <Image src="/agents/top-agents-card.png" alt="Top agents earnings highlight" width={250} height={312} className="h-36 w-full object-cover" />
                   </div>
                   <div className="mt-8 text-sm font-black uppercase tracking-[0.24em] text-[#7a0000]">Top Agents</div>
                   <h3 className="mt-4 text-4xl font-black leading-tight">Earn Over Ksh 100,000+ Monthly</h3>
@@ -516,8 +427,8 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
                   className="rounded-[30px] border border-[#7a0000]/10 bg-white p-5 shadow-[0_18px_40px_rgba(15,23,42,0.06)] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_26px_55px_rgba(122,0,0,0.12)]"
                 >
                   <div className="flex items-center gap-4">
-                    <div className={`flex h-20 w-20 items-center justify-center rounded-[24px] bg-gradient-to-br ${testimonial.accent} text-2xl font-black text-white shadow-[0_18px_30px_rgba(15,23,42,0.14)]`}>
-                      {testimonial.name.split(" ").map((part) => part[0]).join("")}
+                    <div className="overflow-hidden rounded-[24px] border border-[#7a0000]/10 bg-white shadow-[0_18px_30px_rgba(15,23,42,0.10)]">
+                      <Image src={testimonial.image} alt={testimonial.name} width={98} height={169} className="h-20 w-20 object-cover" />
                     </div>
                     <div>
                       <div className="text-xl font-black text-slate-950">{testimonial.name}</div>
@@ -587,6 +498,12 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
             </div>
 
             <div className="relative overflow-hidden rounded-[36px] border border-white/10 bg-[linear-gradient(155deg,#f9d18f_0%,#a34a26_24%,#6a1c10_58%,#2a0704_100%)] p-5 shadow-[0_30px_80px_rgba(0,0,0,0.24)]">
+              <Image
+                src="/agents/cta-house-crop.png"
+                alt="Solar-powered home for the final Betech agent call to action"
+                fill
+                className="object-cover opacity-70"
+              />
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.26),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(242,178,15,0.24),transparent_24%)]" />
               <div className="absolute bottom-0 left-0 right-0 h-32 bg-[linear-gradient(180deg,transparent_0%,rgba(0,0,0,0.35)_100%)]" />
               <div className="relative h-full min-h-[24rem] rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] p-6">
