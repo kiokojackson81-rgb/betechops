@@ -84,6 +84,32 @@ function getAgentName(profile: { name?: string | null; email?: string | null } |
   return profile?.name || profile?.email || "Agent";
 }
 
+function isMissingAgentSaleTableError(error: unknown) {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
+  if (error.code !== "P2021") return false;
+  const table = String((error.meta as { table?: unknown } | undefined)?.table ?? "");
+  const message = error.message || "";
+  return table.includes("AgentSale") || message.includes("AgentSale");
+}
+
+function createAgentSaleSetupError() {
+  return new Error(
+    "Agent sales database setup is incomplete. Apply scripts/sql/20260515_agent_sales_workflow.sql in Neon, then redeploy.",
+  );
+}
+
+function emptySalesSummary() {
+  return {
+    totalSubmittedSales: 0,
+    pendingSales: 0,
+    processingSales: 0,
+    completedSales: 0,
+    potentialCommission: 0,
+    earnedCommission: 0,
+    paidCommission: 0,
+  };
+}
+
 type AgentSaleRecord = Prisma.AgentSaleGetPayload<{
   include: {
     agent: { select: { id: true; name: true; email: true } };
@@ -252,35 +278,41 @@ export async function createAgentSale(agentId: string, body: unknown) {
   const input = parseAgentSaleCreateInput(body);
   const totalAmount = normalizeAmount(input.totalAmount > 0 ? input.totalAmount : input.quantity * input.unitPrice);
   const amountPaid = normalizeAmount(input.amountPaid);
-  const sale = await prisma.agentSale.create({
-    data: {
-      agentId,
-      customerName: input.customerName,
-      customerPhone: input.customerPhone,
-      customerLocation: input.customerLocation,
-      customerCounty: cleanOptional(input.customerCounty),
-      productName: input.productName,
-      productCategory: cleanOptional(input.productCategory),
-      quantity: input.quantity,
-      unitPrice: normalizeAmount(input.unitPrice),
-      totalAmount,
-      paymentType: input.paymentType,
-      amountPaid,
-      mpesaReference: cleanOptional(input.mpesaReference),
-      deliveryMethod: cleanOptional(input.deliveryMethod),
-      deliveryNotes: cleanOptional(input.deliveryNotes),
-      customerNotes: cleanOptional(input.customerNotes),
-      internalAgentNotes: cleanOptional(input.internalAgentNotes),
-      status: "pending_review",
-      commissionPct: AGENT_COMMISSION_RATE,
-      potentialCommission: calculatePotentialCommission(totalAmount),
-      commissionLocked: true,
-    },
-    include: {
-      agent: { select: { id: true, name: true, email: true } },
-      receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
-    },
-  });
+  let sale;
+  try {
+    sale = await prisma.agentSale.create({
+      data: {
+        agentId,
+        customerName: input.customerName,
+        customerPhone: input.customerPhone,
+        customerLocation: input.customerLocation,
+        customerCounty: cleanOptional(input.customerCounty),
+        productName: input.productName,
+        productCategory: cleanOptional(input.productCategory),
+        quantity: input.quantity,
+        unitPrice: normalizeAmount(input.unitPrice),
+        totalAmount,
+        paymentType: input.paymentType,
+        amountPaid,
+        mpesaReference: cleanOptional(input.mpesaReference),
+        deliveryMethod: cleanOptional(input.deliveryMethod),
+        deliveryNotes: cleanOptional(input.deliveryNotes),
+        customerNotes: cleanOptional(input.customerNotes),
+        internalAgentNotes: cleanOptional(input.internalAgentNotes),
+        status: "pending_review",
+        commissionPct: AGENT_COMMISSION_RATE,
+        potentialCommission: calculatePotentialCommission(totalAmount),
+        commissionLocked: true,
+      },
+      include: {
+        agent: { select: { id: true, name: true, email: true } },
+        receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
+      },
+    });
+  } catch (error) {
+    if (isMissingAgentSaleTableError(error)) throw createAgentSaleSetupError();
+    throw error;
+  }
 
   await createAgentActivity(
     agentId,
@@ -292,27 +324,39 @@ export async function createAgentSale(agentId: string, body: unknown) {
 }
 
 export async function getAgentSales(agentId: string) {
-  const sales = await prisma.agentSale.findMany({
-    where: { agentId },
-    include: {
-      agent: { select: { id: true, name: true, email: true } },
-      receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
-    },
-    orderBy: [{ createdAt: "desc" }],
-  });
+  let sales: AgentSaleRecord[] = [];
+  try {
+    sales = await prisma.agentSale.findMany({
+      where: { agentId },
+      include: {
+        agent: { select: { id: true, name: true, email: true } },
+        receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
+      },
+      orderBy: [{ createdAt: "desc" }],
+    });
+  } catch (error) {
+    if (isMissingAgentSaleTableError(error)) return [];
+    throw error;
+  }
 
   const commissionBySaleId = await fetchSalesCommissions(sales.map((sale) => sale.id));
   return sales.map((sale) => presentAgentSale(sale, getCommissionForSale(sale.id, commissionBySaleId)));
 }
 
 export async function getAgentSaleById(agentId: string, saleId: string) {
-  const sale = await prisma.agentSale.findFirst({
-    where: { id: saleId, agentId },
-    include: {
-      agent: { select: { id: true, name: true, email: true } },
-      receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
-    },
-  });
+  let sale;
+  try {
+    sale = await prisma.agentSale.findFirst({
+      where: { id: saleId, agentId },
+      include: {
+        agent: { select: { id: true, name: true, email: true } },
+        receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
+      },
+    });
+  } catch (error) {
+    if (isMissingAgentSaleTableError(error)) return null;
+    throw error;
+  }
   if (!sale) return null;
   const commissionBySaleId = await fetchSalesCommissions([sale.id]);
   return presentAgentSale(sale, getCommissionForSale(sale.id, commissionBySaleId));
@@ -342,15 +386,7 @@ export async function getAgentSalesDashboardSummary(agentId: string) {
       if (openStatuses.has(String(sale.status))) acc.potentialCommission += Number(sale.potentialCommission ?? 0);
       return acc;
     },
-    {
-      totalSubmittedSales: 0,
-      pendingSales: 0,
-      processingSales: 0,
-      completedSales: 0,
-      potentialCommission: 0,
-      earnedCommission: 0,
-      paidCommission: 0,
-    },
+    emptySalesSummary(),
   );
 
   for (const commission of commissions) {
@@ -410,27 +446,39 @@ export async function getAdminAgentSales(filters: AdminAgentSalesFilters = {}) {
   }
   if (and.length) where.AND = and;
 
-  const sales = await prisma.agentSale.findMany({
-    where,
-    include: {
-      agent: { select: { id: true, name: true, email: true } },
-      receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
-    },
-    orderBy: [{ createdAt: "desc" }],
-  });
+  let sales: AgentSaleRecord[] = [];
+  try {
+    sales = await prisma.agentSale.findMany({
+      where,
+      include: {
+        agent: { select: { id: true, name: true, email: true } },
+        receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
+      },
+      orderBy: [{ createdAt: "desc" }],
+    });
+  } catch (error) {
+    if (isMissingAgentSaleTableError(error)) return [];
+    throw error;
+  }
   const commissionBySaleId = await fetchSalesCommissions(sales.map((sale) => sale.id));
 
   return sales.map((sale) => presentAgentSale(sale, getCommissionForSale(sale.id, commissionBySaleId)));
 }
 
 export async function getAdminAgentSaleById(saleId: string) {
-  const sale = await prisma.agentSale.findUnique({
-    where: { id: saleId },
-    include: {
-      agent: { select: { id: true, name: true, email: true } },
-      receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
-    },
-  });
+  let sale;
+  try {
+    sale = await prisma.agentSale.findUnique({
+      where: { id: saleId },
+      include: {
+        agent: { select: { id: true, name: true, email: true } },
+        receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
+      },
+    });
+  } catch (error) {
+    if (isMissingAgentSaleTableError(error)) return null;
+    throw error;
+  }
   if (!sale) return null;
   const commissionBySaleId = await fetchSalesCommissions([sale.id]);
   const activity = await prisma.agentActivityLog.findMany({
@@ -453,43 +501,49 @@ export async function getAdminAgentSaleById(saleId: string) {
 
 export async function updateAgentSaleStatus(saleId: string, body: unknown, actorEmail?: string | null) {
   const { status } = parseAgentSaleStatusInput(body);
-  const result = await prisma.$transaction(async (tx) => {
-    const sale = await tx.agentSale.findUnique({ where: { id: saleId } });
-    if (!sale) throw new Error("Agent sale not found.");
+  let result;
+  try {
+    result = await prisma.$transaction(async (tx) => {
+      const sale = await tx.agentSale.findUnique({ where: { id: saleId } });
+      if (!sale) throw new Error("Agent sale not found.");
 
-    const updated = await tx.agentSale.update({
-      where: { id: saleId },
-      data: {
-        status,
-        commissionLocked: true,
-      },
-      include: {
-        agent: { select: { id: true, name: true, email: true } },
-        receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
-      },
-    });
-
-    if (status === "cancelled" || status === "rejected") {
-      await tx.agentCommission.updateMany({
-        where: {
-          agentId: updated.agentId,
-          sourceType: "agent_sale",
-          sourceId: updated.id,
-          NOT: { status: "paid" },
+      const updated = await tx.agentSale.update({
+        where: { id: saleId },
+        data: {
+          status,
+          commissionLocked: true,
         },
-        data: { status: "cancelled" },
+        include: {
+          agent: { select: { id: true, name: true, email: true } },
+          receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
+        },
       });
-    }
 
-    await createAgentActivity(
-      updated.agentId,
-      `sale_status_${status}`,
-      `Agent sale ${updated.id} moved to ${status} by ${actorEmail || "admin"}.`,
-      tx,
-    );
+      if (status === "cancelled" || status === "rejected") {
+        await tx.agentCommission.updateMany({
+          where: {
+            agentId: updated.agentId,
+            sourceType: "agent_sale",
+            sourceId: updated.id,
+            NOT: { status: "paid" },
+          },
+          data: { status: "cancelled" },
+        });
+      }
 
-    return updated;
-  });
+      await createAgentActivity(
+        updated.agentId,
+        `sale_status_${status}`,
+        `Agent sale ${updated.id} moved to ${status} by ${actorEmail || "admin"}.`,
+        tx,
+      );
+
+      return updated;
+    });
+  } catch (error) {
+    if (isMissingAgentSaleTableError(error)) throw createAgentSaleSetupError();
+    throw error;
+  }
 
   const commissionBySaleId = await fetchSalesCommissions([result.id]);
   return presentAgentSale(result, getCommissionForSale(result.id, commissionBySaleId));
@@ -551,17 +605,23 @@ export async function linkAgentSaleReceipt(saleId: string, body: unknown, actorE
 
   if (!lookup) throw new Error("Receipt not found.");
 
-  const sale = await prisma.agentSale.update({
-    where: { id: saleId },
-    data: {
-      receiptId: lookup.id,
-      receiptNumber: lookup.receiptNumber || lookup.order?.orderNumber || input.receiptNumber || null,
-    },
-    include: {
-      agent: { select: { id: true, name: true, email: true } },
-      receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
-    },
-  });
+  let sale;
+  try {
+    sale = await prisma.agentSale.update({
+      where: { id: saleId },
+      data: {
+        receiptId: lookup.id,
+        receiptNumber: lookup.receiptNumber || lookup.order?.orderNumber || input.receiptNumber || null,
+      },
+      include: {
+        agent: { select: { id: true, name: true, email: true } },
+        receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
+      },
+    });
+  } catch (error) {
+    if (isMissingAgentSaleTableError(error)) throw createAgentSaleSetupError();
+    throw error;
+  }
 
   await createAgentActivity(
     sale.agentId,
@@ -600,72 +660,78 @@ function canCompleteSale(sale: {
 }
 
 export async function completeAgentSale(saleId: string, actorEmail?: string | null) {
-  const completed = await prisma.$transaction(async (tx) => {
-    const sale = await tx.agentSale.findUnique({
-      where: { id: saleId },
-      include: {
-        agent: { select: { id: true, name: true, email: true } },
-        receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
-      },
-    });
-    if (!sale) throw new Error("Agent sale not found.");
+  let completed;
+  try {
+    completed = await prisma.$transaction(async (tx) => {
+      const sale = await tx.agentSale.findUnique({
+        where: { id: saleId },
+        include: {
+          agent: { select: { id: true, name: true, email: true } },
+          receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
+        },
+      });
+      if (!sale) throw new Error("Agent sale not found.");
 
-    const validationError = canCompleteSale(sale);
-    if (validationError) throw new Error(validationError);
+      const validationError = canCompleteSale(sale);
+      if (validationError) throw new Error(validationError);
 
-    const existingCommission = await tx.agentCommission.findFirst({
-      where: {
-        agentId: sale.agentId,
-        sourceType: "agent_sale",
-        sourceId: sale.id,
-      },
-    });
-
-    const commissionAmount = calculatePotentialCommission(Number(sale.totalAmount ?? 0));
-
-    if (!existingCommission) {
-      await tx.agentCommission.create({
-        data: {
+      const existingCommission = await tx.agentCommission.findFirst({
+        where: {
           agentId: sale.agentId,
           sourceType: "agent_sale",
           sourceId: sale.id,
-          orderNumber: sale.receiptNumber || sale.receipt?.receiptNumber || sale.receipt?.order?.orderNumber || null,
-          saleAmount: Number(sale.totalAmount ?? 0),
-          commissionPct: Number(sale.commissionPct ?? AGENT_COMMISSION_RATE),
-          commissionAmt: commissionAmount,
-          status: "pending",
         },
       });
-    }
 
-    const updated = await tx.agentSale.update({
-      where: { id: sale.id },
-      data: {
-        status: "completed",
-        commissionLocked: false,
-        completedAt: sale.completedAt ?? new Date(),
-      },
-      include: {
-        agent: { select: { id: true, name: true, email: true } },
-        receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
-      },
+      const commissionAmount = calculatePotentialCommission(Number(sale.totalAmount ?? 0));
+
+      if (!existingCommission) {
+        await tx.agentCommission.create({
+          data: {
+            agentId: sale.agentId,
+            sourceType: "agent_sale",
+            sourceId: sale.id,
+            orderNumber: sale.receiptNumber || sale.receipt?.receiptNumber || sale.receipt?.order?.orderNumber || null,
+            saleAmount: Number(sale.totalAmount ?? 0),
+            commissionPct: Number(sale.commissionPct ?? AGENT_COMMISSION_RATE),
+            commissionAmt: commissionAmount,
+            status: "pending",
+          },
+        });
+      }
+
+      const updated = await tx.agentSale.update({
+        where: { id: sale.id },
+        data: {
+          status: "completed",
+          commissionLocked: false,
+          completedAt: sale.completedAt ?? new Date(),
+        },
+        include: {
+          agent: { select: { id: true, name: true, email: true } },
+          receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
+        },
+      });
+
+      await createAgentActivity(
+        updated.agentId,
+        "sale_completed",
+        `Agent sale ${updated.id} marked completed by ${actorEmail || "admin"}.`,
+        tx,
+      );
+      await createAgentActivity(
+        updated.agentId,
+        "commission_unlocked",
+        `Agent sale ${updated.id} unlocked commission of ${commissionAmount}.`,
+        tx,
+      );
+
+      return updated;
     });
-
-    await createAgentActivity(
-      updated.agentId,
-      "sale_completed",
-      `Agent sale ${updated.id} marked completed by ${actorEmail || "admin"}.`,
-      tx,
-    );
-    await createAgentActivity(
-      updated.agentId,
-      "commission_unlocked",
-      `Agent sale ${updated.id} unlocked commission of ${commissionAmount}.`,
-      tx,
-    );
-
-    return updated;
-  });
+  } catch (error) {
+    if (isMissingAgentSaleTableError(error)) throw createAgentSaleSetupError();
+    throw error;
+  }
 
   const commissionBySaleId = await fetchSalesCommissions([completed.id]);
   return presentAgentSale(completed, getCommissionForSale(completed.id, commissionBySaleId));

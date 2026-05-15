@@ -1,8 +1,17 @@
 import type { Prisma } from "@prisma/client";
+import { Prisma as PrismaRuntime } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { generateReferralCode } from "@/lib/agents/generateReferralCode";
 import { getAgentsBaseUrl } from "@/lib/runtimeUrls";
 import { getAgentSalesDashboardSummary } from "@/lib/agents/sales";
+
+function isMissingAgentSaleTableError(error: unknown) {
+  if (!(error instanceof PrismaRuntime.PrismaClientKnownRequestError)) return false;
+  if (error.code !== "P2021") return false;
+  const table = String((error.meta as { table?: unknown } | undefined)?.table ?? "");
+  const message = error.message || "";
+  return table.includes("AgentSale") || message.includes("AgentSale");
+}
 
 export async function generateUniqueReferralCode() {
   for (let attempt = 0; attempt < 10; attempt += 1) {
@@ -130,6 +139,9 @@ export async function getAdminAgentsData(search?: string, status?: string) {
     prisma.agentSale.findMany({
       where: { agentId: { in: userIds } },
       orderBy: { createdAt: "desc" },
+    }).catch((error) => {
+      if (isMissingAgentSaleTableError(error)) return [];
+      throw error;
     }),
   ]);
 
