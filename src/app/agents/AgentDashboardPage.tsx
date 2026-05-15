@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Copy, CreditCard, Percent, UserCircle2, Wallet } from "lucide-react";
+import { ClipboardList, Copy, CreditCard, Percent, UserCircle2, Wallet } from "lucide-react";
 import { requireAgentSession } from "@/lib/agents/auth";
 import { agentPath } from "@/lib/agents/host";
 import { getAgentDashboardData } from "@/lib/agents/service";
@@ -61,12 +61,14 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
   }
 
   const metrics = [
-    { label: "Total Referrals", value: String(dashboard.metrics.totalReferrals), note: "Tracked commission entries" },
-    { label: "Total Sales", value: money(dashboard.metrics.totalSales), note: "Sales value linked to your referrals" },
-    { label: "Total Commission", value: money(dashboard.metrics.totalCommission), note: "All recorded earnings" },
-    { label: "Pending Commission", value: money(dashboard.metrics.pendingCommission), note: "Awaiting release or payout" },
-    { label: "Paid Commission", value: money(dashboard.metrics.paidCommission), note: "Already settled" },
-    { label: "Success Rate", value: `${dashboard.metrics.successRate}%`, note: "Paid entries over total entries" },
+    { label: "Total submitted sales", value: String(dashboard.salesSummary.totalSubmittedSales), note: "All sales you have logged" },
+    { label: "Pending sales", value: String(dashboard.salesSummary.pendingSales), note: "Review and payment stages" },
+    { label: "Sales in progress", value: String(dashboard.salesSummary.processingSales), note: "Processing, dispatched, or delivered" },
+    { label: "Completed sales", value: String(dashboard.salesSummary.completedSales), note: "Paid in full and delivered" },
+    { label: "Potential commission", value: money(dashboard.salesSummary.potentialCommission), note: "Locked until completed" },
+    { label: "Earned commission", value: money(dashboard.salesSummary.earnedCommission), note: "Unlocked but not yet paid" },
+    { label: "Paid commission", value: money(dashboard.salesSummary.paidCommission), note: "Already settled" },
+    { label: "Success rate", value: `${dashboard.metrics.successRate}%`, note: "Paid commission entries over total entries" },
   ];
 
   return (
@@ -83,14 +85,28 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
                 Monitor your affiliate performance, update profile details, and manage commission and payout activity from one place.
               </p>
             </div>
-            <div className="rounded-[28px] border border-white/10 bg-white/[0.03] px-5 py-4">
-              <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Account status</div>
-              <div className="mt-2 text-2xl font-semibold text-white">{dashboard.profile.status}</div>
+            <div className="flex flex-wrap gap-3">
+              <Link
+                href={agentPath("/sales/new", useRootPaths)}
+                className="rounded-2xl bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:brightness-95"
+              >
+                Submit sale
+              </Link>
+              <Link
+                href={agentPath("/sales", useRootPaths)}
+                className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-white/20"
+              >
+                View sales
+              </Link>
+              <div className="rounded-[28px] border border-white/10 bg-white/[0.03] px-5 py-4">
+                <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Account status</div>
+                <div className="mt-2 text-2xl font-semibold text-white">{dashboard.profile.status}</div>
+              </div>
             </div>
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {metrics.map((item, index) => (
             <div key={item.label} className="relative overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/80 p-5">
               <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${metricStyles[index % metricStyles.length]}`} />
@@ -105,6 +121,22 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
 
         <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
           <div className="space-y-6">
+            <div className="rounded-[28px] border border-amber-400/20 bg-amber-400/10 p-6">
+              <div className="flex items-center gap-3">
+                <ClipboardList className="h-5 w-5 text-amber-200" />
+                <h2 className="text-xl font-semibold text-white">Sales and commission motivation</h2>
+              </div>
+              <div className="mt-4 grid gap-3 text-sm text-amber-50 md:grid-cols-2">
+                <div>Potential commission: {money(dashboard.salesSummary.potentialCommission)}</div>
+                <div>Earned commission: {money(dashboard.salesSummary.earnedCommission)}</div>
+                <div>Paid commission: {money(dashboard.salesSummary.paidCommission)}</div>
+                <div>Sales in progress: {dashboard.salesSummary.processingSales}</div>
+              </div>
+              <p className="mt-4 text-sm text-amber-50/85">
+                Potential commission appears as soon as you submit a sale. It unlocks only after the customer pays in full and the order is delivered or collected.
+              </p>
+            </div>
+
             <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
               <div className="flex items-center gap-3">
                 <UserCircle2 className="h-5 w-5 text-cyan-300" />
@@ -165,6 +197,39 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
                     </div>
                   </div>
                 )) : <div className="text-sm text-slate-500">No commissions recorded yet.</div>}
+              </div>
+            </div>
+
+            <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
+              <div className="flex items-center gap-3">
+                <ClipboardList className="h-5 w-5 text-cyan-300" />
+                <h2 className="text-xl font-semibold text-white">Recent sales</h2>
+              </div>
+              <div className="mt-5 space-y-3">
+                {dashboard.sales.length ? dashboard.sales.slice(0, 6).map((sale) => (
+                  <div key={sale.id} className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <div className="font-medium text-white">{sale.customerName}</div>
+                        <div className="text-xs text-slate-500">
+                          {sale.productName} · {sale.statusMeta.label} · {sale.receiptNumber || "No receipt"}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-semibold text-white">
+                          {sale.status === "completed" ? "Earned commission" : "Potential commission"}
+                        </div>
+                        <div className="text-xs text-amber-200">{money(sale.commissionAmount)}</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <div className="text-xs text-slate-500">{sale.commissionBadge}</div>
+                      <Link href={agentPath(`/sales/${sale.id}`, useRootPaths)} className="text-sm font-medium text-cyan-300 hover:text-cyan-200">
+                        Open sale
+                      </Link>
+                    </div>
+                  </div>
+                )) : <div className="text-sm text-slate-500">No sales submitted yet.</div>}
               </div>
             </div>
 

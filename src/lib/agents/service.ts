@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { generateReferralCode } from "@/lib/agents/generateReferralCode";
 import { getAgentsBaseUrl } from "@/lib/runtimeUrls";
+import { getAgentSalesDashboardSummary } from "@/lib/agents/sales";
 
 export async function generateUniqueReferralCode() {
   for (let attempt = 0; attempt < 10; attempt += 1) {
@@ -34,7 +35,8 @@ export async function getAgentDashboardData(userId: string) {
 
   if (!profile) return null;
 
-  const [commissions, payouts, activities] = await Promise.all([
+  const [{ sales, summary: salesSummary }, commissions, payouts, activities] = await Promise.all([
+    getAgentSalesDashboardSummary(userId),
     prisma.agentCommission.findMany({
       where: { agentId: userId },
       orderBy: { createdAt: "desc" },
@@ -79,6 +81,8 @@ export async function getAgentDashboardData(userId: string) {
       paidCommission: totals.paid,
       successRate,
     },
+    salesSummary,
+    sales,
     commissions,
     payouts,
     activities,
@@ -114,7 +118,7 @@ export async function getAdminAgentsData(search?: string, status?: string) {
   if (!rows.length) return [];
 
   const userIds = rows.map((row) => row.userId);
-  const [commissions, payouts] = await Promise.all([
+  const [commissions, payouts, sales] = await Promise.all([
     prisma.agentCommission.findMany({
       where: { agentId: { in: userIds } },
       orderBy: { createdAt: "desc" },
@@ -123,11 +127,16 @@ export async function getAdminAgentsData(search?: string, status?: string) {
       where: { agentId: { in: userIds } },
       orderBy: { createdAt: "desc" },
     }),
+    prisma.agentSale.findMany({
+      where: { agentId: { in: userIds } },
+      orderBy: { createdAt: "desc" },
+    }),
   ]);
 
   return rows.map((row) => {
     const agentCommissions = commissions.filter((item) => item.agentId === row.userId);
     const agentPayouts = payouts.filter((item) => item.agentId === row.userId);
+    const agentSales = sales.filter((item) => item.agentId === row.userId);
     const totalSales = agentCommissions.reduce((sum, item) => sum + Number(item.saleAmount ?? 0), 0);
     const totalCommission = agentCommissions.reduce((sum, item) => sum + Number(item.commissionAmt ?? 0), 0);
     const paidCommission = agentCommissions
@@ -150,6 +159,12 @@ export async function getAdminAgentsData(search?: string, status?: string) {
       totalPayouts,
       commissionCount: agentCommissions.length,
       payoutCount: agentPayouts.length,
+      saleCount: agentSales.length,
+      openSaleCount: agentSales.filter((item) => !["completed", "cancelled", "rejected"].includes(String(item.status))).length,
+      completedSaleCount: agentSales.filter((item) => String(item.status) === "completed").length,
+      potentialCommission: agentSales
+        .filter((item) => !["completed", "cancelled", "rejected"].includes(String(item.status)))
+        .reduce((sum, item) => sum + Number(item.potentialCommission ?? 0), 0),
       successRate,
       lastCommissionAt: agentCommissions[0]?.createdAt ?? null,
       commissions: agentCommissions.slice(0, 10),

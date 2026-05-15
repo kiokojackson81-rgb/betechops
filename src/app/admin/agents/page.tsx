@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import AgentsAdminClient from "@/app/admin/agents/AgentsAdminClient";
 import { auth } from "@/lib/auth";
 import { getAdminAgentsData } from "@/lib/agents/service";
@@ -46,6 +47,14 @@ export default async function AdminAgentsPage({
             Review all registered agents, approve or reject applications, inspect KYC fields, and compare affiliate
             performance without leaving the main BETECHOPS admin shell.
           </p>
+        </div>
+        <div className="mt-5">
+          <Link
+            href="/admin/agents/pending-sales"
+            className="inline-flex rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm font-semibold text-emerald-100 transition hover:border-emerald-300/30"
+          >
+            Open pending sales queue
+          </Link>
         </div>
 
         <form className="mt-6 grid gap-4 rounded-[26px] border border-white/10 bg-white/[0.03] p-5 md:grid-cols-[1fr_220px_160px]">

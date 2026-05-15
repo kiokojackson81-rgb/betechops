@@ -161,6 +161,60 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const agentSaleId = params.get("agentSaleId");
+    if (!agentSaleId) return;
+
+    const nextCustomerName = params.get("customerName") || "";
+    const nextCustomerPhone = params.get("customerPhone") || "";
+    const nextCustomerLocation = params.get("customerLocation") || "";
+    const nextProductName = params.get("productName") || "";
+    const nextQuantity = Number(params.get("quantity") || "1") || 1;
+    const nextUnitPrice = Number(params.get("unitPrice") || "0") || 0;
+    const nextDeliveryNotes = params.get("deliveryNotes") || "";
+    const nextAgentName = params.get("agentName") || "";
+    const nextPaymentType = (params.get("paymentType") || "").toLowerCase();
+
+    if (nextCustomerName) setCustomerName(nextCustomerName);
+    if (nextCustomerPhone) setCustomerPhone(nextCustomerPhone);
+    if (nextCustomerLocation) {
+      setDeliveryAddress(nextCustomerLocation);
+      setShowAddressInput(true);
+      setCustomerType("delivery");
+    }
+    if (nextDeliveryNotes) {
+      setPodNote(nextDeliveryNotes);
+      setNotes((current) => {
+        const agentRef = nextAgentName ? `Agent referral: ${nextAgentName}` : "Agent referral";
+        return [current, `Agent sale ${agentSaleId}`, agentRef, nextDeliveryNotes].filter(Boolean).join("\n");
+      });
+    } else {
+      setNotes((current) => {
+        const agentRef = nextAgentName ? `Agent referral: ${nextAgentName}` : "Agent referral";
+        return [current, `Agent sale ${agentSaleId}`, agentRef].filter(Boolean).join("\n");
+      });
+    }
+
+    if (nextProductName) {
+      setItems([
+        {
+          ...newItem(),
+          title: nextProductName,
+          quantity: nextQuantity,
+          unitPrice: nextUnitPrice,
+        },
+      ]);
+    }
+
+    if (nextPaymentType === "full_payment") {
+      setSelectedPaymentMethods({ MPESA: true, CASH: false });
+      const nextTotal = Number(params.get("amountPaid") || params.get("totalAmount") || "0") || 0;
+      if (nextTotal > 0) setMpesaPaid(nextTotal);
+    }
+  }, []);
+
   const addRow = () => setItems((s) => [...s, newItem()]);
   const clearRow = (id: string) =>
     setItems((rows) =>

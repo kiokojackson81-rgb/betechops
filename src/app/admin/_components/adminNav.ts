@@ -14,7 +14,15 @@ export type AdminNavItem = {
 export const NAV: AdminNavItem[] = [
   { href: "/admin", label: "Overview", icon: Receipt },
   { href: "/admin/attendants", label: "Staffs", icon: Store },
-  { href: "/admin/agents", label: "Agents", icon: Users },
+  {
+    href: "/admin/agents",
+    label: "Agents",
+    icon: Users,
+    children: [
+      { href: "/admin/agents", label: "Profiles" },
+      { href: "/admin/agents/pending-sales", label: "Pending sales" },
+    ],
+  },
   { href: "/admin/orders", label: "Orders", icon: Package },
   {
     href: "/admin/receipts",

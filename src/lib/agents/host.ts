@@ -26,6 +26,9 @@ export function isAgentRoutePath(path: string | null | undefined) {
     normalizedPath === "/login" ||
     normalizedPath === "/register" ||
     normalizedPath === "/dashboard" ||
+    normalizedPath === "/sales" ||
+    normalizedPath === "/sales/new" ||
+    normalizedPath.startsWith("/sales/") ||
     normalizedPath === "/agents" ||
     normalizedPath.startsWith("/agents/")
   );

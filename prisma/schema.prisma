@@ -61,9 +61,47 @@ model User {
   marketplaceStatementDraftsCreated    MarketplaceStatementDraft[]     @relation("MarketplaceStatementDraftCreatedBy")
   managedShops                         Shop[]                          @relation("ManagedBy")
   agentProfile                         AgentProfile?
+  agentSales                           AgentSale[]                     @relation("AgentSaleAgent")
   agentCommissions                     AgentCommission[]               @relation("AgentCommissionAgent")
   agentPayouts                         AgentPayout[]                   @relation("AgentPayoutAgent")
   agentActivityLogs                    AgentActivityLog[]              @relation("AgentActivityAgent")
+}
+
+model AgentSale {
+  id                  String    @id @default(cuid())
+  agentId             String
+  customerName        String
+  customerPhone       String
+  customerLocation    String
+  customerCounty      String?
+  productName         String
+  productCategory     String?
+  quantity            Float     @default(1)
+  unitPrice           Float     @default(0)
+  totalAmount         Float     @default(0)
+  paymentType         String
+  amountPaid          Float     @default(0)
+  mpesaReference      String?
+  deliveryMethod      String?
+  deliveryNotes       String?
+  customerNotes       String?
+  internalAgentNotes  String?
+  status              String    @default("pending_review")
+  commissionPct       Float     @default(6)
+  potentialCommission Float     @default(0)
+  commissionLocked    Boolean   @default(true)
+  receiptId           String?
+  receiptNumber       String?
+  completedAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  agent               User      @relation("AgentSaleAgent", fields: [agentId], references: [id], onDelete: Cascade)
+  receipt             Receipt?  @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+
+  @@index([agentId, createdAt])
+  @@index([status, createdAt])
+  @@index([paymentType, createdAt])
+  @@index([receiptId])
 }
 
 model AgentProfile {
@@ -1210,6 +1248,7 @@ model Receipt {
   totals              Json?
   data                Json?
   createdAt           DateTime      @default(now())
+  agentSales          AgentSale[]
   issuedBy            User?         @relation("issuedBy", fields: [issuedById], references: [id])
   order               Order         @relation(fields: [orderId], references: [id])
   files               ReceiptFile[]
