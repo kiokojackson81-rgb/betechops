@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BarChart3, CreditCard, ShieldCheck, Users } from "lucide-react";
+import { agentPath } from "@/lib/agents/host";
 
 const featureCards = [
   {
@@ -24,7 +25,11 @@ const featureCards = [
   },
 ];
 
-export default function AgentsLandingPage() {
+type AgentsLandingPageProps = {
+  useRootPaths?: boolean;
+};
+
+export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandingPageProps) {
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(20,184,166,0.22),transparent_30%),linear-gradient(180deg,#020617_0%,#0f172a_52%,#020617_100%)] px-6 py-12 text-slate-100">
       <div className="mx-auto max-w-7xl space-y-10">
@@ -43,13 +48,13 @@ export default function AgentsLandingPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-4">
-              <Link href="/agents/register" className="rounded-2xl bg-emerald-400 px-5 py-3 font-semibold text-slate-950 transition hover:brightness-95">
+              <Link href={agentPath("/register", useRootPaths)} className="rounded-2xl bg-emerald-400 px-5 py-3 font-semibold text-slate-950 transition hover:brightness-95">
                 Create account
               </Link>
-              <Link href="/agents/login" className="rounded-2xl border border-white/10 px-5 py-3 font-semibold text-white transition hover:border-white/20">
+              <Link href={agentPath("/login", useRootPaths)} className="rounded-2xl border border-white/10 px-5 py-3 font-semibold text-white transition hover:border-white/20">
                 Sign in
               </Link>
-              <Link href="/agents/dashboard" className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-5 py-3 font-semibold text-cyan-100 transition hover:border-cyan-300/40">
+              <Link href={agentPath("/dashboard", useRootPaths)} className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-5 py-3 font-semibold text-cyan-100 transition hover:border-cyan-300/40">
                 Open dashboard
               </Link>
             </div>

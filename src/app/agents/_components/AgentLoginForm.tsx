@@ -4,10 +4,15 @@ import { signIn } from "next-auth/react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
+import { agentPath } from "@/lib/agents/host";
 
-export default function AgentLoginForm() {
+type AgentLoginFormProps = {
+  useRootPaths?: boolean;
+};
+
+export default function AgentLoginForm({ useRootPaths = false }: AgentLoginFormProps) {
   const params = useSearchParams();
-  const callbackUrl = params?.get("callbackUrl") || "/agents/dashboard";
+  const callbackUrl = params?.get("callbackUrl") || agentPath("/dashboard", useRootPaths);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -83,7 +88,7 @@ export default function AgentLoginForm() {
 
       <p className="text-sm text-slate-400">
         New here?{" "}
-        <Link href="/agents/register" className="font-medium text-emerald-300 hover:text-emerald-200">
+        <Link href={agentPath("/register", useRootPaths)} className="font-medium text-emerald-300 hover:text-emerald-200">
           Create your agent account
         </Link>
       </p>

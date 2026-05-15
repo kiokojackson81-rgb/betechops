@@ -4,13 +4,18 @@ import { signIn } from "next-auth/react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
+import { agentPath } from "@/lib/agents/host";
 
 type RegisterResponse = {
   ok?: boolean;
   error?: string;
 };
 
-export default function AgentRegisterForm() {
+type AgentRegisterFormProps = {
+  useRootPaths?: boolean;
+};
+
+export default function AgentRegisterForm({ useRootPaths = false }: AgentRegisterFormProps) {
   const params = useSearchParams();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,10 +55,9 @@ export default function AgentRegisterForm() {
     }
 
     setSuccess("Account created. Redirecting to your dashboard...");
+    const dashboardPath = agentPath("/dashboard", useRootPaths);
     const absoluteCallbackUrl =
-      typeof window === "undefined"
-        ? "/agents/dashboard"
-        : new URL("/agents/dashboard", window.location.origin).toString();
+      typeof window === "undefined" ? dashboardPath : new URL(dashboardPath, window.location.origin).toString();
     const signInRes = await signIn("credentials", {
       redirect: false,
       email: form.email,
@@ -64,7 +68,7 @@ export default function AgentRegisterForm() {
       window.location.href = signInRes.url;
       return;
     }
-    window.location.href = "/agents/login";
+    window.location.href = agentPath("/login", useRootPaths);
   }
 
   return (
@@ -177,7 +181,7 @@ export default function AgentRegisterForm() {
 
       <p className="text-sm text-slate-400">
         Already registered?{" "}
-        <Link href="/agents/login" className="font-medium text-cyan-300 hover:text-cyan-200">
+        <Link href={agentPath("/login", useRootPaths)} className="font-medium text-cyan-300 hover:text-cyan-200">
           Sign in here
         </Link>
       </p>
