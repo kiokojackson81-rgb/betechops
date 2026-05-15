@@ -1,13 +1,22 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import getLandingPage from '@/lib/getLandingPage';
+import { isAgentsHost } from '@/lib/runtimeUrls';
 
 export async function GET(req: Request) {
   const session = await auth();
   const url = new URL(req.url);
+  const host = url.host;
+  const rawCallback = url.searchParams.get('callbackUrl') ?? url.searchParams.get('callback');
+  const shouldUseAgentLogin =
+    isAgentsHost(host) ||
+    rawCallback === "/agents/dashboard" ||
+    rawCallback?.startsWith("/agents/") ||
+    rawCallback?.includes("/agents/");
+
   if (!session) {
     const original = url.pathname + url.search + url.hash;
-    const loginUrl = new URL('/attendant/login', url);
+    const loginUrl = new URL(shouldUseAgentLogin ? '/agents/login' : '/attendant/login', url);
     loginUrl.searchParams.set('callbackUrl', original);
     return NextResponse.redirect(loginUrl);
   }
@@ -16,7 +25,6 @@ export async function GET(req: Request) {
   const role = user?.role ?? '';
   const category = user?.attendantCategory ?? null;
   const isAgent = Boolean(user?.isAgent);
-  const rawCallback = url.searchParams.get('callbackUrl') ?? url.searchParams.get('callback');
   let target = isAgent ? "/agents/dashboard" : getLandingPage(category, role);
 
   if (rawCallback) {

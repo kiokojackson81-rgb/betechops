@@ -4,6 +4,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { getAllowedAuthOrigins, isAllowedAuthOrigin } from "@/lib/runtimeUrls";
 
 type ExtendedToken = {
   email?: string;
@@ -137,6 +138,22 @@ export const authOptions = {
       (s.user as Record<string, unknown>).isAgent = token.isAgent ?? false;
       (s.user as Record<string, unknown>).agentStatus = token.agentStatus ?? null;
       return s;
+    },
+    async redirect({ url, baseUrl }: { url: string; baseUrl: string }) {
+      if (url.startsWith("/")) {
+        return `${baseUrl}${url}`;
+      }
+
+      try {
+        const target = new URL(url);
+        if (target.origin === baseUrl || isAllowedAuthOrigin(target.origin)) {
+          return target.toString();
+        }
+      } catch {
+        // Fall through to base URL when the redirect target is invalid.
+      }
+
+      return getAllowedAuthOrigins()[0] ?? baseUrl;
     },
   },
   pages: {

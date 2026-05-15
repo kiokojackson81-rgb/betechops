@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { generateReferralCode } from "@/lib/agents/generateReferralCode";
+import { getAgentsBaseUrl } from "@/lib/runtimeUrls";
 
 export async function generateUniqueReferralCode() {
   for (let attempt = 0; attempt < 10; attempt += 1) {
@@ -69,7 +70,7 @@ export async function getAgentDashboardData(userId: string) {
   return {
     profile,
     displayName: getAgentDisplayName(profile),
-    referralLink: `${process.env.NEXT_PUBLIC_APP_URL || "https://agents.betech.co.ke"}/register?ref=${encodeURIComponent(profile.referralCode)}`,
+    referralLink: `${getAgentsBaseUrl()}/register?ref=${encodeURIComponent(profile.referralCode)}`,
     metrics: {
       totalReferrals: totals.referrals,
       totalSales: totals.sales,

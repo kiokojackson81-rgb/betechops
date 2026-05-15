@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { isAgentsHost } from "@/lib/runtimeUrls";
 
 // Combined middleware:
 // - Fast-fail unauthenticated requests to sensitive API routes (support/admin/pos)
@@ -9,6 +10,12 @@ export function middleware(req: NextRequest) {
     const url = req.nextUrl.clone();
     const pathname = url.pathname || "";
     const params = url.searchParams;
+    const host = req.headers.get("host");
+
+    if (pathname === "/" && isAgentsHost(host)) {
+      url.pathname = "/agents";
+      return NextResponse.redirect(url);
+    }
 
     // Allow the post-login rehydration endpoint to pass through unchanged
     if (pathname.startsWith("/auth/post-login")) return NextResponse.next();
@@ -49,6 +56,7 @@ export function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
+    "/",
     "/api/support/:path*",
     "/api/admin/:path*",
     "/api/pos-commissions/:path*",

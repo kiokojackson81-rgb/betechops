@@ -17,11 +17,15 @@ export default function AgentLoginForm() {
     event.preventDefault();
     setBusy(true);
     setError(null);
+    const absoluteCallbackUrl =
+      typeof window === "undefined"
+        ? callbackUrl
+        : new URL(callbackUrl, window.location.origin).toString();
     const res = await signIn("credentials", {
       redirect: false,
       email,
       password,
-      callbackUrl,
+      callbackUrl: absoluteCallbackUrl,
     });
     if (res?.ok && res.url) {
       window.location.href = res.url;

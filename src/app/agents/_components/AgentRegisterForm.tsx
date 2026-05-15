@@ -50,11 +50,15 @@ export default function AgentRegisterForm() {
     }
 
     setSuccess("Account created. Redirecting to your dashboard...");
+    const absoluteCallbackUrl =
+      typeof window === "undefined"
+        ? "/agents/dashboard"
+        : new URL("/agents/dashboard", window.location.origin).toString();
     const signInRes = await signIn("credentials", {
       redirect: false,
       email: form.email,
       password: form.password,
-      callbackUrl: "/agents/dashboard",
+      callbackUrl: absoluteCallbackUrl,
     });
     if (signInRes?.ok && signInRes.url) {
       window.location.href = signInRes.url;
