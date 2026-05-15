@@ -48,11 +48,11 @@ const steps = [
 ];
 
 const earnings = [
-  { title: "5KW Solar Kit", amount: "Ksh 12,000+", note: "Earn up to", accent: "from-[#fff3d8] to-[#fffaf0]", image: "/agents/product-solar-kit.png" },
-  { title: "Inverter", amount: "Ksh 3,000+", note: "Earn up to", accent: "from-[#fff8ee] to-[#ffffff]", image: "/agents/product-inverter.png" },
-  { title: "Battery", amount: "Ksh 3,000+", note: "Earn up to", accent: "from-[#fff5df] to-[#fffdf8]", image: "/agents/product-battery.png" },
-  { title: "Water Pump", amount: "Ksh 1,500+", note: "Earn up to", accent: "from-[#fff7ea] to-[#ffffff]", image: "/agents/product-water-pump.png" },
-  { title: "Accessories", amount: "Ksh 500+", note: "Earn up to", accent: "from-[#fff8ef] to-[#ffffff]", image: "/agents/product-accessories.png" },
+  { title: "5KW Solar Kit", amount: "Ksh 12,000+", note: "Earn up to", accent: "from-[#fff3d8] to-[#fffaf0]", image: "/agents/product-solar-kit-generated.png" },
+  { title: "Inverter", amount: "Ksh 3,000+", note: "Earn up to", accent: "from-[#fff8ee] to-[#ffffff]", image: "/agents/product-inverter-generated.png" },
+  { title: "Battery", amount: "Ksh 3,000+", note: "Earn up to", accent: "from-[#fff5df] to-[#fffdf8]", image: "/agents/product-battery-generated.png" },
+  { title: "Water Pump", amount: "Ksh 1,500+", note: "Earn up to", accent: "from-[#fff7ea] to-[#ffffff]", image: "/agents/product-water-pump-generated.png" },
+  { title: "Accessories", amount: "Ksh 500+", note: "Earn up to", accent: "from-[#fff8ef] to-[#ffffff]", image: "/agents/product-accessories-generated.png" },
 ];
 
 const benefits = [
@@ -96,21 +96,21 @@ const testimonials = [
     location: "Kisumu",
     quote: "I started referring customers through WhatsApp and now earn extra monthly income without leaving my main work.",
     accent: "from-[#7a0000] to-[#a11d1d]",
-    image: "/agents/testimonial-james.png",
+    image: "/agents/testimonial-james-generated.png",
   },
   {
     name: "Mercy W.",
     location: "Nakuru",
     quote: "The system is simple. I submit the customer, Betech handles delivery and installation, then I track my commission.",
     accent: "from-[#f3b205] to-[#ffd761]",
-    image: "/agents/testimonial-mercy.png",
+    image: "/agents/testimonial-mercy-generated.png",
   },
   {
     name: "Brian K.",
     location: "Eldoret",
     quote: "Fast payouts and genuine products make it easy to build trust with customers and keep referrals growing.",
     accent: "from-[#163b3d] to-[#2d7377]",
-    image: "/agents/testimonial-brian.png",
+    image: "/agents/testimonial-brian-generated.png",
   },
 ];
 
@@ -162,7 +162,7 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
           <Link href={agentPath("/", useRootPaths)} className="flex items-center gap-3">
             <div className="overflow-hidden rounded-2xl border border-[#7a0000]/10 bg-white shadow-[0_16px_30px_rgba(122,0,0,0.12)]">
-              <Image src="/agents/betech-logo-crop.png" alt="Betech Solar Solutions" width={58} height={58} className="h-12 w-12 object-cover" />
+              <Image src="/agents/betech-logo-crop.png" alt="Betech Solar Solutions" width={58} height={58} className="h-12 w-12 object-contain" />
             </div>
             <div className="leading-tight">
               <div className="text-sm font-black uppercase tracking-[0.18em] text-[#7a0000]">Betech Solar</div>
@@ -249,11 +249,11 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
                 <div className="rounded-[30px] border border-white/70 bg-[radial-gradient(circle_at_top,#fffaf1_0%,#fff_44%,#fff6ea_100%)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] sm:p-5">
                   <div className="overflow-hidden rounded-[28px] border border-[#7a0000]/10 bg-white shadow-[0_24px_60px_rgba(122,0,0,0.14)]">
                     <Image
-                      src="/agents/hero-mockup-crop.png"
+                      src="/agents/hero-generated-v2.png"
                       alt="Betech Solar agent holding a phone with earnings dashboard in front of a solar home"
                       width={425}
                       height={704}
-                      className="h-auto w-full object-cover"
+                      className="h-auto w-full object-cover object-center"
                       priority
                     />
                   </div>
@@ -308,8 +308,8 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
                     key={item.title}
                     className={`rounded-[28px] border border-white/10 bg-gradient-to-br ${item.accent} p-5 text-slate-950 shadow-[0_24px_50px_rgba(0,0,0,0.16)] transition duration-300 hover:-translate-y-1.5`}
                   >
-                    <div className="overflow-hidden rounded-[22px] border border-white/70 bg-white shadow-[0_12px_24px_rgba(122,0,0,0.10)]">
-                      <Image src={item.image} alt={item.title} width={109} height={263} className="h-36 w-full object-cover" />
+                    <div className="flex h-40 items-center justify-center overflow-hidden rounded-[22px] border border-white/70 bg-white p-4 shadow-[0_12px_24px_rgba(122,0,0,0.10)]">
+                      <Image src={item.image} alt={item.title} width={120} height={120} className="h-full w-full object-contain" />
                     </div>
                     <div className="mt-5 text-xl font-black">{item.title}</div>
                     <div className="mt-3 text-sm text-slate-500">{item.note}</div>
@@ -322,8 +322,8 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
             <div className="flex">
               <div className="flex w-full flex-col justify-between rounded-[34px] bg-[#f2b20f] p-8 text-slate-950 shadow-[0_35px_80px_rgba(0,0,0,0.22)]">
                 <div>
-                  <div className="overflow-hidden rounded-[26px] border border-white/50 bg-white/80 shadow-[0_20px_40px_rgba(0,0,0,0.12)]">
-                    <Image src="/agents/top-agents-card.png" alt="Top agents earnings highlight" width={250} height={312} className="h-36 w-full object-cover" />
+                  <div className="flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-[24px] bg-white/75 p-4 text-[#7a0000] shadow-[0_20px_40px_rgba(0,0,0,0.10)]">
+                    <CircleDollarSign className="h-10 w-10" />
                   </div>
                   <div className="mt-8 text-sm font-black uppercase tracking-[0.24em] text-[#7a0000]">Top Agents</div>
                   <h3 className="mt-4 text-4xl font-black leading-tight">Earn Over Ksh 100,000+ Monthly</h3>
@@ -338,6 +338,12 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
                     <div>Hardware sales reps</div>
                     <div>Rural field agents</div>
                     <div>Project connectors</div>
+                  </div>
+                  <div className="mt-5 flex items-end gap-2">
+                    <div className="h-12 w-8 rounded-t-xl bg-[#ffd761]" />
+                    <div className="h-16 w-8 rounded-t-xl bg-[#f2b20f]" />
+                    <div className="h-24 w-8 rounded-t-xl bg-[#c68f0d]" />
+                    <div className="h-32 w-8 rounded-t-xl bg-[#7a0000]" />
                   </div>
                 </div>
               </div>
@@ -499,7 +505,7 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
 
             <div className="relative overflow-hidden rounded-[36px] border border-white/10 bg-[linear-gradient(155deg,#f9d18f_0%,#a34a26_24%,#6a1c10_58%,#2a0704_100%)] p-5 shadow-[0_30px_80px_rgba(0,0,0,0.24)]">
               <Image
-                src="/agents/cta-house-crop.png"
+                src="/agents/cta-house-generated.png"
                 alt="Solar-powered home for the final Betech agent call to action"
                 fill
                 className="object-cover opacity-70"
