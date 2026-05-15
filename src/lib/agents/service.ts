@@ -1,16 +1,39 @@
 import type { Prisma } from "@prisma/client";
-import { Prisma as PrismaRuntime } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { generateReferralCode } from "@/lib/agents/generateReferralCode";
 import { getAgentsBaseUrl } from "@/lib/runtimeUrls";
 import { getAgentSalesDashboardSummary } from "@/lib/agents/sales";
 
-function isMissingAgentSaleTableError(error: unknown) {
-  if (!(error instanceof PrismaRuntime.PrismaClientKnownRequestError)) return false;
-  if (error.code !== "P2021") return false;
-  const table = String((error.meta as { table?: unknown } | undefined)?.table ?? "");
-  const message = error.message || "";
-  return table.includes("AgentSale") || message.includes("AgentSale");
+function getPrismaErrorDetails(error: unknown) {
+  if (!error || typeof error !== "object") return null;
+  const candidate = error as {
+    code?: unknown;
+    message?: unknown;
+    meta?: { table?: unknown; column?: unknown; modelName?: unknown } | null;
+  };
+  return {
+    code: String(candidate.code ?? ""),
+    message: String(candidate.message ?? ""),
+    table: String(candidate.meta?.table ?? ""),
+    column: String(candidate.meta?.column ?? ""),
+    modelName: String(candidate.meta?.modelName ?? ""),
+  };
+}
+
+function isAgentSalesSchemaError(error: unknown) {
+  const details = getPrismaErrorDetails(error);
+  if (!details) return false;
+  if (!["P2021", "P2022"].includes(details.code)) return false;
+  const haystack = [details.table, details.column, details.modelName, details.message].join(" ");
+  return [
+    "AgentSale",
+    "AgentCommission",
+    "sourceType",
+    "sourceId",
+    "saleAmount",
+    "commissionPct",
+    "commissionAmt",
+  ].some((token) => haystack.includes(token));
 }
 
 export async function generateUniqueReferralCode() {
@@ -50,6 +73,9 @@ export async function getAgentDashboardData(userId: string) {
       where: { agentId: userId },
       orderBy: { createdAt: "desc" },
       take: 20,
+    }).catch((error) => {
+      if (isAgentSalesSchemaError(error)) return [];
+      throw error;
     }),
     prisma.agentPayout.findMany({
       where: { agentId: userId },
@@ -131,6 +157,9 @@ export async function getAdminAgentsData(search?: string, status?: string) {
     prisma.agentCommission.findMany({
       where: { agentId: { in: userIds } },
       orderBy: { createdAt: "desc" },
+    }).catch((error) => {
+      if (isAgentSalesSchemaError(error)) return [];
+      throw error;
     }),
     prisma.agentPayout.findMany({
       where: { agentId: { in: userIds } },
@@ -140,7 +169,7 @@ export async function getAdminAgentsData(search?: string, status?: string) {
       where: { agentId: { in: userIds } },
       orderBy: { createdAt: "desc" },
     }).catch((error) => {
-      if (isMissingAgentSaleTableError(error)) return [];
+      if (isAgentSalesSchemaError(error)) return [];
       throw error;
     }),
   ]);

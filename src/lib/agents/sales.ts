@@ -84,12 +84,36 @@ function getAgentName(profile: { name?: string | null; email?: string | null } |
   return profile?.name || profile?.email || "Agent";
 }
 
-function isMissingAgentSaleTableError(error: unknown) {
-  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
-  if (error.code !== "P2021") return false;
-  const table = String((error.meta as { table?: unknown } | undefined)?.table ?? "");
-  const message = error.message || "";
-  return table.includes("AgentSale") || message.includes("AgentSale");
+function getPrismaErrorDetails(error: unknown) {
+  if (!error || typeof error !== "object") return null;
+  const candidate = error as {
+    code?: unknown;
+    message?: unknown;
+    meta?: { table?: unknown; column?: unknown; modelName?: unknown } | null;
+  };
+  return {
+    code: String(candidate.code ?? ""),
+    message: String(candidate.message ?? ""),
+    table: String(candidate.meta?.table ?? ""),
+    column: String(candidate.meta?.column ?? ""),
+    modelName: String(candidate.meta?.modelName ?? ""),
+  };
+}
+
+function isAgentSalesSchemaError(error: unknown) {
+  const details = getPrismaErrorDetails(error);
+  if (!details) return false;
+  if (!["P2021", "P2022"].includes(details.code)) return false;
+  const haystack = [details.table, details.column, details.modelName, details.message].join(" ");
+  return [
+    "AgentSale",
+    "AgentCommission",
+    "sourceType",
+    "sourceId",
+    "saleAmount",
+    "commissionPct",
+    "commissionAmt",
+  ].some((token) => haystack.includes(token));
 }
 
 function createAgentSaleSetupError() {
@@ -192,22 +216,28 @@ async function createAgentActivity(agentId: string, action: string, description:
 
 async function fetchSalesCommissions(saleIds: string[]) {
   if (!saleIds.length) return new Map<string, AgentSaleCommission>();
-  const rows = await prisma.agentCommission.findMany({
-    where: {
-      sourceType: "agent_sale",
-      sourceId: { in: saleIds },
-    },
-    select: {
-      id: true,
-      sourceType: true,
-      sourceId: true,
-      commissionAmt: true,
-      saleAmount: true,
-      status: true,
-      createdAt: true,
-      orderNumber: true,
-    },
-  });
+  let rows: AgentSaleCommission[] = [];
+  try {
+    rows = await prisma.agentCommission.findMany({
+      where: {
+        sourceType: "agent_sale",
+        sourceId: { in: saleIds },
+      },
+      select: {
+        id: true,
+        sourceType: true,
+        sourceId: true,
+        commissionAmt: true,
+        saleAmount: true,
+        status: true,
+        createdAt: true,
+        orderNumber: true,
+      },
+    });
+  } catch (error) {
+    if (isAgentSalesSchemaError(error)) return new Map<string, AgentSaleCommission>();
+    throw error;
+  }
   return new Map(rows.filter((row) => row.sourceId).map((row) => [String(row.sourceId), row]));
 }
 
@@ -310,7 +340,7 @@ export async function createAgentSale(agentId: string, body: unknown) {
       },
     });
   } catch (error) {
-    if (isMissingAgentSaleTableError(error)) throw createAgentSaleSetupError();
+    if (isAgentSalesSchemaError(error)) throw createAgentSaleSetupError();
     throw error;
   }
 
@@ -335,7 +365,7 @@ export async function getAgentSales(agentId: string) {
       orderBy: [{ createdAt: "desc" }],
     });
   } catch (error) {
-    if (isMissingAgentSaleTableError(error)) return [];
+    if (isAgentSalesSchemaError(error)) return [];
     throw error;
   }
 
@@ -354,7 +384,7 @@ export async function getAgentSaleById(agentId: string, saleId: string) {
       },
     });
   } catch (error) {
-    if (isMissingAgentSaleTableError(error)) return null;
+    if (isAgentSalesSchemaError(error)) return null;
     throw error;
   }
   if (!sale) return null;
@@ -368,6 +398,9 @@ export async function getAgentSalesDashboardSummary(agentId: string) {
     prisma.agentCommission.findMany({
       where: { agentId, sourceType: "agent_sale" },
       select: { commissionAmt: true, status: true },
+    }).catch((error) => {
+      if (isAgentSalesSchemaError(error)) return [];
+      throw error;
     }),
   ]);
 
@@ -457,7 +490,7 @@ export async function getAdminAgentSales(filters: AdminAgentSalesFilters = {}) {
       orderBy: [{ createdAt: "desc" }],
     });
   } catch (error) {
-    if (isMissingAgentSaleTableError(error)) return [];
+    if (isAgentSalesSchemaError(error)) return [];
     throw error;
   }
   const commissionBySaleId = await fetchSalesCommissions(sales.map((sale) => sale.id));
@@ -476,7 +509,7 @@ export async function getAdminAgentSaleById(saleId: string) {
       },
     });
   } catch (error) {
-    if (isMissingAgentSaleTableError(error)) return null;
+    if (isAgentSalesSchemaError(error)) return null;
     throw error;
   }
   if (!sale) return null;
@@ -541,7 +574,7 @@ export async function updateAgentSaleStatus(saleId: string, body: unknown, actor
       return updated;
     });
   } catch (error) {
-    if (isMissingAgentSaleTableError(error)) throw createAgentSaleSetupError();
+    if (isAgentSalesSchemaError(error)) throw createAgentSaleSetupError();
     throw error;
   }
 
@@ -619,7 +652,7 @@ export async function linkAgentSaleReceipt(saleId: string, body: unknown, actorE
       },
     });
   } catch (error) {
-    if (isMissingAgentSaleTableError(error)) throw createAgentSaleSetupError();
+    if (isAgentSalesSchemaError(error)) throw createAgentSaleSetupError();
     throw error;
   }
 
@@ -729,7 +762,7 @@ export async function completeAgentSale(saleId: string, actorEmail?: string | nu
       return updated;
     });
   } catch (error) {
-    if (isMissingAgentSaleTableError(error)) throw createAgentSaleSetupError();
+    if (isAgentSalesSchemaError(error)) throw createAgentSaleSetupError();
     throw error;
   }
 
