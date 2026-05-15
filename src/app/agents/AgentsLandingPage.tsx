@@ -58,37 +58,53 @@ const earnings = [
 const benefits = [
   {
     title: "Trusted Brand",
-    copy: "A leading Kenyan solar company trusted by households, businesses, and project buyers.",
+    copy: "A leading solar company with thousands of satisfied customers.",
     icon: ShieldCheck,
+    tone: "gold",
   },
   {
     title: "Genuine Products",
-    copy: "Sell with confidence using quality solar brands and dependable after-sales support.",
+    copy: "We deal with top global brands for quality and reliability.",
     icon: BadgeCheck,
+    tone: "maroon",
   },
   {
     title: "Full Support",
-    copy: "Our team helps with product guidance, quotations, delivery, installation, and customer follow-up.",
+    copy: "We handle installation, after-sales support and warranty.",
     icon: Headphones,
+    tone: "gold",
   },
   {
     title: "Marketing Materials",
-    copy: "Use flyers, social creatives, and product information to close more referrals faster.",
+    copy: "Get posters, videos, catalogs and content to help you sell more.",
     icon: PanelsTopLeft,
+    tone: "maroon",
   },
   {
     title: "Fast Payouts",
-    copy: "Withdraw earned commission through M-Pesa quickly after successful completed sales.",
+    copy: "Withdraw your earnings directly to M-Pesa quickly and securely.",
     icon: Banknote,
+    tone: "gold",
   },
   {
     title: "Nationwide Opportunities",
-    copy: "Work from any county in Kenya and earn from solar demand in homes, farms, and businesses.",
+    copy: "Work from anywhere in Kenya. No boundaries.",
     icon: MapPinned,
+    tone: "maroon",
   },
 ];
 
-const brands = ["Solarmax", "SRNE", "MUST", "Felicity Solar", "Alltop", "Deye", "Growatt", "Jinko", "JA Solar"];
+const brands = [
+  { name: "SolarMax", style: "solarmax" },
+  { name: "SRNE", style: "srne" },
+  { name: "MUST", style: "must" },
+  { name: "Felicity Solar", style: "felicity" },
+  { name: "ALLTOP ELECTRONICS", style: "alltop" },
+  { name: "Deye", style: "deye" },
+  { name: "Growatt", style: "growatt" },
+  { name: "Jinko Solar", style: "jinko" },
+  { name: "JA Solar", style: "ja" },
+];
 
 const testimonials = [
   {
@@ -150,6 +166,66 @@ function sectionTitle(title: string, copy?: string, dark = false) {
       {copy ? <p className={`mt-4 text-base leading-7 ${dark ? "text-white/75" : "text-slate-600"}`}>{copy}</p> : null}
     </div>
   );
+}
+
+function BrandWordmark({ style, name }: { style: string; name: string }) {
+  if (style === "solarmax") {
+    return (
+      <div className="flex items-center gap-3">
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#e53935] text-sm font-black text-white">◎</span>
+        <span className="text-[2rem] font-semibold tracking-tight text-slate-700">SolarMax</span>
+      </div>
+    );
+  }
+  if (style === "srne") {
+    return (
+      <div className="flex items-center gap-3">
+        <span className="relative h-8 w-8 overflow-hidden rounded-full bg-[#ff8f1f]">
+          <span className="absolute inset-y-0 left-1/2 w-[0.35rem] -translate-x-1/2 rotate-45 bg-white" />
+        </span>
+        <span className="text-[2.1rem] font-black tracking-tight text-slate-800">SRNE</span>
+      </div>
+    );
+  }
+  if (style === "must") {
+    return <span className="text-[2.4rem] font-black uppercase tracking-tight text-[#f2352c]">MUST</span>;
+  }
+  if (style === "felicity") {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f28c28] text-xl font-black text-white">F</span>
+        <span className="text-[1.9rem] tracking-tight text-slate-500">
+          <span className="font-semibold text-slate-600">Felicity</span>
+          <span className="ml-1 text-slate-400">solar</span>
+        </span>
+      </div>
+    );
+  }
+  if (style === "alltop") {
+    return (
+      <div className="flex flex-col items-start leading-none">
+        <span className="border-t-[0.35rem] border-[#e6362d] pt-1 text-[1.65rem] font-black uppercase tracking-tight text-[#e6362d]">ALLTOP</span>
+        <span className="text-[0.95rem] font-semibold uppercase tracking-[0.12em] text-slate-600">Electronics</span>
+      </div>
+    );
+  }
+  if (style === "deye") {
+    return <span className="text-[2.25rem] font-black tracking-tight text-[#1f6fd1]">Deye</span>;
+  }
+  if (style === "growatt") {
+    return <span className="text-[2.15rem] font-semibold tracking-tight text-[#73b63f]">Growatt</span>;
+  }
+  if (style === "jinko") {
+    return (
+      <span className="text-[2.15rem] italic tracking-tight text-[#45a930]">
+        <span className="font-semibold">Jinko</span> <span className="text-[1.3rem]">Solar</span>
+      </span>
+    );
+  }
+  if (style === "ja") {
+    return <span className="text-[2.1rem] font-semibold tracking-tight text-[#2b5fb8]">JA SOLAR</span>;
+  }
+  return <span className="text-[2rem] font-semibold text-slate-700">{name}</span>;
 }
 
 export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandingPageProps) {
@@ -354,19 +430,22 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
         <section id="benefits" className="bg-white py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             {sectionTitle("Why Agents Choose Betech Solar")}
-            <div className="mt-14 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            <div className="mt-14 grid gap-y-8 md:grid-cols-2 xl:grid-cols-6 xl:gap-x-0">
               {benefits.map((benefit) => {
                 const Icon = benefit.icon;
                 return (
                   <div
                     key={benefit.title}
-                    className="rounded-[30px] border border-[#7a0000]/10 bg-white p-6 shadow-[0_18px_40px_rgba(15,23,42,0.06)] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_26px_55px_rgba(122,0,0,0.12)]"
+                    className="relative px-5 text-center"
                   >
-                    <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-[#fff3d8] text-[#7a0000]">
+                    <div className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full shadow-[0_16px_32px_rgba(122,0,0,0.08)] ${
+                      benefit.tone === "gold" ? "bg-[#f2b20f] text-[#7a0000]" : "bg-[#7a0000] text-white"
+                    }`}>
                       <Icon className="h-8 w-8" />
                     </div>
-                    <h3 className="mt-5 text-2xl font-black text-slate-950">{benefit.title}</h3>
-                    <p className="mt-3 text-base leading-7 text-slate-600">{benefit.copy}</p>
+                    <h3 className="mt-5 text-xl font-black text-slate-950">{benefit.title}</h3>
+                    <p className="mt-3 text-sm leading-6 text-slate-600">{benefit.copy}</p>
+                    <div className="absolute right-0 top-4 hidden h-[9.5rem] w-px bg-gradient-to-b from-transparent via-[#7a0000]/12 to-transparent xl:block" />
                   </div>
                 );
               })}
@@ -377,15 +456,21 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
         <section id="products" className="bg-[#fffaf3] py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             {sectionTitle("Trusted Solar Brands We Deal With")}
-            <div className="mt-14 grid gap-4 rounded-[34px] border border-[#7a0000]/10 bg-white p-6 shadow-[0_20px_50px_rgba(15,23,42,0.06)] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            <div className="mt-14 rounded-[34px] border border-[#7a0000]/10 bg-white p-6 shadow-[0_20px_50px_rgba(15,23,42,0.06)]">
+              <div className="grid gap-x-8 gap-y-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
               {brands.map((brand) => (
                 <div
-                  key={brand}
-                  className="flex min-h-[96px] items-center justify-center rounded-[24px] border border-slate-100 bg-[#fcfbf8] px-5 py-4 text-center text-xl font-black tracking-tight text-slate-800 transition duration-300 hover:-translate-y-1 hover:border-[#7a0000]/18 hover:shadow-[0_18px_35px_rgba(122,0,0,0.08)]"
+                  key={brand.name}
+                  className="flex min-h-[5.5rem] items-center justify-center rounded-[20px] px-4 py-3 text-center transition duration-300 hover:-translate-y-1"
                 >
-                  {brand}
+                  <BrandWordmark style={brand.style} name={brand.name} />
                 </div>
               ))}
+                <div className="flex min-h-[5.5rem] items-center justify-center gap-3 rounded-[20px] px-4 py-3 text-center">
+                  <span className="text-[1.9rem] font-medium tracking-tight text-slate-700">and many more...</span>
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#f2b20f] text-lg font-black text-white">···</span>
+                </div>
+              </div>
             </div>
           </div>
         </section>
