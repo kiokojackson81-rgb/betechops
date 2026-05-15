@@ -8,14 +8,11 @@ import {
   Headphones,
   House,
   MapPinned,
-  MessageCircleMore,
   PanelsTopLeft,
   PhoneCall,
   PlayCircle,
   ShieldCheck,
-  Truck,
   Users,
-  WalletCards,
 } from "lucide-react";
 import AnimatedCount from "@/app/agents/_components/AnimatedCount";
 import { agentPath } from "@/lib/agents/host";
@@ -25,25 +22,25 @@ const steps = [
     number: "1",
     title: "Refer Customer",
     copy: "Share Betech products through WhatsApp, Facebook, TikTok, posters, and your local network.",
-    icon: MessageCircleMore,
+    image: "/agents/step-refer-customer.png",
   },
   {
     number: "2",
     title: "Customer Orders",
     copy: "Submit customer details in your dashboard so the Betech team can follow through quickly.",
-    icon: WalletCards,
+    image: "/agents/step-customer-orders.png",
   },
   {
     number: "3",
     title: "We Deliver & Install",
     copy: "Betech handles delivery, installation, and customer support professionally across Kenya.",
-    icon: Truck,
+    image: "/agents/step-deliver-install.png",
   },
   {
     number: "4",
     title: "You Earn Commission",
     copy: "Earn up to 6% commission after successful solar sales are completed and confirmed.",
-    icon: CircleDollarSign,
+    image: "/agents/step-earn-commission.png",
   },
 ];
 
@@ -349,21 +346,28 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
             {sectionTitle("How The Betech Agent Program Works")}
             <div className="mt-14 grid gap-5 xl:grid-cols-4">
               {steps.map((step, index) => {
-                const Icon = step.icon;
                 return (
                   <div key={step.title} className="relative">
                     <div className="group h-full rounded-[30px] border border-[#7a0000]/10 bg-white p-6 shadow-[0_18px_40px_rgba(15,23,42,0.06)] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_24px_55px_rgba(122,0,0,0.12)]">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#7a0000] text-lg font-black text-white shadow-[0_12px_24px_rgba(122,0,0,0.22)]">
+                      <div className={`flex h-11 w-11 items-center justify-center rounded-full text-lg font-black text-white shadow-[0_12px_24px_rgba(122,0,0,0.20)] ${
+                        index === 0 || index === 2 ? "bg-[#f2b20f] text-slate-950" : "bg-[#7a0000]"
+                      }`}>
                         {step.number}
                       </div>
-                      <div className="mt-6 flex h-16 w-16 items-center justify-center rounded-[22px] bg-[#fff3d8] text-[#7a0000] transition group-hover:scale-105">
-                        <Icon className="h-8 w-8" />
+                      <div className="mt-6 transition group-hover:scale-105">
+                        <Image
+                          src={step.image}
+                          alt={step.title}
+                          width={84}
+                          height={84}
+                          className="h-[5.25rem] w-[5.25rem] object-contain drop-shadow-[0_18px_28px_rgba(122,0,0,0.10)]"
+                        />
                       </div>
-                      <h3 className="mt-6 text-2xl font-black text-slate-950">{step.title}</h3>
-                      <p className="mt-3 text-base leading-7 text-slate-600">{step.copy}</p>
+                      <h3 className="mt-5 text-2xl font-black text-slate-950">{step.title}</h3>
+                      <p className="mt-3 max-w-[18rem] text-base leading-7 text-slate-600">{step.copy}</p>
                     </div>
                     {index < steps.length - 1 ? (
-                      <div className="pointer-events-none absolute -right-3 top-1/2 hidden -translate-y-1/2 xl:block">
+                      <div className="pointer-events-none absolute -right-3 top-[8.2rem] hidden xl:block">
                         <ArrowRight className="h-8 w-8 text-[#7a0000]/35" />
                       </div>
                     ) : null}
