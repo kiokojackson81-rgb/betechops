@@ -1,21 +1,27 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ClipboardList, Copy, CreditCard, Percent, UserCircle2, Wallet } from "lucide-react";
+import { ArrowRight, CircleDollarSign, ClipboardList, CreditCard, PlusCircle, UserRound, Wallet } from "lucide-react";
+import AgentPortalShell from "@/app/agents/_components/AgentPortalShell";
 import { requireAgentSession } from "@/lib/agents/auth";
 import { agentPath } from "@/lib/agents/host";
 import { getAgentDashboardData } from "@/lib/agents/service";
 
 const money = (value: number) =>
-  new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 }).format(value || 0);
+  new Intl.NumberFormat("en-KE", {
+    style: "currency",
+    currency: "KES",
+    maximumFractionDigits: 0,
+  }).format(value || 0);
 
-const metricStyles = [
-  "from-emerald-500/20 via-emerald-400/10 to-transparent",
-  "from-cyan-500/20 via-sky-400/10 to-transparent",
-  "from-amber-500/20 via-orange-400/10 to-transparent",
-  "from-fuchsia-500/20 via-violet-400/10 to-transparent",
-  "from-lime-500/20 via-emerald-300/10 to-transparent",
-  "from-slate-500/20 via-slate-300/10 to-transparent",
-];
+const statCards = [
+  { key: "totalSubmittedSales", label: "Total submitted sales", tone: "bg-[#fff3cf] text-[#5a4300]" },
+  { key: "pendingSales", label: "Pending sales", tone: "bg-[#fffaf5] text-slate-700" },
+  { key: "processingSales", label: "Sales in progress", tone: "bg-[#f1f8ff] text-[#174c7a]" },
+  { key: "completedSales", label: "Completed sales", tone: "bg-[#edf9f0] text-[#136233]" },
+  { key: "potentialCommission", label: "Potential commission", tone: "bg-[#fff3cf] text-[#5a4300]", money: true },
+  { key: "earnedCommission", label: "Earned commission", tone: "bg-[#fceeee] text-[#7a0000]", money: true },
+  { key: "paidCommission", label: "Paid commission", tone: "bg-[#edf9f0] text-[#136233]", money: true },
+] as const;
 
 type AgentDashboardPageProps = {
   useRootPaths?: boolean;
@@ -31,12 +37,12 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
 
   if (status === "pending") {
     return (
-      <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.16),transparent_25%),linear-gradient(180deg,#020617_0%,#0f172a_55%,#020617_100%)] px-6 py-10 text-slate-100">
-        <div className="mx-auto max-w-3xl rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.95),rgba(2,6,23,.98))] p-10 text-center shadow-[0_24px_80px_rgba(0,0,0,.35)]">
-          <div className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-300">Account under review</div>
-          <h1 className="mt-4 text-4xl font-semibold text-white">Your agent account is pending approval</h1>
-          <p className="mt-4 text-sm text-slate-400">
-            We have your registration and KYC details. An admin needs to approve the account before the full dashboard is available.
+      <div className="min-h-screen bg-[#f7f1eb] px-6 py-10">
+        <div className="mx-auto max-w-3xl rounded-[32px] border border-[#e4d4cb] bg-white p-10 text-center shadow-[0_24px_80px_rgba(64,32,18,0.08)]">
+          <div className="text-xs font-semibold uppercase tracking-[0.28em] text-[#7a0000]">Account under review</div>
+          <h1 className="mt-4 text-4xl font-black tracking-tight text-[#210505]">Your agent account is pending approval</h1>
+          <p className="mt-4 text-sm text-slate-600">
+            We have your registration details. An admin needs to approve the account before your full sales dashboard and payout tools are unlocked.
           </p>
           <div className="mt-6 text-sm text-slate-500">Referral code: {dashboard.profile.referralCode}</div>
         </div>
@@ -46,244 +52,265 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
 
   if (status === "rejected" || status === "suspended") {
     return (
-      <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(244,63,94,0.16),transparent_25%),linear-gradient(180deg,#020617_0%,#0f172a_55%,#020617_100%)] px-6 py-10 text-slate-100">
-        <div className="mx-auto max-w-3xl rounded-[32px] border border-rose-500/20 bg-[linear-gradient(180deg,rgba(15,23,42,.95),rgba(2,6,23,.98))] p-10 text-center shadow-[0_24px_80px_rgba(0,0,0,.35)]">
-          <div className="text-xs font-semibold uppercase tracking-[0.28em] text-rose-300">Access blocked</div>
-          <h1 className="mt-4 text-4xl font-semibold text-white">
+      <div className="min-h-screen bg-[#f7f1eb] px-6 py-10">
+        <div className="mx-auto max-w-3xl rounded-[32px] border border-rose-200 bg-white p-10 text-center shadow-[0_24px_80px_rgba(64,32,18,0.08)]">
+          <div className="text-xs font-semibold uppercase tracking-[0.28em] text-rose-600">Access blocked</div>
+          <h1 className="mt-4 text-4xl font-black tracking-tight text-[#210505]">
             {status === "suspended" ? "Your account is suspended" : "Your application was rejected"}
           </h1>
-          <p className="mt-4 text-sm text-slate-400">
-            This dashboard is only available to approved agents. Contact BETECH support or an administrator if you need clarification.
+          <p className="mt-4 text-sm text-slate-600">
+            This workspace is only available to approved BETECH agents. Contact support or an administrator if you need clarification.
           </p>
         </div>
       </div>
     );
   }
 
-  const metrics = [
-    { label: "Total submitted sales", value: String(dashboard.salesSummary.totalSubmittedSales), note: "All sales you have logged" },
-    { label: "Pending sales", value: String(dashboard.salesSummary.pendingSales), note: "Review and payment stages" },
-    { label: "Sales in progress", value: String(dashboard.salesSummary.processingSales), note: "Processing, dispatched, or delivered" },
-    { label: "Completed sales", value: String(dashboard.salesSummary.completedSales), note: "Paid in full and delivered" },
-    { label: "Potential commission", value: money(dashboard.salesSummary.potentialCommission), note: "Locked until completed" },
-    { label: "Earned commission", value: money(dashboard.salesSummary.earnedCommission), note: "Unlocked but not yet paid" },
-    { label: "Paid commission", value: money(dashboard.salesSummary.paidCommission), note: "Already settled" },
-    { label: "Success rate", value: `${dashboard.metrics.successRate}%`, note: "Paid commission entries over total entries" },
-  ];
-
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.16),transparent_25%),linear-gradient(180deg,#020617_0%,#0f172a_55%,#020617_100%)] px-6 py-10 text-slate-100">
-      <div className="mx-auto max-w-7xl space-y-8">
-        <section className="rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.95),rgba(2,6,23,.98))] p-8 shadow-[0_24px_80px_rgba(0,0,0,.35)]">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <div className="space-y-3">
-              <div className="inline-flex rounded-full border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-emerald-200">
-                Agent dashboard
-              </div>
-              <h1 className="text-4xl font-semibold tracking-tight text-white">Welcome back, {dashboard.displayName}</h1>
-              <p className="max-w-3xl text-sm text-slate-400">
-                Monitor your affiliate performance, update profile details, and manage commission and payout activity from one place.
-              </p>
+    <AgentPortalShell
+      useRootPaths={useRootPaths}
+      title="Overview"
+      description="Track your pipeline, potential commission, earned payouts, and the key actions that move your sales from referral to payment."
+      agent={{
+        displayName: dashboard.displayName,
+        email: dashboard.profile.email || dashboard.profile.user.email,
+        status: String(dashboard.profile.status || ""),
+        referralCode: dashboard.profile.referralCode,
+        payoutPhone: dashboard.profile.phone,
+      }}
+      stats={{
+        potentialCommission: dashboard.salesSummary.potentialCommission,
+        earnedCommission: dashboard.salesSummary.earnedCommission,
+        paidCommission: dashboard.salesSummary.paidCommission,
+      }}
+    >
+      <div className="space-y-6">
+        <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+          <div className="rounded-[30px] bg-[linear-gradient(135deg,#7a0000_0%,#3c0909_100%)] p-7 text-white shadow-[0_20px_60px_rgba(64,10,10,0.28)]">
+            <div className="inline-flex rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#f5d88f]">
+              Welcome back
             </div>
-            <div className="flex flex-wrap gap-3">
+            <h2 className="mt-4 text-3xl font-black tracking-tight">Build your solar sales pipeline with clarity</h2>
+            <p className="mt-3 max-w-2xl text-sm text-white/78">
+              Submit customer opportunities, watch them move through payment and delivery, and see exactly when your 6% commission becomes earned.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
               <Link
                 href={agentPath("/sales/new", useRootPaths)}
-                className="rounded-2xl bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:brightness-95"
+                className="rounded-2xl bg-[#f1b81d] px-5 py-3 text-sm font-semibold text-[#4d0808] transition hover:brightness-95"
               >
-                Submit sale
+                Submit new sale
               </Link>
               <Link
                 href={agentPath("/sales", useRootPaths)}
-                className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-white/20"
+                className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
               >
-                View sales
+                View all sales
               </Link>
-              <div className="rounded-[28px] border border-white/10 bg-white/[0.03] px-5 py-4">
-                <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Account status</div>
-                <div className="mt-2 text-2xl font-semibold text-white">{dashboard.profile.status}</div>
+              <Link
+                href={agentPath("/profile/payment-method", useRootPaths)}
+                className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+              >
+                Manage payout setup
+              </Link>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-1">
+            <div className="rounded-[28px] border border-[#e4d4cb] bg-white p-5 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
+              <div className="flex items-center gap-3 text-[#7a0000]">
+                <Wallet className="h-5 w-5" />
+                <div className="text-sm font-semibold uppercase tracking-[0.18em]">Potential Commission</div>
               </div>
+              <div className="mt-3 text-3xl font-black tracking-tight text-[#210505]">{money(dashboard.salesSummary.potentialCommission)}</div>
+              <p className="mt-2 text-sm text-slate-600">Locked until full payment and delivery are confirmed.</p>
+            </div>
+            <div className="rounded-[28px] border border-[#e4d4cb] bg-white p-5 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
+              <div className="flex items-center gap-3 text-[#7a0000]">
+                <CircleDollarSign className="h-5 w-5" />
+                <div className="text-sm font-semibold uppercase tracking-[0.18em]">Earned Commission</div>
+              </div>
+              <div className="mt-3 text-3xl font-black tracking-tight text-[#210505]">{money(dashboard.salesSummary.earnedCommission)}</div>
+              <p className="mt-2 text-sm text-slate-600">Completed sales waiting for payout processing.</p>
+            </div>
+            <div className="rounded-[28px] border border-[#e4d4cb] bg-white p-5 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
+              <div className="flex items-center gap-3 text-[#7a0000]">
+                <CreditCard className="h-5 w-5" />
+                <div className="text-sm font-semibold uppercase tracking-[0.18em]">Payout Method</div>
+              </div>
+              <div className="mt-3 text-xl font-black tracking-tight text-[#210505]">{dashboard.profile.phone || "Add M-Pesa number"}</div>
+              <p className="mt-2 text-sm text-slate-600">Current agent payouts are processed through M-Pesa.</p>
             </div>
           </div>
         </section>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {metrics.map((item, index) => (
-            <div key={item.label} className="relative overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/80 p-5">
-              <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${metricStyles[index % metricStyles.length]}`} />
-              <div className="relative">
-                <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">{item.label}</div>
-                <div className="mt-3 text-3xl font-semibold text-white">{item.value}</div>
-                <div className="mt-2 text-sm text-slate-400">{item.note}</div>
-              </div>
-            </div>
-          ))}
+          {statCards.map((item) => {
+            const value = dashboard.salesSummary[item.key];
+            return (
+              <article
+                key={item.label}
+                className={`rounded-[26px] border border-[#e4d4cb] p-5 shadow-[0_12px_40px_rgba(64,32,18,0.06)] ${item.tone}`}
+              >
+                <div className="text-xs font-semibold uppercase tracking-[0.2em]">{item.label}</div>
+                <div className="mt-3 text-3xl font-black tracking-tight text-[#210505]">
+                  {"money" in item && item.money ? money(Number(value || 0)) : String(value)}
+                </div>
+              </article>
+            );
+          })}
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
           <div className="space-y-6">
-            <div className="rounded-[28px] border border-amber-400/20 bg-amber-400/10 p-6">
-              <div className="flex items-center gap-3">
-                <ClipboardList className="h-5 w-5 text-amber-200" />
-                <h2 className="text-xl font-semibold text-white">Sales and commission motivation</h2>
+            <article className="rounded-[28px] border border-[#e4d4cb] bg-white p-6 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">Quick actions</p>
+                  <h3 className="mt-2 text-2xl font-black tracking-tight text-[#210505]">What you can do next</h3>
+                </div>
               </div>
-              <div className="mt-4 grid gap-3 text-sm text-amber-50 md:grid-cols-2">
-                <div>Potential commission: {money(dashboard.salesSummary.potentialCommission)}</div>
-                <div>Earned commission: {money(dashboard.salesSummary.earnedCommission)}</div>
-                <div>Paid commission: {money(dashboard.salesSummary.paidCommission)}</div>
-                <div>Sales in progress: {dashboard.salesSummary.processingSales}</div>
+              <div className="mt-5 grid gap-4 md:grid-cols-3">
+                <Link href={agentPath("/sales/new", useRootPaths)} className="rounded-[24px] border border-[#e4d4cb] bg-[#fffaf5] p-4 transition hover:-translate-y-0.5 hover:shadow-[0_12px_25px_rgba(64,32,18,0.08)]">
+                  <PlusCircle className="h-5 w-5 text-[#7a0000]" />
+                  <div className="mt-4 text-lg font-semibold text-[#210505]">Submit sale</div>
+                  <p className="mt-2 text-sm text-slate-600">Capture a new customer opportunity and lock in potential commission.</p>
+                </Link>
+                <Link href={agentPath("/profile", useRootPaths)} className="rounded-[24px] border border-[#e4d4cb] bg-[#fffaf5] p-4 transition hover:-translate-y-0.5 hover:shadow-[0_12px_25px_rgba(64,32,18,0.08)]">
+                  <UserRound className="h-5 w-5 text-[#7a0000]" />
+                  <div className="mt-4 text-lg font-semibold text-[#210505]">Update profile</div>
+                  <p className="mt-2 text-sm text-slate-600">Keep your contact, KRA, and ID details ready for approvals and payouts.</p>
+                </Link>
+                <Link href={agentPath("/profile/payment-method", useRootPaths)} className="rounded-[24px] border border-[#e4d4cb] bg-[#fffaf5] p-4 transition hover:-translate-y-0.5 hover:shadow-[0_12px_25px_rgba(64,32,18,0.08)]">
+                  <CreditCard className="h-5 w-5 text-[#7a0000]" />
+                  <div className="mt-4 text-lg font-semibold text-[#210505]">Set payout method</div>
+                  <p className="mt-2 text-sm text-slate-600">Make sure BETECH has the correct M-Pesa number before you request payouts.</p>
+                </Link>
               </div>
-              <p className="mt-4 text-sm text-amber-50/85">
-                Potential commission appears as soon as you submit a sale. It unlocks only after the customer pays in full and the order is delivered or collected.
-              </p>
-            </div>
+            </article>
 
-            <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
-              <div className="flex items-center gap-3">
-                <UserCircle2 className="h-5 w-5 text-cyan-300" />
-                <h2 className="text-xl font-semibold text-white">Personal Info</h2>
-              </div>
-              <div className="mt-5 grid gap-4 text-sm text-slate-300 md:grid-cols-2">
-                <div>Name: {dashboard.displayName}</div>
-                <div>Email: {dashboard.profile.email || dashboard.profile.user.email || "Not set"}</div>
-                <div>Phone: {dashboard.profile.phone || "Not set"}</div>
-                <div>Location: {[dashboard.profile.city, dashboard.profile.county, dashboard.profile.country].filter(Boolean).join(", ") || "Not set"}</div>
-                <div>National ID: {dashboard.profile.nationalId || "Pending"}</div>
-                <div>KRA PIN: {dashboard.profile.kraPin || "Pending"}</div>
-              </div>
-            </div>
-
-            <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
-              <div className="flex items-center gap-3">
-                <Wallet className="h-5 w-5 text-emerald-300" />
-                <h2 className="text-xl font-semibold text-white">Payment Account</h2>
-              </div>
-              <div className="mt-5 space-y-2 text-sm text-slate-300">
-                <div>Preferred phone: {dashboard.profile.phone || "Add your payout phone in profile settings"}</div>
-                <div>Agent status: {dashboard.profile.status}</div>
-                <div>Payout requests submitted: {dashboard.payouts.length}</div>
-              </div>
-            </div>
-
-            <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
-              <div className="flex items-center gap-3">
-                <Copy className="h-5 w-5 text-amber-300" />
-                <h2 className="text-xl font-semibold text-white">Referral Link</h2>
-              </div>
-              <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-sm text-slate-200">
-                {dashboard.referralLink}
-              </div>
-              <div className="mt-3 text-xs text-slate-500">Share this link or your code: {dashboard.profile.referralCode}</div>
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
-              <div className="flex items-center gap-3">
-                <Percent className="h-5 w-5 text-fuchsia-300" />
-                <h2 className="text-xl font-semibold text-white">Commission History</h2>
+            <article className="rounded-[28px] border border-[#e4d4cb] bg-white p-6 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">Recent sales</p>
+                  <h3 className="mt-2 text-2xl font-black tracking-tight text-[#210505]">Sales in motion</h3>
+                </div>
+                <Link href={agentPath("/sales", useRootPaths)} className="text-sm font-semibold text-[#7a0000] hover:text-[#5d0000]">
+                  View all
+                </Link>
               </div>
               <div className="mt-5 space-y-3">
-                {dashboard.commissions.length ? dashboard.commissions.map((item) => (
-                  <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <div className="font-medium text-white">{item.sourceType}</div>
-                        <div className="text-xs text-slate-500">{item.orderNumber || "No order"} · {item.status}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-semibold text-white">{money(Number(item.commissionAmt ?? 0))}</div>
-                        <div className="text-xs text-slate-500">{new Date(item.createdAt).toLocaleDateString()}</div>
-                      </div>
-                    </div>
-                  </div>
-                )) : <div className="text-sm text-slate-500">No commissions recorded yet.</div>}
-              </div>
-            </div>
-
-            <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
-              <div className="flex items-center gap-3">
-                <ClipboardList className="h-5 w-5 text-cyan-300" />
-                <h2 className="text-xl font-semibold text-white">Recent sales</h2>
-              </div>
-              <div className="mt-5 space-y-3">
-                {dashboard.sales.length ? dashboard.sales.slice(0, 6).map((sale) => (
-                  <div key={sale.id} className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                {dashboard.sales.length ? dashboard.sales.slice(0, 5).map((sale) => (
+                  <div key={sale.id} className="rounded-[24px] border border-[#ece1d9] bg-[#fffaf5] p-4">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <div className="font-medium text-white">{sale.customerName}</div>
-                        <div className="text-xs text-slate-500">
-                          {sale.productName} · {sale.statusMeta.label} · {sale.receiptNumber || "No receipt"}
+                        <div className="font-semibold text-[#210505]">{sale.customerName}</div>
+                        <div className="mt-1 text-sm text-slate-600">
+                          {sale.productName} · {sale.statusMeta.label} · {sale.receiptNumber || "No receipt linked"}
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="font-semibold text-white">
-                          {sale.status === "completed" ? "Earned commission" : "Potential commission"}
+                        <div className="text-sm font-semibold text-[#210505]">
+                          {sale.status === "completed" ? "Earned" : "Potential"}
                         </div>
-                        <div className="text-xs text-amber-200">{money(sale.commissionAmount)}</div>
+                        <div className="text-sm text-[#7a0000]">{money(sale.commissionAmount)}</div>
                       </div>
                     </div>
-                    <div className="mt-3 flex items-center justify-between gap-3">
-                      <div className="text-xs text-slate-500">{sale.commissionBadge}</div>
-                      <Link href={agentPath(`/sales/${sale.id}`, useRootPaths)} className="text-sm font-medium text-cyan-300 hover:text-cyan-200">
-                        Open sale
+                    <div className="mt-3 flex items-center justify-between gap-4">
+                      <span className="rounded-full bg-[#fff3cf] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#7a0000]">
+                        {sale.commissionBadge}
+                      </span>
+                      <Link
+                        href={agentPath(`/sales/${sale.id}`, useRootPaths)}
+                        className="inline-flex items-center gap-2 text-sm font-semibold text-[#7a0000] hover:text-[#5d0000]"
+                      >
+                        Open sale <ArrowRight className="h-4 w-4" />
                       </Link>
                     </div>
                   </div>
-                )) : <div className="text-sm text-slate-500">No sales submitted yet.</div>}
+                )) : (
+                  <div className="rounded-[24px] border border-dashed border-[#d9c6ba] bg-[#fffaf5] p-8 text-center text-sm text-slate-500">
+                    No sales submitted yet. Start by adding your first customer opportunity.
+                  </div>
+                )}
               </div>
-            </div>
+            </article>
+          </div>
 
-            <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
+          <div className="space-y-6">
+            <article className="rounded-[28px] border border-[#e4d4cb] bg-white p-6 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
               <div className="flex items-center gap-3">
-                <CreditCard className="h-5 w-5 text-lime-300" />
-                <h2 className="text-xl font-semibold text-white">Payout Requests</h2>
+                <ClipboardList className="h-5 w-5 text-[#7a0000]" />
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">Commission pipeline</p>
+                  <h3 className="mt-1 text-2xl font-black tracking-tight text-[#210505]">Refer → Earn → Withdraw</h3>
+                </div>
+              </div>
+              <div className="mt-5 space-y-4">
+                <div className="rounded-[24px] bg-[#fff3cf] p-4">
+                  <div className="text-sm font-semibold text-[#210505]">Potential commission</div>
+                  <p className="mt-1 text-sm text-[#6a5000]">Appears immediately after you submit a sale.</p>
+                </div>
+                <div className="rounded-[24px] bg-[#fceeee] p-4">
+                  <div className="text-sm font-semibold text-[#210505]">Earned commission</div>
+                  <p className="mt-1 text-sm text-[#7a0000]">Unlocks only after full payment and delivery confirmation.</p>
+                </div>
+                <div className="rounded-[24px] bg-[#edf9f0] p-4">
+                  <div className="text-sm font-semibold text-[#210505]">Paid commission</div>
+                  <p className="mt-1 text-sm text-[#136233]">Moves here once BETECH processes your payout.</p>
+                </div>
+              </div>
+            </article>
+
+            <article className="rounded-[28px] border border-[#e4d4cb] bg-white p-6 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
+              <div className="flex items-center gap-3">
+                <CreditCard className="h-5 w-5 text-[#7a0000]" />
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">Payout activity</p>
+                  <h3 className="mt-1 text-2xl font-black tracking-tight text-[#210505]">Recent payout requests</h3>
+                </div>
               </div>
               <div className="mt-5 space-y-3">
-                {dashboard.payouts.length ? dashboard.payouts.map((item) => (
-                  <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                {dashboard.payouts.length ? dashboard.payouts.slice(0, 4).map((item) => (
+                  <div key={item.id} className="rounded-[24px] border border-[#ece1d9] bg-[#fffaf5] p-4">
                     <div className="flex items-center justify-between gap-4">
                       <div>
-                        <div className="font-medium text-white">{item.method || "Unspecified method"}</div>
-                        <div className="text-xs text-slate-500">{item.reference || "No reference"} · {item.status}</div>
+                        <div className="font-semibold text-[#210505]">{item.method || "M-Pesa payout"}</div>
+                        <div className="mt-1 text-sm text-slate-600">{item.reference || "Awaiting reference"} · {item.status}</div>
                       </div>
                       <div className="text-right">
-                        <div className="font-semibold text-white">{money(Number(item.amount ?? 0))}</div>
+                        <div className="font-semibold text-[#210505]">{money(Number(item.amount || 0))}</div>
                         <div className="text-xs text-slate-500">{new Date(item.createdAt).toLocaleDateString()}</div>
                       </div>
                     </div>
                   </div>
-                )) : <div className="text-sm text-slate-500">No payout requests yet.</div>}
+                )) : (
+                  <div className="rounded-[24px] border border-dashed border-[#d9c6ba] bg-[#fffaf5] p-6 text-sm text-slate-500">
+                    No payout requests yet. Save your M-Pesa number, then request payouts when commissions are ready.
+                  </div>
+                )}
               </div>
-            </div>
-          </div>
-        </section>
+            </article>
 
-        <section className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-xl font-semibold text-white">Agent activity</h2>
-              <p className="mt-1 text-sm text-slate-400">Recent registration, approval, and payout events.</p>
-            </div>
-            <div className="flex gap-3">
-              <Link href="/api/agents/profile" className="rounded-2xl border border-white/10 px-4 py-2 text-sm text-slate-200 transition hover:border-white/20">
-                Profile API
-              </Link>
-              <Link href="/api/agents/commissions" className="rounded-2xl border border-white/10 px-4 py-2 text-sm text-slate-200 transition hover:border-white/20">
-                Commissions API
-              </Link>
-            </div>
-          </div>
-          <div className="mt-5 grid gap-3 lg:grid-cols-3">
-            {dashboard.activities.length ? dashboard.activities.map((item) => (
-              <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                <div className="text-sm font-semibold text-white">{item.action}</div>
-                <div className="mt-2 text-sm text-slate-400">{item.description || "No extra details"}</div>
-                <div className="mt-2 text-xs text-slate-500">{new Date(item.createdAt).toLocaleString()}</div>
+            <article className="rounded-[28px] border border-[#e4d4cb] bg-white p-6 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
+              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">Recent activity</div>
+              <div className="mt-4 space-y-3">
+                {dashboard.activities.length ? dashboard.activities.map((item) => (
+                  <div key={item.id} className="rounded-[24px] border border-[#ece1d9] bg-[#fffaf5] p-4">
+                    <div className="font-semibold text-[#210505]">{item.action}</div>
+                    <div className="mt-1 text-sm text-slate-600">{item.description || "No extra details"}</div>
+                    <div className="mt-2 text-xs text-slate-500">{new Date(item.createdAt).toLocaleString()}</div>
+                  </div>
+                )) : (
+                  <div className="rounded-[24px] border border-dashed border-[#d9c6ba] bg-[#fffaf5] p-6 text-sm text-slate-500">
+                    No activity logged yet.
+                  </div>
+                )}
               </div>
-            )) : <div className="text-sm text-slate-500">No activity logged yet.</div>}
+            </article>
           </div>
         </section>
       </div>
-    </div>
+    </AgentPortalShell>
   );
 }

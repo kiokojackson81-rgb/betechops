@@ -26,10 +26,13 @@ export function isAgentRoutePath(path: string | null | undefined) {
     normalizedPath === "/login" ||
     normalizedPath === "/register" ||
     normalizedPath === "/dashboard" ||
+    normalizedPath === "/profile" ||
+    normalizedPath === "/profile/payment-method" ||
     normalizedPath === "/sales" ||
     normalizedPath === "/sales/new" ||
     normalizedPath.startsWith("/sales/") ||
     normalizedPath === "/agents" ||
-    normalizedPath.startsWith("/agents/")
+    normalizedPath.startsWith("/agents/") ||
+    normalizedPath.startsWith("/profile/")
   );
 }

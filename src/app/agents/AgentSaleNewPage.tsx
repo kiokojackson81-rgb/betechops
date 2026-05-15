@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 import AgentSaleForm from "@/app/agents/_components/AgentSaleForm";
+import AgentPortalShell from "@/app/agents/_components/AgentPortalShell";
 import { requireAgentSession } from "@/lib/agents/auth";
 import { agentPath } from "@/lib/agents/host";
+import { getAgentDashboardData } from "@/lib/agents/service";
 
 type AgentSaleNewPageProps = {
   useRootPaths?: boolean;
@@ -16,11 +18,30 @@ export default async function AgentSaleNewPage({ useRootPaths = false }: AgentSa
     redirect(agentPath("/dashboard", useRootPaths));
   }
 
+  const dashboard = await getAgentDashboardData(agentSession.userId);
+  if (!dashboard) redirect(agentPath("/register", useRootPaths));
+
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.16),transparent_25%),linear-gradient(180deg,#020617_0%,#0f172a_60%,#020617_100%)] px-6 py-10 text-slate-100">
-      <div className="mx-auto max-w-5xl rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] p-8 shadow-[0_24px_80px_rgba(0,0,0,.35)]">
+    <AgentPortalShell
+      useRootPaths={useRootPaths}
+      title="Submit Sale"
+      description="Capture a customer opportunity with the right payment and delivery details so admin can process it through the normal BETECH order flow."
+      agent={{
+        displayName: dashboard.displayName,
+        email: dashboard.profile.email || dashboard.profile.user.email,
+        status: String(dashboard.profile.status || ""),
+        referralCode: dashboard.profile.referralCode,
+        payoutPhone: dashboard.profile.phone,
+      }}
+      stats={{
+        potentialCommission: dashboard.salesSummary.potentialCommission,
+        earnedCommission: dashboard.salesSummary.earnedCommission,
+        paidCommission: dashboard.salesSummary.paidCommission,
+      }}
+    >
+      <div className="rounded-[28px] border border-[#e4d4cb] bg-white p-6 shadow-[0_12px_40px_rgba(64,32,18,0.08)] md:p-8">
         <AgentSaleForm useRootPaths={useRootPaths} />
       </div>
-    </div>
+    </AgentPortalShell>
   );
 }
