@@ -68,11 +68,11 @@ export default function AgentPortalShell({
   const pathname = usePathname() || "";
   const loginPath = agentPath("/login", useRootPaths);
   const navItems = [
-    { href: agentPath("/dashboard", useRootPaths), label: "Overview", icon: Home },
+    { href: agentPath("/dashboard", useRootPaths), label: "Dashboard", icon: Home },
     { href: agentPath("/sales", useRootPaths), label: "My Sales", icon: ClipboardList },
-    { href: agentPath("/sales/new", useRootPaths), label: "Submit Sale", icon: PlusCircle },
+    { href: agentPath("/sales/new", useRootPaths), label: "Submit Order", icon: PlusCircle },
     { href: agentPath("/profile", useRootPaths), label: "Profile", icon: UserRound },
-    { href: agentPath("/profile/payment-method", useRootPaths), label: "Payment Method", icon: CreditCard },
+    { href: agentPath("/profile/payment-method", useRootPaths), label: "Withdrawals", icon: CreditCard },
   ];
 
   const mobileItems = navItems.slice(0, 4);
@@ -103,8 +103,8 @@ export default function AgentPortalShell({
             </div>
             <div className="mt-4 flex items-center justify-between rounded-2xl bg-black/15 px-3 py-2">
               <span className="text-xs uppercase tracking-[0.2em] text-white/60">Status</span>
-              <span className="rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200">
-                {agent.status}
+              <span className="rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-200">
+                {String(agent.status || "").toLowerCase() === "approved" ? "Approved Agent" : agent.status}
               </span>
             </div>
             <div className="mt-3 text-xs text-white/65">Referral code: {agent.referralCode}</div>
@@ -133,18 +133,18 @@ export default function AgentPortalShell({
 
           <div className="mt-8 space-y-4">
             <div className="rounded-[28px] border border-[#f1b81d]/30 bg-[#f1b81d]/12 p-4">
-              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#f8dd8a]">Commission snapshot</div>
+              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#f8dd8a]">Earnings snapshot</div>
               <div className="mt-4 space-y-3 text-sm">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-white/72">Potential</span>
                   <span className="font-semibold text-white">{money(stats.potentialCommission)}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-white/72">Earned</span>
+                  <span className="text-white/72">Ready</span>
                   <span className="font-semibold text-white">{money(stats.earnedCommission)}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-white/72">Paid</span>
+                  <span className="text-white/72">Withdrawn</span>
                   <span className="font-semibold text-white">{money(stats.paidCommission)}</span>
                 </div>
               </div>
@@ -153,10 +153,10 @@ export default function AgentPortalShell({
             <div className="rounded-[28px] border border-white/10 bg-white/10 p-4">
               <div className="flex items-center gap-2 text-sm font-semibold text-white">
                 <Settings2 className="h-4 w-4 text-[#f3d674]" />
-                Payment setup
+                Withdrawal Method
               </div>
               <p className="mt-3 text-sm text-white/72">
-                Current agent payouts are processed through M-Pesa using your saved phone number.
+                Your commissions will be sent to this M-Pesa number.
               </p>
               <div className="mt-3 text-sm font-medium text-white">
                 {agent.payoutPhone ? `M-Pesa: ${agent.payoutPhone}` : "No payout phone saved yet"}
@@ -165,7 +165,7 @@ export default function AgentPortalShell({
                 href={agentPath("/profile/payment-method", useRootPaths)}
                 className="mt-4 inline-flex rounded-2xl border border-white/15 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
               >
-                Update payment method
+                Setup withdrawals
               </Link>
             </div>
           </div>
@@ -195,14 +195,16 @@ export default function AgentPortalShell({
           <header className="sticky top-0 z-30 border-b border-[#e4d4cb] bg-[#f7f1eb]/92 px-4 py-4 backdrop-blur md:px-6 lg:px-8">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <div className="text-xs font-semibold uppercase tracking-[0.28em] text-[#7a0000]">Agent workspace</div>
+                <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">Betech Agents Hub</div>
                 <h1 className="mt-1 text-2xl font-black tracking-tight text-[#210505] md:text-3xl">{title}</h1>
                 <p className="mt-1 max-w-3xl text-sm text-slate-600">{description}</p>
               </div>
               <div className="flex shrink-0 items-center gap-3">
                 <div className="hidden rounded-2xl border border-[#d9c6ba] bg-white px-4 py-3 text-right md:block">
                   <div className="text-sm font-semibold text-[#210505]">{agent.displayName}</div>
-                  <div className="text-xs uppercase tracking-[0.18em] text-slate-500">{agent.status}</div>
+                  <div className="text-xs uppercase tracking-[0.1em] text-slate-500">
+                    {String(agent.status || "").toLowerCase() === "approved" ? "Approved Agent" : agent.status}
+                  </div>
                 </div>
                 <button
                   type="button"

@@ -14,14 +14,24 @@ const money = (value: number) =>
   }).format(value || 0);
 
 const statCards = [
-  { key: "totalSubmittedSales", label: "Total submitted sales", tone: "bg-[#fff3cf] text-[#5a4300]" },
-  { key: "pendingSales", label: "Pending sales", tone: "bg-[#fffaf5] text-slate-700" },
-  { key: "processingSales", label: "Sales in progress", tone: "bg-[#f1f8ff] text-[#174c7a]" },
-  { key: "completedSales", label: "Completed sales", tone: "bg-[#edf9f0] text-[#136233]" },
-  { key: "potentialCommission", label: "Potential commission", tone: "bg-[#fff3cf] text-[#5a4300]", money: true },
-  { key: "earnedCommission", label: "Earned commission", tone: "bg-[#fceeee] text-[#7a0000]", money: true },
-  { key: "paidCommission", label: "Paid commission", tone: "bg-[#edf9f0] text-[#136233]", money: true },
+  { key: "totalSubmittedSales", label: "Customer Orders", tone: "bg-[#fff3cf] text-[#5a4300]" },
+  { key: "pendingSales", label: "Orders Pending", tone: "bg-[#fffaf5] text-slate-700" },
+  { key: "processingSales", label: "Orders In Progress", tone: "bg-[#f1f8ff] text-[#174c7a]" },
+  { key: "completedSales", label: "Completed Orders", tone: "bg-[#edf9f0] text-[#136233]" },
+  { key: "potentialCommission", label: "Potential Earnings", tone: "bg-[#fff3cf] text-[#5a4300]", money: true },
+  { key: "earnedCommission", label: "Ready To Withdraw", tone: "bg-[#fceeee] text-[#7a0000]", money: true },
+  { key: "paidCommission", label: "Withdrawn Earnings", tone: "bg-[#edf9f0] text-[#136233]", money: true },
 ] as const;
+
+function formatActivity(action: string, description: string | null) {
+  const normalized = String(action || "").toLowerCase();
+  if (normalized === "status_approved") return "✅ Your agent account was approved";
+  if (normalized === "registered") return "🟢 Agent account created successfully";
+  if (normalized === "sale_submitted") return "📦 Customer order submitted";
+  if (normalized === "commission_unlocked") return "💰 Commission unlocked";
+  if (normalized === "sale_completed") return "✅ Customer order completed";
+  return description || action || "Activity updated";
+}
 
 type AgentDashboardPageProps = {
   useRootPaths?: boolean;
@@ -69,8 +79,8 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
   return (
     <AgentPortalShell
       useRootPaths={useRootPaths}
-      title="Overview"
-      description="Track your pipeline, potential commission, earned payouts, and the key actions that move your sales from referral to payment."
+      title="Your Sales Dashboard"
+      description="Track your customer orders, sales progress, and commissions all in one place."
       agent={{
         displayName: dashboard.displayName,
         email: dashboard.profile.email || dashboard.profile.user.email,
@@ -88,30 +98,30 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
         <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
           <div className="rounded-[30px] bg-[linear-gradient(135deg,#7a0000_0%,#3c0909_100%)] p-7 text-white shadow-[0_20px_60px_rgba(64,10,10,0.28)]">
             <div className="inline-flex rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#f5d88f]">
-              Welcome back
+              Welcome back 👋
             </div>
-            <h2 className="mt-4 text-3xl font-black tracking-tight">Build your solar sales pipeline with clarity</h2>
+            <h2 className="mt-4 text-3xl font-black tracking-tight">Grow Your Solar Business With Betech</h2>
             <p className="mt-3 max-w-2xl text-sm text-white/78">
-              Submit customer opportunities, watch them move through payment and delivery, and see exactly when your 6% commission becomes earned.
+              Refer customers, submit orders, and earn up to 6% commission on successful solar sales across Kenya.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Link
                 href={agentPath("/sales/new", useRootPaths)}
                 className="rounded-2xl bg-[#f1b81d] px-5 py-3 text-sm font-semibold text-[#4d0808] transition hover:brightness-95"
               >
-                Submit new sale
+                🟢 Submit Customer Order
               </Link>
               <Link
                 href={agentPath("/sales", useRootPaths)}
                 className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
               >
-                View all sales
+                📦 My Sales
               </Link>
               <Link
                 href={agentPath("/profile/payment-method", useRootPaths)}
                 className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
               >
-                Manage payout setup
+                💰 Withdraw Setup
               </Link>
             </div>
           </div>
@@ -120,27 +130,48 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
             <div className="rounded-[28px] border border-[#e4d4cb] bg-white p-5 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
               <div className="flex items-center gap-3 text-[#7a0000]">
                 <Wallet className="h-5 w-5" />
-                <div className="text-sm font-semibold uppercase tracking-[0.18em]">Potential Commission</div>
+                <div className="text-sm font-semibold uppercase tracking-[0.18em]">Potential Earnings</div>
               </div>
               <div className="mt-3 text-3xl font-black tracking-tight text-[#210505]">{money(dashboard.salesSummary.potentialCommission)}</div>
-              <p className="mt-2 text-sm text-slate-600">Locked until full payment and delivery are confirmed.</p>
+              <p className="mt-2 text-sm text-slate-600">Commission from submitted customer orders appears here.</p>
             </div>
             <div className="rounded-[28px] border border-[#e4d4cb] bg-white p-5 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
               <div className="flex items-center gap-3 text-[#7a0000]">
                 <CircleDollarSign className="h-5 w-5" />
-                <div className="text-sm font-semibold uppercase tracking-[0.18em]">Earned Commission</div>
+                <div className="text-sm font-semibold uppercase tracking-[0.18em]">Ready To Withdraw</div>
               </div>
               <div className="mt-3 text-3xl font-black tracking-tight text-[#210505]">{money(dashboard.salesSummary.earnedCommission)}</div>
-              <p className="mt-2 text-sm text-slate-600">Completed sales waiting for payout processing.</p>
+              <p className="mt-2 text-sm text-slate-600">Completed and fully paid customer orders appear here.</p>
             </div>
             <div className="rounded-[28px] border border-[#e4d4cb] bg-white p-5 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
               <div className="flex items-center gap-3 text-[#7a0000]">
                 <CreditCard className="h-5 w-5" />
-                <div className="text-sm font-semibold uppercase tracking-[0.18em]">Payout Method</div>
+                <div className="text-sm font-semibold uppercase tracking-[0.18em]">Withdrawal Method</div>
               </div>
               <div className="mt-3 text-xl font-black tracking-tight text-[#210505]">{dashboard.profile.phone || "Add M-Pesa number"}</div>
-              <p className="mt-2 text-sm text-slate-600">Current agent payouts are processed through M-Pesa.</p>
+              <p className="mt-2 text-sm text-slate-600">Your commissions will be sent to this M-Pesa number.</p>
             </div>
+          </div>
+        </section>
+
+        <section className="rounded-[30px] bg-[linear-gradient(135deg,#8b0b0b_0%,#530707_55%,#2f0808_100%)] p-6 text-white shadow-[0_18px_55px_rgba(122,0,0,0.22)]">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="text-sm font-black uppercase tracking-[0.18em] text-[#ffd76a]">🔥 Earn Up To 6% Commission On Every Successful Sale</div>
+              <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-white/90">
+                <span>✅ Solar Kits</span>
+                <span>✅ Batteries</span>
+                <span>✅ Inverters</span>
+                <span>✅ Water Pumps</span>
+                <span>✅ Installations</span>
+              </div>
+            </div>
+            <Link
+              href={agentPath("/sales/new", useRootPaths)}
+              className="inline-flex items-center justify-center rounded-2xl bg-[#f1b81d] px-5 py-3 text-sm font-bold text-[#4d0808] shadow-[0_0_28px_rgba(241,184,29,0.25)] transition hover:-translate-y-0.5 hover:brightness-95"
+            >
+              Submit Customer Order
+            </Link>
           </div>
         </section>
 
@@ -166,25 +197,25 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
             <article className="rounded-[28px] border border-[#e4d4cb] bg-white p-6 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">Quick actions</p>
-                  <h3 className="mt-2 text-2xl font-black tracking-tight text-[#210505]">What you can do next</h3>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">🚀 Quick Actions</p>
+                  <h3 className="mt-2 text-2xl font-black tracking-tight text-[#210505]">Start Earning With Betech</h3>
                 </div>
               </div>
               <div className="mt-5 grid gap-4 md:grid-cols-3">
                 <Link href={agentPath("/sales/new", useRootPaths)} className="rounded-[24px] border border-[#e4d4cb] bg-[#fffaf5] p-4 transition hover:-translate-y-0.5 hover:shadow-[0_12px_25px_rgba(64,32,18,0.08)]">
                   <PlusCircle className="h-5 w-5 text-[#7a0000]" />
-                  <div className="mt-4 text-lg font-semibold text-[#210505]">Submit sale</div>
-                  <p className="mt-2 text-sm text-slate-600">Capture a new customer opportunity and lock in potential commission.</p>
+                  <div className="mt-4 text-lg font-semibold text-[#210505]">Submit Customer Order</div>
+                  <p className="mt-2 text-sm text-slate-600">Submit customer orders and start tracking your earnings instantly.</p>
                 </Link>
                 <Link href={agentPath("/profile", useRootPaths)} className="rounded-[24px] border border-[#e4d4cb] bg-[#fffaf5] p-4 transition hover:-translate-y-0.5 hover:shadow-[0_12px_25px_rgba(64,32,18,0.08)]">
                   <UserRound className="h-5 w-5 text-[#7a0000]" />
                   <div className="mt-4 text-lg font-semibold text-[#210505]">Update profile</div>
-                  <p className="mt-2 text-sm text-slate-600">Keep your contact, KRA, and ID details ready for approvals and payouts.</p>
+                  <p className="mt-2 text-sm text-slate-600">Keep your details updated for smooth payouts and account support.</p>
                 </Link>
                 <Link href={agentPath("/profile/payment-method", useRootPaths)} className="rounded-[24px] border border-[#e4d4cb] bg-[#fffaf5] p-4 transition hover:-translate-y-0.5 hover:shadow-[0_12px_25px_rgba(64,32,18,0.08)]">
                   <CreditCard className="h-5 w-5 text-[#7a0000]" />
-                  <div className="mt-4 text-lg font-semibold text-[#210505]">Set payout method</div>
-                  <p className="mt-2 text-sm text-slate-600">Make sure BETECH has the correct M-Pesa number before you request payouts.</p>
+                  <div className="mt-4 text-lg font-semibold text-[#210505]">Setup Withdrawals</div>
+                  <p className="mt-2 text-sm text-slate-600">Confirm the M-Pesa number where you want to receive commissions.</p>
                 </Link>
               </div>
             </article>
@@ -192,8 +223,8 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
             <article className="rounded-[28px] border border-[#e4d4cb] bg-white p-6 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">Recent sales</p>
-                  <h3 className="mt-2 text-2xl font-black tracking-tight text-[#210505]">Sales in motion</h3>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">📦 Recent Customer Orders</p>
+                  <h3 className="mt-2 text-2xl font-black tracking-tight text-[#210505]">Your Sales Activity</h3>
                 </div>
                 <Link href={agentPath("/sales", useRootPaths)} className="text-sm font-semibold text-[#7a0000] hover:text-[#5d0000]">
                   View all
@@ -229,8 +260,27 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
                     </div>
                   </div>
                 )) : (
-                  <div className="rounded-[24px] border border-dashed border-[#d9c6ba] bg-[#fffaf5] p-8 text-center text-sm text-slate-500">
-                    No sales submitted yet. Start by adding your first customer opportunity.
+                  <div className="space-y-4">
+                    <div className="rounded-[24px] border border-dashed border-[#d9c6ba] bg-[#fffaf5] p-8 text-center text-sm text-slate-500">
+                      You haven’t submitted any customer orders yet.
+                      <div className="mt-2 font-medium text-[#7a0000]">Start earning by submitting your first sale today 🚀</div>
+                    </div>
+                    {dashboard.salesSummary.totalSubmittedSales === 0 &&
+                    dashboard.salesSummary.potentialCommission === 0 &&
+                    dashboard.salesSummary.earnedCommission === 0 ? (
+                      <div className="rounded-[24px] border border-[#f1b81d]/40 bg-[#fff3cf] p-6 text-center">
+                        <div className="text-lg font-black text-[#210505]">🚀 Start Your First Sale</div>
+                        <p className="mt-2 text-sm text-[#5a4300]">
+                          Submit your first customer order and begin earning commissions with Betech Solar.
+                        </p>
+                        <Link
+                          href={agentPath("/sales/new", useRootPaths)}
+                          className="mt-4 inline-flex rounded-2xl bg-[#7a0000] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#5d0000]"
+                        >
+                          Submit Customer Order
+                        </Link>
+                      </div>
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -242,22 +292,22 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
               <div className="flex items-center gap-3">
                 <ClipboardList className="h-5 w-5 text-[#7a0000]" />
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">Commission pipeline</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">💰 How You Earn</p>
                   <h3 className="mt-1 text-2xl font-black tracking-tight text-[#210505]">Refer → Earn → Withdraw</h3>
                 </div>
               </div>
               <div className="mt-5 space-y-4">
                 <div className="rounded-[24px] bg-[#fff3cf] p-4">
-                  <div className="text-sm font-semibold text-[#210505]">Potential commission</div>
-                  <p className="mt-1 text-sm text-[#6a5000]">Appears immediately after you submit a sale.</p>
+                  <div className="text-sm font-semibold text-[#210505]">Potential Earnings</div>
+                  <p className="mt-1 text-sm text-[#6a5000]">Appears after you submit a customer order.</p>
                 </div>
                 <div className="rounded-[24px] bg-[#fceeee] p-4">
-                  <div className="text-sm font-semibold text-[#210505]">Earned commission</div>
-                  <p className="mt-1 text-sm text-[#7a0000]">Unlocks only after full payment and delivery confirmation.</p>
+                  <div className="text-sm font-semibold text-[#210505]">Commission Ready</div>
+                  <p className="mt-1 text-sm text-[#7a0000]">Unlocked after customer payment and successful delivery.</p>
                 </div>
                 <div className="rounded-[24px] bg-[#edf9f0] p-4">
-                  <div className="text-sm font-semibold text-[#210505]">Paid commission</div>
-                  <p className="mt-1 text-sm text-[#136233]">Moves here once BETECH processes your payout.</p>
+                  <div className="text-sm font-semibold text-[#210505]">Withdrawn Earnings</div>
+                  <p className="mt-1 text-sm text-[#136233]">Completed payouts appear here.</p>
                 </div>
               </div>
             </article>
@@ -266,8 +316,8 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
               <div className="flex items-center gap-3">
                 <CreditCard className="h-5 w-5 text-[#7a0000]" />
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">Payout activity</p>
-                  <h3 className="mt-1 text-2xl font-black tracking-tight text-[#210505]">Recent payout requests</h3>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">💸 Withdrawal Activity</p>
+                  <h3 className="mt-1 text-2xl font-black tracking-tight text-[#210505]">Recent Withdrawals</h3>
                 </div>
               </div>
               <div className="mt-5 space-y-3">
@@ -286,19 +336,19 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
                   </div>
                 )) : (
                   <div className="rounded-[24px] border border-dashed border-[#d9c6ba] bg-[#fffaf5] p-6 text-sm text-slate-500">
-                    No payout requests yet. Save your M-Pesa number, then request payouts when commissions are ready.
+                    No withdrawals yet.
+                    <div className="mt-2">Your earnings will appear here once customer orders are completed and paid.</div>
                   </div>
                 )}
               </div>
             </article>
 
             <article className="rounded-[28px] border border-[#e4d4cb] bg-white p-6 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
-              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">Recent activity</div>
+              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">📈 Account Activity</div>
               <div className="mt-4 space-y-3">
                 {dashboard.activities.length ? dashboard.activities.map((item) => (
                   <div key={item.id} className="rounded-[24px] border border-[#ece1d9] bg-[#fffaf5] p-4">
-                    <div className="font-semibold text-[#210505]">{item.action}</div>
-                    <div className="mt-1 text-sm text-slate-600">{item.description || "No extra details"}</div>
+                    <div className="font-semibold text-[#210505]">{formatActivity(item.action, item.description)}</div>
                     <div className="mt-2 text-xs text-slate-500">{new Date(item.createdAt).toLocaleString()}</div>
                   </div>
                 )) : (
