@@ -2,17 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
-  Building2,
   CreditCard,
-  MapPinned,
-  PackageCheck,
-  ReceiptText,
-  ShieldCheck,
   Store,
   Truck,
+  Wallet,
 } from "lucide-react";
 import { agentPath } from "@/lib/agents/host";
 import { getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
@@ -21,18 +17,62 @@ type AgentSaleFormProps = {
   useRootPaths?: boolean;
 };
 
-const paymentTypes = [
-  { value: "transport_fee", label: "Delivery fee", note: "Useful when the customer is outside Nairobi and wants dispatch started before clearing the full balance." },
-  { value: "deposit", label: "Partial payment / deposit", note: "Use when the customer is confirming the order with part payment first." },
-  { value: "full_payment", label: "Full payment", note: "Use when the customer is ready to clear the full amount immediately." },
-];
+const productOptions = [
+  "SRNE 5KW Kit",
+  "SRNE 3KW Kit",
+  "200AH Battery",
+  "150AH Battery",
+  "100AH Battery",
+  "585W Panel",
+  "550W Panel",
+  "Water Pump",
+  "Inverter",
+  "Solar Accessories",
+] as const;
 
-const deliveryMethods = [
-  { value: "courier", label: "Courier / parcel delivery" },
-  { value: "rider", label: "Betech rider / pay on delivery" },
-  { value: "shop_pickup", label: "Shop pickup - Nairobi CBD" },
-  { value: "agent_pickup", label: "Send to nearest agent / pickup point" },
-];
+const paymentOptions = [
+  {
+    value: "pay_on_delivery",
+    title: "Pay On Delivery",
+    note: "For Nairobi and nearby areas.",
+    detail: "Customer pays after delivery.",
+    icon: Truck,
+    accent: "emerald",
+  },
+  {
+    value: "full_payment",
+    title: "Prepay Full Amount",
+    note: "Recommended for outside Nairobi deliveries.",
+    detail: "Customer pays before dispatch.",
+    icon: Wallet,
+    accent: "gold",
+  },
+  {
+    value: "transport_fee",
+    title: "Pay Transport Fee First",
+    note: "For customers outside Nairobi.",
+    detail: "Customer pays transport first and clears balance on delivery.",
+    icon: CreditCard,
+    accent: "sky",
+  },
+  {
+    value: "shop_pickup",
+    title: "Collect From Shop",
+    note: "Pickup from Nairobi shop.",
+    detail: "Customer collects order and pays at collection.",
+    icon: Store,
+    accent: "slate",
+  },
+] as const;
+
+type PaymentOptionValue = (typeof paymentOptions)[number]["value"];
+
+const paymentTypeToApiValue: Record<PaymentOptionValue, "transport_fee" | "full_payment" | "deposit"> = {
+  pay_on_delivery: "deposit",
+  full_payment: "full_payment",
+  transport_fee: "transport_fee",
+  shop_pickup: "deposit",
+};
 
 const initialForm = {
   customerName: "",
@@ -43,13 +83,9 @@ const initialForm = {
   quantity: "1",
   unitPrice: "",
   totalAmount: "",
-  paymentType: "deposit",
+  paymentOption: "pay_on_delivery" as PaymentOptionValue,
   amountPaid: "",
   mpesaReference: "",
-  deliveryMethod: "",
-  deliveryNotes: "",
-  customerNotes: "",
-  internalAgentNotes: "",
 };
 
 function currency(value: string | number) {
@@ -57,12 +93,22 @@ function currency(value: string | number) {
   return `Ksh ${amount.toLocaleString("en-KE", { maximumFractionDigits: 2 })}`;
 }
 
-function fieldClassName() {
-  return "w-full rounded-2xl border border-[#e6d7ce] bg-[#fffdfb] px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#7a0000]/35 focus:bg-white focus:ring-4 focus:ring-[#f2b20f]/10";
+function inputClassName() {
+  return "w-full rounded-2xl border border-[#e6d7ce] bg-[#fffdfb] px-4 py-3.5 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#7a0000]/35 focus:bg-white focus:ring-4 focus:ring-[#f2b20f]/10";
 }
 
-function labelClassName() {
-  return "text-sm font-semibold text-slate-700";
+function sectionCardClassName() {
+  return "rounded-[28px] bg-white p-5 shadow-[0_10px_30px_rgba(72,36,19,0.06)] ring-1 ring-[#ead9ce] md:p-6";
+}
+
+function paymentCardClasses(active: boolean, accent: string) {
+  if (!active) {
+    return "border-[#ead9ce] bg-white hover:border-[#7a0000]/25 hover:shadow-[0_14px_34px_rgba(72,36,19,0.08)]";
+  }
+  if (accent === "emerald") return "border-emerald-300 bg-emerald-50 shadow-[0_16px_36px_rgba(16,185,129,0.14)]";
+  if (accent === "gold") return "border-[#f2b20f]/50 bg-[#fff7e3] shadow-[0_16px_36px_rgba(242,178,15,0.16)]";
+  if (accent === "sky") return "border-sky-300 bg-sky-50 shadow-[0_16px_36px_rgba(14,165,233,0.14)]";
+  return "border-slate-300 bg-slate-50 shadow-[0_16px_36px_rgba(15,23,42,0.10)]";
 }
 
 export default function AgentSaleForm({ useRootPaths = false }: AgentSaleFormProps) {
@@ -72,14 +118,13 @@ export default function AgentSaleForm({ useRootPaths = false }: AgentSaleFormPro
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const isNairobi = form.customerCounty === "Nairobi";
-  const availableTowns = getTownsForCounty(form.customerCounty);
+  const availableTowns = useMemo(() => getTownsForCounty(form.customerCounty), [form.customerCounty]);
   const numericTotal = Number(form.totalAmount || 0);
   const numericPaid = Number(form.amountPaid || 0);
   const balance = Math.max(numericTotal - numericPaid, 0);
   const potentialCommission = Math.round(numericTotal * 0.06 * 100) / 100;
-  const selectedPaymentType = paymentTypes.find((item) => item.value === form.paymentType);
-  const selectedDeliveryMethod = deliveryMethods.find((item) => item.value === form.deliveryMethod);
+  const selectedPayment = paymentOptions.find((option) => option.value === form.paymentOption) ?? paymentOptions[0];
+  const shouldShowPaymentFields = form.paymentOption === "full_payment" || form.paymentOption === "transport_fee";
 
   useEffect(() => {
     const quantity = Number(form.quantity || 0);
@@ -90,7 +135,17 @@ export default function AgentSaleForm({ useRootPaths = false }: AgentSaleFormPro
     }
   }, [form.quantity, form.unitPrice]);
 
-  function update(key: keyof typeof initialForm, value: string) {
+  useEffect(() => {
+    if (!shouldShowPaymentFields) {
+      setForm((current) =>
+        current.amountPaid === "" && current.mpesaReference === ""
+          ? current
+          : { ...current, amountPaid: "", mpesaReference: "" },
+      );
+    }
+  }, [shouldShowPaymentFields]);
+
+  function update<K extends keyof typeof initialForm>(key: K, value: (typeof initialForm)[K]) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
@@ -99,15 +154,7 @@ export default function AgentSaleForm({ useRootPaths = false }: AgentSaleFormPro
     setForm((current) => ({
       ...current,
       customerCounty: value,
-      customerLocation: towns.some((town) => town === current.customerLocation) ? current.customerLocation : "",
-      deliveryMethod:
-        value === "Nairobi"
-          ? current.deliveryMethod === "courier" || current.deliveryMethod === "agent_pickup"
-            ? ""
-            : current.deliveryMethod
-          : current.deliveryMethod === "rider"
-            ? ""
-            : current.deliveryMethod,
+      customerLocation: towns.includes(current.customerLocation as never) ? current.customerLocation : "",
     }));
   }
 
@@ -117,15 +164,41 @@ export default function AgentSaleForm({ useRootPaths = false }: AgentSaleFormPro
     setError(null);
     setSuccess(null);
 
+    const deliveryMethod =
+      form.paymentOption === "shop_pickup"
+        ? "shop_pickup"
+        : form.paymentOption === "pay_on_delivery"
+          ? "rider"
+          : "courier";
+
+    const amountPaid = shouldShowPaymentFields ? Number(form.amountPaid || 0) : 0;
+
     const response = await fetch("/api/agents/sales", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        ...form,
+        customerName: form.customerName,
+        customerPhone: form.customerPhone,
+        customerCounty: form.customerCounty,
+        customerLocation: form.customerLocation,
+        productName: form.productName,
         quantity: Number(form.quantity || 0),
         unitPrice: Number(form.unitPrice || 0),
         totalAmount: Number(form.totalAmount || 0),
-        amountPaid: Number(form.amountPaid || 0),
+        paymentType: paymentTypeToApiValue[form.paymentOption],
+        amountPaid,
+        mpesaReference: shouldShowPaymentFields ? form.mpesaReference : "",
+        deliveryMethod,
+        deliveryNotes:
+          form.paymentOption === "pay_on_delivery"
+            ? "Customer prefers pay on delivery."
+            : form.paymentOption === "full_payment"
+              ? "Customer prefers to pay full amount before dispatch."
+              : form.paymentOption === "transport_fee"
+                ? "Customer pays transport fee first, then clears balance on delivery."
+                : "Customer will collect from the Nairobi shop.",
+        customerNotes: `Preferred payment option: ${selectedPayment.title}.`,
+        internalAgentNotes: "",
       }),
     });
 
@@ -140,6 +213,7 @@ export default function AgentSaleForm({ useRootPaths = false }: AgentSaleFormPro
       payload.message ||
         "Sale submitted successfully. Potential commission will be unlocked after customer pays fully and order is delivered.",
     );
+
     const nextId = payload?.sale?.id;
     if (nextId) {
       window.setTimeout(() => {
@@ -152,445 +226,264 @@ export default function AgentSaleForm({ useRootPaths = false }: AgentSaleFormPro
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="max-w-3xl">
-          <p className="text-xs font-black uppercase tracking-[0.28em] text-[#7a0000]">Agent sales desk</p>
-          <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950 md:text-4xl">Submit a customer order opportunity</h1>
-          <p className="mt-3 text-base leading-7 text-slate-600">
-            Capture the customer, location, payment stage, and delivery plan correctly so admin can process the order through the normal Betech flow and issue a receipt once the order is confirmed.
-          </p>
-        </div>
-        <div className="flex gap-3">
-          <Link
-            href={agentPath("/sales", useRootPaths)}
-            className="rounded-2xl border border-[#7a0000]/12 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-[#7a0000]/25 hover:bg-[#fff8f3]"
-          >
-            View my sales
-          </Link>
-          <Link
-            href={agentPath("/dashboard", useRootPaths)}
-            className="rounded-2xl bg-[#fff3d8] px-4 py-3 text-sm font-semibold text-[#7a0000] transition hover:bg-[#ffe7ab]"
-          >
-            Dashboard
-          </Link>
-        </div>
+    <div className="mx-auto max-w-[1100px] space-y-6">
+      <div className="space-y-2">
+        <h1 className="text-3xl font-black tracking-tight text-slate-950 md:text-4xl">Submit Customer Order</h1>
+        <p className="text-base text-slate-600">Capture customer details and submit the order for processing.</p>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-        <div className="space-y-5">
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-[28px] border border-[#ead9ce] bg-[linear-gradient(180deg,#fffefb_0%,#fff7ef_100%)] p-5 shadow-[0_10px_28px_rgba(72,36,19,0.05)]">
-              <div className="text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">Potential commission</div>
-              <div className="mt-3 text-3xl font-black text-slate-950">{currency(potentialCommission)}</div>
-              <p className="mt-2 text-sm leading-6 text-slate-600">Locked until customer pays fully and delivery or collection is confirmed.</p>
-            </div>
-            <div className="rounded-[28px] border border-[#ead9ce] bg-white p-5 shadow-[0_10px_28px_rgba(72,36,19,0.05)]">
-              <div className="text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">Amount paid</div>
-              <div className="mt-3 text-3xl font-black text-slate-950">{currency(numericPaid)}</div>
-              <p className="mt-2 text-sm leading-6 text-slate-600">Use M-Pesa reference whenever the customer has already sent any payment.</p>
-            </div>
-            <div className="rounded-[28px] border border-[#ead9ce] bg-white p-5 shadow-[0_10px_28px_rgba(72,36,19,0.05)]">
-              <div className="text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">Outstanding balance</div>
-              <div className="mt-3 text-3xl font-black text-slate-950">{currency(balance)}</div>
-              <p className="mt-2 text-sm leading-6 text-slate-600">Admin follows up the balance before a commission becomes earned.</p>
-            </div>
+      {error ? (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+      ) : null}
+      {success ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div>
+      ) : null}
+
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className={sectionCardClassName()}>
+          <div className="mb-5">
+            <h2 className="text-xl font-black text-slate-950">Customer Details</h2>
+            <p className="mt-1 text-sm text-slate-500">Enter the customer information correctly.</p>
           </div>
 
-          {error ? (
-            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
-          ) : null}
-          {success ? (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div>
-          ) : null}
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <section className="rounded-[30px] border border-[#ead9ce] bg-white p-6 shadow-[0_12px_34px_rgba(72,36,19,0.06)] md:p-7">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#fff3d8] text-[#7a0000]">
-                  <MapPinned className="h-5 w-5" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-black text-slate-950">Customer and location</h2>
-                  <p className="text-sm text-slate-500">Select county first, then choose the market centre or town.</p>
-                </div>
-              </div>
-
-              <div className="mt-6 grid gap-4 md:grid-cols-2">
-                <label className="space-y-2">
-                  <span className={labelClassName()}>Customer name</span>
-                  <input
-                    required
-                    value={form.customerName}
-                    onChange={(event) => update("customerName", event.target.value)}
-                    className={fieldClassName()}
-                    placeholder="Customer full name"
-                  />
-                </label>
-                <label className="space-y-2">
-                  <span className={labelClassName()}>Customer phone</span>
-                  <input
-                    required
-                    value={form.customerPhone}
-                    onChange={(event) => update("customerPhone", event.target.value)}
-                    className={fieldClassName()}
-                    placeholder="e.g. 0712345678"
-                  />
-                </label>
-              </div>
-
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <label className="space-y-2">
-                  <span className={labelClassName()}>Customer county</span>
-                  <select
-                    required
-                    value={form.customerCounty}
-                    onChange={(event) => updateCounty(event.target.value)}
-                    className={fieldClassName()}
-                  >
-                    <option value="">Select county</option>
-                    {kenyaCountyOptions.map((county) => (
-                      <option key={county} value={county}>
-                        {county}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="space-y-2">
-                  <span className={labelClassName()}>Town / market centre</span>
-                  <select
-                    required
-                    disabled={!form.customerCounty}
-                    value={form.customerLocation}
-                    onChange={(event) => update("customerLocation", event.target.value)}
-                    className={`${fieldClassName()} disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400`}
-                  >
-                    <option value="">{form.customerCounty ? "Select town / market centre" : "Select county first"}</option>
-                    {availableTowns.map((town) => (
-                      <option key={town} value={town}>
-                        {town}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            </section>
-
-            <section className="rounded-[30px] border border-[#ead9ce] bg-white p-6 shadow-[0_12px_34px_rgba(72,36,19,0.06)] md:p-7">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#fff3d8] text-[#7a0000]">
-                  <PackageCheck className="h-5 w-5" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-black text-slate-950">Product and pricing</h2>
-                  <p className="text-sm text-slate-500">Keep this simple and exact so admin can turn it into a receipt smoothly.</p>
-                </div>
-              </div>
-
-              <div className="mt-6 grid gap-4 md:grid-cols-2">
-                <label className="space-y-2">
-                  <span className={labelClassName()}>Product name</span>
-                  <input
-                    required
-                    value={form.productName}
-                    onChange={(event) => update("productName", event.target.value)}
-                    className={fieldClassName()}
-                    placeholder="e.g. 5KW solar kit"
-                  />
-                </label>
-                <label className="space-y-2">
-                  <span className={labelClassName()}>Quantity</span>
-                  <input
-                    type="number"
-                    min="1"
-                    step="0.01"
-                    required
-                    value={form.quantity}
-                    onChange={(event) => update("quantity", event.target.value)}
-                    className={fieldClassName()}
-                  />
-                </label>
-              </div>
-
-              <div className="mt-4 grid gap-4 md:grid-cols-3">
-                <label className="space-y-2">
-                  <span className={labelClassName()}>Unit price</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    required
-                    value={form.unitPrice}
-                    onChange={(event) => update("unitPrice", event.target.value)}
-                    className={fieldClassName()}
-                  />
-                </label>
-                <label className="space-y-2">
-                  <span className={labelClassName()}>Total amount</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    required
-                    value={form.totalAmount}
-                    onChange={(event) => update("totalAmount", event.target.value)}
-                    className={fieldClassName()}
-                  />
-                </label>
-                <div className="rounded-[24px] border border-[#ecd8b1] bg-[#fff8e8] p-4">
-                  <div className="text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">Pricing note</div>
-                  <p className="mt-3 text-sm leading-6 text-slate-700">
-                    Keep the quoted total accurate here. Payment progress and M-Pesa reference are captured in the next section once the customer confirms how they want to pay.
-                  </p>
-                </div>
-              </div>
-            </section>
-
-            <section className="rounded-[30px] border border-[#ead9ce] bg-white p-6 shadow-[0_12px_34px_rgba(72,36,19,0.06)] md:p-7">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#fff3d8] text-[#7a0000]">
-                  <CreditCard className="h-5 w-5" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-black text-slate-950">Payment and delivery procedure</h2>
-                  <p className="text-sm text-slate-500">Use the correct payment stage and route so operations can process the order properly.</p>
-                </div>
-              </div>
-
-              <div className="mt-6 grid gap-4 md:grid-cols-3">
-                <label className="space-y-2 md:col-span-1">
-                  <span className={labelClassName()}>Payment stage</span>
-                  <select
-                    required
-                    value={form.paymentType}
-                    onChange={(event) => update("paymentType", event.target.value)}
-                    className={fieldClassName()}
-                  >
-                    {paymentTypes.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="space-y-2 md:col-span-1">
-                  <span className={labelClassName()}>Delivery method</span>
-                  <select
-                    required
-                    value={form.deliveryMethod}
-                    onChange={(event) => update("deliveryMethod", event.target.value)}
-                    className={fieldClassName()}
-                  >
-                    <option value="">Select method</option>
-                    {deliveryMethods
-                      .filter((item) => (isNairobi ? item.value !== "agent_pickup" : item.value !== "rider"))
-                      .map((item) => (
-                        <option key={item.value} value={item.value}>
-                          {item.label}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-                <label className="space-y-2 md:col-span-1">
-                  <span className={labelClassName()}>M-Pesa reference</span>
-                  <input
-                    value={form.mpesaReference}
-                    onChange={(event) => update("mpesaReference", event.target.value)}
-                    className={fieldClassName()}
-                    placeholder="Optional until payment is made"
-                  />
-                </label>
-              </div>
-
-              <div className="mt-4 grid gap-4 md:grid-cols-3">
-                <label className="space-y-2 md:col-span-1">
-                  <span className={labelClassName()}>Amount paid so far</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    required
-                    value={form.amountPaid}
-                    onChange={(event) => update("amountPaid", event.target.value)}
-                    className={fieldClassName()}
-                  />
-                </label>
-                <div className="rounded-[24px] border border-[#ead9ce] bg-[#fffdfb] p-4 md:col-span-2">
-                  <div className="text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">Payment update</div>
-                  <p className="mt-3 text-sm leading-6 text-slate-700">
-                    Every customer payment should be guided to the Betech paybill. Record the amount already received here and add the M-Pesa reference once the customer sends it.
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                <div className="rounded-[24px] border border-[#ecd8b1] bg-[#fff8e8] p-5">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#f2b20f] text-slate-950">
-                      {isNairobi ? <Truck className="h-5 w-5" /> : <Building2 className="h-5 w-5" />}
-                    </div>
-                    <div className="text-lg font-black text-slate-950">{isNairobi ? "Nairobi delivery and collection" : "Outside Nairobi delivery options"}</div>
-                  </div>
-                  <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-700">
-                    {isNairobi ? (
-                      <>
-                        <li>For delivery within Nairobi and its environment, the customer can pay on delivery after the order is confirmed.</li>
-                        <li>If the customer prefers shop pickup, there is no extra pickup cost. Just place the order and indicate the expected pickup date.</li>
-                        <li>Once the customer collects from the shop or receives the order successfully, your commission can move toward completion.</li>
-                      </>
-                    ) : (
-                      <>
-                        <li>For customers outside Nairobi, they may pay full amount, partial amount, or delivery fee first depending on what is most convenient for them.</li>
-                        <li>Betech can dispatch through SpeedAF or coordinate the nearest suitable pickup arrangement.</li>
-                        <li>The remaining balance can then be completed on delivery where applicable, based on the customer’s preferred payment plan.</li>
-                      </>
-                    )}
-                  </ul>
-                </div>
-
-                <div className="rounded-[24px] border border-[#ead9ce] bg-[#fffdfb] p-5">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#7a0000] text-white">
-                      <ReceiptText className="h-5 w-5" />
-                    </div>
-                    <div className="text-lg font-black text-slate-950">Customer assurance notes</div>
-                  </div>
-                  <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-700">
-                    <li><span className="font-semibold text-slate-950">Payment guidance:</span> always inform the customer about the available payment procedure before the order is processed.</li>
-                    <li><span className="font-semibold text-slate-950">Current payment choice:</span> {selectedPaymentType?.note || "Choose the customer’s preferred payment stage."}</li>
-                    <li><span className="font-semibold text-slate-950">Delivery choice:</span> {selectedDeliveryMethod?.label || "Select the customer’s preferred delivery or pickup method."}</li>
-                    <li><span className="font-semibold text-slate-950">Confirmation call:</span> the Betech team will call the customer to confirm the preferred payment method and next step before fulfillment.</li>
-                  </ul>
-                </div>
-              </div>
-            </section>
-
-            <section className="rounded-[30px] border border-[#ead9ce] bg-white p-6 shadow-[0_12px_34px_rgba(72,36,19,0.06)] md:p-7">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#fff3d8] text-[#7a0000]">
-                  <Store className="h-5 w-5" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-black text-slate-950">Notes for admin follow-up</h2>
-                  <p className="text-sm text-slate-500">Anything that helps operations process the order faster.</p>
-                </div>
-              </div>
-
-              <div className="mt-6 grid gap-4 md:grid-cols-2">
-                <label className="space-y-2">
-                  <span className={labelClassName()}>Delivery notes</span>
-                  <textarea
-                    rows={4}
-                    value={form.deliveryNotes}
-                    onChange={(event) => update("deliveryNotes", event.target.value)}
-                    className={fieldClassName()}
-                    placeholder="Courier preference, pickup point, nearest agent, estate, or landmark"
-                  />
-                </label>
-                <label className="space-y-2">
-                  <span className={labelClassName()}>Customer notes</span>
-                  <textarea
-                    rows={4}
-                    value={form.customerNotes}
-                    onChange={(event) => update("customerNotes", event.target.value)}
-                    className={fieldClassName()}
-                    placeholder="Any customer preference, urgency, or product clarification"
-                  />
-                </label>
-              </div>
-
-              <label className="mt-4 block space-y-2">
-                <span className={labelClassName()}>Internal agent notes</span>
-                <textarea
-                  rows={4}
-                  value={form.internalAgentNotes}
-                  onChange={(event) => update("internalAgentNotes", event.target.value)}
-                  className={fieldClassName()}
-                  placeholder="Internal context for admin only"
-                />
-              </label>
-            </section>
-
-            <div className="rounded-[26px] border border-[#ecd8b1] bg-[#fff8e8] p-4 text-sm leading-6 text-slate-700">
-              <span className="font-black text-slate-950">Important:</span> receipt creation still happens after admin review and confirmation. Agents do not issue receipts directly from this page.
-            </div>
-
-            <button
-              type="submit"
-              disabled={busy}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#7a0000] px-5 py-4 text-base font-bold text-white shadow-[0_18px_38px_rgba(122,0,0,0.20)] transition hover:-translate-y-0.5 hover:bg-[#5e0000] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {busy ? "Submitting sale..." : "Submit sale for admin review"}
-              <ArrowRight className="h-5 w-5" />
-            </button>
-          </form>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="space-y-2">
+              <span className="text-sm font-semibold text-slate-700">Customer Name</span>
+              <input
+                required
+                value={form.customerName}
+                onChange={(event) => update("customerName", event.target.value)}
+                className={inputClassName()}
+                placeholder="Customer full name"
+              />
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm font-semibold text-slate-700">Phone Number</span>
+              <input
+                required
+                value={form.customerPhone}
+                onChange={(event) => update("customerPhone", event.target.value)}
+                className={inputClassName()}
+                placeholder="e.g. 0712345678"
+              />
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm font-semibold text-slate-700">County</span>
+              <select
+                required
+                value={form.customerCounty}
+                onChange={(event) => updateCounty(event.target.value)}
+                className={inputClassName()}
+              >
+                <option value="">Select county</option>
+                {kenyaCountyOptions.map((county) => (
+                  <option key={county} value={county}>
+                    {county}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm font-semibold text-slate-700">Town / Market Centre</span>
+              <select
+                required
+                disabled={!form.customerCounty}
+                value={form.customerLocation}
+                onChange={(event) => update("customerLocation", event.target.value)}
+                className={`${inputClassName()} disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400`}
+              >
+                <option value="">{form.customerCounty ? "Select town / market centre" : "Select county first"}</option>
+                {availableTowns.map((town) => (
+                  <option key={town} value={town}>
+                    {town}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </div>
 
-        <aside className="space-y-5">
-          <div className="rounded-[30px] border border-[#ead9ce] bg-[linear-gradient(180deg,#fffdf8_0%,#fff4e3_100%)] p-6 shadow-[0_12px_34px_rgba(72,36,19,0.06)]">
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#7a0000] text-white">
-                <ShieldCheck className="h-5 w-5" />
-              </div>
-              <div>
-                <div className="text-lg font-black text-slate-950">Order handling checklist</div>
-                <div className="text-sm text-slate-500">Use this flow before you submit.</div>
-              </div>
-            </div>
-            <div className="mt-5 space-y-4">
-              {[ 
-                "Choose the county, then the exact town or market centre.",
-                "Confirm the product name, quantity, and agreed selling price.",
-                "Inform the customer that all payments are submitted through the Betech paybill.",
-                "For outside Nairobi, explain they can pay full amount, partial amount, or delivery fee first.",
-                "For Nairobi, explain pay-on-delivery or Nairobi CBD shop pickup options.",
-                "Capture the M-Pesa reference once any payment has been made.",
-              ].map((item, index) => (
-                <div key={item} className="flex gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f2b20f] text-sm font-black text-slate-950">
-                    {index + 1}
-                  </div>
-                  <p className="pt-1 text-sm leading-6 text-slate-700">{item}</p>
-                </div>
-              ))}
-            </div>
+        <div className={sectionCardClassName()}>
+          <div className="mb-5">
+            <h2 className="text-xl font-black text-slate-950">Product Details</h2>
           </div>
 
-          <div className="rounded-[30px] border border-[#ead9ce] bg-white p-6 shadow-[0_12px_34px_rgba(72,36,19,0.06)]">
-            <div className="text-lg font-black text-slate-950">How this sale moves next</div>
-            <div className="mt-5 space-y-4">
-              {[
-                ["1", "Pending review", "Admin checks the customer details and payment stage."],
-                ["2", "Receipt and processing", "Once confirmed, the order is processed through the normal Betech receipt flow."],
-                ["3", "Delivery or collection", "Order is delivered, dispatched, or collected depending on the agreed route."],
-                ["4", "Commission unlock", "Your 6% commission becomes earned only after full payment and completion."],
-              ].map(([step, title, note]) => (
-                <div key={step} className="flex gap-3 rounded-[20px] border border-[#efe4dd] bg-[#fffdfb] p-4">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#7a0000] text-sm font-black text-white">
-                    {step}
-                  </div>
-                  <div>
-                    <div className="font-black text-slate-950">{title}</div>
-                    <div className="mt-1 text-sm leading-6 text-slate-600">{note}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="space-y-2 md:col-span-2">
+              <span className="text-sm font-semibold text-slate-700">Product Name</span>
+              <input
+                required
+                list="agent-product-options"
+                value={form.productName}
+                onChange={(event) => update("productName", event.target.value)}
+                className={inputClassName()}
+                placeholder="e.g. 5KW solar kit"
+              />
+              <datalist id="agent-product-options">
+                {productOptions.map((option) => (
+                  <option key={option} value={option} />
+                ))}
+              </datalist>
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm font-semibold text-slate-700">Quantity</span>
+              <input
+                type="number"
+                min="1"
+                step="0.01"
+                required
+                value={form.quantity}
+                onChange={(event) => update("quantity", event.target.value)}
+                className={inputClassName()}
+              />
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm font-semibold text-slate-700">Unit Price</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                required
+                value={form.unitPrice}
+                onChange={(event) => update("unitPrice", event.target.value)}
+                className={inputClassName()}
+              />
+            </label>
+            <label className="space-y-2 md:col-span-2">
+              <span className="text-sm font-semibold text-slate-700">Total Amount</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                required
+                value={form.totalAmount}
+                onChange={(event) => update("totalAmount", event.target.value)}
+                className={inputClassName()}
+              />
+            </label>
+          </div>
+        </div>
+
+        <div className={sectionCardClassName()}>
+          <div className="mb-5">
+            <h2 className="text-xl font-black text-slate-950">How Will The Customer Pay?</h2>
           </div>
 
-          <div className="rounded-[30px] border border-[#ead9ce] bg-white p-6 shadow-[0_12px_34px_rgba(72,36,19,0.06)]">
-            <div className="text-lg font-black text-slate-950">Payment instructions</div>
-            <div className="mt-4 rounded-[22px] border border-[#ead9ce] bg-[#fffaf3] p-4">
-              <div className="text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">All payments go to paybill</div>
-              <div className="mt-2 text-3xl font-black text-slate-950">516600</div>
-              <div className="mt-4 text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">Account number</div>
-              <div className="mt-2 text-2xl font-black text-slate-950">0710098001</div>
-            </div>
-            <p className="mt-4 text-sm leading-6 text-slate-600">
-              Always guide the customer to use this paybill for any order payment. Once payment is confirmed, Betech validates it, confirms the order, and issues the receipt through the normal process.
-            </p>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {paymentOptions.map((option) => {
+              const Icon = option.icon;
+              const active = form.paymentOption === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => update("paymentOption", option.value)}
+                  className={`rounded-[24px] border p-5 text-left transition ${paymentCardClasses(active, option.accent)}`}
+                >
+                  <div
+                    className={`flex h-12 w-12 items-center justify-center rounded-2xl ${
+                      active
+                        ? option.accent === "emerald"
+                          ? "bg-emerald-500 text-white"
+                          : option.accent === "gold"
+                            ? "bg-[#f2b20f] text-slate-950"
+                            : option.accent === "sky"
+                              ? "bg-sky-500 text-white"
+                              : "bg-slate-700 text-white"
+                        : "bg-[#fff3d8] text-[#7a0000]"
+                    }`}
+                  >
+                    <Icon className="h-6 w-6" />
+                  </div>
+                  <div className="mt-4 text-lg font-black text-slate-950">{option.title}</div>
+                  <div className="mt-2 text-sm font-semibold text-slate-700">{option.note}</div>
+                  <div className="mt-1 text-sm leading-6 text-slate-500">{option.detail}</div>
+                </button>
+              );
+            })}
           </div>
-        </aside>
+
+          {shouldShowPaymentFields ? (
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <label className="space-y-2">
+                <span className="text-sm font-semibold text-slate-700">Amount Paid</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.amountPaid}
+                  onChange={(event) => update("amountPaid", event.target.value)}
+                  className={inputClassName()}
+                />
+              </label>
+              <label className="space-y-2">
+                <span className="text-sm font-semibold text-slate-700">M-Pesa Reference</span>
+                <input
+                  value={form.mpesaReference}
+                  onChange={(event) => update("mpesaReference", event.target.value)}
+                  className={inputClassName()}
+                  placeholder="Enter M-Pesa reference"
+                />
+              </label>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="rounded-[28px] bg-white px-5 py-5 shadow-[0_10px_30px_rgba(72,36,19,0.06)] ring-1 ring-[#ead9ce]">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="text-lg font-black text-slate-950">How Orders Work</div>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                <span>Submit</span>
+                <ArrowRight className="h-4 w-4 text-[#7a0000]/45" />
+                <span>Confirm</span>
+                <ArrowRight className="h-4 w-4 text-[#7a0000]/45" />
+                <span>Deliver</span>
+                <ArrowRight className="h-4 w-4 text-[#7a0000]/45" />
+                <span>Customer Pays</span>
+                <ArrowRight className="h-4 w-4 text-[#7a0000]/45" />
+                <span>Commission Unlocks</span>
+              </div>
+            </div>
+            <Link
+              href={agentPath("/sales", useRootPaths)}
+              className="inline-flex items-center gap-2 text-sm font-semibold text-[#7a0000] hover:text-[#560000]"
+            >
+              View my sales
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <button
+            type="submit"
+            disabled={busy}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#7a0000] px-5 py-4 text-base font-bold text-white shadow-[0_18px_38px_rgba(122,0,0,0.20)] transition hover:-translate-y-0.5 hover:bg-[#5e0000] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {busy ? "Submitting order..." : "Submit Customer Order"}
+            <ArrowRight className="h-5 w-5" />
+          </button>
+          <p className="text-center text-sm text-slate-500">Betech will review and process the order.</p>
+        </div>
+      </form>
+
+      <div className="grid gap-3 rounded-[28px] bg-[#fffaf3] p-4 ring-1 ring-[#ead9ce] md:grid-cols-3">
+        <div className="rounded-[22px] bg-white px-5 py-4 shadow-[0_8px_24px_rgba(72,36,19,0.05)]">
+          <div className="text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">Potential Commission</div>
+          <div className="mt-2 text-3xl font-black text-slate-950">{currency(potentialCommission)}</div>
+          <div className="mt-1 text-sm text-slate-500">Locked until customer pays fully and delivery or collection is confirmed.</div>
+        </div>
+        <div className="rounded-[22px] bg-white px-5 py-4 shadow-[0_8px_24px_rgba(72,36,19,0.05)]">
+          <div className="text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">Amount Paid</div>
+          <div className="mt-2 text-3xl font-black text-slate-950">{currency(numericPaid)}</div>
+          <div className="mt-1 text-sm text-slate-500">Use M-Pesa reference whenever the customer has already sent any payment.</div>
+        </div>
+        <div className="rounded-[22px] bg-white px-5 py-4 shadow-[0_8px_24px_rgba(72,36,19,0.05)]">
+          <div className="text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">Outstanding Balance</div>
+          <div className="mt-2 text-3xl font-black text-slate-950">{currency(balance)}</div>
+          <div className="mt-1 text-sm text-slate-500">Admin follows up the balance before a commission becomes earned.</div>
+        </div>
       </div>
     </div>
   );
