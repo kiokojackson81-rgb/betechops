@@ -15,6 +15,10 @@ import { getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets
 
 type AgentSaleFormProps = {
   useRootPaths?: boolean;
+  stats?: {
+    earnedCommission: number;
+    unpaidCommission: number;
+  };
 };
 
 const productOptions = [
@@ -111,7 +115,7 @@ function paymentCardClasses(active: boolean, accent: string) {
   return "border-slate-300 bg-slate-50 shadow-[0_16px_36px_rgba(15,23,42,0.10)]";
 }
 
-export default function AgentSaleForm({ useRootPaths = false }: AgentSaleFormProps) {
+export default function AgentSaleForm({ useRootPaths = false, stats }: AgentSaleFormProps) {
   const router = useRouter();
   const [form, setForm] = useState(initialForm);
   const [busy, setBusy] = useState(false);
@@ -120,9 +124,9 @@ export default function AgentSaleForm({ useRootPaths = false }: AgentSaleFormPro
 
   const availableTowns = useMemo(() => getTownsForCounty(form.customerCounty), [form.customerCounty]);
   const numericTotal = Number(form.totalAmount || 0);
-  const numericPaid = Number(form.amountPaid || 0);
-  const balance = Math.max(numericTotal - numericPaid, 0);
   const potentialCommission = Math.round(numericTotal * 0.06 * 100) / 100;
+  const earnedCommission = Number(stats?.earnedCommission ?? 0);
+  const unpaidCommission = Number(stats?.unpaidCommission ?? 0);
   const selectedPayment = paymentOptions.find((option) => option.value === form.paymentOption) ?? paymentOptions[0];
   const shouldShowPaymentFields = form.paymentOption === "full_payment" || form.paymentOption === "transport_fee";
 
@@ -475,14 +479,14 @@ export default function AgentSaleForm({ useRootPaths = false }: AgentSaleFormPro
           <div className="mt-1 text-sm text-slate-500">Locked until customer pays fully and delivery or collection is confirmed.</div>
         </div>
         <div className="rounded-[22px] bg-white px-5 py-4 shadow-[0_8px_24px_rgba(72,36,19,0.05)]">
-          <div className="text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">Amount Paid</div>
-          <div className="mt-2 text-3xl font-black text-slate-950">{currency(numericPaid)}</div>
-          <div className="mt-1 text-sm text-slate-500">Use M-Pesa reference whenever the customer has already sent any payment.</div>
+          <div className="text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">Commission Not Paid</div>
+          <div className="mt-2 text-3xl font-black text-slate-950">{currency(unpaidCommission)}</div>
+          <div className="mt-1 text-sm text-slate-500">Completed commission still waiting for payout.</div>
         </div>
         <div className="rounded-[22px] bg-white px-5 py-4 shadow-[0_8px_24px_rgba(72,36,19,0.05)]">
-          <div className="text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">Outstanding Balance</div>
-          <div className="mt-2 text-3xl font-black text-slate-950">{currency(balance)}</div>
-          <div className="mt-1 text-sm text-slate-500">Admin follows up the balance before a commission becomes earned.</div>
+          <div className="text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">Commission Earned So Far</div>
+          <div className="mt-2 text-3xl font-black text-slate-950">{currency(earnedCommission)}</div>
+          <div className="mt-1 text-sm text-slate-500">Every completed sale moves you closer to more income.</div>
         </div>
       </div>
     </div>

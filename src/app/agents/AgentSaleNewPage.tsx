@@ -38,9 +38,15 @@ export default async function AgentSaleNewPage({ useRootPaths = false }: AgentSa
         earnedCommission: dashboard.salesSummary.earnedCommission,
         paidCommission: dashboard.salesSummary.paidCommission,
       }}
-    >
+      >
       <div className="rounded-[28px] border border-[#e4d4cb] bg-white p-6 shadow-[0_12px_40px_rgba(64,32,18,0.08)] md:p-8">
-        <AgentSaleForm useRootPaths={useRootPaths} />
+        <AgentSaleForm
+          useRootPaths={useRootPaths}
+          stats={{
+            earnedCommission: dashboard.metrics.totalCommission,
+            unpaidCommission: dashboard.metrics.pendingCommission,
+          }}
+        />
       </div>
     </AgentPortalShell>
   );
