@@ -46,12 +46,21 @@ const steps = [
   },
 ];
 
-const earnings = [
-  { title: "Solar Kit Sales", amount: "Ksh 12,000+", note: "Earn up to", accent: "from-[#fff3d8] to-[#fffaf0]", image: "/agents/product-solar-kit-generated.png" },
-  { title: "Inverters", amount: "Ksh 3,000+", note: "Earn up to", accent: "from-[#fff8ee] to-[#ffffff]", image: "/agents/product-inverter-generated.png" },
-  { title: "Batteries", amount: "Ksh 3,000+", note: "Earn up to", accent: "from-[#fff5df] to-[#fffdf8]", image: "/agents/product-battery-generated.png" },
-  { title: "Water Pumps", amount: "Ksh 1,500+", note: "Earn up to", accent: "from-[#fff7ea] to-[#ffffff]", image: "/agents/product-water-pump-generated.png" },
-  { title: "Accessories", amount: "Ksh 500+", note: "Earn up to", accent: "from-[#fff8ef] to-[#ffffff]", image: "/agents/product-accessories-generated.png" },
+const agentProducts = [
+  { name: "SRNE 20KW Lithium Solar System", price: 950000, image: "/agents/products/srne-20kw-lithium-solar-system.jpeg", category: "Solar Kit" },
+  { name: "SRNE 10KW Lithium Solar Power System", price: 550000, image: "/agents/products/srne-10kw-lithium-solar-power-system.jpeg", category: "Solar Kit" },
+  { name: "8KW Lithium Battery Kit", price: 350000, image: "/agents/products/8kw-lithium-battery-kit.jpeg", category: "Battery Kit" },
+  { name: "SRNE 5KW Lithium Solar System", price: 280000, image: "/agents/products/srne-5kw-lithium-solar-system.jpeg", category: "Solar Kit" },
+  { name: "SRNE 3KW Lithium Solar System", price: 180000, image: "/agents/products/srne-3kw-lithium-solar-system.jpeg", category: "Solar Kit" },
+  { name: "4KW Lithium Solar Kit", price: 90000, image: "/agents/products/4kw-lithium-solar-kit.jpeg", category: "Solar Kit" },
+  { name: "2KW Lithium Powerstation", price: 86400, image: "/agents/products/2kw-lithium-powerstation.jpeg", category: "Power Station" },
+  { name: "Platinum 2.56KW Lithium Solar Kit", price: 70000, image: "/agents/products/platinum-2-56kw-lithium-solar-kit.jpeg", category: "Solar Kit" },
+  { name: "Platinum 1.28KW Lithium Solar Kit", price: 49000, image: "/agents/products/platinum-1-28kw-lithium-solar-kit.jpeg", category: "Solar Kit" },
+  { name: "Starmax 300W Full Kit", price: 38999, image: "/agents/products/starmax-300w-full-kit.jpeg", category: "Starter Kit" },
+  { name: "Starmax 250W Full Kit", price: 27500, image: "/agents/products/starmax-250w-full-kit.jpeg", category: "Starter Kit" },
+  { name: "Starmax 200W Full Kit", price: 21999, image: "/agents/products/starmax-200w-full-kit.jpeg", category: "Starter Kit" },
+  { name: "Starmax 150W Full Kit", price: 19999, image: "/agents/products/starmax-150w-full-kit.jpeg", category: "Starter Kit" },
+  { name: "Starmax 100W Full Kit", price: 13000, image: "/agents/products/starmax-100w-full-kit.jpeg", category: "Starter Kit" },
 ];
 
 const benefits = [
@@ -196,6 +205,10 @@ function sectionTitle(title: string, copy?: string, dark = false) {
   );
 }
 
+function formatCurrency(value: number) {
+  return `Ksh ${value.toLocaleString()}`;
+}
+
 function BrandWordmark({ style, name }: { style: string; name: string }) {
   if (style === "solarmax") {
     return (
@@ -273,6 +286,19 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
             @keyframes marquee {
               0% { transform: translateX(0); }
               100% { transform: translateX(-50%); }
+            }
+
+            @keyframes productMarquee {
+              0% { transform: translateX(0); }
+              100% { transform: translateX(-50%); }
+            }
+
+            .product-marquee {
+              animation: productMarquee 46s linear infinite;
+            }
+
+            .product-marquee:hover {
+              animation-play-state: paused;
             }
           `,
         }}
@@ -519,56 +545,90 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
         </section>
 
         <section id="earnings" className="bg-[linear-gradient(135deg,#5c0000_0%,#7a0000_38%,#8d1407_100%)] py-20 text-white">
-          <div className="mx-auto grid max-w-7xl gap-8 px-4 sm:px-6 lg:grid-cols-[1.15fr_0.85fr] lg:px-8">
-            <div>
-            {sectionTitle("Example Earnings", "The more you refer, the more you earn.", true)}
-              <div className="mt-12 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {earnings.map((item) => (
-                  <div
-                    key={item.title}
-                    className={`rounded-[28px] border border-white/10 bg-gradient-to-br ${item.accent} p-5 text-slate-950 shadow-[0_24px_50px_rgba(0,0,0,0.16)] transition duration-300 hover:-translate-y-1.5`}
-                  >
-                    <div className="flex h-40 items-center justify-center overflow-hidden rounded-[22px] border border-white/70 bg-white p-4 shadow-[0_12px_24px_rgba(122,0,0,0.10)]">
-                      <Image src={item.image} alt={item.title} width={120} height={120} className="h-full w-full object-contain" />
-                    </div>
-                    <div className="mt-5 text-xl font-black">{item.title}</div>
-                    <div className="mt-3 text-sm text-slate-500">{item.note}</div>
-                    <div className="mt-1 text-3xl font-black text-[#7a0000]">{item.amount}</div>
-                  </div>
-                ))}
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            {sectionTitle(
+              "Products You Can Refer & Earn From",
+              "Share Betech Solar products and earn 6% commission after every successful completed sale.",
+              true,
+            )}
+
+            <div className="mt-12 md:hidden">
+              <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="flex gap-4 pb-2">
+                  {agentProducts.map((product) => {
+                    const commission = Math.round(product.price * 0.06);
+                    return (
+                      <div
+                        key={product.name}
+                        className="w-[84vw] max-w-[22rem] shrink-0 rounded-[30px] border border-white/12 bg-[linear-gradient(180deg,#fffaf1_0%,#ffffff_100%)] p-4 text-slate-950 shadow-[0_22px_48px_rgba(0,0,0,0.18)]"
+                      >
+                        <div className="overflow-hidden rounded-[22px] border border-[#7a0000]/10 bg-[#fdf7ef] shadow-[0_14px_28px_rgba(122,0,0,0.10)]">
+                          <div className="relative aspect-[4/3]">
+                            <Image src={product.image} alt={product.name} fill className="object-cover" />
+                          </div>
+                        </div>
+                        <div className="mt-4 inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-[#7a0000]">
+                          {product.category}
+                        </div>
+                        <h3 className="mt-4 text-xl font-black leading-tight text-slate-950">{product.name}</h3>
+                        <div className="mt-3 text-sm font-semibold text-slate-500">Price</div>
+                        <div className="mt-1 text-2xl font-black text-slate-950">{formatCurrency(product.price)}</div>
+                        <div className="mt-5 rounded-[22px] bg-[linear-gradient(135deg,#7a0000_0%,#991010_100%)] px-4 py-4 text-white shadow-[0_16px_34px_rgba(122,0,0,0.18)]">
+                          <div className="text-sm font-bold uppercase tracking-[0.16em] text-[#ffd761]">Earn 6% Commission</div>
+                          <div className="mt-2 text-3xl font-black">{formatCurrency(commission)}</div>
+                        </div>
+                        <Link
+                          href={registerHref}
+                          className="mt-5 inline-flex min-h-[3.5rem] w-full items-center justify-center rounded-2xl bg-[#0f9d58] px-5 py-3 text-base font-bold text-white shadow-[0_16px_34px_rgba(15,157,88,0.24)] transition hover:-translate-y-0.5"
+                        >
+                          Refer This Product
+                        </Link>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-              <p className="mt-6 text-sm text-white/70">Commission depends on confirmed sale value and completed payment.</p>
             </div>
 
-            <div className="flex">
-              <div className="flex w-full flex-col justify-between rounded-[34px] bg-[#f2b20f] p-8 text-slate-950 shadow-[0_35px_80px_rgba(0,0,0,0.22)]">
-                <div>
-                  <div className="flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-[24px] bg-white/75 p-4 text-[#7a0000] shadow-[0_20px_40px_rgba(0,0,0,0.10)]">
-                    <CircleDollarSign className="h-10 w-10" />
-                  </div>
-                  <div className="mt-8 text-sm font-black uppercase tracking-[0.24em] text-[#7a0000]">Top Agents</div>
-                  <h3 className="mt-4 text-4xl font-black leading-tight">Earn Over Ksh 100,000+ Monthly</h3>
-                  <p className="mt-5 text-lg leading-8 text-slate-900/80">
-                    Be part of our growing network of successful agents serving homes, farms, businesses, and projects across Kenya.
-                  </p>
-                </div>
-                <div className="mt-8 rounded-[26px] bg-white/80 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
-                  <div className="text-sm font-semibold text-slate-700">Best for:</div>
-                  <div className="mt-3 grid gap-3 text-sm font-medium text-slate-800 sm:grid-cols-2">
-                    <div>WhatsApp marketers</div>
-                    <div>Hardware sales reps</div>
-                    <div>Rural field agents</div>
-                    <div>Project connectors</div>
-                  </div>
-                  <div className="mt-5 flex items-end gap-2">
-                    <div className="h-12 w-8 rounded-t-xl bg-[#ffd761]" />
-                    <div className="h-16 w-8 rounded-t-xl bg-[#f2b20f]" />
-                    <div className="h-24 w-8 rounded-t-xl bg-[#c68f0d]" />
-                    <div className="h-32 w-8 rounded-t-xl bg-[#7a0000]" />
-                  </div>
-                </div>
+            <div className="mt-12 hidden overflow-hidden md:block">
+              <div className="product-marquee flex min-w-max gap-5 pr-5">
+                {[...agentProducts, ...agentProducts].map((product, index) => {
+                  const commission = Math.round(product.price * 0.06);
+                  return (
+                    <div
+                      key={`${product.name}-${index}`}
+                      className="w-[19rem] shrink-0 rounded-[30px] border border-white/12 bg-[linear-gradient(180deg,#fffaf1_0%,#ffffff_100%)] p-4 text-slate-950 shadow-[0_22px_48px_rgba(0,0,0,0.18)] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_28px_60px_rgba(0,0,0,0.24)]"
+                    >
+                      <div className="overflow-hidden rounded-[22px] border border-[#7a0000]/10 bg-[#fdf7ef] shadow-[0_14px_28px_rgba(122,0,0,0.10)]">
+                        <div className="relative aspect-[4/3]">
+                          <Image src={product.image} alt={product.name} fill className="object-cover" />
+                        </div>
+                      </div>
+                      <div className="mt-4 inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-[#7a0000]">
+                        {product.category}
+                      </div>
+                      <h3 className="mt-4 text-xl font-black leading-tight text-slate-950">{product.name}</h3>
+                      <div className="mt-3 text-sm font-semibold text-slate-500">Price</div>
+                      <div className="mt-1 text-2xl font-black text-slate-950">{formatCurrency(product.price)}</div>
+                      <div className="mt-5 rounded-[22px] bg-[linear-gradient(135deg,#7a0000_0%,#991010_100%)] px-4 py-4 text-white shadow-[0_16px_34px_rgba(122,0,0,0.18)]">
+                        <div className="text-sm font-bold uppercase tracking-[0.16em] text-[#ffd761]">Earn 6% Commission</div>
+                        <div className="mt-2 text-3xl font-black">{formatCurrency(commission)}</div>
+                      </div>
+                      <Link
+                        href={registerHref}
+                        className="mt-5 inline-flex min-h-[3.5rem] w-full items-center justify-center rounded-2xl bg-[#0f9d58] px-5 py-3 text-base font-bold text-white shadow-[0_16px_34px_rgba(15,157,88,0.24)] transition hover:-translate-y-0.5"
+                      >
+                        Refer This Product
+                      </Link>
+                    </div>
+                  );
+                })}
               </div>
             </div>
+
+            <p className="mt-6 text-center text-sm text-white/70">
+              Commission is calculated automatically from the confirmed sale price and becomes available after successful completed payment.
+            </p>
           </div>
         </section>
 
