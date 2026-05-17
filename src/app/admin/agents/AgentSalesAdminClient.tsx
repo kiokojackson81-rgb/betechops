@@ -44,12 +44,16 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
   const [busy, setBusy] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
-  async function patchStatus(saleId: string, status: string) {
+  async function patchStatus(
+    saleId: string,
+    status: string,
+    extras?: { amountPaid?: number; mpesaReference?: string },
+  ) {
     setBusy(`${saleId}:${status}`);
     const res = await fetch(`/api/admin/agents/sales/${saleId}/status`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, ...extras }),
     });
     setBusy(null);
     if (!res.ok) {
@@ -58,6 +62,18 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
       return;
     }
     startTransition(() => router.refresh());
+  }
+
+  async function confirmPayment(sale: AdminSaleRow) {
+    const paidInput = window.prompt("Enter amount paid by the customer", String(sale.totalAmount || 0));
+    if (paidInput === null) return;
+    const amountPaid = Number(paidInput);
+    if (!Number.isFinite(amountPaid) || amountPaid < 0) {
+      window.alert("Enter a valid paid amount.");
+      return;
+    }
+    const mpesaReference = window.prompt("Enter M-Pesa reference if available", "") ?? "";
+    await patchStatus(sale.id, "payment_confirmed", { amountPaid, mpesaReference });
   }
 
   async function completeSale(saleId: string) {
@@ -127,7 +143,7 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
               Review sale
             </Link>
             <button
-              onClick={() => patchStatus(sale.id, "payment_confirmed")}
+              onClick={() => confirmPayment(sale)}
               disabled={busy !== null}
               className="rounded-2xl border border-white/10 px-4 py-2 text-sm text-slate-200 transition hover:border-white/20 disabled:opacity-60"
             >

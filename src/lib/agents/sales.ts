@@ -73,6 +73,8 @@ const agentSaleStatusUpdateSchema = z.object({
     "cancelled",
     "rejected",
   ]),
+  amountPaid: z.coerce.number().nonnegative("Amount paid cannot be negative.").optional(),
+  mpesaReference: z.string().trim().optional().nullable(),
 });
 
 const agentSaleReceiptSchema = z.object({
@@ -533,18 +535,28 @@ export async function getAdminAgentSaleById(saleId: string) {
 }
 
 export async function updateAgentSaleStatus(saleId: string, body: unknown, actorEmail?: string | null) {
-  const { status } = parseAgentSaleStatusInput(body);
+  const { status, amountPaid, mpesaReference } = parseAgentSaleStatusInput(body);
   let result;
   try {
     result = await prisma.$transaction(async (tx) => {
       const sale = await tx.agentSale.findUnique({ where: { id: saleId } });
       if (!sale) throw new Error("Agent sale not found.");
 
+      const nextAmountPaid =
+        typeof amountPaid === "number"
+          ? normalizeAmount(amountPaid)
+          : normalizeAmount(Number(sale.amountPaid ?? 0));
+      if (nextAmountPaid > Number(sale.totalAmount ?? 0)) {
+        throw new Error("Amount paid cannot be more than the total amount.");
+      }
+
       const updated = await tx.agentSale.update({
         where: { id: saleId },
         data: {
           status,
           commissionLocked: true,
+          ...(typeof amountPaid === "number" ? { amountPaid: nextAmountPaid } : {}),
+          ...(mpesaReference !== undefined ? { mpesaReference: cleanOptional(mpesaReference) } : {}),
         },
         include: {
           agent: { select: { id: true, name: true, email: true } },
@@ -677,6 +689,8 @@ function canCompleteSale(sale: {
   const currentStatus = String(sale.status || "").toLowerCase();
   const hasPickupFlow = deliveryMethod === "shop_pickup" || deliveryMethod === "agent_pickup";
   const deliveryConfirmed =
+    currentStatus === "payment_confirmed" ||
+    currentStatus === "processing" ||
     currentStatus === "delivered_pending_balance" ||
     currentStatus === "dispatched" ||
     hasPickupFlow;

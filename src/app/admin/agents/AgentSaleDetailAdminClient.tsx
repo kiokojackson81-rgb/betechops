@@ -47,7 +47,6 @@ type ActivityRow = {
 const statuses = [
   "pending_review",
   "awaiting_payment",
-  "payment_confirmed",
   "processing",
   "dispatched",
   "delivered_pending_balance",
@@ -73,12 +72,15 @@ export default function AgentSaleDetailAdminClient({
   const [busy, setBusy] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
-  async function patchStatus(status: string) {
+  async function patchStatus(
+    status: string,
+    extras?: { amountPaid?: number; mpesaReference?: string },
+  ) {
     setBusy(`status:${status}`);
     const res = await fetch(`/api/admin/agents/sales/${sale.id}/status`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, ...extras }),
     });
     setBusy(null);
     if (!res.ok) {
@@ -87,6 +89,18 @@ export default function AgentSaleDetailAdminClient({
       return;
     }
     startTransition(() => router.refresh());
+  }
+
+  async function confirmPayment() {
+    const paidInput = window.prompt("Enter amount paid by the customer", String(sale.totalAmount || 0));
+    if (paidInput === null) return;
+    const amountPaid = Number(paidInput);
+    if (!Number.isFinite(amountPaid) || amountPaid < 0) {
+      window.alert("Enter a valid paid amount.");
+      return;
+    }
+    const mpesaReference = window.prompt("Enter M-Pesa reference if available", sale.mpesaReference || "") ?? "";
+    await patchStatus("payment_confirmed", { amountPaid, mpesaReference });
   }
 
   async function linkReceipt() {
@@ -228,6 +242,13 @@ export default function AgentSaleDetailAdminClient({
           <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
             <h2 className="text-xl font-semibold text-white">Admin actions</h2>
             <div className="mt-5 grid gap-3 md:grid-cols-2">
+              <button
+                onClick={confirmPayment}
+                disabled={busy !== null}
+                className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm font-semibold text-cyan-100 disabled:opacity-60"
+              >
+                {busy === "status:payment_confirmed" ? "Saving..." : "Confirm payment"}
+              </button>
               {statuses.map((status) => (
                 <button
                   key={status}
@@ -235,7 +256,11 @@ export default function AgentSaleDetailAdminClient({
                   disabled={busy !== null}
                   className="rounded-2xl border border-white/10 px-4 py-3 text-sm text-slate-200 transition hover:border-white/20 disabled:opacity-60"
                 >
-                  {busy === `status:${status}` ? "Saving..." : status.replace(/_/g, " ")}
+                  {busy === `status:${status}`
+                    ? "Saving..."
+                    : status === "payment_confirmed"
+                      ? "Payment confirmed"
+                      : status.replace(/_/g, " ")}
                 </button>
               ))}
               <button
