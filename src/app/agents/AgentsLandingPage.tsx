@@ -7,12 +7,15 @@ import {
   CircleDollarSign,
   Headphones,
   House,
+  MessageCircleMore,
   MapPinned,
   PanelsTopLeft,
   PhoneCall,
   PlayCircle,
   ShieldCheck,
+  Sparkles,
   ShoppingBag,
+  ClipboardList,
   Truck,
   Users,
 } from "lucide-react";
@@ -23,26 +26,31 @@ const steps = [
   {
     number: "1",
     title: "Refer Customer",
-    copy: "Share Betech products through WhatsApp, Facebook, TikTok, posters, and your local network.",
-    image: "/agents/step-refer-customer.png",
+    copy: "Share Betech products online or through your local network.",
+    icon: MessageCircleMore,
+    tone: "gold",
   },
   {
     number: "2",
     title: "Submit Order",
-    copy: "Enter customer details and product interest in your agent dashboard.",
-    image: "/agents/step-customer-orders.png",
+    copy: "Enter customer and product details in your agent dashboard.",
+    icon: ClipboardList,
+    tone: "maroon",
   },
   {
     number: "3",
     title: "Betech Delivers",
-    copy: "Our team handles order confirmation, delivery, installation, and customer support.",
-    image: "/agents/step-deliver-install.png",
+    copy: "We handle delivery, installation, and customer support.",
+    icon: Truck,
+    tone: "gold",
   },
   {
     number: "4",
     title: "You Earn",
-    copy: "Once the customer pays fully and the order is completed, your 6% commission becomes available.",
-    image: "/agents/step-earn-commission.png",
+    copy: "Receive your 6% commission after successful payment and delivery.",
+    icon: Sparkles,
+    tone: "maroon",
+    featured: true,
   },
 ];
 
@@ -453,34 +461,121 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
           </div>
         </section>
 
-        <section id="how-it-works" className="bg-white py-20">
+        <section
+          id="how-it-works"
+          className="bg-[radial-gradient(circle_at_top,rgba(242,178,15,0.10),transparent_24%),linear-gradient(180deg,#fffefb_0%,#fff7ef_100%)] py-20"
+        >
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            {sectionTitle("How The Betech Agent Program Works")}
-            <div className="mt-14 grid gap-5 xl:grid-cols-4">
+            {sectionTitle("How It Works", "Refer customers, submit orders, and earn commission in four simple steps.")}
+            <div className="mt-14 hidden xl:block">
+              <div className="relative grid grid-cols-4 gap-5">
+                <div className="pointer-events-none absolute left-[12%] right-[12%] top-[8.3rem] h-[2px] bg-gradient-to-r from-[#f2b20f]/30 via-[#7a0000]/22 to-[#f2b20f]/30" />
+                <div className="pointer-events-none absolute left-[12%] right-[12%] top-[7.55rem] h-6 bg-[radial-gradient(circle_at_center,rgba(242,178,15,0.18),transparent_70%)] blur-xl" />
+                {steps.map((step, index) => {
+                  const Icon = step.icon;
+                  const isGold = step.tone === "gold";
+                  const isFeatured = Boolean(step.featured);
+                  return (
+                    <div key={step.title} className={`relative ${isFeatured ? "xl:-mt-4" : ""}`}>
+                      <div
+                        className={`group relative h-full overflow-hidden rounded-[2rem] border p-6 shadow-lg transition duration-300 hover:-translate-y-1 ${
+                          isFeatured
+                            ? "border-[#f2b20f]/35 bg-[linear-gradient(180deg,#fff8e7_0%,#ffffff_100%)] shadow-[0_30px_70px_rgba(242,178,15,0.18)]"
+                            : "border-[#7a0000]/10 bg-white/75 shadow-[0_18px_45px_rgba(15,23,42,0.06)] backdrop-blur"
+                        }`}
+                      >
+                        <div className={`absolute inset-x-8 top-[6.2rem] h-px ${isFeatured ? "bg-[#f2b20f]/28" : "bg-transparent"}`} />
+                        <div
+                          className={`absolute left-6 top-0 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full text-lg font-black shadow-[0_16px_28px_rgba(122,0,0,0.18)] ${
+                            isGold ? "bg-[linear-gradient(135deg,#ffd761_0%,#f2b20f_100%)] text-slate-950" : "bg-[linear-gradient(135deg,#8f0808_0%,#7a0000_100%)] text-white"
+                          }`}
+                        >
+                          {step.number}
+                        </div>
+
+                        <div className="flex items-start justify-between gap-4 pt-5">
+                          <div className="relative">
+                            <div className={`absolute inset-0 rounded-[1.6rem] blur-xl ${isGold ? "bg-[#f2b20f]/28" : "bg-[#7a0000]/20"}`} />
+                            <div
+                              className={`relative flex h-[5.6rem] w-[5.6rem] items-center justify-center rounded-[1.6rem] border shadow-[0_18px_34px_rgba(0,0,0,0.10)] ${
+                                isGold
+                                  ? "border-[#f2b20f]/30 bg-[linear-gradient(180deg,#ffe8a8_0%,#ffc741_100%)] text-[#7a0000]"
+                                  : "border-[#7a0000]/20 bg-[linear-gradient(180deg,#941010_0%,#6d0000_100%)] text-white"
+                              }`}
+                            >
+                              <Icon className="h-9 w-9" />
+                            </div>
+                          </div>
+                          {index < steps.length - 1 ? (
+                            <div className="mt-5 flex items-center gap-2 text-[#7a0000]/45">
+                              <div className="h-[2px] w-10 bg-gradient-to-r from-[#7a0000]/15 to-[#7a0000]/45" />
+                              <ArrowRight className="h-6 w-6 animate-pulse" />
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <h3 className={`mt-5 text-[2rem] font-black tracking-tight ${isFeatured ? "text-[#7a0000]" : "text-slate-950"}`}>{step.title}</h3>
+                        <p className="mt-3 max-w-[17rem] text-lg leading-8 text-slate-600">{step.copy}</p>
+                        {isFeatured ? (
+                          <div className="mt-6 inline-flex rounded-full bg-[#7a0000] px-4 py-2 text-sm font-black uppercase tracking-[0.18em] text-[#ffd761] shadow-[0_14px_30px_rgba(122,0,0,0.20)]">
+                            6% Commission Unlock
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="mt-14 space-y-5 xl:hidden">
               {steps.map((step, index) => {
+                const Icon = step.icon;
+                const isGold = step.tone === "gold";
+                const isFeatured = Boolean(step.featured);
                 return (
                   <div key={step.title} className="relative">
-                    <div className="group h-full rounded-[30px] border border-[#7a0000]/10 bg-white p-6 shadow-[0_18px_40px_rgba(15,23,42,0.06)] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_24px_55px_rgba(122,0,0,0.12)]">
-                      <div className={`flex h-11 w-11 items-center justify-center rounded-full text-lg font-black text-white shadow-[0_12px_24px_rgba(122,0,0,0.20)] ${
-                        index === 0 || index === 2 ? "bg-[#f2b20f] text-slate-950" : "bg-[#7a0000]"
+                    <div
+                      className={`group relative overflow-hidden rounded-[2rem] border p-5 shadow-lg transition duration-300 hover:-translate-y-1 ${
+                        isFeatured
+                          ? "border-[#f2b20f]/35 bg-[linear-gradient(180deg,#fff8e7_0%,#ffffff_100%)] shadow-[0_26px_55px_rgba(242,178,15,0.16)]"
+                          : "border-[#7a0000]/10 bg-white/80 shadow-[0_18px_40px_rgba(15,23,42,0.06)] backdrop-blur"
+                      }`}
+                    >
+                      <div className={`absolute left-5 top-0 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-lg font-black shadow-[0_12px_24px_rgba(122,0,0,0.20)] ${
+                        isGold ? "bg-[linear-gradient(135deg,#ffd761_0%,#f2b20f_100%)] text-slate-950" : "bg-[linear-gradient(135deg,#8f0808_0%,#7a0000_100%)] text-white"
                       }`}>
                         {step.number}
                       </div>
-                      <div className="mt-6 transition group-hover:scale-105">
-                        <Image
-                          src={step.image}
-                          alt={step.title}
-                          width={84}
-                          height={84}
-                          className="h-[5.25rem] w-[5.25rem] object-contain drop-shadow-[0_18px_28px_rgba(122,0,0,0.10)]"
-                        />
+
+                      <div className="flex items-start gap-4 pt-5">
+                        <div className="relative shrink-0">
+                          <div className={`absolute inset-0 rounded-[1.35rem] blur-xl ${isGold ? "bg-[#f2b20f]/28" : "bg-[#7a0000]/20"}`} />
+                          <div
+                            className={`relative flex h-[4.8rem] w-[4.8rem] items-center justify-center rounded-[1.35rem] border shadow-[0_16px_30px_rgba(0,0,0,0.10)] ${
+                              isGold
+                                ? "border-[#f2b20f]/30 bg-[linear-gradient(180deg,#ffe8a8_0%,#ffc741_100%)] text-[#7a0000]"
+                                : "border-[#7a0000]/20 bg-[linear-gradient(180deg,#941010_0%,#6d0000_100%)] text-white"
+                            }`}
+                          >
+                            <Icon className="h-8 w-8" />
+                          </div>
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className={`text-2xl font-black tracking-tight ${isFeatured ? "text-[#7a0000]" : "text-slate-950"}`}>{step.title}</h3>
+                          <p className="mt-2 text-base leading-7 text-slate-600">{step.copy}</p>
+                          {isFeatured ? (
+                            <div className="mt-4 inline-flex rounded-full bg-[#7a0000] px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-[#ffd761]">
+                              6% Commission Unlock
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
-                      <h3 className="mt-5 text-2xl font-black text-slate-950">{step.title}</h3>
-                      <p className="mt-3 max-w-[18rem] text-base leading-7 text-slate-600">{step.copy}</p>
+
                     </div>
                     {index < steps.length - 1 ? (
-                      <div className="pointer-events-none absolute -right-3 top-[8.2rem] hidden xl:block">
-                        <ArrowRight className="h-8 w-8 text-[#7a0000]/35" />
+                      <div className="pointer-events-none mx-auto mt-4 flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#7a0000]/45 shadow-[0_14px_26px_rgba(15,23,42,0.08)]">
+                        <ArrowRight className="h-5 w-5 rotate-90" />
                       </div>
                     ) : null}
                   </div>
@@ -564,7 +659,7 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
                       >
                         <div className="overflow-hidden rounded-[22px] border border-[#7a0000]/10 bg-[#fdf7ef] shadow-[0_14px_28px_rgba(122,0,0,0.10)]">
                           <div className="relative aspect-[4/3]">
-                            <Image src={product.image} alt={product.name} fill className="object-cover" />
+                            <Image src={product.image} alt={product.name} fill className="object-contain p-2" />
                           </div>
                         </div>
                         <div className="mt-4 inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-[#7a0000]">
@@ -601,7 +696,7 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
                     >
                       <div className="overflow-hidden rounded-[22px] border border-[#7a0000]/10 bg-[#fdf7ef] shadow-[0_14px_28px_rgba(122,0,0,0.10)]">
                         <div className="relative aspect-[4/3]">
-                          <Image src={product.image} alt={product.name} fill className="object-cover" />
+                          <Image src={product.image} alt={product.name} fill className="object-contain p-2" />
                         </div>
                       </div>
                       <div className="mt-4 inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-[#7a0000]">
