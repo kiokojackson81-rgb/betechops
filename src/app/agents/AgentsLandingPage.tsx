@@ -55,20 +55,20 @@ const steps = [
 ];
 
 const agentProducts = [
-  { name: "SRNE 20KW Lithium Solar System", price: 950000, image: "/agents/product-solar-kit-generated.png", category: "Solar Kit" },
-  { name: "SRNE 10KW Lithium Solar Power System", price: 550000, image: "/agents/product-solar-kit-generated.png", category: "Solar Kit" },
-  { name: "8KW Lithium Battery Kit", price: 350000, image: "/agents/product-battery-generated.png", category: "Battery Kit" },
-  { name: "SRNE 5KW Lithium Solar System", price: 280000, image: "/agents/product-solar-kit-generated.png", category: "Solar Kit" },
-  { name: "SRNE 3KW Lithium Solar System", price: 180000, image: "/agents/product-inverter-generated.png", category: "Solar Kit" },
-  { name: "4KW Lithium Solar Kit", price: 90000, image: "/agents/product-solar-kit-generated.png", category: "Solar Kit" },
-  { name: "2KW Lithium Powerstation", price: 86400, image: "/agents/product-inverter-generated.png", category: "Power Station" },
-  { name: "Platinum 2.56KW Lithium Solar Kit", price: 70000, image: "/agents/product-battery-generated.png", category: "Solar Kit" },
-  { name: "Platinum 1.28KW Lithium Solar Kit", price: 49000, image: "/agents/product-battery-generated.png", category: "Solar Kit" },
-  { name: "Starmax 300W Full Kit", price: 38999, image: "/agents/product-accessories-generated.png", category: "Starter Kit" },
-  { name: "Starmax 250W Full Kit", price: 27500, image: "/agents/product-accessories-generated.png", category: "Starter Kit" },
-  { name: "Starmax 200W Full Kit", price: 21999, image: "/agents/product-accessories-generated.png", category: "Starter Kit" },
-  { name: "Starmax 150W Full Kit", price: 19999, image: "/agents/product-accessories-generated.png", category: "Starter Kit" },
-  { name: "Starmax 100W Full Kit", price: 13000, image: "/agents/product-accessories-generated.png", category: "Starter Kit" },
+  { name: "SRNE 20KW Lithium Solar System", price: 950000, image: "/agents/products/srne-20kw-lithium-solar-system.jpeg", category: "Solar Kit" },
+  { name: "SRNE 10KW Lithium Solar Power System", price: 550000, image: "/agents/products/srne-10kw-lithium-solar-power-system.jpeg", category: "Solar Kit" },
+  { name: "8KW Lithium Battery Kit", price: 350000, image: "/agents/products/8kw-lithium-battery-kit.jpeg", category: "Battery Kit" },
+  { name: "SRNE 5KW Lithium Solar System", price: 280000, image: "/agents/products/srne-5kw-lithium-solar-system.jpeg", category: "Solar Kit" },
+  { name: "SRNE 3KW Lithium Solar System", price: 180000, image: "/agents/products/srne-3kw-lithium-solar-system.jpeg", category: "Solar Kit" },
+  { name: "4KW Lithium Solar Kit", price: 90000, image: "/agents/products/4kw-lithium-solar-kit.jpeg", category: "Solar Kit" },
+  { name: "2KW Lithium Powerstation", price: 86400, image: "/agents/products/2kw-lithium-powerstation.jpeg", category: "Power Station" },
+  { name: "Platinum 2.56KW Lithium Solar Kit", price: 70000, image: "/agents/products/platinum-2-56kw-lithium-solar-kit.jpeg", category: "Solar Kit" },
+  { name: "Platinum 1.28KW Lithium Solar Kit", price: 49000, image: "/agents/products/platinum-1-28kw-lithium-solar-kit.jpeg", category: "Solar Kit" },
+  { name: "Starmax 300W Full Kit", price: 38999, image: "/agents/products/starmax-300w-full-kit.jpeg", category: "Starter Kit" },
+  { name: "Starmax 250W Full Kit", price: 27500, image: "/agents/products/starmax-250w-full-kit.jpeg", category: "Starter Kit" },
+  { name: "Starmax 200W Full Kit", price: 21999, image: "/agents/products/starmax-200w-full-kit.jpeg", category: "Starter Kit" },
+  { name: "Starmax 150W Full Kit", price: 19999, image: "/agents/products/starmax-150w-full-kit.jpeg", category: "Starter Kit" },
+  { name: "Starmax 100W Full Kit", price: 13000, image: "/agents/products/starmax-100w-full-kit.jpeg", category: "Starter Kit" },
 ];
 
 const benefits = [
