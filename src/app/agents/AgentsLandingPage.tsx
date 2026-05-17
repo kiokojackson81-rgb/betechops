@@ -12,6 +12,8 @@ import {
   PhoneCall,
   PlayCircle,
   ShieldCheck,
+  ShoppingBag,
+  Truck,
   Users,
 } from "lucide-react";
 import AnimatedCount from "@/app/agents/_components/AnimatedCount";
@@ -26,29 +28,29 @@ const steps = [
   },
   {
     number: "2",
-    title: "Customer Orders",
-    copy: "Submit customer details in your dashboard so the Betech team can follow through quickly.",
+    title: "Submit Order",
+    copy: "Enter customer details and product interest in your agent dashboard.",
     image: "/agents/step-customer-orders.png",
   },
   {
     number: "3",
-    title: "We Deliver & Install",
-    copy: "Betech handles delivery, installation, and customer support professionally across Kenya.",
+    title: "Betech Delivers",
+    copy: "Our team handles order confirmation, delivery, installation, and customer support.",
     image: "/agents/step-deliver-install.png",
   },
   {
     number: "4",
-    title: "You Earn Commission",
-    copy: "Earn up to 6% commission after successful solar sales are completed and confirmed.",
+    title: "You Earn",
+    copy: "Once the customer pays fully and the order is completed, your 6% commission becomes available.",
     image: "/agents/step-earn-commission.png",
   },
 ];
 
 const earnings = [
-  { title: "5KW Solar Kit", amount: "Ksh 12,000+", note: "Earn up to", accent: "from-[#fff3d8] to-[#fffaf0]", image: "/agents/product-solar-kit-generated.png" },
-  { title: "Inverter", amount: "Ksh 3,000+", note: "Earn up to", accent: "from-[#fff8ee] to-[#ffffff]", image: "/agents/product-inverter-generated.png" },
-  { title: "Battery", amount: "Ksh 3,000+", note: "Earn up to", accent: "from-[#fff5df] to-[#fffdf8]", image: "/agents/product-battery-generated.png" },
-  { title: "Water Pump", amount: "Ksh 1,500+", note: "Earn up to", accent: "from-[#fff7ea] to-[#ffffff]", image: "/agents/product-water-pump-generated.png" },
+  { title: "Solar Kit Sales", amount: "Ksh 12,000+", note: "Earn up to", accent: "from-[#fff3d8] to-[#fffaf0]", image: "/agents/product-solar-kit-generated.png" },
+  { title: "Inverters", amount: "Ksh 3,000+", note: "Earn up to", accent: "from-[#fff8ee] to-[#ffffff]", image: "/agents/product-inverter-generated.png" },
+  { title: "Batteries", amount: "Ksh 3,000+", note: "Earn up to", accent: "from-[#fff5df] to-[#fffdf8]", image: "/agents/product-battery-generated.png" },
+  { title: "Water Pumps", amount: "Ksh 1,500+", note: "Earn up to", accent: "from-[#fff7ea] to-[#ffffff]", image: "/agents/product-water-pump-generated.png" },
   { title: "Accessories", amount: "Ksh 500+", note: "Earn up to", accent: "from-[#fff8ef] to-[#ffffff]", image: "/agents/product-accessories-generated.png" },
 ];
 
@@ -89,6 +91,35 @@ const benefits = [
     icon: MapPinned,
     tone: "maroon",
   },
+];
+
+const activityFeed = [
+  "Kisumu agent earned Ksh 12,500",
+  "Nakuru agent submitted a solar kit order",
+  "Kitui agent earned Ksh 21,000",
+  "Eldoret agent payout processed via M-Pesa",
+  "Mombasa agent referred a water pump customer",
+  "Nyeri agent completed a battery order",
+];
+
+const joinAudience = [
+  "WhatsApp Marketers",
+  "Hardware Shops",
+  "Electronics Shops",
+  "Solar Technicians",
+  "Installers",
+  "TikTok/Facebook Creators",
+  "Rural Field Agents",
+  "Existing Betech Customers",
+];
+
+const kenyaOpportunity = [
+  "High demand for backup power",
+  "Solar water pumps for farms",
+  "Homes need reliable lighting",
+  "Businesses need power security",
+  "Rural areas need affordable energy",
+  "Customers trust local recommendations",
 ];
 
 const brands = [
@@ -147,7 +178,7 @@ function trustPoint(label: string, note: string) {
 
 function heroCard(label: string, value: string, note: string) {
   return (
-    <div className="rounded-[24px] border border-white/60 bg-white/90 p-4 shadow-[0_24px_60px_rgba(0,0,0,0.10)] backdrop-blur transition duration-300 hover:-translate-y-1 hover:shadow-[0_32px_80px_rgba(0,0,0,0.14)]">
+    <div className="rounded-[24px] border border-white/60 bg-white/92 p-4 shadow-[0_24px_60px_rgba(0,0,0,0.10)] backdrop-blur transition duration-300 hover:-translate-y-1 hover:shadow-[0_32px_80px_rgba(0,0,0,0.14)]">
       <div className="text-[11px] font-semibold uppercase tracking-[0.26em] text-[#7a0000]/70">{label}</div>
       <div className="mt-2 text-2xl font-black text-slate-950">{value}</div>
       <div className="mt-1 text-sm text-slate-500">{note}</div>
@@ -231,6 +262,25 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
 
   return (
     <div className="scroll-smooth bg-[#fcfaf7] text-slate-950">
+      <style jsx global>{`
+        @keyframes float {
+          0%, 100% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-8px);
+          }
+        }
+
+        @keyframes marquee {
+          0% {
+            transform: translateX(0);
+          }
+          100% {
+            transform: translateX(-50%);
+          }
+        }
+      `}</style>
       <header className="sticky top-0 z-40 border-b border-[#7a0000]/10 bg-white/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
           <Link href={agentPath("/", useRootPaths)} className="flex items-center gap-3">
@@ -288,7 +338,7 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
               <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <Link
                   href={registerHref}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#0f9d58] px-6 py-4 text-base font-bold text-white shadow-[0_18px_40px_rgba(15,157,88,0.20)] transition hover:-translate-y-0.5 hover:shadow-[0_24px_50px_rgba(15,157,88,0.26)]"
+                  className="inline-flex min-h-[3.75rem] items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#11b86a_0%,#0f9d58_55%,#0b7c44_100%)] px-7 py-4 text-base font-bold text-white shadow-[0_20px_50px_rgba(15,157,88,0.30)] transition hover:-translate-y-0.5 hover:shadow-[0_28px_60px_rgba(15,157,88,0.36)]"
                 >
                   Become an Agent
                 </Link>
@@ -318,6 +368,26 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
             <div className="relative">
               <div className="absolute -left-4 top-10 h-40 w-40 rounded-full bg-[#f2b20f]/20 blur-3xl" />
               <div className="absolute right-0 top-0 h-48 w-48 rounded-full bg-[#7a0000]/14 blur-3xl" />
+              <div className="absolute left-2 top-8 z-10 hidden max-w-[13rem] rounded-[24px] border border-white/70 bg-white/92 p-4 shadow-[0_22px_50px_rgba(0,0,0,0.12)] backdrop-blur md:block animate-[float_6s_ease-in-out_infinite]">
+                <div className="text-[11px] font-black uppercase tracking-[0.26em] text-[#7a0000]/70">Commission Alert</div>
+                <div className="mt-2 text-2xl font-black text-[#0f9d58]">+Ksh 12,000</div>
+                <div className="mt-1 text-sm text-slate-500">Solar kit sale completed</div>
+              </div>
+              <div className="absolute right-4 top-12 z-10 hidden max-w-[12rem] rounded-[24px] border border-white/70 bg-white/92 p-4 shadow-[0_22px_50px_rgba(0,0,0,0.12)] backdrop-blur lg:block animate-[float_7s_ease-in-out_infinite]">
+                <div className="text-[11px] font-black uppercase tracking-[0.26em] text-[#7a0000]/70">New Customer Order</div>
+                <div className="mt-2 text-xl font-black text-slate-950">SRNE 5KW Kit</div>
+                <div className="mt-1 text-sm text-slate-500">Ready for confirmation</div>
+              </div>
+              <div className="absolute bottom-28 left-6 z-10 hidden max-w-[12rem] rounded-[24px] border border-white/70 bg-white/92 p-4 shadow-[0_22px_50px_rgba(0,0,0,0.12)] backdrop-blur md:block animate-[float_8s_ease-in-out_infinite]">
+                <div className="text-[11px] font-black uppercase tracking-[0.26em] text-[#7a0000]/70">M-Pesa Payout Ready</div>
+                <div className="mt-2 text-xl font-black text-slate-950">Ksh 8,400</div>
+                <div className="mt-1 text-sm text-slate-500">Withdraw after approval</div>
+              </div>
+              <div className="absolute bottom-16 right-4 z-10 hidden max-w-[10rem] rounded-[24px] border border-white/70 bg-white/92 p-4 shadow-[0_22px_50px_rgba(0,0,0,0.12)] backdrop-blur sm:block animate-[float_5.5s_ease-in-out_infinite]">
+                <div className="text-[11px] font-black uppercase tracking-[0.26em] text-[#7a0000]/70">Earn Up To</div>
+                <div className="mt-2 text-3xl font-black text-[#7a0000]">6%</div>
+                <div className="mt-1 text-sm text-slate-500">On successful sales</div>
+              </div>
               <div className="relative overflow-hidden rounded-[36px] border border-white/70 bg-[linear-gradient(160deg,#fff_0%,#fff7ef_45%,#fff0dc_100%)] p-5 shadow-[0_35px_90px_rgba(122,0,0,0.16)] sm:p-7">
                 <div className="rounded-[30px] border border-white/70 bg-[radial-gradient(circle_at_top,#fffaf1_0%,#fff_44%,#fff6ea_100%)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] sm:p-5">
                   <div className="overflow-hidden rounded-[28px] border border-[#7a0000]/10 bg-white shadow-[0_24px_60px_rgba(122,0,0,0.14)]">
@@ -331,11 +401,31 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
                     />
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                    {heroCard("Solar Leads", "Daily", "High demand in homes and farms")}
-                    {heroCard("Fast Payout", "M-Pesa", "Withdraw after successful completion")}
-                    {heroCard("Top Agents", "100K+", "Monthly potential across Kenya")}
+                    {heroCard("Solar Leads", "Daily", "Homes, farms, and businesses")}
+                    {heroCard("Fast Payout", "M-Pesa", "Withdraw when commissions are ready")}
+                    {heroCard("Top Agents", "100K+", "Monthly income potential")}
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="border-y border-[#7a0000]/10 bg-white py-4">
+          <div className="mx-auto flex max-w-7xl items-center gap-4 overflow-hidden px-4 sm:px-6 lg:px-8">
+            <div className="shrink-0 rounded-full bg-[#fff3d8] px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">
+              Recent Agent Activity
+            </div>
+            <div className="flex min-w-0 flex-1 overflow-hidden">
+              <div className="flex min-w-max animate-[marquee_28s_linear_infinite] gap-3">
+                {[...activityFeed, ...activityFeed].map((item, index) => (
+                  <div
+                    key={`${item}-${index}`}
+                    className="rounded-full border border-[#7a0000]/10 bg-[#fcfaf7] px-4 py-2 text-sm font-medium text-slate-700 shadow-[0_10px_24px_rgba(15,23,42,0.04)]"
+                  >
+                    {item}
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -378,6 +468,60 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
           </div>
         </section>
 
+        <section className="bg-[linear-gradient(135deg,#4a0000_0%,#7a0000_45%,#a51e0f_100%)] py-18 text-white">
+          <div className="mx-auto grid max-w-7xl gap-8 rounded-[38px] px-4 sm:px-6 lg:grid-cols-[1.15fr_0.85fr] lg:px-8">
+            <div className="rounded-[34px] border border-white/10 bg-white/7 p-8 shadow-[0_30px_70px_rgba(0,0,0,0.16)] backdrop-blur">
+              <div className="inline-flex rounded-full border border-[#ffd761]/25 bg-white/10 px-4 py-2 text-xs font-black uppercase tracking-[0.22em] text-[#ffd761]">
+                Income Opportunity
+              </div>
+              <h2 className="mt-6 text-4xl font-black leading-tight md:text-5xl">Top Agents Can Earn Over Ksh 100,000+ Monthly 💰</h2>
+              <p className="mt-5 max-w-2xl text-lg leading-8 text-white/80">
+                Refer more customers, submit real orders, and grow your income with Betech Solar.
+              </p>
+              <div className="mt-8 grid gap-4 sm:grid-cols-3">
+                <div className="rounded-[26px] border border-white/10 bg-white/10 p-5">
+                  <div className="text-sm font-black uppercase tracking-[0.18em] text-[#ffd761]">Solar Kits</div>
+                  <div className="mt-2 text-2xl font-black text-white">10 referrals</div>
+                  <div className="mt-2 text-sm text-white/70">Big-ticket orders can compound income quickly.</div>
+                </div>
+                <div className="rounded-[26px] border border-white/10 bg-white/10 p-5">
+                  <div className="text-sm font-black uppercase tracking-[0.18em] text-[#ffd761]">Battery + Inverter</div>
+                  <div className="mt-2 text-2xl font-black text-white">20 referrals</div>
+                  <div className="mt-2 text-sm text-white/70">Smaller but frequent sales build steady monthly payouts.</div>
+                </div>
+                <div className="rounded-[26px] border border-white/10 bg-white/10 p-5">
+                  <div className="text-sm font-black uppercase tracking-[0.18em] text-[#ffd761]">Next Growth</div>
+                  <div className="mt-2 text-2xl font-black text-white">More rewards</div>
+                  <div className="mt-2 text-sm text-white/70">Monthly bonus opportunities can be layered later.</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex">
+              <div className="flex w-full flex-col justify-between rounded-[34px] bg-[#f2b20f] p-8 text-slate-950 shadow-[0_35px_80px_rgba(0,0,0,0.22)]">
+                <div>
+                  <div className="flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-[24px] bg-white/75 p-4 text-[#7a0000] shadow-[0_20px_40px_rgba(0,0,0,0.10)]">
+                    <CircleDollarSign className="h-10 w-10" />
+                  </div>
+                  <div className="mt-8 text-sm font-black uppercase tracking-[0.24em] text-[#7a0000]">Why top agents win</div>
+                  <h3 className="mt-4 text-4xl font-black leading-tight">Real customer trust turns into real monthly income.</h3>
+                  <p className="mt-5 text-lg leading-8 text-slate-900/80">
+                    Solar demand keeps growing across Kenya. Strong local recommendations make referrals easier to close.
+                  </p>
+                </div>
+                <div className="mt-8">
+                  <Link
+                    href={registerHref}
+                    className="inline-flex min-h-[3.5rem] w-full items-center justify-center rounded-2xl bg-[#7a0000] px-6 py-4 text-base font-bold text-white shadow-[0_18px_40px_rgba(122,0,0,0.20)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_50px_rgba(122,0,0,0.26)]"
+                  >
+                    Start Referring Today
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section id="earnings" className="bg-[linear-gradient(135deg,#5c0000_0%,#7a0000_38%,#8d1407_100%)] py-20 text-white">
           <div className="mx-auto grid max-w-7xl gap-8 px-4 sm:px-6 lg:grid-cols-[1.15fr_0.85fr] lg:px-8">
             <div>
@@ -397,6 +541,7 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
                   </div>
                 ))}
               </div>
+              <p className="mt-6 text-sm text-white/70">Commission depends on confirmed sale value and completed payment.</p>
             </div>
 
             <div className="flex">
@@ -457,15 +602,71 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
           </div>
         </section>
 
+        <section className="bg-[#fffaf3] py-20">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            {sectionTitle("Who Can Join?", "Anyone with a network can refer customers and earn.")}
+            <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {joinAudience.map((item, index) => (
+                <div
+                  key={item}
+                  className="rounded-[26px] border border-[#7a0000]/10 bg-white p-5 shadow-[0_18px_40px_rgba(15,23,42,0.06)] transition duration-300 hover:-translate-y-1"
+                >
+                  <div className={`flex h-12 w-12 items-center justify-center rounded-2xl font-black ${index % 2 === 0 ? "bg-[#fff3d8] text-[#7a0000]" : "bg-[#7a0000] text-white"}`}>
+                    {index + 1}
+                  </div>
+                  <div className="mt-4 text-xl font-black text-slate-950">{item}</div>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">Perfect for people who already influence customer buying decisions in their area.</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="bg-white py-20">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            {sectionTitle("Why Solar Referrals Work Across Kenya 🇰🇪")}
+            <div className="mt-14 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {kenyaOpportunity.map((item, index) => {
+                const icons = [House, PanelsTopLeft, ShoppingBag, ShieldCheck, Truck, Users];
+                const Icon = icons[index] ?? BadgeCheck;
+                return (
+                  <div
+                    key={item}
+                    className="rounded-[28px] border border-[#7a0000]/10 bg-[#fcfaf7] p-6 shadow-[0_16px_34px_rgba(15,23,42,0.05)] transition duration-300 hover:-translate-y-1"
+                  >
+                    <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${index % 2 === 0 ? "bg-[#fff3d8] text-[#7a0000]" : "bg-[#7a0000] text-white"}`}>
+                      <Icon className="h-7 w-7" />
+                    </div>
+                    <div className="mt-4 text-2xl font-black text-slate-950">{item}</div>
+                    <p className="mt-3 text-sm leading-7 text-slate-600">
+                      Local referrals work because customers trust people who understand the needs of their home, farm, or business.
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
         <section id="products" className="bg-[#fffaf3] py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            {sectionTitle("Trusted Solar Brands We Deal With")}
+            {sectionTitle("Trusted Solar Brands We Deal With", "We deal with reliable solar products trusted by homes, farms, and businesses across Kenya.")}
+            <div className="mt-8 flex flex-wrap justify-center gap-3">
+              {["Solar Kits", "Batteries", "Inverters", "Water Pumps", "Accessories"].map((label, index) => (
+                <div
+                  key={label}
+                  className={`rounded-full px-4 py-2 text-sm font-bold shadow-[0_10px_24px_rgba(15,23,42,0.04)] ${index % 2 === 0 ? "bg-[#fff3d8] text-[#7a0000]" : "bg-white text-slate-700 border border-[#7a0000]/10"}`}
+                >
+                  {label}
+                </div>
+              ))}
+            </div>
             <div className="mt-14 rounded-[34px] border border-[#7a0000]/10 bg-white p-6 shadow-[0_20px_50px_rgba(15,23,42,0.06)]">
               <div className="grid gap-x-8 gap-y-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
               {brands.map((brand) => (
                 <div
                   key={brand.name}
-                  className="flex min-h-[5.5rem] items-center justify-center rounded-[20px] px-4 py-3 text-center transition duration-300 hover:-translate-y-1"
+                  className="flex min-h-[5.5rem] items-center justify-center rounded-[20px] border border-[#7a0000]/6 bg-[#fcfaf7] px-4 py-3 text-center transition duration-300 hover:-translate-y-1"
                 >
                   <BrandWordmark style={brand.style} name={brand.name} />
                 </div>
@@ -528,11 +729,42 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
                     <div>
                       <div className="text-xl font-black text-slate-950">{testimonial.name}</div>
                       <div className="text-sm text-slate-500">{testimonial.location}</div>
+                      <div className="mt-2 inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-[#7a0000]">
+                        Approved Agent
+                      </div>
                     </div>
                   </div>
                   <p className="mt-5 text-base leading-8 text-slate-600">“{testimonial.quote}”</p>
                 </div>
               ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="bg-[#fffaf3] py-20">
+          <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+            {sectionTitle("See How Betech Agents Earn", "Watch how agents refer customers, submit orders, and withdraw commissions.")}
+            <div className="mt-14 overflow-hidden rounded-[36px] border border-[#7a0000]/10 bg-[linear-gradient(135deg,#5c0000_0%,#7a0000_45%,#2c0000_100%)] p-6 shadow-[0_28px_65px_rgba(122,0,0,0.16)]">
+              <div className="grid gap-6 md:grid-cols-[1.05fr_0.95fr]">
+                <div className="rounded-[28px] border border-white/10 bg-white/6 p-8 text-white">
+                  <div className="inline-flex rounded-full border border-white/16 bg-white/10 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-[#ffd761]">
+                    Video Coming Soon
+                  </div>
+                  <h3 className="mt-6 text-3xl font-black">A quick look at how agents turn customer referrals into M-Pesa payouts.</h3>
+                  <p className="mt-4 text-base leading-8 text-white/75">
+                    We’ll add a short explainer video here showing how simple it is to refer customers, submit orders, and grow your solar income.
+                  </p>
+                </div>
+                <div className="flex min-h-[18rem] items-center justify-center rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.16),transparent_30%),linear-gradient(135deg,#ffe2a7_0%,#f2b20f_40%,#7a0000_100%)] p-8 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.24)]">
+                  <div className="text-center">
+                    <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-white/20 shadow-[0_20px_40px_rgba(0,0,0,0.18)] backdrop-blur">
+                      <PlayCircle className="h-14 w-14" />
+                    </div>
+                    <div className="mt-5 text-2xl font-black">Watch The Agent Story</div>
+                    <div className="mt-2 text-sm uppercase tracking-[0.16em] text-white/80">Referral • Delivery • Commission • Withdraw</div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -556,21 +788,21 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
           </div>
         </section>
 
-        <section id="contact" className="bg-[linear-gradient(135deg,#5c0000_0%,#7a0000_45%,#3f0000_100%)] py-20 text-white">
+        <section id="contact" className="bg-[linear-gradient(135deg,#3b0000_0%,#7a0000_45%,#150000_100%)] py-20 text-white">
           <div className="mx-auto grid max-w-7xl gap-8 px-4 sm:px-6 lg:grid-cols-[1fr_0.95fr] lg:px-8">
             <div className="flex flex-col justify-center">
               <div className="inline-flex w-fit rounded-full border border-white/16 bg-white/8 px-4 py-2 text-xs font-black uppercase tracking-[0.22em] text-[#ffd761]">
                 Ready To Start Earning? ⚡
               </div>
-              <h2 className="mt-6 text-4xl font-black tracking-tight text-white md:text-6xl">Join the Betech Solar Agents Program today.</h2>
+              <h2 className="mt-6 text-4xl font-black tracking-tight text-white md:text-6xl">Join the Betech Solar Agents Program today and start earning from successful solar referrals.</h2>
               <p className="mt-5 max-w-2xl text-lg leading-8 text-white/80">
-                Start earning from successful solar referrals by connecting homes, farms, and businesses to trusted energy solutions.
+                Refer customers, let Betech handle confirmation and delivery, then withdraw your commission through M-Pesa.
               </p>
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Link
                   href={registerHref}
-                  className="inline-flex items-center justify-center rounded-2xl bg-[#0f9d58] px-6 py-4 text-base font-bold text-white shadow-[0_18px_40px_rgba(15,157,88,0.24)] transition hover:-translate-y-0.5"
+                  className="inline-flex items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#11b86a_0%,#0f9d58_55%,#0b7c44_100%)] px-6 py-4 text-base font-bold text-white shadow-[0_18px_40px_rgba(15,157,88,0.24)] transition hover:-translate-y-0.5"
                 >
                   Become an Agent Now
                 </Link>
@@ -580,16 +812,17 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
                   rel="noreferrer"
                   className="inline-flex items-center justify-center rounded-2xl border border-white/18 bg-white px-6 py-4 text-base font-bold text-slate-950 transition hover:-translate-y-0.5"
                 >
-                  Talk To Us
+                  Talk To Us On WhatsApp
                 </a>
               </div>
 
               <div className="mt-8 flex flex-wrap gap-6 text-sm font-semibold text-white/80">
+                <div>📞 0722 151 083</div>
+                <div>🌐 www.betech.co.ke</div>
                 <div>Free to Join</div>
-                <div>Easy to Use</div>
-                <div>Earn More</div>
                 <div>Get Paid Fast</div>
               </div>
+              <div className="mt-8 text-2xl font-black text-[#ffd761]">Refer. Earn. Withdraw.</div>
             </div>
 
             <div className="relative overflow-hidden rounded-[36px] border border-white/10 bg-[linear-gradient(155deg,#f9d18f_0%,#a34a26_24%,#6a1c10_58%,#2a0704_100%)] p-5 shadow-[0_30px_80px_rgba(0,0,0,0.24)]">
