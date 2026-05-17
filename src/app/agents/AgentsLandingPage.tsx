@@ -55,20 +55,20 @@ const steps = [
 ];
 
 const agentProducts = [
-  { name: "SRNE 20KW Lithium Solar System", price: 950000, image: "/agents/products/srne-20kw-lithium-solar-system.jpeg", category: "Solar Kit" },
-  { name: "SRNE 10KW Lithium Solar Power System", price: 550000, image: "/agents/products/srne-10kw-lithium-solar-power-system.jpeg", category: "Solar Kit" },
-  { name: "8KW Lithium Battery Kit", price: 350000, image: "/agents/products/8kw-lithium-battery-kit.jpeg", category: "Battery Kit" },
-  { name: "SRNE 5KW Lithium Solar System", price: 280000, image: "/agents/products/srne-5kw-lithium-solar-system.jpeg", category: "Solar Kit" },
-  { name: "SRNE 3KW Lithium Solar System", price: 180000, image: "/agents/products/srne-3kw-lithium-solar-system.jpeg", category: "Solar Kit" },
-  { name: "4KW Lithium Solar Kit", price: 90000, image: "/agents/products/4kw-lithium-solar-kit.jpeg", category: "Solar Kit" },
-  { name: "2KW Lithium Powerstation", price: 86400, image: "/agents/products/2kw-lithium-powerstation.jpeg", category: "Power Station" },
-  { name: "Platinum 2.56KW Lithium Solar Kit", price: 70000, image: "/agents/products/platinum-2-56kw-lithium-solar-kit.jpeg", category: "Solar Kit" },
-  { name: "Platinum 1.28KW Lithium Solar Kit", price: 49000, image: "/agents/products/platinum-1-28kw-lithium-solar-kit.jpeg", category: "Solar Kit" },
-  { name: "Starmax 300W Full Kit", price: 38999, image: "/agents/products/starmax-300w-full-kit.jpeg", category: "Starter Kit" },
-  { name: "Starmax 250W Full Kit", price: 27500, image: "/agents/products/starmax-250w-full-kit.jpeg", category: "Starter Kit" },
-  { name: "Starmax 200W Full Kit", price: 21999, image: "/agents/products/starmax-200w-full-kit.jpeg", category: "Starter Kit" },
-  { name: "Starmax 150W Full Kit", price: 19999, image: "/agents/products/starmax-150w-full-kit.jpeg", category: "Starter Kit" },
-  { name: "Starmax 100W Full Kit", price: 13000, image: "/agents/products/starmax-100w-full-kit.jpeg", category: "Starter Kit" },
+  { name: "SRNE 20KW Lithium Solar System", price: 950000, image: "/agents/product-solar-kit-generated.png", category: "Solar Kit" },
+  { name: "SRNE 10KW Lithium Solar Power System", price: 550000, image: "/agents/product-solar-kit-generated.png", category: "Solar Kit" },
+  { name: "8KW Lithium Battery Kit", price: 350000, image: "/agents/product-battery-generated.png", category: "Battery Kit" },
+  { name: "SRNE 5KW Lithium Solar System", price: 280000, image: "/agents/product-solar-kit-generated.png", category: "Solar Kit" },
+  { name: "SRNE 3KW Lithium Solar System", price: 180000, image: "/agents/product-inverter-generated.png", category: "Solar Kit" },
+  { name: "4KW Lithium Solar Kit", price: 90000, image: "/agents/product-solar-kit-generated.png", category: "Solar Kit" },
+  { name: "2KW Lithium Powerstation", price: 86400, image: "/agents/product-inverter-generated.png", category: "Power Station" },
+  { name: "Platinum 2.56KW Lithium Solar Kit", price: 70000, image: "/agents/product-battery-generated.png", category: "Solar Kit" },
+  { name: "Platinum 1.28KW Lithium Solar Kit", price: 49000, image: "/agents/product-battery-generated.png", category: "Solar Kit" },
+  { name: "Starmax 300W Full Kit", price: 38999, image: "/agents/product-accessories-generated.png", category: "Starter Kit" },
+  { name: "Starmax 250W Full Kit", price: 27500, image: "/agents/product-accessories-generated.png", category: "Starter Kit" },
+  { name: "Starmax 200W Full Kit", price: 21999, image: "/agents/product-accessories-generated.png", category: "Starter Kit" },
+  { name: "Starmax 150W Full Kit", price: 19999, image: "/agents/product-accessories-generated.png", category: "Starter Kit" },
+  { name: "Starmax 100W Full Kit", price: 13000, image: "/agents/product-accessories-generated.png", category: "Starter Kit" },
 ];
 
 const benefits = [
@@ -485,14 +485,6 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
                         }`}
                       >
                         <div className={`absolute inset-x-8 top-[6.2rem] h-px ${isFeatured ? "bg-[#f2b20f]/28" : "bg-transparent"}`} />
-                        <div
-                          className={`absolute left-6 top-0 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full text-lg font-black shadow-[0_16px_28px_rgba(122,0,0,0.18)] ${
-                            isGold ? "bg-[linear-gradient(135deg,#ffd761_0%,#f2b20f_100%)] text-slate-950" : "bg-[linear-gradient(135deg,#8f0808_0%,#7a0000_100%)] text-white"
-                          }`}
-                        >
-                          {step.number}
-                        </div>
-
                         <div className="flex items-start justify-between gap-4 pt-5">
                           <div className="relative">
                             <div className={`absolute inset-0 rounded-[1.6rem] blur-xl ${isGold ? "bg-[#f2b20f]/28" : "bg-[#7a0000]/20"}`} />
@@ -542,12 +534,6 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
                           : "border-[#7a0000]/10 bg-white/80 shadow-[0_18px_40px_rgba(15,23,42,0.06)] backdrop-blur"
                       }`}
                     >
-                      <div className={`absolute left-5 top-0 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-lg font-black shadow-[0_12px_24px_rgba(122,0,0,0.20)] ${
-                        isGold ? "bg-[linear-gradient(135deg,#ffd761_0%,#f2b20f_100%)] text-slate-950" : "bg-[linear-gradient(135deg,#8f0808_0%,#7a0000_100%)] text-white"
-                      }`}>
-                        {step.number}
-                      </div>
-
                       <div className="flex items-start gap-4 pt-5">
                         <div className="relative shrink-0">
                           <div className={`absolute inset-0 rounded-[1.35rem] blur-xl ${isGold ? "bg-[#f2b20f]/28" : "bg-[#7a0000]/20"}`} />
