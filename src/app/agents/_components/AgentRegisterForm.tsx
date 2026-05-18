@@ -3,8 +3,9 @@
 import { signIn } from "next-auth/react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { agentPath } from "@/lib/agents/host";
+import { getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
 
 type RegisterResponse = {
   ok?: boolean;
@@ -30,6 +31,7 @@ export default function AgentRegisterForm({ useRootPaths = false }: AgentRegiste
     county: "",
     city: "",
   });
+  const townOptions = useMemo(() => getTownsForCounty(form.county), [form.county]);
 
   function update<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -148,27 +150,52 @@ export default function AgentRegisterForm({ useRootPaths = false }: AgentRegiste
       <div className="grid gap-4 md:grid-cols-3">
         <div className="space-y-2">
           <label className="text-sm font-semibold text-slate-700">Country</label>
-          <input
+          <select
             value={form.country}
             onChange={(event) => update("country", event.target.value)}
             className="h-14 w-full rounded-2xl border border-[#7a0000]/10 bg-[#fcfaf7] px-4 text-slate-950 outline-none transition focus:border-[#7a0000]/55 focus:bg-white"
-          />
+          >
+            <option value="Kenya">Kenya</option>
+          </select>
         </div>
         <div className="space-y-2">
           <label className="text-sm font-semibold text-slate-700">County</label>
-          <input
+          <select
             value={form.county}
-            onChange={(event) => update("county", event.target.value)}
+            onChange={(event) => {
+              const nextCounty = event.target.value;
+              const nextTowns = getTownsForCounty(nextCounty);
+              setForm((current) => ({
+                ...current,
+                county: nextCounty,
+                city: nextTowns.some((town) => town === current.city) ? current.city : "",
+              }));
+            }}
             className="h-14 w-full rounded-2xl border border-[#7a0000]/10 bg-[#fcfaf7] px-4 text-slate-950 outline-none transition focus:border-[#7a0000]/55 focus:bg-white"
-          />
+          >
+            <option value="">Select County</option>
+            {kenyaCountyOptions.map((county) => (
+              <option key={county} value={county}>
+                {county}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="space-y-2">
           <label className="text-sm font-semibold text-slate-700">Town / City</label>
-          <input
+          <select
             value={form.city}
             onChange={(event) => update("city", event.target.value)}
+            disabled={!form.county}
             className="h-14 w-full rounded-2xl border border-[#7a0000]/10 bg-[#fcfaf7] px-4 text-slate-950 outline-none transition focus:border-[#7a0000]/55 focus:bg-white"
-          />
+          >
+            <option value="">{form.county ? "Select Town / City" : "Choose County First"}</option>
+            {townOptions.map((town) => (
+              <option key={town} value={town}>
+                {town}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
