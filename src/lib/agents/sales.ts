@@ -196,6 +196,11 @@ type AgentSaleCommission = Prisma.AgentCommissionGetPayload<{
   };
 }>;
 
+type AgentPayoutStatusRow = {
+  amount: number | null;
+  status: string | null;
+};
+
 type AgentSaleRecordLite = Prisma.AgentSaleGetPayload<{
   include: {
     agent: { select: { id: true; name: true; email: true } };
@@ -230,6 +235,37 @@ function getCommissionForSale(
   commissionsBySaleId: Map<string, AgentSaleCommission>,
 ) {
   return commissionsBySaleId.get(saleId) ?? null;
+}
+
+function applyPaidPayoutsToSaleCommissions(
+  commissions: AgentSaleCommission[],
+  payouts: AgentPayoutStatusRow[],
+) {
+  let remainingPaid = payouts
+    .filter((row) => String(row.status || "").toLowerCase() === "paid")
+    .reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
+
+  const paidIds = new Set<string>();
+  for (const commission of commissions
+    .filter((row) => String(row.status || "").toLowerCase() !== "cancelled")
+    .slice()
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())) {
+    const amount = Number(commission.commissionAmt ?? 0);
+    if (remainingPaid <= 0) break;
+    if (amount <= remainingPaid + 0.0001) {
+      paidIds.add(commission.id);
+      remainingPaid -= amount;
+    }
+  }
+
+  return commissions.map((commission) =>
+    paidIds.has(commission.id)
+      ? {
+          ...commission,
+          status: "paid",
+        }
+      : commission,
+  );
 }
 
 function isAgentSalePodCandidate(sale: {
@@ -1049,54 +1085,69 @@ export async function createAgentSale(agentId: string, body: unknown) {
 
 export async function getAgentSales(agentId: string) {
   let sales: AgentSaleRecord[] = [];
+  let payouts: AgentPayoutStatusRow[] = [];
   try {
-    sales = await prisma.agentSale.findMany({
-      where: { agentId },
-      include: {
-        agent: { select: { id: true, name: true, email: true } },
-        receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
-      },
-      orderBy: [{ createdAt: "desc" }],
-    });
+    [sales, payouts] = await Promise.all([
+      prisma.agentSale.findMany({
+        where: { agentId },
+        include: {
+          agent: { select: { id: true, name: true, email: true } },
+          receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
+        },
+        orderBy: [{ createdAt: "desc" }],
+      }),
+      prisma.agentPayout.findMany({
+        where: { agentId },
+        select: { amount: true, status: true },
+        orderBy: { createdAt: "asc" },
+      }),
+    ]);
   } catch (error) {
     if (isAgentSalesSchemaError(error)) return [];
     throw error;
   }
 
-  const commissionBySaleId = await fetchSalesCommissions(sales.map((sale) => sale.id));
+  const rawCommissionBySaleId = await fetchSalesCommissions(sales.map((sale) => sale.id));
+  const adjustedCommissions = applyPaidPayoutsToSaleCommissions(Array.from(rawCommissionBySaleId.values()), payouts);
+  const commissionBySaleId = new Map(
+    adjustedCommissions.filter((row) => row.sourceId).map((row) => [String(row.sourceId), row] as const),
+  );
   return sales.map((sale) => presentAgentSale(sale, getCommissionForSale(sale.id, commissionBySaleId)));
 }
 
 export async function getAgentSaleById(agentId: string, saleId: string) {
   let sale;
+  let payouts: AgentPayoutStatusRow[] = [];
   try {
-    sale = await prisma.agentSale.findFirst({
-      where: { id: saleId, agentId },
-      include: {
-        agent: { select: { id: true, name: true, email: true } },
-        receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
-      },
-    });
+    [sale, payouts] = await Promise.all([
+      prisma.agentSale.findFirst({
+        where: { id: saleId, agentId },
+        include: {
+          agent: { select: { id: true, name: true, email: true } },
+          receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
+        },
+      }),
+      prisma.agentPayout.findMany({
+        where: { agentId },
+        select: { amount: true, status: true },
+        orderBy: { createdAt: "asc" },
+      }),
+    ]);
   } catch (error) {
     if (isAgentSalesSchemaError(error)) return null;
     throw error;
   }
   if (!sale) return null;
-  const commissionBySaleId = await fetchSalesCommissions([sale.id]);
+  const rawCommissionBySaleId = await fetchSalesCommissions([sale.id]);
+  const adjustedCommissions = applyPaidPayoutsToSaleCommissions(Array.from(rawCommissionBySaleId.values()), payouts);
+  const commissionBySaleId = new Map(
+    adjustedCommissions.filter((row) => row.sourceId).map((row) => [String(row.sourceId), row] as const),
+  );
   return presentAgentSale(sale, getCommissionForSale(sale.id, commissionBySaleId));
 }
 
 export async function getAgentSalesDashboardSummary(agentId: string) {
-  const [sales, commissions] = await Promise.all([
-    getAgentSales(agentId),
-    prisma.agentCommission.findMany({
-      where: { agentId, sourceType: "agent_sale" },
-      select: { commissionAmt: true, status: true },
-    }).catch((error) => {
-      if (isAgentSalesSchemaError(error)) return [];
-      throw error;
-    }),
-  ]);
+  const sales = await getAgentSales(agentId);
 
   const pendingStatuses = new Set<string>(["pending_review", "awaiting_payment", "payment_confirmed"]);
   const inProgressStatuses = new Set<string>(["processing", "dispatched", "delivered_pending_balance"]);
@@ -1116,9 +1167,10 @@ export async function getAgentSalesDashboardSummary(agentId: string) {
     emptySalesSummary(),
   );
 
-  for (const commission of commissions) {
-    const amount = Number(commission.commissionAmt ?? 0);
-    const status = String(commission.status || "").toLowerCase();
+  for (const sale of sales) {
+    if (String(sale.status || "").toLowerCase() !== "completed") continue;
+    const amount = Number(sale.commissionAmount ?? 0);
+    const status = String(sale.commissionStatus || "").toLowerCase();
     if (status === "paid") summary.paidCommission += amount;
     else if (status !== "cancelled") summary.earnedCommission += amount;
   }

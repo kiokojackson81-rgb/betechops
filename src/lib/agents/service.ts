@@ -94,7 +94,9 @@ export async function getAgentDashboardData(userId: string) {
     }),
   ]);
 
-  const totals = commissions.reduce(
+  const adjustedCommissions = applyPaidPayoutsToCommissions(commissions, payouts);
+
+  const totals = adjustedCommissions.reduce(
     (acc, row) => {
       acc.referrals += 1;
       acc.sales += Number(row.saleAmount ?? 0);
@@ -106,8 +108,8 @@ export async function getAgentDashboardData(userId: string) {
     { referrals: 0, sales: 0, commission: 0, pending: 0, paid: 0 },
   );
 
-  const paidCount = commissions.filter((row) => String(row.status).toLowerCase() === "paid").length;
-  const successRate = commissions.length ? Math.round((paidCount / commissions.length) * 100) : 0;
+  const paidCount = adjustedCommissions.filter((row) => String(row.status).toLowerCase() === "paid").length;
+  const successRate = adjustedCommissions.length ? Math.round((paidCount / adjustedCommissions.length) * 100) : 0;
 
   return {
     profile,
@@ -123,7 +125,7 @@ export async function getAgentDashboardData(userId: string) {
     },
     salesSummary,
     sales,
-    commissions,
+    commissions: adjustedCommissions,
     payouts,
     activities,
   };
@@ -188,6 +190,7 @@ export async function getAdminAgentsData(
       orderBy: { createdAt: "desc" },
     }),
   ]);
+  const adjustedCommissions = applyPaidPayoutsToCommissions(commissions, payouts);
 
   const phoneOwnerCounts = new Map<string, Set<string>>();
   for (const sale of sales) {
@@ -199,7 +202,7 @@ export async function getAdminAgentsData(
   }
 
   const mapped = rows.map((row) => {
-    const agentCommissions = commissions.filter((item) => item.agentId === row.userId);
+    const agentCommissions = adjustedCommissions.filter((item) => item.agentId === row.userId);
     const agentPayouts = payouts.filter((item) => item.agentId === row.userId);
     const agentSales = sales.filter((item) => item.agentId === row.userId);
     const agentActivities = activities.filter((item) => item.agentId === row.userId).slice(0, 10);
@@ -297,6 +300,52 @@ function commissionQueueFromStatus(status: string) {
   return "pending";
 }
 
+function applyPaidPayoutsToCommissions<T extends { id: string; agentId: string; commissionAmt: number | null; status: string | null; createdAt: Date }>(
+  commissions: T[],
+  payouts: Array<{ agentId: string; amount: number | null; status: string | null }>,
+) {
+  const payoutsByAgent = new Map<string, number>();
+  for (const payout of payouts) {
+    if (String(payout.status || "").toLowerCase() !== "paid") continue;
+    payoutsByAgent.set(
+      payout.agentId,
+      (payoutsByAgent.get(payout.agentId) ?? 0) + Number(payout.amount ?? 0),
+    );
+  }
+
+  const commissionsByAgent = new Map<string, T[]>();
+  for (const commission of commissions) {
+    const bucket = commissionsByAgent.get(commission.agentId) ?? [];
+    bucket.push(commission);
+    commissionsByAgent.set(commission.agentId, bucket);
+  }
+
+  const paidIds = new Set<string>();
+  for (const [agentId, items] of commissionsByAgent.entries()) {
+    let remaining = payoutsByAgent.get(agentId) ?? 0;
+    for (const commission of items
+      .filter((row) => String(row.status || "").toLowerCase() !== "cancelled")
+      .slice()
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())) {
+      const amount = Number(commission.commissionAmt ?? 0);
+      if (remaining <= 0) break;
+      if (amount <= remaining + 0.0001) {
+        paidIds.add(commission.id);
+        remaining -= amount;
+      }
+    }
+  }
+
+  return commissions.map((commission) =>
+    paidIds.has(commission.id)
+      ? {
+          ...commission,
+          status: "paid",
+        }
+      : commission,
+  );
+}
+
 function payoutQueueFromStatus(status: string) {
   const normalized = String(status || "").toLowerCase();
   if (normalized === "approved") return "approved";
@@ -335,7 +384,7 @@ export async function getAdminAgentCommissionQueueData(filters: {
   );
   const agentMap = new Map(agents.map((agent) => [agent.profile.userId, agent]));
   const userIds = profiles.map((row) => row.userId);
-  const [sales, commissions] = await Promise.all([
+  const [sales, commissions, payouts] = await Promise.all([
     prisma.agentSale.findMany({
       where: { agentId: { in: userIds } },
       orderBy: { createdAt: "desc" },
@@ -350,7 +399,12 @@ export async function getAdminAgentCommissionQueueData(filters: {
       if (isAgentSalesSchemaError(error)) return [];
       throw error;
     }),
+    prisma.agentPayout.findMany({
+      where: { agentId: { in: userIds } },
+      orderBy: { createdAt: "desc" },
+    }),
   ]);
+  const adjustedCommissions = applyPaidPayoutsToCommissions(commissions, payouts);
 
   const saleById = new Map<string, (typeof sales)[number]>(
     sales.map((sale) => [sale.id, sale] as [string, (typeof sales)[number]]),
@@ -382,7 +436,7 @@ export async function getAdminAgentCommissionQueueData(filters: {
           note: "Locked until payment, delivery, and admin completion.",
         };
       }),
-    ...commissions.map((commission) => {
+    ...adjustedCommissions.map((commission) => {
       const sale = commission.sourceId ? saleById.get(commission.sourceId) : null;
       const agent = agentMap.get(commission.agentId);
       return {
