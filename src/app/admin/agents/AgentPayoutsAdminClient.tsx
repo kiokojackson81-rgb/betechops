@@ -47,6 +47,7 @@ export default function AgentPayoutsAdminClient({ rows }: { rows: PayoutRow[] })
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  const [activeActionById, setActiveActionById] = useState<Record<string, "paid" | "rejected" | null>>({});
   const [paymentReferenceById, setPaymentReferenceById] = useState<Record<string, string>>({});
   const [rejectionReasonById, setRejectionReasonById] = useState<Record<string, string>>({});
   const [, startTransition] = useTransition();
@@ -83,6 +84,7 @@ export default function AgentPayoutsAdminClient({ rows }: { rows: PayoutRow[] })
     if (status === "rejected") {
       setRejectionReasonById((current) => ({ ...current, [id]: "" }));
     }
+    setActiveActionById((current) => ({ ...current, [id]: null }));
     startTransition(() => router.refresh());
   }
 
@@ -174,6 +176,7 @@ export default function AgentPayoutsAdminClient({ rows }: { rows: PayoutRow[] })
         <div className="divide-y divide-white/5">
           {rows.map((row) => {
             const expanded = expandedIds.includes(row.id);
+            const activeAction = activeActionById[row.id] ?? null;
             return (
               <div key={row.id} className="transition hover:bg-white/[0.02]">
                 <div className="grid grid-cols-[56px_56px_minmax(220px,1.4fr)_160px_150px_160px_130px_160px] items-center gap-3 px-4 py-4">
@@ -252,34 +255,68 @@ export default function AgentPayoutsAdminClient({ rows }: { rows: PayoutRow[] })
                         </button>
                       )}
                       {row.status === "approved" && (
-                        <div className="flex min-w-[320px] flex-1 flex-wrap gap-3 rounded-2xl border border-emerald-400/15 bg-emerald-400/[0.04] p-3">
-                          <input
-                            value={paymentReferenceById[row.id] ?? row.reference ?? ""}
-                            onChange={(event) =>
-                              setPaymentReferenceById((current) => ({ ...current, [row.id]: event.target.value }))
-                            }
-                            placeholder="Enter M-Pesa reference code"
-                            className="min-w-[220px] flex-1 rounded-xl border border-white/10 bg-slate-950/70 px-4 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-emerald-300/40"
-                          />
-                          <button onClick={() => updateStatus(row.id, "paid")} disabled={busy !== null} className="rounded-xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60">
-                            {busy === `${row.id}:paid` ? "..." : "Mark Paid"}
+                        activeAction === "paid" ? (
+                          <div className="flex min-w-[320px] flex-1 flex-wrap gap-3 rounded-2xl border border-emerald-400/15 bg-emerald-400/[0.04] p-3">
+                            <input
+                              value={paymentReferenceById[row.id] ?? row.reference ?? ""}
+                              onChange={(event) =>
+                                setPaymentReferenceById((current) => ({ ...current, [row.id]: event.target.value }))
+                              }
+                              placeholder="Enter M-Pesa reference code"
+                              className="min-w-[220px] flex-1 rounded-xl border border-white/10 bg-slate-950/70 px-4 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-emerald-300/40"
+                            />
+                            <button onClick={() => updateStatus(row.id, "paid")} disabled={busy !== null} className="rounded-xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60">
+                              {busy === `${row.id}:paid` ? "..." : "Confirm Paid"}
+                            </button>
+                            <button
+                              onClick={() => setActiveActionById((current) => ({ ...current, [row.id]: null }))}
+                              disabled={busy !== null}
+                              className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 disabled:opacity-60"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setActiveActionById((current) => ({ ...current, [row.id]: "paid" }))}
+                            disabled={busy !== null}
+                            className="rounded-xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60"
+                          >
+                            Mark Paid
                           </button>
-                        </div>
+                        )
                       )}
                       {row.status !== "paid" && row.status !== "rejected" && (
-                        <div className="flex min-w-[320px] flex-1 flex-wrap gap-3 rounded-2xl border border-rose-400/15 bg-rose-400/[0.04] p-3">
-                          <input
-                            value={rejectionReasonById[row.id] ?? ""}
-                            onChange={(event) =>
-                              setRejectionReasonById((current) => ({ ...current, [row.id]: event.target.value }))
-                            }
-                            placeholder="Enter rejection reason"
-                            className="min-w-[220px] flex-1 rounded-xl border border-white/10 bg-slate-950/70 px-4 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-rose-300/40"
-                          />
-                          <button onClick={() => updateStatus(row.id, "rejected")} disabled={busy !== null} className="rounded-xl bg-rose-400 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60">
-                            {busy === `${row.id}:rejected` ? "..." : "Reject"}
+                        activeAction === "rejected" ? (
+                          <div className="flex min-w-[320px] flex-1 flex-wrap gap-3 rounded-2xl border border-rose-400/15 bg-rose-400/[0.04] p-3">
+                            <input
+                              value={rejectionReasonById[row.id] ?? ""}
+                              onChange={(event) =>
+                                setRejectionReasonById((current) => ({ ...current, [row.id]: event.target.value }))
+                              }
+                              placeholder="Enter rejection reason"
+                              className="min-w-[220px] flex-1 rounded-xl border border-white/10 bg-slate-950/70 px-4 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-rose-300/40"
+                            />
+                            <button onClick={() => updateStatus(row.id, "rejected")} disabled={busy !== null} className="rounded-xl bg-rose-400 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60">
+                              {busy === `${row.id}:rejected` ? "..." : "Confirm Reject"}
+                            </button>
+                            <button
+                              onClick={() => setActiveActionById((current) => ({ ...current, [row.id]: null }))}
+                              disabled={busy !== null}
+                              className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 disabled:opacity-60"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setActiveActionById((current) => ({ ...current, [row.id]: "rejected" }))}
+                            disabled={busy !== null}
+                            className="rounded-xl bg-rose-400 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60"
+                          >
+                            Reject
                           </button>
-                        </div>
+                        )
                       )}
                     </div>
                   </div>
