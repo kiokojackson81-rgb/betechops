@@ -123,6 +123,12 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
               >
                 💰 Withdraw Setup
               </Link>
+              <Link
+                href={agentPath("/withdrawals", useRootPaths)}
+                className="rounded-2xl border border-[#f1b81d]/50 bg-[#f1b81d]/12 px-5 py-3 text-sm font-semibold text-[#fff3cf] transition hover:bg-[#f1b81d]/18"
+              >
+                💸 Request Withdrawal
+              </Link>
             </div>
           </div>
 
@@ -340,6 +346,18 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
                     <div className="mt-2">Your earnings will appear here once customer orders are completed and paid.</div>
                   </div>
                 )}
+              </div>
+              <div className="mt-5 rounded-[24px] border border-[#f1b81d]/30 bg-[#fff3cf] p-4">
+                <div className="text-sm font-semibold text-[#210505]">Withdrawal procedure</div>
+                <p className="mt-2 text-sm text-[#5a4300]">
+                  Complete customer orders, wait for commission to unlock, then request withdrawal to your saved M-Pesa number.
+                </p>
+                <Link
+                  href={agentPath("/withdrawals", useRootPaths)}
+                  className="mt-4 inline-flex rounded-2xl bg-[#7a0000] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#5d0000]"
+                >
+                  Open withdrawals
+                </Link>
               </div>
             </article>
 

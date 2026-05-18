@@ -13,6 +13,7 @@ import {
   PlusCircle,
   Settings2,
   UserRound,
+  Wallet,
 } from "lucide-react";
 import { agentPath } from "@/lib/agents/host";
 
@@ -71,11 +72,12 @@ export default function AgentPortalShell({
     { href: agentPath("/dashboard", useRootPaths), label: "Dashboard", icon: Home },
     { href: agentPath("/sales", useRootPaths), label: "My Sales", icon: ClipboardList },
     { href: agentPath("/sales/new", useRootPaths), label: "Submit Order", icon: PlusCircle },
+    { href: agentPath("/withdrawals", useRootPaths), label: "Withdrawals", icon: Wallet },
     { href: agentPath("/profile", useRootPaths), label: "Profile", icon: UserRound },
-    { href: agentPath("/profile/payment-method", useRootPaths), label: "Withdrawals", icon: CreditCard },
+    { href: agentPath("/profile/payment-method", useRootPaths), label: "Payout Setup", icon: CreditCard },
   ];
 
-  const mobileItems = navItems.slice(0, 4);
+  const mobileItems = [navItems[0], navItems[1], navItems[2], navItems[3]];
 
   return (
     <div className="min-h-screen bg-[#f7f1eb] text-slate-900">

@@ -82,16 +82,16 @@ export async function POST(req: NextRequest) {
     throw error;
   }
 
-  const paidCommission = commissions
-    .filter((row) => String(row.status).toLowerCase() === "paid")
+  const eligibleCommission = commissions
+    .filter((row) => ["approved", "paid"].includes(String(row.status).toLowerCase()))
     .reduce((sum, row) => sum + Number(row.commissionAmt ?? 0), 0);
   const reservedPayouts = payouts
     .filter((row) => !["rejected", "cancelled"].includes(String(row.status).toLowerCase()))
     .reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
-  const available = paidCommission - reservedPayouts;
+  const available = Math.max(0, eligibleCommission - reservedPayouts);
 
   if (amount > available) {
-    return NextResponse.json({ error: `Requested amount exceeds available paid commission balance (${available}).` }, { status: 400 });
+    return NextResponse.json({ error: `Requested amount exceeds available withdrawal balance (${available}).` }, { status: 400 });
   }
 
   const payout = await prisma.agentPayout.create({
