@@ -43,55 +43,60 @@ export default function AgentLoginForm({ useRootPaths = false }: AgentLoginFormP
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">Agent portal</p>
-        <h1 className="text-3xl font-semibold text-white">Sign in to your BETECH affiliate account</h1>
-        <p className="text-sm text-slate-400">
-          Track referrals, sales, commissions, payout requests, and approval status from one dashboard.
+        <p className="text-xs font-black uppercase tracking-[0.28em] text-[#7a0000]">Agent Portal</p>
+        <h1 className="text-4xl font-black tracking-tight text-slate-950">Welcome back</h1>
+        <p className="text-base leading-8 text-slate-600">
+          Sign in to manage your referrals, track commissions, and submit customer orders.
         </p>
       </div>
 
       {error ? (
-        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{error}</div>
+        <div className="rounded-2xl border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
       ) : null}
 
       <div className="space-y-2">
-        <label className="text-sm text-slate-300">Email</label>
+        <label className="text-sm font-semibold text-slate-700">Email</label>
         <input
           type="email"
           required
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none transition focus:border-emerald-400/60"
+          className="h-14 w-full rounded-2xl border border-[#7a0000]/10 bg-[#fcfaf7] px-4 text-slate-950 outline-none transition focus:border-[#7a0000]/55 focus:bg-white"
           placeholder="agent@example.com"
         />
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm text-slate-300">Password</label>
+        <label className="text-sm font-semibold text-slate-700">Password</label>
         <input
           type="password"
           required
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-          className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none transition focus:border-emerald-400/60"
+          className="h-14 w-full rounded-2xl border border-[#7a0000]/10 bg-[#fcfaf7] px-4 text-slate-950 outline-none transition focus:border-[#7a0000]/55 focus:bg-white"
           placeholder="Your password"
         />
+      </div>
+
+      <div className="rounded-[1.4rem] border border-[#f2b20f]/20 bg-[#fff7e9] px-4 py-4 text-sm leading-7 text-slate-700">
+        <div className="font-black uppercase tracking-[0.16em] text-[#7a0000]">Why sign in?</div>
+        <div className="mt-2">6% commission on completed sales. Track customer orders, referrals, and M-Pesa withdrawals in one place.</div>
       </div>
 
       <button
         type="submit"
         disabled={busy}
-        className="w-full rounded-2xl bg-emerald-400 px-4 py-3 font-semibold text-slate-950 transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+        className="h-14 w-full rounded-2xl bg-[linear-gradient(135deg,#7a0000_0%,#9a1010_100%)] px-4 text-base font-bold text-white shadow-[0_18px_40px_rgba(122,0,0,0.18)] transition hover:-translate-y-0.5 hover:bg-[#7a0000] hover:shadow-[0_24px_50px_rgba(122,0,0,0.24)] disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {busy ? "Signing in..." : "Sign in"}
+        {busy ? "Signing In..." : "Sign In"}
       </button>
 
-      <p className="text-sm text-slate-400">
-        New here?{" "}
-        <Link href={agentPath("/register", useRootPaths)} className="font-medium text-emerald-300 hover:text-emerald-200">
-          Create your agent account
+      <div className="rounded-[1.4rem] border border-[#7a0000]/10 bg-white px-4 py-4 text-sm text-slate-600 shadow-[0_12px_24px_rgba(15,23,42,0.04)]">
+        <div className="font-semibold text-slate-800">New agent?</div>
+        <Link href={agentPath("/register", useRootPaths)} className="mt-1 inline-flex font-bold text-[#7a0000] hover:text-[#9a1010]">
+          Create your BETECH affiliate account
         </Link>
-      </p>
+      </div>
     </form>
   );
 }
