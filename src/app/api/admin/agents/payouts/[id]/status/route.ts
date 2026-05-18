@@ -23,39 +23,66 @@ export async function PATCH(
     return NextResponse.json({ error: "A valid payout id and status are required." }, { status: 400 });
   }
 
-  const payout = await prisma.agentPayout.update({
-    where: { id },
-    data: {
-      status,
-      ...(reference !== null ? { reference } : {}),
-    },
-  });
-
-  await prisma.agentActivityLog.create({
-    data: {
-      agentId: payout.agentId,
-      action: `payout_${status}`,
-      description: `Agent payout ${payout.id} moved to ${status} by admin.`,
-    },
-  });
-  try {
-    await prisma.agentAuditLog.create({
+  const payout = await prisma.$transaction(async (tx) => {
+    const updatedPayout = await tx.agentPayout.update({
+      where: { id },
       data: {
-        actorUserId,
-        targetAgentId: payout.agentId,
-        payoutId: payout.id,
-        eventType: `payout_${status}`,
-        summary: `Payout ${payout.id} moved to ${status}.`,
-        metadata: {
-          status,
-          amount: payout.amount,
-          reference,
-        },
+        status,
+        ...(reference !== null ? { reference } : {}),
       },
     });
-  } catch {
-    // enterprise tables may not exist until the manual SQL patch is applied
-  }
+
+    if (status === "paid") {
+      const commissions = await tx.agentCommission.findMany({
+        where: {
+          agentId: updatedPayout.agentId,
+          status: "approved",
+        },
+        orderBy: { createdAt: "asc" },
+      });
+
+      let remaining = Number(updatedPayout.amount ?? 0);
+      for (const commission of commissions) {
+        const amount = Number(commission.commissionAmt ?? 0);
+        if (remaining <= 0) break;
+        if (amount <= remaining + 0.0001) {
+          await tx.agentCommission.update({
+            where: { id: commission.id },
+            data: { status: "paid" },
+          });
+          remaining -= amount;
+        }
+      }
+    }
+
+    await tx.agentActivityLog.create({
+      data: {
+        agentId: updatedPayout.agentId,
+        action: `payout_${status}`,
+        description: `Agent payout ${updatedPayout.id} moved to ${status} by admin.`,
+      },
+    });
+    try {
+      await tx.agentAuditLog.create({
+        data: {
+          actorUserId,
+          targetAgentId: updatedPayout.agentId,
+          payoutId: updatedPayout.id,
+          eventType: `payout_${status}`,
+          summary: `Payout ${updatedPayout.id} moved to ${status}.`,
+          metadata: {
+            status,
+            amount: updatedPayout.amount,
+            reference,
+          },
+        },
+      });
+    } catch {
+      // enterprise tables may not exist until the manual SQL patch is applied
+    }
+
+    return updatedPayout;
+  });
 
   return NextResponse.json({ ok: true, payout });
 }
