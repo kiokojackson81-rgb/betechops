@@ -984,9 +984,10 @@ export async function computeAdminReceiptSummary({
       buyingTotal: Number((receipt as any)?.buyingTotal ?? (receipt.data as any)?.buyingTotal ?? 0),
       supportBuyingTotal: supportBuyingTotal,
       profit: (() => {
+        const agentSaleCommission = Number((receipt.data as any)?.agentSale?.commissionAmount ?? 0) || 0;
         const p = (receipt as any).profit ?? (receipt.data as any)?.profit;
-        if (typeof p === 'number' && Number.isFinite(p)) return Number(p);
-        if (typeof p === 'string' && p.trim() !== '' && !Number.isNaN(Number(p))) return Number(p);
+        if (typeof p === 'number' && Number.isFinite(p)) return Number(p) - agentSaleCommission;
+        if (typeof p === 'string' && p.trim() !== '' && !Number.isNaN(Number(p))) return Number(p) - agentSaleCommission;
         return undefined;
       })(),
       items: (receipt.order?.items ?? []).map((item) => {

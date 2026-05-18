@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { generateReceiptSerial, normalizeReceiptSerial } from "@/lib/receipts/serial";
 
 export const AGENT_COMMISSION_RATE = 6;
 
@@ -25,7 +26,7 @@ const agentSaleStatusLabels: Record<(typeof agentSaleStatuses)[number], string> 
   payment_confirmed: "Payment confirmed",
   processing: "Processing",
   dispatched: "Dispatched",
-  delivered_pending_balance: "Delivered, pending balance",
+  delivered_pending_balance: "Delivered / collected",
   completed: "Completed",
   cancelled: "Cancelled",
   rejected: "Rejected",
@@ -34,10 +35,10 @@ const agentSaleStatusLabels: Record<(typeof agentSaleStatuses)[number], string> 
 const agentSaleStatusNotes: Record<(typeof agentSaleStatuses)[number], string> = {
   pending_review: "Agent submitted the sale and it is waiting for admin review.",
   awaiting_payment: "Admin reviewed the sale and is waiting for customer payment.",
-  payment_confirmed: "Payment has been confirmed and the order is waiting for processing.",
-  processing: "Betech is preparing the item.",
+  payment_confirmed: "Customer payment has been confirmed.",
+  processing: "Betech is preparing the item and a receipt has been created.",
   dispatched: "The item has been sent out to the customer or pickup point.",
-  delivered_pending_balance: "The item was delivered or collected, but there is still a remaining balance.",
+  delivered_pending_balance: "The item was delivered or collected and is now ready for final completion.",
   completed: "Customer paid fully and the item was delivered or collected.",
   cancelled: "The sale was cancelled or abandoned.",
   rejected: "The sale was rejected during review.",
@@ -156,6 +157,13 @@ type AgentSaleCommission = Prisma.AgentCommissionGetPayload<{
   };
 }>;
 
+type AgentSaleRecordLite = Prisma.AgentSaleGetPayload<{
+  include: {
+    agent: { select: { id: true; name: true; email: true } };
+    receipt: { select: { id: true; receiptNumber: true; order: { select: { orderNumber: true } } } };
+  };
+}>;
+
 function roundAmount(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
@@ -179,6 +187,310 @@ function getCommissionForSale(
   commissionsBySaleId: Map<string, AgentSaleCommission>,
 ) {
   return commissionsBySaleId.get(saleId) ?? null;
+}
+
+function isAgentSalePodCandidate(sale: {
+  totalAmount: number;
+  amountPaid: number;
+  paymentType?: string | null;
+  deliveryMethod?: string | null;
+}) {
+  const paymentType = String(sale.paymentType || "").toLowerCase();
+  const deliveryMethod = String(sale.deliveryMethod || "").toLowerCase();
+  if (deliveryMethod === "shop_pickup" || deliveryMethod === "agent_pickup") return false;
+  return paymentType === "transport_fee" || paymentType === "deposit";
+}
+
+async function generateUniqueAgentReceiptSerial(tx: Prisma.TransactionClient) {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const serial = normalizeReceiptSerial(generateReceiptSerial());
+    const [order, receipt] = await Promise.all([
+      tx.order.findUnique({ where: { orderNumber: serial }, select: { id: true } }),
+      tx.receipt.findUnique({ where: { receiptNumber: serial }, select: { id: true } }),
+    ]);
+    if (!order && !receipt) return serial;
+  }
+  throw new Error("Unable to generate a unique receipt number for this agent sale.");
+}
+
+async function findOrCreateAgentSaleProduct(
+  tx: Prisma.TransactionClient,
+  sale: Pick<AgentSaleRecordLite, "productName" | "unitPrice">,
+) {
+  const productName = String(sale.productName || "").trim();
+  const unitPrice = normalizeAmount(Number(sale.unitPrice ?? 0));
+  const existing = await tx.product.findFirst({
+    where: {
+      name: {
+        equals: productName,
+        mode: "insensitive",
+      },
+    },
+  });
+  if (existing) return existing;
+  return tx.product.create({
+    data: {
+      sku: `agent-sale-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      name: productName || "Agent Sale Product",
+      category: "agent_sale",
+      sellingPrice: unitPrice,
+    },
+  });
+}
+
+async function syncLinkedReceiptForAgentSale(
+  tx: Prisma.TransactionClient,
+  sale: Pick<
+    AgentSaleRecordLite,
+    | "id"
+    | "agentId"
+    | "customerLocation"
+    | "deliveryMethod"
+    | "deliveryNotes"
+    | "paymentType"
+    | "totalAmount"
+    | "amountPaid"
+    | "status"
+    | "receiptId"
+    | "receiptNumber"
+  >,
+  actorEmail?: string | null,
+) {
+  if (!sale.receiptId) return;
+  const receipt = await tx.receipt.findUnique({
+    where: { id: sale.receiptId },
+    include: { order: true },
+  });
+  if (!receipt?.order) return;
+
+  const totalAmount = normalizeAmount(Number(sale.totalAmount ?? 0));
+  const amountPaid = normalizeAmount(Number(sale.amountPaid ?? 0));
+  const isPod = isAgentSalePodCandidate(sale);
+  const existingData =
+    typeof receipt.data === "object" && receipt.data ? { ...(receipt.data as Record<string, unknown>) } : {};
+  const existingPod =
+    typeof existingData.podDelivery === "object" && existingData.podDelivery
+      ? { ...(existingData.podDelivery as Record<string, unknown>) }
+      : null;
+  const nextPod = existingPod ?? (isPod ? { status: "pending", createdAt: new Date().toISOString() } : null);
+
+  if (sale.status === "dispatched") {
+    if (nextPod) nextPod.dispatchedAt = new Date().toISOString();
+  }
+  if (sale.status === "delivered_pending_balance") {
+    if (nextPod) {
+      nextPod.status = "delivered";
+      nextPod.deliveredAt = new Date().toISOString();
+    }
+    existingData.agentSale = {
+      ...(typeof existingData.agentSale === "object" && existingData.agentSale ? (existingData.agentSale as Record<string, unknown>) : {}),
+      deliveredAt: new Date().toISOString(),
+    };
+  }
+  if (amountPaid >= totalAmount && nextPod && !nextPod.paidAt) {
+    nextPod.paidAt = new Date().toISOString();
+    if (actorEmail) nextPod.paidBy = actorEmail;
+  }
+
+  let orderStatus: "PENDING" | "PROCESSING" | "FULFILLED" | "COMPLETED" | "CANCELED" = "PENDING";
+  if (sale.status === "processing") orderStatus = "PROCESSING";
+  else if (sale.status === "dispatched" || sale.status === "delivered_pending_balance") orderStatus = "FULFILLED";
+  else if (sale.status === "completed") orderStatus = "COMPLETED";
+  else if (sale.status === "cancelled" || sale.status === "rejected") orderStatus = "CANCELED";
+
+  const paymentStatus =
+    amountPaid >= totalAmount ? "PAID" : amountPaid > 0 ? "PARTIAL" : "UNPAID";
+
+  await tx.order.update({
+    where: { id: receipt.orderId },
+    data: {
+      status: orderStatus,
+      paidAmount: amountPaid,
+      paymentStatus,
+      metadata: {
+        ...(typeof receipt.order.metadata === "object" && receipt.order.metadata ? (receipt.order.metadata as Record<string, unknown>) : {}),
+        customerType: isPod ? "pod" : "online",
+        deliveryAddress: sale.customerLocation || null,
+        agentSale: {
+          saleId: sale.id,
+          agentId: sale.agentId,
+          paymentType: sale.paymentType,
+          deliveryMethod: sale.deliveryMethod,
+          commissionAmount: calculatePotentialCommission(totalAmount),
+        },
+      } as Prisma.InputJsonValue,
+    },
+  });
+
+  await tx.receipt.update({
+    where: { id: receipt.id },
+    data: {
+      receiptNumber: sale.receiptNumber || receipt.receiptNumber || undefined,
+      totals: {
+        subtotal: totalAmount,
+        tax: 0,
+        discount: 0,
+        total: totalAmount,
+      } as Prisma.InputJsonValue,
+      data: {
+        ...existingData,
+        paymentMethod: "MPESA",
+        customerType: isPod ? "pod" : "online",
+        paymentType: sale.paymentType,
+        deliveryMethod: sale.deliveryMethod,
+        customerLocation: sale.customerLocation,
+        agentSale: {
+          ...(typeof existingData.agentSale === "object" && existingData.agentSale ? (existingData.agentSale as Record<string, unknown>) : {}),
+          saleId: sale.id,
+          agentId: sale.agentId,
+          commissionAmount: calculatePotentialCommission(totalAmount),
+        },
+        ...(nextPod ? { podDelivery: nextPod } : {}),
+      } as Prisma.InputJsonValue,
+      notes: cleanOptional(
+        [
+          "Agent sale receipt",
+          sale.deliveryNotes || "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      ),
+    },
+  });
+}
+
+async function ensureAgentSaleReceipt(
+  tx: Prisma.TransactionClient,
+  sale: AgentSaleRecordLite,
+) {
+  if (sale.receiptId) return sale;
+
+  const activeShop = await tx.shop.findFirst({
+    where: { isActive: true },
+    select: { id: true },
+  });
+  if (!activeShop?.id) throw new Error("No active shop found for agent sale receipt creation.");
+
+  const totalAmount = normalizeAmount(Number(sale.totalAmount ?? 0));
+  const amountPaid = normalizeAmount(Number(sale.amountPaid ?? 0));
+  const commissionAmount = calculatePotentialCommission(totalAmount);
+  const receiptSerial = await generateUniqueAgentReceiptSerial(tx);
+  const product = await findOrCreateAgentSaleProduct(tx, sale);
+  const isPod = isAgentSalePodCandidate(sale);
+
+  const order = await tx.order.create({
+    data: {
+      orderNumber: receiptSerial,
+      customerName: sale.customerName,
+      customerPhone: sale.customerPhone,
+      attendantId: sale.agentId,
+      shopId: activeShop.id,
+      status: "PROCESSING",
+      totalAmount,
+      paidAmount: amountPaid,
+      paymentStatus: amountPaid >= totalAmount ? "PAID" : amountPaid > 0 ? "PARTIAL" : "UNPAID",
+      metadata: {
+        customerType: isPod ? "pod" : "online",
+        deliveryAddress: sale.customerLocation,
+        agentSale: {
+          saleId: sale.id,
+          agentId: sale.agentId,
+          commissionAmount,
+        },
+      } as Prisma.InputJsonValue,
+    },
+  });
+
+  const createdItem = await tx.orderItem.create({
+    data: {
+      orderId: order.id,
+      productId: product.id,
+      quantity: Math.max(1, Math.trunc(Number(sale.quantity ?? 1))),
+      sellingPrice: normalizeAmount(Number(sale.unitPrice ?? 0)),
+    },
+  });
+
+  const unitCost = Number(product.lastBuyingPrice ?? 0);
+  if (unitCost > 0) {
+    await tx.orderCost.create({
+      data: {
+        orderItemId: createdItem.id,
+        unitCost,
+        costSource: "agent_sale_auto_receipt",
+      },
+    });
+  }
+
+  const podDelivery = isPod
+    ? {
+        status: "pending",
+        type: "pay_on_delivery",
+        note: sale.deliveryNotes ?? null,
+        createdAt: new Date().toISOString(),
+        createdById: sale.agentId,
+      }
+    : undefined;
+
+  const receipt = await tx.receipt.create({
+    data: {
+      orderId: order.id,
+      receiptNumber: receiptSerial,
+      docType: "RECEIPT",
+      issuedById: sale.agentId,
+      taxRate: 0,
+      discount: 0,
+      showTax: false,
+      showDiscount: false,
+      paymentDetailsShown: true,
+      totals: {
+        subtotal: totalAmount,
+        tax: 0,
+        discount: 0,
+        total: totalAmount,
+      } as Prisma.InputJsonValue,
+      data: {
+        paymentMethod: "MPESA",
+        customerType: isPod ? "pod" : "online",
+        paymentType: sale.paymentType,
+        deliveryMethod: sale.deliveryMethod,
+        customerLocation: sale.customerLocation,
+        agentSale: {
+          saleId: sale.id,
+          agentId: sale.agentId,
+          commissionAmount,
+        },
+        ...(podDelivery ? { podDelivery } : {}),
+      } as Prisma.InputJsonValue,
+      notes: cleanOptional(
+        [
+          "Auto-created from agent sale",
+          sale.deliveryNotes || "",
+          sale.customerNotes || "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      ),
+    },
+  });
+
+  await createAgentActivity(
+    sale.agentId,
+    "sale_receipt_created",
+    `Agent sale ${sale.id} automatically created receipt ${receipt.receiptNumber || receipt.id}.`,
+    tx,
+  );
+
+  return tx.agentSale.update({
+    where: { id: sale.id },
+    data: {
+      receiptId: receipt.id,
+      receiptNumber: receipt.receiptNumber || receiptSerial,
+    },
+    include: {
+      agent: { select: { id: true, name: true, email: true } },
+      receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
+    },
+  });
 }
 
 export function getAgentSaleStatusMeta(status: string) {
@@ -539,7 +851,13 @@ export async function updateAgentSaleStatus(saleId: string, body: unknown, actor
   let result;
   try {
     result = await prisma.$transaction(async (tx) => {
-      const sale = await tx.agentSale.findUnique({ where: { id: saleId } });
+      const sale = await tx.agentSale.findUnique({
+        where: { id: saleId },
+        include: {
+          agent: { select: { id: true, name: true, email: true } },
+          receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
+        },
+      });
       if (!sale) throw new Error("Agent sale not found.");
 
       const nextAmountPaid =
@@ -550,7 +868,7 @@ export async function updateAgentSaleStatus(saleId: string, body: unknown, actor
         throw new Error("Amount paid cannot be more than the total amount.");
       }
 
-      const updated = await tx.agentSale.update({
+      let updated = await tx.agentSale.update({
         where: { id: saleId },
         data: {
           status,
@@ -563,6 +881,12 @@ export async function updateAgentSaleStatus(saleId: string, body: unknown, actor
           receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
         },
       });
+
+      if (status === "processing" && !updated.receiptId) {
+        updated = await ensureAgentSaleReceipt(tx, updated);
+      }
+
+      await syncLinkedReceiptForAgentSale(tx, updated, actorEmail);
 
       if (status === "cancelled" || status === "rejected") {
         await tx.agentCommission.updateMany({
@@ -685,20 +1009,12 @@ function canCompleteSale(sale: {
   status: string;
   deliveryMethod: string | null;
 }) {
-  const deliveryMethod = String(sale.deliveryMethod || "").toLowerCase();
   const currentStatus = String(sale.status || "").toLowerCase();
-  const hasPickupFlow = deliveryMethod === "shop_pickup" || deliveryMethod === "agent_pickup";
-  const deliveryConfirmed =
-    currentStatus === "payment_confirmed" ||
-    currentStatus === "processing" ||
-    currentStatus === "delivered_pending_balance" ||
-    currentStatus === "dispatched" ||
-    hasPickupFlow;
   if (Number(sale.amountPaid ?? 0) < Number(sale.totalAmount ?? 0)) {
     return "Customer payment is not complete yet.";
   }
-  if (!deliveryConfirmed) {
-    return "Mark the sale as dispatched or delivered before completion.";
+  if (currentStatus !== "delivered_pending_balance") {
+    return "Mark the sale as delivered / collected before completion.";
   }
   if (!sale.receiptId) {
     return "Link the sale to a receipt before marking it completed.";
@@ -759,6 +1075,8 @@ export async function completeAgentSale(saleId: string, actorEmail?: string | nu
           receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
         },
       });
+
+      await syncLinkedReceiptForAgentSale(tx, updated, actorEmail);
 
       await createAgentActivity(
         updated.agentId,

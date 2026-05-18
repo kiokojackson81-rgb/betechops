@@ -397,6 +397,7 @@ export async function summarizePosReceiptsForPeriod(period: {
 
   const computeProfitFromCosts = (row: PosReceiptRow) => {
     const selling = extractSales(row);
+    const agentSaleCommission = Number((row?.data as any)?.agentSale?.commissionAmount ?? 0) || 0;
     const orderRef = String(row?.order?.orderNumber ?? "");
     const receiptNumber = String(row?.receiptNumber ?? "");
     const keyCandidates = [
@@ -446,9 +447,9 @@ export async function summarizePosReceiptsForPeriod(period: {
 
     if (hasAggregateCost || allItemsPriced) {
       const buyingSum = hasAggregateCost ? aggregateCost : costFromItems;
-      return selling - buyingSum;
+      return selling - buyingSum - agentSaleCommission;
     }
-    if (explicitProfit !== undefined) return explicitProfit;
+    if (explicitProfit !== undefined) return explicitProfit - agentSaleCommission;
     return 0;
   };
 
@@ -549,7 +550,7 @@ export async function summarizePosReceiptsForPeriod(period: {
     const supportContext = canonicalOrderNumber ? supportProfitByReceipt.get(canonicalOrderNumber) : undefined;
     const profit =
       supportContext
-        ? supportContext.profit
+        ? supportContext.profit - (Number((receipt?.data as any)?.agentSale?.commissionAmount ?? 0) || 0)
         : extractProfit(receipt, sales);
 
     if (salesIncluded && sales > 0) {

@@ -48,8 +48,10 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
     saleId: string,
     status: string,
     extras?: { amountPaid?: number; mpesaReference?: string },
+    busyKey?: string,
   ) {
-    setBusy(`${saleId}:${status}`);
+    const nextBusyKey = busyKey || `${saleId}:${status}`;
+    setBusy(nextBusyKey);
     const res = await fetch(`/api/admin/agents/sales/${saleId}/status`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -65,7 +67,7 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
   }
 
   async function confirmPayment(sale: AdminSaleRow) {
-    const paidInput = window.prompt("Enter amount paid by the customer", String(sale.totalAmount || 0));
+    const paidInput = window.prompt("Enter total amount paid by the customer", String(sale.totalAmount || sale.amountPaid || 0));
     if (paidInput === null) return;
     const amountPaid = Number(paidInput);
     if (!Number.isFinite(amountPaid) || amountPaid < 0) {
@@ -73,7 +75,7 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
       return;
     }
     const mpesaReference = window.prompt("Enter M-Pesa reference if available", "") ?? "";
-    await patchStatus(sale.id, "payment_confirmed", { amountPaid, mpesaReference });
+    await patchStatus(sale.id, sale.status, { amountPaid, mpesaReference }, `${sale.id}:payment`);
   }
 
   async function completeSale(saleId: string) {
@@ -125,6 +127,9 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
                 <div>Receipt: {sale.receiptNumber || "Not linked"}</div>
               </div>
               <p className="text-sm text-slate-500">{sale.statusMeta.note}</p>
+              {sale.receiptNumber ? (
+                <p className="text-xs text-emerald-200">Receipt created: {sale.receiptNumber}</p>
+              ) : null}
             </div>
 
             <div className="min-w-[260px] rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
@@ -147,7 +152,7 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
               disabled={busy !== null}
               className="rounded-2xl border border-white/10 px-4 py-2 text-sm text-slate-200 transition hover:border-white/20 disabled:opacity-60"
             >
-              {busy === `${sale.id}:payment_confirmed` ? "Saving..." : "Confirm payment"}
+              {busy === `${sale.id}:payment` ? "Saving..." : "Confirm payment"}
             </button>
             <button
               onClick={() => patchStatus(sale.id, "processing")}
@@ -168,7 +173,7 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
               disabled={busy !== null}
               className="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-2 text-sm font-semibold text-amber-100 disabled:opacity-60"
             >
-              {busy === `${sale.id}:delivered_pending_balance` ? "Saving..." : "Delivered pending balance"}
+              {busy === `${sale.id}:delivered_pending_balance` ? "Saving..." : "Delivered / collected"}
             </button>
             <button
               onClick={() => completeSale(sale.id)}

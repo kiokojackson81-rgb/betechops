@@ -75,8 +75,9 @@ export default function AgentSaleDetailAdminClient({
   async function patchStatus(
     status: string,
     extras?: { amountPaid?: number; mpesaReference?: string },
+    busyKey?: string,
   ) {
-    setBusy(`status:${status}`);
+    setBusy(busyKey || `status:${status}`);
     const res = await fetch(`/api/admin/agents/sales/${sale.id}/status`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -92,7 +93,7 @@ export default function AgentSaleDetailAdminClient({
   }
 
   async function confirmPayment() {
-    const paidInput = window.prompt("Enter amount paid by the customer", String(sale.totalAmount || 0));
+    const paidInput = window.prompt("Enter total amount paid by the customer", String(sale.totalAmount || sale.amountPaid || 0));
     if (paidInput === null) return;
     const amountPaid = Number(paidInput);
     if (!Number.isFinite(amountPaid) || amountPaid < 0) {
@@ -100,7 +101,7 @@ export default function AgentSaleDetailAdminClient({
       return;
     }
     const mpesaReference = window.prompt("Enter M-Pesa reference if available", sale.mpesaReference || "") ?? "";
-    await patchStatus("payment_confirmed", { amountPaid, mpesaReference });
+    await patchStatus(sale.status, { amountPaid, mpesaReference }, "payment");
   }
 
   async function linkReceipt() {
@@ -222,6 +223,9 @@ export default function AgentSaleDetailAdminClient({
                 </Link>
               ) : null}
             </div>
+            {sale.receiptNumber ? (
+              <div className="mt-4 text-sm text-emerald-200">Receipt created automatically: {sale.receiptNumber}</div>
+            ) : null}
           </div>
         </div>
 
@@ -247,7 +251,7 @@ export default function AgentSaleDetailAdminClient({
                 disabled={busy !== null}
                 className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm font-semibold text-cyan-100 disabled:opacity-60"
               >
-                {busy === "status:payment_confirmed" ? "Saving..." : "Confirm payment"}
+                {busy === "payment" ? "Saving..." : "Confirm payment"}
               </button>
               {statuses.map((status) => (
                 <button
@@ -258,8 +262,8 @@ export default function AgentSaleDetailAdminClient({
                 >
                   {busy === `status:${status}`
                     ? "Saving..."
-                    : status === "payment_confirmed"
-                      ? "Payment confirmed"
+                    : status === "delivered_pending_balance"
+                      ? "Delivered / collected"
                       : status.replace(/_/g, " ")}
                 </button>
               ))}

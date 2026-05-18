@@ -484,6 +484,7 @@ export async function GET(req: NextRequest) {
 
   const mapPosRow = (r: any) => {
     const podDeliveryData = (r.data as any)?.podDelivery;
+    const agentSaleCommission = Number((r.data as any)?.agentSale?.commissionAmount ?? 0) || 0;
     const total = Number((r.totals as any)?.total ?? (r.order as any)?.totalAmount ?? 0) || 0;
     const canonicalReceipt =
       canonicalReceiptNumber((r.order as any)?.orderNumber ?? "") || canonicalReceiptNumber(r.receiptNumber ?? "");
@@ -515,7 +516,8 @@ export async function GET(req: NextRequest) {
           ? Number(explicitProfitRaw)
           : null;
     const resolvedBuyingTotal = contributor?.buyingTotal ?? buyingTotal;
-    const profit = contributor?.profit ?? explicitProfit ?? (resolvedBuyingTotal > 0 ? total - resolvedBuyingTotal : null);
+    const baseProfit = contributor?.profit ?? explicitProfit ?? (resolvedBuyingTotal > 0 ? total - resolvedBuyingTotal : null);
+    const profit = typeof baseProfit === "number" ? baseProfit - agentSaleCommission : baseProfit;
     return {
       id: r.id,
       source: "pos" as const,
