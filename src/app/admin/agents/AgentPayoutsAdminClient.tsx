@@ -47,31 +47,23 @@ export default function AgentPayoutsAdminClient({ rows }: { rows: PayoutRow[] })
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  const [paymentReferenceById, setPaymentReferenceById] = useState<Record<string, string>>({});
+  const [rejectionReasonById, setRejectionReasonById] = useState<Record<string, string>>({});
   const [, startTransition] = useTransition();
 
   const allSelected = rows.length > 0 && selectedIds.length === rows.length;
   const selectedRows = useMemo(() => rows.filter((row) => selectedIds.includes(row.id)), [rows, selectedIds]);
 
   async function updateStatus(id: string, status: string) {
-    let reference: string | null = null;
-    let reason: string | null = null;
-    if (status === "paid") {
-      const input = window.prompt("Enter M-Pesa reference code for this paid payout:");
-      if (input === null) return;
-      reference = input.trim();
-      if (!reference) {
-        window.alert("M-Pesa reference code is required before marking this payout as paid.");
-        return;
-      }
+    const reference = paymentReferenceById[id]?.trim() || null;
+    const reason = rejectionReasonById[id]?.trim() || null;
+    if (status === "paid" && !reference) {
+      window.alert("Enter the M-Pesa reference code before marking this payout as paid.");
+      return;
     }
-    if (status === "rejected") {
-      const input = window.prompt("Enter reason for rejecting this payout request:");
-      if (input === null) return;
-      reason = input.trim();
-      if (!reason) {
-        window.alert("A rejection reason is required.");
-        return;
-      }
+    if (status === "rejected" && !reason) {
+      window.alert("Enter the reason for rejecting this payout request.");
+      return;
     }
     setBusy(`${id}:${status}`);
     const res = await fetch(`/api/admin/agents/payouts/${id}/status`, {
@@ -84,6 +76,12 @@ export default function AgentPayoutsAdminClient({ rows }: { rows: PayoutRow[] })
       const payload = await res.json().catch(() => ({ error: "Unable to update payout." }));
       window.alert(payload.error || "Unable to update payout.");
       return;
+    }
+    if (status === "paid") {
+      setPaymentReferenceById((current) => ({ ...current, [id]: "" }));
+    }
+    if (status === "rejected") {
+      setRejectionReasonById((current) => ({ ...current, [id]: "" }));
     }
     startTransition(() => router.refresh());
   }
@@ -243,18 +241,46 @@ export default function AgentPayoutsAdminClient({ rows }: { rows: PayoutRow[] })
                     </div>
 
                     <div className="mt-4 flex flex-wrap gap-3">
-                      <button onClick={() => updateStatus(row.id, "approved")} disabled={busy !== null} className="rounded-xl bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60">
-                        {busy === `${row.id}:approved` ? "..." : "Approve"}
-                      </button>
-                      <button onClick={() => updateStatus(row.id, "held")} disabled={busy !== null} className="rounded-xl bg-amber-300 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60">
-                        {busy === `${row.id}:held` ? "..." : "Hold"}
-                      </button>
-                      <button onClick={() => updateStatus(row.id, "paid")} disabled={busy !== null} className="rounded-xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60">
-                        {busy === `${row.id}:paid` ? "..." : "Mark Paid"}
-                      </button>
-                      <button onClick={() => updateStatus(row.id, "rejected")} disabled={busy !== null} className="rounded-xl bg-rose-400 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60">
-                        {busy === `${row.id}:rejected` ? "..." : "Reject"}
-                      </button>
+                      {(row.status === "pending" || row.status === "held") && (
+                        <button onClick={() => updateStatus(row.id, "approved")} disabled={busy !== null} className="rounded-xl bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60">
+                          {busy === `${row.id}:approved` ? "..." : "Approve"}
+                        </button>
+                      )}
+                      {row.status !== "paid" && row.status !== "rejected" && (
+                        <button onClick={() => updateStatus(row.id, "held")} disabled={busy !== null} className="rounded-xl bg-amber-300 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60">
+                          {busy === `${row.id}:held` ? "..." : "Hold"}
+                        </button>
+                      )}
+                      {row.status === "approved" && (
+                        <div className="flex min-w-[320px] flex-1 flex-wrap gap-3 rounded-2xl border border-emerald-400/15 bg-emerald-400/[0.04] p-3">
+                          <input
+                            value={paymentReferenceById[row.id] ?? row.reference ?? ""}
+                            onChange={(event) =>
+                              setPaymentReferenceById((current) => ({ ...current, [row.id]: event.target.value }))
+                            }
+                            placeholder="Enter M-Pesa reference code"
+                            className="min-w-[220px] flex-1 rounded-xl border border-white/10 bg-slate-950/70 px-4 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-emerald-300/40"
+                          />
+                          <button onClick={() => updateStatus(row.id, "paid")} disabled={busy !== null} className="rounded-xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60">
+                            {busy === `${row.id}:paid` ? "..." : "Mark Paid"}
+                          </button>
+                        </div>
+                      )}
+                      {row.status !== "paid" && row.status !== "rejected" && (
+                        <div className="flex min-w-[320px] flex-1 flex-wrap gap-3 rounded-2xl border border-rose-400/15 bg-rose-400/[0.04] p-3">
+                          <input
+                            value={rejectionReasonById[row.id] ?? ""}
+                            onChange={(event) =>
+                              setRejectionReasonById((current) => ({ ...current, [row.id]: event.target.value }))
+                            }
+                            placeholder="Enter rejection reason"
+                            className="min-w-[220px] flex-1 rounded-xl border border-white/10 bg-slate-950/70 px-4 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-rose-300/40"
+                          />
+                          <button onClick={() => updateStatus(row.id, "rejected")} disabled={busy !== null} className="rounded-xl bg-rose-400 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60">
+                            {busy === `${row.id}:rejected` ? "..." : "Reject"}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : null}
