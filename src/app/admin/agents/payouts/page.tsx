@@ -127,7 +127,7 @@ export default async function AdminAgentPayoutsPage({
         </form>
       </section>
 
-      <AgentPayoutsAdminClient rows={pagedRows} />
+      <AgentPayoutsAdminClient rows={pagedRows} activeQueue={queue} />
 
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.9),rgba(2,6,23,.95))] px-5 py-4 text-sm text-slate-300">
         <div>Showing {(safePage - 1) * pageSize + 1}-{Math.min(safePage * pageSize, preparedRows.length)} of {preparedRows.length} payout rows</div>

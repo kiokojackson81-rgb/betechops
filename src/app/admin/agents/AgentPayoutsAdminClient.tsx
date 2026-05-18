@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Eye } from "lucide-react";
 
 type PayoutRow = {
@@ -42,8 +41,13 @@ function InfoCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default function AgentPayoutsAdminClient({ rows }: { rows: PayoutRow[] }) {
-  const router = useRouter();
+export default function AgentPayoutsAdminClient({
+  rows,
+  activeQueue = "all",
+}: {
+  rows: PayoutRow[];
+  activeQueue?: string;
+}) {
   const [localRows, setLocalRows] = useState<PayoutRow[]>(rows);
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -51,8 +55,6 @@ export default function AgentPayoutsAdminClient({ rows }: { rows: PayoutRow[] })
   const [activeActionById, setActiveActionById] = useState<Record<string, "paid" | "rejected" | null>>({});
   const [paymentReferenceById, setPaymentReferenceById] = useState<Record<string, string>>({});
   const [rejectionReasonById, setRejectionReasonById] = useState<Record<string, string>>({});
-  const [, startTransition] = useTransition();
-
   useEffect(() => {
     setLocalRows(rows);
   }, [rows]);
@@ -84,12 +86,10 @@ export default function AgentPayoutsAdminClient({ rows }: { rows: PayoutRow[] })
       return;
     }
     setLocalRows((current) =>
-      current.map((row) => {
-        if (row.id !== id) return row;
-        return {
-          ...row,
-          status,
-          queue:
+      current
+        .map((row) => {
+          if (row.id !== id) return row;
+          const nextQueue =
             status === "approved"
               ? "approved"
               : status === "paid"
@@ -98,13 +98,23 @@ export default function AgentPayoutsAdminClient({ rows }: { rows: PayoutRow[] })
                   ? "held"
                   : status === "rejected"
                     ? "rejected"
-                    : "requests",
-          reference: status === "paid" ? reference || row.reference : row.reference,
-          paidAmount: status === "paid" ? row.amount : row.paidAmount,
-          availableBalance: status === "paid" ? Math.max(0, row.availableBalance) : row.availableBalance,
-        };
-      }),
+                    : "requests";
+
+          return {
+            ...row,
+            status,
+            queue: nextQueue,
+            reference: status === "paid" ? reference || row.reference : row.reference,
+            paidAmount: status === "paid" ? row.amount : row.paidAmount,
+            availableBalance: status === "paid" ? Math.max(0, row.availableBalance) : row.availableBalance,
+          };
+        })
+        .filter((row) => activeQueue === "all" || row.queue === activeQueue),
     );
+    setExpandedIds((current) =>
+      activeQueue === "all" ? current : current.filter((rowId) => rowId !== id),
+    );
+    setSelectedIds((current) => current.filter((rowId) => rowId !== id));
     if (status === "paid") {
       setPaymentReferenceById((current) => ({ ...current, [id]: "" }));
     }
@@ -112,7 +122,6 @@ export default function AgentPayoutsAdminClient({ rows }: { rows: PayoutRow[] })
       setRejectionReasonById((current) => ({ ...current, [id]: "" }));
     }
     setActiveActionById((current) => ({ ...current, [id]: null }));
-    startTransition(() => router.refresh());
   }
 
   async function bulkUpdateStatus(status: string) {
@@ -141,7 +150,6 @@ export default function AgentPayoutsAdminClient({ rows }: { rows: PayoutRow[] })
     }
     setBusy(null);
     setSelectedIds([]);
-    startTransition(() => router.refresh());
   }
 
   function toggleExpanded(id: string) {
