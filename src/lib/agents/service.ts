@@ -28,6 +28,11 @@ function isAgentSalesSchemaError(error: unknown) {
   return [
     "AgentSale",
     "AgentCommission",
+    "AgentLeadOwnership",
+    "AgentDuplicateReview",
+    "AgentFraudSignal",
+    "AgentAuditLog",
+    "AgentSaleTimeline",
     "sourceType",
     "sourceId",
     "saleAmount",
