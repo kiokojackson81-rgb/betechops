@@ -18,6 +18,19 @@ const trustPoints = [
   { label: "Work anywhere in Kenya", icon: MapPinned },
 ];
 
+const registerProducts = [
+  { name: "SRNE 20KW Lithium Solar System", price: 950000, image: "/agents/products/srne-20kw-lithium-solar-system.jpeg" },
+  { name: "SRNE 10KW Lithium Solar Power System", price: 550000, image: "/agents/products/srne-10kw-lithium-solar-power-system.jpeg" },
+  { name: "8KW Lithium Battery Kit", price: 350000, image: "/agents/products/8kw-lithium-battery-kit.jpeg" },
+  { name: "SRNE 5KW Lithium Solar System", price: 280000, image: "/agents/products/srne-5kw-lithium-solar-system.jpeg" },
+  { name: "4KW Lithium Solar Kit", price: 90000, image: "/agents/products/4kw-lithium-solar-kit.jpeg" },
+  { name: "2KW Lithium Powerstation", price: 86400, image: "/agents/products/2kw-lithium-powerstation.jpeg" },
+];
+
+function formatCurrency(value: number) {
+  return `Ksh ${value.toLocaleString()}`;
+}
+
 export default async function AgentRegisterPage({ useRootPaths = false }: AgentRegisterPageProps) {
   const session = await auth();
   if ((session?.user as { isAgent?: boolean } | undefined)?.isAgent) {
@@ -26,6 +39,24 @@ export default async function AgentRegisterPage({ useRootPaths = false }: AgentR
 
   return (
     <div className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(242,178,15,0.18),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(122,0,0,0.12),transparent_26%),linear-gradient(180deg,#fffdf9_0%,#fff5ea_100%)] px-4 py-6 text-slate-950 sm:px-6 lg:px-8 lg:py-10">
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+            @keyframes registerProductFlow {
+              0% { transform: translateY(0); }
+              100% { transform: translateY(-50%); }
+            }
+
+            .register-product-flow {
+              animation: registerProductFlow 26s linear infinite;
+            }
+
+            .register-product-flow:hover {
+              animation-play-state: paused;
+            }
+          `,
+        }}
+      />
       <div className="mx-auto max-w-7xl">
         <div className="mb-6 flex items-center justify-between">
           <Link href={agentPath("/", useRootPaths)} className="flex items-center gap-3">
@@ -98,19 +129,38 @@ export default async function AgentRegisterPage({ useRootPaths = false }: AgentR
                     <CircleDollarSign className="h-8 w-8" />
                   </div>
                 </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {[
-                    "/agents/product-solar-kit-generated.png",
-                    "/agents/product-battery-generated.png",
-                    "/agents/product-inverter-generated.png",
-                    "/agents/product-water-pump-generated.png",
-                  ].map((src, index) => (
-                    <div key={src} className={`overflow-hidden rounded-[1.4rem] border border-[#7a0000]/8 bg-[#fcfaf7] p-4 shadow-[0_12px_24px_rgba(15,23,42,0.04)] transition duration-300 hover:-translate-y-1 ${index === 0 ? "sm:col-span-2" : ""}`}>
-                      <div className={`relative ${index === 0 ? "aspect-[16/9]" : "aspect-[4/3]"}`}>
-                        <Image src={src} alt="Betech solar product" fill className="object-contain" />
-                      </div>
+                <div className="overflow-hidden rounded-[1.8rem] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#fffdf8_0%,#fff6ee_100%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+                  <div className="max-h-[34rem] overflow-hidden">
+                    <div className="register-product-flow flex flex-col gap-4">
+                      {[...registerProducts, ...registerProducts].map((product, index) => {
+                        const commission = Math.round(product.price * 0.06);
+                        return (
+                          <div
+                            key={`${product.name}-${index}`}
+                            className="rounded-[1.5rem] border border-[#7a0000]/8 bg-white p-4 shadow-[0_14px_28px_rgba(15,23,42,0.05)]"
+                          >
+                            <div className="flex gap-4">
+                              <div className="overflow-hidden rounded-[1.2rem] border border-[#7a0000]/10 bg-[#fcfaf7] p-2 shadow-[0_10px_22px_rgba(15,23,42,0.04)]">
+                                <div className="relative h-28 w-24">
+                                  <Image src={product.image} alt={product.name} fill className="object-contain" />
+                                </div>
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-sm font-black uppercase tracking-[0.16em] text-[#7a0000]">Earn 6% Commission</div>
+                                <h3 className="mt-2 text-lg font-black leading-tight text-slate-950">{product.name}</h3>
+                                <div className="mt-3 text-sm text-slate-500">Product Price</div>
+                                <div className="mt-1 text-xl font-black text-slate-950">{formatCurrency(product.price)}</div>
+                                <div className="mt-3 rounded-xl bg-[linear-gradient(135deg,#7a0000_0%,#991010_100%)] px-3 py-3 text-white shadow-[0_12px_24px_rgba(122,0,0,0.16)]">
+                                  <div className="text-xs font-black uppercase tracking-[0.18em] text-[#ffd761]">Commission</div>
+                                  <div className="mt-1 text-2xl font-black">{formatCurrency(commission)}</div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))}
+                  </div>
                 </div>
               </div>
 
