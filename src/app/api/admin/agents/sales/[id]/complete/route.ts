@@ -13,8 +13,8 @@ export async function POST(
 
   try {
     const { id } = await params;
-    const email = (adminSession.session.user as { email?: string } | undefined)?.email ?? null;
-    const sale = await completeAgentSale(id, email);
+    const user = adminSession.session.user as { email?: string; id?: string } | undefined;
+    const sale = await completeAgentSale(id, { email: user?.email ?? null, userId: user?.id ?? null });
     return NextResponse.json({ ok: true, sale });
   } catch (error) {
     return NextResponse.json(

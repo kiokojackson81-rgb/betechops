@@ -30,6 +30,38 @@ export default async function AdminAgentSaleDetailPage({
     ...item,
     createdAt: item.createdAt.toISOString(),
   }));
+  const preparedTimeline = result.timeline.map((item) => ({
+    ...item,
+    createdAt: item.createdAt.toISOString(),
+  }));
+  const preparedAudit = result.audit.map((item) => ({
+    ...item,
+    createdAt: item.createdAt.toISOString(),
+  }));
+  const preparedFraudSignals = result.fraudSignals.map((item) => ({
+    ...item,
+    createdAt: item.createdAt.toISOString(),
+    resolvedAt: item.resolvedAt ? item.resolvedAt.toISOString() : null,
+  }));
+  const preparedDuplicateReviews = result.duplicateReviews.map((item) => ({
+    ...item,
+    createdAt: item.createdAt.toISOString(),
+    updatedAt: item.updatedAt.toISOString(),
+    resolvedAt: item.resolvedAt ? item.resolvedAt.toISOString() : null,
+  }));
+  const preparedActiveOwnership = result.activeOwnership
+    ? {
+        ...result.activeOwnership,
+        ownedUntil: result.activeOwnership.ownedUntil.toISOString(),
+        releasedAt: result.activeOwnership.releasedAt ? result.activeOwnership.releasedAt.toISOString() : null,
+        createdAt: result.activeOwnership.createdAt.toISOString(),
+        updatedAt: result.activeOwnership.updatedAt.toISOString(),
+        firstSale: {
+          ...result.activeOwnership.firstSale,
+          createdAt: result.activeOwnership.firstSale.createdAt.toISOString(),
+        },
+      }
+    : null;
   const receiptPrefillUrl = buildAgentSaleReceiptPrefillUrl({
     id: result.sale.id,
     agentId: result.sale.agentId,
@@ -71,6 +103,11 @@ export default async function AdminAgentSaleDetailPage({
       <AgentSaleDetailAdminClient
         sale={preparedSale}
         activity={preparedActivity}
+        timeline={preparedTimeline}
+        audit={preparedAudit}
+        fraudSignals={preparedFraudSignals}
+        duplicateReviews={preparedDuplicateReviews}
+        activeOwnership={preparedActiveOwnership}
         receiptPrefillUrl={receiptPrefillUrl}
       />
     </div>

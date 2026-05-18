@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { generateReceiptSerial, normalizeReceiptSerial } from "@/lib/receipts/serial";
 
 export const AGENT_COMMISSION_RATE = 6;
+const AGENT_LEAD_OWNERSHIP_DAYS = 14;
 
 export const agentSaleStatuses = [
   "pending_review",
@@ -111,6 +112,11 @@ function isAgentSalesSchemaError(error: unknown) {
   return [
     "AgentSale",
     "AgentCommission",
+    "AgentLeadOwnership",
+    "AgentDuplicateReview",
+    "AgentFraudSignal",
+    "AgentAuditLog",
+    "AgentSaleTimeline",
     "sourceType",
     "sourceId",
     "saleAmount",
@@ -171,6 +177,10 @@ function roundAmount(value: number) {
 function cleanOptional(value: string | null | undefined) {
   const cleaned = typeof value === "string" ? value.trim() : "";
   return cleaned ? cleaned : null;
+}
+
+function normalizeCustomerPhone(value: string | null | undefined) {
+  return String(value || "").replace(/\D/g, "");
 }
 
 function normalizeAmount(value: number) {
@@ -479,6 +489,32 @@ async function ensureAgentSaleReceipt(
     `Agent sale ${sale.id} automatically created receipt ${receipt.receiptNumber || receipt.id}.`,
     tx,
   );
+  await createAgentSaleTimelineEntry(
+    sale.id,
+    "receipt_created",
+    `Receipt ${receipt.receiptNumber || receipt.id} created automatically.`,
+    null,
+    {
+      receiptId: receipt.id,
+      receiptNumber: receipt.receiptNumber || receiptSerial,
+      orderId: order.id,
+    } as Prisma.InputJsonValue,
+    tx,
+  );
+  await createAgentAuditLog(
+    {
+      targetAgentId: sale.agentId,
+      saleId: sale.id,
+      eventType: "receipt_created",
+      summary: `Receipt ${receipt.receiptNumber || receipt.id} auto-created for agent sale ${sale.id}.`,
+      metadata: {
+        receiptId: receipt.id,
+        receiptNumber: receipt.receiptNumber || receiptSerial,
+        orderId: order.id,
+      } as Prisma.InputJsonValue,
+    },
+    tx,
+  );
 
   return tx.agentSale.update({
     where: { id: sale.id },
@@ -526,6 +562,281 @@ async function createAgentActivity(agentId: string, action: string, description:
       description,
     },
   });
+}
+
+async function createAgentAuditLog(
+  args: {
+    actorUserId?: string | null;
+    targetAgentId?: string | null;
+    saleId?: string | null;
+    payoutId?: string | null;
+    duplicateReviewId?: string | null;
+    eventType: string;
+    summary: string;
+    metadata?: Prisma.InputJsonValue;
+  },
+  tx: Prisma.TransactionClient = prisma,
+) {
+  try {
+    await tx.agentAuditLog.create({
+      data: {
+        actorUserId: args.actorUserId || null,
+        targetAgentId: args.targetAgentId || null,
+        saleId: args.saleId || null,
+        payoutId: args.payoutId || null,
+        duplicateReviewId: args.duplicateReviewId || null,
+        eventType: args.eventType,
+        summary: args.summary,
+        metadata: args.metadata,
+      },
+    });
+  } catch (error) {
+    if (isAgentSalesSchemaError(error)) return;
+    throw error;
+  }
+}
+
+async function createAgentSaleTimelineEntry(
+  saleId: string,
+  stage: string,
+  note: string | null,
+  actorUserId?: string | null,
+  metadata?: Prisma.InputJsonValue,
+  tx: Prisma.TransactionClient = prisma,
+) {
+  try {
+    await tx.agentSaleTimeline.create({
+      data: {
+        saleId,
+        stage,
+        note,
+        actorUserId: actorUserId || null,
+        metadata,
+      },
+    });
+  } catch (error) {
+    if (isAgentSalesSchemaError(error)) return;
+    throw error;
+  }
+}
+
+async function createAgentFraudSignal(
+  args: {
+    agentId?: string | null;
+    saleId?: string | null;
+    signalType: string;
+    riskLevel: string;
+    title: string;
+    description?: string | null;
+    metadata?: Prisma.InputJsonValue;
+  },
+  tx: Prisma.TransactionClient = prisma,
+) {
+  try {
+    await tx.agentFraudSignal.create({
+      data: {
+        agentId: args.agentId || null,
+        saleId: args.saleId || null,
+        signalType: args.signalType,
+        riskLevel: args.riskLevel,
+        title: args.title,
+        description: args.description || null,
+        metadata: args.metadata,
+      },
+    });
+  } catch (error) {
+    if (isAgentSalesSchemaError(error)) return;
+    throw error;
+  }
+}
+
+async function syncAgentLeadOwnershipAndReviews(
+  tx: Prisma.TransactionClient,
+  sale: Pick<
+    AgentSaleRecordLite,
+    "id" | "agentId" | "customerPhone" | "customerName" | "customerCounty" | "customerLocation" | "productName" | "createdAt"
+  >,
+) {
+  const normalizedPhone = normalizeCustomerPhone(sale.customerPhone);
+  if (!normalizedPhone) return;
+
+  const now = new Date();
+  await tx.agentLeadOwnership.updateMany({
+    where: {
+      normalizedPhone,
+      status: "active",
+      ownedUntil: { lt: now },
+    },
+    data: {
+      status: "expired",
+      releasedAt: now,
+      overrideNote: "Automatically expired by system.",
+    },
+  }).catch((error) => {
+    if (isAgentSalesSchemaError(error)) return;
+    throw error;
+  });
+
+  const [activeOwnership, recentPhoneSales, agentProfile] = await Promise.all([
+    tx.agentLeadOwnership.findFirst({
+      where: {
+        normalizedPhone,
+        status: "active",
+        ownedUntil: { gte: now },
+      },
+      orderBy: { createdAt: "asc" },
+    }).catch((error) => {
+      if (isAgentSalesSchemaError(error)) return null;
+      throw error;
+    }),
+    tx.agentSale.findMany({
+      where: {
+        customerPhone: sale.customerPhone,
+        createdAt: { gte: new Date(now.getTime() - AGENT_LEAD_OWNERSHIP_DAYS * 24 * 60 * 60 * 1000) },
+      },
+      orderBy: { createdAt: "asc" },
+    }).catch((error) => {
+      if (isAgentSalesSchemaError(error)) return [];
+      throw error;
+    }),
+    tx.agentProfile.findUnique({
+      where: { userId: sale.agentId },
+      select: { phone: true, referralCode: true },
+    }).catch((error) => {
+      if (isAgentSalesSchemaError(error)) return null;
+      throw error;
+    }),
+  ]);
+
+  if (!activeOwnership) {
+    try {
+      await tx.agentLeadOwnership.create({
+        data: {
+          normalizedPhone,
+          customerName: cleanOptional(sale.customerName),
+          customerCounty: cleanOptional(sale.customerCounty),
+          customerLocation: cleanOptional(sale.customerLocation),
+          productName: cleanOptional(sale.productName),
+          agentId: sale.agentId,
+          firstSaleId: sale.id,
+          status: "active",
+          ownedUntil: new Date(now.getTime() + AGENT_LEAD_OWNERSHIP_DAYS * 24 * 60 * 60 * 1000),
+        },
+      });
+    } catch (error) {
+      if (!isAgentSalesSchemaError(error)) throw error;
+    }
+  } else if (activeOwnership.agentId !== sale.agentId) {
+    let duplicateReviewId: string | null = null;
+    try {
+      const existingReview = await tx.agentDuplicateReview.findFirst({
+        where: {
+          primarySaleId: activeOwnership.firstSaleId,
+          duplicateSaleId: sale.id,
+        },
+        select: { id: true },
+      });
+      if (!existingReview) {
+        const review = await tx.agentDuplicateReview.create({
+          data: {
+            normalizedPhone,
+            primarySaleId: activeOwnership.firstSaleId,
+            duplicateSaleId: sale.id,
+            primaryAgentId: activeOwnership.agentId,
+            duplicateAgentId: sale.agentId,
+            status: "open",
+          },
+          select: { id: true },
+        });
+        duplicateReviewId = review.id;
+      } else {
+        duplicateReviewId = existingReview.id;
+      }
+    } catch (error) {
+      if (!isAgentSalesSchemaError(error)) throw error;
+    }
+
+    await createAgentFraudSignal(
+      {
+        agentId: sale.agentId,
+        saleId: sale.id,
+        signalType: "duplicate_customer",
+        riskLevel: "medium",
+        title: "Possible duplicate customer",
+        description: `Customer phone is already owned by another agent within the ${AGENT_LEAD_OWNERSHIP_DAYS}-day window.`,
+        metadata: {
+          normalizedPhone,
+          ownerAgentId: activeOwnership.agentId,
+          firstSaleId: activeOwnership.firstSaleId,
+          ownedUntil: activeOwnership.ownedUntil.toISOString(),
+        } as Prisma.InputJsonValue,
+      },
+      tx,
+    );
+    await createAgentAuditLog(
+      {
+        targetAgentId: sale.agentId,
+        saleId: sale.id,
+        duplicateReviewId,
+        eventType: "duplicate_customer_detected",
+        summary: `Agent sale ${sale.id} triggered duplicate customer review.`,
+        metadata: {
+          normalizedPhone,
+          ownerAgentId: activeOwnership.agentId,
+          firstSaleId: activeOwnership.firstSaleId,
+        } as Prisma.InputJsonValue,
+      },
+      tx,
+    );
+    await createAgentSaleTimelineEntry(
+      sale.id,
+      "needs_admin_review",
+      "Duplicate customer detected. Needs admin ownership review.",
+      null,
+      {
+        normalizedPhone,
+        ownerAgentId: activeOwnership.agentId,
+        firstSaleId: activeOwnership.firstSaleId,
+      } as Prisma.InputJsonValue,
+      tx,
+    );
+  }
+
+  if (recentPhoneSales.length >= 3) {
+    await createAgentFraudSignal(
+      {
+        agentId: sale.agentId,
+        saleId: sale.id,
+        signalType: "phone_reuse",
+        riskLevel: recentPhoneSales.length >= 4 ? "high" : "medium",
+        title: "Repeated phone reuse",
+        description: `${recentPhoneSales.length} submissions share this customer phone in the recent ownership window.`,
+        metadata: {
+          normalizedPhone,
+          saleIds: recentPhoneSales.map((item) => item.id),
+        } as Prisma.InputJsonValue,
+      },
+      tx,
+    );
+  }
+
+  if (agentProfile?.phone && normalizeCustomerPhone(agentProfile.phone) === normalizedPhone) {
+    await createAgentFraudSignal(
+      {
+        agentId: sale.agentId,
+        saleId: sale.id,
+        signalType: "self_submission",
+        riskLevel: "high",
+        title: "Possible self-submission",
+        description: "The customer phone matches the agent profile phone number.",
+        metadata: {
+          normalizedPhone,
+          referralCode: agentProfile.referralCode,
+        } as Prisma.InputJsonValue,
+      },
+      tx,
+    );
+  }
 }
 
 async function fetchSalesCommissions(saleIds: string[]) {
@@ -624,45 +935,73 @@ export async function createAgentSale(agentId: string, body: unknown) {
   const amountPaid = normalizeAmount(input.amountPaid);
   let sale;
   try {
-    sale = await prisma.agentSale.create({
-      data: {
+    sale = await prisma.$transaction(async (tx) => {
+      const created = await tx.agentSale.create({
+        data: {
+          agentId,
+          customerName: input.customerName,
+          customerPhone: input.customerPhone,
+          customerLocation: input.customerLocation,
+          customerCounty: cleanOptional(input.customerCounty),
+          productName: input.productName,
+          productCategory: cleanOptional(input.productCategory),
+          quantity: input.quantity,
+          unitPrice: normalizeAmount(input.unitPrice),
+          totalAmount,
+          paymentType: input.paymentType,
+          amountPaid,
+          mpesaReference: cleanOptional(input.mpesaReference),
+          deliveryMethod: cleanOptional(input.deliveryMethod),
+          deliveryNotes: cleanOptional(input.deliveryNotes),
+          customerNotes: cleanOptional(input.customerNotes),
+          internalAgentNotes: cleanOptional(input.internalAgentNotes),
+          status: "pending_review",
+          commissionPct: AGENT_COMMISSION_RATE,
+          potentialCommission: calculatePotentialCommission(totalAmount),
+          commissionLocked: true,
+        },
+        include: {
+          agent: { select: { id: true, name: true, email: true } },
+          receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
+        },
+      });
+
+      await createAgentActivity(
         agentId,
-        customerName: input.customerName,
-        customerPhone: input.customerPhone,
-        customerLocation: input.customerLocation,
-        customerCounty: cleanOptional(input.customerCounty),
-        productName: input.productName,
-        productCategory: cleanOptional(input.productCategory),
-        quantity: input.quantity,
-        unitPrice: normalizeAmount(input.unitPrice),
-        totalAmount,
-        paymentType: input.paymentType,
-        amountPaid,
-        mpesaReference: cleanOptional(input.mpesaReference),
-        deliveryMethod: cleanOptional(input.deliveryMethod),
-        deliveryNotes: cleanOptional(input.deliveryNotes),
-        customerNotes: cleanOptional(input.customerNotes),
-        internalAgentNotes: cleanOptional(input.internalAgentNotes),
-        status: "pending_review",
-        commissionPct: AGENT_COMMISSION_RATE,
-        potentialCommission: calculatePotentialCommission(totalAmount),
-        commissionLocked: true,
-      },
-      include: {
-        agent: { select: { id: true, name: true, email: true } },
-        receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
-      },
+        "sale_submitted",
+        `Agent sale ${created.id} submitted for ${created.customerName} - potential commission locked until completion.`,
+        tx,
+      );
+      await createAgentSaleTimelineEntry(
+        created.id,
+        "submitted",
+        "Customer order submitted by agent.",
+        agentId,
+        undefined,
+        tx,
+      );
+      await createAgentAuditLog(
+        {
+          actorUserId: agentId,
+          targetAgentId: agentId,
+          saleId: created.id,
+          eventType: "sale_submitted",
+          summary: `Agent sale ${created.id} submitted by agent.`,
+          metadata: {
+            customerPhone: created.customerPhone,
+            customerName: created.customerName,
+            totalAmount,
+          } as Prisma.InputJsonValue,
+        },
+        tx,
+      );
+      await syncAgentLeadOwnershipAndReviews(tx, created);
+      return created;
     });
   } catch (error) {
     if (isAgentSalesSchemaError(error)) throw createAgentSaleSetupError();
     throw error;
   }
-
-  await createAgentActivity(
-    agentId,
-    "sale_submitted",
-    `Agent sale ${sale.id} submitted for ${sale.customerName} - potential commission locked until completion.`,
-  );
 
   return presentAgentSale(sale, null);
 }
@@ -814,6 +1153,84 @@ export async function getAdminAgentSales(filters: AdminAgentSalesFilters = {}) {
   }
   const commissionBySaleId = await fetchSalesCommissions(sales.map((sale) => sale.id));
   const presentedSales = sales.map((sale) => presentAgentSale(sale, getCommissionForSale(sale.id, commissionBySaleId)));
+  let leadOwnerships: Array<{
+    normalizedPhone: string;
+    agentId: string;
+    firstSaleId: string;
+    ownedUntil: Date;
+  }> = [];
+  let duplicateReviews: Array<{
+    primarySaleId: string;
+    duplicateSaleId: string;
+    status: string;
+    resolutionNote: string | null;
+  }> = [];
+  let fraudSignals: Array<{
+    saleId: string | null;
+    riskLevel: string;
+    title: string;
+    description: string | null;
+  }> = [];
+  const normalizedPhones = Array.from(
+    new Set(
+      presentedSales
+        .map((sale) => normalizeCustomerPhone(sale.customerPhone))
+        .filter(Boolean),
+    ),
+  );
+  try {
+    [leadOwnerships, duplicateReviews, fraudSignals] = await Promise.all([
+      normalizedPhones.length
+        ? prisma.agentLeadOwnership.findMany({
+            where: {
+              normalizedPhone: { in: normalizedPhones },
+              status: "active",
+            },
+            select: { normalizedPhone: true, agentId: true, firstSaleId: true, ownedUntil: true },
+          })
+        : Promise.resolve([]),
+      sales.length
+        ? prisma.agentDuplicateReview.findMany({
+            where: {
+              OR: [
+                { primarySaleId: { in: sales.map((sale) => sale.id) } },
+                { duplicateSaleId: { in: sales.map((sale) => sale.id) } },
+              ],
+            },
+            select: { primarySaleId: true, duplicateSaleId: true, status: true, resolutionNote: true },
+          })
+        : Promise.resolve([]),
+      sales.length
+        ? prisma.agentFraudSignal.findMany({
+            where: {
+              saleId: { in: sales.map((sale) => sale.id) },
+              status: "open",
+            },
+            select: { saleId: true, riskLevel: true, title: true, description: true },
+          })
+        : Promise.resolve([]),
+    ]);
+  } catch (error) {
+    if (!isAgentSalesSchemaError(error)) throw error;
+  }
+  const ownershipByPhone = new Map(leadOwnerships.map((item) => [item.normalizedPhone, item] as const));
+  const reviewsBySaleId = new Map<string, typeof duplicateReviews>();
+  for (const review of duplicateReviews) {
+    const primary = reviewsBySaleId.get(review.primarySaleId) ?? [];
+    primary.push(review);
+    reviewsBySaleId.set(review.primarySaleId, primary);
+    const duplicate = reviewsBySaleId.get(review.duplicateSaleId) ?? [];
+    duplicate.push(review);
+    reviewsBySaleId.set(review.duplicateSaleId, duplicate);
+  }
+  const signalBySaleId = new Map<string, (typeof fraudSignals)[number]>();
+  for (const signal of fraudSignals) {
+    if (!signal.saleId) continue;
+    const current = signalBySaleId.get(signal.saleId);
+    const currentWeight = current?.riskLevel === "high" ? 3 : current?.riskLevel === "medium" ? 2 : 1;
+    const nextWeight = signal.riskLevel === "high" ? 3 : signal.riskLevel === "medium" ? 2 : 1;
+    if (!current || nextWeight > currentWeight) signalBySaleId.set(signal.saleId, signal);
+  }
   const phoneSubmissions = new Map<string, typeof presentedSales>();
 
   for (const sale of presentedSales) {
@@ -837,9 +1254,20 @@ export async function getAdminAgentSales(filters: AdminAgentSalesFilters = {}) {
       ? new Date(earliestSubmission.createdAt.getTime() + 14 * 24 * 60 * 60 * 1000)
       : null;
 
-    let duplicateRisk: "low" | "medium" | "high" = "low";
-    let duplicateNote = "No duplicate indicators detected.";
-    if (hasConflict && duplicateCount >= 1) {
+    const ownership = phone ? ownershipByPhone.get(phone) : null;
+    const reviews = reviewsBySaleId.get(sale.id) ?? [];
+    const signal = signalBySaleId.get(sale.id);
+    let duplicateRisk: "low" | "medium" | "high" =
+      signal?.riskLevel === "high" ? "high" : signal?.riskLevel === "medium" ? "medium" : "low";
+    let duplicateNote = signal?.description || "No duplicate indicators detected.";
+    if (reviews.length) {
+      duplicateRisk = signal?.riskLevel === "high" ? "high" : duplicateCount >= 2 ? "high" : "medium";
+      duplicateNote =
+        reviews.find((item) => item.status === "open")?.resolutionNote ||
+        (ownership && ownership.agentId !== sale.agentId
+          ? `Customer already belongs to ${ownership.agentId === earliestSubmission?.agentId ? earliestSubmission?.agentName || "another agent" : "another agent"} within the ownership window.`
+          : "Possible duplicate customer needs admin review.");
+    } else if (hasConflict && duplicateCount >= 1) {
       duplicateRisk = duplicateCount >= 2 ? "high" : "medium";
       duplicateNote = earliestSubmission?.id === sale.id
         ? "Another agent submitted the same customer after this lead."
@@ -850,9 +1278,9 @@ export async function getAdminAgentSales(filters: AdminAgentSalesFilters = {}) {
       ...sale,
       duplicateRisk,
       duplicateCount,
-      needsReview: hasConflict,
-      ownershipOwnerAgentName: earliestSubmission?.agentName || null,
-      ownershipWindowEndsAt: ownershipUntil,
+      needsReview: reviews.some((item) => item.status === "open") || hasConflict,
+      ownershipOwnerAgentName: ownership?.agentId === earliestSubmission?.agentId ? earliestSubmission?.agentName || null : earliestSubmission?.agentName || null,
+      ownershipWindowEndsAt: ownership?.ownedUntil || ownershipUntil,
       duplicateNote,
     };
   });
@@ -874,25 +1302,107 @@ export async function getAdminAgentSaleById(saleId: string) {
   }
   if (!sale) return null;
   const commissionBySaleId = await fetchSalesCommissions([sale.id]);
-  const activity = await prisma.agentActivityLog.findMany({
-    where: {
-      agentId: sale.agentId,
-      description: {
-        contains: sale.id,
-        mode: "insensitive",
+  const [activity, timeline, audit, fraudSignals, duplicateReviews, activeOwnership] = await Promise.all([
+    prisma.agentActivityLog.findMany({
+      where: {
+        agentId: sale.agentId,
+        description: {
+          contains: sale.id,
+          mode: "insensitive",
+        },
       },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 20,
-  });
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    }),
+    prisma.agentSaleTimeline
+      .findMany({
+        where: { saleId: sale.id },
+        orderBy: { createdAt: "asc" },
+        take: 50,
+        include: {
+          actor: { select: { id: true, name: true, email: true } },
+        },
+      })
+      .catch((error) => {
+        if (isAgentSalesSchemaError(error)) return [];
+        throw error;
+      }),
+    prisma.agentAuditLog
+      .findMany({
+        where: { saleId: sale.id },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        include: {
+          actor: { select: { id: true, name: true, email: true } },
+        },
+      })
+      .catch((error) => {
+        if (isAgentSalesSchemaError(error)) return [];
+        throw error;
+      }),
+    prisma.agentFraudSignal
+      .findMany({
+        where: {
+          OR: [{ saleId: sale.id }, { agentId: sale.agentId }],
+        },
+        orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+        take: 20,
+      })
+      .catch((error) => {
+        if (isAgentSalesSchemaError(error)) return [];
+        throw error;
+      }),
+    prisma.agentDuplicateReview
+      .findMany({
+        where: {
+          OR: [{ primarySaleId: sale.id }, { duplicateSaleId: sale.id }],
+        },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        include: {
+          primaryAgent: { select: { id: true, name: true, email: true } },
+          duplicateAgent: { select: { id: true, name: true, email: true } },
+        },
+      })
+      .catch((error) => {
+        if (isAgentSalesSchemaError(error)) return [];
+        throw error;
+      }),
+    prisma.agentLeadOwnership
+      .findFirst({
+        where: {
+          normalizedPhone: normalizeCustomerPhone(sale.customerPhone),
+          status: "active",
+          ownedUntil: { gte: new Date() },
+        },
+        orderBy: { ownedUntil: "desc" },
+        include: {
+          agent: { select: { id: true, name: true, email: true } },
+          firstSale: { select: { id: true, createdAt: true } },
+        },
+      })
+      .catch((error) => {
+        if (isAgentSalesSchemaError(error)) return null;
+        throw error;
+      }),
+  ]);
 
   return {
     sale: presentAgentSale(sale, getCommissionForSale(sale.id, commissionBySaleId)),
     activity,
+    timeline,
+    audit,
+    fraudSignals,
+    duplicateReviews,
+    activeOwnership,
   };
 }
 
-export async function updateAgentSaleStatus(saleId: string, body: unknown, actorEmail?: string | null) {
+export async function updateAgentSaleStatus(
+  saleId: string,
+  body: unknown,
+  actor?: { userId?: string | null; email?: string | null },
+) {
   const { status, amountPaid, mpesaReference } = parseAgentSaleStatusInput(body);
   let result;
   try {
@@ -932,7 +1442,7 @@ export async function updateAgentSaleStatus(saleId: string, body: unknown, actor
         updated = await ensureAgentSaleReceipt(tx, updated);
       }
 
-      await syncLinkedReceiptForAgentSale(tx, updated, actorEmail);
+      await syncLinkedReceiptForAgentSale(tx, updated, actor?.email || null);
 
       if (status === "cancelled" || status === "rejected") {
         await tx.agentCommission.updateMany({
@@ -949,7 +1459,33 @@ export async function updateAgentSaleStatus(saleId: string, body: unknown, actor
       await createAgentActivity(
         updated.agentId,
         `sale_status_${status}`,
-        `Agent sale ${updated.id} moved to ${status} by ${actorEmail || "admin"}.`,
+        `Agent sale ${updated.id} moved to ${status} by ${actor?.email || "admin"}.`,
+        tx,
+      );
+      await createAgentSaleTimelineEntry(
+        updated.id,
+        status,
+        `Sale moved to ${status} by ${actor?.email || "admin"}.`,
+        actor?.userId || null,
+        {
+          amountPaid: nextAmountPaid,
+          mpesaReference: mpesaReference !== undefined ? cleanOptional(mpesaReference) : updated.mpesaReference,
+        } as Prisma.InputJsonValue,
+        tx,
+      );
+      await createAgentAuditLog(
+        {
+          actorUserId: actor?.userId || null,
+          targetAgentId: updated.agentId,
+          saleId: updated.id,
+          eventType: `sale_status_${status}`,
+          summary: `Agent sale ${updated.id} moved to ${status}.`,
+          metadata: {
+            actorEmail: actor?.email || null,
+            amountPaid: nextAmountPaid,
+            mpesaReference: mpesaReference !== undefined ? cleanOptional(mpesaReference) : updated.mpesaReference,
+          } as Prisma.InputJsonValue,
+        },
         tx,
       );
 
@@ -997,7 +1533,11 @@ export function buildAgentSaleReceiptPrefillUrl(sale: {
   return `/receipts?${params.toString()}`;
 }
 
-export async function linkAgentSaleReceipt(saleId: string, body: unknown, actorEmail?: string | null) {
+export async function linkAgentSaleReceipt(
+  saleId: string,
+  body: unknown,
+  actor?: { userId?: string | null; email?: string | null },
+) {
   const input = parseAgentSaleReceiptInput(body);
   if (!input.receiptId && !input.receiptNumber) {
     throw new Error("Provide a receipt id or receipt number.");
@@ -1041,8 +1581,30 @@ export async function linkAgentSaleReceipt(saleId: string, body: unknown, actorE
   await createAgentActivity(
     sale.agentId,
     "sale_receipt_linked",
-    `Agent sale ${sale.id} linked to receipt ${sale.receiptNumber || lookup.id} by ${actorEmail || "admin"}.`,
+    `Agent sale ${sale.id} linked to receipt ${sale.receiptNumber || lookup.id} by ${actor?.email || "admin"}.`,
   );
+  await createAgentSaleTimelineEntry(
+    sale.id,
+    "receipt_linked",
+    `Receipt ${sale.receiptNumber || lookup.id} linked by ${actor?.email || "admin"}.`,
+    actor?.userId || null,
+    {
+      receiptId: lookup.id,
+      receiptNumber: sale.receiptNumber || lookup.receiptNumber || lookup.order?.orderNumber || null,
+    } as Prisma.InputJsonValue,
+  );
+  await createAgentAuditLog({
+    actorUserId: actor?.userId || null,
+    targetAgentId: sale.agentId,
+    saleId: sale.id,
+    eventType: "receipt_linked",
+    summary: `Receipt linked to agent sale ${sale.id}.`,
+    metadata: {
+      actorEmail: actor?.email || null,
+      receiptId: lookup.id,
+      receiptNumber: sale.receiptNumber || lookup.receiptNumber || lookup.order?.orderNumber || null,
+    } as Prisma.InputJsonValue,
+  });
 
   const commissionBySaleId = await fetchSalesCommissions([sale.id]);
   return presentAgentSale(sale, getCommissionForSale(sale.id, commissionBySaleId));
@@ -1068,7 +1630,10 @@ function canCompleteSale(sale: {
   return null;
 }
 
-export async function completeAgentSale(saleId: string, actorEmail?: string | null) {
+export async function completeAgentSale(
+  saleId: string,
+  actor?: { userId?: string | null; email?: string | null },
+) {
   let completed;
   try {
     completed = await prisma.$transaction(async (tx) => {
@@ -1122,18 +1687,42 @@ export async function completeAgentSale(saleId: string, actorEmail?: string | nu
         },
       });
 
-      await syncLinkedReceiptForAgentSale(tx, updated, actorEmail);
+      await syncLinkedReceiptForAgentSale(tx, updated, actor?.email || null);
 
       await createAgentActivity(
         updated.agentId,
         "sale_completed",
-        `Agent sale ${updated.id} marked completed by ${actorEmail || "admin"}.`,
+        `Agent sale ${updated.id} marked completed by ${actor?.email || "admin"}.`,
         tx,
       );
       await createAgentActivity(
         updated.agentId,
         "commission_unlocked",
         `Agent sale ${updated.id} unlocked commission of ${commissionAmount}.`,
+        tx,
+      );
+      await createAgentSaleTimelineEntry(
+        updated.id,
+        "completed",
+        `Sale completed and commission unlocked by ${actor?.email || "admin"}.`,
+        actor?.userId || null,
+        {
+          commissionAmount,
+        } as Prisma.InputJsonValue,
+        tx,
+      );
+      await createAgentAuditLog(
+        {
+          actorUserId: actor?.userId || null,
+          targetAgentId: updated.agentId,
+          saleId: updated.id,
+          eventType: "sale_completed",
+          summary: `Agent sale ${updated.id} completed and commission unlocked.`,
+          metadata: {
+            actorEmail: actor?.email || null,
+            commissionAmount,
+          } as Prisma.InputJsonValue,
+        },
         tx,
       );
 

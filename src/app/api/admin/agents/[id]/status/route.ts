@@ -25,6 +25,7 @@ export async function PATCH(
     data: { status },
   });
 
+  const actorUserId = (adminSession.session.user as { id?: string } | undefined)?.id ?? null;
   await prisma.agentActivityLog.create({
     data: {
       agentId: profile.userId,
@@ -32,6 +33,22 @@ export async function PATCH(
       description: `Agent status changed to ${status} by admin`,
     },
   });
+  try {
+    await prisma.agentAuditLog.create({
+      data: {
+        actorUserId,
+        targetAgentId: profile.userId,
+        eventType: `agent_status_${status}`,
+        summary: `Agent ${profile.userId} moved to ${status}.`,
+        metadata: {
+          profileId: profile.id,
+          status,
+        },
+      },
+    });
+  } catch {
+    // enterprise tables may not exist until the manual SQL patch is applied
+  }
 
   return NextResponse.json({ ok: true, profile });
 }

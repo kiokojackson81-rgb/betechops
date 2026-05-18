@@ -64,6 +64,24 @@ export async function POST(req: NextRequest) {
           description: referredBy ? `Self-registered with referral code ${referredBy}` : "Self-registered",
         },
       });
+      try {
+        await tx.agentAuditLog.create({
+          data: {
+            actorUserId: user.id,
+            targetAgentId: user.id,
+            eventType: "agent_registered",
+            summary: `Agent ${user.id} created an account.`,
+            metadata: {
+              referralCode,
+              referredBy,
+              county,
+              city,
+            },
+          },
+        });
+      } catch {
+        // enterprise tables may not exist until the manual SQL patch is applied
+      }
 
       return { user, profile };
     });

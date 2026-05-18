@@ -112,6 +112,26 @@ export async function POST(req: NextRequest) {
       description: `Requested payout of ${amount}`,
     },
   });
+  try {
+    await prisma.agentAuditLog.create({
+      data: {
+        actorUserId: agentSession.userId,
+        targetAgentId: agentSession.userId,
+        payoutId: payout.id,
+        eventType: "payout_requested",
+        summary: `Agent ${agentSession.userId} requested payout ${payout.id}.`,
+        metadata: {
+          amount,
+          method,
+          phone,
+          reference,
+          available,
+        },
+      },
+    });
+  } catch {
+    // enterprise tables may not exist until the manual SQL patch is applied
+  }
 
   return NextResponse.json({ ok: true, payout });
 }

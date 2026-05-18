@@ -284,10 +284,6 @@ export async function getAdminAgentsData(
   return mapped;
 }
 
-function normalizePhone(value: string | null | undefined) {
-  return String(value || "").replace(/\D/g, "");
-}
-
 function commissionQueueFromStatus(status: string) {
   const normalized = String(status || "").toLowerCase();
   if (normalized === "paid") return "paid";
@@ -547,15 +543,7 @@ export async function getAdminAgentFraudQueueData(filters: {
 }) {
   const agents = await getAdminAgentsData(undefined, "all", "all", "newest");
   const agentMap = new Map(agents.map((agent) => [agent.profile.userId, agent]));
-  const sales = await prisma.agentSale.findMany({
-    where: filters.agentId && filters.agentId !== "all" ? { agentId: filters.agentId } : undefined,
-    orderBy: { createdAt: "desc" },
-  }).catch((error) => {
-    if (isAgentSalesSchemaError(error)) return [];
-    throw error;
-  });
-
-  const duplicateRows: Array<{
+  type FraudQueueRow = {
     id: string;
     queue: "duplicate_customers" | "phone_reuse" | "suspicious_agents" | "disputes";
     title: string;
@@ -567,74 +555,83 @@ export async function getAdminAgentFraudQueueData(filters: {
     county: string;
     createdAt: Date;
     note: string;
-  }> = [];
+  };
 
-  const byPhone = new Map<string, typeof sales>();
-  for (const sale of sales) {
-    const phone = normalizePhone(sale.customerPhone);
-    if (!phone) continue;
-    const existing = byPhone.get(phone) ?? [];
-    existing.push(sale);
-    byPhone.set(phone, existing);
-  }
+  const duplicateRows: FraudQueueRow[] = [];
+  try {
+    const [reviews, signals, sales] = await Promise.all([
+      prisma.agentDuplicateReview.findMany({
+        where: filters.agentId && filters.agentId !== "all"
+          ? {
+              OR: [
+                { primaryAgentId: filters.agentId },
+                { duplicateAgentId: filters.agentId },
+              ],
+            }
+          : undefined,
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.agentFraudSignal.findMany({
+        where: filters.agentId && filters.agentId !== "all" ? { agentId: filters.agentId } : undefined,
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.agentSale.findMany({
+        where: filters.agentId && filters.agentId !== "all" ? { agentId: filters.agentId } : undefined,
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
 
-  for (const [phone, phoneSales] of byPhone.entries()) {
-    const agentIds = Array.from(new Set(phoneSales.map((sale) => sale.agentId)));
-    const earliest = phoneSales.slice().sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0];
-    const ownershipEnd = new Date(earliest.createdAt.getTime() + 14 * 24 * 60 * 60 * 1000);
-    const withinWindow = phoneSales.some(
-      (sale) => sale.id !== earliest.id && sale.createdAt.getTime() <= ownershipEnd.getTime(),
+    const saleMap = new Map<string, (typeof sales)[number]>(
+      sales.map((sale) => [sale.id, sale] as [string, (typeof sales)[number]]),
     );
 
-    if (agentIds.length > 1) {
+    for (const review of reviews) {
+      const primarySale = saleMap.get(review.primarySaleId);
+      const duplicateSale = saleMap.get(review.duplicateSaleId);
+      const phone = review.normalizedPhone;
+      const primaryAgentName = agentMap.get(review.primaryAgentId)?.displayName || "Agent";
+      const duplicateAgentName = agentMap.get(review.duplicateAgentId)?.displayName || "Agent";
+      const queue = review.status === "open" ? "disputes" : "duplicate_customers";
       duplicateRows.push({
-        id: `duplicate:${phone}`,
-        queue: "duplicate_customers",
-        title: "Possible duplicate customer",
-        riskLevel: phoneSales.length >= 3 ? "high" : "medium",
+        id: `review:${review.id}`,
+        queue,
+        title: queue === "disputes" ? "Lead ownership dispute" : "Duplicate customer review",
+        riskLevel: review.status === "open" ? "high" : "medium",
         phone,
-        agents: agentIds.map((agentId) => agentMap.get(agentId)?.displayName || "Agent"),
-        saleIds: phoneSales.map((sale) => sale.id),
-        customerNames: Array.from(new Set(phoneSales.map((sale) => sale.customerName))),
-        county: String(earliest.customerCounty || earliest.customerLocation || ""),
-        createdAt: earliest.createdAt,
-        note: withinWindow
-          ? `Lead appears owned by ${agentMap.get(earliest.agentId)?.displayName || "the first agent"} until ${ownershipEnd.toLocaleDateString()}.`
-          : "Same customer phone was submitted by multiple agents.",
+        agents: [primaryAgentName, duplicateAgentName],
+        saleIds: [review.primarySaleId, review.duplicateSaleId],
+        customerNames: Array.from(
+          new Set([primarySale?.customerName, duplicateSale?.customerName].filter((value): value is string => Boolean(value))),
+        ),
+        county: String(primarySale?.customerCounty || duplicateSale?.customerCounty || primarySale?.customerLocation || duplicateSale?.customerLocation || ""),
+        createdAt: review.createdAt,
+        note: review.resolutionNote || "Review ownership and decide whether to keep first, merge, reassign, or reject duplicate.",
       });
     }
 
-    if (phoneSales.length >= 3) {
+    for (const signal of signals) {
+      const sale = signal.saleId ? saleMap.get(signal.saleId) : null;
+      let queue: FraudQueueRow["queue"] = "suspicious_agents";
+      if (signal.signalType === "duplicate_customer") queue = "duplicate_customers";
+      else if (signal.signalType === "phone_reuse") queue = "phone_reuse";
+      else if (signal.signalType === "self_submission") queue = "suspicious_agents";
+      if (!["all", queue].includes(filters.queue || "all")) continue;
       duplicateRows.push({
-        id: `reuse:${phone}`,
-        queue: "phone_reuse",
-        title: "Repeated phone reuse",
-        riskLevel: agentIds.length > 1 ? "high" : "medium",
-        phone,
-        agents: agentIds.map((agentId) => agentMap.get(agentId)?.displayName || "Agent"),
-        saleIds: phoneSales.map((sale) => sale.id),
-        customerNames: Array.from(new Set(phoneSales.map((sale) => sale.customerName))),
-        county: String(earliest.customerCounty || earliest.customerLocation || ""),
-        createdAt: earliest.createdAt,
-        note: `${phoneSales.length} submissions share this phone number.`,
+        id: `signal:${signal.id}`,
+        queue,
+        title: signal.title,
+        riskLevel: String(signal.riskLevel).toLowerCase() === "high" ? "high" : String(signal.riskLevel).toLowerCase() === "medium" ? "medium" : "low",
+        phone: sale?.customerPhone || "",
+        agents: signal.agentId ? [agentMap.get(signal.agentId)?.displayName || "Agent"] : [],
+        saleIds: signal.saleId ? [signal.saleId] : [],
+        customerNames: sale?.customerName ? [sale.customerName] : [],
+        county: String(sale?.customerCounty || sale?.customerLocation || ""),
+        createdAt: signal.createdAt,
+        note: signal.description || "Investigate this flagged submission.",
       });
     }
-
-    if (agentIds.length > 1 && withinWindow) {
-      duplicateRows.push({
-        id: `dispute:${phone}`,
-        queue: "disputes",
-        title: "Lead ownership dispute",
-        riskLevel: "high",
-        phone,
-        agents: agentIds.map((agentId) => agentMap.get(agentId)?.displayName || "Agent"),
-        saleIds: phoneSales.map((sale) => sale.id),
-        customerNames: Array.from(new Set(phoneSales.map((sale) => sale.customerName))),
-        county: String(earliest.customerCounty || earliest.customerLocation || ""),
-        createdAt: earliest.createdAt,
-        note: `Another agent submitted this lead during the 14-day ownership window.`,
-      });
-    }
+  } catch (error) {
+    if (!isAgentSalesSchemaError(error)) throw error;
   }
 
   const suspiciousRows = agents

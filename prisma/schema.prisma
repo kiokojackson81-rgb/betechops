@@ -65,43 +65,60 @@ model User {
   agentCommissions                     AgentCommission[]               @relation("AgentCommissionAgent")
   agentPayouts                         AgentPayout[]                   @relation("AgentPayoutAgent")
   agentActivityLogs                    AgentActivityLog[]              @relation("AgentActivityAgent")
+  ownedAgentLeads                      AgentLeadOwnership[]            @relation("AgentLeadOwnershipAgent")
+  primaryDuplicateReviews              AgentDuplicateReview[]          @relation("AgentDuplicatePrimaryAgent")
+  secondaryDuplicateReviews            AgentDuplicateReview[]          @relation("AgentDuplicateAgent")
+  resolvedDuplicateReviews             AgentDuplicateReview[]          @relation("AgentDuplicateResolvedBy")
+  agentFraudSignals                    AgentFraudSignal[]              @relation("AgentFraudSignalAgent")
+  reviewedAgentFraudSignals            AgentFraudSignal[]              @relation("AgentFraudSignalReviewedBy")
+  agentAuditActions                    AgentAuditLog[]                 @relation("AgentAuditActor")
+  agentAuditTargets                    AgentAuditLog[]                 @relation("AgentAuditTargetAgent")
+  agentSaleTimelineActions             AgentSaleTimeline[]             @relation("AgentSaleTimelineActor")
 }
 
 model AgentSale {
-  id                  String    @id @default(cuid())
-  agentId             String
-  customerName        String
-  customerPhone       String
-  customerLocation    String
-  customerCounty      String?
-  productName         String
-  productCategory     String?
-  quantity            Float     @default(1)
-  unitPrice           Float     @default(0)
-  totalAmount         Float     @default(0)
-  paymentType         String
-  amountPaid          Float     @default(0)
-  mpesaReference      String?
-  deliveryMethod      String?
-  deliveryNotes       String?
-  customerNotes       String?
-  internalAgentNotes  String?
-  status              String    @default("pending_review")
-  commissionPct       Float     @default(6)
-  potentialCommission Float     @default(0)
-  commissionLocked    Boolean   @default(true)
-  receiptId           String?
-  receiptNumber       String?
-  completedAt         DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-  agent               User      @relation("AgentSaleAgent", fields: [agentId], references: [id], onDelete: Cascade)
-  receipt             Receipt?  @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+  id                      String                 @id @default(cuid())
+  agentId                 String
+  customerName            String
+  customerPhone           String
+  customerLocation        String
+  customerCounty          String?
+  productName             String
+  productCategory         String?
+  quantity                Float                  @default(1)
+  unitPrice               Float                  @default(0)
+  totalAmount             Float                  @default(0)
+  paymentType             String
+  amountPaid              Float                  @default(0)
+  mpesaReference          String?
+  deliveryMethod          String?
+  deliveryNotes           String?
+  customerNotes           String?
+  internalAgentNotes      String?
+  status                  String                 @default("pending_review")
+  commissionPct           Float                  @default(6)
+  potentialCommission     Float                  @default(0)
+  commissionLocked        Boolean                @default(true)
+  receiptId               String?
+  receiptNumber           String?
+  completedAt             DateTime?
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+  agent                   User                   @relation("AgentSaleAgent", fields: [agentId], references: [id], onDelete: Cascade)
+  receipt                 Receipt?               @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+  leadOwnerships          AgentLeadOwnership[]   @relation("AgentLeadOwnershipFirstSale")
+  primaryDuplicateReviews AgentDuplicateReview[] @relation("AgentDuplicatePrimarySale")
+  duplicateReviews        AgentDuplicateReview[] @relation("AgentDuplicateSale")
+  fraudSignals            AgentFraudSignal[]     @relation("AgentFraudSignalSale")
+  auditLogs               AgentAuditLog[]        @relation("AgentAuditSale")
+  timelineEntries         AgentSaleTimeline[]
 
   @@index([agentId, createdAt])
   @@index([status, createdAt])
   @@index([paymentType, createdAt])
   @@index([receiptId])
+  @@index([customerPhone, createdAt])
+  @@index([customerName, createdAt])
 }
 
 model AgentProfile {
@@ -149,18 +166,20 @@ model AgentCommission {
 }
 
 model AgentPayout {
-  id        String   @id @default(cuid())
+  id        String          @id @default(cuid())
   agentId   String
   amount    Float
   method    String?
   phone     String?
   reference String?
-  status    String   @default("pending")
-  createdAt DateTime @default(now())
-  agent     User     @relation("AgentPayoutAgent", fields: [agentId], references: [id], onDelete: Cascade)
+  status    String          @default("pending")
+  createdAt DateTime        @default(now())
+  agent     User            @relation("AgentPayoutAgent", fields: [agentId], references: [id], onDelete: Cascade)
+  auditLogs AgentAuditLog[] @relation("AgentAuditPayout")
 
   @@index([agentId, createdAt])
   @@index([status, createdAt])
+  @@index([reference])
 }
 
 model AgentActivityLog {
@@ -172,6 +191,115 @@ model AgentActivityLog {
   agent       User     @relation("AgentActivityAgent", fields: [agentId], references: [id], onDelete: Cascade)
 
   @@index([agentId, createdAt])
+}
+
+model AgentLeadOwnership {
+  id               String    @id @default(cuid())
+  normalizedPhone  String
+  customerName     String?
+  customerCounty   String?
+  customerLocation String?
+  productName      String?
+  agentId          String
+  firstSaleId      String
+  status           String    @default("active")
+  ownedUntil       DateTime
+  releasedAt       DateTime?
+  overrideNote     String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  agent            User      @relation("AgentLeadOwnershipAgent", fields: [agentId], references: [id], onDelete: Cascade)
+  firstSale        AgentSale @relation("AgentLeadOwnershipFirstSale", fields: [firstSaleId], references: [id], onDelete: Cascade)
+
+  @@index([normalizedPhone, ownedUntil])
+  @@index([agentId, status])
+  @@index([firstSaleId])
+}
+
+model AgentDuplicateReview {
+  id               String          @id @default(cuid())
+  normalizedPhone  String
+  primarySaleId    String
+  duplicateSaleId  String
+  primaryAgentId   String
+  duplicateAgentId String
+  status           String          @default("open")
+  resolutionNote   String?
+  resolvedById     String?
+  resolvedAt       DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  primarySale      AgentSale       @relation("AgentDuplicatePrimarySale", fields: [primarySaleId], references: [id], onDelete: Cascade)
+  duplicateSale    AgentSale       @relation("AgentDuplicateSale", fields: [duplicateSaleId], references: [id], onDelete: Cascade)
+  primaryAgent     User            @relation("AgentDuplicatePrimaryAgent", fields: [primaryAgentId], references: [id], onDelete: Cascade)
+  duplicateAgent   User            @relation("AgentDuplicateAgent", fields: [duplicateAgentId], references: [id], onDelete: Cascade)
+  resolvedBy       User?           @relation("AgentDuplicateResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+  auditLogs        AgentAuditLog[] @relation("AgentAuditDuplicateReview")
+
+  @@unique([primarySaleId, duplicateSaleId])
+  @@index([normalizedPhone, status])
+  @@index([duplicateAgentId, status])
+}
+
+model AgentFraudSignal {
+  id           String     @id @default(cuid())
+  agentId      String?
+  saleId       String?
+  signalType   String
+  riskLevel    String
+  title        String
+  description  String?
+  status       String     @default("open")
+  metadata     Json?
+  reviewedById String?
+  resolvedAt   DateTime?
+  createdAt    DateTime   @default(now())
+  agent        User?      @relation("AgentFraudSignalAgent", fields: [agentId], references: [id], onDelete: SetNull)
+  sale         AgentSale? @relation("AgentFraudSignalSale", fields: [saleId], references: [id], onDelete: SetNull)
+  reviewedBy   User?      @relation("AgentFraudSignalReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([status, riskLevel, createdAt])
+  @@index([agentId, createdAt])
+  @@index([saleId])
+}
+
+model AgentAuditLog {
+  id                String                @id @default(cuid())
+  actorUserId       String?
+  targetAgentId     String?
+  saleId            String?
+  payoutId          String?
+  duplicateReviewId String?
+  eventType         String
+  summary           String
+  metadata          Json?
+  createdAt         DateTime              @default(now())
+  actor             User?                 @relation("AgentAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  targetAgent       User?                 @relation("AgentAuditTargetAgent", fields: [targetAgentId], references: [id], onDelete: SetNull)
+  sale              AgentSale?            @relation("AgentAuditSale", fields: [saleId], references: [id], onDelete: SetNull)
+  payout            AgentPayout?          @relation("AgentAuditPayout", fields: [payoutId], references: [id], onDelete: SetNull)
+  duplicateReview   AgentDuplicateReview? @relation("AgentAuditDuplicateReview", fields: [duplicateReviewId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([eventType, createdAt])
+  @@index([targetAgentId, createdAt])
+  @@index([saleId, createdAt])
+  @@index([payoutId, createdAt])
+}
+
+model AgentSaleTimeline {
+  id          String    @id @default(cuid())
+  saleId      String
+  stage       String
+  note        String?
+  actorUserId String?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  sale        AgentSale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  actor       User?     @relation("AgentSaleTimelineActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([saleId, createdAt])
+  @@index([stage, createdAt])
 }
 
 model AttendantActivity {

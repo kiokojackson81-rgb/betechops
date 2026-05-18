@@ -66,6 +66,18 @@ export async function PUT(req: NextRequest) {
       description: "Agent updated profile details",
     },
   });
+  try {
+    await prisma.agentAuditLog.create({
+      data: {
+        actorUserId: agentSession.userId,
+        targetAgentId: agentSession.userId,
+        eventType: "agent_profile_updated",
+        summary: `Agent ${agentSession.userId} updated profile details.`,
+      },
+    });
+  } catch {
+    // enterprise tables may not exist until the manual SQL patch is applied
+  }
 
   return NextResponse.json({ ok: true, profile });
 }

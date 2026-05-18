@@ -44,6 +44,88 @@ type ActivityRow = {
   createdAt: string;
 };
 
+type TimelineRow = {
+  id: string;
+  stage: string;
+  note: string | null;
+  createdAt: string;
+  actorUserId: string | null;
+  actor: {
+    id: string;
+    name: string | null;
+    email: string;
+  } | null;
+};
+
+type AuditRow = {
+  id: string;
+  eventType: string;
+  summary: string;
+  createdAt: string;
+  actorUserId: string | null;
+  actor: {
+    id: string;
+    name: string | null;
+    email: string;
+  } | null;
+};
+
+type FraudSignalRow = {
+  id: string;
+  signalType: string;
+  riskLevel: string;
+  title: string;
+  description: string | null;
+  status: string;
+  createdAt: string;
+  resolvedAt: string | null;
+};
+
+type DuplicateReviewRow = {
+  id: string;
+  status: string;
+  normalizedPhone: string;
+  primarySaleId: string;
+  duplicateSaleId: string;
+  resolutionNote: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  primaryAgent: {
+    id: string;
+    name: string | null;
+    email: string;
+  };
+  duplicateAgent: {
+    id: string;
+    name: string | null;
+    email: string;
+  };
+};
+
+type OwnershipRow = {
+  id: string;
+  status: string;
+  customerName: string | null;
+  customerCounty: string | null;
+  customerLocation: string | null;
+  productName: string | null;
+  ownedUntil: string;
+  releasedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  overrideNote: string | null;
+  agent: {
+    id: string;
+    name: string | null;
+    email: string;
+  };
+  firstSale: {
+    id: string;
+    createdAt: string;
+  };
+};
+
 const statuses = [
   "pending_review",
   "awaiting_payment",
@@ -57,13 +139,29 @@ const statuses = [
 const money = (value: number) =>
   new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 }).format(value || 0);
 
+function riskTone(riskLevel: string) {
+  if (riskLevel === "high") return "border-rose-400/30 bg-rose-400/10 text-rose-100";
+  if (riskLevel === "medium") return "border-amber-400/30 bg-amber-400/10 text-amber-100";
+  return "border-emerald-400/30 bg-emerald-400/10 text-emerald-100";
+}
+
 export default function AgentSaleDetailAdminClient({
   sale,
   activity,
+  timeline,
+  audit,
+  fraudSignals,
+  duplicateReviews,
+  activeOwnership,
   receiptPrefillUrl,
 }: {
   sale: SaleDetail;
   activity: ActivityRow[];
+  timeline: TimelineRow[];
+  audit: AuditRow[];
+  fraudSignals: FraudSignalRow[];
+  duplicateReviews: DuplicateReviewRow[];
+  activeOwnership: OwnershipRow | null;
   receiptPrefillUrl: string;
 }) {
   const router = useRouter();
@@ -131,6 +229,13 @@ export default function AgentSaleDetailAdminClient({
     }
     startTransition(() => router.refresh());
   }
+
+  const riskSummaryClass =
+    fraudSignals.some((item) => item.riskLevel === "high")
+      ? riskTone("high")
+      : fraudSignals.some((item) => item.riskLevel === "medium")
+        ? riskTone("medium")
+        : riskTone("low");
 
   return (
     <div className="space-y-6">
@@ -227,6 +332,82 @@ export default function AgentSaleDetailAdminClient({
               <div className="mt-4 text-sm text-emerald-200">Receipt created automatically: {sale.receiptNumber}</div>
             ) : null}
           </div>
+
+          <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-xl font-semibold text-white">Enterprise checks</h2>
+              <div className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${riskSummaryClass}`}>
+                {fraudSignals.length ? `${fraudSignals.length} active signals` : "low risk"}
+              </div>
+            </div>
+
+            {activeOwnership ? (
+              <div className="mt-4 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4 text-sm text-cyan-50">
+                <div className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-100">Lead ownership</div>
+                <p className="mt-2">
+                  Owned by {activeOwnership.agent.name || activeOwnership.agent.email} until{" "}
+                  {new Date(activeOwnership.ownedUntil).toLocaleString("en-KE")}.
+                </p>
+                <p className="mt-1 text-cyan-100/80">
+                  First sale {activeOwnership.firstSale.id.slice(0, 10)} · Created{" "}
+                  {new Date(activeOwnership.firstSale.createdAt).toLocaleString("en-KE")}
+                </p>
+              </div>
+            ) : (
+              <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-sm text-slate-400">
+                No active lead ownership record found for this customer phone.
+              </div>
+            )}
+
+            <div className="mt-4 grid gap-4 xl:grid-cols-2">
+              <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Duplicate reviews</div>
+                <div className="mt-3 space-y-3">
+                  {duplicateReviews.length ? (
+                    duplicateReviews.map((review) => (
+                      <div key={review.id} className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-sm text-slate-300">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="font-semibold text-white">{review.status.replace(/_/g, " ")}</div>
+                          <div className="text-xs text-slate-500">{new Date(review.createdAt).toLocaleString("en-KE")}</div>
+                        </div>
+                        <p className="mt-2">
+                          {review.primaryAgent.name || review.primaryAgent.email} vs{" "}
+                          {review.duplicateAgent.name || review.duplicateAgent.email}
+                        </p>
+                        {review.resolutionNote ? <p className="mt-2 text-xs text-slate-400">{review.resolutionNote}</p> : null}
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-slate-400">No duplicate review records on this sale.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Fraud signals</div>
+                <div className="mt-3 space-y-3">
+                  {fraudSignals.length ? (
+                    fraudSignals.map((signal) => (
+                      <div key={signal.id} className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-sm text-slate-300">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="font-semibold text-white">{signal.title}</div>
+                          <div className={`rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${riskTone(signal.riskLevel)}`}>
+                            {signal.riskLevel}
+                          </div>
+                        </div>
+                        <p className="mt-2 text-slate-300">{signal.description || signal.signalType.replace(/_/g, " ")}</p>
+                        <p className="mt-2 text-xs text-slate-500">
+                          {signal.status} · {new Date(signal.createdAt).toLocaleString("en-KE")}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-slate-400">No active fraud signals recorded.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="space-y-6">
@@ -276,18 +457,69 @@ export default function AgentSaleDetailAdminClient({
               </button>
             </div>
           </div>
+        </div>
+      </section>
 
-          <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
-            <h2 className="text-xl font-semibold text-white">Activity log</h2>
-            <div className="mt-5 space-y-3">
-              {activity.length ? activity.map((item) => (
-                <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                  <div className="text-sm font-semibold text-white">{item.action}</div>
-                  <div className="mt-2 text-sm text-slate-400">{item.description || "No extra details"}</div>
-                  <div className="mt-2 text-xs text-slate-500">{new Date(item.createdAt).toLocaleString()}</div>
+      <section className="grid gap-6 xl:grid-cols-3">
+        <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
+          <h2 className="text-xl font-semibold text-white">Sale timeline</h2>
+          <div className="mt-5 space-y-4">
+            {timeline.length ? (
+              timeline.map((entry) => (
+                <div key={entry.id} className="flex gap-3">
+                  <div className="mt-1 h-3 w-3 rounded-full bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.6)]" />
+                  <div className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-sm font-semibold uppercase tracking-[0.18em] text-cyan-200">{entry.stage.replace(/_/g, " ")}</div>
+                      <div className="text-xs text-slate-500">{new Date(entry.createdAt).toLocaleString("en-KE")}</div>
+                    </div>
+                    <p className="mt-2 text-sm text-slate-300">{entry.note || "No note recorded."}</p>
+                    <div className="mt-2 text-xs text-slate-500">{entry.actor?.name || entry.actor?.email || "System"}</div>
+                  </div>
                 </div>
-              )) : <div className="text-sm text-slate-500">No activity recorded yet.</div>}
-            </div>
+              ))
+            ) : (
+              <p className="text-sm text-slate-400">No timeline entries recorded yet.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
+          <h2 className="text-xl font-semibold text-white">Audit trail</h2>
+          <div className="mt-5 space-y-4">
+            {audit.length ? (
+              audit.map((entry) => (
+                <div key={entry.id} className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-200">{entry.eventType.replace(/_/g, " ")}</div>
+                    <div className="text-xs text-slate-500">{new Date(entry.createdAt).toLocaleString("en-KE")}</div>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-300">{entry.summary}</p>
+                  <div className="mt-2 text-xs text-slate-500">{entry.actor?.name || entry.actor?.email || "System"}</div>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-slate-400">No audit events recorded yet.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
+          <h2 className="text-xl font-semibold text-white">Activity log</h2>
+          <div className="mt-5 space-y-4">
+            {activity.length ? (
+              activity.map((item) => (
+                <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-sm font-semibold uppercase tracking-[0.18em] text-cyan-200">{item.action.replace(/_/g, " ")}</div>
+                    <div className="text-xs text-slate-500">{new Date(item.createdAt).toLocaleString("en-KE")}</div>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-300">{item.description || "No extra details provided."}</p>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-slate-400">No activity recorded for this sale yet.</p>
+            )}
           </div>
         </div>
       </section>
