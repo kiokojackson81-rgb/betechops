@@ -283,3 +283,405 @@ export async function getAdminAgentsData(
 
   return mapped;
 }
+
+function normalizePhone(value: string | null | undefined) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function commissionQueueFromStatus(status: string) {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized === "paid") return "paid";
+  if (normalized === "approved") return "available";
+  if (normalized === "cancelled") return "cancelled";
+  return "pending";
+}
+
+function payoutQueueFromStatus(status: string) {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized === "approved") return "approved";
+  if (normalized === "paid") return "paid";
+  if (normalized === "rejected" || normalized === "cancelled") return "rejected";
+  if (normalized === "held") return "held";
+  return "requests";
+}
+
+export async function getAdminAgentCommissionQueueData(filters: {
+  q?: string;
+  queue?: string;
+  agentId?: string;
+}) {
+  const agentWhere: Prisma.AgentProfileWhereInput = {};
+  if (filters.agentId && filters.agentId !== "all") {
+    agentWhere.userId = filters.agentId;
+  }
+
+  const profiles = await prisma.agentProfile.findMany({
+    where: agentWhere,
+    include: {
+      user: { select: { id: true, name: true, email: true, createdAt: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!profiles.length) {
+    return { rows: [], summary: { locked: 0, pending: 0, available: 0, paid: 0 } };
+  }
+
+  const agents = await getAdminAgentsData(
+    undefined,
+    "all",
+    "all",
+    "newest",
+  );
+  const agentMap = new Map(agents.map((agent) => [agent.profile.userId, agent]));
+  const userIds = profiles.map((row) => row.userId);
+  const [sales, commissions] = await Promise.all([
+    prisma.agentSale.findMany({
+      where: { agentId: { in: userIds } },
+      orderBy: { createdAt: "desc" },
+    }).catch((error) => {
+      if (isAgentSalesSchemaError(error)) return [];
+      throw error;
+    }),
+    prisma.agentCommission.findMany({
+      where: { agentId: { in: userIds } },
+      orderBy: { createdAt: "desc" },
+    }).catch((error) => {
+      if (isAgentSalesSchemaError(error)) return [];
+      throw error;
+    }),
+  ]);
+
+  const saleById = new Map<string, (typeof sales)[number]>(
+    sales.map((sale) => [sale.id, sale] as [string, (typeof sales)[number]]),
+  );
+  const rows = [
+    ...sales
+      .filter((sale) => !["completed", "cancelled", "rejected"].includes(String(sale.status)))
+      .map((sale) => {
+        const agent = agentMap.get(sale.agentId);
+        return {
+          id: `locked:${sale.id}`,
+          queue: "locked",
+          kind: "locked" as const,
+          agentId: sale.agentId,
+          agentName: agent?.displayName || "Agent",
+          referralCode: agent?.profile.referralCode || "",
+          phone: agent?.profile.phone || "",
+          county: agent?.profile.county || "",
+          riskLevel: agent?.riskLevel || "low",
+          customerName: sale.customerName,
+          customerPhone: sale.customerPhone,
+          productName: sale.productName,
+          saleId: sale.id,
+          receiptNumber: sale.receiptNumber || null,
+          saleAmount: Number(sale.totalAmount ?? 0),
+          commissionAmount: Number(sale.potentialCommission ?? 0),
+          status: String(sale.status),
+          createdAt: sale.createdAt,
+          note: "Locked until payment, delivery, and admin completion.",
+        };
+      }),
+    ...commissions.map((commission) => {
+      const sale = commission.sourceId ? saleById.get(commission.sourceId) : null;
+      const agent = agentMap.get(commission.agentId);
+      return {
+        id: `commission:${commission.id}`,
+        queue: commissionQueueFromStatus(commission.status),
+        kind: "earned" as const,
+        agentId: commission.agentId,
+        agentName: agent?.displayName || "Agent",
+        referralCode: agent?.profile.referralCode || "",
+        phone: agent?.profile.phone || "",
+        county: agent?.profile.county || "",
+        riskLevel: agent?.riskLevel || "low",
+        customerName: sale?.customerName || "Linked sale",
+        customerPhone: sale?.customerPhone || "",
+        productName: sale?.productName || commission.orderNumber || "Agent sale",
+        saleId: sale?.id || commission.sourceId || null,
+        receiptNumber: commission.orderNumber || sale?.receiptNumber || null,
+        saleAmount: Number(commission.saleAmount ?? sale?.totalAmount ?? 0),
+        commissionAmount: Number(commission.commissionAmt ?? 0),
+        status: String(commission.status),
+        createdAt: commission.createdAt,
+        note:
+          commissionQueueFromStatus(commission.status) === "available"
+            ? "Available for agent withdrawal review."
+            : commissionQueueFromStatus(commission.status) === "paid"
+              ? "Already paid out to the agent."
+              : commissionQueueFromStatus(commission.status) === "cancelled"
+                ? "Cancelled and excluded from payout."
+                : "Unlocked and pending payout workflow.",
+      };
+    }),
+  ]
+    .filter((row) => {
+      if (!filters.queue || filters.queue === "all") return true;
+      return row.queue === filters.queue;
+    })
+    .filter((row) => {
+      if (!filters.q?.trim()) return true;
+      const q = filters.q.trim().toLowerCase();
+      return [
+        row.agentName,
+        row.referralCode,
+        row.phone,
+        row.customerName,
+        row.customerPhone,
+        row.productName,
+        row.receiptNumber,
+      ].some((value) => String(value || "").toLowerCase().includes(q));
+    })
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+  const summary = rows.reduce(
+    (acc, row) => {
+      if (row.queue === "locked") acc.locked += row.commissionAmount;
+      if (row.queue === "pending") acc.pending += row.commissionAmount;
+      if (row.queue === "available") acc.available += row.commissionAmount;
+      if (row.queue === "paid") acc.paid += row.commissionAmount;
+      return acc;
+    },
+    { locked: 0, pending: 0, available: 0, paid: 0 },
+  );
+
+  return { rows, summary };
+}
+
+export async function getAdminAgentPayoutQueueData(filters: {
+  q?: string;
+  queue?: string;
+  agentId?: string;
+}) {
+  const profiles = await prisma.agentProfile.findMany({
+    include: {
+      user: { select: { id: true, name: true, email: true, createdAt: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!profiles.length) {
+    return { rows: [], summary: { requests: 0, approved: 0, paid: 0, held: 0 } };
+  }
+
+  const agents = await getAdminAgentsData(undefined, "all", "all", "newest");
+  const agentMap = new Map(agents.map((agent) => [agent.profile.userId, agent]));
+  const userIds = profiles.map((row) => row.userId);
+  const [payouts, commissions] = await Promise.all([
+    prisma.agentPayout.findMany({
+      where: filters.agentId && filters.agentId !== "all" ? { agentId: filters.agentId } : undefined,
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.agentCommission.findMany({
+      where: { agentId: { in: userIds } },
+      orderBy: { createdAt: "desc" },
+    }).catch((error) => {
+      if (isAgentSalesSchemaError(error)) return [];
+      throw error;
+    }),
+  ]);
+
+  const rows = payouts
+    .map((payout) => {
+      const agent = agentMap.get(payout.agentId);
+      const agentCommissions = commissions.filter((item) => item.agentId === payout.agentId);
+      const paidCommission = agentCommissions
+        .filter((item) => String(item.status).toLowerCase() === "paid")
+        .reduce((sum, item) => sum + Number(item.commissionAmt ?? 0), 0);
+      const reservedPayouts = payouts
+        .filter((item) => item.agentId === payout.agentId)
+        .filter((item) => !["rejected", "cancelled"].includes(String(item.status).toLowerCase()))
+        .reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
+      const availableBalance = Math.max(0, paidCommission - reservedPayouts);
+
+      return {
+        id: payout.id,
+        queue: payoutQueueFromStatus(payout.status),
+        agentId: payout.agentId,
+        agentName: agent?.displayName || "Agent",
+        referralCode: agent?.profile.referralCode || "",
+        phone: payout.phone || agent?.profile.phone || "",
+        county: agent?.profile.county || "",
+        riskLevel: agent?.riskLevel || "low",
+        amount: Number(payout.amount ?? 0),
+        method: payout.method || "MPESA",
+        reference: payout.reference || "",
+        status: String(payout.status),
+        eligibleCommission: paidCommission,
+        availableBalance,
+        createdAt: payout.createdAt,
+      };
+    })
+    .filter((row) => {
+      if (!filters.queue || filters.queue === "all") return true;
+      return row.queue === filters.queue;
+    })
+    .filter((row) => {
+      if (!filters.q?.trim()) return true;
+      const q = filters.q.trim().toLowerCase();
+      return [
+        row.agentName,
+        row.referralCode,
+        row.phone,
+        row.reference,
+      ].some((value) => String(value || "").toLowerCase().includes(q));
+    })
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+  const summary = rows.reduce(
+    (acc, row) => {
+      if (row.queue === "requests") acc.requests += row.amount;
+      if (row.queue === "approved") acc.approved += row.amount;
+      if (row.queue === "paid") acc.paid += row.amount;
+      if (row.queue === "held") acc.held += row.amount;
+      return acc;
+    },
+    { requests: 0, approved: 0, paid: 0, held: 0 },
+  );
+
+  return { rows, summary };
+}
+
+export async function getAdminAgentFraudQueueData(filters: {
+  q?: string;
+  queue?: string;
+  agentId?: string;
+}) {
+  const agents = await getAdminAgentsData(undefined, "all", "all", "newest");
+  const agentMap = new Map(agents.map((agent) => [agent.profile.userId, agent]));
+  const sales = await prisma.agentSale.findMany({
+    where: filters.agentId && filters.agentId !== "all" ? { agentId: filters.agentId } : undefined,
+    orderBy: { createdAt: "desc" },
+  }).catch((error) => {
+    if (isAgentSalesSchemaError(error)) return [];
+    throw error;
+  });
+
+  const duplicateRows: Array<{
+    id: string;
+    queue: "duplicate_customers" | "phone_reuse" | "suspicious_agents" | "disputes";
+    title: string;
+    riskLevel: "low" | "medium" | "high";
+    phone: string;
+    agents: string[];
+    saleIds: string[];
+    customerNames: string[];
+    county: string;
+    createdAt: Date;
+    note: string;
+  }> = [];
+
+  const byPhone = new Map<string, typeof sales>();
+  for (const sale of sales) {
+    const phone = normalizePhone(sale.customerPhone);
+    if (!phone) continue;
+    const existing = byPhone.get(phone) ?? [];
+    existing.push(sale);
+    byPhone.set(phone, existing);
+  }
+
+  for (const [phone, phoneSales] of byPhone.entries()) {
+    const agentIds = Array.from(new Set(phoneSales.map((sale) => sale.agentId)));
+    const earliest = phoneSales.slice().sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0];
+    const ownershipEnd = new Date(earliest.createdAt.getTime() + 14 * 24 * 60 * 60 * 1000);
+    const withinWindow = phoneSales.some(
+      (sale) => sale.id !== earliest.id && sale.createdAt.getTime() <= ownershipEnd.getTime(),
+    );
+
+    if (agentIds.length > 1) {
+      duplicateRows.push({
+        id: `duplicate:${phone}`,
+        queue: "duplicate_customers",
+        title: "Possible duplicate customer",
+        riskLevel: phoneSales.length >= 3 ? "high" : "medium",
+        phone,
+        agents: agentIds.map((agentId) => agentMap.get(agentId)?.displayName || "Agent"),
+        saleIds: phoneSales.map((sale) => sale.id),
+        customerNames: Array.from(new Set(phoneSales.map((sale) => sale.customerName))),
+        county: String(earliest.customerCounty || earliest.customerLocation || ""),
+        createdAt: earliest.createdAt,
+        note: withinWindow
+          ? `Lead appears owned by ${agentMap.get(earliest.agentId)?.displayName || "the first agent"} until ${ownershipEnd.toLocaleDateString()}.`
+          : "Same customer phone was submitted by multiple agents.",
+      });
+    }
+
+    if (phoneSales.length >= 3) {
+      duplicateRows.push({
+        id: `reuse:${phone}`,
+        queue: "phone_reuse",
+        title: "Repeated phone reuse",
+        riskLevel: agentIds.length > 1 ? "high" : "medium",
+        phone,
+        agents: agentIds.map((agentId) => agentMap.get(agentId)?.displayName || "Agent"),
+        saleIds: phoneSales.map((sale) => sale.id),
+        customerNames: Array.from(new Set(phoneSales.map((sale) => sale.customerName))),
+        county: String(earliest.customerCounty || earliest.customerLocation || ""),
+        createdAt: earliest.createdAt,
+        note: `${phoneSales.length} submissions share this phone number.`,
+      });
+    }
+
+    if (agentIds.length > 1 && withinWindow) {
+      duplicateRows.push({
+        id: `dispute:${phone}`,
+        queue: "disputes",
+        title: "Lead ownership dispute",
+        riskLevel: "high",
+        phone,
+        agents: agentIds.map((agentId) => agentMap.get(agentId)?.displayName || "Agent"),
+        saleIds: phoneSales.map((sale) => sale.id),
+        customerNames: Array.from(new Set(phoneSales.map((sale) => sale.customerName))),
+        county: String(earliest.customerCounty || earliest.customerLocation || ""),
+        createdAt: earliest.createdAt,
+        note: `Another agent submitted this lead during the 14-day ownership window.`,
+      });
+    }
+  }
+
+  const suspiciousRows = agents
+    .filter((agent) => agent.riskLevel !== "low")
+    .map((agent) => ({
+      id: `agent:${agent.profile.userId}`,
+      queue: "suspicious_agents" as const,
+      title: agent.performanceLabel,
+      riskLevel: agent.riskLevel,
+      phone: agent.profile.phone || "",
+      agents: [agent.displayName],
+      saleIds: [],
+      customerNames: [],
+      county: agent.profile.county || "",
+      createdAt: agent.lastActiveAt,
+      note: `${agent.duplicateLeadCount} duplicate leads · ${agent.cancellationRate}% cancellation rate.`,
+    }));
+
+  const rows = [...duplicateRows, ...suspiciousRows]
+    .filter((row) => {
+      if (!filters.queue || filters.queue === "all") return true;
+      return row.queue === filters.queue;
+    })
+    .filter((row) => {
+      if (!filters.q?.trim()) return true;
+      const q = filters.q.trim().toLowerCase();
+      return [
+        row.title,
+        row.phone,
+        row.note,
+        row.county,
+        ...row.agents,
+        ...row.customerNames,
+      ].some((value) => String(value || "").toLowerCase().includes(q));
+    })
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+  const summary = rows.reduce(
+    (acc, row) => {
+      acc.total += 1;
+      if (row.riskLevel === "high") acc.high += 1;
+      if (row.riskLevel === "medium") acc.medium += 1;
+      if (row.queue === "disputes") acc.disputes += 1;
+      return acc;
+    },
+    { total: 0, high: 0, medium: 0, disputes: 0 },
+  );
+
+  return { rows, summary };
+}
