@@ -74,117 +74,123 @@ export default function AgentRegisterForm({ useRootPaths = false }: AgentRegiste
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-300">Affiliate onboarding</p>
-        <h1 className="text-3xl font-semibold text-white">Register as a BETECH agent</h1>
-        <p className="text-sm text-slate-400">
-          Open one account for referrals, commission tracking, payouts, and future KYC approval.
+        <p className="text-xs font-black uppercase tracking-[0.28em] text-[#7a0000]">Affiliate signup</p>
+        <h1 className="text-4xl font-black tracking-tight text-slate-950">Create Your Agent Account</h1>
+        <p className="text-base leading-8 text-slate-600">
+          Fill in your details to join the Betech Solar Agents Program.
         </p>
       </div>
 
       {error ? (
-        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{error}</div>
+        <div className="rounded-2xl border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
       ) : null}
       {success ? (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">{success}</div>
+        <div className="rounded-2xl border border-[#f2b20f]/30 bg-[#fff7e8] px-4 py-3 text-sm text-[#7a0000]">{success}</div>
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <label className="text-sm text-slate-300">First name</label>
+          <label className="text-sm font-semibold text-slate-700">First Name</label>
           <input
             required
             value={form.firstName}
             onChange={(event) => update("firstName", event.target.value)}
-            className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none transition focus:border-cyan-400/60"
+            className="h-14 w-full rounded-2xl border border-[#7a0000]/10 bg-[#fcfaf7] px-4 text-slate-950 outline-none transition focus:border-[#7a0000]/55 focus:bg-white"
           />
         </div>
         <div className="space-y-2">
-          <label className="text-sm text-slate-300">Last name</label>
+          <label className="text-sm font-semibold text-slate-700">Last Name</label>
           <input
             required
             value={form.lastName}
             onChange={(event) => update("lastName", event.target.value)}
-            className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none transition focus:border-cyan-400/60"
+            className="h-14 w-full rounded-2xl border border-[#7a0000]/10 bg-[#fcfaf7] px-4 text-slate-950 outline-none transition focus:border-[#7a0000]/55 focus:bg-white"
           />
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <label className="text-sm text-slate-300">Email</label>
+          <label className="text-sm font-semibold text-slate-700">Email Address</label>
           <input
             type="email"
             required
             value={form.email}
             onChange={(event) => update("email", event.target.value)}
-            className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none transition focus:border-cyan-400/60"
+            className="h-14 w-full rounded-2xl border border-[#7a0000]/10 bg-[#fcfaf7] px-4 text-slate-950 outline-none transition focus:border-[#7a0000]/55 focus:bg-white"
           />
         </div>
         <div className="space-y-2">
-          <label className="text-sm text-slate-300">Phone</label>
+          <label className="text-sm font-semibold text-slate-700">Phone Number / M-Pesa Number</label>
           <input
             required
             value={form.phone}
             onChange={(event) => update("phone", event.target.value)}
-            className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none transition focus:border-cyan-400/60"
+            className="h-14 w-full rounded-2xl border border-[#7a0000]/10 bg-[#fcfaf7] px-4 text-slate-950 outline-none transition focus:border-[#7a0000]/55 focus:bg-white"
           />
+          <p className="text-xs leading-6 text-slate-500">This number may be used for commission payouts.</p>
         </div>
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm text-slate-300">Password</label>
+        <label className="text-sm font-semibold text-slate-700">Create Password</label>
         <input
           type="password"
           required
           minLength={8}
           value={form.password}
           onChange={(event) => update("password", event.target.value)}
-          className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none transition focus:border-cyan-400/60"
+          className="h-14 w-full rounded-2xl border border-[#7a0000]/10 bg-[#fcfaf7] px-4 text-slate-950 outline-none transition focus:border-[#7a0000]/55 focus:bg-white"
           placeholder="At least 8 characters"
         />
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
         <div className="space-y-2">
-          <label className="text-sm text-slate-300">Country</label>
+          <label className="text-sm font-semibold text-slate-700">Country</label>
           <input
             value={form.country}
             onChange={(event) => update("country", event.target.value)}
-            className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none transition focus:border-cyan-400/60"
+            className="h-14 w-full rounded-2xl border border-[#7a0000]/10 bg-[#fcfaf7] px-4 text-slate-950 outline-none transition focus:border-[#7a0000]/55 focus:bg-white"
           />
         </div>
         <div className="space-y-2">
-          <label className="text-sm text-slate-300">County</label>
+          <label className="text-sm font-semibold text-slate-700">County</label>
           <input
             value={form.county}
             onChange={(event) => update("county", event.target.value)}
-            className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none transition focus:border-cyan-400/60"
+            className="h-14 w-full rounded-2xl border border-[#7a0000]/10 bg-[#fcfaf7] px-4 text-slate-950 outline-none transition focus:border-[#7a0000]/55 focus:bg-white"
           />
         </div>
         <div className="space-y-2">
-          <label className="text-sm text-slate-300">City</label>
+          <label className="text-sm font-semibold text-slate-700">Town / City</label>
           <input
             value={form.city}
             onChange={(event) => update("city", event.target.value)}
-            className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none transition focus:border-cyan-400/60"
+            className="h-14 w-full rounded-2xl border border-[#7a0000]/10 bg-[#fcfaf7] px-4 text-slate-950 outline-none transition focus:border-[#7a0000]/55 focus:bg-white"
           />
         </div>
+      </div>
+
+      <div className="rounded-[1.4rem] border border-[#f2b20f]/20 bg-[#fff7e9] px-4 py-4 text-sm leading-7 text-slate-700">
+        <div className="font-black uppercase tracking-[0.16em] text-[#7a0000]">Create account → refer customers → earn 6%</div>
+        <div className="mt-2">Join the platform, submit customer orders, and start building commission through completed solar sales.</div>
       </div>
 
       <button
         type="submit"
         disabled={busy}
-        className="w-full rounded-2xl bg-cyan-300 px-4 py-3 font-semibold text-slate-950 transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+        className="h-14 w-full rounded-2xl bg-[linear-gradient(135deg,#7a0000_0%,#9a1010_100%)] px-4 text-base font-bold text-white shadow-[0_18px_40px_rgba(122,0,0,0.18)] transition hover:-translate-y-0.5 hover:shadow-[0_24px_50px_rgba(122,0,0,0.24)] disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {busy ? "Creating account..." : "Create agent account"}
+        {busy ? "Creating Account..." : "Create Agent Account"}
       </button>
 
-      <p className="text-sm text-slate-400">
-        Already registered?{" "}
-        <Link href={agentPath("/login", useRootPaths)} className="font-medium text-cyan-300 hover:text-cyan-200">
-          Sign in here
+      <div className="rounded-[1.4rem] border border-[#7a0000]/10 bg-white px-4 py-4 text-sm text-slate-600 shadow-[0_12px_24px_rgba(15,23,42,0.04)]">
+        <div className="font-semibold text-slate-800">Already have an account?</div>
+        <Link href={agentPath("/login", useRootPaths)} className="mt-1 inline-flex font-bold text-[#7a0000] hover:text-[#9a1010]">
+          Sign in
         </Link>
-      </p>
+      </div>
     </form>
   );
 }
