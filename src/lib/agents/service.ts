@@ -124,9 +124,15 @@ export async function getAgentDashboardData(userId: string) {
   };
 }
 
-export async function getAdminAgentsData(search?: string, status?: string) {
+export async function getAdminAgentsData(
+  search?: string,
+  status?: string,
+  county?: string,
+  sort?: string,
+) {
   const where: Prisma.AgentProfileWhereInput = {};
   if (status && status !== "all") where.status = status;
+  if (county && county !== "all") where.county = county;
   if (search) {
     where.OR = [
       { referralCode: { contains: search, mode: "insensitive" } },
@@ -174,7 +180,7 @@ export async function getAdminAgentsData(search?: string, status?: string) {
     }),
   ]);
 
-  return rows.map((row) => {
+  const mapped = rows.map((row) => {
     const agentCommissions = commissions.filter((item) => item.agentId === row.userId);
     const agentPayouts = payouts.filter((item) => item.agentId === row.userId);
     const agentSales = sales.filter((item) => item.agentId === row.userId);
@@ -212,4 +218,17 @@ export async function getAdminAgentsData(search?: string, status?: string) {
       payouts: agentPayouts.slice(0, 10),
     };
   });
+
+  if (sort === "highest_sales") {
+    mapped.sort((a, b) => b.totalSales - a.totalSales);
+  } else if (sort === "pending_commission") {
+    mapped.sort((a, b) => b.pendingCommission - a.pendingCommission);
+  } else {
+    mapped.sort(
+      (a, b) =>
+        new Date(b.profile.createdAt).getTime() - new Date(a.profile.createdAt).getTime(),
+    );
+  }
+
+  return mapped;
 }
