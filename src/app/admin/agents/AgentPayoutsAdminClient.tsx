@@ -53,11 +53,31 @@ export default function AgentPayoutsAdminClient({ rows }: { rows: PayoutRow[] })
   const selectedRows = useMemo(() => rows.filter((row) => selectedIds.includes(row.id)), [rows, selectedIds]);
 
   async function updateStatus(id: string, status: string) {
+    let reference: string | null = null;
+    let reason: string | null = null;
+    if (status === "paid") {
+      const input = window.prompt("Enter M-Pesa reference code for this paid payout:");
+      if (input === null) return;
+      reference = input.trim();
+      if (!reference) {
+        window.alert("M-Pesa reference code is required before marking this payout as paid.");
+        return;
+      }
+    }
+    if (status === "rejected") {
+      const input = window.prompt("Enter reason for rejecting this payout request:");
+      if (input === null) return;
+      reason = input.trim();
+      if (!reason) {
+        window.alert("A rejection reason is required.");
+        return;
+      }
+    }
     setBusy(`${id}:${status}`);
     const res = await fetch(`/api/admin/agents/payouts/${id}/status`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, reference, reason }),
     });
     setBusy(null);
     if (!res.ok) {
@@ -70,6 +90,14 @@ export default function AgentPayoutsAdminClient({ rows }: { rows: PayoutRow[] })
 
   async function bulkUpdateStatus(status: string) {
     if (!selectedIds.length) return;
+    if (status === "paid") {
+      window.alert("Bulk mark paid is disabled because each payout requires its own M-Pesa reference code.");
+      return;
+    }
+    if (status === "rejected") {
+      window.alert("Reject payouts one by one so each request has a proper rejection reason.");
+      return;
+    }
     setBusy(`bulk:${status}`);
     for (const id of selectedIds) {
       const res = await fetch(`/api/admin/agents/payouts/${id}/status`, {

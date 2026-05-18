@@ -17,10 +17,17 @@ export async function PATCH(
   const body = await req.json().catch(() => ({}));
   const status = String(body?.status || "").trim().toLowerCase();
   const reference = String(body?.reference || "").trim() || null;
+  const reason = String(body?.reason || "").trim() || null;
   const actorUserId = (adminSession.session.user as { id?: string } | undefined)?.id ?? null;
 
   if (!id || !allowedStatuses.has(status)) {
     return NextResponse.json({ error: "A valid payout id and status are required." }, { status: 400 });
+  }
+  if (status === "paid" && !reference) {
+    return NextResponse.json({ error: "M-Pesa reference code is required before marking this payout as paid." }, { status: 400 });
+  }
+  if (status === "rejected" && !reason) {
+    return NextResponse.json({ error: "Please provide a reason for rejecting this payout request." }, { status: 400 });
   }
 
   const payout = await prisma.$transaction(async (tx) => {
@@ -59,7 +66,12 @@ export async function PATCH(
       data: {
         agentId: updatedPayout.agentId,
         action: `payout_${status}`,
-        description: `Agent payout ${updatedPayout.id} moved to ${status} by admin.`,
+        description:
+          status === "rejected" && reason
+            ? `Agent payout ${updatedPayout.id} was rejected by admin. Reason: ${reason}`
+            : status === "paid" && reference
+              ? `Agent payout ${updatedPayout.id} was marked paid by admin. M-Pesa reference: ${reference}`
+              : `Agent payout ${updatedPayout.id} moved to ${status} by admin.`,
       },
     });
     try {
@@ -74,6 +86,7 @@ export async function PATCH(
             status,
             amount: updatedPayout.amount,
             reference,
+            reason,
           },
         },
       });
