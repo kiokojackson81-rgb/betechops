@@ -5,6 +5,7 @@ import { generateReceiptSerial, normalizeReceiptSerial } from "@/lib/receipts/se
 
 export const AGENT_COMMISSION_RATE = 6;
 const AGENT_LEAD_OWNERSHIP_DAYS = 14;
+let enterpriseControlsAvailablePromise: Promise<boolean> | null = null;
 
 export const agentSaleStatuses = [
   "pending_review",
@@ -129,6 +130,38 @@ function createAgentSaleSetupError() {
   return new Error(
     "Agent sales database setup is incomplete. Apply scripts/sql/20260515_agent_sales_workflow.sql in Neon, then redeploy.",
   );
+}
+
+async function hasAgentEnterpriseControls() {
+  if (!enterpriseControlsAvailablePromise) {
+    enterpriseControlsAvailablePromise = prisma
+      .$queryRaw<
+        Array<{
+          ownership: string | null;
+          duplicate_review: string | null;
+          fraud_signal: string | null;
+          audit_log: string | null;
+          timeline: string | null;
+        }>
+      >`SELECT
+          to_regclass('public."AgentLeadOwnership"')::text AS ownership,
+          to_regclass('public."AgentDuplicateReview"')::text AS duplicate_review,
+          to_regclass('public."AgentFraudSignal"')::text AS fraud_signal,
+          to_regclass('public."AgentAuditLog"')::text AS audit_log,
+          to_regclass('public."AgentSaleTimeline"')::text AS timeline`
+      .then((rows) => {
+        const first = rows[0];
+        return Boolean(
+          first?.ownership &&
+            first?.duplicate_review &&
+            first?.fraud_signal &&
+            first?.audit_log &&
+            first?.timeline,
+        );
+      })
+      .catch(() => false);
+  }
+  return enterpriseControlsAvailablePromise;
 }
 
 function emptySalesSummary() {
@@ -573,10 +606,12 @@ async function createAgentAuditLog(
     duplicateReviewId?: string | null;
     eventType: string;
     summary: string;
-    metadata?: Prisma.InputJsonValue;
+  metadata?: Prisma.InputJsonValue;
   },
   tx: Prisma.TransactionClient = prisma,
 ) {
+  const enabled = await hasAgentEnterpriseControls();
+  if (!enabled) return;
   try {
     await tx.agentAuditLog.create({
       data: {
@@ -604,6 +639,8 @@ async function createAgentSaleTimelineEntry(
   metadata?: Prisma.InputJsonValue,
   tx: Prisma.TransactionClient = prisma,
 ) {
+  const enabled = await hasAgentEnterpriseControls();
+  if (!enabled) return;
   try {
     await tx.agentSaleTimeline.create({
       data: {
@@ -632,6 +669,8 @@ async function createAgentFraudSignal(
   },
   tx: Prisma.TransactionClient = prisma,
 ) {
+  const enabled = await hasAgentEnterpriseControls();
+  if (!enabled) return;
   try {
     await tx.agentFraudSignal.create({
       data: {
@@ -657,6 +696,8 @@ async function syncAgentLeadOwnershipAndReviews(
     "id" | "agentId" | "customerPhone" | "customerName" | "customerCounty" | "customerLocation" | "productName" | "createdAt"
   >,
 ) {
+  const enabled = await hasAgentEnterpriseControls();
+  if (!enabled) return;
   const normalizedPhone = normalizeCustomerPhone(sale.customerPhone);
   if (!normalizedPhone) return;
 
@@ -1669,7 +1710,7 @@ export async function completeAgentSale(
             saleAmount: Number(sale.totalAmount ?? 0),
             commissionPct: Number(sale.commissionPct ?? AGENT_COMMISSION_RATE),
             commissionAmt: commissionAmount,
-            status: "pending",
+            status: "approved",
           },
         });
       }

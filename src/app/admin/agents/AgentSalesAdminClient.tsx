@@ -62,8 +62,6 @@ function paymentLabel(paymentType: string) {
 function timelineState(status: string, step: string) {
   const order = [
     "pending_review",
-    "awaiting_payment",
-    "payment_confirmed",
     "processing",
     "dispatched",
     "delivered_pending_balance",
@@ -76,8 +74,8 @@ function timelineState(status: string, step: string) {
 
 const timelineSteps = [
   { key: "pending_review", label: "Submitted" },
-  { key: "awaiting_payment", label: "Reviewed" },
   { key: "processing", label: "Processing" },
+  { key: "dispatched", label: "Dispatched" },
   { key: "delivered_pending_balance", label: "Delivered" },
   { key: "completed", label: "Completed" },
 ] as const;

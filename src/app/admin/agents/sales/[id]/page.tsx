@@ -83,12 +83,23 @@ export default async function AdminAgentSaleDetailPage({
       <section className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.95),rgba(2,6,23,.98))] p-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-3">
-            <div className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-300">Agent sale review</div>
+            <div className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-300">Sales Pipeline</div>
             <h1 className="text-4xl font-semibold tracking-tight text-white">
-              {result.sale.customerName} · {result.sale.productName}
+              Order review for {result.sale.customerName}
             </h1>
+            <div className="flex flex-wrap gap-2">
+              <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200">
+                {result.sale.productName}
+              </div>
+              <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200">
+                {result.sale.statusMeta.label}
+              </div>
+              <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200">
+                {result.sale.paymentType.replace(/_/g, " ")}
+              </div>
+            </div>
             <p className="max-w-4xl text-sm text-slate-400">
-              Validate payment progress, link the sale to a receipt, and only unlock commission once the customer has paid fully and delivery or collection is confirmed.
+              Keep customer details, payment progress, delivery status, and receipt handling in one organized review screen before commission is unlocked.
             </p>
           </div>
           <Link

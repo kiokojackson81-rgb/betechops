@@ -128,7 +128,6 @@ type OwnershipRow = {
 
 const statuses = [
   "pending_review",
-  "awaiting_payment",
   "processing",
   "dispatched",
   "delivered_pending_balance",
@@ -143,6 +142,34 @@ function riskTone(riskLevel: string) {
   if (riskLevel === "high") return "border-rose-400/30 bg-rose-400/10 text-rose-100";
   if (riskLevel === "medium") return "border-amber-400/30 bg-amber-400/10 text-amber-100";
   return "border-emerald-400/30 bg-emerald-400/10 text-emerald-100";
+}
+
+function detailValue(value: string | number | null | undefined) {
+  if (value === null || value === undefined || value === "") return "Not set";
+  return String(value);
+}
+
+function stageTone(status: string) {
+  if (status === "completed") return "border-emerald-400/30 bg-emerald-400/10 text-emerald-100";
+  if (status === "cancelled" || status === "rejected") return "border-rose-400/30 bg-rose-400/10 text-rose-100";
+  if (status === "processing" || status === "dispatched") return "border-cyan-400/30 bg-cyan-400/10 text-cyan-100";
+  if (status === "delivered_pending_balance") return "border-amber-400/30 bg-amber-400/10 text-amber-100";
+  return "border-indigo-400/30 bg-indigo-400/10 text-indigo-100";
+}
+
+function DetailStat({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">{label}</div>
+      <div className="mt-2 text-sm font-medium text-slate-100">{value}</div>
+    </div>
+  );
 }
 
 export default function AgentSaleDetailAdminClient({
@@ -239,47 +266,92 @@ export default function AgentSaleDetailAdminClient({
 
   return (
     <div className="space-y-6">
-      <section className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <DetailStat label="Order stage" value={sale.statusMeta.label} />
+        <DetailStat label="Order value" value={money(sale.totalAmount)} />
+        <DetailStat label="Amount paid" value={money(sale.amountPaid)} />
+        <DetailStat label="Receipt" value={sale.receiptNumber || "Not linked"} />
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_360px]">
         <div className="space-y-6">
           <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
-            <h2 className="text-xl font-semibold text-white">Customer and product</h2>
-            <div className="mt-5 grid gap-3 text-sm text-slate-300 md:grid-cols-2">
-              <div>Customer: {sale.customerName}</div>
-              <div>Phone: {sale.customerPhone}</div>
-              <div>Location: {sale.customerLocation}</div>
-              <div>County: {sale.customerCounty || "Not set"}</div>
-              <div>Product: {sale.productName}</div>
-              <div>Category: {sale.productCategory || "Not set"}</div>
-              <div>Quantity: {sale.quantity}</div>
-              <div>Unit price: {money(sale.unitPrice)}</div>
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-300">Order overview</div>
+                <h2 className="mt-2 text-2xl font-semibold text-white">
+                  {sale.customerName} · {sale.productName}
+                </h2>
+                <p className="mt-2 max-w-3xl text-sm text-slate-400">
+                  Review the order, confirm payment and delivery, then complete the sale when it is ready for commission unlock.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <div className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${stageTone(sale.status)}`}>
+                  {sale.statusMeta.label}
+                </div>
+                <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200">
+                  {sale.paymentType.replace(/_/g, " ")}
+                </div>
+                <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200">
+                  {sale.deliveryMethod || "delivery method pending"}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <DetailStat label="Customer phone" value={sale.customerPhone} />
+              <DetailStat label="Location" value={sale.customerLocation} />
+              <DetailStat label="County" value={detailValue(sale.customerCounty)} />
+              <DetailStat label="Last updated" value={new Date(sale.updatedAt).toLocaleString("en-KE")} />
             </div>
           </div>
 
-          <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
-            <h2 className="text-xl font-semibold text-white">Payment and delivery</h2>
-            <div className="mt-5 grid gap-3 text-sm text-slate-300 md:grid-cols-2">
-              <div>Total amount: {money(sale.totalAmount)}</div>
-              <div>Amount paid: {money(sale.amountPaid)}</div>
-              <div>Balance: {money(sale.balance)}</div>
-              <div>Payment type: {sale.paymentType.replace(/_/g, " ")}</div>
-              <div>Delivery method: {sale.deliveryMethod || "Not set"}</div>
-              <div>M-PESA reference: {sale.mpesaReference || "Not provided"}</div>
-              <div>Status: {sale.statusMeta.label}</div>
-              <div>Commission status: {sale.commissionStatus}</div>
-            </div>
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
-              <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                <div className="text-xs uppercase tracking-[0.22em] text-slate-500">Delivery notes</div>
-                <p className="mt-2 text-sm text-slate-300">{sale.deliveryNotes || "No delivery notes."}</p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                <div className="text-xs uppercase tracking-[0.22em] text-slate-500">Customer notes</div>
-                <p className="mt-2 text-sm text-slate-300">{sale.customerNotes || "No customer notes."}</p>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
+              <h2 className="text-xl font-semibold text-white">Customer and product</h2>
+              <div className="mt-5 grid gap-3 md:grid-cols-2">
+                <DetailStat label="Customer" value={sale.customerName} />
+                <DetailStat label="Phone" value={sale.customerPhone} />
+                <DetailStat label="Location" value={sale.customerLocation} />
+                <DetailStat label="County" value={detailValue(sale.customerCounty)} />
+                <DetailStat label="Product" value={sale.productName} />
+                <DetailStat label="Category" value={detailValue(sale.productCategory)} />
+                <DetailStat label="Quantity" value={String(sale.quantity)} />
+                <DetailStat label="Unit price" value={money(sale.unitPrice)} />
               </div>
             </div>
-            <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-              <div className="text-xs uppercase tracking-[0.22em] text-slate-500">Internal agent notes</div>
-              <p className="mt-2 text-sm text-slate-300">{sale.internalAgentNotes || "No internal notes."}</p>
+
+            <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
+              <h2 className="text-xl font-semibold text-white">Payment and delivery</h2>
+              <div className="mt-5 grid gap-3 md:grid-cols-2">
+                <DetailStat label="Total amount" value={money(sale.totalAmount)} />
+                <DetailStat label="Amount paid" value={money(sale.amountPaid)} />
+                <DetailStat label="Balance" value={money(sale.balance)} />
+                <DetailStat label="Payment type" value={sale.paymentType.replace(/_/g, " ")} />
+                <DetailStat label="Delivery method" value={detailValue(sale.deliveryMethod)} />
+                <DetailStat label="M-Pesa reference" value={detailValue(sale.mpesaReference)} />
+                <DetailStat label="Order stage" value={sale.statusMeta.label} />
+                <DetailStat label="Commission status" value={sale.commissionStatus} />
+              </div>
+            </div>
+
+            <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6 lg:col-span-2">
+              <h2 className="text-xl font-semibold text-white">Notes and handling context</h2>
+              <div className="mt-5 grid gap-4 md:grid-cols-3">
+                <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                  <div className="text-xs uppercase tracking-[0.22em] text-slate-500">Delivery notes</div>
+                  <p className="mt-2 text-sm text-slate-300">{sale.deliveryNotes || "No delivery notes."}</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                  <div className="text-xs uppercase tracking-[0.22em] text-slate-500">Customer notes</div>
+                  <p className="mt-2 text-sm text-slate-300">{sale.customerNotes || "No customer notes."}</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+                  <div className="text-xs uppercase tracking-[0.22em] text-slate-500">Internal agent notes</div>
+                  <p className="mt-2 text-sm text-slate-300">{sale.internalAgentNotes || "No internal notes."}</p>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -410,7 +482,7 @@ export default function AgentSaleDetailAdminClient({
           </div>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-6 xl:sticky xl:top-24 xl:self-start">
           <div className="rounded-[28px] border border-amber-400/20 bg-amber-400/10 p-6">
             <div className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-100">
               {sale.status === "completed" ? "Earned commission" : "Potential commission"}
@@ -425,8 +497,25 @@ export default function AgentSaleDetailAdminClient({
           </div>
 
           <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
-            <h2 className="text-xl font-semibold text-white">Admin actions</h2>
-            <div className="mt-5 grid gap-3 md:grid-cols-2">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-xl font-semibold text-white">Admin actions</h2>
+              <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Follow the order journey</div>
+            </div>
+            <div className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-xs uppercase tracking-[0.2em] text-slate-500">
+              <div className="flex items-center justify-between gap-3">
+                <span>1. Review and verify</span>
+                <span className="text-slate-300">Payment / receipt</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span>2. Move order</span>
+                <span className="text-slate-300">Processing to delivery</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span>3. Close sale</span>
+                <span className="text-slate-300">Complete and unlock commission</span>
+              </div>
+            </div>
+            <div className="mt-5 grid gap-3">
               <button
                 onClick={confirmPayment}
                 disabled={busy !== null}
@@ -434,20 +523,22 @@ export default function AgentSaleDetailAdminClient({
               >
                 {busy === "payment" ? "Saving..." : "Confirm payment"}
               </button>
-              {statuses.map((status) => (
-                <button
-                  key={status}
-                  onClick={() => patchStatus(status)}
-                  disabled={busy !== null}
-                  className="rounded-2xl border border-white/10 px-4 py-3 text-sm text-slate-200 transition hover:border-white/20 disabled:opacity-60"
-                >
-                  {busy === `status:${status}`
-                    ? "Saving..."
-                    : status === "delivered_pending_balance"
-                      ? "Delivered / collected"
-                      : status.replace(/_/g, " ")}
-                </button>
-              ))}
+              <div className="grid gap-3 md:grid-cols-2">
+                {statuses.map((status) => (
+                  <button
+                    key={status}
+                    onClick={() => patchStatus(status)}
+                    disabled={busy !== null}
+                    className="rounded-2xl border border-white/10 px-4 py-3 text-sm text-slate-200 transition hover:border-white/20 disabled:opacity-60"
+                  >
+                    {busy === `status:${status}`
+                      ? "Saving..."
+                      : status === "delivered_pending_balance"
+                        ? "Delivered / collected"
+                        : status.replace(/_/g, " ")}
+                  </button>
+                ))}
+              </div>
               <button
                 onClick={completeSale}
                 disabled={busy !== null}
