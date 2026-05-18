@@ -11,6 +11,7 @@ export async function GET(request: Request) {
       where: {
         role: { in: ["ATTENDANT", "SUPERVISOR"] },
         isActive: true,
+        agentProfile: { is: null },
       },
       orderBy: [{ attendantCategory: "asc" }, { name: "asc" }],
       select: {
@@ -30,6 +31,7 @@ export async function GET(request: Request) {
         where: {
           role: { in: ["ATTENDANT", "SUPERVISOR"] },
           isActive: true,
+          agentProfile: { is: null },
         },
         orderBy: [{ name: "asc" }],
         select: { id: true, name: true, email: true },
