@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight, Eye } from "lucide-react";
 
@@ -44,6 +44,7 @@ function InfoCard({ label, value }: { label: string; value: string }) {
 
 export default function AgentPayoutsAdminClient({ rows }: { rows: PayoutRow[] }) {
   const router = useRouter();
+  const [localRows, setLocalRows] = useState<PayoutRow[]>(rows);
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -52,8 +53,12 @@ export default function AgentPayoutsAdminClient({ rows }: { rows: PayoutRow[] })
   const [rejectionReasonById, setRejectionReasonById] = useState<Record<string, string>>({});
   const [, startTransition] = useTransition();
 
-  const allSelected = rows.length > 0 && selectedIds.length === rows.length;
-  const selectedRows = useMemo(() => rows.filter((row) => selectedIds.includes(row.id)), [rows, selectedIds]);
+  useEffect(() => {
+    setLocalRows(rows);
+  }, [rows]);
+
+  const allSelected = localRows.length > 0 && selectedIds.length === localRows.length;
+  const selectedRows = useMemo(() => localRows.filter((row) => selectedIds.includes(row.id)), [localRows, selectedIds]);
 
   async function updateStatus(id: string, status: string) {
     const reference = paymentReferenceById[id]?.trim() || null;
@@ -78,6 +83,28 @@ export default function AgentPayoutsAdminClient({ rows }: { rows: PayoutRow[] })
       window.alert(payload.error || "Unable to update payout.");
       return;
     }
+    setLocalRows((current) =>
+      current.map((row) => {
+        if (row.id !== id) return row;
+        return {
+          ...row,
+          status,
+          queue:
+            status === "approved"
+              ? "approved"
+              : status === "paid"
+                ? "paid"
+                : status === "held"
+                  ? "held"
+                  : status === "rejected"
+                    ? "rejected"
+                    : "requests",
+          reference: status === "paid" ? reference || row.reference : row.reference,
+          paidAmount: status === "paid" ? row.amount : row.paidAmount,
+          availableBalance: status === "paid" ? Math.max(0, row.availableBalance) : row.availableBalance,
+        };
+      }),
+    );
     if (status === "paid") {
       setPaymentReferenceById((current) => ({ ...current, [id]: "" }));
     }
@@ -126,10 +153,10 @@ export default function AgentPayoutsAdminClient({ rows }: { rows: PayoutRow[] })
   }
 
   function toggleSelectAll() {
-    setSelectedIds(allSelected ? [] : rows.map((row) => row.id));
+    setSelectedIds(allSelected ? [] : localRows.map((row) => row.id));
   }
 
-  if (!rows.length) {
+  if (!localRows.length) {
     return (
       <div className="rounded-3xl border border-white/10 bg-slate-950/70 p-8 text-slate-300">
         <div className="text-lg font-semibold text-white">No payout requests found.</div>
@@ -147,7 +174,7 @@ export default function AgentPayoutsAdminClient({ rows }: { rows: PayoutRow[] })
           </div>
           <div className="flex flex-wrap gap-2">
             <button onClick={() => bulkUpdateStatus("approved")} disabled={busy !== null} className="rounded-xl bg-cyan-300 px-4 py-2 text-xs font-semibold text-slate-950 disabled:opacity-60">
-              {busy === "bulk:approved" ? "..." : "Bulk Approve"}
+          {busy === "bulk:approved" ? "..." : "Bulk Approve"}
             </button>
             <button onClick={() => bulkUpdateStatus("held")} disabled={busy !== null} className="rounded-xl bg-amber-300 px-4 py-2 text-xs font-semibold text-slate-950 disabled:opacity-60">
               {busy === "bulk:held" ? "..." : "Bulk Hold"}
@@ -174,7 +201,7 @@ export default function AgentPayoutsAdminClient({ rows }: { rows: PayoutRow[] })
         </div>
 
         <div className="divide-y divide-white/5">
-          {rows.map((row) => {
+          {localRows.map((row) => {
             const expanded = expandedIds.includes(row.id);
             const activeAction = activeActionById[row.id] ?? null;
             return (
@@ -328,7 +355,7 @@ export default function AgentPayoutsAdminClient({ rows }: { rows: PayoutRow[] })
       </div>
 
       <div className="space-y-4 lg:hidden">
-        {rows.map((row) => {
+        {localRows.map((row) => {
           const expanded = expandedIds.includes(row.id);
           return (
             <article key={row.id} className="rounded-[26px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.94),rgba(2,6,23,.98))] p-5 text-slate-200 shadow-[0_18px_45px_rgba(0,0,0,0.28)]">
