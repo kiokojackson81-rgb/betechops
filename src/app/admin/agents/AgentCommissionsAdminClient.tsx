@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { ChevronDown, ChevronRight, Eye } from "lucide-react";
 
 type CommissionRow = {
   id: string;
@@ -42,9 +43,33 @@ function riskBadge(level: CommissionRow["riskLevel"]) {
   return "border-emerald-400/20 bg-emerald-400/10 text-emerald-200";
 }
 
+function InfoCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+      <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</div>
+      <div className="mt-2 text-sm font-medium text-slate-100">{value}</div>
+    </div>
+  );
+}
+
 export default function AgentCommissionsAdminClient({ rows }: { rows: CommissionRow[] }) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected = useMemo(() => rows.find((row) => row.id === selectedId) ?? null, [rows, selectedId]);
+  const [expandedIds, setExpandedIds] = useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const allSelected = rows.length > 0 && selectedIds.length === rows.length;
+  const selectedRows = useMemo(() => rows.filter((row) => selectedIds.includes(row.id)), [rows, selectedIds]);
+
+  function toggleExpanded(id: string) {
+    setExpandedIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+  }
+
+  function toggleSelected(id: string) {
+    setSelectedIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds(allSelected ? [] : rows.map((row) => row.id));
+  }
 
   if (!rows.length) {
     return (
@@ -56,166 +81,158 @@ export default function AgentCommissionsAdminClient({ rows }: { rows: Commission
   }
 
   return (
-    <>
-      <div className="hidden overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.96))] shadow-[0_24px_70px_rgba(0,0,0,0.35)] lg:block">
-        <div className="max-h-[72vh] overflow-auto">
-          <table className="min-w-full text-left text-sm text-slate-300">
-            <thead className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur">
-              <tr className="border-b border-white/10 text-[11px] uppercase tracking-[0.18em] text-slate-500">
-                <th className="px-4 py-4">Agent</th>
-                <th className="px-4 py-4">Customer</th>
-                <th className="px-4 py-4">Product</th>
-                <th className="px-4 py-4">Sale Value</th>
-                <th className="px-4 py-4">Commission</th>
-                <th className="px-4 py-4">Queue</th>
-                <th className="px-4 py-4">Risk</th>
-                <th className="px-4 py-4">Created</th>
-                <th className="px-4 py-4">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.id} className="border-b border-white/5 align-top hover:bg-white/[0.03]">
-                  <td className="px-4 py-4">
-                    <div className="font-semibold text-white">{row.agentName}</div>
-                    <div className="mt-1 text-xs text-slate-500">{row.referralCode}</div>
-                    <div className="mt-1 text-xs text-slate-500">{row.phone || "No phone"}</div>
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="font-medium text-slate-100">{row.customerName}</div>
-                    <div className="mt-1 text-xs text-slate-500">{row.customerPhone || "No phone"}</div>
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="font-medium text-slate-100">{row.productName}</div>
-                    <div className="mt-1 text-xs text-slate-500">{row.receiptNumber || "No receipt"}</div>
-                  </td>
-                  <td className="px-4 py-4 text-slate-100">{money(row.saleAmount)}</td>
-                  <td className="px-4 py-4 text-amber-200">{money(row.commissionAmount)}</td>
-                  <td className="px-4 py-4">
-                    <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${queueBadge(row.queue)}`}>
-                      {row.queue.replace(/_/g, " ")}
-                    </span>
-                  </td>
-                  <td className="px-4 py-4">
-                    <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${riskBadge(row.riskLevel)}`}>
+    <div className="space-y-4">
+      {selectedIds.length ? (
+        <div className="sticky top-4 z-20 flex items-center justify-between gap-3 rounded-[24px] border border-cyan-400/20 bg-slate-950/95 px-5 py-4 backdrop-blur">
+          <div className="text-sm text-slate-200">
+            {selectedRows.length} commission row{selectedRows.length === 1 ? "" : "s"} selected
+          </div>
+          <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Bulk actions ready for next phase</div>
+        </div>
+      ) : null}
+
+      <div className="hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.96))] lg:block">
+        <div className="sticky top-0 z-10 grid grid-cols-[56px_56px_minmax(230px,1.4fr)_170px_170px_150px_150px_120px_160px] items-center gap-3 border-b border-white/10 bg-slate-950/95 px-4 py-4 text-[11px] uppercase tracking-[0.18em] text-slate-500 backdrop-blur">
+          <div className="flex justify-center">
+            <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} />
+          </div>
+          <div />
+          <div className="whitespace-nowrap">Commission</div>
+          <div className="whitespace-nowrap">Agent</div>
+          <div className="whitespace-nowrap">Customer</div>
+          <div className="whitespace-nowrap">Sale Value</div>
+          <div className="whitespace-nowrap">Commission</div>
+          <div className="whitespace-nowrap">Risk</div>
+          <div className="whitespace-nowrap">Quick Action</div>
+        </div>
+
+        <div className="divide-y divide-white/5">
+          {rows.map((row) => {
+            const expanded = expandedIds.includes(row.id);
+            return (
+              <div key={row.id} className="transition hover:bg-white/[0.02]">
+                <div className="grid grid-cols-[56px_56px_minmax(230px,1.4fr)_170px_170px_150px_150px_120px_160px] items-center gap-3 px-4 py-4">
+                  <div className="flex justify-center">
+                    <input type="checkbox" checked={selectedIds.includes(row.id)} onChange={() => toggleSelected(row.id)} />
+                  </div>
+                  <div>
+                    <button onClick={() => toggleExpanded(row.id)} className="rounded-xl border border-white/10 p-2 text-slate-200 transition hover:border-white/20">
+                      {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${queueBadge(row.queue)}`}>
+                        {row.queue.replace(/_/g, " ")}
+                      </span>
+                    </div>
+                    <div className="mt-2 truncate whitespace-nowrap font-semibold text-white">{row.productName}</div>
+                    <div className="truncate whitespace-nowrap text-xs text-slate-500">{row.receiptNumber || "No receipt linked"}</div>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate whitespace-nowrap font-semibold text-white">{row.agentName}</div>
+                    <div className="truncate whitespace-nowrap text-xs text-slate-500">{row.referralCode}</div>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate whitespace-nowrap font-medium text-slate-100">{row.customerName}</div>
+                    <div className="truncate whitespace-nowrap text-xs text-slate-500">{row.customerPhone || "No phone"}</div>
+                  </div>
+                  <div className="whitespace-nowrap text-slate-100">{money(row.saleAmount)}</div>
+                  <div className="whitespace-nowrap text-amber-200">{money(row.commissionAmount)}</div>
+                  <div>
+                    <span className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${riskBadge(row.riskLevel)}`}>
                       {row.riskLevel}
                     </span>
-                  </td>
-                  <td className="px-4 py-4 text-slate-400">{new Date(row.createdAt).toLocaleString()}</td>
-                  <td className="px-4 py-4">
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        onClick={() => setSelectedId(row.id)}
-                        className="rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-white/20"
-                      >
-                        View Details
-                      </button>
+                  </div>
+                  <div>
+                    <button
+                      onClick={() => toggleExpanded(row.id)}
+                      className="inline-flex items-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-100 transition hover:border-cyan-300/30"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      Review
+                    </button>
+                  </div>
+                </div>
+
+                {expanded ? (
+                  <div className="border-t border-white/5 bg-slate-950/55 px-4 py-5">
+                    <div className="grid gap-4 xl:grid-cols-4">
+                      <InfoCard label="Queue status" value={row.queue.replace(/_/g, " ")} />
+                      <InfoCard label="Created" value={new Date(row.createdAt).toLocaleString()} />
+                      <InfoCard label="Sale value" value={money(row.saleAmount)} />
+                      <InfoCard label="Commission" value={money(row.commissionAmount)} />
+                    </div>
+
+                    <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                      <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-5">
+                        <div className="text-sm font-semibold text-white">Details</div>
+                        <div className="mt-4 grid gap-3 md:grid-cols-2">
+                          <InfoCard label="Agent" value={row.agentName} />
+                          <InfoCard label="Phone" value={row.phone || "Not set"} />
+                          <InfoCard label="County" value={row.county || "Not set"} />
+                          <InfoCard label="Customer" value={row.customerName} />
+                          <InfoCard label="Customer phone" value={row.customerPhone || "Not set"} />
+                          <InfoCard label="Product" value={row.productName} />
+                        </div>
+                      </div>
+                      <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-5">
+                        <div className="text-sm font-semibold text-white">Commission handling</div>
+                        <div className="mt-4 grid gap-3 md:grid-cols-2">
+                          <InfoCard label="Receipt / order" value={row.receiptNumber || "Not linked"} />
+                          <InfoCard label="Risk level" value={row.riskLevel} />
+                          <InfoCard label="Lock / queue note" value={row.note} />
+                          <InfoCard label="Withdrawal eligibility" value={row.queue === "available" ? "Available" : "Not yet available"} />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-3">
                       {row.saleId ? (
-                        <Link
-                          href={`/admin/agents/sales/${row.saleId}`}
-                          className="rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-100 transition hover:border-cyan-300/30"
-                        >
+                        <Link href={`/admin/agents/sales/${row.saleId}`} className="rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-100">
                           Open Sale
                         </Link>
                       ) : null}
+                      <button className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200">Approve Commission</button>
+                      <button className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200">Hold</button>
+                      <button className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200">Flag</button>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      <div className="grid gap-4 lg:hidden">
-        {rows.map((row) => (
-          <article key={row.id} className="rounded-[26px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.94),rgba(2,6,23,.98))] p-5 text-slate-200 shadow-[0_18px_45px_rgba(0,0,0,0.28)]">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-lg font-semibold text-white">{row.agentName}</div>
-                <div className="mt-1 text-sm text-slate-400">{row.customerName} · {row.productName}</div>
+      <div className="space-y-4 lg:hidden">
+        {rows.map((row) => {
+          const expanded = expandedIds.includes(row.id);
+          return (
+            <article key={row.id} className="rounded-[26px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.94),rgba(2,6,23,.98))] p-5 text-slate-200 shadow-[0_18px_45px_rgba(0,0,0,0.28)]">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate text-lg font-semibold text-white">{row.productName}</div>
+                  <div className="mt-1 truncate text-sm text-slate-400">{row.agentName} · {row.customerName}</div>
+                </div>
+                <button onClick={() => toggleExpanded(row.id)} className="rounded-xl border border-white/10 p-2 text-slate-200">
+                  {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                </button>
               </div>
-              <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${queueBadge(row.queue)}`}>
-                {row.queue.replace(/_/g, " ")}
-              </span>
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <div className="text-slate-500">Sale value</div>
-                <div className="mt-1 font-semibold text-white">{money(row.saleAmount)}</div>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <InfoCard label="Queue" value={row.queue.replace(/_/g, " ")} />
+                <InfoCard label="Commission" value={money(row.commissionAmount)} />
               </div>
-              <div>
-                <div className="text-slate-500">Commission</div>
-                <div className="mt-1 font-semibold text-amber-200">{money(row.commissionAmount)}</div>
-              </div>
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                onClick={() => setSelectedId(row.id)}
-                className="rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100"
-              >
-                View Details
-              </button>
-              {row.saleId ? (
-                <Link href={`/admin/agents/sales/${row.saleId}`} className="rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-100">
-                  Open Sale
-                </Link>
+              {expanded ? (
+                <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
+                  <InfoCard label="Sale value" value={money(row.saleAmount)} />
+                  <InfoCard label="Note" value={row.note} />
+                </div>
               ) : null}
-            </div>
-          </article>
-        ))}
+            </article>
+          );
+        })}
       </div>
-
-      {selected ? (
-        <div className="fixed inset-0 z-40 flex justify-end bg-slate-950/72 backdrop-blur-sm">
-          <div className="h-full w-full max-w-2xl overflow-y-auto border-l border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.98),rgba(2,6,23,.99))] p-6 shadow-[-20px_0_60px_rgba(0,0,0,0.35)]">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-300">Commission detail</div>
-                <h2 className="mt-2 text-3xl font-semibold text-white">{selected.agentName}</h2>
-                <p className="mt-2 text-sm text-slate-400">{selected.customerName} · {selected.productName}</p>
-              </div>
-              <button onClick={() => setSelectedId(null)} className="rounded-2xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-100">
-                Close
-              </button>
-            </div>
-
-            <div className="mt-6 grid gap-4 md:grid-cols-2">
-              <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Commission queue</div>
-                <div className="mt-3 text-2xl font-semibold text-white">{selected.queue.replace(/_/g, " ")}</div>
-                <div className="mt-2 text-sm text-slate-400">{selected.note}</div>
-              </div>
-              <div className="rounded-[24px] border border-amber-400/20 bg-amber-400/10 p-5">
-                <div className="text-xs uppercase tracking-[0.2em] text-amber-100">Commission amount</div>
-                <div className="mt-3 text-3xl font-semibold text-white">{money(selected.commissionAmount)}</div>
-                <div className="mt-2 text-sm text-amber-50/80">Against sale value {money(selected.saleAmount)}</div>
-              </div>
-            </div>
-
-            <div className="mt-6 grid gap-4 md:grid-cols-2">
-              <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5 text-sm text-slate-300">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Agent info</div>
-                <div className="mt-3 space-y-2">
-                  <div>Name: {selected.agentName}</div>
-                  <div>Referral code: {selected.referralCode}</div>
-                  <div>Phone: {selected.phone || "Not set"}</div>
-                  <div>County: {selected.county || "Not set"}</div>
-                </div>
-              </div>
-              <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5 text-sm text-slate-300">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Customer and sale</div>
-                <div className="mt-3 space-y-2">
-                  <div>Customer: {selected.customerName}</div>
-                  <div>Phone: {selected.customerPhone || "Not set"}</div>
-                  <div>Product: {selected.productName}</div>
-                  <div>Receipt / Order: {selected.receiptNumber || "Not linked"}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </>
+    </div>
   );
 }
