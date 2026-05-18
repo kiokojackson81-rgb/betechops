@@ -17,8 +17,8 @@ type PayoutRow = {
   method: string;
   reference: string;
   status: string;
-  eligibleCommission: number;
   availableBalance: number;
+  paidAmount: number;
   createdAt: string;
 };
 
@@ -187,7 +187,7 @@ export default function AgentPayoutsAdminClient({ rows }: { rows: PayoutRow[] })
                     <div className="grid gap-4 xl:grid-cols-4">
                       <InfoCard label="Requested" value={money(row.amount)} />
                       <InfoCard label="Available balance" value={money(row.availableBalance)} />
-                      <InfoCard label="Eligible commissions" value={money(row.eligibleCommission)} />
+                      <InfoCard label="Paid" value={money(row.paidAmount)} />
                       <InfoCard label="Risk" value={row.riskLevel} />
                     </div>
 

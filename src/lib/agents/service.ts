@@ -560,8 +560,8 @@ export async function getAdminAgentPayoutQueueData(filters: {
         method: payout.method || "MPESA",
         reference: payout.reference || "",
         status: String(payout.status),
-        eligibleCommission,
         availableBalance,
+        paidAmount: String(payout.status).toLowerCase() === "paid" ? Number(payout.amount ?? 0) : 0,
         createdAt: payout.createdAt,
       };
     })
