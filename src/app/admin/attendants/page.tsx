@@ -6,7 +6,10 @@ export default async function AdminAttendantsPage() {
   let attendantsRaw: any[] = [];
   try {
     attendantsRaw = await prisma.user.findMany({
-      where: { role: { in: ["ATTENDANT", "SUPERVISOR"] } },
+      where: {
+        role: { in: ["ATTENDANT", "SUPERVISOR"] },
+        agentProfile: { is: null },
+      },
       orderBy: [{ attendantCategory: "asc" }, { name: "asc" }],
       select: {
         id: true,
