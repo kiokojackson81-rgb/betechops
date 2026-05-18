@@ -174,9 +174,9 @@ export default async function AdminAgentPendingSalesPage({
       <section className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.95),rgba(2,6,23,.98))] p-8">
         <div className="space-y-3">
           <div className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-300">Agent sales admin</div>
-          <h1 className="text-4xl font-semibold tracking-tight text-white">Pending sales management</h1>
+          <h1 className="text-4xl font-semibold tracking-tight text-white">Sales Pipeline</h1>
           <p className="max-w-4xl text-sm text-slate-400">
-            Scan submitted customer orders quickly, move them through payment and delivery, and unlock commission only when completed.
+            Track customer orders from submission to payout completion.
           </p>
         </div>
 
@@ -196,7 +196,7 @@ export default async function AdminAgentPendingSalesPage({
           ))}
         </div>
 
-        <form className="mt-6 grid gap-4 rounded-[26px] border border-white/10 bg-white/[0.03] p-5 md:grid-cols-3 xl:grid-cols-6">
+        <form className="mt-6 grid gap-4 rounded-[26px] border border-white/10 bg-white/[0.03] p-5 md:grid-cols-3 xl:grid-cols-[minmax(280px,1.6fr)_repeat(4,minmax(0,1fr))_auto_auto]">
           <input
             type="text"
             name="q"
@@ -243,7 +243,15 @@ export default async function AdminAgentPendingSalesPage({
             <option value="full_payment">Full payment</option>
           </select>
           <button type="submit" className="rounded-2xl bg-emerald-400 px-4 py-3 font-semibold text-slate-950 transition hover:brightness-95">
-            Apply filters
+            Filter
+          </button>
+          <button
+            type="button"
+            disabled
+            title="Use the Export button above the queue to download the current visible rows."
+            className="rounded-2xl border border-white/10 px-4 py-3 font-semibold text-slate-400"
+          >
+            Export
           </button>
           <input
             type="date"
