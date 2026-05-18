@@ -1713,6 +1713,17 @@ export async function completeAgentSale(
             status: "approved",
           },
         });
+      } else if (String(existingCommission.status || "").toLowerCase() !== "paid") {
+        await tx.agentCommission.update({
+          where: { id: existingCommission.id },
+          data: {
+            orderNumber: sale.receiptNumber || sale.receipt?.receiptNumber || sale.receipt?.order?.orderNumber || existingCommission.orderNumber || null,
+            saleAmount: Number(sale.totalAmount ?? 0),
+            commissionPct: Number(sale.commissionPct ?? AGENT_COMMISSION_RATE),
+            commissionAmt: commissionAmount,
+            status: "approved",
+          },
+        });
       }
 
       const updated = await tx.agentSale.update({
