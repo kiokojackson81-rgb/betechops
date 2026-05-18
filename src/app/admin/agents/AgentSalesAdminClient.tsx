@@ -11,6 +11,7 @@ type AdminSaleRow = {
   customerName: string;
   customerPhone: string;
   customerLocation: string;
+  customerCounty?: string | null;
   productName: string;
   quantity: number;
   totalAmount: number;
@@ -24,6 +25,12 @@ type AdminSaleRow = {
   commissionBadge: string;
   receiptId: string | null;
   receiptNumber: string | null;
+  duplicateRisk: "low" | "medium" | "high";
+  duplicateCount: number;
+  needsReview: boolean;
+  ownershipOwnerAgentName: string | null;
+  ownershipWindowEndsAt: string | null;
+  duplicateNote: string;
   createdAt: string;
 };
 
@@ -37,6 +44,12 @@ function statusBadge(status: string) {
   if (normalized === "processing" || normalized === "dispatched") return "border-cyan-400/20 bg-cyan-400/10 text-cyan-200";
   if (normalized === "delivered_pending_balance" || normalized === "payment_confirmed") return "border-amber-400/20 bg-amber-400/10 text-amber-200";
   return "border-white/10 bg-white/[0.04] text-slate-200";
+}
+
+function duplicateBadge(level: AdminSaleRow["duplicateRisk"]) {
+  if (level === "high") return "border-rose-400/20 bg-rose-400/10 text-rose-200";
+  if (level === "medium") return "border-amber-400/20 bg-amber-400/10 text-amber-200";
+  return "border-emerald-400/20 bg-emerald-400/10 text-emerald-200";
 }
 
 function paymentLabel(paymentType: string) {
@@ -55,6 +68,7 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [, startTransition] = useTransition();
 
   const selectedSale = useMemo(
@@ -108,6 +122,41 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
     startTransition(() => router.refresh());
   }
 
+  async function bulkStage(status: "processing" | "dispatched" | "delivered_pending_balance") {
+    if (!selectedIds.length) return;
+    setBusy(`bulk:${status}`);
+    for (const saleId of selectedIds) {
+      const res = await fetch(`/api/admin/agents/sales/${saleId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) {
+        setBusy(null);
+        const payload = await res.json().catch(() => ({ error: "Unable to update selected sales." }));
+        window.alert(payload.error || "Unable to update selected sales.");
+        return;
+      }
+    }
+    setBusy(null);
+    setSelectedIds([]);
+    startTransition(() => router.refresh());
+  }
+
+  function toggleSelected(saleId: string) {
+    setSelectedIds((current) =>
+      current.includes(saleId) ? current.filter((id) => id !== saleId) : [...current, saleId],
+    );
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.length === sales.length) {
+      setSelectedIds([]);
+      return;
+    }
+    setSelectedIds(sales.map((sale) => sale.id));
+  }
+
   function renderActions(sale: AdminSaleRow, compact = false) {
     const base = compact ? "px-3 py-2 text-[11px]" : "px-3 py-2 text-xs";
     return (
@@ -154,22 +203,56 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
 
   return (
     <>
+      {selectedIds.length ? (
+        <div className="sticky top-4 z-20 flex flex-wrap items-center justify-between gap-3 rounded-[24px] border border-emerald-400/20 bg-slate-950/95 px-5 py-4 shadow-[0_18px_50px_rgba(0,0,0,0.25)] backdrop-blur">
+          <div className="text-sm text-slate-200">{selectedIds.length} sale{selectedIds.length === 1 ? "" : "s"} selected</div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => bulkStage("processing")}
+              disabled={busy !== null}
+              className="rounded-xl border border-white/10 px-4 py-2 text-xs font-semibold text-slate-100 disabled:opacity-60"
+            >
+              {busy === "bulk:processing" ? "..." : "Bulk Process"}
+            </button>
+            <button
+              onClick={() => bulkStage("dispatched")}
+              disabled={busy !== null}
+              className="rounded-xl border border-white/10 px-4 py-2 text-xs font-semibold text-slate-100 disabled:opacity-60"
+            >
+              {busy === "bulk:dispatched" ? "..." : "Bulk Dispatch"}
+            </button>
+            <button
+              onClick={() => bulkStage("delivered_pending_balance")}
+              disabled={busy !== null}
+              className="rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 py-2 text-xs font-semibold text-amber-100 disabled:opacity-60"
+            >
+              {busy === "bulk:delivered_pending_balance" ? "..." : "Bulk Delivered"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="hidden overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.96))] shadow-[0_24px_70px_rgba(0,0,0,0.35)] lg:block">
         <div className="max-h-[72vh] overflow-auto">
           <table className="min-w-full text-left text-sm text-slate-300">
             <thead className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur">
               <tr className="border-b border-white/10 text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                <th className="px-4 py-4">
+                  <input type="checkbox" checked={selectedIds.length === sales.length && sales.length > 0} onChange={toggleSelectAll} />
+                </th>
                 <th className="px-4 py-4">Customer</th>
                 <th className="px-4 py-4">Phone</th>
                 <th className="px-4 py-4">Product</th>
                 <th className="px-4 py-4">Agent</th>
-                <th className="px-4 py-4">Location</th>
+                <th className="px-4 py-4">County</th>
                 <th className="px-4 py-4">Payment</th>
                 <th className="px-4 py-4">Paid</th>
+                <th className="px-4 py-4">Balance</th>
                 <th className="px-4 py-4">Order Value</th>
-                <th className="px-4 py-4">Potential</th>
-                <th className="px-4 py-4">Status</th>
+                <th className="px-4 py-4">Commission</th>
+                <th className="px-4 py-4">Stage</th>
                 <th className="px-4 py-4">Submitted</th>
+                <th className="px-4 py-4">Duplicate Risk</th>
                 <th className="px-4 py-4">Actions</th>
               </tr>
             </thead>
@@ -177,17 +260,23 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
               {sales.map((sale) => (
                 <tr key={sale.id} className="border-b border-white/5 align-top transition hover:bg-white/[0.03]">
                   <td className="px-4 py-4">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(sale.id)}
+                      onChange={() => toggleSelected(sale.id)}
+                    />
+                  </td>
+                  <td className="px-4 py-4">
                     <div className="font-semibold text-white">{sale.customerName}</div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      {sale.quantity} x {sale.productName}
-                    </div>
+                    <div className="mt-1 text-xs text-slate-500">{sale.quantity} x {sale.productName}</div>
                   </td>
                   <td className="px-4 py-4">{sale.customerPhone}</td>
                   <td className="px-4 py-4">{sale.productName}</td>
                   <td className="px-4 py-4">{sale.agentName}</td>
-                  <td className="px-4 py-4">{sale.customerLocation}</td>
+                  <td className="px-4 py-4">{sale.customerCounty || sale.customerLocation}</td>
                   <td className="px-4 py-4">{paymentLabel(sale.paymentType)}</td>
                   <td className="px-4 py-4 text-cyan-100">{money(sale.amountPaid)}</td>
+                  <td className="px-4 py-4">{money(sale.balance)}</td>
                   <td className="px-4 py-4">{money(sale.totalAmount)}</td>
                   <td className="px-4 py-4 text-amber-200">{money(sale.commissionAmount)}</td>
                   <td className="px-4 py-4">
@@ -196,6 +285,14 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
                     </span>
                   </td>
                   <td className="px-4 py-4 text-slate-400">{new Date(sale.createdAt).toLocaleDateString()}</td>
+                  <td className="px-4 py-4">
+                    <div className="space-y-1">
+                      <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${duplicateBadge(sale.duplicateRisk)}`}>
+                        {sale.duplicateRisk} risk
+                      </span>
+                      {sale.needsReview ? <div className="text-xs text-slate-500">Needs review</div> : null}
+                    </div>
+                  </td>
                   <td className="px-4 py-4">{renderActions(sale)}</td>
                 </tr>
               ))}
@@ -215,6 +312,7 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
                 <div className="text-lg font-semibold text-white">{sale.customerName}</div>
                 <div className="mt-1 text-sm text-slate-400">{sale.customerPhone}</div>
                 <div className="mt-1 text-sm text-slate-500">{sale.customerLocation}</div>
+                {sale.needsReview ? <div className="mt-2 text-xs text-amber-200">Needs admin duplicate review</div> : null}
               </div>
               <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${statusBadge(sale.status)}`}>
                 {sale.statusMeta.label}
@@ -241,6 +339,12 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
               <div className="mt-1">Agent: {sale.agentName}</div>
             </div>
 
+            <div className="mt-3">
+              <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${duplicateBadge(sale.duplicateRisk)}`}>
+                {sale.duplicateRisk} duplicate risk
+              </span>
+            </div>
+
             <div className="mt-4">{renderActions(sale, true)}</div>
           </article>
         ))}
@@ -254,9 +358,7 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
               <div>
                 <div className="text-xs uppercase tracking-[0.22em] text-cyan-300">Sale Details</div>
                 <h2 className="mt-2 text-3xl font-semibold text-white">{selectedSale.customerName}</h2>
-                <div className="mt-2 text-sm text-slate-400">
-                  {selectedSale.customerPhone} · {selectedSale.customerLocation}
-                </div>
+                <div className="mt-2 text-sm text-slate-400">{selectedSale.customerPhone} · {selectedSale.customerLocation}</div>
               </div>
               <button
                 onClick={() => setSelectedId(null)}
@@ -287,6 +389,7 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
                 <div className="mt-4 space-y-2 text-sm text-slate-300">
                   <div>Name: {selectedSale.customerName}</div>
                   <div>Phone: {selectedSale.customerPhone}</div>
+                  <div>County: {selectedSale.customerCounty || "Not captured"}</div>
                   <div>Location: {selectedSale.customerLocation}</div>
                 </div>
               </section>
@@ -320,6 +423,25 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
                 </div>
               </section>
             </div>
+
+            <section className="mt-6 rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+              <h3 className="text-lg font-semibold text-white">Duplicate & Ownership Check</h3>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${duplicateBadge(selectedSale.duplicateRisk)}`}>
+                  {selectedSale.duplicateRisk} risk
+                </span>
+                {selectedSale.needsReview ? (
+                  <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200">
+                    Needs admin review
+                  </span>
+                ) : null}
+              </div>
+              <div className="mt-4 space-y-2 text-sm text-slate-300">
+                <div>{selectedSale.duplicateNote}</div>
+                {selectedSale.ownershipOwnerAgentName ? <div>Lead owner: {selectedSale.ownershipOwnerAgentName}</div> : null}
+                {selectedSale.ownershipWindowEndsAt ? <div>Ownership window ends: {new Date(selectedSale.ownershipWindowEndsAt).toLocaleString()}</div> : null}
+              </div>
+            </section>
 
             <section className="mt-6 rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
               <h3 className="text-lg font-semibold text-white">Order Journey</h3>

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import AgentSalesAdminClient from "@/app/admin/agents/AgentSalesAdminClient";
 import { auth } from "@/lib/auth";
 import { getAdminAgentSales } from "@/lib/agents/sales";
@@ -16,6 +17,8 @@ export default async function AdminAgentPendingSalesPage({
     paymentType?: string;
     start?: string;
     end?: string;
+    queue?: string;
+    page?: string;
   }>;
 }) {
   const session = await auth();
@@ -24,10 +27,36 @@ export default async function AdminAgentPendingSalesPage({
   if (role !== "ADMIN") redirect("/not-authorized");
 
   const params = (await searchParams) || {};
-  const [sales, agents] = await Promise.all([
+  const queue = params.queue?.trim() || "all";
+  const page = Math.max(1, Number(params.page || "1"));
+  const queueStatuses =
+    queue === "new"
+      ? ["pending_review"]
+      : queue === "under_review"
+        ? ["awaiting_payment"]
+        : queue === "payment_verified"
+          ? ["payment_confirmed"]
+          : queue === "processing"
+            ? ["processing", "dispatched"]
+            : queue === "delivered"
+              ? ["delivered_pending_balance"]
+              : queue === "completed"
+                ? ["completed"]
+                : queue === "cancelled"
+                  ? ["cancelled", "rejected"]
+                  : undefined;
+  const [sales, baseSales, agents] = await Promise.all([
     getAdminAgentSales({
       q: params.q?.trim() || undefined,
       status: params.status?.trim() || undefined,
+      statuses: queueStatuses,
+      agentId: params.agentId?.trim() || undefined,
+      paymentType: params.paymentType?.trim() || undefined,
+      start: params.start?.trim() || undefined,
+      end: params.end?.trim() || undefined,
+    }),
+    getAdminAgentSales({
+      q: params.q?.trim() || undefined,
       agentId: params.agentId?.trim() || undefined,
       paymentType: params.paymentType?.trim() || undefined,
       start: params.start?.trim() || undefined,
@@ -44,7 +73,25 @@ export default async function AdminAgentPendingSalesPage({
     createdAt: sale.createdAt.toISOString(),
     updatedAt: sale.updatedAt.toISOString(),
     completedAt: sale.completedAt ? sale.completedAt.toISOString() : null,
+    ownershipWindowEndsAt: sale.ownershipWindowEndsAt ? sale.ownershipWindowEndsAt.toISOString() : null,
   }));
+  const preparedBaseSales = baseSales.map((sale) => ({
+    ...sale,
+    createdAt: sale.createdAt.toISOString(),
+    updatedAt: sale.updatedAt.toISOString(),
+    completedAt: sale.completedAt ? sale.completedAt.toISOString() : null,
+    ownershipWindowEndsAt: sale.ownershipWindowEndsAt ? sale.ownershipWindowEndsAt.toISOString() : null,
+  }));
+  const queueCounts = {
+    all: preparedBaseSales.length,
+    new: preparedBaseSales.filter((sale) => sale.status === "pending_review").length,
+    under_review: preparedBaseSales.filter((sale) => sale.status === "awaiting_payment").length,
+    payment_verified: preparedBaseSales.filter((sale) => sale.status === "payment_confirmed").length,
+    processing: preparedBaseSales.filter((sale) => ["processing", "dispatched"].includes(sale.status)).length,
+    delivered: preparedBaseSales.filter((sale) => sale.status === "delivered_pending_balance").length,
+    completed: preparedBaseSales.filter((sale) => sale.status === "completed").length,
+    cancelled: preparedBaseSales.filter((sale) => ["cancelled", "rejected"].includes(sale.status)).length,
+  };
 
   const summaryCards = [
     { label: "Total Sales", value: preparedSales.length, tone: "text-white" },
@@ -78,6 +125,42 @@ export default async function AdminAgentPendingSalesPage({
       tone: "text-amber-200",
     },
   ];
+  const pageSize = 25;
+  const totalPages = Math.max(1, Math.ceil(preparedSales.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedSales = preparedSales.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  function buildHref(next: Record<string, string | number | undefined>) {
+    const query = new URLSearchParams();
+    const finalParams = {
+      q: params.q?.trim() || "",
+      status: params.status?.trim() || "all",
+      agentId: params.agentId?.trim() || "all",
+      paymentType: params.paymentType?.trim() || "all",
+      start: params.start?.trim() || "",
+      end: params.end?.trim() || "",
+      queue,
+      page: safePage,
+      ...next,
+    };
+    for (const [key, value] of Object.entries(finalParams)) {
+      if (value === undefined || value === "" || value === "all") continue;
+      query.set(key, String(value));
+    }
+    const serialized = query.toString();
+    return serialized ? `/admin/agents/pending-sales?${serialized}` : "/admin/agents/pending-sales";
+  }
+
+  const queueTabs = [
+    { key: "all", label: "All Sales", count: queueCounts.all },
+    { key: "new", label: "New", count: queueCounts.new },
+    { key: "under_review", label: "Under Review", count: queueCounts.under_review },
+    { key: "payment_verified", label: "Payment Verified", count: queueCounts.payment_verified },
+    { key: "processing", label: "Processing", count: queueCounts.processing },
+    { key: "delivered", label: "Delivered", count: queueCounts.delivered },
+    { key: "completed", label: "Completed", count: queueCounts.completed },
+    { key: "cancelled", label: "Cancelled / Rejected", count: queueCounts.cancelled },
+  ];
 
   return (
     <div className="space-y-8">
@@ -88,6 +171,26 @@ export default async function AdminAgentPendingSalesPage({
           <p className="max-w-4xl text-sm text-slate-400">
             Scan submitted customer orders quickly, move them through payment and delivery, and unlock commission only when completed.
           </p>
+        </div>
+
+        <div className="mt-6 flex flex-wrap gap-3">
+          {queueTabs.map((tab) => {
+            const active = queue === tab.key || (queue === "all" && tab.key === "all");
+            return (
+              <Link
+                key={tab.key}
+                href={buildHref({ queue: tab.key === "all" ? undefined : tab.key, page: 1 })}
+                className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
+                  active
+                    ? "border-emerald-400/30 bg-emerald-400/12 text-emerald-100"
+                    : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20"
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px]">{tab.count}</span>
+              </Link>
+            );
+          })}
         </div>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
@@ -166,7 +269,28 @@ export default async function AdminAgentPendingSalesPage({
         </form>
       </section>
 
-      <AgentSalesAdminClient sales={preparedSales} />
+      <AgentSalesAdminClient sales={pagedSales} />
+
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.9),rgba(2,6,23,.95))] px-5 py-4 text-sm text-slate-300">
+        <div>
+          Showing {(safePage - 1) * pageSize + 1}-{Math.min(safePage * pageSize, preparedSales.length)} of {preparedSales.length} sales
+        </div>
+        <div className="flex items-center gap-3">
+          <Link
+            href={buildHref({ page: Math.max(1, safePage - 1) })}
+            className={`rounded-xl border px-4 py-2 font-semibold ${safePage <= 1 ? "pointer-events-none border-white/5 text-slate-600" : "border-white/10 text-slate-100 hover:border-white/20"}`}
+          >
+            Previous
+          </Link>
+          <span className="text-xs uppercase tracking-[0.18em] text-slate-500">Page {safePage} / {totalPages}</span>
+          <Link
+            href={buildHref({ page: Math.min(totalPages, safePage + 1) })}
+            className={`rounded-xl border px-4 py-2 font-semibold ${safePage >= totalPages ? "pointer-events-none border-white/5 text-slate-600" : "border-white/10 text-slate-100 hover:border-white/20"}`}
+          >
+            Next
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

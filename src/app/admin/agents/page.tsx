@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function AdminAgentsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ q?: string; status?: string; county?: string; sort?: string }>;
+  searchParams?: Promise<{ q?: string; status?: string; county?: string; sort?: string; page?: string; view?: string }>;
 }) {
   const session = await auth();
   const role = (session?.user as { role?: string } | undefined)?.role ?? "";
@@ -21,9 +21,11 @@ export default async function AdminAgentsPage({
   const status = params.status?.trim() || "all";
   const county = params.county?.trim() || "all";
   const sort = params.sort?.trim() || "newest";
+  const page = Math.max(1, Number(params.page || "1"));
+  const view = params.view?.trim() || "all";
   const agents = await getAdminAgentsData(q, status, county, sort);
 
-  const prepared = agents.map((row) => ({
+  const preparedAll = agents.map((row) => ({
     ...row,
     profile: {
       ...row.profile,
@@ -37,10 +39,19 @@ export default async function AdminAgentsPage({
     lastCommissionAt: row.lastCommissionAt ? row.lastCommissionAt.toISOString() : null,
     commissions: row.commissions.map((item) => ({ ...item, createdAt: item.createdAt.toISOString() })),
     payouts: row.payouts.map((item) => ({ ...item, createdAt: item.createdAt.toISOString() })),
+    activities: row.activities.map((item) => ({ ...item, createdAt: item.createdAt.toISOString() })),
+    lastActiveAt: row.lastActiveAt.toISOString(),
   }));
+  const prepared = preparedAll.filter((row) => {
+    if (view === "pending") return row.profile.status === "pending";
+    if (view === "suspended") return row.profile.status === "suspended";
+    if (view === "top") return row.performanceLabel === "Top Performer";
+    if (view === "fraud") return row.riskLevel !== "low";
+    return true;
+  });
   const counties = Array.from(
     new Set(
-      prepared
+      preparedAll
         .map((row) => row.profile.county)
         .filter((value): value is string => Boolean(value)),
     ),
@@ -66,6 +77,13 @@ export default async function AdminAgentsPage({
       paidCommission: 0,
     },
   );
+  const viewCounts = {
+    all: preparedAll.length,
+    pending: preparedAll.filter((agent) => agent.profile.status === "pending").length,
+    suspended: preparedAll.filter((agent) => agent.profile.status === "suspended").length,
+    top: preparedAll.filter((agent) => agent.performanceLabel === "Top Performer").length,
+    fraud: preparedAll.filter((agent) => agent.riskLevel !== "low").length,
+  };
   const summaryCards = [
     { label: "Total Agents", value: String(totals.totalAgents), tone: "text-white" },
     { label: "Approved Agents", value: String(totals.approvedAgents), tone: "text-emerald-200" },
@@ -87,6 +105,37 @@ export default async function AdminAgentsPage({
       tone: "text-emerald-200",
     },
   ];
+  const pageSize = 25;
+  const totalPages = Math.max(1, Math.ceil(prepared.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedAgents = prepared.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  function buildHref(next: Record<string, string | number | undefined>) {
+    const query = new URLSearchParams();
+    const finalParams = {
+      q,
+      status,
+      county,
+      sort,
+      view,
+      page: safePage,
+      ...next,
+    };
+    for (const [key, value] of Object.entries(finalParams)) {
+      if (value === undefined || value === "" || value === "all") continue;
+      query.set(key, String(value));
+    }
+    const serialized = query.toString();
+    return serialized ? `/admin/agents?${serialized}` : "/admin/agents";
+  }
+
+  const viewTabs = [
+    { key: "all", label: "All Agents", count: viewCounts.all },
+    { key: "pending", label: "Pending Approval", count: viewCounts.pending },
+    { key: "suspended", label: "Suspended", count: viewCounts.suspended },
+    { key: "top", label: "Top Performers", count: viewCounts.top },
+    { key: "fraud", label: "Fraud Alerts", count: viewCounts.fraud },
+  ];
 
   return (
     <div className="space-y-8">
@@ -105,6 +154,26 @@ export default async function AdminAgentsPage({
           >
             Open pending sales queue
           </Link>
+        </div>
+
+        <div className="mt-6 flex flex-wrap gap-3">
+          {viewTabs.map((tab) => {
+            const active = view === tab.key || (view === "all" && tab.key === "all");
+            return (
+              <Link
+                key={tab.key}
+                href={buildHref({ view: tab.key === "all" ? undefined : tab.key, page: 1 })}
+                className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
+                  active
+                    ? "border-cyan-400/30 bg-cyan-400/12 text-cyan-100"
+                    : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20"
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px]">{tab.count}</span>
+              </Link>
+            );
+          })}
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-7">
@@ -162,7 +231,28 @@ export default async function AdminAgentsPage({
         </form>
       </section>
 
-      <AgentsAdminClient agents={prepared} />
+      <AgentsAdminClient agents={pagedAgents} />
+
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.9),rgba(2,6,23,.95))] px-5 py-4 text-sm text-slate-300">
+        <div>
+          Showing {(safePage - 1) * pageSize + 1}-{Math.min(safePage * pageSize, prepared.length)} of {prepared.length} agents
+        </div>
+        <div className="flex items-center gap-3">
+          <Link
+            href={buildHref({ page: Math.max(1, safePage - 1) })}
+            className={`rounded-xl border px-4 py-2 font-semibold ${safePage <= 1 ? "pointer-events-none border-white/5 text-slate-600" : "border-white/10 text-slate-100 hover:border-white/20"}`}
+          >
+            Previous
+          </Link>
+          <span className="text-xs uppercase tracking-[0.18em] text-slate-500">Page {safePage} / {totalPages}</span>
+          <Link
+            href={buildHref({ page: Math.min(totalPages, safePage + 1) })}
+            className={`rounded-xl border px-4 py-2 font-semibold ${safePage >= totalPages ? "pointer-events-none border-white/5 text-slate-600" : "border-white/10 text-slate-100 hover:border-white/20"}`}
+          >
+            Next
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

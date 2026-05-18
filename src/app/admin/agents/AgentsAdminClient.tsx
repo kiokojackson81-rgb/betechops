@@ -42,8 +42,14 @@ type AgentRow = {
   potentialCommission?: number;
   successRate: number;
   lastCommissionAt: string | null;
+  lastActiveAt: string;
+  duplicateLeadCount: number;
+  cancellationRate: number;
+  riskLevel: "low" | "medium" | "high";
+  performanceLabel: string;
   commissions: Array<{ id: string; sourceType: string; orderNumber: string | null; commissionAmt: number; status: string; createdAt: string }>;
   payouts: Array<{ id: string; amount: number; method: string | null; reference: string | null; status: string; createdAt: string }>;
+  activities: Array<{ id: string; action: string; description: string | null; createdAt: string }>;
 };
 
 const money = (value: number) =>
@@ -56,6 +62,12 @@ function statusBadge(status: string) {
   if (normalized === "rejected") return "border-rose-400/20 bg-rose-400/10 text-rose-200";
   if (normalized === "suspended") return "border-slate-400/20 bg-slate-400/10 text-slate-300";
   return "border-white/10 bg-white/[0.04] text-slate-200";
+}
+
+function riskBadge(level: AgentRow["riskLevel"]) {
+  if (level === "high") return "border-rose-400/20 bg-rose-400/10 text-rose-200";
+  if (level === "medium") return "border-amber-400/20 bg-amber-400/10 text-amber-200";
+  return "border-emerald-400/20 bg-emerald-400/10 text-emerald-200";
 }
 
 function buildLocation(agent: AgentRow) {
@@ -72,10 +84,22 @@ function initials(name: string) {
     .join("");
 }
 
+const drawerTabs = [
+  { key: "overview", label: "Overview" },
+  { key: "sales", label: "Sales" },
+  { key: "commission", label: "Commission" },
+  { key: "payouts", label: "Payouts" },
+  { key: "kyc", label: "KYC" },
+  { key: "activity", label: "Activity Log" },
+  { key: "fraud", label: "Fraud Checks" },
+] as const;
+
 export default function AgentsAdminClient({ agents }: { agents: AgentRow[] }) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [drawerTab, setDrawerTab] = useState<(typeof drawerTabs)[number]["key"]>("overview");
   const [, startTransition] = useTransition();
 
   const selectedAgent = useMemo(
@@ -99,6 +123,46 @@ export default function AgentsAdminClient({ agents }: { agents: AgentRow[] }) {
     startTransition(() => router.refresh());
   }
 
+  async function bulkUpdateStatus(status: string) {
+    if (!selectedIds.length) return;
+    setBusyId(`bulk:${status}`);
+    for (const userId of selectedIds) {
+      const res = await fetch(`/api/admin/agents/${userId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) {
+        setBusyId(null);
+        const payload = await res.json().catch(() => ({ error: "Unable to update selected agents" }));
+        window.alert(payload.error || "Unable to update selected agents");
+        return;
+      }
+    }
+    setBusyId(null);
+    setSelectedIds([]);
+    startTransition(() => router.refresh());
+  }
+
+  function toggleSelected(userId: string) {
+    setSelectedIds((current) =>
+      current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId],
+    );
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.length === agents.length) {
+      setSelectedIds([]);
+      return;
+    }
+    setSelectedIds(agents.map((agent) => agent.profile.id));
+  }
+
+  function openDrawer(agentId: string) {
+    setSelectedId(agentId);
+    setDrawerTab("overview");
+  }
+
   function renderActionButtons(agent: AgentRow, compact = false) {
     const base = compact ? "px-3 py-2 text-[11px]" : "px-3 py-2 text-xs";
     const nextSuspendAction = agent.profile.status === "suspended" ? "approved" : "suspended";
@@ -107,7 +171,7 @@ export default function AgentsAdminClient({ agents }: { agents: AgentRow[] }) {
     return (
       <div className="flex flex-wrap gap-2">
         <button
-          onClick={() => setSelectedId(agent.profile.id)}
+          onClick={() => openDrawer(agent.profile.id)}
           className={`rounded-xl border border-white/10 font-semibold text-slate-100 transition hover:border-white/20 ${base}`}
         >
           View Details
@@ -148,21 +212,56 @@ export default function AgentsAdminClient({ agents }: { agents: AgentRow[] }) {
 
   return (
     <>
+      {selectedIds.length ? (
+        <div className="sticky top-4 z-20 flex flex-wrap items-center justify-between gap-3 rounded-[24px] border border-cyan-400/20 bg-slate-950/95 px-5 py-4 shadow-[0_18px_50px_rgba(0,0,0,0.25)] backdrop-blur">
+          <div className="text-sm text-slate-200">{selectedIds.length} agent{selectedIds.length === 1 ? "" : "s"} selected</div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => bulkUpdateStatus("approved")}
+              disabled={busyId !== null}
+              className="rounded-xl bg-emerald-400 px-4 py-2 text-xs font-semibold text-slate-950 disabled:opacity-60"
+            >
+              {busyId === "bulk:approved" ? "..." : "Bulk Approve"}
+            </button>
+            <button
+              onClick={() => bulkUpdateStatus("suspended")}
+              disabled={busyId !== null}
+              className="rounded-xl bg-amber-300 px-4 py-2 text-xs font-semibold text-slate-950 disabled:opacity-60"
+            >
+              {busyId === "bulk:suspended" ? "..." : "Bulk Suspend"}
+            </button>
+            <button
+              onClick={() => bulkUpdateStatus("rejected")}
+              disabled={busyId !== null}
+              className="rounded-xl bg-rose-400 px-4 py-2 text-xs font-semibold text-slate-950 disabled:opacity-60"
+            >
+              {busyId === "bulk:rejected" ? "..." : "Bulk Reject"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="hidden overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.96))] shadow-[0_24px_70px_rgba(0,0,0,0.35)] lg:block">
         <div className="max-h-[72vh] overflow-auto">
           <table className="min-w-full text-left text-sm text-slate-300">
             <thead className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur">
               <tr className="border-b border-white/10 text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                <th className="px-4 py-4">
+                  <input type="checkbox" checked={selectedIds.length === agents.length && agents.length > 0} onChange={toggleSelectAll} />
+                </th>
                 <th className="px-4 py-4">Agent</th>
                 <th className="px-4 py-4">Code</th>
                 <th className="px-4 py-4">Phone</th>
-                <th className="px-4 py-4">Email</th>
-                <th className="px-4 py-4">Location</th>
+                <th className="px-4 py-4">County</th>
                 <th className="px-4 py-4">Status</th>
-                <th className="px-4 py-4">Sales</th>
+                <th className="px-4 py-4">Total Sales</th>
+                <th className="px-4 py-4">Successful</th>
                 <th className="px-4 py-4">Pending</th>
-                <th className="px-4 py-4">Paid</th>
-                <th className="px-4 py-4">Joined</th>
+                <th className="px-4 py-4">Success Rate</th>
+                <th className="px-4 py-4">Pending Comm.</th>
+                <th className="px-4 py-4">Paid Comm.</th>
+                <th className="px-4 py-4">Last Active</th>
+                <th className="px-4 py-4">Risk</th>
                 <th className="px-4 py-4">Actions</th>
               </tr>
             </thead>
@@ -170,31 +269,48 @@ export default function AgentsAdminClient({ agents }: { agents: AgentRow[] }) {
               {agents.map((agent) => (
                 <tr key={agent.profile.id} className="border-b border-white/5 align-top transition hover:bg-white/[0.03]">
                   <td className="px-4 py-4">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(agent.profile.id)}
+                      onChange={() => toggleSelected(agent.profile.id)}
+                    />
+                  </td>
+                  <td className="px-4 py-4">
                     <div className="flex items-center gap-3">
                       <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] text-xs font-semibold uppercase tracking-[0.18em] text-white">
                         {initials(agent.displayName)}
                       </div>
                       <div>
                         <div className="font-semibold text-white">{agent.displayName}</div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          {agent.completedSaleCount ?? 0} completed · {agent.openSaleCount ?? 0} open
-                        </div>
+                        <div className="mt-1 text-xs text-slate-500">{agent.performanceLabel}</div>
                       </div>
                     </div>
                   </td>
                   <td className="px-4 py-4 font-medium text-cyan-100">{agent.profile.referralCode}</td>
                   <td className="px-4 py-4">{agent.profile.phone || "No phone"}</td>
-                  <td className="px-4 py-4">{agent.profile.email || agent.profile.user.email || "No email"}</td>
-                  <td className="px-4 py-4">{buildLocation(agent)}</td>
+                  <td className="px-4 py-4">{agent.profile.county || "No county"}</td>
                   <td className="px-4 py-4">
                     <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${statusBadge(agent.profile.status)}`}>
                       {agent.profile.status}
                     </span>
                   </td>
                   <td className="px-4 py-4">{money(agent.totalSales)}</td>
+                  <td className="px-4 py-4">{agent.completedSaleCount ?? 0}</td>
+                  <td className="px-4 py-4">{agent.openSaleCount ?? 0}</td>
+                  <td className="px-4 py-4">{agent.successRate}%</td>
                   <td className="px-4 py-4 text-amber-200">{money(agent.pendingCommission)}</td>
                   <td className="px-4 py-4 text-emerald-200">{money(agent.paidCommission)}</td>
-                  <td className="px-4 py-4 text-slate-400">{new Date(agent.profile.createdAt).toLocaleDateString()}</td>
+                  <td className="px-4 py-4 text-slate-400">{new Date(agent.lastActiveAt).toLocaleDateString()}</td>
+                  <td className="px-4 py-4">
+                    <div className="space-y-1">
+                      <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${riskBadge(agent.riskLevel)}`}>
+                        {agent.riskLevel} risk
+                      </span>
+                      <div className="text-xs text-slate-500">
+                        {agent.duplicateLeadCount} duplicates · {agent.cancellationRate}% cancelled
+                      </div>
+                    </div>
+                  </td>
                   <td className="px-4 py-4">{renderActionButtons(agent)}</td>
                 </tr>
               ))}
@@ -214,6 +330,7 @@ export default function AgentsAdminClient({ agents }: { agents: AgentRow[] }) {
                 <div className="text-lg font-semibold text-white">{agent.displayName}</div>
                 <div className="mt-1 text-sm text-slate-400">{agent.profile.phone || "No phone"}</div>
                 <div className="mt-1 text-sm text-slate-500">{buildLocation(agent)}</div>
+                <div className="mt-2 text-xs text-slate-500">{agent.performanceLabel}</div>
               </div>
               <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${statusBadge(agent.profile.status)}`}>
                 {agent.profile.status}
@@ -233,6 +350,12 @@ export default function AgentsAdminClient({ agents }: { agents: AgentRow[] }) {
                 <div className="uppercase tracking-[0.16em] text-slate-500">Paid</div>
                 <div className="mt-1 font-semibold text-emerald-200">{money(agent.paidCommission)}</div>
               </div>
+            </div>
+
+            <div className="mt-3">
+              <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${riskBadge(agent.riskLevel)}`}>
+                {agent.riskLevel} risk
+              </span>
             </div>
 
             <div className="mt-4">{renderActionButtons(agent, true)}</div>
@@ -275,94 +398,77 @@ export default function AgentsAdminClient({ agents }: { agents: AgentRow[] }) {
               </div>
             </div>
 
-            <div className="mt-6 grid gap-6 xl:grid-cols-2">
-              <section className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
-                <h3 className="text-lg font-semibold text-white">Agent Profile</h3>
-                <div className="mt-4 space-y-2 text-sm text-slate-300">
-                  <div>Full name: {selectedAgent.displayName}</div>
-                  <div>Email: {selectedAgent.profile.email || selectedAgent.profile.user.email || "Not provided"}</div>
-                  <div>Phone: {selectedAgent.profile.phone || "Not provided"}</div>
-                  <div>Referral code: {selectedAgent.profile.referralCode}</div>
-                  <div>Country: {selectedAgent.profile.country || "Not provided"}</div>
-                  <div>County: {selectedAgent.profile.county || "Not provided"}</div>
-                  <div>Town / City: {selectedAgent.profile.city || "Not provided"}</div>
-                  <div>Joined date: {new Date(selectedAgent.profile.createdAt).toLocaleString()}</div>
-                  <div>
-                    Current status:{" "}
-                    <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${statusBadge(selectedAgent.profile.status)}`}>
-                      {selectedAgent.profile.status}
-                    </span>
+            <div className="mt-6 flex flex-wrap gap-2 border-b border-white/10 pb-4">
+              {drawerTabs.map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setDrawerTab(tab.key)}
+                  className={`rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
+                    drawerTab === tab.key
+                      ? "border-cyan-400/30 bg-cyan-400/12 text-cyan-100"
+                      : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {drawerTab === "overview" ? (
+              <div className="mt-6 grid gap-6 xl:grid-cols-2">
+                <section className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+                  <h3 className="text-lg font-semibold text-white">Agent Profile</h3>
+                  <div className="mt-4 space-y-2 text-sm text-slate-300">
+                    <div>Full name: {selectedAgent.displayName}</div>
+                    <div>Email: {selectedAgent.profile.email || selectedAgent.profile.user.email || "Not provided"}</div>
+                    <div>Phone: {selectedAgent.profile.phone || "Not provided"}</div>
+                    <div>Referral code: {selectedAgent.profile.referralCode}</div>
+                    <div>Country: {selectedAgent.profile.country || "Not provided"}</div>
+                    <div>County: {selectedAgent.profile.county || "Not provided"}</div>
+                    <div>Town / City: {selectedAgent.profile.city || "Not provided"}</div>
+                    <div>Joined date: {new Date(selectedAgent.profile.createdAt).toLocaleString()}</div>
+                    <div>Last active: {new Date(selectedAgent.lastActiveAt).toLocaleString()}</div>
                   </div>
-                </div>
-              </section>
+                </section>
 
-              <section className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
-                <h3 className="text-lg font-semibold text-white">KYC Info</h3>
-                <div className="mt-4 space-y-2 text-sm text-slate-300">
-                  <div>National ID: {selectedAgent.profile.nationalId || "Not provided"}</div>
-                  <div>KRA PIN: {selectedAgent.profile.kraPin || "Not provided"}</div>
-                  <div>Gender: {selectedAgent.profile.gender || "Not provided"}</div>
-                  <div>Address: {selectedAgent.profile.address || "Not provided"}</div>
-                </div>
-              </section>
+                <section className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+                  <h3 className="text-lg font-semibold text-white">Performance</h3>
+                  <div className="mt-4 grid gap-3 text-sm text-slate-300 sm:grid-cols-2">
+                    <div>Total submitted sales: {selectedAgent.saleCount ?? 0}</div>
+                    <div>Completed sales: {selectedAgent.completedSaleCount ?? 0}</div>
+                    <div>Pending sales: {selectedAgent.openSaleCount ?? 0}</div>
+                    <div>Total commission: {money(selectedAgent.totalCommission)}</div>
+                    <div>Pending commission: {money(selectedAgent.pendingCommission)}</div>
+                    <div>Paid commission: {money(selectedAgent.paidCommission)}</div>
+                    <div>Potential commission: {money(selectedAgent.potentialCommission ?? 0)}</div>
+                    <div>Success rate: {selectedAgent.successRate}%</div>
+                  </div>
+                </section>
+              </div>
+            ) : null}
 
-              <section className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
-                <h3 className="text-lg font-semibold text-white">Performance</h3>
+            {drawerTab === "sales" ? (
+              <section className="mt-6 rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+                <h3 className="text-lg font-semibold text-white">Sales Snapshot</h3>
                 <div className="mt-4 grid gap-3 text-sm text-slate-300 sm:grid-cols-2">
                   <div>Total submitted sales: {selectedAgent.saleCount ?? 0}</div>
                   <div>Completed sales: {selectedAgent.completedSaleCount ?? 0}</div>
                   <div>Pending sales: {selectedAgent.openSaleCount ?? 0}</div>
-                  <div>Total commission: {money(selectedAgent.totalCommission)}</div>
-                  <div>Pending commission: {money(selectedAgent.pendingCommission)}</div>
-                  <div>Paid commission: {money(selectedAgent.paidCommission)}</div>
-                  <div>Potential commission: {money(selectedAgent.potentialCommission ?? 0)}</div>
                   <div>Success rate: {selectedAgent.successRate}%</div>
                 </div>
-              </section>
-
-              <section className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
-                <h3 className="text-lg font-semibold text-white">Admin Actions</h3>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <button
-                    onClick={() => updateStatus(selectedAgent.profile.id, "approved")}
-                    disabled={busyId !== null}
-                    className="rounded-2xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60"
-                  >
-                    Approve
-                  </button>
-                  <button
-                    onClick={() => updateStatus(selectedAgent.profile.id, "rejected")}
-                    disabled={busyId !== null}
-                    className="rounded-2xl bg-rose-400 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60"
-                  >
-                    Reject
-                  </button>
-                  <button
-                    onClick={() => updateStatus(selectedAgent.profile.id, "suspended")}
-                    disabled={busyId !== null}
-                    className="rounded-2xl bg-amber-300 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60"
-                  >
-                    Suspend
-                  </button>
-                  <button
-                    onClick={() => updateStatus(selectedAgent.profile.id, "approved")}
-                    disabled={busyId !== null}
-                    className="rounded-2xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 disabled:opacity-60"
-                  >
-                    Reactivate
-                  </button>
+                <div className="mt-4">
                   <Link
                     href={`/admin/agents/pending-sales?agentId=${selectedAgent.profile.userId}`}
-                    className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-100"
+                    className="inline-flex rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-100"
                   >
-                    View Sales
+                    View Sales Queue
                   </Link>
                 </div>
               </section>
-            </div>
+            ) : null}
 
-            <div className="mt-6 grid gap-6 xl:grid-cols-2">
-              <section className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+            {drawerTab === "commission" ? (
+              <section className="mt-6 rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
                 <h3 className="text-lg font-semibold text-white">Recent Commissions</h3>
                 <div className="mt-4 space-y-3">
                   {selectedAgent.commissions.length ? selectedAgent.commissions.map((item) => (
@@ -376,8 +482,10 @@ export default function AgentsAdminClient({ agents }: { agents: AgentRow[] }) {
                   )) : <div className="text-sm text-slate-500">No commissions yet.</div>}
                 </div>
               </section>
+            ) : null}
 
-              <section className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+            {drawerTab === "payouts" ? (
+              <section className="mt-6 rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
                 <h3 className="text-lg font-semibold text-white">Recent Payouts</h3>
                 <div className="mt-4 space-y-3">
                   {selectedAgent.payouts.length ? selectedAgent.payouts.map((item) => (
@@ -391,7 +499,86 @@ export default function AgentsAdminClient({ agents }: { agents: AgentRow[] }) {
                   )) : <div className="text-sm text-slate-500">No payouts yet.</div>}
                 </div>
               </section>
-            </div>
+            ) : null}
+
+            {drawerTab === "kyc" ? (
+              <section className="mt-6 rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+                <h3 className="text-lg font-semibold text-white">KYC Info</h3>
+                <div className="mt-4 space-y-2 text-sm text-slate-300">
+                  <div>National ID: {selectedAgent.profile.nationalId || "Not provided"}</div>
+                  <div>KRA PIN: {selectedAgent.profile.kraPin || "Not provided"}</div>
+                  <div>Gender: {selectedAgent.profile.gender || "Not provided"}</div>
+                  <div>Address: {selectedAgent.profile.address || "Not provided"}</div>
+                </div>
+              </section>
+            ) : null}
+
+            {drawerTab === "activity" ? (
+              <section className="mt-6 rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+                <h3 className="text-lg font-semibold text-white">Activity Log</h3>
+                <div className="mt-4 space-y-3">
+                  {selectedAgent.activities.length ? selectedAgent.activities.map((item) => (
+                    <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/70 p-3 text-sm text-slate-300">
+                      <div className="font-semibold text-white">{item.action.replace(/_/g, " ")}</div>
+                      <div className="mt-1 text-slate-400">{item.description || "No description"}</div>
+                      <div className="mt-2 text-xs text-slate-500">{new Date(item.createdAt).toLocaleString()}</div>
+                    </div>
+                  )) : <div className="text-sm text-slate-500">No recent activity.</div>}
+                </div>
+              </section>
+            ) : null}
+
+            {drawerTab === "fraud" ? (
+              <section className="mt-6 rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+                <h3 className="text-lg font-semibold text-white">Fraud Checks</h3>
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${riskBadge(selectedAgent.riskLevel)}`}>
+                    {selectedAgent.riskLevel} risk
+                  </span>
+                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-300">
+                    {selectedAgent.performanceLabel}
+                  </span>
+                </div>
+                <div className="mt-4 grid gap-3 text-sm text-slate-300 sm:grid-cols-2">
+                  <div>Duplicate customer leads: {selectedAgent.duplicateLeadCount}</div>
+                  <div>Cancellation rate: {selectedAgent.cancellationRate}%</div>
+                </div>
+              </section>
+            ) : null}
+
+            <section className="mt-6 rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+              <h3 className="text-lg font-semibold text-white">Admin Actions</h3>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <button
+                  onClick={() => updateStatus(selectedAgent.profile.id, "approved")}
+                  disabled={busyId !== null}
+                  className="rounded-2xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60"
+                >
+                  Approve
+                </button>
+                <button
+                  onClick={() => updateStatus(selectedAgent.profile.id, "rejected")}
+                  disabled={busyId !== null}
+                  className="rounded-2xl bg-rose-400 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60"
+                >
+                  Reject
+                </button>
+                <button
+                  onClick={() => updateStatus(selectedAgent.profile.id, "suspended")}
+                  disabled={busyId !== null}
+                  className="rounded-2xl bg-amber-300 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60"
+                >
+                  Suspend
+                </button>
+                <button
+                  onClick={() => updateStatus(selectedAgent.profile.id, "approved")}
+                  disabled={busyId !== null}
+                  className="rounded-2xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 disabled:opacity-60"
+                >
+                  Reactivate
+                </button>
+              </div>
+            </section>
           </aside>
         </div>
       ) : null}

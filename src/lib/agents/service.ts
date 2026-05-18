@@ -159,7 +159,7 @@ export async function getAdminAgentsData(
   if (!rows.length) return [];
 
   const userIds = rows.map((row) => row.userId);
-  const [commissions, payouts, sales] = await Promise.all([
+  const [commissions, payouts, sales, activities] = await Promise.all([
     prisma.agentCommission.findMany({
       where: { agentId: { in: userIds } },
       orderBy: { createdAt: "desc" },
@@ -178,12 +178,26 @@ export async function getAdminAgentsData(
       if (isAgentSalesSchemaError(error)) return [];
       throw error;
     }),
+    prisma.agentActivityLog.findMany({
+      where: { agentId: { in: userIds } },
+      orderBy: { createdAt: "desc" },
+    }),
   ]);
+
+  const phoneOwnerCounts = new Map<string, Set<string>>();
+  for (const sale of sales) {
+    const phone = String(sale.customerPhone || "").replace(/\D/g, "");
+    if (!phone) continue;
+    const existing = phoneOwnerCounts.get(phone) ?? new Set<string>();
+    existing.add(sale.agentId);
+    phoneOwnerCounts.set(phone, existing);
+  }
 
   const mapped = rows.map((row) => {
     const agentCommissions = commissions.filter((item) => item.agentId === row.userId);
     const agentPayouts = payouts.filter((item) => item.agentId === row.userId);
     const agentSales = sales.filter((item) => item.agentId === row.userId);
+    const agentActivities = activities.filter((item) => item.agentId === row.userId).slice(0, 10);
     const totalSales = agentCommissions.reduce((sum, item) => sum + Number(item.saleAmount ?? 0), 0);
     const totalCommission = agentCommissions.reduce((sum, item) => sum + Number(item.commissionAmt ?? 0), 0);
     const paidCommission = agentCommissions
@@ -195,6 +209,37 @@ export async function getAdminAgentsData(
       .reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
     const paidCount = agentCommissions.filter((item) => String(item.status).toLowerCase() === "paid").length;
     const successRate = agentCommissions.length ? Math.round((paidCount / agentCommissions.length) * 100) : 0;
+    const completedSales = agentSales.filter((item) => String(item.status) === "completed").length;
+    const openSales = agentSales.filter((item) => !["completed", "cancelled", "rejected"].includes(String(item.status))).length;
+    const cancelledSales = agentSales.filter((item) => ["cancelled", "rejected"].includes(String(item.status))).length;
+    const duplicateLeadCount = agentSales.reduce((sum, sale) => {
+      const phone = String(sale.customerPhone || "").replace(/\D/g, "");
+      if (!phone) return sum;
+      const ownerCount = phoneOwnerCounts.get(phone)?.size ?? 0;
+      return sum + (ownerCount > 1 ? 1 : 0);
+    }, 0);
+    const cancellationRate = agentSales.length ? Math.round((cancelledSales / agentSales.length) * 100) : 0;
+
+    let riskLevel: "low" | "medium" | "high" = "low";
+    let performanceLabel = "Trusted Agent";
+    if (duplicateLeadCount >= 3 || cancellationRate >= 45) {
+      riskLevel = "high";
+      performanceLabel = "Suspicious Activity";
+    } else if (duplicateLeadCount > 0 || cancellationRate >= 25) {
+      riskLevel = "medium";
+      performanceLabel = duplicateLeadCount > 0 ? "Duplicate Risk" : "High Cancellation Rate";
+    } else if (completedSales >= 5 && totalSales >= 250000) {
+      performanceLabel = "Top Performer";
+    }
+
+    const lastActiveAt = [
+      row.updatedAt,
+      agentSales[0]?.createdAt,
+      agentCommissions[0]?.createdAt,
+      agentActivities[0]?.createdAt,
+    ]
+      .filter((value): value is Date => Boolean(value))
+      .sort((a, b) => b.getTime() - a.getTime())[0] ?? row.createdAt;
 
     return {
       profile: row,
@@ -207,15 +252,21 @@ export async function getAdminAgentsData(
       commissionCount: agentCommissions.length,
       payoutCount: agentPayouts.length,
       saleCount: agentSales.length,
-      openSaleCount: agentSales.filter((item) => !["completed", "cancelled", "rejected"].includes(String(item.status))).length,
-      completedSaleCount: agentSales.filter((item) => String(item.status) === "completed").length,
+      openSaleCount: openSales,
+      completedSaleCount: completedSales,
       potentialCommission: agentSales
         .filter((item) => !["completed", "cancelled", "rejected"].includes(String(item.status)))
         .reduce((sum, item) => sum + Number(item.potentialCommission ?? 0), 0),
       successRate,
       lastCommissionAt: agentCommissions[0]?.createdAt ?? null,
+      lastActiveAt,
+      duplicateLeadCount,
+      cancellationRate,
+      riskLevel,
+      performanceLabel,
       commissions: agentCommissions.slice(0, 10),
       payouts: agentPayouts.slice(0, 10),
+      activities: agentActivities,
     };
   });
 

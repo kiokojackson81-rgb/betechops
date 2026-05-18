@@ -753,6 +753,7 @@ export async function getAgentSalesDashboardSummary(agentId: string) {
 type AdminAgentSalesFilters = {
   q?: string;
   status?: string;
+  statuses?: string[];
   agentId?: string;
   paymentType?: string;
   start?: string;
@@ -762,6 +763,9 @@ type AdminAgentSalesFilters = {
 export async function getAdminAgentSales(filters: AdminAgentSalesFilters = {}) {
   const where: Prisma.AgentSaleWhereInput = {};
   const and: Prisma.AgentSaleWhereInput[] = [];
+  if (filters.statuses?.length) {
+    and.push({ status: { in: filters.statuses } });
+  }
   if (filters.status && filters.status !== "all") {
     and.push({ status: filters.status });
   }
@@ -786,6 +790,7 @@ export async function getAdminAgentSales(filters: AdminAgentSalesFilters = {}) {
         { customerLocation: { contains: q, mode: "insensitive" } },
         { productName: { contains: q, mode: "insensitive" } },
         { receiptNumber: { contains: q, mode: "insensitive" } },
+        { mpesaReference: { contains: q, mode: "insensitive" } },
         { agent: { is: { name: { contains: q, mode: "insensitive" } } } },
         { agent: { is: { email: { contains: q, mode: "insensitive" } } } },
       ],
@@ -808,8 +813,49 @@ export async function getAdminAgentSales(filters: AdminAgentSalesFilters = {}) {
     throw error;
   }
   const commissionBySaleId = await fetchSalesCommissions(sales.map((sale) => sale.id));
+  const presentedSales = sales.map((sale) => presentAgentSale(sale, getCommissionForSale(sale.id, commissionBySaleId)));
+  const phoneSubmissions = new Map<string, typeof presentedSales>();
 
-  return sales.map((sale) => presentAgentSale(sale, getCommissionForSale(sale.id, commissionBySaleId)));
+  for (const sale of presentedSales) {
+    const phone = String(sale.customerPhone || "").replace(/\D/g, "");
+    if (!phone) continue;
+    const existing = phoneSubmissions.get(phone) ?? [];
+    existing.push(sale);
+    phoneSubmissions.set(phone, existing);
+  }
+
+  return presentedSales.map((sale) => {
+    const phone = String(sale.customerPhone || "").replace(/\D/g, "");
+    const related = phone ? phoneSubmissions.get(phone) ?? [] : [];
+    const competingAgents = new Set(related.map((item) => item.agentId));
+    const duplicateCount = Math.max(0, related.length - 1);
+    const hasConflict = competingAgents.size > 1;
+    const earliestSubmission = related
+      .slice()
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0];
+    const ownershipUntil = earliestSubmission
+      ? new Date(earliestSubmission.createdAt.getTime() + 14 * 24 * 60 * 60 * 1000)
+      : null;
+
+    let duplicateRisk: "low" | "medium" | "high" = "low";
+    let duplicateNote = "No duplicate indicators detected.";
+    if (hasConflict && duplicateCount >= 1) {
+      duplicateRisk = duplicateCount >= 2 ? "high" : "medium";
+      duplicateNote = earliestSubmission?.id === sale.id
+        ? "Another agent submitted the same customer after this lead."
+        : `Customer already belongs to ${earliestSubmission?.agentName || "another agent"} within the ownership window.`;
+    }
+
+    return {
+      ...sale,
+      duplicateRisk,
+      duplicateCount,
+      needsReview: hasConflict,
+      ownershipOwnerAgentName: earliestSubmission?.agentName || null,
+      ownershipWindowEndsAt: ownershipUntil,
+      duplicateNote,
+    };
+  });
 }
 
 export async function getAdminAgentSaleById(saleId: string) {
