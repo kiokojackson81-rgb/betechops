@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import AgentCommissionsAdminClient from "@/app/admin/agents/AgentCommissionsAdminClient";
+import AgentOpsSectionNav from "@/app/admin/agents/_components/AgentOpsSectionNav";
 import { auth } from "@/lib/auth";
 import { getAdminAgentCommissionQueueData, getAdminAgentsData } from "@/lib/agents/service";
 
@@ -65,6 +66,12 @@ export default async function AdminAgentCommissionsPage({
     { key: "available", label: "Available", count: queueCounts.available },
     { key: "paid", label: "Paid", count: queueCounts.paid },
   ];
+  const activeQueueHref = buildHref({ queue: queue === "all" ? undefined : queue, page: 1 });
+  const secondaryItems = queueTabs.map((tab) => ({
+    href: buildHref({ queue: tab.key === "all" ? undefined : tab.key, page: 1 }),
+    label: tab.label,
+    count: tab.count,
+  }));
   const formatMoney = (value: number) =>
     new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 }).format(value || 0);
 
@@ -79,24 +86,8 @@ export default async function AdminAgentCommissionsPage({
           </p>
         </div>
 
-        <div className="mt-6 flex flex-wrap gap-3">
-          {queueTabs.map((tab) => {
-            const active = queue === tab.key || (queue === "all" && tab.key === "all");
-            return (
-              <Link
-                key={tab.key}
-                href={buildHref({ queue: tab.key === "all" ? undefined : tab.key, page: 1 })}
-                className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
-                  active
-                    ? "border-amber-400/30 bg-amber-400/12 text-amber-100"
-                    : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20"
-                }`}
-              >
-                <span>{tab.label}</span>
-                <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px]">{tab.count}</span>
-              </Link>
-            );
-          })}
+        <div className="mt-6">
+          <AgentOpsSectionNav activeHref={activeQueueHref} secondaryItems={secondaryItems} />
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import AgentSalesAdminClient from "@/app/admin/agents/AgentSalesAdminClient";
+import AgentOpsSectionNav from "@/app/admin/agents/_components/AgentOpsSectionNav";
 import { auth } from "@/lib/auth";
 import { getAdminAgentSales } from "@/lib/agents/sales";
 import { prisma } from "@/lib/prisma";
@@ -161,6 +162,12 @@ export default async function AdminAgentPendingSalesPage({
     { key: "completed", label: "Completed", count: queueCounts.completed },
     { key: "cancelled", label: "Cancelled / Rejected", count: queueCounts.cancelled },
   ];
+  const activeQueueHref = buildHref({ queue: queue === "all" ? undefined : queue, page: 1 });
+  const secondaryItems = queueTabs.map((tab) => ({
+    href: buildHref({ queue: tab.key === "all" ? undefined : tab.key, page: 1 }),
+    label: tab.label,
+    count: tab.count,
+  }));
 
   return (
     <div className="space-y-8">
@@ -173,24 +180,8 @@ export default async function AdminAgentPendingSalesPage({
           </p>
         </div>
 
-        <div className="mt-6 flex flex-wrap gap-3">
-          {queueTabs.map((tab) => {
-            const active = queue === tab.key || (queue === "all" && tab.key === "all");
-            return (
-              <Link
-                key={tab.key}
-                href={buildHref({ queue: tab.key === "all" ? undefined : tab.key, page: 1 })}
-                className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
-                  active
-                    ? "border-emerald-400/30 bg-emerald-400/12 text-emerald-100"
-                    : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20"
-                }`}
-              >
-                <span>{tab.label}</span>
-                <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px]">{tab.count}</span>
-              </Link>
-            );
-          })}
+        <div className="mt-6">
+          <AgentOpsSectionNav activeHref={activeQueueHref} secondaryItems={secondaryItems} />
         </div>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
