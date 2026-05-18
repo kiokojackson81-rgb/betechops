@@ -46,6 +46,46 @@ const agentSaleStatusNotes: Record<(typeof agentSaleStatuses)[number], string> =
   rejected: "The sale was rejected during review.",
 };
 
+const terminalAgentSaleStatuses = new Set<string>(["completed", "cancelled", "rejected"]);
+
+function normalizeAgentSaleStatus(status: string | null | undefined) {
+  return String(status || "").toLowerCase();
+}
+
+function getAllowedAgentSaleTransitions(currentStatus: string) {
+  const current = normalizeAgentSaleStatus(currentStatus);
+  switch (current) {
+    case "pending_review":
+      return ["processing", "rejected", "cancelled"];
+    case "awaiting_payment":
+    case "payment_confirmed":
+      return ["processing", "rejected", "cancelled"];
+    case "processing":
+      return ["dispatched", "rejected", "cancelled"];
+    case "dispatched":
+      return ["delivered_pending_balance", "rejected", "cancelled"];
+    case "delivered_pending_balance":
+      return ["rejected", "cancelled"];
+    default:
+      return [];
+  }
+}
+
+function getAgentSaleTransitionError(currentStatus: string, nextStatus: string) {
+  const current = normalizeAgentSaleStatus(currentStatus);
+  const next = normalizeAgentSaleStatus(nextStatus);
+  if (current === next) {
+    return `This order is already marked as ${next.replace(/_/g, " ")}.`;
+  }
+  if (terminalAgentSaleStatuses.has(current)) {
+    return "This order is already in a final state and cannot be moved again.";
+  }
+  if (!getAllowedAgentSaleTransitions(current).includes(next)) {
+    return `You cannot move an order from ${current.replace(/_/g, " ")} to ${next.replace(/_/g, " ")}.`;
+  }
+  return null;
+}
+
 const agentSaleCreateSchema = z.object({
   customerName: z.string().trim().min(2, "Customer name is required."),
   customerPhone: z.string().trim().min(6, "Customer phone is required."),
@@ -1509,6 +1549,9 @@ export async function updateAgentSaleStatus(
       });
       if (!sale) throw new Error("Agent sale not found.");
 
+      const transitionError = getAgentSaleTransitionError(sale.status, status);
+      if (transitionError) throw new Error(transitionError);
+
       const nextAmountPaid =
         typeof amountPaid === "number"
           ? normalizeAmount(amountPaid)
@@ -1711,6 +1754,12 @@ function canCompleteSale(sale: {
   deliveryMethod: string | null;
 }) {
   const currentStatus = String(sale.status || "").toLowerCase();
+  if (currentStatus === "completed") {
+    return "This order is already completed.";
+  }
+  if (currentStatus === "cancelled" || currentStatus === "rejected") {
+    return "This order is already in a final state and cannot be completed.";
+  }
   if (Number(sale.amountPaid ?? 0) < Number(sale.totalAmount ?? 0)) {
     return "Customer payment is not complete yet.";
   }

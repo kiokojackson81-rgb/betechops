@@ -80,6 +80,30 @@ const timelineSteps = [
   { key: "completed", label: "Completed" },
 ] as const;
 
+function isTerminalStatus(status: string) {
+  const normalized = String(status || "").toLowerCase();
+  return normalized === "completed" || normalized === "cancelled" || normalized === "rejected";
+}
+
+function canMoveTo(status: string, nextStatus: string) {
+  const current = String(status || "").toLowerCase();
+  const next = String(nextStatus || "").toLowerCase();
+  if (current === next || isTerminalStatus(current)) return false;
+  if (current === "pending_review" || current === "awaiting_payment" || current === "payment_confirmed") {
+    return ["processing", "rejected", "cancelled"].includes(next);
+  }
+  if (current === "processing") {
+    return ["dispatched", "rejected", "cancelled"].includes(next);
+  }
+  if (current === "dispatched") {
+    return ["delivered_pending_balance", "rejected", "cancelled"].includes(next);
+  }
+  if (current === "delivered_pending_balance") {
+    return ["rejected", "cancelled"].includes(next);
+  }
+  return false;
+}
+
 export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -139,8 +163,13 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
 
   async function bulkStage(status: "processing" | "dispatched" | "delivered_pending_balance") {
     if (!selectedIds.length) return;
+    const eligibleSales = selectedSales.filter((sale) => canMoveTo(sale.status, status));
+    if (!eligibleSales.length) {
+      window.alert("None of the selected sales can move to that stage.");
+      return;
+    }
     setBusy(`bulk:${status}`);
-    for (const saleId of selectedIds) {
+    for (const saleId of eligibleSales.map((sale) => sale.id)) {
       const res = await fetch(`/api/admin/agents/sales/${saleId}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -154,7 +183,7 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
       }
     }
     setBusy(null);
-    setSelectedIds([]);
+    setSelectedIds((current) => current.filter((id) => !eligibleSales.some((sale) => sale.id === id)));
     startTransition(() => router.refresh());
   }
 
@@ -230,7 +259,28 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
   }
 
   function quickAction(sale: AdminSaleRow) {
-    if (sale.status === "processing" || sale.status === "dispatched") {
+    if (isTerminalStatus(sale.status)) {
+      return {
+        label: "View Details",
+        onClick: () => toggleExpanded(sale.id),
+        className: "border-white/10 text-slate-200 hover:border-white/20",
+      };
+    }
+    if (sale.status === "pending_review" || sale.status === "awaiting_payment" || sale.status === "payment_confirmed") {
+      return {
+        label: busy === `${sale.id}:processing` ? "Saving..." : "Mark Processing",
+        onClick: () => patchStatus(sale.id, "processing"),
+        className: "border-white/10 text-slate-200 hover:border-white/20",
+      };
+    }
+    if (sale.status === "processing") {
+      return {
+        label: busy === `${sale.id}:dispatched` ? "Saving..." : "Mark Dispatched",
+        onClick: () => patchStatus(sale.id, "dispatched"),
+        className: "border-cyan-400/20 bg-cyan-400/10 text-cyan-100",
+      };
+    }
+    if (sale.status === "dispatched") {
       return {
         label: busy === `${sale.id}:delivered_pending_balance` ? "Saving..." : "Mark Delivered",
         onClick: () => patchStatus(sale.id, "delivered_pending_balance"),
@@ -245,9 +295,9 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
       };
     }
     return {
-      label: busy === `${sale.id}:processing` ? "Saving..." : "Mark Processing",
-      onClick: () => patchStatus(sale.id, "processing"),
-      className: "border-white/10 text-slate-200 hover:border-white/20",
+      label: sale.balance > 0 ? "Verify Payment" : "Complete Sale",
+      onClick: () => (sale.balance > 0 ? confirmPayment(sale) : completeSale(sale.id)),
+      className: sale.balance > 0 ? "border-cyan-400/20 bg-cyan-400/10 text-cyan-100" : "bg-emerald-400 text-slate-950",
     };
   }
 
@@ -482,41 +532,60 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
                                   <Eye className="h-4 w-4" />
                                   View Details
                                 </Link>
-                                <button
-                                  onClick={() => confirmPayment(sale)}
-                                  disabled={busy !== null}
-                                  className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-white/20 disabled:opacity-60"
-                                >
-                                  {busy === `${sale.id}:payment` ? "Saving..." : "Verify Payment"}
-                                </button>
-                                <button
-                                  onClick={() => patchStatus(sale.id, "processing")}
-                                  disabled={busy !== null}
-                                  className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-white/20 disabled:opacity-60"
-                                >
-                                  {busy === `${sale.id}:processing` ? "Saving..." : "Mark Processing"}
-                                </button>
-                                <button
-                                  onClick={() => patchStatus(sale.id, "delivered_pending_balance")}
-                                  disabled={busy !== null}
-                                  className="rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 py-2 text-sm font-semibold text-amber-100 disabled:opacity-60"
-                                >
-                                  {busy === `${sale.id}:delivered_pending_balance` ? "Saving..." : "Mark Delivered"}
-                                </button>
-                                <button
-                                  onClick={() => completeSale(sale.id)}
-                                  disabled={busy !== null}
-                                  className="rounded-xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60"
-                                >
-                                  {busy === `${sale.id}:complete` ? "Completing..." : "Complete Sale"}
-                                </button>
-                                <button
-                                  onClick={() => patchStatus(sale.id, "rejected")}
-                                  disabled={busy !== null}
-                                  className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-2 text-sm font-semibold text-rose-100 disabled:opacity-60"
-                                >
-                                  {busy === `${sale.id}:rejected` ? "Saving..." : "Reject Sale"}
-                                </button>
+                                {!isTerminalStatus(sale.status) ? (
+                                  <button
+                                    onClick={() => confirmPayment(sale)}
+                                    disabled={busy !== null}
+                                    className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-white/20 disabled:opacity-60"
+                                  >
+                                    {busy === `${sale.id}:payment` ? "Saving..." : "Verify Payment"}
+                                  </button>
+                                ) : null}
+                                {canMoveTo(sale.status, "processing") ? (
+                                  <button
+                                    onClick={() => patchStatus(sale.id, "processing")}
+                                    disabled={busy !== null}
+                                    className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-white/20 disabled:opacity-60"
+                                  >
+                                    {busy === `${sale.id}:processing` ? "Saving..." : "Mark Processing"}
+                                  </button>
+                                ) : null}
+                                {canMoveTo(sale.status, "dispatched") ? (
+                                  <button
+                                    onClick={() => patchStatus(sale.id, "dispatched")}
+                                    disabled={busy !== null}
+                                    className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-white/20 disabled:opacity-60"
+                                  >
+                                    {busy === `${sale.id}:dispatched` ? "Saving..." : "Mark Dispatched"}
+                                  </button>
+                                ) : null}
+                                {canMoveTo(sale.status, "delivered_pending_balance") ? (
+                                  <button
+                                    onClick={() => patchStatus(sale.id, "delivered_pending_balance")}
+                                    disabled={busy !== null}
+                                    className="rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 py-2 text-sm font-semibold text-amber-100 disabled:opacity-60"
+                                  >
+                                    {busy === `${sale.id}:delivered_pending_balance` ? "Saving..." : "Mark Delivered"}
+                                  </button>
+                                ) : null}
+                                {sale.status === "delivered_pending_balance" && sale.balance <= 0 ? (
+                                  <button
+                                    onClick={() => completeSale(sale.id)}
+                                    disabled={busy !== null}
+                                    className="rounded-xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60"
+                                  >
+                                    {busy === `${sale.id}:complete` ? "Completing..." : "Complete Sale"}
+                                  </button>
+                                ) : null}
+                                {canMoveTo(sale.status, "rejected") ? (
+                                  <button
+                                    onClick={() => patchStatus(sale.id, "rejected")}
+                                    disabled={busy !== null}
+                                    className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-2 text-sm font-semibold text-rose-100 disabled:opacity-60"
+                                  >
+                                    {busy === `${sale.id}:rejected` ? "Saving..." : "Reject Sale"}
+                                  </button>
+                                ) : null}
                               </div>
                             </section>
                           </div>
@@ -670,41 +739,60 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
                         >
                           View Details
                         </Link>
-                        <button
-                          onClick={() => confirmPayment(sale)}
-                          disabled={busy !== null}
-                          className="rounded-xl border border-white/10 px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-white/20 disabled:opacity-60"
-                        >
-                          {busy === `${sale.id}:payment` ? "Saving..." : "Verify Payment"}
-                        </button>
-                        <button
-                          onClick={() => patchStatus(sale.id, "processing")}
-                          disabled={busy !== null}
-                          className="rounded-xl border border-white/10 px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-white/20 disabled:opacity-60"
-                        >
-                          {busy === `${sale.id}:processing` ? "Saving..." : "Mark Processing"}
-                        </button>
-                        <button
-                          onClick={() => patchStatus(sale.id, "delivered_pending_balance")}
-                          disabled={busy !== null}
-                          className="rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm font-semibold text-amber-100 disabled:opacity-60"
-                        >
-                          {busy === `${sale.id}:delivered_pending_balance` ? "Saving..." : "Mark Delivered"}
-                        </button>
-                        <button
-                          onClick={() => completeSale(sale.id)}
-                          disabled={busy !== null}
-                          className="rounded-xl bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-950 disabled:opacity-60"
-                        >
-                          {busy === `${sale.id}:complete` ? "Completing..." : "Complete Sale"}
-                        </button>
-                        <button
-                          onClick={() => patchStatus(sale.id, "rejected")}
-                          disabled={busy !== null}
-                          className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm font-semibold text-rose-100 disabled:opacity-60"
-                        >
-                          {busy === `${sale.id}:rejected` ? "Saving..." : "Reject Sale"}
-                        </button>
+                        {!isTerminalStatus(sale.status) ? (
+                          <button
+                            onClick={() => confirmPayment(sale)}
+                            disabled={busy !== null}
+                            className="rounded-xl border border-white/10 px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-white/20 disabled:opacity-60"
+                          >
+                            {busy === `${sale.id}:payment` ? "Saving..." : "Verify Payment"}
+                          </button>
+                        ) : null}
+                        {canMoveTo(sale.status, "processing") ? (
+                          <button
+                            onClick={() => patchStatus(sale.id, "processing")}
+                            disabled={busy !== null}
+                            className="rounded-xl border border-white/10 px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-white/20 disabled:opacity-60"
+                          >
+                            {busy === `${sale.id}:processing` ? "Saving..." : "Mark Processing"}
+                          </button>
+                        ) : null}
+                        {canMoveTo(sale.status, "dispatched") ? (
+                          <button
+                            onClick={() => patchStatus(sale.id, "dispatched")}
+                            disabled={busy !== null}
+                            className="rounded-xl border border-white/10 px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-white/20 disabled:opacity-60"
+                          >
+                            {busy === `${sale.id}:dispatched` ? "Saving..." : "Mark Dispatched"}
+                          </button>
+                        ) : null}
+                        {canMoveTo(sale.status, "delivered_pending_balance") ? (
+                          <button
+                            onClick={() => patchStatus(sale.id, "delivered_pending_balance")}
+                            disabled={busy !== null}
+                            className="rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm font-semibold text-amber-100 disabled:opacity-60"
+                          >
+                            {busy === `${sale.id}:delivered_pending_balance` ? "Saving..." : "Mark Delivered"}
+                          </button>
+                        ) : null}
+                        {sale.status === "delivered_pending_balance" && sale.balance <= 0 ? (
+                          <button
+                            onClick={() => completeSale(sale.id)}
+                            disabled={busy !== null}
+                            className="rounded-xl bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-950 disabled:opacity-60"
+                          >
+                            {busy === `${sale.id}:complete` ? "Completing..." : "Complete Sale"}
+                          </button>
+                        ) : null}
+                        {canMoveTo(sale.status, "rejected") ? (
+                          <button
+                            onClick={() => patchStatus(sale.id, "rejected")}
+                            disabled={busy !== null}
+                            className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm font-semibold text-rose-100 disabled:opacity-60"
+                          >
+                            {busy === `${sale.id}:rejected` ? "Saving..." : "Reject Sale"}
+                          </button>
+                        ) : null}
                       </div>
                     </section>
                   </div>

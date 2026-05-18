@@ -126,14 +126,29 @@ type OwnershipRow = {
   };
 };
 
-const statuses = [
-  "pending_review",
-  "processing",
-  "dispatched",
-  "delivered_pending_balance",
-  "rejected",
-  "cancelled",
-];
+function isTerminalStatus(status: string) {
+  const normalized = String(status || "").toLowerCase();
+  return normalized === "completed" || normalized === "cancelled" || normalized === "rejected";
+}
+
+function canMoveTo(status: string, nextStatus: string) {
+  const current = String(status || "").toLowerCase();
+  const next = String(nextStatus || "").toLowerCase();
+  if (current === next || isTerminalStatus(current)) return false;
+  if (current === "pending_review" || current === "awaiting_payment" || current === "payment_confirmed") {
+    return ["processing", "rejected", "cancelled"].includes(next);
+  }
+  if (current === "processing") {
+    return ["dispatched", "rejected", "cancelled"].includes(next);
+  }
+  if (current === "dispatched") {
+    return ["delivered_pending_balance", "rejected", "cancelled"].includes(next);
+  }
+  if (current === "delivered_pending_balance") {
+    return ["rejected", "cancelled"].includes(next);
+  }
+  return false;
+}
 
 const money = (value: number) =>
   new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 }).format(value || 0);
@@ -516,36 +531,71 @@ export default function AgentSaleDetailAdminClient({
               </div>
             </div>
             <div className="mt-5 grid gap-3">
-              <button
-                onClick={confirmPayment}
-                disabled={busy !== null}
-                className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm font-semibold text-cyan-100 disabled:opacity-60"
-              >
-                {busy === "payment" ? "Saving..." : "Confirm payment"}
-              </button>
+              {!isTerminalStatus(sale.status) ? (
+                <button
+                  onClick={confirmPayment}
+                  disabled={busy !== null}
+                  className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm font-semibold text-cyan-100 disabled:opacity-60"
+                >
+                  {busy === "payment" ? "Saving..." : "Verify payment"}
+                </button>
+              ) : null}
               <div className="grid gap-3 md:grid-cols-2">
-                {statuses.map((status) => (
+                {canMoveTo(sale.status, "processing") ? (
                   <button
-                    key={status}
-                    onClick={() => patchStatus(status)}
+                    onClick={() => patchStatus("processing")}
                     disabled={busy !== null}
                     className="rounded-2xl border border-white/10 px-4 py-3 text-sm text-slate-200 transition hover:border-white/20 disabled:opacity-60"
                   >
-                    {busy === `status:${status}`
-                      ? "Saving..."
-                      : status === "delivered_pending_balance"
-                        ? "Delivered / collected"
-                        : status.replace(/_/g, " ")}
+                    {busy === "status:processing" ? "Saving..." : "Mark processing"}
                   </button>
-                ))}
+                ) : null}
+                {canMoveTo(sale.status, "dispatched") ? (
+                  <button
+                    onClick={() => patchStatus("dispatched")}
+                    disabled={busy !== null}
+                    className="rounded-2xl border border-white/10 px-4 py-3 text-sm text-slate-200 transition hover:border-white/20 disabled:opacity-60"
+                  >
+                    {busy === "status:dispatched" ? "Saving..." : "Mark dispatched"}
+                  </button>
+                ) : null}
+                {canMoveTo(sale.status, "delivered_pending_balance") ? (
+                  <button
+                    onClick={() => patchStatus("delivered_pending_balance")}
+                    disabled={busy !== null}
+                    className="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm font-semibold text-amber-100 disabled:opacity-60"
+                  >
+                    {busy === "status:delivered_pending_balance" ? "Saving..." : "Mark delivered / collected"}
+                  </button>
+                ) : null}
+                {canMoveTo(sale.status, "rejected") ? (
+                  <button
+                    onClick={() => patchStatus("rejected")}
+                    disabled={busy !== null}
+                    className="rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm font-semibold text-rose-100 disabled:opacity-60"
+                  >
+                    {busy === "status:rejected" ? "Saving..." : "Reject sale"}
+                  </button>
+                ) : null}
+                {canMoveTo(sale.status, "cancelled") ? (
+                  <button
+                    onClick={() => patchStatus("cancelled")}
+                    disabled={busy !== null}
+                    className="rounded-2xl border border-white/10 px-4 py-3 text-sm text-slate-200 transition hover:border-white/20 disabled:opacity-60"
+                  >
+                    {busy === "status:cancelled" ? "Saving..." : "Cancel sale"}
+                  </button>
+                ) : null}
               </div>
-              <button
-                onClick={completeSale}
-                disabled={busy !== null}
-                className="rounded-2xl bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-950 disabled:opacity-60"
-              >
-                {busy === "complete" ? "Completing..." : "Mark completed"}
-              </button>
+              {sale.status === "delivered_pending_balance" && sale.balance <= 0 ? (
+                <button
+                  onClick={completeSale}
+                  disabled={busy !== null}
+                  className="rounded-2xl bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-950 disabled:opacity-60"
+                >
+                  {busy === "complete" ? "Completing..." : "Mark completed"}
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
