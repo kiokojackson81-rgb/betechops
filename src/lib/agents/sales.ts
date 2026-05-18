@@ -1549,7 +1549,16 @@ export async function updateAgentSaleStatus(
       });
       if (!sale) throw new Error("Agent sale not found.");
 
-      const transitionError = getAgentSaleTransitionError(sale.status, status);
+      const currentStatus = normalizeAgentSaleStatus(sale.status);
+      const nextStatus = normalizeAgentSaleStatus(status);
+      const isInPlacePaymentUpdate =
+        currentStatus === nextStatus &&
+        !terminalAgentSaleStatuses.has(currentStatus) &&
+        (typeof amountPaid === "number" || mpesaReference !== undefined);
+
+      const transitionError = isInPlacePaymentUpdate
+        ? null
+        : getAgentSaleTransitionError(sale.status, status);
       if (transitionError) throw new Error(transitionError);
 
       const nextAmountPaid =
