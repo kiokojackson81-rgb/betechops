@@ -25,7 +25,7 @@ export default async function AgentWithdrawalsPage({ useRootPaths = false }: Age
 
   const profile = dashboard.profile;
   const eligibleCommission = dashboard.commissions
-    .filter((item) => ["approved", "paid"].includes(String(item.status || "").toLowerCase()))
+    .filter((item) => !["cancelled"].includes(String(item.status || "").toLowerCase()))
     .reduce((sum, item) => sum + Number(item.commissionAmt ?? 0), 0);
   const reservedPayouts = dashboard.payouts
     .filter((item) => !["rejected", "cancelled"].includes(String(item.status || "").toLowerCase()))

@@ -484,14 +484,14 @@ export async function getAdminAgentPayoutQueueData(filters: {
     .map((payout) => {
       const agent = agentMap.get(payout.agentId);
       const agentCommissions = commissions.filter((item) => item.agentId === payout.agentId);
-      const paidCommission = agentCommissions
-        .filter((item) => String(item.status).toLowerCase() === "paid")
+      const eligibleCommission = agentCommissions
+        .filter((item) => !["cancelled"].includes(String(item.status).toLowerCase()))
         .reduce((sum, item) => sum + Number(item.commissionAmt ?? 0), 0);
       const reservedPayouts = payouts
         .filter((item) => item.agentId === payout.agentId)
         .filter((item) => !["rejected", "cancelled"].includes(String(item.status).toLowerCase()))
         .reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
-      const availableBalance = Math.max(0, paidCommission - reservedPayouts);
+      const availableBalance = Math.max(0, eligibleCommission - reservedPayouts);
 
       return {
         id: payout.id,
@@ -506,7 +506,7 @@ export async function getAdminAgentPayoutQueueData(filters: {
         method: payout.method || "MPESA",
         reference: payout.reference || "",
         status: String(payout.status),
-        eligibleCommission: paidCommission,
+        eligibleCommission,
         availableBalance,
         createdAt: payout.createdAt,
       };
