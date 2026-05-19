@@ -97,7 +97,6 @@ export default async function AgentSalesPage({ useRootPaths = false }: AgentSale
           <div className="mt-6 space-y-4">
             {sales.length ? sales.map((sale) => {
               const status = getAgentSaleStatusMeta(sale.status);
-              const commissionTitle = sale.status === "completed" ? "Earned commission" : "Potential commission";
               return (
                 <article key={sale.id} className="rounded-[26px] border border-[#ece1d9] bg-[#fffaf5] p-5">
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
@@ -124,7 +123,7 @@ export default async function AgentSalesPage({ useRootPaths = false }: AgentSale
                       <p className="text-sm text-slate-500">{status.note}</p>
                     </div>
                     <div className="min-w-[260px] rounded-[24px] border border-[#f1b81d]/25 bg-[#fff3cf] p-4">
-                      <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">{commissionTitle}</div>
+                      <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">{sale.commissionLabel}</div>
                       <div className="mt-3 text-3xl font-black tracking-tight text-[#210505]">{money(sale.commissionAmount)}</div>
                       <div className="mt-2 inline-flex rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#7a0000]">
                         {sale.commissionBadge}

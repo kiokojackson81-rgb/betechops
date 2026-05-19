@@ -239,6 +239,7 @@ type AgentSaleCommission = Prisma.AgentCommissionGetPayload<{
 type AgentPayoutStatusRow = {
   amount: number | null;
   status: string | null;
+  createdAt?: Date;
 };
 
 type AgentSaleRecordLite = Prisma.AgentSaleGetPayload<{
@@ -277,24 +278,59 @@ function getCommissionForSale(
   return commissionsBySaleId.get(saleId) ?? null;
 }
 
+function amountsMatch(a: number, b: number) {
+  return Math.abs(a - b) <= 0.0001;
+}
+
 function applyPaidPayoutsToSaleCommissions(
   commissions: AgentSaleCommission[],
   payouts: AgentPayoutStatusRow[],
 ) {
-  let remainingPaid = payouts
+  const paidPayouts = payouts
     .filter((row) => String(row.status || "").toLowerCase() === "paid")
-    .reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
+    .map((row) => ({ amount: Number(row.amount ?? 0), createdAt: row.createdAt ?? new Date(0) }))
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
-  const paidIds = new Set<string>();
-  for (const commission of commissions
-    .filter((row) => String(row.status || "").toLowerCase() !== "cancelled")
+  const activeCommissions = commissions
+    .filter((row) => !["cancelled", "rejected"].includes(String(row.status || "").toLowerCase()))
     .slice()
-    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())) {
-    const amount = Number(commission.commissionAmt ?? 0);
-    if (remainingPaid <= 0) break;
-    if (amount <= remainingPaid + 0.0001) {
-      paidIds.add(commission.id);
-      remainingPaid -= amount;
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const approvedPool = activeCommissions.filter((row) => String(row.status || "").toLowerCase() === "approved");
+  const paidIds = new Set<string>(
+    activeCommissions
+      .filter((row) => String(row.status || "").toLowerCase() === "paid")
+      .map((row) => row.id),
+  );
+
+  const existingPaidAmount = activeCommissions
+    .filter((row) => String(row.status || "").toLowerCase() === "paid")
+    .reduce((sum, row) => sum + Number(row.commissionAmt ?? 0), 0);
+  const totalPaidPayoutAmount = paidPayouts.reduce((sum, row) => sum + row.amount, 0);
+  let remainingBudget = Math.max(0, totalPaidPayoutAmount - existingPaidAmount);
+
+  const takeExact = (targetAmount: number) => {
+    const index = approvedPool.findIndex(
+      (row) => !paidIds.has(row.id) && amountsMatch(Number(row.commissionAmt ?? 0), targetAmount),
+    );
+    if (index === -1) return false;
+    const row = approvedPool[index];
+    paidIds.add(row.id);
+    remainingBudget = Math.max(0, remainingBudget - Number(row.commissionAmt ?? 0));
+    approvedPool.splice(index, 1);
+    return true;
+  };
+
+  for (const payout of paidPayouts) {
+    if (remainingBudget <= 0) break;
+    takeExact(payout.amount);
+  }
+
+  for (const row of approvedPool) {
+    const amount = Number(row.commissionAmt ?? 0);
+    if (remainingBudget <= 0) break;
+    if (amount <= remainingBudget + 0.0001) {
+      paidIds.add(row.id);
+      remainingBudget = Math.max(0, remainingBudget - amount);
     }
   }
 
@@ -987,24 +1023,60 @@ export function presentAgentSale(
   sale: AgentSaleRecord,
   commission: AgentSaleCommission | null,
 ) {
-  const isCompleted = String(sale.status).toLowerCase() === "completed";
+  const normalizedSaleStatus = String(sale.status).toLowerCase();
+  const isCompleted = normalizedSaleStatus === "completed";
+  const isRejected = normalizedSaleStatus === "rejected";
+  const isCancelled = normalizedSaleStatus === "cancelled";
   const balance = roundAmount(Math.max(Number(sale.totalAmount ?? 0) - Number(sale.amountPaid ?? 0), 0));
   const derivedCommissionAmount = isCompleted
     ? roundAmount(Number(commission?.commissionAmt ?? sale.potentialCommission ?? calculatePotentialCommission(Number(sale.totalAmount ?? 0))))
     : roundAmount(Number(sale.potentialCommission ?? calculatePotentialCommission(Number(sale.totalAmount ?? 0))));
   const commissionStatus = isCompleted
     ? String(commission?.status || "pending").toLowerCase()
-    : "locked";
-  const commissionLabel = isCompleted ? "Earned commission" : "Potential commission";
+    : isRejected
+      ? "rejected"
+      : isCancelled
+        ? "cancelled"
+        : "locked";
+  const commissionLabel = isCompleted
+    ? commissionStatus === "paid"
+      ? "Paid commission"
+      : "Earned commission"
+    : isRejected
+      ? "Commission rejected"
+      : isCancelled
+        ? "Commission cancelled"
+        : "Potential commission";
   const commissionBadge = isCompleted
     ? commissionStatus === "paid"
-      ? "Paid"
+      ? "Paid out"
       : commissionStatus === "approved"
-        ? "Approved"
-        : commissionStatus === "cancelled"
-          ? "Cancelled"
-          : "Pending payout"
-    : "Locked until completed";
+        ? "Ready to withdraw"
+        : commissionStatus === "held"
+          ? "On hold"
+          : commissionStatus === "cancelled" || commissionStatus === "rejected"
+            ? "Not payable"
+            : "Pending payout"
+    : isRejected
+      ? "Rejected"
+      : isCancelled
+        ? "Cancelled"
+        : "Locked until completed";
+  const commissionExplanation = isCompleted
+    ? commissionStatus === "paid"
+      ? "This commission has already been paid out and moved to withdrawn earnings."
+      : commissionStatus === "approved"
+        ? "Commission is approved and available for withdrawal."
+        : commissionStatus === "held"
+          ? "This commission is on hold and cannot be withdrawn yet."
+          : commissionStatus === "cancelled" || commissionStatus === "rejected"
+            ? "This commission is no longer payable."
+            : "Commission has been earned and is now waiting for payout processing."
+    : isRejected
+      ? "The sale was rejected during review, so this commission is not payable."
+      : isCancelled
+        ? "The sale was cancelled, so this commission is not payable."
+        : "Commission will be earned after full payment and delivery confirmation.";
   return {
     id: sale.id,
     agentId: sale.agentId,
@@ -1035,9 +1107,7 @@ export function presentAgentSale(
     commissionStatus,
     commissionLabel,
     commissionBadge,
-    commissionExplanation: isCompleted
-      ? "Commission has been earned and is now waiting for payout processing."
-      : "Commission will be earned after full payment and delivery confirmation.",
+    commissionExplanation,
     receiptId: sale.receiptId,
     receiptNumber: ensureReceiptNumber(sale),
     completedAt: sale.completedAt,
@@ -1212,7 +1282,7 @@ export async function getAgentSalesDashboardSummary(agentId: string) {
     const amount = Number(sale.commissionAmount ?? 0);
     const status = String(sale.commissionStatus || "").toLowerCase();
     if (status === "paid") summary.paidCommission += amount;
-    else if (status !== "cancelled") summary.earnedCommission += amount;
+    else if (status === "approved") summary.earnedCommission += amount;
   }
 
   summary.potentialCommission = roundAmount(summary.potentialCommission);

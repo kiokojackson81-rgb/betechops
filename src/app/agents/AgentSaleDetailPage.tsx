@@ -122,7 +122,7 @@ export default async function AgentSaleDetailPage({ id, useRootPaths = false }: 
           <div className="space-y-6">
             <div className="rounded-[28px] border border-[#f1b81d]/30 bg-[#fff3cf] p-6 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
               <div className="text-xs font-semibold uppercase tracking-[0.24em] text-[#7a0000]">
-                {sale.status === "completed" ? "Earned commission" : "Potential commission"}
+                {sale.commissionLabel}
               </div>
               <div className="mt-3 text-4xl font-black tracking-tight text-[#210505]">{money(sale.commissionAmount)}</div>
               <div className="mt-3 inline-flex rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#7a0000]">

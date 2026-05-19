@@ -3,6 +3,7 @@ import { requireAdminSession } from "@/lib/agents/auth";
 import { prisma } from "@/lib/prisma";
 
 const allowedStatuses = new Set(["pending", "approved", "paid", "rejected", "held"]);
+const amountsMatch = (a: number, b: number) => Math.abs(a - b) <= 0.0001;
 
 export async function PATCH(
   req: NextRequest,
@@ -60,7 +61,19 @@ export async function PATCH(
       });
 
       let remaining = Number(updatedPayout.amount ?? 0);
+      const exactMatch = commissions.find((commission) =>
+        amountsMatch(Number(commission.commissionAmt ?? 0), remaining),
+      );
+      if (exactMatch) {
+        await tx.agentCommission.update({
+          where: { id: exactMatch.id },
+          data: { status: "paid" },
+        });
+        remaining = Math.max(0, remaining - Number(exactMatch.commissionAmt ?? 0));
+      }
+
       for (const commission of commissions) {
+        if (exactMatch?.id === commission.id) continue;
         const amount = Number(commission.commissionAmt ?? 0);
         if (remaining <= 0) break;
         if (amount <= remaining + 0.0001) {

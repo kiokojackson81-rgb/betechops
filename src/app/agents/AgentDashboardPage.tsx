@@ -23,6 +23,15 @@ const statCards = [
   { key: "paidCommission", label: "Withdrawn Earnings", tone: "bg-[#edf9f0] text-[#136233]", money: true },
 ] as const;
 
+function getSaleCommissionHeadline(sale: { status: string; commissionStatus: string }) {
+  const saleStatus = String(sale.status || "").toLowerCase();
+  const commissionStatus = String(sale.commissionStatus || "").toLowerCase();
+  if (commissionStatus === "paid") return "Paid";
+  if (saleStatus === "rejected" || saleStatus === "cancelled") return "Rejected";
+  if (saleStatus === "completed") return "Earned";
+  return "Potential";
+}
+
 function formatActivity(action: string, description: string | null) {
   const normalized = String(action || "").toLowerCase();
   if (normalized === "status_approved") return "✅ Your agent account was approved";
@@ -248,7 +257,7 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
                       </div>
                       <div className="text-right">
                         <div className="text-sm font-semibold text-[#210505]">
-                          {sale.status === "completed" ? "Earned" : "Potential"}
+                          {getSaleCommissionHeadline(sale)}
                         </div>
                         <div className="text-sm text-[#7a0000]">{money(sale.commissionAmount)}</div>
                       </div>

@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
   }
 
   const eligibleCommission = commissions
-    .filter((row) => !["cancelled"].includes(String(row.status).toLowerCase()))
+    .filter((row) => String(row.status).toLowerCase() === "approved")
     .reduce((sum, row) => sum + Number(row.commissionAmt ?? 0), 0);
   const reservedPayouts = payouts
     .filter((row) => !["rejected", "cancelled"].includes(String(row.status).toLowerCase()))

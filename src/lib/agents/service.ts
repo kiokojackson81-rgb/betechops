@@ -300,17 +300,23 @@ function commissionQueueFromStatus(status: string) {
   return "pending";
 }
 
+function amountsMatch(a: number, b: number) {
+  return Math.abs(a - b) <= 0.0001;
+}
+
 function applyPaidPayoutsToCommissions<T extends { id: string; agentId: string; commissionAmt: number | null; status: string | null; createdAt: Date }>(
   commissions: T[],
-  payouts: Array<{ agentId: string; amount: number | null; status: string | null }>,
+  payouts: Array<{ agentId: string; amount: number | null; status: string | null; createdAt?: Date }>,
 ) {
-  const payoutsByAgent = new Map<string, number>();
+  const payoutsByAgent = new Map<string, Array<{ amount: number; createdAt: Date }>>();
   for (const payout of payouts) {
     if (String(payout.status || "").toLowerCase() !== "paid") continue;
-    payoutsByAgent.set(
-      payout.agentId,
-      (payoutsByAgent.get(payout.agentId) ?? 0) + Number(payout.amount ?? 0),
-    );
+    const bucket = payoutsByAgent.get(payout.agentId) ?? [];
+    bucket.push({
+      amount: Number(payout.amount ?? 0),
+      createdAt: payout.createdAt ?? new Date(0),
+    });
+    payoutsByAgent.set(payout.agentId, bucket);
   }
 
   const commissionsByAgent = new Map<string, T[]>();
@@ -322,16 +328,50 @@ function applyPaidPayoutsToCommissions<T extends { id: string; agentId: string; 
 
   const paidIds = new Set<string>();
   for (const [agentId, items] of commissionsByAgent.entries()) {
-    let remaining = payoutsByAgent.get(agentId) ?? 0;
-    for (const commission of items
-      .filter((row) => String(row.status || "").toLowerCase() !== "cancelled")
+    const paidPayouts = (payoutsByAgent.get(agentId) ?? []).sort(
+      (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+    );
+    if (!paidPayouts.length) continue;
+
+    const activeItems = items
+      .filter((row) => !["cancelled", "rejected"].includes(String(row.status || "").toLowerCase()))
       .slice()
-      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())) {
-      const amount = Number(commission.commissionAmt ?? 0);
-      if (remaining <= 0) break;
-      if (amount <= remaining + 0.0001) {
-        paidIds.add(commission.id);
-        remaining -= amount;
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+    const approvedPool = activeItems.filter((row) => String(row.status || "").toLowerCase() === "approved");
+    for (const row of activeItems.filter((item) => String(item.status || "").toLowerCase() === "paid")) {
+      paidIds.add(row.id);
+    }
+
+    const alreadyPaidAmount = activeItems
+      .filter((row) => String(row.status || "").toLowerCase() === "paid")
+      .reduce((sum, row) => sum + Number(row.commissionAmt ?? 0), 0);
+    const totalPaidPayoutAmount = paidPayouts.reduce((sum, row) => sum + row.amount, 0);
+    let remainingBudget = Math.max(0, totalPaidPayoutAmount - alreadyPaidAmount);
+
+    const takeExact = (targetAmount: number) => {
+      const index = approvedPool.findIndex(
+        (row) => !paidIds.has(row.id) && amountsMatch(Number(row.commissionAmt ?? 0), targetAmount),
+      );
+      if (index === -1) return false;
+      const row = approvedPool[index];
+      paidIds.add(row.id);
+      remainingBudget = Math.max(0, remainingBudget - Number(row.commissionAmt ?? 0));
+      approvedPool.splice(index, 1);
+      return true;
+    };
+
+    for (const payout of paidPayouts) {
+      if (remainingBudget <= 0) break;
+      takeExact(payout.amount);
+    }
+
+    for (const row of approvedPool) {
+      const amount = Number(row.commissionAmt ?? 0);
+      if (remainingBudget <= 0) break;
+      if (amount <= remainingBudget + 0.0001) {
+        paidIds.add(row.id);
+        remainingBudget = Math.max(0, remainingBudget - amount);
       }
     }
   }
@@ -539,7 +579,7 @@ export async function getAdminAgentPayoutQueueData(filters: {
       const agent = agentMap.get(payout.agentId);
       const agentCommissions = commissions.filter((item) => item.agentId === payout.agentId);
       const eligibleCommission = agentCommissions
-        .filter((item) => !["cancelled"].includes(String(item.status).toLowerCase()))
+        .filter((item) => String(item.status).toLowerCase() === "approved")
         .reduce((sum, item) => sum + Number(item.commissionAmt ?? 0), 0);
       const reservedPayouts = payouts
         .filter((item) => item.agentId === payout.agentId)
