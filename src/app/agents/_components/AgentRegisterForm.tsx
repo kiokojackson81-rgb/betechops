@@ -74,11 +74,11 @@ export default function AgentRegisterForm({ useRootPaths = false }: AgentRegiste
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
       <div className="space-y-2">
         <p className="text-xs font-black uppercase tracking-[0.28em] text-[#7a0000]">Affiliate signup</p>
-        <h1 className="text-4xl font-black tracking-tight text-slate-950">Create Your Agent Account</h1>
-        <p className="text-base leading-8 text-slate-600">
+        <h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Create Your Agent Account</h1>
+        <p className="text-base leading-7 text-slate-600 sm:leading-8">
           Fill in your details to join the Betech Solar Agents Program.
         </p>
       </div>
@@ -90,7 +90,7 @@ export default function AgentRegisterForm({ useRootPaths = false }: AgentRegiste
         <div className="rounded-2xl border border-[#f2b20f]/30 bg-[#fff7e8] px-4 py-3 text-sm text-[#7a0000]">{success}</div>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <label className="text-sm font-semibold text-slate-700">First Name</label>
           <input
@@ -111,7 +111,7 @@ export default function AgentRegisterForm({ useRootPaths = false }: AgentRegiste
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <label className="text-sm font-semibold text-slate-700">Email Address</label>
           <input
@@ -147,7 +147,7 @@ export default function AgentRegisterForm({ useRootPaths = false }: AgentRegiste
         />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div className="space-y-2">
           <label className="text-sm font-semibold text-slate-700">Country</label>
           <select
@@ -207,7 +207,7 @@ export default function AgentRegisterForm({ useRootPaths = false }: AgentRegiste
       <button
         type="submit"
         disabled={busy}
-        className="h-14 w-full rounded-2xl bg-[linear-gradient(135deg,#7a0000_0%,#9a1010_100%)] px-4 text-base font-bold text-white shadow-[0_18px_40px_rgba(122,0,0,0.18)] transition hover:-translate-y-0.5 hover:shadow-[0_24px_50px_rgba(122,0,0,0.24)] disabled:cursor-not-allowed disabled:opacity-60"
+        className="h-14 w-full rounded-2xl bg-[linear-gradient(135deg,#7a0000_0%,#9a1010_100%)] px-4 text-base font-bold text-white shadow-[0_18px_40px_rgba(122,0,0,0.18)] transition active:scale-[0.99] hover:-translate-y-0.5 hover:shadow-[0_24px_50px_rgba(122,0,0,0.24)] disabled:cursor-not-allowed disabled:opacity-60"
       >
         {busy ? "Creating Account..." : "Create Agent Account"}
       </button>

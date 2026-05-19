@@ -53,14 +53,14 @@ export default async function AgentLoginPage({ useRootPaths = false }: AgentLogi
   }
 
   return (
-    <div className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(242,178,15,0.20),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(122,0,0,0.12),transparent_26%),linear-gradient(180deg,#fffdf9_0%,#fff5ea_100%)] px-4 py-6 text-slate-950 sm:px-6 lg:px-8 lg:py-10">
+    <div className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(242,178,15,0.20),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(122,0,0,0.12),transparent_26%),linear-gradient(180deg,#fffdf9_0%,#fff5ea_100%)] px-4 py-4 text-slate-950 sm:px-6 sm:py-6 lg:px-8 lg:py-10">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-5 flex items-center justify-between sm:mb-6">
           <Link href={agentPath("/", useRootPaths)} className="flex items-center gap-3">
             <div className="overflow-hidden rounded-2xl border border-[#7a0000]/10 bg-white shadow-[0_14px_28px_rgba(122,0,0,0.10)]">
               <Image src="/agents/betech-logo-crop.png" alt="Betech Solar Solutions" width={56} height={56} className="h-12 w-12 object-contain" />
             </div>
-            <div className="leading-tight">
+            <div className="hidden leading-tight sm:block">
               <div className="text-sm font-black uppercase tracking-[0.18em] text-[#7a0000]">Betech Agents</div>
               <div className="text-xs text-slate-500">Solar sales network</div>
             </div>
@@ -73,24 +73,24 @@ export default async function AgentLoginPage({ useRootPaths = false }: AgentLogi
           </Link>
         </div>
 
-        <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-stretch">
+        <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr] lg:items-stretch lg:gap-8">
           <div className="order-2 space-y-6 lg:order-1">
-            <div className="rounded-[2rem] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#fff9ef_0%,#ffffff_100%)] p-7 shadow-[0_28px_70px_rgba(122,0,0,0.10)]">
+            <div className="rounded-[2rem] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#fff9ef_0%,#ffffff_100%)] p-5 shadow-[0_28px_70px_rgba(122,0,0,0.10)] sm:p-7">
               <div className="inline-flex rounded-full border border-[#f2b20f]/30 bg-[#fff3d8] px-4 py-2 text-xs font-black uppercase tracking-[0.24em] text-[#7a0000]">
                 BETECH AGENTS
               </div>
-              <h1 className="mt-6 max-w-2xl text-4xl font-black leading-tight text-slate-950 md:text-5xl">
+              <h1 className="mt-5 max-w-2xl text-3xl font-black leading-tight text-slate-950 sm:text-4xl md:text-5xl">
                 Earn commission by referring solar customers across Kenya.
               </h1>
-              <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-600">
+              <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg sm:leading-8">
                 Share Betech Solar products, submit customer orders, and earn 6% commission after successful delivery and payment.
               </p>
 
-              <div className="mt-8 grid gap-4 sm:grid-cols-2">
+              <div className="mt-6 grid gap-3 sm:mt-8 sm:gap-4 sm:grid-cols-2">
                 {productHighlights.map((item) => (
                   <div
                     key={item.title}
-                    className={`rounded-[1.6rem] border p-5 shadow-[0_16px_34px_rgba(15,23,42,0.06)] transition duration-300 hover:-translate-y-1 ${
+                    className={`rounded-[1.6rem] border p-4 shadow-[0_16px_34px_rgba(15,23,42,0.06)] transition duration-300 hover:-translate-y-1 sm:p-5 ${
                       item.tone === "gold"
                         ? "border-[#f2b20f]/25 bg-[linear-gradient(180deg,#fff5de_0%,#fffdfa_100%)]"
                         : "border-[#7a0000]/12 bg-[linear-gradient(180deg,#fff8f5_0%,#ffffff_100%)]"
@@ -101,13 +101,13 @@ export default async function AgentLoginPage({ useRootPaths = false }: AgentLogi
                     }`}>
                       Opportunity
                     </div>
-                    <div className="mt-4 text-2xl font-black text-slate-950">{item.title}</div>
+                    <div className="mt-4 text-xl font-black text-slate-950 sm:text-2xl">{item.title}</div>
                     <div className="mt-2 text-sm leading-7 text-slate-600">{item.copy}</div>
                   </div>
                 ))}
               </div>
 
-              <div className="mt-8 grid gap-4 sm:grid-cols-4">
+              <div className="mt-6 grid grid-cols-2 gap-3 sm:mt-8 sm:gap-4 sm:grid-cols-4">
                 {trustPoints.map((item) => {
                   const Icon = item.icon;
                   return (
@@ -122,8 +122,8 @@ export default async function AgentLoginPage({ useRootPaths = false }: AgentLogi
               </div>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-[1.05fr_0.95fr]">
-              <div className="rounded-[2rem] border border-[#7a0000]/10 bg-white p-5 shadow-[0_24px_50px_rgba(15,23,42,0.06)]">
+            <div className="grid gap-5 md:grid-cols-[1.05fr_0.95fr] md:gap-6">
+              <div className="rounded-[2rem] border border-[#7a0000]/10 bg-white p-4 shadow-[0_24px_50px_rgba(15,23,42,0.06)] sm:p-5">
                 <div className="mb-4 flex items-center justify-between">
                   <div>
                     <div className="text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">6% commission on completed sales</div>
@@ -133,7 +133,7 @@ export default async function AgentLoginPage({ useRootPaths = false }: AgentLogi
                     <CircleDollarSign className="h-8 w-8" />
                   </div>
                 </div>
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-3 sm:gap-4 sm:grid-cols-2">
                   {[
                     "/agents/product-solar-kit-generated.png",
                     "/agents/product-battery-generated.png",
@@ -149,11 +149,11 @@ export default async function AgentLoginPage({ useRootPaths = false }: AgentLogi
                 </div>
               </div>
 
-              <div className="rounded-[2rem] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#7a0000_0%,#4d0000_100%)] p-6 text-white shadow-[0_30px_70px_rgba(122,0,0,0.18)]">
+              <div className="rounded-[2rem] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#7a0000_0%,#4d0000_100%)] p-5 text-white shadow-[0_30px_70px_rgba(122,0,0,0.18)] sm:p-6">
                 <div className="inline-flex rounded-full bg-white/10 px-4 py-2 text-xs font-black uppercase tracking-[0.22em] text-[#ffd761]">
                   Why agents stay
                 </div>
-                <h2 className="mt-5 text-3xl font-black leading-tight">Track every customer order from one dashboard.</h2>
+                <h2 className="mt-5 text-2xl font-black leading-tight sm:text-3xl">Track every customer order from one dashboard.</h2>
                 <p className="mt-4 text-base leading-8 text-white/75">
                   Submit referrals, monitor commissions, and build a real income stream with a trusted solar brand.
                 </p>
@@ -174,7 +174,7 @@ export default async function AgentLoginPage({ useRootPaths = false }: AgentLogi
           </div>
 
           <div className="order-1 lg:order-2">
-            <div className="rounded-[2rem] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#fff9ef_0%,#ffffff_100%)] p-6 shadow-[0_32px_80px_rgba(122,0,0,0.12)] sm:p-8">
+            <div className="rounded-[2rem] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#fff9ef_0%,#ffffff_100%)] p-5 shadow-[0_32px_80px_rgba(122,0,0,0.12)] sm:p-8">
               <AgentLoginForm useRootPaths={useRootPaths} />
             </div>
           </div>

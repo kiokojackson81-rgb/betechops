@@ -68,27 +68,27 @@ export default async function AgentSalesPage({ useRootPaths = false }: AgentSale
         paidCommission: dashboard.salesSummary.paidCommission,
       }}
     >
-      <div className="space-y-6">
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="space-y-5 sm:space-y-6">
+        <section className="grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
           {cards.map((card) => (
-            <div key={card.label} className="rounded-[26px] border border-[#e4d4cb] bg-white p-5 shadow-[0_12px_40px_rgba(64,32,18,0.06)]">
+            <div key={card.label} className="rounded-[26px] border border-[#e4d4cb] bg-white p-4 shadow-[0_12px_40px_rgba(64,32,18,0.06)] sm:p-5">
               <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">{card.label}</div>
-              <div className="mt-3 text-3xl font-black tracking-tight text-[#210505]">{card.value}</div>
+              <div className="mt-3 text-2xl font-black tracking-tight text-[#210505] sm:text-3xl">{card.value}</div>
               <p className="mt-2 text-sm text-slate-600">{card.note}</p>
             </div>
           ))}
         </section>
 
-        <section className="rounded-[28px] border border-[#e4d4cb] bg-white p-6 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
+        <section className="rounded-[28px] border border-[#e4d4cb] bg-white p-4 shadow-[0_12px_40px_rgba(64,32,18,0.08)] sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">Sales list</p>
-              <h2 className="mt-2 text-2xl font-black tracking-tight text-[#210505]">Every submitted customer</h2>
+              <h2 className="mt-2 text-xl font-black tracking-tight text-[#210505] sm:text-2xl">Every submitted customer</h2>
               <p className="mt-2 text-sm text-slate-600">Potential commission appears immediately but remains locked until the sale is fully complete.</p>
             </div>
             <Link
               href={agentPath("/sales/new", useRootPaths)}
-              className="rounded-2xl bg-[#7a0000] px-5 py-3 text-sm font-semibold text-white transition hover:brightness-95"
+              className="w-full rounded-2xl bg-[#7a0000] px-5 py-3 text-center text-sm font-semibold text-white transition hover:brightness-95 sm:w-auto"
             >
               Submit new sale
             </Link>
@@ -98,11 +98,11 @@ export default async function AgentSalesPage({ useRootPaths = false }: AgentSale
             {sales.length ? sales.map((sale) => {
               const status = getAgentSaleStatusMeta(sale.status);
               return (
-                <article key={sale.id} className="rounded-[26px] border border-[#ece1d9] bg-[#fffaf5] p-5">
+                <article key={sale.id} className="rounded-[26px] border border-[#ece1d9] bg-[#fffaf5] p-4 sm:p-5">
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                     <div className="space-y-3">
                       <div className="flex flex-wrap items-center gap-3">
-                        <h3 className="text-xl font-semibold text-[#210505]">{sale.customerName}</h3>
+                        <h3 className="text-lg font-semibold text-[#210505] sm:text-xl">{sale.customerName}</h3>
                         <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${statusBadge(sale.status)}`}>
                           {status.label}
                         </span>
@@ -110,7 +110,7 @@ export default async function AgentSalesPage({ useRootPaths = false }: AgentSale
                           {sale.paymentType.replace(/_/g, " ")}
                         </span>
                       </div>
-                      <div className="grid gap-2 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-4">
+                      <div className="grid gap-2 text-sm text-slate-600 sm:grid-cols-2 xl:grid-cols-4">
                         <div>Phone: {sale.customerPhone}</div>
                         <div>Location: {sale.customerLocation}</div>
                         <div>Product: {sale.productName}</div>
@@ -122,9 +122,9 @@ export default async function AgentSalesPage({ useRootPaths = false }: AgentSale
                       </div>
                       <p className="text-sm text-slate-500">{status.note}</p>
                     </div>
-                    <div className="min-w-[260px] rounded-[24px] border border-[#f1b81d]/25 bg-[#fff3cf] p-4">
+                    <div className="w-full rounded-[24px] border border-[#f1b81d]/25 bg-[#fff3cf] p-4 xl:min-w-[260px] xl:max-w-[320px]">
                       <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">{sale.commissionLabel}</div>
-                      <div className="mt-3 text-3xl font-black tracking-tight text-[#210505]">{money(sale.commissionAmount)}</div>
+                      <div className="mt-3 text-2xl font-black tracking-tight text-[#210505] sm:text-3xl">{money(sale.commissionAmount)}</div>
                       <div className="mt-2 inline-flex rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#7a0000]">
                         {sale.commissionBadge}
                       </div>
@@ -132,17 +132,17 @@ export default async function AgentSalesPage({ useRootPaths = false }: AgentSale
                     </div>
                   </div>
 
-                  <div className="mt-5 flex flex-wrap gap-3">
+                  <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                     <Link
                       href={agentPath(`/sales/${sale.id}`, useRootPaths)}
-                      className="inline-flex items-center gap-2 rounded-2xl border border-[#d6c0b5] bg-white px-4 py-2 text-sm font-semibold text-[#7a0000] transition hover:-translate-y-0.5"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[#d6c0b5] bg-white px-4 py-2 text-sm font-semibold text-[#7a0000] transition hover:-translate-y-0.5 sm:w-auto"
                     >
                       View sale <ArrowRight className="h-4 w-4" />
                     </Link>
                     {sale.receiptId ? (
                       <Link
                         href={`/receipts/${sale.receiptId}`}
-                        className="inline-flex items-center gap-2 rounded-2xl border border-[#d6c0b5] bg-white px-4 py-2 text-sm text-slate-700 transition hover:-translate-y-0.5"
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[#d6c0b5] bg-white px-4 py-2 text-sm text-slate-700 transition hover:-translate-y-0.5 sm:w-auto"
                       >
                         <ReceiptText className="h-4 w-4" />
                         Open receipt

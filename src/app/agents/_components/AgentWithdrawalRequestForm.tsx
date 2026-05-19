@@ -60,10 +60,10 @@ export default function AgentWithdrawalRequestForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5 rounded-[28px] border border-[#e4d4cb] bg-white p-6 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
+    <form onSubmit={handleSubmit} className="space-y-5 rounded-[28px] border border-[#e4d4cb] bg-white p-4 shadow-[0_12px_40px_rgba(64,32,18,0.08)] sm:p-6">
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.26em] text-[#7a0000]">Withdraw commission</p>
-        <h2 className="mt-2 text-2xl font-black tracking-tight text-[#210505]">Request M-Pesa withdrawal</h2>
+        <h2 className="mt-2 text-xl font-black tracking-tight text-[#210505] sm:text-2xl">Request M-Pesa withdrawal</h2>
         <p className="mt-2 text-sm text-slate-600">
           Once your commission is available, request withdrawal here and the BETECH team will process it to your saved M-Pesa number.
         </p>
@@ -76,7 +76,7 @@ export default function AgentWithdrawalRequestForm({
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-3 sm:gap-4 md:grid-cols-3">
         <div className="rounded-[22px] border border-[#f1b81d]/30 bg-[#fff3cf] p-4">
           <div className="text-xs uppercase tracking-[0.18em] text-[#7a0000]">Available now</div>
           <div className="mt-2 text-2xl font-black text-[#210505]">{money(availableAmount)}</div>
@@ -127,7 +127,7 @@ export default function AgentWithdrawalRequestForm({
       <button
         type="submit"
         disabled={busy || availableAmount <= 0 || !phone}
-        className="rounded-2xl bg-[#7a0000] px-5 py-3 text-sm font-semibold text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+        className="w-full rounded-2xl bg-[#7a0000] px-5 py-3 text-sm font-semibold text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
       >
         {busy ? "Submitting..." : "Request Withdrawal"}
       </button>

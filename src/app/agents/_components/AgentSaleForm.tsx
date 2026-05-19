@@ -230,9 +230,9 @@ export default function AgentSaleForm({ useRootPaths = false, stats }: AgentSale
   }
 
   return (
-    <div className="mx-auto max-w-[1100px] space-y-6">
+    <div className="mx-auto max-w-[1100px] space-y-5 sm:space-y-6">
       <div className="space-y-2">
-        <h1 className="text-3xl font-black tracking-tight text-slate-950 md:text-4xl">Submit Customer Order</h1>
+        <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl md:text-4xl">Submit Customer Order</h1>
         <p className="text-base text-slate-600">Capture customer details and submit the order for processing.</p>
       </div>
 
@@ -250,7 +250,7 @@ export default function AgentSaleForm({ useRootPaths = false, stats }: AgentSale
             <p className="mt-1 text-sm text-slate-500">Enter the customer information correctly.</p>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <label className="space-y-2">
               <span className="text-sm font-semibold text-slate-700">Customer Name</span>
               <input
@@ -312,8 +312,8 @@ export default function AgentSaleForm({ useRootPaths = false, stats }: AgentSale
             <h2 className="text-xl font-black text-slate-950">Product Details</h2>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="space-y-2 md:col-span-2">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="space-y-2 sm:col-span-2">
               <span className="text-sm font-semibold text-slate-700">Product Name</span>
               <input
                 required
@@ -353,7 +353,7 @@ export default function AgentSaleForm({ useRootPaths = false, stats }: AgentSale
                 className={inputClassName()}
               />
             </label>
-            <label className="space-y-2 md:col-span-2">
+            <label className="space-y-2 sm:col-span-2">
               <span className="text-sm font-semibold text-slate-700">Total Amount</span>
               <input
                 type="number"
@@ -373,7 +373,7 @@ export default function AgentSaleForm({ useRootPaths = false, stats }: AgentSale
             <h2 className="text-xl font-black text-slate-950">How Will The Customer Pay?</h2>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {paymentOptions.map((option) => {
               const Icon = option.icon;
               const active = form.paymentOption === option.value;
@@ -408,7 +408,7 @@ export default function AgentSaleForm({ useRootPaths = false, stats }: AgentSale
           </div>
 
           {shouldShowPaymentFields ? (
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <label className="space-y-2">
                 <span className="text-sm font-semibold text-slate-700">Amount Paid</span>
                 <input
@@ -451,7 +451,7 @@ export default function AgentSaleForm({ useRootPaths = false, stats }: AgentSale
             </div>
             <Link
               href={agentPath("/sales", useRootPaths)}
-              className="inline-flex items-center gap-2 text-sm font-semibold text-[#7a0000] hover:text-[#560000]"
+              className="inline-flex items-center justify-center gap-2 text-sm font-semibold text-[#7a0000] hover:text-[#560000] md:justify-start"
             >
               View my sales
               <ArrowRight className="h-4 w-4" />

@@ -38,7 +38,7 @@ export default async function AgentRegisterPage({ useRootPaths = false }: AgentR
   }
 
   return (
-    <div className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(242,178,15,0.18),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(122,0,0,0.12),transparent_26%),linear-gradient(180deg,#fffdf9_0%,#fff5ea_100%)] px-4 py-6 text-slate-950 sm:px-6 lg:px-8 lg:py-10">
+    <div className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(242,178,15,0.18),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(122,0,0,0.12),transparent_26%),linear-gradient(180deg,#fffdf9_0%,#fff5ea_100%)] px-4 py-4 text-slate-950 sm:px-6 sm:py-6 lg:px-8 lg:py-10">
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -58,12 +58,12 @@ export default async function AgentRegisterPage({ useRootPaths = false }: AgentR
         }}
       />
       <div className="mx-auto max-w-7xl">
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-5 flex items-center justify-between sm:mb-6">
           <Link href={agentPath("/", useRootPaths)} className="flex items-center gap-3">
             <div className="overflow-hidden rounded-2xl border border-[#7a0000]/10 bg-white shadow-[0_14px_28px_rgba(122,0,0,0.10)]">
               <Image src="/agents/betech-logo-crop.png" alt="Betech Solar Solutions" width={56} height={56} className="h-12 w-12 object-contain" />
             </div>
-            <div className="leading-tight">
+            <div className="hidden leading-tight sm:block">
               <div className="text-sm font-black uppercase tracking-[0.18em] text-[#7a0000]">Betech Agents Program</div>
               <div className="text-xs text-slate-500">Solar sales opportunity</div>
             </div>
@@ -76,20 +76,20 @@ export default async function AgentRegisterPage({ useRootPaths = false }: AgentR
           </Link>
         </div>
 
-        <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-stretch">
+        <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr] lg:items-stretch lg:gap-8">
           <div className="order-2 space-y-6 lg:order-1">
-            <div className="rounded-[2rem] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#fff9ef_0%,#ffffff_100%)] p-7 shadow-[0_28px_70px_rgba(122,0,0,0.10)]">
+            <div className="rounded-[2rem] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#fff9ef_0%,#ffffff_100%)] p-5 shadow-[0_28px_70px_rgba(122,0,0,0.10)] sm:p-7">
               <div className="inline-flex rounded-full border border-[#f2b20f]/30 bg-[#fff3d8] px-4 py-2 text-xs font-black uppercase tracking-[0.24em] text-[#7a0000]">
                 BETECH AGENTS PROGRAM
               </div>
-              <h1 className="mt-6 max-w-2xl text-4xl font-black leading-tight text-slate-950 md:text-5xl">
+              <h1 className="mt-5 max-w-2xl text-3xl font-black leading-tight text-slate-950 sm:text-4xl md:text-5xl">
                 Create Your Agent Account & Start Referring Solar Customers
               </h1>
-              <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-600">
+              <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg sm:leading-8">
                 Join for free, refer customers, and earn 6% commission after every successful completed sale.
               </p>
 
-              <div className="mt-8 flex flex-wrap gap-3">
+              <div className="mt-6 flex flex-wrap gap-2.5 sm:mt-8 sm:gap-3">
                 {chips.map((chip) => (
                   <div key={chip} className="rounded-full border border-[#f2b20f]/20 bg-[#fff8eb] px-4 py-2 text-sm font-bold text-[#7a0000] shadow-[0_10px_22px_rgba(15,23,42,0.04)]">
                     {chip}
@@ -97,9 +97,9 @@ export default async function AgentRegisterPage({ useRootPaths = false }: AgentR
                 ))}
               </div>
 
-              <div className="mt-8 rounded-[1.8rem] border border-[#7a0000]/10 bg-white p-5 shadow-[0_18px_40px_rgba(15,23,42,0.05)]">
+              <div className="mt-6 rounded-[1.8rem] border border-[#7a0000]/10 bg-white p-4 shadow-[0_18px_40px_rgba(15,23,42,0.05)] sm:mt-8 sm:p-5">
                 <div className="text-xs font-black uppercase tracking-[0.22em] text-[#7a0000]">Refer → Customer Pays → Betech Delivers → You Earn</div>
-                <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                <div className="mt-4 grid gap-3 sm:gap-4 sm:grid-cols-3">
                   {trustPoints.map((item, index) => {
                     const Icon = item.icon;
                     return (
@@ -118,41 +118,41 @@ export default async function AgentRegisterPage({ useRootPaths = false }: AgentR
               </div>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-[1.05fr_0.95fr]">
-              <div className="rounded-[2rem] border border-[#7a0000]/10 bg-white p-5 shadow-[0_24px_50px_rgba(15,23,42,0.06)]">
+            <div className="grid gap-5 md:grid-cols-[1.05fr_0.95fr] md:gap-6">
+              <div className="rounded-[2rem] border border-[#7a0000]/10 bg-white p-4 shadow-[0_24px_50px_rgba(15,23,42,0.06)] sm:p-5">
                 <div className="mb-4 flex items-center justify-between">
                   <div>
                     <div className="text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">Commission motivation</div>
-                    <div className="mt-2 text-2xl font-black text-slate-950">Sell trusted solar products and build a real income stream.</div>
+                    <div className="mt-2 text-xl font-black text-slate-950 sm:text-2xl">Sell trusted solar products and build a real income stream.</div>
                   </div>
                   <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#7a0000_0%,#9a1111_100%)] text-[#ffd761] shadow-[0_16px_32px_rgba(122,0,0,0.18)]">
                     <CircleDollarSign className="h-8 w-8" />
                   </div>
                 </div>
                 <div className="overflow-hidden rounded-[1.8rem] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#fffdf8_0%,#fff6ee_100%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                  <div className="max-h-[34rem] overflow-hidden">
+                  <div className="max-h-[30rem] overflow-hidden sm:max-h-[34rem]">
                     <div className="register-product-flow flex flex-col gap-4">
                       {[...registerProducts, ...registerProducts].map((product, index) => {
                         const commission = Math.round(product.price * 0.06);
                         return (
                           <div
                             key={`${product.name}-${index}`}
-                            className="rounded-[1.5rem] border border-[#7a0000]/8 bg-white p-4 shadow-[0_14px_28px_rgba(15,23,42,0.05)]"
+                            className="rounded-[1.5rem] border border-[#7a0000]/8 bg-white p-3 shadow-[0_14px_28px_rgba(15,23,42,0.05)] sm:p-4"
                           >
-                            <div className="flex gap-4">
+                            <div className="flex gap-3 sm:gap-4">
                               <div className="overflow-hidden rounded-[1.2rem] border border-[#7a0000]/10 bg-[#fcfaf7] p-2 shadow-[0_10px_22px_rgba(15,23,42,0.04)]">
-                                <div className="relative h-28 w-24">
+                                <div className="relative h-24 w-20 sm:h-28 sm:w-24">
                                   <Image src={product.image} alt={product.name} fill className="object-contain" />
                                 </div>
                               </div>
                               <div className="min-w-0 flex-1">
                                 <div className="text-sm font-black uppercase tracking-[0.16em] text-[#7a0000]">Earn 6% Commission</div>
-                                <h3 className="mt-2 text-lg font-black leading-tight text-slate-950">{product.name}</h3>
+                                <h3 className="mt-2 text-base font-black leading-tight text-slate-950 sm:text-lg">{product.name}</h3>
                                 <div className="mt-3 text-sm text-slate-500">Product Price</div>
                                 <div className="mt-1 text-xl font-black text-slate-950">{formatCurrency(product.price)}</div>
                                 <div className="mt-3 rounded-xl bg-[linear-gradient(135deg,#7a0000_0%,#991010_100%)] px-3 py-3 text-white shadow-[0_12px_24px_rgba(122,0,0,0.16)]">
                                   <div className="text-xs font-black uppercase tracking-[0.18em] text-[#ffd761]">Commission</div>
-                                  <div className="mt-1 text-2xl font-black">{formatCurrency(commission)}</div>
+                                  <div className="mt-1 text-xl font-black sm:text-2xl">{formatCurrency(commission)}</div>
                                 </div>
                               </div>
                             </div>
@@ -164,7 +164,7 @@ export default async function AgentRegisterPage({ useRootPaths = false }: AgentR
                 </div>
               </div>
 
-              <div className="rounded-[2rem] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#7a0000_0%,#4d0000_100%)] p-6 text-white shadow-[0_30px_70px_rgba(122,0,0,0.18)]">
+              <div className="rounded-[2rem] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#7a0000_0%,#4d0000_100%)] p-5 text-white shadow-[0_30px_70px_rgba(122,0,0,0.18)] sm:p-6">
                 <div className="inline-flex rounded-full bg-white/10 px-4 py-2 text-xs font-black uppercase tracking-[0.22em] text-[#ffd761]">
                   Start earning in 3 simple steps
                 </div>
@@ -190,7 +190,7 @@ export default async function AgentRegisterPage({ useRootPaths = false }: AgentR
           </div>
 
           <div className="order-1 lg:order-2">
-            <div className="rounded-[2rem] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#fff9ef_0%,#ffffff_100%)] p-6 shadow-[0_32px_80px_rgba(122,0,0,0.12)] sm:p-8">
+            <div className="rounded-[2rem] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#fff9ef_0%,#ffffff_100%)] p-5 shadow-[0_32px_80px_rgba(122,0,0,0.12)] sm:p-8">
               <AgentRegisterForm useRootPaths={useRootPaths} />
             </div>
           </div>

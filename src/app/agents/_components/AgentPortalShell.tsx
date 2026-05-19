@@ -194,14 +194,14 @@ export default function AgentPortalShell({
         </aside>
 
         <main className="min-w-0">
-          <header className="sticky top-0 z-30 border-b border-[#e4d4cb] bg-[#f7f1eb]/92 px-4 py-4 backdrop-blur md:px-6 lg:px-8">
-            <div className="flex items-start justify-between gap-4">
+          <header className="sticky top-0 z-30 border-b border-[#e4d4cb] bg-[#f7f1eb]/92 px-4 py-3 backdrop-blur md:px-6 lg:px-8">
+            <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">Betech Agents Hub</div>
-                <h1 className="mt-1 text-2xl font-black tracking-tight text-[#210505] md:text-3xl">{title}</h1>
-                <p className="mt-1 max-w-3xl text-sm text-slate-600">{description}</p>
+                <h1 className="mt-1 text-xl font-black tracking-tight text-[#210505] sm:text-2xl md:text-3xl">{title}</h1>
+                <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">{description}</p>
               </div>
-              <div className="flex shrink-0 items-center gap-3">
+              <div className="flex shrink-0 items-center gap-2 sm:gap-3">
                 <div className="hidden rounded-2xl border border-[#d9c6ba] bg-white px-4 py-3 text-right md:block">
                   <div className="text-sm font-semibold text-[#210505]">{agent.displayName}</div>
                   <div className="text-xs uppercase tracking-[0.1em] text-slate-500">
@@ -217,10 +217,37 @@ export default function AgentPortalShell({
                 </button>
               </div>
             </div>
+            <div className="mt-4 grid gap-3 lg:hidden">
+              <div className="rounded-[24px] border border-[#d9c6ba] bg-white px-4 py-4 shadow-[0_10px_28px_rgba(64,32,18,0.05)]">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-[#210505]">{agent.displayName}</div>
+                    <div className="truncate text-xs text-slate-500">{agent.email || "Agent account"}</div>
+                  </div>
+                  <div className="rounded-full bg-[#edf9f0] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#136233]">
+                    {String(agent.status || "").toLowerCase() === "approved" ? "Approved" : agent.status}
+                  </div>
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
+                  <div className="rounded-2xl bg-[#fffaf5] px-3 py-3">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Potential</div>
+                    <div className="mt-1 font-semibold text-[#210505]">{money(stats.potentialCommission)}</div>
+                  </div>
+                  <div className="rounded-2xl bg-[#fffaf5] px-3 py-3">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Ready</div>
+                    <div className="mt-1 font-semibold text-[#210505]">{money(stats.earnedCommission)}</div>
+                  </div>
+                  <div className="rounded-2xl bg-[#fffaf5] px-3 py-3">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Paid</div>
+                    <div className="mt-1 font-semibold text-[#210505]">{money(stats.paidCommission)}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </header>
 
-          <div className="px-4 py-6 md:px-6 lg:px-8 lg:py-8">
-            <div className="mx-auto max-w-7xl pb-24 lg:pb-8">{children}</div>
+          <div className="px-4 py-5 md:px-6 lg:px-8 lg:py-8">
+            <div className="mx-auto max-w-7xl pb-24 md:pb-28 lg:pb-8">{children}</div>
           </div>
         </main>
       </div>
@@ -234,7 +261,7 @@ export default function AgentPortalShell({
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex flex-col items-center justify-center rounded-2xl px-2 py-2 text-[11px] font-semibold transition ${
+                className={`flex min-h-[3.75rem] flex-col items-center justify-center rounded-2xl px-2 py-2 text-[11px] font-semibold transition ${
                   active ? "bg-[#7a0000] text-white" : "text-slate-600"
                 }`}
               >

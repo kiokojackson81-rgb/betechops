@@ -41,11 +41,11 @@ export default function AgentLoginForm({ useRootPaths = false }: AgentLoginFormP
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
       <div className="space-y-2">
         <p className="text-xs font-black uppercase tracking-[0.28em] text-[#7a0000]">Agent Portal</p>
-        <h1 className="text-4xl font-black tracking-tight text-slate-950">Welcome back</h1>
-        <p className="text-base leading-8 text-slate-600">
+        <h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Welcome back</h1>
+        <p className="text-base leading-7 text-slate-600 sm:leading-8">
           Sign in to manage your referrals, track commissions, and submit customer orders.
         </p>
       </div>
@@ -86,7 +86,7 @@ export default function AgentLoginForm({ useRootPaths = false }: AgentLoginFormP
       <button
         type="submit"
         disabled={busy}
-        className="h-14 w-full rounded-2xl bg-[linear-gradient(135deg,#7a0000_0%,#9a1010_100%)] px-4 text-base font-bold text-white shadow-[0_18px_40px_rgba(122,0,0,0.18)] transition hover:-translate-y-0.5 hover:bg-[#7a0000] hover:shadow-[0_24px_50px_rgba(122,0,0,0.24)] disabled:cursor-not-allowed disabled:opacity-60"
+        className="h-14 w-full rounded-2xl bg-[linear-gradient(135deg,#7a0000_0%,#9a1010_100%)] px-4 text-base font-bold text-white shadow-[0_18px_40px_rgba(122,0,0,0.18)] transition active:scale-[0.99] hover:-translate-y-0.5 hover:bg-[#7a0000] hover:shadow-[0_24px_50px_rgba(122,0,0,0.24)] disabled:cursor-not-allowed disabled:opacity-60"
       >
         {busy ? "Signing In..." : "Sign In"}
       </button>
