@@ -312,12 +312,12 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
         }}
       />
       <header className="sticky top-0 z-40 border-b border-[#7a0000]/10 bg-white/90 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
           <Link href={agentPath("/", useRootPaths)} className="flex items-center gap-3">
             <div className="overflow-hidden rounded-2xl border border-[#7a0000]/10 bg-white shadow-[0_16px_30px_rgba(122,0,0,0.12)]">
               <Image src="/agents/betech-logo-crop.png" alt="Betech Solar Solutions" width={58} height={58} className="h-12 w-12 object-contain" />
             </div>
-            <div className="leading-tight">
+            <div className="hidden leading-tight sm:block">
               <div className="text-sm font-black uppercase tracking-[0.18em] text-[#7a0000]">Betech Solar</div>
               <div className="text-xs text-slate-500">Solutions Kenya</div>
             </div>
@@ -333,7 +333,7 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
             <a href="#contact" className="transition hover:text-[#7a0000]">Contact</a>
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <Link
               href={loginHref}
               className="hidden rounded-2xl border border-[#7a0000]/20 px-4 py-3 text-sm font-semibold text-[#7a0000] transition hover:-translate-y-0.5 hover:border-[#7a0000]/40 hover:shadow-[0_16px_30px_rgba(122,0,0,0.10)] sm:inline-flex"
@@ -348,39 +348,62 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
             </Link>
           </div>
         </div>
+        <div className="border-t border-[#7a0000]/8 lg:hidden">
+          <div className="overflow-x-auto px-4 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex min-w-max items-center gap-2">
+              {[
+                ["Home", "#home"],
+                ["How It Works", "#how-it-works"],
+                ["Benefits", "#benefits"],
+                ["Products", "#products"],
+                ["Earnings", "#earnings"],
+                ["FAQs", "#faqs"],
+                ["Contact", "#contact"],
+              ].map(([label, href]) => (
+                <a
+                  key={label}
+                  href={href}
+                  className="rounded-full border border-[#7a0000]/12 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-[0_8px_20px_rgba(15,23,42,0.04)]"
+                >
+                  {label}
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
       </header>
 
       <main>
         <section id="home" className="relative overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(242,178,15,0.18),transparent_28%),radial-gradient(circle_at_80%_20%,rgba(122,0,0,0.10),transparent_24%),linear-gradient(180deg,#fffdf9_0%,#fff7ef_100%)]" />
-          <div className="relative mx-auto grid max-w-7xl gap-12 px-4 pb-14 pt-10 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:pb-20 lg:pt-16">
+          <div className="relative mx-auto grid max-w-7xl gap-8 px-4 pb-12 pt-8 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:gap-12 lg:px-8 lg:pb-20 lg:pt-16">
             <div className="flex flex-col justify-center">
               <div className="inline-flex w-fit rounded-full border border-[#f2b20f]/30 bg-[#fff3d8] px-4 py-2 text-xs font-black uppercase tracking-[0.24em] text-[#7a0000] shadow-[0_12px_24px_rgba(242,178,15,0.18)]">
                 Betech Agents Program
               </div>
-              <h1 className="mt-6 max-w-3xl text-5xl font-black leading-[0.95] tracking-tight text-slate-950 sm:text-6xl lg:text-7xl">
+              <h1 className="mt-5 max-w-3xl text-[2.7rem] font-black leading-[0.95] tracking-tight text-slate-950 sm:text-6xl lg:text-7xl">
                 Earn Money By <span className="text-[#7a0000]">Referring Solar</span> Customers <span className="text-[#f2b20f]">☀️</span>
               </h1>
-              <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">
+              <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg sm:leading-8">
                 Join the Betech Solar Agents Program, refer customers, and earn up to <span className="font-bold text-[#7a0000]">6% commission</span> on successful solar sales across Kenya.
               </p>
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <Link
                   href={registerHref}
-                  className="inline-flex min-h-[3.75rem] items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#11b86a_0%,#0f9d58_55%,#0b7c44_100%)] px-7 py-4 text-base font-bold text-white shadow-[0_20px_50px_rgba(15,157,88,0.30)] transition hover:-translate-y-0.5 hover:shadow-[0_28px_60px_rgba(15,157,88,0.36)]"
+                  className="inline-flex min-h-[3.75rem] w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#11b86a_0%,#0f9d58_55%,#0b7c44_100%)] px-7 py-4 text-base font-bold text-white shadow-[0_20px_50px_rgba(15,157,88,0.30)] transition hover:-translate-y-0.5 hover:shadow-[0_28px_60px_rgba(15,157,88,0.36)] sm:w-auto"
                 >
                   Become an Agent
                 </Link>
                 <Link
                   href={loginHref}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#7a0000]/18 bg-white px-6 py-4 text-base font-bold text-slate-950 shadow-[0_14px_30px_rgba(15,23,42,0.05)] transition hover:-translate-y-0.5 hover:border-[#7a0000]/35"
+                  className="inline-flex min-h-[3.5rem] w-full items-center justify-center gap-2 rounded-2xl border border-[#7a0000]/18 bg-white px-6 py-4 text-base font-bold text-slate-950 shadow-[0_14px_30px_rgba(15,23,42,0.05)] transition hover:-translate-y-0.5 hover:border-[#7a0000]/35 sm:w-auto"
                 >
                   Sign In
                 </Link>
                 <a
                   href="#how-it-works"
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#f2b20f] px-6 py-4 text-base font-bold text-slate-950 shadow-[0_18px_40px_rgba(242,178,15,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_24px_50px_rgba(242,178,15,0.30)]"
+                  className="inline-flex min-h-[3.5rem] w-full items-center justify-center gap-2 rounded-2xl bg-[#f2b20f] px-6 py-4 text-base font-bold text-slate-950 shadow-[0_18px_40px_rgba(242,178,15,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_24px_50px_rgba(242,178,15,0.30)] sm:w-auto"
                 >
                   <PlayCircle className="h-5 w-5" />
                   How It Works
@@ -395,7 +418,7 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
               </div>
             </div>
 
-            <div className="relative">
+            <div className="relative order-first lg:order-none">
               <div className="absolute -left-4 top-10 h-40 w-40 rounded-full bg-[#f2b20f]/20 blur-3xl" />
               <div className="absolute right-0 top-0 h-48 w-48 rounded-full bg-[#7a0000]/14 blur-3xl" />
               <div className="absolute left-2 top-8 z-10 hidden max-w-[13rem] rounded-[24px] border border-white/70 bg-white/92 p-4 shadow-[0_22px_50px_rgba(0,0,0,0.12)] backdrop-blur md:block animate-[float_6s_ease-in-out_infinite]">
@@ -418,8 +441,8 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
                 <div className="mt-2 text-3xl font-black text-[#7a0000]">6%</div>
                 <div className="mt-1 text-sm text-slate-500">On successful sales</div>
               </div>
-              <div className="relative overflow-hidden rounded-[36px] border border-white/70 bg-[linear-gradient(160deg,#fff_0%,#fff7ef_45%,#fff0dc_100%)] p-5 shadow-[0_35px_90px_rgba(122,0,0,0.16)] sm:p-7">
-                <div className="rounded-[30px] border border-white/70 bg-[radial-gradient(circle_at_top,#fffaf1_0%,#fff_44%,#fff6ea_100%)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] sm:p-5">
+              <div className="relative overflow-hidden rounded-[28px] border border-white/70 bg-[linear-gradient(160deg,#fff_0%,#fff7ef_45%,#fff0dc_100%)] p-3 shadow-[0_35px_90px_rgba(122,0,0,0.16)] sm:rounded-[36px] sm:p-5 lg:sm:p-7">
+                <div className="rounded-[22px] border border-white/70 bg-[radial-gradient(circle_at_top,#fffaf1_0%,#fff_44%,#fff6ea_100%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] sm:rounded-[30px] sm:p-4 lg:sm:p-5">
                   <div className="overflow-hidden rounded-[28px] border border-[#7a0000]/10 bg-white shadow-[0_24px_60px_rgba(122,0,0,0.14)]">
                     <Image
                       src="/agents/hero-generated-v2.png"
@@ -430,7 +453,7 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
                       priority
                     />
                   </div>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <div className="mt-3 grid gap-3 sm:mt-4 sm:grid-cols-3">
                     {heroCard("Solar Leads", "Daily", "Homes, farms, and businesses")}
                     {heroCard("Fast Payout", "M-Pesa", "Withdraw when commissions are ready")}
                     {heroCard("Top Agents", "100K+", "Monthly income potential")}
@@ -441,17 +464,17 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
           </div>
         </section>
 
-        <section className="border-y border-[#7a0000]/10 bg-white py-4">
-          <div className="mx-auto flex max-w-7xl items-center gap-4 overflow-hidden px-4 sm:px-6 lg:px-8">
-            <div className="shrink-0 rounded-full bg-[#fff3d8] px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">
+        <section className="border-y border-[#7a0000]/10 bg-white py-3 sm:py-4">
+          <div className="mx-auto flex max-w-7xl items-center gap-3 overflow-hidden px-4 sm:gap-4 sm:px-6 lg:px-8">
+            <div className="shrink-0 rounded-full bg-[#fff3d8] px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000] sm:px-4 sm:text-xs sm:tracking-[0.2em]">
               Recent Agent Activity
             </div>
             <div className="flex min-w-0 flex-1 overflow-hidden">
-              <div className="flex min-w-max animate-[marquee_28s_linear_infinite] gap-3">
+              <div className="flex min-w-max animate-[marquee_28s_linear_infinite] gap-2 sm:gap-3">
                 {[...activityFeed, ...activityFeed].map((item, index) => (
                   <div
                     key={`${item}-${index}`}
-                    className="rounded-full border border-[#7a0000]/10 bg-[#fcfaf7] px-4 py-2 text-sm font-medium text-slate-700 shadow-[0_10px_24px_rgba(15,23,42,0.04)]"
+                    className="rounded-full border border-[#7a0000]/10 bg-[#fcfaf7] px-3 py-2 text-xs font-medium text-slate-700 shadow-[0_10px_24px_rgba(15,23,42,0.04)] sm:px-4 sm:text-sm"
                   >
                     {item}
                   </div>
@@ -520,7 +543,7 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
               </div>
             </div>
 
-            <div className="mt-14 space-y-5 xl:hidden">
+            <div className="mt-10 space-y-4 xl:hidden">
               {steps.map((step, index) => {
                 const Icon = step.icon;
                 const isGold = step.tone === "gold";
@@ -577,8 +600,8 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
               <div className="inline-flex rounded-full border border-[#ffd761]/25 bg-white/10 px-4 py-2 text-xs font-black uppercase tracking-[0.22em] text-[#ffd761]">
                 Income Opportunity
               </div>
-              <h2 className="mt-6 text-4xl font-black leading-tight md:text-5xl">Top Agents Can Earn Over Ksh 100,000+ Monthly 💰</h2>
-              <p className="mt-5 max-w-2xl text-lg leading-8 text-white/80">
+              <h2 className="mt-5 text-3xl font-black leading-tight sm:text-4xl md:text-5xl">Top Agents Can Earn Over Ksh 100,000+ Monthly 💰</h2>
+              <p className="mt-4 max-w-2xl text-base leading-7 text-white/80 sm:text-lg sm:leading-8">
                 Refer more customers, submit real orders, and grow your income with Betech Solar.
               </p>
               <div className="mt-8 grid gap-4 sm:grid-cols-3">
@@ -634,18 +657,18 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
             )}
 
             <div className="mt-12 md:hidden">
-              <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] snap-x snap-mandatory [&::-webkit-scrollbar]:hidden">
                 <div className="flex gap-4 pb-2">
                   {agentProducts.map((product) => {
                     const commission = Math.round(product.price * 0.06);
                     return (
                       <div
                         key={product.name}
-                        className="w-[84vw] max-w-[22rem] shrink-0 rounded-[30px] border border-white/12 bg-[linear-gradient(180deg,#fffaf1_0%,#ffffff_100%)] p-4 text-slate-950 shadow-[0_22px_48px_rgba(0,0,0,0.18)]"
+                        className="w-[86vw] max-w-[22rem] shrink-0 snap-center rounded-[30px] border border-white/12 bg-[linear-gradient(180deg,#fffaf1_0%,#ffffff_100%)] p-4 text-slate-950 shadow-[0_22px_48px_rgba(0,0,0,0.18)]"
                       >
                         <div className="overflow-hidden rounded-[22px] border border-[#7a0000]/10 bg-[#fdf7ef] shadow-[0_14px_28px_rgba(122,0,0,0.10)]">
-                          <div className="relative aspect-[4/3]">
-                            <Image src={product.image} alt={product.name} fill className="object-contain p-2" />
+                          <div className="relative aspect-[3/4]">
+                            <Image src={product.image} alt={product.name} fill className="object-contain p-1" />
                           </div>
                         </div>
                         <div className="mt-4 inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-[#7a0000]">
@@ -681,8 +704,8 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
                       className="w-[19rem] shrink-0 rounded-[30px] border border-white/12 bg-[linear-gradient(180deg,#fffaf1_0%,#ffffff_100%)] p-4 text-slate-950 shadow-[0_22px_48px_rgba(0,0,0,0.18)] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_28px_60px_rgba(0,0,0,0.24)]"
                     >
                       <div className="overflow-hidden rounded-[22px] border border-[#7a0000]/10 bg-[#fdf7ef] shadow-[0_14px_28px_rgba(122,0,0,0.10)]">
-                        <div className="relative aspect-[4/3]">
-                          <Image src={product.image} alt={product.name} fill className="object-contain p-2" />
+                        <div className="relative aspect-[3/4]">
+                          <Image src={product.image} alt={product.name} fill className="object-contain p-1" />
                         </div>
                       </div>
                       <div className="mt-4 inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-[#7a0000]">
@@ -853,7 +876,7 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
         <section className="bg-white py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             {sectionTitle("What Our Agents Say")}
-            <div className="mt-14 grid gap-5 lg:grid-cols-3">
+            <div className="mt-10 grid gap-4 lg:mt-14 lg:grid-cols-3">
               {testimonials.map((testimonial) => (
                 <div
                   key={testimonial.name}
@@ -931,15 +954,15 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
               <div className="inline-flex w-fit rounded-full border border-white/16 bg-white/8 px-4 py-2 text-xs font-black uppercase tracking-[0.22em] text-[#ffd761]">
                 Ready To Start Earning? ⚡
               </div>
-              <h2 className="mt-6 text-4xl font-black tracking-tight text-white md:text-6xl">Join the Betech Solar Agents Program today and start earning from successful solar referrals.</h2>
-              <p className="mt-5 max-w-2xl text-lg leading-8 text-white/80">
+              <h2 className="mt-5 text-3xl font-black tracking-tight text-white sm:text-4xl md:text-6xl">Join the Betech Solar Agents Program today and start earning from successful solar referrals.</h2>
+              <p className="mt-4 max-w-2xl text-base leading-7 text-white/80 sm:text-lg sm:leading-8">
                 Refer customers, let Betech handle confirmation and delivery, then withdraw your commission through M-Pesa.
               </p>
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Link
                   href={registerHref}
-                  className="inline-flex items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#11b86a_0%,#0f9d58_55%,#0b7c44_100%)] px-6 py-4 text-base font-bold text-white shadow-[0_18px_40px_rgba(15,157,88,0.24)] transition hover:-translate-y-0.5"
+                  className="inline-flex min-h-[3.75rem] w-full items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#11b86a_0%,#0f9d58_55%,#0b7c44_100%)] px-6 py-4 text-base font-bold text-white shadow-[0_18px_40px_rgba(15,157,88,0.24)] transition hover:-translate-y-0.5 sm:w-auto"
                 >
                   Become an Agent Now
                 </Link>
@@ -947,7 +970,7 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
                   href="https://wa.me/254722151083"
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center justify-center rounded-2xl border border-white/18 bg-white px-6 py-4 text-base font-bold text-slate-950 transition hover:-translate-y-0.5"
+                  className="inline-flex min-h-[3.75rem] w-full items-center justify-center rounded-2xl border border-white/18 bg-white px-6 py-4 text-base font-bold text-slate-950 transition hover:-translate-y-0.5 sm:w-auto"
                 >
                   Talk To Us On WhatsApp
                 </a>
