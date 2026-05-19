@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { ArrowRight, CircleDollarSign, ClipboardList, CreditCard, PlusCircle, UserRound, Wallet } from "lucide-react";
 import AgentPortalShell from "@/app/agents/_components/AgentPortalShell";
@@ -22,6 +23,29 @@ const statCards = [
   { key: "earnedCommission", label: "Ready To Withdraw", tone: "bg-[#fceeee] text-[#7a0000]", money: true },
   { key: "paidCommission", label: "Withdrawn Earnings", tone: "bg-[#edf9f0] text-[#136233]", money: true },
 ] as const;
+
+const opportunityProducts = [
+  {
+    name: "SRNE 20KW Solar System",
+    price: 950000,
+    image: "/agents/product-solar-kit-generated.png",
+  },
+  {
+    name: "8KW Lithium Battery Kit",
+    price: 350000,
+    image: "/agents/product-battery-generated.png",
+  },
+  {
+    name: "Hybrid Inverter Package",
+    price: 55000,
+    image: "/agents/product-inverter-generated.png",
+  },
+  {
+    name: "Solar Water Pump",
+    price: 25000,
+    image: "/agents/product-water-pump-generated.png",
+  },
+];
 
 function getSaleCommissionHeadline(sale: { status: string; commissionStatus: string }) {
   const saleStatus = String(sale.status || "").toLowerCase();
@@ -109,6 +133,16 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
         paidCommission: dashboard.salesSummary.paidCommission,
       }}
     >
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+            @keyframes agentOpportunityFlow {
+              0% { transform: translateY(0); }
+              100% { transform: translateY(-50%); }
+            }
+          `,
+        }}
+      />
       <div className="space-y-6">
         <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
           <div className="rounded-[30px] bg-[linear-gradient(135deg,#7a0000_0%,#3c0909_100%)] p-7 text-white shadow-[0_20px_60px_rgba(64,10,10,0.28)]">
@@ -151,10 +185,32 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
             <div className="rounded-[28px] border border-[#e4d4cb] bg-white p-5 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
               <div className="flex items-center gap-3 text-[#7a0000]">
                 <Wallet className="h-5 w-5" />
-                <div className="text-sm font-semibold uppercase tracking-[0.18em]">Total Commission Earned So Far</div>
+                <div className="text-sm font-semibold uppercase tracking-[0.18em]">Opportunity</div>
               </div>
-              <div className="mt-3 text-3xl font-black tracking-tight text-[#210505]">{money(totalCommissionEarnedSoFar)}</div>
-              <p className="mt-2 text-sm text-slate-600">This includes commission ready for withdrawal and what has already been paid out.</p>
+              <div className="mt-4 overflow-hidden rounded-[24px] border border-[#f1dfb0] bg-[linear-gradient(180deg,#fffaf0_0%,#fffdf9_100%)]">
+                <div
+                  className="divide-y divide-[#f1e5da]"
+                  style={{
+                    animation: "agentOpportunityFlow 18s linear infinite",
+                  }}
+                >
+                  {[...opportunityProducts, ...opportunityProducts].map((product, index) => {
+                    const commission = Math.round(product.price * 0.06);
+                    return (
+                      <div key={`${product.name}-${index}`} className="flex items-center gap-3 px-3 py-3">
+                        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-[#ead9cd] bg-white p-2">
+                          <Image src={product.image} alt={product.name} width={64} height={64} className="h-full w-full object-contain" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-bold text-[#210505]">{product.name}</div>
+                          <div className="mt-1 text-xs text-slate-500">Earn up to</div>
+                          <div className="text-lg font-black tracking-tight text-[#7a0000]">{money(commission)}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
             <div className="rounded-[28px] border border-[#e4d4cb] bg-white p-5 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
               <div className="flex items-center gap-3 text-[#7a0000]">
