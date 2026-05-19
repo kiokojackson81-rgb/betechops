@@ -18,7 +18,7 @@ const statCards = [
   { key: "pendingSales", label: "Orders Pending", tone: "bg-[#fffaf5] text-slate-700" },
   { key: "processingSales", label: "Orders In Progress", tone: "bg-[#f1f8ff] text-[#174c7a]" },
   { key: "completedSales", label: "Completed Orders", tone: "bg-[#edf9f0] text-[#136233]" },
-  { key: "potentialCommission", label: "Potential Earnings", tone: "bg-[#fff3cf] text-[#5a4300]", money: true },
+  { key: "totalCommissionEarnedSoFar", label: "Total Earned So Far", tone: "bg-[#fff3cf] text-[#5a4300]", money: true },
   { key: "earnedCommission", label: "Ready To Withdraw", tone: "bg-[#fceeee] text-[#7a0000]", money: true },
   { key: "paidCommission", label: "Withdrawn Earnings", tone: "bg-[#edf9f0] text-[#136233]", money: true },
 ] as const;
@@ -53,6 +53,12 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
   const dashboard = await getAgentDashboardData(agentSession.userId);
   if (!dashboard) redirect(agentPath("/register", useRootPaths));
   const status = String(dashboard.profile.status || "").toLowerCase();
+  const totalCommissionEarnedSoFar =
+    Number(dashboard.salesSummary.earnedCommission || 0) + Number(dashboard.salesSummary.paidCommission || 0);
+  const dashboardSummary = {
+    ...dashboard.salesSummary,
+    totalCommissionEarnedSoFar,
+  };
 
   if (status === "pending") {
     return (
@@ -145,10 +151,10 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
             <div className="rounded-[28px] border border-[#e4d4cb] bg-white p-5 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
               <div className="flex items-center gap-3 text-[#7a0000]">
                 <Wallet className="h-5 w-5" />
-                <div className="text-sm font-semibold uppercase tracking-[0.18em]">Potential Earnings</div>
+                <div className="text-sm font-semibold uppercase tracking-[0.18em]">Total Commission Earned So Far</div>
               </div>
-              <div className="mt-3 text-3xl font-black tracking-tight text-[#210505]">{money(dashboard.salesSummary.potentialCommission)}</div>
-              <p className="mt-2 text-sm text-slate-600">Commission from submitted customer orders appears here.</p>
+              <div className="mt-3 text-3xl font-black tracking-tight text-[#210505]">{money(totalCommissionEarnedSoFar)}</div>
+              <p className="mt-2 text-sm text-slate-600">This includes commission ready for withdrawal and what has already been paid out.</p>
             </div>
             <div className="rounded-[28px] border border-[#e4d4cb] bg-white p-5 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
               <div className="flex items-center gap-3 text-[#7a0000]">
@@ -192,7 +198,7 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {statCards.map((item) => {
-            const value = dashboard.salesSummary[item.key];
+            const value = dashboardSummary[item.key];
             return (
               <article
                 key={item.label}
