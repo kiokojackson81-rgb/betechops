@@ -30,16 +30,27 @@ export async function PATCH(
     return NextResponse.json({ error: "Please provide a reason for rejecting this payout request." }, { status: 400 });
   }
 
-  const payout = await prisma.$transaction(async (tx) => {
-    const updatedPayout = await tx.agentPayout.update({
-      where: { id },
-      data: {
-        status,
-        ...(reference !== null ? { reference } : {}),
-      },
-    });
+  const existingPayout = await prisma.agentPayout.findUnique({
+    where: { id },
+    select: { id: true, agentId: true, amount: true },
+  });
 
-    if (status === "paid") {
+  if (!existingPayout) {
+    return NextResponse.json({ error: "Payout request not found." }, { status: 404 });
+  }
+
+  let payout;
+
+  if (status === "paid") {
+    payout = await prisma.$transaction(async (tx) => {
+      const updatedPayout = await tx.agentPayout.update({
+        where: { id },
+        data: {
+          status,
+          ...(reference !== null ? { reference } : {}),
+        },
+      });
+
       const commissions = await tx.agentCommission.findMany({
         where: {
           agentId: updatedPayout.agentId,
@@ -60,42 +71,55 @@ export async function PATCH(
           remaining -= amount;
         }
       }
-    }
 
-    await tx.agentActivityLog.create({
+      return updatedPayout;
+    });
+  } else {
+    payout = await prisma.agentPayout.update({
+      where: { id },
       data: {
-        agentId: updatedPayout.agentId,
+        status,
+        ...(reference !== null ? { reference } : {}),
+      },
+    });
+  }
+
+  try {
+    await prisma.agentActivityLog.create({
+      data: {
+        agentId: payout.agentId,
         action: `payout_${status}`,
         description:
           status === "rejected" && reason
-            ? `Agent payout ${updatedPayout.id} was rejected by admin. Reason: ${reason}`
+            ? `Agent payout ${payout.id} was rejected by admin. Reason: ${reason}`
             : status === "paid" && reference
-              ? `Agent payout ${updatedPayout.id} was marked paid by admin. M-Pesa reference: ${reference}`
-              : `Agent payout ${updatedPayout.id} moved to ${status} by admin.`,
+              ? `Agent payout ${payout.id} was marked paid by admin. M-Pesa reference: ${reference}`
+              : `Agent payout ${payout.id} moved to ${status} by admin.`,
       },
     });
-    try {
-      await tx.agentAuditLog.create({
-        data: {
-          actorUserId,
-          targetAgentId: updatedPayout.agentId,
-          payoutId: updatedPayout.id,
-          eventType: `payout_${status}`,
-          summary: `Payout ${updatedPayout.id} moved to ${status}.`,
-          metadata: {
-            status,
-            amount: updatedPayout.amount,
-            reference,
-            reason,
-          },
-        },
-      });
-    } catch {
-      // enterprise tables may not exist until the manual SQL patch is applied
-    }
+  } catch {
+    // activity logging should not block payout state transitions
+  }
 
-    return updatedPayout;
-  });
+  try {
+    await prisma.agentAuditLog.create({
+      data: {
+        actorUserId,
+        targetAgentId: payout.agentId,
+        payoutId: payout.id,
+        eventType: `payout_${status}`,
+        summary: `Payout ${payout.id} moved to ${status}.`,
+        metadata: {
+          status,
+          amount: payout.amount,
+          reference,
+          reason,
+        },
+      },
+    });
+  } catch {
+    // enterprise tables may not exist until the manual SQL patch is applied
+  }
 
   return NextResponse.json({ ok: true, payout });
 }
