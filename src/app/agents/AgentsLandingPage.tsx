@@ -19,6 +19,7 @@ import {
   Truck,
   Users,
 } from "lucide-react";
+import AgentWhatsAppFloat from "@/app/agents/_components/AgentWhatsAppFloat";
 import AnimatedCount from "@/app/agents/_components/AnimatedCount";
 import { agentPath } from "@/lib/agents/host";
 
@@ -1051,6 +1052,7 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
           </div>
         </section>
       </main>
+      <AgentWhatsAppFloat />
     </div>
   );
 }
