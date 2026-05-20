@@ -71,10 +71,10 @@ export default function AgentWhatsAppFloat() {
 
   return (
     <>
-      <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] right-3 z-[70] sm:bottom-6 sm:right-6">
+      <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+18px)] right-3 z-40 scale-[0.85] sm:bottom-6 sm:right-6 sm:z-[70] sm:scale-100">
         <div className="relative flex flex-col items-end gap-3">
           {expanded ? (
-            <div className="agent-wa-card w-[15.25rem] max-w-[calc(100vw-1.25rem)] rounded-[1.6rem] border border-[#7a0000]/12 bg-[linear-gradient(180deg,#fffaf1_0%,#ffffff_100%)] p-4 text-slate-950 shadow-[0_24px_60px_rgba(15,23,42,0.22)] sm:w-[20rem] sm:max-w-[calc(100vw-2rem)] sm:p-5">
+            <div className="agent-wa-card w-[15.25rem] max-w-[82vw] rounded-[1.6rem] border border-[#7a0000]/12 bg-[linear-gradient(180deg,#fffaf1_0%,#ffffff_100%)] p-4 text-slate-950 shadow-[0_24px_60px_rgba(15,23,42,0.22)] sm:w-[20rem] sm:max-w-[calc(100vw-2rem)] sm:p-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">
