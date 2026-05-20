@@ -16,6 +16,7 @@ export default function AgentWhatsAppFloat() {
   const [expanded, setExpanded] = useState(false);
   const [peek, setPeek] = useState(false);
   const [microIndex, setMicroIndex] = useState(0);
+  const [isVisible, setIsVisible] = useState(true);
 
   const isMobile = useMemo(() => {
     if (typeof window === "undefined") return false;
@@ -58,6 +59,38 @@ export default function AgentWhatsAppFloat() {
     return () => window.removeEventListener("scroll", onScroll);
   }, [isMobile]);
 
+  useEffect(() => {
+    if (!isMobile) {
+      setIsVisible(true);
+      return;
+    }
+
+    let lastY = window.scrollY;
+    let idleTimer = 0;
+
+    const onScroll = () => {
+      const currentY = window.scrollY;
+      const delta = currentY - lastY;
+
+      if (delta > 8) {
+        setIsVisible(false);
+      } else if (delta < -8) {
+        setIsVisible(true);
+      }
+
+      lastY = currentY;
+
+      window.clearTimeout(idleTimer);
+      idleTimer = window.setTimeout(() => setIsVisible(true), 700);
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.clearTimeout(idleTimer);
+    };
+  }, [isMobile]);
+
   const handleJoinClick = () => {
     if (typeof window !== "undefined") {
       const maybeGtag = (window as typeof window & { gtag?: (...args: unknown[]) => void }).gtag;
@@ -71,7 +104,11 @@ export default function AgentWhatsAppFloat() {
 
   return (
     <>
-      <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+18px)] right-3 z-40 scale-[0.85] sm:bottom-6 sm:right-6 sm:z-[70] sm:scale-100">
+      <div
+        className={`fixed bottom-[calc(env(safe-area-inset-bottom)+10px)] right-[10px] z-40 scale-[0.82] transition-all duration-300 sm:bottom-6 sm:right-6 sm:z-[70] sm:scale-100 ${
+          isVisible ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0 pointer-events-none"
+        }`}
+      >
         <div className="relative flex flex-col items-end gap-3">
           {expanded ? (
             <div className="agent-wa-card w-[15.25rem] max-w-[82vw] rounded-[1.6rem] border border-[#7a0000]/12 bg-[linear-gradient(180deg,#fffaf1_0%,#ffffff_100%)] p-4 text-slate-950 shadow-[0_24px_60px_rgba(15,23,42,0.22)] sm:w-[20rem] sm:max-w-[calc(100vw-2rem)] sm:p-5">

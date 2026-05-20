@@ -122,23 +122,87 @@ const activityFeed = [
 ];
 
 const joinAudience = [
-  "WhatsApp Marketers",
-  "Hardware Shops",
-  "Electronics Shops",
-  "Solar Technicians",
-  "Installers",
-  "TikTok/Facebook Creators",
-  "Rural Field Agents",
-  "Existing Betech Customers",
+  {
+    title: "WhatsApp Marketers",
+    copy: "Earn by sharing products through WhatsApp groups, statuses and online communities.",
+    badge: "Fast Growing",
+    icon: MessageCircleMore,
+  },
+  {
+    title: "Hardware Shops",
+    copy: "Help customers order solar products locally and earn commission on every sale.",
+    badge: "High Demand",
+    icon: ShoppingBag,
+  },
+  {
+    title: "Electronics Shops",
+    copy: "Offer trusted solar solutions to your customers without keeping stock.",
+    badge: "Retail Fit",
+    icon: PanelsTopLeft,
+  },
+  {
+    title: "Solar Technicians",
+    copy: "Recommend quality systems during installations and earn extra income.",
+    badge: "Most Popular",
+    icon: ShieldCheck,
+  },
+  {
+    title: "Installers",
+    copy: "Partner with Betech and grow your earnings from customer referrals.",
+    badge: "Trusted Referrals",
+    icon: Truck,
+  },
+  {
+    title: "TikTok/Facebook Creators",
+    copy: "Monetize your audience by promoting trending solar products online.",
+    badge: "Creator Opportunity",
+    icon: Sparkles,
+  },
+  {
+    title: "Rural Field Agents",
+    copy: "Connect rural customers with affordable solar systems and earn commission.",
+    badge: "County Reach",
+    icon: MapPinned,
+  },
+  {
+    title: "Existing Customers",
+    copy: "Refer friends and family after using Betech products and get rewarded.",
+    badge: "Easy Start",
+    icon: BadgeCheck,
+  },
 ];
 
 const kenyaOpportunity = [
-  "High demand for backup power",
-  "Solar water pumps for farms",
-  "Homes need reliable lighting",
-  "Businesses need power security",
-  "Rural areas need affordable energy",
-  "Customers trust local recommendations",
+  {
+    title: "High demand for backup power",
+    copy: "Frequent power outages continue to increase demand for solar backup systems.",
+    icon: House,
+  },
+  {
+    title: "Solar water pumps for farms",
+    copy: "Farmers are switching to solar pumping to reduce fuel and electricity costs.",
+    icon: Truck,
+  },
+  {
+    title: "Homes need reliable lighting",
+    copy: "Families are investing in solar systems for lighting, TV, internet and charging.",
+    icon: PanelsTopLeft,
+  },
+  {
+    title: "Businesses need power security",
+    copy: "Shops and biashara centers need stable backup power to avoid downtime and losses.",
+    icon: ShoppingBag,
+  },
+  {
+    title: "Rural areas need affordable energy",
+    copy: "Many rural homes and biashara centers need reliable and affordable power solutions.",
+    icon: MapPinned,
+  },
+  {
+    title: "Customers trust local recommendations",
+    copy: "People buy faster when products are recommended by someone they know and trust.",
+    icon: Users,
+  },
 ];
 
 const brands = [
@@ -397,7 +461,7 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
         }}
       />
       <header className="sticky top-0 z-40 border-b border-[#7a0000]/10 bg-white/90 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2.5 sm:px-6 lg:px-8">
           <Link href={agentPath("/", useRootPaths)} className="flex items-center gap-3">
             <div className="overflow-hidden rounded-2xl border border-[#7a0000]/10 bg-white shadow-[0_16px_30px_rgba(122,0,0,0.12)]">
               <Image src="/agents/betech-logo-crop.png" alt="Betech Solar Solutions" width={58} height={58} className="h-12 w-12 object-contain" />
@@ -429,28 +493,33 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
               href={registerHref}
               className="inline-flex rounded-2xl bg-[#7a0000] px-5 py-3 text-sm font-semibold text-white shadow-[0_18px_35px_rgba(122,0,0,0.20)] transition hover:-translate-y-0.5 hover:bg-[#5f0000] hover:shadow-[0_24px_45px_rgba(122,0,0,0.25)]"
             >
-              Become an Agent
+              Start Earning
             </Link>
           </div>
         </div>
         <div className="border-t border-[#7a0000]/8 lg:hidden">
-          <div className="overflow-x-auto px-4 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="overflow-x-auto px-4 py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <div className="flex min-w-max items-center gap-2">
               {[
-                ["Home", "#home"],
-                ["How It Works", "#how-it-works"],
-                ["Benefits", "#benefits"],
-                ["Products", "#products"],
-                ["Earnings", "#start-earning"],
-                ["FAQs", "#faqs"],
-                ["Contact", "#contact"],
-              ].map(([label, href]) => (
+                { label: "Home", href: "#home", active: true },
+                { label: "How It Works", href: "#how-it-works", active: false },
+                { label: "Benefits", href: "#benefits", active: false },
+                { label: "Products", href: "#products", active: false },
+                { label: "Earnings", href: "#start-earning", active: false },
+                { label: "FAQs", href: "#faqs", active: false },
+                { label: "Contact", href: "#contact", active: false },
+              ].map(({ label, href, active }) => (
                 <a
                   key={label}
                   href={href}
-                  className="rounded-full border border-[#7a0000]/12 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-[0_8px_20px_rgba(15,23,42,0.04)]"
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-[11px] font-semibold shadow-[0_8px_20px_rgba(15,23,42,0.04)] ${
+                    active
+                      ? "border-[#7a0000]/18 bg-[#fff3d8] text-[#7a0000]"
+                      : "border-[#7a0000]/12 bg-white text-slate-700"
+                  }`}
                 >
                   {label}
+                  {active ? <span className="h-1.5 w-1.5 rounded-full bg-[#f2b20f]" /> : null}
                 </a>
               ))}
             </div>
@@ -461,24 +530,24 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
       <main>
         <section id="home" className="relative overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(242,178,15,0.18),transparent_28%),radial-gradient(circle_at_80%_20%,rgba(122,0,0,0.10),transparent_24%),linear-gradient(180deg,#fffdf9_0%,#fff7ef_100%)]" />
-          <div className="relative mx-auto grid max-w-7xl gap-8 px-4 pb-12 pt-8 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:gap-12 lg:px-8 lg:pb-20 lg:pt-16">
+          <div className="relative mx-auto grid max-w-7xl gap-6 px-4 pb-10 pt-6 sm:px-6 sm:pb-12 sm:pt-8 lg:grid-cols-[1.05fr_0.95fr] lg:gap-12 lg:px-8 lg:pb-20 lg:pt-16">
             <div className="flex flex-col justify-center">
               <div className="inline-flex w-fit rounded-full border border-[#f2b20f]/30 bg-[#fff3d8] px-4 py-2 text-xs font-black uppercase tracking-[0.24em] text-[#7a0000] shadow-[0_12px_24px_rgba(242,178,15,0.18)]">
                 Betech Agents Program
               </div>
-              <h1 className="mt-5 max-w-3xl text-[2.7rem] font-black leading-[0.95] tracking-tight text-slate-950 sm:text-6xl lg:text-7xl">
+              <h1 className="mt-4 max-w-3xl text-[2.45rem] font-black leading-[0.95] tracking-tight text-slate-950 sm:text-6xl lg:text-7xl">
                 Earn Money By <span className="text-[#7a0000]">Referring Solar</span> Customers <span className="text-[#f2b20f]">☀️</span>
               </h1>
-              <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg sm:leading-8">
-                Join the Betech Solar Agents Program, refer customers, and earn up to <span className="font-bold text-[#7a0000]">6% commission</span> on successful solar sales across Kenya.
+              <p className="mt-4 max-w-2xl text-[15px] leading-[1.55] text-slate-600 sm:text-lg sm:leading-8">
+                Help customers access trusted solar products and earn commission directly to M-Pesa. Refer customers, submit orders, and earn from every successful sale.
               </p>
 
-              <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <Link
                   href={registerHref}
                   className="inline-flex min-h-[3.75rem] w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#11b86a_0%,#0f9d58_55%,#0b7c44_100%)] px-7 py-4 text-base font-bold text-white shadow-[0_20px_50px_rgba(15,157,88,0.30)] transition hover:-translate-y-0.5 hover:shadow-[0_28px_60px_rgba(15,157,88,0.36)] sm:w-auto"
                 >
-                  Become an Agent
+                  Start Earning With Betech
                 </Link>
                 <Link
                   href={loginHref}
@@ -498,7 +567,7 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
                 Join free, refer products, and start unlocking 6% commission across Kenya.
               </p>
 
-              <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="mt-7 grid grid-cols-2 gap-3 xl:grid-cols-4">
                 {trustPoint("100% Free To Join", "No fees")}
                 {trustPoint("No Targets", "Refer at your pace")}
                 {trustPoint("Earn 6% Commission", "On successful sales")}
@@ -578,7 +647,7 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
 
         <section
           id="how-it-works"
-          className="bg-[radial-gradient(circle_at_top,rgba(242,178,15,0.10),transparent_24%),linear-gradient(180deg,#fffefb_0%,#fff7ef_100%)] py-20"
+          className="bg-[radial-gradient(circle_at_top,rgba(242,178,15,0.10),transparent_24%),linear-gradient(180deg,#fffefb_0%,#fff7ef_100%)] py-14 sm:py-20"
         >
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             {sectionTitle("How It Works", "Refer customers, submit orders, and earn commission in four simple steps.")}
@@ -686,7 +755,7 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
           </div>
         </section>
 
-        <section className="bg-[linear-gradient(135deg,#4a0000_0%,#7a0000_45%,#a51e0f_100%)] py-18 text-white">
+        <section className="bg-[linear-gradient(135deg,#4a0000_0%,#7a0000_45%,#a51e0f_100%)] py-14 text-white sm:py-18">
           <div className="mx-auto grid max-w-7xl gap-8 rounded-[38px] px-4 sm:px-6 lg:grid-cols-[1.15fr_0.85fr] lg:px-8">
             <div className="rounded-[34px] border border-white/10 bg-white/7 p-8 shadow-[0_30px_70px_rgba(0,0,0,0.16)] backdrop-blur">
               <div className="inline-flex rounded-full border border-[#ffd761]/25 bg-white/10 px-4 py-2 text-xs font-black uppercase tracking-[0.22em] text-[#ffd761]">
@@ -744,7 +813,7 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
           <ProductCommissionSection registerHref={registerHref} />
         </div>
 
-        <section id="benefits" className="bg-white py-20">
+        <section id="benefits" className="bg-white py-14 sm:py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             {sectionTitle("Why Agents Choose Betech Solar")}
             <div className="mt-14 grid gap-y-8 md:grid-cols-2 xl:grid-cols-6 xl:gap-x-0">
@@ -770,45 +839,47 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
           </div>
         </section>
 
-        <section className="bg-[#fffaf3] py-20">
+        <section className="bg-[#fffaf3] py-14 sm:py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             {sectionTitle("Who Can Join?", "Anyone with a network can refer customers and earn.")}
             <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {joinAudience.map((item, index) => (
+              {joinAudience.map((item, index) => {
+                const Icon = item.icon;
+                return (
                 <div
-                  key={item}
+                  key={item.title}
                   className="rounded-[26px] border border-[#7a0000]/10 bg-white p-5 shadow-[0_18px_40px_rgba(15,23,42,0.06)] transition duration-300 hover:-translate-y-1"
                 >
                   <div className={`flex h-12 w-12 items-center justify-center rounded-2xl font-black ${index % 2 === 0 ? "bg-[#fff3d8] text-[#7a0000]" : "bg-[#7a0000] text-white"}`}>
-                    {index + 1}
+                    <Icon className="h-6 w-6" />
                   </div>
-                  <div className="mt-4 text-xl font-black text-slate-950">{item}</div>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">Perfect for people who already influence customer buying decisions in their area.</p>
+                  <div className="mt-4 inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000]">
+                    {item.badge}
+                  </div>
+                  <div className="mt-3 text-xl font-black text-slate-950">{item.title}</div>
+                  <p className="mt-2 text-[15px] leading-[1.55] text-slate-600">{item.copy}</p>
                 </div>
-              ))}
+              )})}
             </div>
           </div>
         </section>
 
-        <section className="bg-white py-20">
+        <section className="bg-white py-14 sm:py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            {sectionTitle("Why Solar Referrals Work Across Kenya 🇰🇪")}
+            {sectionTitle("Why Thousands of Kenyans Are Joining Solar Referrals 🇰🇪")}
             <div className="mt-14 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {kenyaOpportunity.map((item, index) => {
-                const icons = [House, PanelsTopLeft, ShoppingBag, ShieldCheck, Truck, Users];
-                const Icon = icons[index] ?? BadgeCheck;
+                const Icon = item.icon;
                 return (
                   <div
-                    key={item}
+                    key={item.title}
                     className="rounded-[28px] border border-[#7a0000]/10 bg-[#fcfaf7] p-6 shadow-[0_16px_34px_rgba(15,23,42,0.05)] transition duration-300 hover:-translate-y-1"
                   >
                     <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${index % 2 === 0 ? "bg-[#fff3d8] text-[#7a0000]" : "bg-[#7a0000] text-white"}`}>
                       <Icon className="h-7 w-7" />
                     </div>
-                    <div className="mt-4 text-2xl font-black text-slate-950">{item}</div>
-                    <p className="mt-3 text-sm leading-7 text-slate-600">
-                      Local referrals work because customers trust people who understand the needs of their home, farm, or business.
-                    </p>
+                    <div className="mt-4 text-2xl font-black text-slate-950">{item.title}</div>
+                    <p className="mt-3 text-[15px] leading-[1.55] text-slate-600">{item.copy}</p>
                   </div>
                 );
               })}
@@ -816,7 +887,7 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
           </div>
         </section>
 
-        <section id="products" className="bg-[#fffaf3] py-20">
+        <section id="products" className="bg-[#fffaf3] py-14 sm:py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             {sectionTitle("Trusted Solar Brands We Deal With", "We deal with reliable solar products trusted by homes, farms, and businesses across Kenya.")}
             <div className="mt-8 flex flex-wrap justify-center gap-3">
@@ -848,21 +919,21 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
           </div>
         </section>
 
-        <section className="bg-[linear-gradient(135deg,#520000_0%,#7a0000_50%,#3d0000_100%)] py-16 text-white">
-          <div className="mx-auto grid max-w-7xl gap-4 px-4 sm:grid-cols-2 sm:px-6 lg:grid-cols-4 lg:px-8">
+        <section className="bg-[linear-gradient(135deg,#520000_0%,#7a0000_50%,#3d0000_100%)] py-14 text-white sm:py-16">
+          <div className="mx-auto grid max-w-7xl grid-cols-2 gap-4 px-4 sm:grid-cols-2 sm:px-6 lg:grid-cols-4 lg:px-8">
             <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 text-center shadow-[0_20px_40px_rgba(0,0,0,0.15)]">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[22px] bg-white/10 text-[#ffd761]">
                 <Users className="h-8 w-8" />
               </div>
               <div className="mt-5 text-4xl font-black"><AnimatedCount value={2500} suffix="+" /></div>
-              <div className="mt-2 text-sm font-semibold uppercase tracking-[0.18em] text-white/75">Customers Served</div>
+              <div className="mt-2 text-sm font-semibold uppercase tracking-[0.18em] text-white/75">Happy Customers</div>
             </div>
             <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 text-center shadow-[0_20px_40px_rgba(0,0,0,0.15)]">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[22px] bg-white/10 text-[#ffd761]">
                 <BadgeCheck className="h-8 w-8" />
               </div>
               <div className="mt-5 text-4xl font-black"><AnimatedCount value={120} suffix="+" /></div>
-              <div className="mt-2 text-sm font-semibold uppercase tracking-[0.18em] text-white/75">Active Agents</div>
+              <div className="mt-2 text-sm font-semibold uppercase tracking-[0.18em] text-white/75">Referral Partners</div>
             </div>
             <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 text-center shadow-[0_20px_40px_rgba(0,0,0,0.15)]">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[22px] bg-white/10 text-[#ffd761]">
@@ -881,7 +952,29 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
           </div>
         </section>
 
-        <section className="bg-white py-20">
+        <section className="bg-[#fffaf3] py-14 sm:py-16">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            {sectionTitle("Estimate Your Monthly Earnings", "See how referrals can build real monthly commission.")}
+            <div className="mt-10 grid gap-4 md:grid-cols-3">
+              {[
+                { label: "1 kit / month", value: "Ksh 5,400", note: "A simple start for a new agent." },
+                { label: "5 kits / month", value: "Ksh 27,000", note: "Steady side income from active referrals." },
+                { label: "10 kits / month", value: "Ksh 54,000", note: "Strong monthly growth from a serious network." },
+              ].map((item, index) => (
+                <div
+                  key={item.label}
+                  className={`rounded-[28px] border p-6 shadow-[0_16px_34px_rgba(15,23,42,0.05)] ${index === 1 ? "border-[#f2b20f]/30 bg-[linear-gradient(180deg,#fff6df_0%,#ffffff_100%)]" : "border-[#7a0000]/10 bg-white"}`}
+                >
+                  <div className="text-sm font-black uppercase tracking-[0.18em] text-[#7a0000]">{item.label}</div>
+                  <div className="mt-4 text-4xl font-black text-slate-950">{item.value}</div>
+                  <p className="mt-3 text-[15px] leading-[1.55] text-slate-600">{item.note}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="bg-white py-14 sm:py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             {sectionTitle("What Our Agents Say")}
             <div className="mt-10 grid gap-4 lg:mt-14 lg:grid-cols-3">
@@ -906,30 +999,45 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
                 </div>
               ))}
             </div>
+            <div className="mt-8 grid gap-4 md:grid-cols-2">
+              <div className="rounded-[28px] border border-[#0f9d58]/12 bg-[linear-gradient(180deg,#effcf4_0%,#ffffff_100%)] p-6 shadow-[0_16px_34px_rgba(15,23,42,0.05)]">
+                <div className="text-sm font-black uppercase tracking-[0.18em] text-[#0f9d58]">M-Pesa Payout Proof</div>
+                <div className="mt-4 text-3xl font-black text-slate-950">Ksh 12,000 paid out</div>
+                <p className="mt-3 text-[15px] leading-[1.55] text-slate-600">Agents receive approved commissions through M-Pesa once successful sales are completed and confirmed.</p>
+              </div>
+              <div className="rounded-[28px] border border-[#7a0000]/10 bg-[#fffaf3] p-6 shadow-[0_16px_34px_rgba(15,23,42,0.05)]">
+                <div className="text-sm font-black uppercase tracking-[0.18em] text-[#7a0000]">Referral Success</div>
+                <div className="mt-4 text-3xl font-black text-slate-950">Track every order</div>
+                <p className="mt-3 text-[15px] leading-[1.55] text-slate-600">From customer order to delivery and payout, agents can follow their progress inside one dashboard.</p>
+              </div>
+            </div>
           </div>
         </section>
 
-        <section className="bg-[#fffaf3] py-20">
+        <section className="bg-[#fffaf3] py-14 sm:py-20">
           <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
-            {sectionTitle("See How Betech Agents Earn", "Watch how agents refer customers, submit orders, and withdraw commissions.")}
+            {sectionTitle("Start Earning In 4 Simple Steps", "Learn how agents across Kenya earn commission by referring customers to Betech Solar Solutions.")}
             <div className="mt-14 overflow-hidden rounded-[36px] border border-[#7a0000]/10 bg-[linear-gradient(135deg,#5c0000_0%,#7a0000_45%,#2c0000_100%)] p-6 shadow-[0_28px_65px_rgba(122,0,0,0.16)]">
               <div className="grid gap-6 md:grid-cols-[1.05fr_0.95fr]">
                 <div className="rounded-[28px] border border-white/10 bg-white/6 p-8 text-white">
                   <div className="inline-flex rounded-full border border-white/16 bg-white/10 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-[#ffd761]">
-                    Video Coming Soon
+                    How It Works
                   </div>
                   <h3 className="mt-6 text-3xl font-black">A quick look at how agents turn customer referrals into M-Pesa payouts.</h3>
                   <p className="mt-4 text-base leading-8 text-white/75">
-                    We’ll add a short explainer video here showing how simple it is to refer customers, submit orders, and grow your solar income.
+                    Share product leads, let customers order, allow Betech to deliver, then receive your commission through M-Pesa.
                   </p>
                 </div>
                 <div className="flex min-h-[18rem] items-center justify-center rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.16),transparent_30%),linear-gradient(135deg,#ffe2a7_0%,#f2b20f_40%,#7a0000_100%)] p-8 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.24)]">
-                  <div className="text-center">
-                    <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-white/20 shadow-[0_20px_40px_rgba(0,0,0,0.18)] backdrop-blur">
-                      <PlayCircle className="h-14 w-14" />
-                    </div>
-                    <div className="mt-5 text-2xl font-black">Watch The Agent Story</div>
-                    <div className="mt-2 text-sm uppercase tracking-[0.16em] text-white/80">Referral • Delivery • Commission • Withdraw</div>
+                  <div className="w-full space-y-3">
+                    {["Share Product", "Customer Orders", "Betech Delivers", "Commission Sent to M-Pesa"].map((item, index) => (
+                      <div key={item} className="flex items-center gap-3 rounded-2xl border border-white/14 bg-white/10 px-4 py-3 backdrop-blur">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/18 text-sm font-black text-[#ffd761]">
+                          {index + 1}
+                        </div>
+                        <div className="text-base font-bold text-white">{item}</div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -937,7 +1045,7 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
           </div>
         </section>
 
-        <section id="faqs" className="bg-[#fffaf3] py-20">
+        <section id="faqs" className="bg-[#fffaf3] py-14 sm:py-20">
           <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
             {sectionTitle("Frequently Asked Questions")}
             <div className="mt-14 space-y-4">
@@ -956,7 +1064,7 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
           </div>
         </section>
 
-        <section id="contact" className="bg-[linear-gradient(135deg,#3b0000_0%,#7a0000_45%,#150000_100%)] py-20 text-white">
+        <section id="contact" className="bg-[linear-gradient(135deg,#3b0000_0%,#7a0000_45%,#150000_100%)] py-14 text-white sm:py-20">
           <div className="mx-auto grid max-w-7xl gap-8 px-4 sm:px-6 lg:grid-cols-[1fr_0.95fr] lg:px-8">
             <div className="flex flex-col justify-center">
               <div className="inline-flex w-fit rounded-full border border-white/16 bg-white/8 px-4 py-2 text-xs font-black uppercase tracking-[0.22em] text-[#ffd761]">
