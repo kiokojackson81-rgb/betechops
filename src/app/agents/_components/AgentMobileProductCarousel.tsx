@@ -47,7 +47,7 @@ export default function AgentMobileProductCarousel({
     let frameId = 0;
     let lastTime = 0;
     const loopWidth = container.scrollWidth / 2;
-    const speed = loopWidth / 36;
+    const speed = loopWidth / 42;
 
     if (container.scrollLeft === 0) {
       container.scrollLeft = loopWidth;
