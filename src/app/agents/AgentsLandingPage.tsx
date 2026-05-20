@@ -205,6 +205,36 @@ const kenyaOpportunity = [
   },
 ];
 
+const customerTrust = [
+  {
+    title: "Genuine Solar Products",
+    copy: "Customers buy with confidence because Betech deals in trusted brands and genuine solar systems.",
+    icon: ShieldCheck,
+  },
+  {
+    title: "Nationwide Delivery",
+    copy: "Orders are delivered across Kenya so agents can refer customers without handling logistics themselves.",
+    icon: Truck,
+  },
+  {
+    title: "Nairobi Physical Shop",
+    copy: "Betech has a real physical location at Pramukh Plaza, Nairobi CBD for pickup, support and walk-in trust.",
+    icon: House,
+  },
+  {
+    title: "Warranty & Support",
+    copy: "Installation guidance, after-sales support and warranty help customers feel safe ordering.",
+    icon: Headphones,
+  },
+  {
+    title: "Thousands Served",
+    copy: "Homes, farms and biashara owners across Kenya already trust Betech for solar solutions.",
+    icon: Users,
+  },
+];
+
+const kenyaReach = ["Nairobi", "Kisumu", "Nakuru", "Eldoret", "Kitui", "Mombasa", "Machakos", "Nyeri"];
+
 const brands = [
   { name: "SolarMax", style: "solarmax" },
   { name: "SRNE", style: "srne" },
@@ -275,6 +305,49 @@ function sectionTitle(title: string, copy?: string, dark = false) {
       <div className="mx-auto h-1 w-16 rounded-full bg-gradient-to-r from-[#f2b20f] to-[#7a0000]" />
       <h2 className={`mt-5 text-3xl font-black tracking-tight md:text-5xl ${dark ? "text-white" : "text-slate-950"}`}>{title}</h2>
       {copy ? <p className={`mt-4 text-base leading-7 ${dark ? "text-white/75" : "text-slate-600"}`}>{copy}</p> : null}
+    </div>
+  );
+}
+
+function sectionCtaStrip({
+  title,
+  copy,
+  primaryHref,
+  primaryLabel,
+  secondaryHref,
+  secondaryLabel,
+}: {
+  title: string;
+  copy: string;
+  primaryHref: string;
+  primaryLabel: string;
+  secondaryHref?: string;
+  secondaryLabel?: string;
+}) {
+  return (
+    <div className="mt-8 rounded-[28px] border border-[#7a0000]/10 bg-[linear-gradient(135deg,#fff7e6_0%,#ffffff_100%)] p-5 shadow-[0_18px_40px_rgba(122,0,0,0.06)] sm:p-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="max-w-2xl">
+          <div className="text-sm font-black uppercase tracking-[0.18em] text-[#7a0000]">{title}</div>
+          <p className="mt-2 text-[15px] leading-[1.55] text-slate-600">{copy}</p>
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Link
+            href={primaryHref}
+            className="inline-flex min-h-[3.25rem] items-center justify-center rounded-2xl bg-[#7a0000] px-5 py-3 text-sm font-bold text-white shadow-[0_16px_30px_rgba(122,0,0,0.16)] transition hover:-translate-y-0.5"
+          >
+            {primaryLabel}
+          </Link>
+          {secondaryHref && secondaryLabel ? (
+            <Link
+              href={secondaryHref}
+              className="inline-flex min-h-[3.25rem] items-center justify-center rounded-2xl border border-[#7a0000]/14 bg-white px-5 py-3 text-sm font-bold text-[#7a0000] transition hover:-translate-y-0.5"
+            >
+              {secondaryLabel}
+            </Link>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }
@@ -836,12 +909,20 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
                 );
               })}
             </div>
+            {sectionCtaStrip({
+              title: "Start now",
+              copy: "No stock needed. No delivery stress. No shop required. Just refer customers and start building commission income.",
+              primaryHref: registerHref,
+              primaryLabel: "Start Referring Today",
+              secondaryHref: loginHref,
+              secondaryLabel: "Log In To Your Dashboard",
+            })}
           </div>
         </section>
 
         <section className="bg-[#fffaf3] py-14 sm:py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            {sectionTitle("Who Can Join?", "Anyone with a network can refer customers and earn.")}
+            {sectionTitle("Who Is Already Earning With Betech?", "Thousands of Kenyans can earn with this opportunity when they connect real customers to trusted solar products.")}
             <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {joinAudience.map((item, index) => {
                 const Icon = item.icon;
@@ -861,6 +942,14 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
                 </div>
               )})}
             </div>
+            {sectionCtaStrip({
+              title: "Join the opportunity",
+              copy: "WhatsApp marketers, fundis, biashara owners, SACCO members, shop owners and creators can all grow extra income through referrals.",
+              primaryHref: registerHref,
+              primaryLabel: "Become a Betech Agent",
+              secondaryHref: "https://chat.whatsapp.com/K6TBwpEpCKP29sIks5KosZ",
+              secondaryLabel: "Join WhatsApp Community",
+            })}
           </div>
         </section>
 
@@ -883,6 +972,58 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
                   </div>
                 );
               })}
+            </div>
+            <div className="mt-8 rounded-[28px] border border-[#7a0000]/10 bg-[#fffaf3] p-5 shadow-[0_16px_34px_rgba(15,23,42,0.05)] sm:p-6">
+              <div className="text-sm font-black uppercase tracking-[0.18em] text-[#7a0000]">Referral urgency</div>
+              <p className="mt-3 text-base leading-7 text-slate-700">
+                Solar demand is growing rapidly across Kenya. More homes, farms and biashara centers are actively searching for affordable solar systems right now.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="bg-[#fffaf3] py-14 sm:py-20">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            {sectionTitle(
+              "Why Customers Trust Betech Solar",
+              "Trust closes sales faster. Help customers see that Betech offers real products, real support and a real Nairobi location.",
+            )}
+            <div className="mt-14 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+              {customerTrust.map((item, index) => {
+                const Icon = item.icon;
+                return (
+                  <div
+                    key={item.title}
+                    className="rounded-[28px] border border-[#7a0000]/10 bg-white p-6 shadow-[0_16px_34px_rgba(15,23,42,0.05)] transition duration-300 hover:-translate-y-1"
+                  >
+                    <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${index % 2 === 0 ? "bg-[#fff3d8] text-[#7a0000]" : "bg-[#7a0000] text-white"}`}>
+                      <Icon className="h-7 w-7" />
+                    </div>
+                    <div className="mt-4 text-2xl font-black text-slate-950">{item.title}</div>
+                    <p className="mt-3 text-[15px] leading-[1.55] text-slate-600">{item.copy}</p>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-8 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+              <div className="rounded-[28px] border border-[#7a0000]/10 bg-[linear-gradient(135deg,#fff6df_0%,#ffffff_100%)] p-6 shadow-[0_16px_34px_rgba(15,23,42,0.05)]">
+                <div className="text-sm font-black uppercase tracking-[0.18em] text-[#7a0000]">Physical Location Trust</div>
+                <div className="mt-4 text-3xl font-black text-slate-950">Pramukh Plaza, Nairobi CBD</div>
+                <p className="mt-3 text-[15px] leading-[1.55] text-slate-600">
+                  Customers can collect from the shop, confirm the business physically, and trust that Betech is a real solar company with a Nairobi presence.
+                </p>
+              </div>
+              <div className="rounded-[28px] border border-[#0f9d58]/12 bg-[linear-gradient(180deg,#effcf4_0%,#ffffff_100%)] p-6 shadow-[0_16px_34px_rgba(15,23,42,0.05)]">
+                <div className="text-sm font-black uppercase tracking-[0.18em] text-[#0f9d58]">Trusted Across Kenya</div>
+                <p className="mt-3 text-[15px] leading-[1.55] text-slate-600">Serving customers in:</p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {kenyaReach.map((county) => (
+                    <span key={county} className="rounded-full bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+                      {county}
+                    </span>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -916,6 +1057,14 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
                 </div>
               </div>
             </div>
+            {sectionCtaStrip({
+              title: "See a product you can sell?",
+              copy: "Every completed referral can turn into real M-Pesa income. Start now and begin unlocking commission from trusted solar products.",
+              primaryHref: registerHref,
+              primaryLabel: "Start Referring Today",
+              secondaryHref: "https://chat.whatsapp.com/K6TBwpEpCKP29sIks5KosZ",
+              secondaryLabel: "Join Agent WhatsApp Group",
+            })}
           </div>
         </section>
 
@@ -976,7 +1125,7 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
 
         <section className="bg-white py-14 sm:py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            {sectionTitle("What Our Agents Say")}
+            {sectionTitle("How Agents Turn Referrals Into M-Pesa Income")}
             <div className="mt-10 grid gap-4 lg:mt-14 lg:grid-cols-3">
               {testimonials.map((testimonial) => (
                 <div
@@ -1002,8 +1151,8 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
             <div className="mt-8 grid gap-4 md:grid-cols-2">
               <div className="rounded-[28px] border border-[#0f9d58]/12 bg-[linear-gradient(180deg,#effcf4_0%,#ffffff_100%)] p-6 shadow-[0_16px_34px_rgba(15,23,42,0.05)]">
                 <div className="text-sm font-black uppercase tracking-[0.18em] text-[#0f9d58]">M-Pesa Payout Proof</div>
-                <div className="mt-4 text-3xl font-black text-slate-950">Ksh 12,000 paid out</div>
-                <p className="mt-3 text-[15px] leading-[1.55] text-slate-600">Agents receive approved commissions through M-Pesa once successful sales are completed and confirmed.</p>
+                <div className="mt-4 text-3xl font-black text-slate-950">Commission sent to M-Pesa successfully</div>
+                <p className="mt-3 text-[15px] leading-[1.55] text-slate-600">Agents receive approved commissions through M-Pesa after successful delivery and completed payment confirmation.</p>
               </div>
               <div className="rounded-[28px] border border-[#7a0000]/10 bg-[#fffaf3] p-6 shadow-[0_16px_34px_rgba(15,23,42,0.05)]">
                 <div className="text-sm font-black uppercase tracking-[0.18em] text-[#7a0000]">Referral Success</div>
@@ -1011,6 +1160,14 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
                 <p className="mt-3 text-[15px] leading-[1.55] text-slate-600">From customer order to delivery and payout, agents can follow their progress inside one dashboard.</p>
               </div>
             </div>
+            {sectionCtaStrip({
+              title: "Want results like these?",
+              copy: "Join the network, submit your first customer, and start tracking every order and payout from one dashboard.",
+              primaryHref: registerHref,
+              primaryLabel: "Become a Betech Agent",
+              secondaryHref: loginHref,
+              secondaryLabel: "Sign In",
+            })}
           </div>
         </section>
 
@@ -1042,6 +1199,14 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
                 </div>
               </div>
             </div>
+            {sectionCtaStrip({
+              title: "Commission made simple",
+              copy: "Customer orders product. Betech delivers. Customer completes payment. Your commission is then sent to your M-Pesa when approved.",
+              primaryHref: registerHref,
+              primaryLabel: "Start Earning With Betech",
+              secondaryHref: "https://chat.whatsapp.com/K6TBwpEpCKP29sIks5KosZ",
+              secondaryLabel: "Join WhatsApp Community",
+            })}
           </div>
         </section>
 
