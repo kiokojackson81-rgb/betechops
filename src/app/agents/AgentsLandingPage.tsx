@@ -19,6 +19,7 @@ import {
   Truck,
   Users,
 } from "lucide-react";
+import AgentMobileProductCarousel from "@/app/agents/_components/AgentMobileProductCarousel";
 import AgentWhatsAppFloat from "@/app/agents/_components/AgentWhatsAppFloat";
 import AnimatedCount from "@/app/agents/_components/AnimatedCount";
 import { agentPath } from "@/lib/agents/host";
@@ -242,57 +243,55 @@ function ProductCommissionSection({
           The more products you refer, the more commission you unlock.
         </p>
 
-        <div className={`mt-10 overflow-hidden ${mobile ? "group -mx-4 px-4" : ""}`}>
-          <div
-            className={`product-marquee flex min-w-max gap-4 ${mobile ? "touch-pan-x pr-4 group-active:[animation-play-state:paused]" : "pr-5"}`}
-          >
-            {[...agentProducts, ...agentProducts].map((product, index) => {
-              const commission = Math.round(product.price * 0.06);
-              return (
-                <div
-                  key={`${product.name}-${mobile ? "mobile" : "desktop"}-${index}`}
-                  className={`shrink-0 overflow-hidden rounded-[30px] border border-white/12 bg-[linear-gradient(180deg,#fffaf1_0%,#ffffff_100%)] text-slate-950 shadow-[0_22px_48px_rgba(0,0,0,0.18)] ${
-                    mobile
-                      ? "w-[78vw] max-w-[22rem]"
-                      : "w-[20rem] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_28px_60px_rgba(0,0,0,0.24)]"
-                  }`}
-                >
-                  <div className="relative h-56 w-full overflow-hidden border-b border-[#7a0000]/10 bg-[#f6eee2] sm:h-64">
-                    <Image
-                      src={product.image}
-                      alt={product.name}
-                      fill
-                      sizes={mobile ? "(max-width: 1024px) 78vw, 22rem" : "20rem"}
-                      className="object-cover object-top"
-                    />
-                    <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#2a0700]/22 via-transparent to-transparent" />
-                  </div>
-
-                  <div className="p-5">
-                    <div className="inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">
-                      {product.category}
-                    </div>
-                    <h3 className="mt-4 text-2xl font-black leading-tight text-slate-950">{product.name}</h3>
-                    <div className="mt-4 text-sm font-semibold uppercase tracking-[0.12em] text-slate-500">Product Price</div>
-                    <div className="mt-1 text-2xl font-black text-slate-950">{formatCurrency(product.price)}</div>
-
-                    <div className="mt-5 rounded-[22px] bg-[linear-gradient(135deg,#7a0000_0%,#991010_100%)] px-4 py-4 text-white shadow-[0_16px_34px_rgba(122,0,0,0.18)]">
-                      <div className="text-sm font-bold uppercase tracking-[0.16em] text-[#ffd761]">Earn 6% Commission</div>
-                      <div className="mt-2 text-3xl font-black">{formatCurrency(commission)}</div>
+        {mobile ? (
+          <AgentMobileProductCarousel products={agentProducts} registerHref={registerHref} />
+        ) : (
+          <div className="mt-10 overflow-hidden">
+            <div className="product-marquee flex min-w-max gap-4 pr-5">
+              {[...agentProducts, ...agentProducts].map((product, index) => {
+                const commission = Math.round(product.price * 0.06);
+                return (
+                  <div
+                    key={`${product.name}-desktop-${index}`}
+                    className="w-[20rem] shrink-0 overflow-hidden rounded-[30px] border border-white/12 bg-[linear-gradient(180deg,#fffaf1_0%,#ffffff_100%)] text-slate-950 shadow-[0_22px_48px_rgba(0,0,0,0.18)] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_28px_60px_rgba(0,0,0,0.24)]"
+                  >
+                    <div className="relative h-56 w-full overflow-hidden border-b border-[#7a0000]/10 bg-[#f6eee2] sm:h-64">
+                      <Image
+                        src={product.image}
+                        alt={product.name}
+                        fill
+                        sizes="20rem"
+                        className="object-cover object-top"
+                      />
+                      <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#2a0700]/22 via-transparent to-transparent" />
                     </div>
 
-                    <Link
-                      href={registerHref}
-                      className="mt-5 inline-flex min-h-[3.5rem] w-full items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#0f9d58_0%,#0d884d_100%)] px-5 py-3 text-base font-bold text-white shadow-[0_16px_34px_rgba(15,157,88,0.24)] transition hover:-translate-y-0.5"
-                    >
-                      Refer This Product
-                    </Link>
+                    <div className="p-5">
+                      <div className="inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">
+                        {product.category}
+                      </div>
+                      <h3 className="mt-4 text-2xl font-black leading-tight text-slate-950">{product.name}</h3>
+                      <div className="mt-4 text-sm font-semibold uppercase tracking-[0.12em] text-slate-500">Product Price</div>
+                      <div className="mt-1 text-2xl font-black text-slate-950">{formatCurrency(product.price)}</div>
+
+                      <div className="mt-5 rounded-[22px] bg-[linear-gradient(135deg,#7a0000_0%,#991010_100%)] px-4 py-4 text-white shadow-[0_16px_34px_rgba(122,0,0,0.18)]">
+                        <div className="text-sm font-bold uppercase tracking-[0.16em] text-[#ffd761]">Earn 6% Commission</div>
+                        <div className="mt-2 text-3xl font-black">{formatCurrency(commission)}</div>
+                      </div>
+
+                      <Link
+                        href={registerHref}
+                        className="mt-5 inline-flex min-h-[3.5rem] w-full items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#0f9d58_0%,#0d884d_100%)] px-5 py-3 text-base font-bold text-white shadow-[0_16px_34px_rgba(15,157,88,0.24)] transition hover:-translate-y-0.5"
+                      >
+                        Refer This Product
+                      </Link>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         <p className="mt-6 text-center text-sm text-white/70">
           Commission is calculated automatically from the confirmed sale price and becomes available after successful completed payment.
@@ -507,7 +506,7 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
               </div>
             </div>
 
-            <div className="relative order-first lg:order-none">
+            <div className="relative order-first hidden md:block lg:order-none">
               <div className="absolute -left-4 top-10 h-40 w-40 rounded-full bg-[#f2b20f]/20 blur-3xl" />
               <div className="absolute right-0 top-0 h-48 w-48 rounded-full bg-[#7a0000]/14 blur-3xl" />
               <div className="absolute left-2 top-8 z-10 hidden max-w-[13rem] rounded-[24px] border border-white/70 bg-white/92 p-4 shadow-[0_22px_50px_rgba(0,0,0,0.12)] backdrop-blur md:block animate-[float_6s_ease-in-out_infinite]">
