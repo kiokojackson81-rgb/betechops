@@ -35,7 +35,7 @@ export default function AgentMobileProductCarousel({
     let frameId = 0;
     let lastTime = 0;
     const loopWidth = container.scrollWidth / 2;
-    const speed = loopWidth / 40;
+    const speed = loopWidth / 38;
 
     const step = (time: number) => {
       if (!lastTime) lastTime = time;
@@ -55,8 +55,8 @@ export default function AgentMobileProductCarousel({
   }, [isPaused]);
 
   return (
-    <div className="mt-10">
-      <div className="mb-4 flex items-center justify-end">
+    <div className="mt-6">
+      <div className="mb-3 flex items-center justify-end">
         <button
           type="button"
           onClick={() => setIsPaused((current) => !current)}
@@ -70,6 +70,7 @@ export default function AgentMobileProductCarousel({
         ref={scrollRef}
         className="mobile-product-carousel -mx-4 overflow-x-auto overflow-y-visible px-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
         onTouchStart={() => setIsPaused(true)}
+        onPointerDown={() => setIsPaused(true)}
         onMouseEnter={() => setIsPaused(true)}
         onFocus={() => setIsPaused(true)}
       >
@@ -79,9 +80,9 @@ export default function AgentMobileProductCarousel({
             return (
               <div
                 key={`${product.name}-${index}`}
-                className="w-[88vw] max-w-[380px] shrink-0 snap-start overflow-hidden rounded-[30px] border border-white/12 bg-[linear-gradient(180deg,#fffaf1_0%,#ffffff_100%)] text-slate-950 shadow-[0_22px_48px_rgba(0,0,0,0.18)]"
+                className="w-[88vw] min-w-[88vw] max-w-[380px] shrink-0 snap-start overflow-hidden rounded-[30px] border border-white/12 bg-[linear-gradient(180deg,#fffaf1_0%,#ffffff_100%)] text-slate-950 shadow-[0_22px_48px_rgba(0,0,0,0.18)]"
               >
-                <div className="relative h-[300px] w-full overflow-hidden border-b border-[#7a0000]/10 bg-[#fff7ed]">
+                <div className="relative h-[320px] w-full overflow-hidden rounded-t-[30px] border-b border-[#7a0000]/10 bg-[#fff7ed]">
                   <Image
                     src={product.image}
                     alt={product.name}
@@ -91,11 +92,11 @@ export default function AgentMobileProductCarousel({
                   />
                 </div>
 
-                <div className="px-5 pb-5 pt-4">
+                <div className="px-4 pb-4 pt-3.5">
                   <div className="inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">
                     {product.category}
                   </div>
-                  <h3 className="mt-3 text-[1.8rem] font-black leading-tight text-slate-950">{product.name}</h3>
+                  <h3 className="mt-3 text-[1.72rem] font-black leading-[1.08] text-slate-950">{product.name}</h3>
                   <div className="mt-3 text-sm font-semibold uppercase tracking-[0.12em] text-slate-500">Product Price</div>
                   <div className="mt-1 text-2xl font-black text-slate-950">{formatCurrency(product.price)}</div>
 
@@ -106,7 +107,7 @@ export default function AgentMobileProductCarousel({
 
                   <Link
                     href={registerHref}
-                    className="mt-4 inline-flex min-h-[3.5rem] w-full items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#0f9d58_0%,#0d884d_100%)] px-5 py-3 text-base font-bold text-white shadow-[0_16px_34px_rgba(15,157,88,0.24)] transition hover:-translate-y-0.5"
+                    className="mt-4 inline-flex min-h-[3.45rem] w-full items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#0f9d58_0%,#0d884d_100%)] px-5 py-3 text-base font-bold text-white shadow-[0_16px_34px_rgba(15,157,88,0.24)] transition hover:-translate-y-0.5"
                   >
                     Refer This Product
                   </Link>
@@ -124,6 +125,7 @@ export default function AgentMobileProductCarousel({
               touch-action: pan-x pan-y;
               -webkit-overflow-scrolling: touch;
               scroll-snap-type: x proximity;
+              scroll-padding-inline: 1rem;
             }
           `,
         }}

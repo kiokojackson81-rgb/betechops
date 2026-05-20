@@ -71,10 +71,10 @@ export default function AgentWhatsAppFloat() {
 
   return (
     <>
-      <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+5.25rem)] right-3 z-[70] sm:bottom-6 sm:right-6">
+      <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] right-3 z-[70] sm:bottom-6 sm:right-6">
         <div className="relative flex flex-col items-end gap-3">
           {expanded ? (
-            <div className="agent-wa-card w-[16.25rem] max-w-[calc(100vw-1.25rem)] rounded-[1.6rem] border border-[#7a0000]/12 bg-[linear-gradient(180deg,#fffaf1_0%,#ffffff_100%)] p-4 text-slate-950 shadow-[0_24px_60px_rgba(15,23,42,0.22)] sm:w-[20rem] sm:max-w-[calc(100vw-2rem)] sm:p-5">
+            <div className="agent-wa-card w-[15.25rem] max-w-[calc(100vw-1.25rem)] rounded-[1.6rem] border border-[#7a0000]/12 bg-[linear-gradient(180deg,#fffaf1_0%,#ffffff_100%)] p-4 text-slate-950 shadow-[0_24px_60px_rgba(15,23,42,0.22)] sm:w-[20rem] sm:max-w-[calc(100vw-2rem)] sm:p-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">
@@ -125,18 +125,18 @@ export default function AgentWhatsAppFloat() {
             type="button"
             aria-label="Join Betech Agents WhatsApp community"
             onClick={() => setExpanded((current) => !current)}
-            className={`agent-wa-float relative inline-flex min-h-[3.2rem] max-w-[260px] items-center gap-2 overflow-hidden rounded-full border border-[#f2b20f]/22 bg-[linear-gradient(135deg,#16c768_0%,#0f9d58_55%,#0c8349_100%)] px-3 py-2.5 text-left text-white shadow-[0_20px_45px_rgba(15,157,88,0.28)] transition duration-300 hover:-translate-y-0.5 sm:min-h-[3.75rem] sm:gap-3 sm:px-4 sm:py-3 ${
+            className={`agent-wa-float relative inline-flex min-h-[3rem] max-w-[230px] items-center gap-2 overflow-hidden rounded-full border border-[#f2b20f]/22 bg-[linear-gradient(135deg,#16c768_0%,#0f9d58_55%,#0c8349_100%)] px-3 py-2 text-left text-white shadow-[0_20px_45px_rgba(15,157,88,0.28)] transition duration-300 hover:-translate-y-0.5 sm:min-h-[3.75rem] sm:max-w-[260px] sm:gap-3 sm:px-4 sm:py-3 ${
               peek ? "ring-4 ring-[#f2b20f]/25" : ""
             }`}
           >
             <span className="pointer-events-none absolute inset-0 rounded-full ring-2 ring-[#f2b20f]/25" />
             <span className="pointer-events-none absolute inset-0 rounded-full bg-[radial-gradient(circle,rgba(242,178,15,0.18),transparent_60%)] opacity-80" />
-            <span className="relative flex h-9 w-9 items-center justify-center rounded-full bg-white/12 text-white sm:h-10 sm:w-10">
-              <MessageCircle className="h-5 w-5" />
+            <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-white/12 text-white sm:h-10 sm:w-10">
+              <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5" />
             </span>
-            <span className="relative max-w-[10rem] sm:max-w-none">
-              <span className="block text-xs font-black uppercase tracking-[0.12em] sm:text-sm">Join Agent Network</span>
-              <span className="block text-xs text-white/85">WhatsApp community</span>
+            <span className="relative max-w-[9rem] sm:max-w-none">
+              <span className="block text-[11px] font-black uppercase tracking-[0.12em] sm:text-sm">Join Agent Network</span>
+              <span className="block text-[11px] text-white/85 sm:text-xs">WhatsApp community</span>
             </span>
           </button>
         </div>
