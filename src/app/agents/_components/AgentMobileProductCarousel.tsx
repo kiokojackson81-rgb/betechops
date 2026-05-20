@@ -25,7 +25,6 @@ export default function AgentMobileProductCarousel({
   registerHref,
 }: AgentMobileProductCarouselProps) {
   const [isPaused, setIsPaused] = useState(false);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
   const resumeTimerRef = useRef<number | null>(null);
   const duplicatedProducts = useMemo(() => [...products, ...products], [products]);
 
@@ -41,36 +40,6 @@ export default function AgentMobileProductCarousel({
   };
 
   useEffect(() => {
-    const container = scrollRef.current;
-    if (!container || isPaused) return;
-
-    let frameId = 0;
-    let lastTime = 0;
-    const loopWidth = container.scrollWidth / 2;
-    const speed = loopWidth / 42;
-
-    if (container.scrollLeft === 0) {
-      container.scrollLeft = loopWidth;
-    }
-
-    const step = (time: number) => {
-      if (!lastTime) lastTime = time;
-      const delta = (time - lastTime) / 1000;
-      lastTime = time;
-      container.scrollLeft -= speed * delta;
-
-      if (container.scrollLeft <= 0) {
-        container.scrollLeft += loopWidth;
-      }
-
-      frameId = window.requestAnimationFrame(step);
-    };
-
-    frameId = window.requestAnimationFrame(step);
-    return () => window.cancelAnimationFrame(frameId);
-  }, [isPaused]);
-
-  useEffect(() => {
     return () => {
       if (resumeTimerRef.current) {
         window.clearTimeout(resumeTimerRef.current);
@@ -81,20 +50,19 @@ export default function AgentMobileProductCarousel({
   return (
     <div className="mt-6">
       <div
-        ref={scrollRef}
-        className="mobile-product-carousel -mx-4 overflow-x-auto overflow-y-visible px-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+        className="carousel-wrapper -mx-4 overflow-hidden px-4"
         onTouchStart={pauseTemporarily}
         onPointerDown={pauseTemporarily}
         onMouseEnter={pauseTemporarily}
         onFocus={pauseTemporarily}
       >
-        <div className="flex min-w-max gap-4 pb-2">
+        <div className={`mobile-product-track flex min-w-max gap-4 pb-2 ${isPaused ? "is-paused" : ""}`}>
           {duplicatedProducts.map((product, index) => {
             const commission = Math.round(product.price * 0.06);
             return (
               <div
                 key={`${product.name}-${index}`}
-                className="w-[88vw] min-w-[88vw] max-w-[380px] shrink-0 snap-start overflow-hidden rounded-[30px] border border-white/12 bg-[linear-gradient(180deg,#fffaf1_0%,#ffffff_100%)] text-slate-950 shadow-[0_22px_48px_rgba(0,0,0,0.18)]"
+                className="w-[88vw] min-w-[88vw] max-w-[380px] shrink-0 overflow-hidden rounded-[30px] border border-white/12 bg-[linear-gradient(180deg,#fffaf1_0%,#ffffff_100%)] text-slate-950 shadow-[0_22px_48px_rgba(0,0,0,0.18)]"
               >
                 <div className="rounded-t-[30px] border-b border-[#7a0000]/10 bg-[#fff7ed]">
                   <Image
@@ -132,11 +100,22 @@ export default function AgentMobileProductCarousel({
       <style
         dangerouslySetInnerHTML={{
           __html: `
-            .mobile-product-carousel {
+            @keyframes mobileProductMarquee {
+              0% { transform: translateX(0); }
+              100% { transform: translateX(-50%); }
+            }
+
+            .carousel-wrapper {
               touch-action: pan-y;
-              -webkit-overflow-scrolling: touch;
-              scroll-snap-type: x proximity;
-              scroll-padding-inline: 1rem;
+            }
+
+            .mobile-product-track {
+              animation: mobileProductMarquee 42s linear infinite;
+              will-change: transform;
+            }
+
+            .mobile-product-track.is-paused {
+              animation-play-state: paused;
             }
 
             .mobile-product-image {
