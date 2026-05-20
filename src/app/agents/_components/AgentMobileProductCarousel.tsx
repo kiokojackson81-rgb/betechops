@@ -47,16 +47,20 @@ export default function AgentMobileProductCarousel({
     let frameId = 0;
     let lastTime = 0;
     const loopWidth = container.scrollWidth / 2;
-    const speed = loopWidth / 40;
+    const speed = loopWidth / 36;
+
+    if (container.scrollLeft === 0) {
+      container.scrollLeft = loopWidth;
+    }
 
     const step = (time: number) => {
       if (!lastTime) lastTime = time;
       const delta = (time - lastTime) / 1000;
       lastTime = time;
-      container.scrollLeft += speed * delta;
+      container.scrollLeft -= speed * delta;
 
-      if (container.scrollLeft >= loopWidth) {
-        container.scrollLeft -= loopWidth;
+      if (container.scrollLeft <= 0) {
+        container.scrollLeft += loopWidth;
       }
 
       frameId = window.requestAnimationFrame(step);
