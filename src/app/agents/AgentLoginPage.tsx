@@ -46,6 +46,33 @@ const trustPoints = [
   { label: "Installation support", icon: BadgeCheck },
 ];
 
+const mobileCommissionProducts = [
+  {
+    name: "SRNE 20KW Solar System",
+    price: 950000,
+    image: "/agents/products/srne-20kw-lithium-solar-system.jpeg",
+  },
+  {
+    name: "SRNE 10KW Solar Power System",
+    price: 550000,
+    image: "/agents/products/srne-10kw-lithium-solar-power-system.jpeg",
+  },
+  {
+    name: "8KW Lithium Battery Kit",
+    price: 350000,
+    image: "/agents/products/8kw-lithium-battery-kit.jpeg",
+  },
+  {
+    name: "SRNE 5KW Lithium Solar System",
+    price: 280000,
+    image: "/agents/products/srne-5kw-lithium-solar-system.jpeg",
+  },
+];
+
+function formatCurrency(value: number) {
+  return `Ksh ${value.toLocaleString()}`;
+}
+
 export default async function AgentLoginPage({ useRootPaths = false }: AgentLoginPageProps) {
   const session = await auth();
   if ((session?.user as { isAgent?: boolean } | undefined)?.isAgent) {
@@ -54,6 +81,25 @@ export default async function AgentLoginPage({ useRootPaths = false }: AgentLogi
 
   return (
     <div className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(242,178,15,0.20),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(122,0,0,0.12),transparent_26%),linear-gradient(180deg,#fffdf9_0%,#fff5ea_100%)] px-4 py-4 text-slate-950 sm:px-6 sm:py-6 lg:px-8 lg:py-10">
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+            @keyframes loginProductMarquee {
+              0% { transform: translateX(0); }
+              100% { transform: translateX(-50%); }
+            }
+
+            .login-product-marquee {
+              animation: loginProductMarquee 28s linear infinite;
+            }
+
+            .login-product-marquee:hover,
+            .login-product-marquee:active {
+              animation-play-state: paused;
+            }
+          `,
+        }}
+      />
       <div className="mx-auto max-w-7xl">
         <div className="mb-5 flex items-center justify-between sm:mb-6">
           <Link href={agentPath("/", useRootPaths)} className="flex items-center gap-3">
@@ -79,14 +125,47 @@ export default async function AgentLoginPage({ useRootPaths = false }: AgentLogi
               <div className="inline-flex rounded-full border border-[#f2b20f]/30 bg-[#fff3d8] px-4 py-2 text-xs font-black uppercase tracking-[0.24em] text-[#7a0000]">
                 BETECH AGENTS
               </div>
-              <h1 className="mt-5 max-w-2xl text-3xl font-black leading-tight text-slate-950 sm:text-4xl md:text-5xl">
+              <h1 className="mt-5 hidden max-w-2xl text-3xl font-black leading-tight text-slate-950 sm:text-4xl md:block md:text-5xl">
                 Earn commission by referring solar customers across Kenya.
               </h1>
-              <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg sm:leading-8">
+              <h1 className="mt-5 max-w-2xl text-3xl font-black leading-tight text-slate-950 md:hidden">
+                Your next commission starts here
+              </h1>
+              <p className="mt-4 hidden max-w-2xl text-base leading-7 text-slate-600 sm:text-lg sm:leading-8 md:block">
                 Share Betech Solar products, submit customer orders, and earn 6% commission after successful delivery and payment.
               </p>
+              <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600 md:hidden">
+                Sign in and start tracking customer orders and earnings.
+              </p>
 
-              <div className="mt-6 grid gap-3 sm:mt-8 sm:gap-4 sm:grid-cols-2">
+              <div className="group mt-6 -mx-5 overflow-hidden px-5 md:hidden">
+                <div className="login-product-marquee flex min-w-max gap-4 touch-pan-x pr-4 group-active:[animation-play-state:paused]">
+                  {[...mobileCommissionProducts, ...mobileCommissionProducts].map((product, index) => {
+                    const commission = Math.round(product.price * 0.06);
+                    return (
+                      <div
+                        key={`${product.name}-${index}`}
+                        className="w-[76vw] max-w-[18rem] shrink-0 overflow-hidden rounded-[1.8rem] border border-[#7a0000]/10 bg-white shadow-[0_18px_40px_rgba(122,0,0,0.10)]"
+                      >
+                        <div className="relative h-44 overflow-hidden bg-[#f6eee2]">
+                          <Image src={product.image} alt={product.name} fill className="object-cover object-top" sizes="(max-width: 768px) 76vw, 18rem" />
+                        </div>
+                        <div className="p-4">
+                          <div className="text-lg font-black leading-tight text-slate-950">{product.name}</div>
+                          <div className="mt-3 text-sm font-semibold uppercase tracking-[0.12em] text-slate-500">Product Price</div>
+                          <div className="mt-1 text-2xl font-black text-slate-950">{formatCurrency(product.price)}</div>
+                          <div className="mt-4 rounded-[1.2rem] bg-[linear-gradient(135deg,#7a0000_0%,#991010_100%)] px-4 py-3 text-white shadow-[0_14px_28px_rgba(122,0,0,0.16)]">
+                            <div className="text-xs font-bold uppercase tracking-[0.16em] text-[#ffd761]">Earn 6% Commission</div>
+                            <div className="mt-1 text-2xl font-black">{formatCurrency(commission)}</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="mt-6 hidden gap-3 sm:mt-8 sm:gap-4 md:grid md:grid-cols-2">
                 {productHighlights.map((item) => (
                   <div
                     key={item.title}
@@ -107,7 +186,7 @@ export default async function AgentLoginPage({ useRootPaths = false }: AgentLogi
                 ))}
               </div>
 
-              <div className="mt-6 grid grid-cols-2 gap-3 sm:mt-8 sm:gap-4 sm:grid-cols-4">
+              <div className="mt-6 hidden grid-cols-2 gap-3 sm:mt-8 sm:gap-4 sm:grid sm:grid-cols-4">
                 {trustPoints.map((item) => {
                   const Icon = item.icon;
                   return (
@@ -122,7 +201,7 @@ export default async function AgentLoginPage({ useRootPaths = false }: AgentLogi
               </div>
             </div>
 
-            <div className="grid gap-5 md:grid-cols-[1.05fr_0.95fr] md:gap-6">
+            <div className="hidden gap-5 md:grid md:grid-cols-[1.05fr_0.95fr] md:gap-6">
               <div className="rounded-[2rem] border border-[#7a0000]/10 bg-white p-4 shadow-[0_24px_50px_rgba(15,23,42,0.06)] sm:p-5">
                 <div className="mb-4 flex items-center justify-between">
                   <div>

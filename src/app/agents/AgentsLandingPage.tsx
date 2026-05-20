@@ -217,6 +217,90 @@ function formatCurrency(value: number) {
   return `Ksh ${value.toLocaleString()}`;
 }
 
+function ProductCommissionSection({
+  registerHref,
+  mobile = false,
+}: {
+  registerHref: string;
+  mobile?: boolean;
+}) {
+  return (
+    <section
+      id={mobile ? "start-earning" : "earnings"}
+      className={`bg-[linear-gradient(135deg,#5c0000_0%,#7a0000_38%,#8d1407_100%)] text-white ${
+        mobile ? "py-14" : "py-20"
+      }`}
+    >
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        {sectionTitle(
+          "Start Earning From These Products",
+          "Refer Betech Solar products and earn 6% commission after every completed sale.",
+          true,
+        )}
+        <p className="mx-auto mt-4 max-w-2xl text-center text-sm font-medium text-white/72 sm:text-base">
+          The more products you refer, the more commission you unlock.
+        </p>
+
+        <div className={`mt-10 overflow-hidden ${mobile ? "group -mx-4 px-4" : ""}`}>
+          <div
+            className={`product-marquee flex min-w-max gap-4 ${mobile ? "touch-pan-x pr-4 group-active:[animation-play-state:paused]" : "pr-5"}`}
+          >
+            {[...agentProducts, ...agentProducts].map((product, index) => {
+              const commission = Math.round(product.price * 0.06);
+              return (
+                <div
+                  key={`${product.name}-${mobile ? "mobile" : "desktop"}-${index}`}
+                  className={`shrink-0 overflow-hidden rounded-[30px] border border-white/12 bg-[linear-gradient(180deg,#fffaf1_0%,#ffffff_100%)] text-slate-950 shadow-[0_22px_48px_rgba(0,0,0,0.18)] ${
+                    mobile
+                      ? "w-[78vw] max-w-[22rem]"
+                      : "w-[20rem] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_28px_60px_rgba(0,0,0,0.24)]"
+                  }`}
+                >
+                  <div className="relative h-56 w-full overflow-hidden border-b border-[#7a0000]/10 bg-[#f6eee2] sm:h-64">
+                    <Image
+                      src={product.image}
+                      alt={product.name}
+                      fill
+                      sizes={mobile ? "(max-width: 1024px) 78vw, 22rem" : "20rem"}
+                      className="object-cover object-top"
+                    />
+                    <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#2a0700]/22 via-transparent to-transparent" />
+                  </div>
+
+                  <div className="p-5">
+                    <div className="inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">
+                      {product.category}
+                    </div>
+                    <h3 className="mt-4 text-2xl font-black leading-tight text-slate-950">{product.name}</h3>
+                    <div className="mt-4 text-sm font-semibold uppercase tracking-[0.12em] text-slate-500">Product Price</div>
+                    <div className="mt-1 text-2xl font-black text-slate-950">{formatCurrency(product.price)}</div>
+
+                    <div className="mt-5 rounded-[22px] bg-[linear-gradient(135deg,#7a0000_0%,#991010_100%)] px-4 py-4 text-white shadow-[0_16px_34px_rgba(122,0,0,0.18)]">
+                      <div className="text-sm font-bold uppercase tracking-[0.16em] text-[#ffd761]">Earn 6% Commission</div>
+                      <div className="mt-2 text-3xl font-black">{formatCurrency(commission)}</div>
+                    </div>
+
+                    <Link
+                      href={registerHref}
+                      className="mt-5 inline-flex min-h-[3.5rem] w-full items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#0f9d58_0%,#0d884d_100%)] px-5 py-3 text-base font-bold text-white shadow-[0_16px_34px_rgba(15,157,88,0.24)] transition hover:-translate-y-0.5"
+                    >
+                      Refer This Product
+                    </Link>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <p className="mt-6 text-center text-sm text-white/70">
+          Commission is calculated automatically from the confirmed sale price and becomes available after successful completed payment.
+        </p>
+      </div>
+    </section>
+  );
+}
+
 function BrandWordmark({ style, name }: { style: string; name: string }) {
   if (style === "solarmax") {
     return (
@@ -302,10 +386,11 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
             }
 
             .product-marquee {
-              animation: productMarquee 46s linear infinite;
+              animation: productMarquee 42s linear infinite;
             }
 
-            .product-marquee:hover {
+            .product-marquee:hover,
+            .product-marquee:active {
               animation-play-state: paused;
             }
           `,
@@ -356,7 +441,7 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
                 ["How It Works", "#how-it-works"],
                 ["Benefits", "#benefits"],
                 ["Products", "#products"],
-                ["Earnings", "#earnings"],
+                ["Earnings", "#start-earning"],
                 ["FAQs", "#faqs"],
                 ["Contact", "#contact"],
               ].map(([label, href]) => (
@@ -409,6 +494,9 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
                   How It Works
                 </a>
               </div>
+              <p className="mt-3 text-sm font-medium text-slate-600 sm:hidden">
+                Join free, refer products, and start unlocking 6% commission across Kenya.
+              </p>
 
               <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 {trustPoint("100% Free To Join", "No fees")}
@@ -463,6 +551,10 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
             </div>
           </div>
         </section>
+
+        <div className="lg:hidden">
+          <ProductCommissionSection registerHref={registerHref} mobile />
+        </div>
 
         <section className="border-y border-[#7a0000]/10 bg-white py-3 sm:py-4">
           <div className="mx-auto flex max-w-7xl items-center gap-3 overflow-hidden px-4 sm:gap-4 sm:px-6 lg:px-8">
@@ -648,93 +740,9 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
           </div>
         </section>
 
-        <section id="earnings" className="bg-[linear-gradient(135deg,#5c0000_0%,#7a0000_38%,#8d1407_100%)] py-20 text-white">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            {sectionTitle(
-              "Products You Can Refer & Earn From",
-              "Share Betech Solar products and earn 6% commission after every successful completed sale.",
-              true,
-            )}
-
-            <div className="mt-12 md:hidden">
-              <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] snap-x snap-mandatory [&::-webkit-scrollbar]:hidden">
-                <div className="flex gap-4 pb-2">
-                  {agentProducts.map((product) => {
-                    const commission = Math.round(product.price * 0.06);
-                    return (
-                      <div
-                        key={product.name}
-                        className="w-[86vw] max-w-[22rem] shrink-0 snap-center rounded-[30px] border border-white/12 bg-[linear-gradient(180deg,#fffaf1_0%,#ffffff_100%)] p-4 text-slate-950 shadow-[0_22px_48px_rgba(0,0,0,0.18)]"
-                      >
-                        <div className="overflow-hidden rounded-[22px] border border-[#7a0000]/10 bg-[#fdf7ef] shadow-[0_14px_28px_rgba(122,0,0,0.10)]">
-                          <div className="relative aspect-[3/4]">
-                            <Image src={product.image} alt={product.name} fill className="object-contain p-1" />
-                          </div>
-                        </div>
-                        <div className="mt-4 inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-[#7a0000]">
-                          {product.category}
-                        </div>
-                        <h3 className="mt-4 text-xl font-black leading-tight text-slate-950">{product.name}</h3>
-                        <div className="mt-3 text-sm font-semibold text-slate-500">Price</div>
-                        <div className="mt-1 text-2xl font-black text-slate-950">{formatCurrency(product.price)}</div>
-                        <div className="mt-5 rounded-[22px] bg-[linear-gradient(135deg,#7a0000_0%,#991010_100%)] px-4 py-4 text-white shadow-[0_16px_34px_rgba(122,0,0,0.18)]">
-                          <div className="text-sm font-bold uppercase tracking-[0.16em] text-[#ffd761]">Earn 6% Commission</div>
-                          <div className="mt-2 text-3xl font-black">{formatCurrency(commission)}</div>
-                        </div>
-                        <Link
-                          href={registerHref}
-                          className="mt-5 inline-flex min-h-[3.5rem] w-full items-center justify-center rounded-2xl bg-[#0f9d58] px-5 py-3 text-base font-bold text-white shadow-[0_16px_34px_rgba(15,157,88,0.24)] transition hover:-translate-y-0.5"
-                        >
-                          Refer This Product
-                        </Link>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-12 hidden overflow-hidden md:block">
-              <div className="product-marquee flex min-w-max gap-5 pr-5">
-                {[...agentProducts, ...agentProducts].map((product, index) => {
-                  const commission = Math.round(product.price * 0.06);
-                  return (
-                    <div
-                      key={`${product.name}-${index}`}
-                      className="w-[19rem] shrink-0 rounded-[30px] border border-white/12 bg-[linear-gradient(180deg,#fffaf1_0%,#ffffff_100%)] p-4 text-slate-950 shadow-[0_22px_48px_rgba(0,0,0,0.18)] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_28px_60px_rgba(0,0,0,0.24)]"
-                    >
-                      <div className="overflow-hidden rounded-[22px] border border-[#7a0000]/10 bg-[#fdf7ef] shadow-[0_14px_28px_rgba(122,0,0,0.10)]">
-                        <div className="relative aspect-[3/4]">
-                          <Image src={product.image} alt={product.name} fill className="object-contain p-1" />
-                        </div>
-                      </div>
-                      <div className="mt-4 inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-[#7a0000]">
-                        {product.category}
-                      </div>
-                      <h3 className="mt-4 text-xl font-black leading-tight text-slate-950">{product.name}</h3>
-                      <div className="mt-3 text-sm font-semibold text-slate-500">Price</div>
-                      <div className="mt-1 text-2xl font-black text-slate-950">{formatCurrency(product.price)}</div>
-                      <div className="mt-5 rounded-[22px] bg-[linear-gradient(135deg,#7a0000_0%,#991010_100%)] px-4 py-4 text-white shadow-[0_16px_34px_rgba(122,0,0,0.18)]">
-                        <div className="text-sm font-bold uppercase tracking-[0.16em] text-[#ffd761]">Earn 6% Commission</div>
-                        <div className="mt-2 text-3xl font-black">{formatCurrency(commission)}</div>
-                      </div>
-                      <Link
-                        href={registerHref}
-                        className="mt-5 inline-flex min-h-[3.5rem] w-full items-center justify-center rounded-2xl bg-[#0f9d58] px-5 py-3 text-base font-bold text-white shadow-[0_16px_34px_rgba(15,157,88,0.24)] transition hover:-translate-y-0.5"
-                      >
-                        Refer This Product
-                      </Link>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <p className="mt-6 text-center text-sm text-white/70">
-              Commission is calculated automatically from the confirmed sale price and becomes available after successful completed payment.
-            </p>
-          </div>
-        </section>
+        <div className="hidden lg:block">
+          <ProductCommissionSection registerHref={registerHref} />
+        </div>
 
         <section id="benefits" className="bg-white py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
