@@ -87,7 +87,6 @@ export default function AgentMobileProductCarousel({
         onPointerDown={pauseTemporarily}
         onMouseEnter={pauseTemporarily}
         onFocus={pauseTemporarily}
-        onScroll={pauseTemporarily}
       >
         <div className="flex min-w-max gap-4 pb-2">
           {duplicatedProducts.map((product, index) => {
