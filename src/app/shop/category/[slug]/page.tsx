@@ -6,6 +6,7 @@ import ProductCard from "@/app/shop/_components/ProductCard";
 import ShopBreadcrumbs from "@/app/shop/_components/ShopBreadcrumbs";
 import ShopFooter from "@/app/shop/_components/ShopFooter";
 import ShopHeader from "@/app/shop/_components/ShopHeader";
+import ShopStatePanel from "@/app/shop/_components/ShopStatePanel";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { getShopProducts } from "@/app/shop/shopApi";
 import { shopCategories, shopNavLinks } from "@/app/shop/shopData";
@@ -40,9 +41,9 @@ export default async function ShopCategoryPage({ params }: { params: Promise<{ s
             </div>
             <div className={`${shopStyles.darkPanel} p-5 sm:p-6`}>
               <div className="inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">
-                Need sizing help?
+                Not sure what you need?
               </div>
-              <h2 className="mt-4 text-2xl font-black tracking-tight text-white">Request a Solar System Quote</h2>
+              <h2 className="mt-4 text-2xl font-black tracking-tight text-white">Request a solar quote and our team will help size your system.</h2>
               <p className="mt-3 text-sm leading-7 text-white/76">
                 If you are not sure which {category.title.toLowerCase()} setup fits your needs, Betech Solar Solutions can guide the right combination.
               </p>
@@ -81,12 +82,15 @@ export default async function ShopCategoryPage({ params }: { params: Promise<{ s
                   ))}
                 </div>
               ) : (
-                <div className={`${shopStyles.softCard} p-6`}>
-                  <h2 className="text-2xl font-black tracking-tight text-slate-950">Products will appear here.</h2>
-                  <p className="mt-3 text-base leading-7 text-slate-600">
-                    This category is already planned in the Betech Solar store structure, but its mock products are not populated yet.
-                  </p>
-                </div>
+                <ShopStatePanel
+                  eyebrow="Category pending"
+                  title="Products will appear here."
+                  copy="This category is already planned in the Betech Solar store structure, but its mock products are not populated yet."
+                  primaryHref="/shop/request-quote"
+                  primaryLabel="Request Quote"
+                  secondaryHref="/shop"
+                  secondaryLabel="Back to Store"
+                />
               )}
             </div>
           </div>

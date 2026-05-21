@@ -22,6 +22,9 @@ export default async function ShopCartPage() {
             <p className="mt-3 max-w-3xl text-base leading-7 text-slate-600">
               Review quantities, remove products, continue shopping, or move into the safe mock checkout flow.
             </p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
+              Not sure what you need? Request a solar quote and our team will help size your system.
+            </p>
           </div>
           <div className="mt-6">
             <CartClient products={products} />

@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BadgeCheck, MapPin, ShieldCheck, Truck } from "lucide-react";
@@ -8,6 +7,7 @@ import ShopBreadcrumbs from "@/app/shop/_components/ShopBreadcrumbs";
 import ShopFooter from "@/app/shop/_components/ShopFooter";
 import ShopHeader from "@/app/shop/_components/ShopHeader";
 import ShopProductDetailActions from "@/app/shop/_components/ShopProductDetailActions";
+import ShopProductVisual from "@/app/shop/_components/ShopProductVisual";
 import { formatCurrency, shopStyles } from "@/app/shop/_components/shopStyles";
 import { getShopProductBySlug, getShopProducts } from "@/app/shop/shopApi";
 import { shopNavLinks } from "@/app/shop/shopData";
@@ -43,14 +43,16 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
             <div className={`${shopStyles.softCard} overflow-hidden p-4 sm:p-6`}>
               <div className="relative rounded-[30px] border border-[#7a0000]/10 bg-[#f6eee2]">
                 <div className="relative h-[18rem] sm:h-[24rem] lg:h-[30rem]">
-                  <Image src={product.image} alt={product.name} fill sizes="(max-width: 1280px) 100vw, 42rem" className="object-contain p-6" />
+                  <div className="absolute inset-0 p-5 sm:p-7">
+                    <ShopProductVisual visualType={product.visualType} productName={product.name} className="h-full w-full rounded-[28px]" />
+                  </div>
                 </div>
               </div>
               <div className="mt-4 grid grid-cols-3 gap-3">
                 {["Main view", "Installation view", "Product close-up"].map((label, index) => (
                   <div key={label} className="rounded-[22px] border border-[#7a0000]/10 bg-white p-3 shadow-[0_14px_26px_rgba(15,23,42,0.05)]">
-                    <div className="relative h-20 rounded-2xl bg-[#f6eee2]">
-                      <Image src={product.image} alt={`${product.name} ${label}`} fill sizes="8rem" className="object-contain p-2" />
+                    <div className="h-20 rounded-2xl bg-[#f6eee2] p-2">
+                      <ShopProductVisual visualType={product.visualType} productName={`${product.name} ${label}`} compact className="h-full w-full rounded-[18px]" />
                     </div>
                     <div className="mt-2 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
                       {index === 0 ? "Gallery" : label}
@@ -111,11 +113,11 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
 
               <div className={`${shopStyles.darkPanel} p-5 sm:p-6`}>
                 <div className="inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">
-                  Need help sizing a system?
+                  Not sure what you need?
                 </div>
-                <h2 className="mt-4 text-2xl font-black tracking-tight text-white">Request a Solar System Quote</h2>
+                <h2 className="mt-4 text-2xl font-black tracking-tight text-white">Request a solar quote and our team will help size your system.</h2>
                 <p className="mt-3 text-sm leading-7 text-white/76">
-                  Our team will help match the right panels, inverter, battery, and accessories to your home, biashara, or farm needs.
+                  Our team will help match the right panels, inverter, battery, and accessories to your home, biashara, or farm needs before you place an order.
                 </p>
                 <div className="mt-5 flex flex-col gap-3 sm:flex-row">
                   <Link href={`/shop/request-quote?product=${encodeURIComponent(product.name)}`} className={shopStyles.goldButton}>

@@ -1,6 +1,4 @@
 "use client";
-
-import Image from "next/image";
 import Link from "next/link";
 import { MessageCircle, Minus, Plus, Trash2 } from "lucide-react";
 import {
@@ -9,6 +7,8 @@ import {
   updateShopCartQuantity,
   useShopCartItems,
 } from "@/app/shop/cartStore";
+import ShopProductVisual from "@/app/shop/_components/ShopProductVisual";
+import ShopStatePanel from "@/app/shop/_components/ShopStatePanel";
 import type { ShopProduct } from "@/app/shop/shopData";
 import { formatCurrency, shopStyles } from "@/app/shop/_components/shopStyles";
 
@@ -29,21 +29,15 @@ export default function CartClient({ products }: CartClientProps) {
   if (!detailedItems.length) {
     return (
       <div className="grid gap-5">
-        <div className={`${shopStyles.softCard} p-6 sm:p-8`}>
-          <div className={shopStyles.sectionEyebrow}>Your cart is empty</div>
-          <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-950">Start with genuine Betech Solar products.</h1>
-          <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">
-            Add panels, inverters, batteries, pumps, or full kits to continue with the mock checkout flow.
-          </p>
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-            <Link href="/shop" className={shopStyles.primaryButton}>
-              Continue Shopping
-            </Link>
-            <Link href="/shop/request-quote" className={shopStyles.secondaryButton}>
-              Request a Solar System Quote
-            </Link>
-          </div>
-        </div>
+        <ShopStatePanel
+          eyebrow="Your cart is empty"
+          title="Start with genuine Betech Solar products."
+          copy="Add panels, inverters, batteries, pumps, heaters, or full kits to continue with the mock checkout flow."
+          primaryHref="/shop"
+          primaryLabel="Continue Shopping"
+          secondaryHref="/shop/request-quote"
+          secondaryLabel="Request a Solar System Quote"
+        />
       </div>
     );
   }
@@ -54,7 +48,7 @@ export default function CartClient({ products }: CartClientProps) {
         {detailedItems.map(({ product, quantity, lineTotal }) => (
           <article key={product.id} className={`${shopStyles.lightCard} flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:p-5`}>
             <div className="relative h-28 rounded-[24px] border border-[#7a0000]/10 bg-[#f6eee2] sm:h-32 sm:w-32">
-              <Image src={product.image} alt={product.name} fill sizes="8rem" className="object-contain p-3" />
+              <ShopProductVisual visualType={product.visualType} productName={product.name} compact className="h-full w-full" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]/75">{product.category}</div>
@@ -128,6 +122,13 @@ export default function CartClient({ products }: CartClientProps) {
           <Link href={cartWhatsappHref} target="_blank" rel="noreferrer" className={shopStyles.whatsappButton}>
             <MessageCircle className="h-4 w-4" />
             WhatsApp Checkout
+          </Link>
+        </div>
+        <div className="mt-6 rounded-[24px] border border-[#7a0000]/10 bg-white p-4">
+          <div className="text-sm font-black uppercase tracking-[0.16em] text-[#7a0000]">Not sure what you need?</div>
+          <p className="mt-2 text-sm leading-6 text-slate-600">Request a solar quote and our team will help size your system before the order is confirmed.</p>
+          <Link href="/shop/request-quote" className="mt-3 inline-flex text-sm font-bold text-[#7a0000]">
+            Request a Solar System Quote
           </Link>
         </div>
       </aside>

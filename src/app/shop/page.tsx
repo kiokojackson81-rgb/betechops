@@ -1,18 +1,20 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, BadgeCheck, Clock3, Headphones, MessageCircleMore } from "lucide-react";
+import { ArrowRight, BadgeCheck, Clock3, Headphones, MapPin, MessageCircleMore, ShieldCheck, Truck } from "lucide-react";
 import CategoryScroller from "@/app/shop/_components/CategoryScroller";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
 import ProductSection from "@/app/shop/_components/ProductSection";
 import ShopFooter from "@/app/shop/_components/ShopFooter";
 import ShopHeader from "@/app/shop/_components/ShopHeader";
 import ShopHero from "@/app/shop/_components/ShopHero";
+import ShopStatePanel from "@/app/shop/_components/ShopStatePanel";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
-import { heroHighlights, shopCategories, shopNavLinks, shopProductSections, trustBadges } from "@/app/shop/shopData";
+import { deliveryPaymentSteps, heroHighlights, shopCategories, shopNavLinks, shopProductSections, shopReasons, trustBadges } from "@/app/shop/shopData";
 
 export const metadata: Metadata = {
-  title: "Betech Solar Online Store",
-  description: "Shop genuine solar products from Betech Solar Solutions and request a solar system quote.",
+  title: "Betech Solar Online Store | Solar Panels, Batteries, Inverters & Kits",
+  description:
+    "Shop genuine solar panels, inverters, batteries, lithium batteries, full solar kits, water pumps, lights and accessories from Betech Solar Solutions. Delivery countrywide.",
 };
 
 // Route planning for future isolated ecommerce expansion:
@@ -86,6 +88,66 @@ export default function ShopPage() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="pb-4 pt-8 sm:pt-12">
+        <div className={shopStyles.shell}>
+          <div className="mx-auto max-w-3xl text-center">
+            <div className="mx-auto h-1 w-16 rounded-full bg-gradient-to-r from-[#f2b20f] to-[#7a0000]" />
+            <h2 className="mt-5 text-3xl font-black tracking-tight text-slate-950 md:text-5xl">Why shop with Betech Solar?</h2>
+            <p className="mt-4 text-base leading-7 text-slate-600">
+              The Betech Solar Online Store is designed around real customer trust signals, practical support, and guided solar buying.
+            </p>
+          </div>
+          <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {shopReasons.map((reason, index) => {
+              const icons = [ShieldCheck, BadgeCheck, Clock3, MapPin, Truck, Headphones];
+              const Icon = icons[index % icons.length];
+              return (
+                <div key={reason} className={`${shopStyles.lightCard} p-5 sm:p-6`}>
+                  <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#fff3d8] text-[#7a0000] shadow-[0_16px_30px_rgba(242,178,15,0.16)]">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <h3 className="mt-4 text-xl font-black tracking-tight text-slate-950">{reason}</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    {reason === "Expert system sizing"
+                      ? "If you are not sure about system size, our team can guide the right mix of panel, inverter, battery and accessories."
+                      : `Betech Solar Solutions supports ${reason.toLowerCase()} for customers testing the store today.`}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section className="pb-4 pt-8">
+        <div className={shopStyles.shell}>
+          <div className="grid gap-4 lg:grid-cols-[1.08fr_0.92fr]">
+            <div className={`${shopStyles.softCard} p-5 sm:p-6`}>
+              <div className={shopStyles.sectionEyebrow}>How delivery and payment works</div>
+              <h2 className="mt-4 text-3xl font-black tracking-tight text-slate-950">Simple buying guidance before live ops integration.</h2>
+              <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                {deliveryPaymentSteps.map((step) => (
+                  <div key={step.title} className="rounded-[24px] border border-[#7a0000]/10 bg-white p-4 shadow-[0_14px_26px_rgba(15,23,42,0.05)]">
+                    <div className="text-sm font-black uppercase tracking-[0.16em] text-[#7a0000]">{step.title}</div>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">{step.copy}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <ShopStatePanel
+              eyebrow="Not sure what you need?"
+              title="Request a solar quote and our team will help size your system."
+              copy="Solar customers often need help choosing the right panel wattage, inverter size, battery capacity, and delivery plan. Start with a quote request if you want guided sizing."
+              primaryHref="/shop/request-quote"
+              primaryLabel="Request a Solar Quote"
+              secondaryHref="/shop#best-selling-solar-kits"
+              secondaryLabel="Browse Products"
+              tone="dark"
+            />
           </div>
         </div>
       </section>
