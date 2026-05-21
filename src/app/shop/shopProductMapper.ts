@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getProductTableCapabilities } from "@/lib/productTableCapabilities";
 import type { ShopProduct, ShopProductVisualType } from "@/app/shop/shopData";
 import { SHOP_CATEGORY_OPTIONS } from "@/app/shop/shopCatalogConfig";
 
@@ -14,10 +15,11 @@ type OpsCatalogueProduct = {
   isActive: boolean;
   showInShop?: boolean | null;
   shopCategory?: string | null;
-  shopTitle?: string | null;
   shopShortDescription?: string | null;
-  imageUrl?: string | null;
-  brand?: string | null;
+  shopWarranty?: string | null;
+  shopSpecs?: string | null;
+  shopImageUrl?: string | null;
+  shopBrand?: string | null;
 };
 
 type ShopCategoryDefinition = {
@@ -348,7 +350,7 @@ function buildMappingWarnings(
   } else {
     warnings.push({ field: "image", message: `Customer display uses the ${category.title} placeholder visual until ops image fields are ready.` });
   }
-  if (!product.defaultWarranty?.trim()) {
+  if (!(product.shopWarranty?.trim() || product.defaultWarranty?.trim())) {
     warnings.push({ field: "warranty", message: "Warranty is missing in the ops catalogue. Customer pages fall back to contact-for-warranty guidance." });
   }
   if (
@@ -368,15 +370,16 @@ function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview 
   const category = explicitShopCategory ?? inferredCategory.definition;
   const categoryWarning = explicitShopCategory ? null : inferredCategory.warning;
   const safeName = product.name.trim() || product.sku || "";
-  const brand = product.brand?.trim() || inferBrand(safeName);
+  const brand = product.shopBrand?.trim() || inferBrand(safeName);
   const specs = compactUnique([
+    product.shopSpecs?.trim() || null,
     product.shopShortDescription?.trim() || null,
     ...inferSpecs(product, category.title),
   ]).slice(0, 4);
-  const warranty = product.defaultWarranty?.trim() || inferWarranty(product);
+  const warranty = product.shopWarranty?.trim() || product.defaultWarranty?.trim() || inferWarranty(product);
   const warnings = buildMappingWarnings(product, category, price, brand, specs, warranty, categoryWarning);
   const eligibility = isSolarShopEligibleProduct({
-    name: product.shopTitle?.trim() || safeName,
+    name: safeName,
     category: product.shopCategory || product.category || category.title,
     tags: inferTags(product, category, brand),
     specs,
@@ -384,7 +387,7 @@ function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview 
     showInShop: product.showInShop,
   });
   const includedInCatalog = eligibility.eligible;
-  const fallbackName = product.shopTitle?.trim() || safeName || `OPS Product ${product.id}`;
+  const fallbackName = safeName || `OPS Product ${product.id}`;
   const mappedProduct: ShopProduct | null = includedInCatalog
     ? {
         id: `ops-${product.id}`,
@@ -394,7 +397,7 @@ function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview 
         brand,
         price,
         oldPrice: undefined,
-        image: product.imageUrl?.trim() || category.image,
+        image: product.shopImageUrl?.trim() || category.image,
         visualType: category.visualType,
         specs,
         warranty,
@@ -457,14 +460,12 @@ export function filterShopProducts(
 }
 
 export async function getOpsCatalogueProductsReadOnly() {
-  const columns = await prisma.$queryRawUnsafe<Array<{ column_name: string }>>(
-    `SELECT column_name FROM information_schema.columns WHERE table_name = 'Product' ORDER BY ordinal_position`,
-  );
-  const available = new Set(columns.map((entry) => entry.column_name));
+  const capabilities = await getProductTableCapabilities(prisma);
+  const available = capabilities.available;
 
   let products: OpsCatalogueProduct[] = [];
 
-  if (available.has("sku")) {
+  if (capabilities.schemaMode === "modern") {
     products = await prisma.$queryRawUnsafe<OpsCatalogueProduct[]>(`
       SELECT
         "id",
@@ -478,10 +479,11 @@ export async function getOpsCatalogueProductsReadOnly() {
         COALESCE("isActive", true) AS "isActive",
         ${available.has("showInShop") ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
         ${available.has("shopCategory") ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
-        ${available.has("shopTitle") ? `"shopTitle"` : `NULL::text`} AS "shopTitle",
         ${available.has("shopShortDescription") ? `"shopShortDescription"` : `NULL::text`} AS "shopShortDescription",
-        ${available.has("imageUrl") ? `"imageUrl"` : `NULL::text`} AS "imageUrl",
-        ${available.has("brand") ? `"brand"` : `NULL::text`} AS "brand"
+        ${available.has("shopWarranty") ? `"shopWarranty"` : `NULL::text`} AS "shopWarranty",
+        ${available.has("shopSpecs") ? `"shopSpecs"` : `NULL::text`} AS "shopSpecs",
+        ${available.has("shopImageUrl") ? `"shopImageUrl"` : `NULL::text`} AS "shopImageUrl",
+        ${available.has("shopBrand") ? `"shopBrand"` : `NULL::text`} AS "shopBrand"
       FROM "Product"
       WHERE COALESCE("isActive", true) = true
       ORDER BY "name" ASC
@@ -500,10 +502,11 @@ export async function getOpsCatalogueProductsReadOnly() {
         COALESCE("active", true) AS "isActive",
         ${available.has("showInShop") ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
         ${available.has("shopCategory") ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
-        ${available.has("shopTitle") ? `"shopTitle"` : `NULL::text`} AS "shopTitle",
         ${available.has("shopShortDescription") ? `"shopShortDescription"` : `NULL::text`} AS "shopShortDescription",
-        ${available.has("imageUrl") ? `"imageUrl"` : `NULL::text`} AS "imageUrl",
-        ${available.has("brand") ? `"brand"` : `NULL::text`} AS "brand"
+        ${available.has("shopWarranty") ? `"shopWarranty"` : `NULL::text`} AS "shopWarranty",
+        ${available.has("shopSpecs") ? `"shopSpecs"` : `NULL::text`} AS "shopSpecs",
+        ${available.has("shopImageUrl") ? `"shopImageUrl"` : `NULL::text`} AS "shopImageUrl",
+        ${available.has("shopBrand") ? `"shopBrand"` : `NULL::text`} AS "shopBrand"
       FROM "Product"
       WHERE COALESCE("active", true) = true
       ORDER BY "name" ASC

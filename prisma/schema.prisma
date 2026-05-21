@@ -921,6 +921,13 @@ model Product {
   sellingPrice               Float
   lastBuyingPrice            Float?
   defaultWarranty            String?
+  showInShop                 Boolean     @default(false)
+  shopCategory               String?
+  shopShortDescription       String?
+  shopWarranty               String?
+  shopSpecs                  String?
+  shopImageUrl               String?
+  shopBrand                  String?
   variableCost               Boolean     @default(false)
   commissionEnabled          Boolean     @default(false)
   commissionAmount           Decimal?    @db.Decimal(12, 2)

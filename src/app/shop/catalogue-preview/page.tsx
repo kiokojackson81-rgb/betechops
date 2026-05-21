@@ -8,6 +8,8 @@ import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { getOpsCatalogueProductsReadOnly } from "@/app/shop/shopProductMapper";
 import { shopNavLinks } from "@/app/shop/shopData";
+import { prisma } from "@/lib/prisma";
+import { getProductTableCapabilities } from "@/lib/productTableCapabilities";
 
 export const metadata: Metadata = buildShopMetadata({
   title: "Internal Catalogue Preview",
@@ -28,6 +30,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ShopCataloguePreviewPage() {
   try {
+    const capabilities = await getProductTableCapabilities(prisma);
     const previewEntries = await getOpsCatalogueProductsReadOnly();
     const includedEntries = previewEntries.filter((entry) => entry.includedInCatalog && entry.product);
     const excludedEntries = previewEntries.filter((entry) => !entry.includedInCatalog || !entry.product);
@@ -57,6 +60,19 @@ export default async function ShopCataloguePreviewPage() {
                 <div className="rounded-[22px] border border-white/10 bg-white/8 px-4 py-4">
                   <div className="text-[11px] font-black uppercase tracking-[0.16em] text-[#ffd761]">Read-only mode</div>
                   <div className="mt-2 text-lg font-black text-white">No orders, stock, POS, receipts or payments mutate here.</div>
+                </div>
+              </div>
+              <div className="mt-5 rounded-[22px] border border-white/10 bg-white/8 px-4 py-4 text-sm text-white/82">
+                <div className="text-[11px] font-black uppercase tracking-[0.16em] text-[#ffd761]">Ecommerce field activation</div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  <div>Schema mode: <span className="font-bold text-white">{capabilities.schemaMode}</span></div>
+                  <div>showInShop: <span className="font-bold text-white">{capabilities.showInShop ? "active" : "missing"}</span></div>
+                  <div>shopCategory: <span className="font-bold text-white">{capabilities.shopCategory ? "active" : "missing"}</span></div>
+                  <div>shopShortDescription: <span className="font-bold text-white">{capabilities.shopShortDescription ? "active" : "missing"}</span></div>
+                  <div>shopWarranty: <span className="font-bold text-white">{capabilities.shopWarranty ? "active" : "missing"}</span></div>
+                  <div>shopSpecs: <span className="font-bold text-white">{capabilities.shopSpecs ? "active" : "missing"}</span></div>
+                  <div>shopImageUrl: <span className="font-bold text-white">{capabilities.shopImageUrl ? "active" : "missing"}</span></div>
+                  <div>shopBrand: <span className="font-bold text-white">{capabilities.shopBrand ? "active" : "missing"}</span></div>
                 </div>
               </div>
             </div>

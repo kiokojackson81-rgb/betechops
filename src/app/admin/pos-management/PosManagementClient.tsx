@@ -20,20 +20,22 @@ type PosProduct = {
   commissionRequiresApproval: boolean;
   showInShop?: boolean | null;
   shopCategory?: string | null;
-  shopTitle?: string | null;
   shopShortDescription?: string | null;
-  imageUrl?: string | null;
-  brand?: string | null;
+  shopWarranty?: string | null;
+  shopSpecs?: string | null;
+  shopImageUrl?: string | null;
+  shopBrand?: string | null;
 };
 
 type PosCatalogueCapabilities = {
   schemaMode: "modern" | "legacy";
   showInShop: boolean;
   shopCategory: boolean;
-  shopTitle: boolean;
   shopShortDescription: boolean;
-  imageUrl: boolean;
-  brand: boolean;
+  shopWarranty: boolean;
+  shopSpecs: boolean;
+  shopImageUrl: boolean;
+  shopBrand: boolean;
   warranty: boolean;
   specs: boolean;
 };
@@ -65,10 +67,11 @@ type ProductDraft = {
   commissionRequiresApproval: boolean;
   showInShop: boolean;
   shopCategory: string;
-  shopTitle: string;
   shopShortDescription: string;
-  imageUrl: string;
-  brand: string;
+  shopWarranty: string;
+  shopSpecs: string;
+  shopImageUrl: string;
+  shopBrand: string;
 };
 
 const emptyDraft: ProductDraft = {
@@ -85,20 +88,22 @@ const emptyDraft: ProductDraft = {
   commissionRequiresApproval: false,
   showInShop: false,
   shopCategory: "",
-  shopTitle: "",
   shopShortDescription: "",
-  imageUrl: "",
-  brand: "",
+  shopWarranty: "",
+  shopSpecs: "",
+  shopImageUrl: "",
+  shopBrand: "",
 };
 
 const defaultCapabilities: PosCatalogueCapabilities = {
   schemaMode: "legacy",
   showInShop: false,
   shopCategory: false,
-  shopTitle: false,
   shopShortDescription: false,
-  imageUrl: false,
-  brand: false,
+  shopWarranty: false,
+  shopSpecs: false,
+  shopImageUrl: false,
+  shopBrand: false,
   warranty: false,
   specs: false,
 };
@@ -259,10 +264,11 @@ export default function PosManagementClient() {
         commissionRequiresApproval: draft.commissionEnabled ? draft.commissionRequiresApproval : false,
         ...(capabilities.showInShop ? { showInShop: draft.showInShop } : {}),
         ...(capabilities.shopCategory ? { shopCategory: draft.shopCategory || null } : {}),
-        ...(capabilities.shopTitle ? { shopTitle: draft.shopTitle.trim() || null } : {}),
         ...(capabilities.shopShortDescription ? { shopShortDescription: draft.shopShortDescription.trim() || null } : {}),
-        ...(capabilities.imageUrl ? { imageUrl: draft.imageUrl.trim() || null } : {}),
-        ...(capabilities.brand ? { brand: draft.brand.trim() || null } : {}),
+        ...(capabilities.shopWarranty ? { shopWarranty: draft.shopWarranty.trim() || null } : {}),
+        ...(capabilities.shopSpecs ? { shopSpecs: draft.shopSpecs.trim() || null } : {}),
+        ...(capabilities.shopImageUrl ? { shopImageUrl: draft.shopImageUrl.trim() || null } : {}),
+        ...(capabilities.shopBrand ? { shopBrand: draft.shopBrand.trim() || null } : {}),
       };
 
       const url = draft.id ? `/api/admin/pos-products/${draft.id}` : "/api/admin/pos-products";
@@ -300,10 +306,11 @@ export default function PosManagementClient() {
       commissionRequiresApproval: Boolean(product.commissionRequiresApproval),
       showInShop: Boolean(product.showInShop),
       shopCategory: product.shopCategory ?? "",
-      shopTitle: product.shopTitle ?? "",
       shopShortDescription: product.shopShortDescription ?? "",
-      imageUrl: product.imageUrl ?? "",
-      brand: product.brand ?? "",
+      shopWarranty: product.shopWarranty ?? "",
+      shopSpecs: product.shopSpecs ?? "",
+      shopImageUrl: product.shopImageUrl ?? "",
+      shopBrand: product.shopBrand ?? "",
     });
     formSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     showToast(`Editing ${product.name}`, "success");
@@ -325,10 +332,11 @@ export default function PosManagementClient() {
       commissionRequiresApproval: Boolean(product.commissionRequiresApproval),
       showInShop: Boolean(product.showInShop),
       shopCategory: product.shopCategory ?? "",
-      shopTitle: product.shopTitle ?? "",
       shopShortDescription: product.shopShortDescription ?? "",
-      imageUrl: product.imageUrl ?? "",
-      brand: product.brand ?? "",
+      shopWarranty: product.shopWarranty ?? "",
+      shopSpecs: product.shopSpecs ?? "",
+      shopImageUrl: product.shopImageUrl ?? "",
+      shopBrand: product.shopBrand ?? "",
     });
     formSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     showToast(`${product.commissionEnabled ? "Editing" : "Assigning"} commission for ${product.name}`, "success");
@@ -635,9 +643,9 @@ export default function PosManagementClient() {
               <p className="mt-2 text-sm text-slate-300">
                 These controls feed the Betech Solar online shop from the existing POS Catalogue. Unsupported fields stay disabled until the Product table is upgraded safely.
               </p>
-              {!(capabilities.showInShop || capabilities.shopCategory || capabilities.shopTitle || capabilities.shopShortDescription || capabilities.imageUrl || capabilities.brand) ? (
+              {!(capabilities.showInShop || capabilities.shopCategory || capabilities.shopShortDescription || capabilities.shopWarranty || capabilities.shopSpecs || capabilities.shopImageUrl || capabilities.shopBrand) ? (
                 <div className="mt-3 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
-                  Live Product table is currently in <span className="font-semibold uppercase">{capabilities.schemaMode}</span> compatibility mode. `showInShop`, `shopCategory`, and optional shop display fields are planned but not yet persisted in this database shape.
+                  Live Product table is currently in <span className="font-semibold uppercase">{capabilities.schemaMode}</span> compatibility mode. `showInShop`, `shopCategory`, and the ecommerce display fields are planned but not yet fully persisted in this database shape.
                 </div>
               ) : null}
 
@@ -673,45 +681,56 @@ export default function PosManagementClient() {
                 </label>
 
                 <label className="text-sm text-slate-300">
-                  Shop title
-                  <input
-                    className={`${fieldClass} mt-1 disabled:cursor-not-allowed disabled:opacity-60`}
-                    value={draft.shopTitle}
-                    disabled={!capabilities.shopTitle}
-                    onChange={(e) => setDraft((s) => ({ ...s, shopTitle: e.target.value }))}
-                    placeholder="Optional override for product name"
-                  />
-                </label>
-
-                <label className="text-sm text-slate-300">
                   Shop brand
                   <input
                     className={`${fieldClass} mt-1 disabled:cursor-not-allowed disabled:opacity-60`}
-                    value={draft.brand}
-                    disabled={!capabilities.brand}
-                    onChange={(e) => setDraft((s) => ({ ...s, brand: e.target.value }))}
+                    value={draft.shopBrand}
+                    disabled={!capabilities.shopBrand}
+                    onChange={(e) => setDraft((s) => ({ ...s, shopBrand: e.target.value }))}
                     placeholder="Optional ecommerce brand label"
                   />
                 </label>
 
                 <label className="text-sm text-slate-300 md:col-span-2">
-                  Shop short description / specs
+                  Shop short description
                   <textarea
                     className={`${fieldClass} mt-1 min-h-[96px] disabled:cursor-not-allowed disabled:opacity-60`}
                     value={draft.shopShortDescription}
                     disabled={!capabilities.shopShortDescription}
                     onChange={(e) => setDraft((s) => ({ ...s, shopShortDescription: e.target.value }))}
-                    placeholder="Short customer-facing description or specs summary"
+                    placeholder="Short customer-facing description"
+                  />
+                </label>
+
+                <label className="text-sm text-slate-300">
+                  Shop warranty
+                  <input
+                    className={`${fieldClass} mt-1 disabled:cursor-not-allowed disabled:opacity-60`}
+                    value={draft.shopWarranty}
+                    disabled={!capabilities.shopWarranty}
+                    onChange={(e) => setDraft((s) => ({ ...s, shopWarranty: e.target.value }))}
+                    placeholder="Customer-facing warranty summary"
+                  />
+                </label>
+
+                <label className="text-sm text-slate-300">
+                  Shop specs
+                  <textarea
+                    className={`${fieldClass} mt-1 min-h-[96px] disabled:cursor-not-allowed disabled:opacity-60`}
+                    value={draft.shopSpecs}
+                    disabled={!capabilities.shopSpecs}
+                    onChange={(e) => setDraft((s) => ({ ...s, shopSpecs: e.target.value }))}
+                    placeholder="Customer-facing specs summary"
                   />
                 </label>
 
                 <label className="text-sm text-slate-300 md:col-span-2">
-                  Product image URL
+                  Shop image URL
                   <input
                     className={`${fieldClass} mt-1 disabled:cursor-not-allowed disabled:opacity-60`}
-                    value={draft.imageUrl}
-                    disabled={!capabilities.imageUrl}
-                    onChange={(e) => setDraft((s) => ({ ...s, imageUrl: e.target.value }))}
+                    value={draft.shopImageUrl}
+                    disabled={!capabilities.shopImageUrl}
+                    onChange={(e) => setDraft((s) => ({ ...s, shopImageUrl: e.target.value }))}
                     placeholder="https://..."
                   />
                 </label>

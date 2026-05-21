@@ -1,22 +1,12 @@
 import { noStoreJson, requireRole, getActorId } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import { getProductTableCapabilities } from "@/lib/productTableCapabilities";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
 const MAX_SKU_LENGTH = 80;
-
-type PosCatalogueCapabilities = {
-  schemaMode: "modern" | "legacy";
-  showInShop: boolean;
-  shopCategory: boolean;
-  shopTitle: boolean;
-  shopShortDescription: boolean;
-  imageUrl: boolean;
-  brand: boolean;
-  warranty: boolean;
-  specs: boolean;
-};
 
 const productSchema = z.object({
   sku: z.string().trim().min(1).max(255).optional(),
@@ -32,10 +22,11 @@ const productSchema = z.object({
   commissionRequiresApproval: z.boolean().optional().default(false),
   showInShop: z.boolean().optional(),
   shopCategory: z.string().trim().max(120).nullable().optional(),
-  shopTitle: z.string().trim().max(255).nullable().optional(),
   shopShortDescription: z.string().trim().max(1000).nullable().optional(),
-  imageUrl: z.string().trim().max(500).nullable().optional(),
-  brand: z.string().trim().max(120).nullable().optional(),
+  shopWarranty: z.string().trim().max(255).nullable().optional(),
+  shopSpecs: z.string().trim().max(2000).nullable().optional(),
+  shopImageUrl: z.string().trim().max(500).nullable().optional(),
+  shopBrand: z.string().trim().max(120).nullable().optional(),
 }).superRefine((data, ctx) => {
   if (!data.variableCost && !(Number(data.lastBuyingPrice ?? 0) > 0)) {
     ctx.addIssue({
@@ -61,30 +52,61 @@ function withSkuSuffix(base: string, suffix: number) {
   return `${base.slice(0, Math.max(1, MAX_SKU_LENGTH - suffixText.length))}${suffixText}`;
 }
 
-async function getProductTableCapabilities(): Promise<{
-  available: Set<string>;
-  capabilities: PosCatalogueCapabilities;
-}> {
-  const columns = await prisma.$queryRawUnsafe<Array<{ column_name: string }>>(
-    `SELECT column_name FROM information_schema.columns WHERE table_name = 'Product' ORDER BY ordinal_position`,
-  );
-  const available = new Set(columns.map((entry) => entry.column_name));
-  const isModern = available.has("sku");
+function normalizeOptionalText(value: string | null | undefined) {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
+}
 
-  return {
-    available,
-    capabilities: {
-      schemaMode: isModern ? "modern" : "legacy",
-      showInShop: available.has("showInShop"),
-      shopCategory: available.has("shopCategory"),
-      shopTitle: available.has("shopTitle"),
-      shopShortDescription: available.has("shopShortDescription"),
-      imageUrl: available.has("imageUrl"),
-      brand: available.has("brand"),
-      warranty: available.has("defaultWarranty"),
-      specs: available.has("shopShortDescription"),
-    },
-  };
+async function findExistingSku(capabilities: Awaited<ReturnType<typeof getProductTableCapabilities>>, sku: string) {
+  if (capabilities.schemaMode === "modern") {
+    const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `SELECT "id" FROM "Product" WHERE "sku" = $1 LIMIT 1`,
+      sku,
+    );
+    return rows[0] ?? null;
+  }
+
+  const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+    `SELECT "id" FROM "Product" WHERE COALESCE("key", '') = $1 LIMIT 1`,
+    sku,
+  );
+  return rows[0] ?? null;
+}
+
+function buildShopInsertFragments(capabilities: Awaited<ReturnType<typeof getProductTableCapabilities>>, data: z.infer<typeof productSchema>) {
+  const columns: string[] = [];
+  const values: unknown[] = [];
+
+  if (capabilities.showInShop) {
+    columns.push(`"showInShop"`);
+    values.push(Boolean(data.showInShop));
+  }
+  if (capabilities.shopCategory) {
+    columns.push(`"shopCategory"`);
+    values.push(normalizeOptionalText(data.shopCategory));
+  }
+  if (capabilities.shopShortDescription) {
+    columns.push(`"shopShortDescription"`);
+    values.push(normalizeOptionalText(data.shopShortDescription));
+  }
+  if (capabilities.shopWarranty) {
+    columns.push(`"shopWarranty"`);
+    values.push(normalizeOptionalText(data.shopWarranty));
+  }
+  if (capabilities.shopSpecs) {
+    columns.push(`"shopSpecs"`);
+    values.push(normalizeOptionalText(data.shopSpecs));
+  }
+  if (capabilities.shopImageUrl) {
+    columns.push(`"shopImageUrl"`);
+    values.push(normalizeOptionalText(data.shopImageUrl));
+  }
+  if (capabilities.shopBrand) {
+    columns.push(`"shopBrand"`);
+    values.push(normalizeOptionalText(data.shopBrand));
+  }
+
+  return { columns, values };
 }
 
 export async function GET(req: Request) {
@@ -95,10 +117,10 @@ export async function GET(req: Request) {
   const q = (searchParams.get("q") || "").trim();
   const includeInactive = ["1", "true", "yes"].includes((searchParams.get("includeInactive") || "").toLowerCase());
   const limit = Math.min(200, Math.max(1, Number(searchParams.get("limit") || "100")));
-  const { available, capabilities } = await getProductTableCapabilities();
+  const capabilities = await getProductTableCapabilities(prisma);
   const qPattern = `%${q.replace(/[%_]/g, "\\$&")}%`;
 
-  const products = available.has("sku")
+  const items = capabilities.schemaMode === "modern"
     ? await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
         `
           SELECT
@@ -116,10 +138,11 @@ export async function GET(req: Request) {
             COALESCE("commissionRequiresApproval", false) AS "commissionRequiresApproval",
             ${capabilities.showInShop ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
             ${capabilities.shopCategory ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
-            ${capabilities.shopTitle ? `"shopTitle"` : `NULL::text`} AS "shopTitle",
             ${capabilities.shopShortDescription ? `"shopShortDescription"` : `NULL::text`} AS "shopShortDescription",
-            ${capabilities.imageUrl ? `"imageUrl"` : `NULL::text`} AS "imageUrl",
-            ${capabilities.brand ? `"brand"` : `NULL::text`} AS "brand"
+            ${capabilities.shopWarranty ? `"shopWarranty"` : `NULL::text`} AS "shopWarranty",
+            ${capabilities.shopSpecs ? `"shopSpecs"` : `NULL::text`} AS "shopSpecs",
+            ${capabilities.shopImageUrl ? `"shopImageUrl"` : `NULL::text`} AS "shopImageUrl",
+            ${capabilities.shopBrand ? `"shopBrand"` : `NULL::text`} AS "shopBrand"
           FROM "Product"
           WHERE ($1::boolean = true OR COALESCE("isActive", true) = true)
             AND (
@@ -153,10 +176,11 @@ export async function GET(req: Request) {
             false AS "commissionRequiresApproval",
             ${capabilities.showInShop ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
             ${capabilities.shopCategory ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
-            ${capabilities.shopTitle ? `"shopTitle"` : `NULL::text`} AS "shopTitle",
             ${capabilities.shopShortDescription ? `"shopShortDescription"` : `NULL::text`} AS "shopShortDescription",
-            ${capabilities.imageUrl ? `"imageUrl"` : `NULL::text`} AS "imageUrl",
-            ${capabilities.brand ? `"brand"` : `NULL::text`} AS "brand"
+            ${capabilities.shopWarranty ? `"shopWarranty"` : `NULL::text`} AS "shopWarranty",
+            ${capabilities.shopSpecs ? `"shopSpecs"` : `NULL::text`} AS "shopSpecs",
+            ${capabilities.shopImageUrl ? `"shopImageUrl"` : `NULL::text`} AS "shopImageUrl",
+            ${capabilities.shopBrand ? `"shopBrand"` : `NULL::text`} AS "shopBrand"
           FROM "Product"
           WHERE ($1::boolean = true OR COALESCE("active", true) = true)
             AND (
@@ -174,7 +198,7 @@ export async function GET(req: Request) {
         limit,
       );
 
-  return noStoreJson({ items: products, capabilities });
+  return noStoreJson({ items, capabilities });
 }
 
 export async function POST(req: Request) {
@@ -187,45 +211,90 @@ export async function POST(req: Request) {
     return noStoreJson({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  const capabilities = await getProductTableCapabilities(prisma);
   const actorId = (auth.session?.user as { id?: string } | undefined)?.id ?? (await getActorId());
   const data = parsed.data;
-  // TODO: Persist shop-specific catalogue fields only after the Product table is upgraded safely.
   const skuBase = slugifySku(data.sku || data.name);
 
   let sku = skuBase;
   let suffix = 1;
-  while (await prisma.product.findUnique({ where: { sku }, select: { id: true } })) {
+  while (await findExistingSku(capabilities, sku)) {
     sku = withSkuSuffix(skuBase, suffix);
     suffix += 1;
   }
 
-  const created = await prisma.product.create({
-    data: {
-      sku,
-      name: data.name,
-      category: data.category,
-      sellingPrice: data.sellingPrice,
-      lastBuyingPrice: data.variableCost ? null : data.lastBuyingPrice ?? null,
-      defaultWarranty: data.defaultWarranty?.trim() || null,
-      variableCost: data.variableCost,
-      isActive: data.isActive,
-      commissionEnabled: data.commissionEnabled,
-      commissionAmount: data.commissionEnabled ? data.commissionAmount ?? 0 : null,
-      commissionRequiresApproval: data.commissionEnabled ? data.commissionRequiresApproval : false,
-    },
-  });
+  const shopFragments = buildShopInsertFragments(capabilities, data);
+  const created = capabilities.schemaMode === "modern"
+    ? (await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+        `
+          INSERT INTO "Product" (
+            "sku",
+            "name",
+            "category",
+            "sellingPrice",
+            "lastBuyingPrice",
+            "defaultWarranty",
+            "variableCost",
+            "isActive",
+            "commissionEnabled",
+            "commissionAmount",
+            "commissionRequiresApproval"
+            ${shopFragments.columns.length ? `, ${shopFragments.columns.join(", ")}` : ""}
+          )
+          VALUES (
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11
+            ${shopFragments.values.map((_, index) => `,$${12 + index}`).join("")}
+          )
+          RETURNING *
+        `,
+        sku,
+        data.name,
+        data.category,
+        data.sellingPrice,
+        data.variableCost ? null : data.lastBuyingPrice ?? null,
+        normalizeOptionalText(data.defaultWarranty),
+        Boolean(data.variableCost),
+        Boolean(data.isActive),
+        Boolean(data.commissionEnabled),
+        data.commissionEnabled ? data.commissionAmount ?? 0 : null,
+        data.commissionEnabled ? Boolean(data.commissionRequiresApproval) : false,
+        ...shopFragments.values,
+      ))[0]
+    : (await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+        `
+          INSERT INTO "Product" (
+            "key",
+            "name",
+            "unit",
+            "sellPrice",
+            "active"
+            ${shopFragments.columns.length ? `, ${shopFragments.columns.join(", ")}` : ""}
+          )
+          VALUES (
+            $1,$2,$3,$4,$5
+            ${shopFragments.values.map((_, index) => `,$${6 + index}`).join("")}
+          )
+          RETURNING *
+        `,
+        sku,
+        data.name,
+        data.category,
+        data.sellingPrice,
+        Boolean(data.isActive),
+        ...shopFragments.values,
+      ))[0];
 
   if (actorId) {
     await prisma.actionLog.create({
       data: {
         actorId,
         entity: "Product",
-        entityId: created.id,
+        entityId: String(created.id),
         action: "POS_PRODUCT_CREATE",
-        after: created,
+        after: created as Prisma.InputJsonValue,
       },
     });
   }
 
-  return noStoreJson({ ok: true, item: created }, { status: 201 });
+  return noStoreJson({ ok: true, item: created, capabilities }, { status: 201 });
 }

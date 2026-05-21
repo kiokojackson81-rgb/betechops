@@ -111,3 +111,12 @@ Then verify:
 - Do not deduct stock.
 - Do not process payments.
 - Keep mock fallback available until catalogue QA is complete.
+
+## Rollback note
+
+If the ecommerce field migration causes issues:
+
+- Keep `NEXT_PUBLIC_SHOP_USE_OPS_API=false`.
+- Keep `showInShop=false` for products until the catalogue is reviewed again.
+- Roll back the deployment if needed.
+- POS core fields and sales flow should remain unaffected because the migration is additive only.
