@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Menu, ShoppingCart, User2, X } from "lucide-react";
 import ShopSearchBar from "@/app/shop/_components/ShopSearchBar";
+import { getShopCartCount, useShopCartItems } from "@/app/shop/cartStore";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 
 type ShopHeaderProps = {
@@ -13,6 +14,8 @@ type ShopHeaderProps = {
 
 export default function ShopHeader({ navLinks }: ShopHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  useShopCartItems();
+  const cartCount = getShopCartCount();
 
   return (
     <header className={`sticky top-0 z-50 ${shopStyles.headerGlass}`}>
@@ -38,13 +41,18 @@ export default function ShopHeader({ navLinks }: ShopHeaderProps) {
           </Link>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
+            <Link
+              href="/shop/cart"
               aria-label="Open cart"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-[#7a0000]/10 bg-white text-slate-700 shadow-[0_12px_24px_rgba(15,23,42,0.05)]"
+              className="relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-[#7a0000]/10 bg-white text-slate-700 shadow-[0_12px_24px_rgba(15,23,42,0.05)]"
             >
               <ShoppingCart className="h-5 w-5" />
-            </button>
+              {cartCount > 0 ? (
+                <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#7a0000] px-1 text-[10px] font-black text-white">
+                  {cartCount}
+                </span>
+              ) : null}
+            </Link>
             <button
               type="button"
               aria-label="Open account"
@@ -111,13 +119,13 @@ export default function ShopHeader({ navLinks }: ShopHeaderProps) {
               <User2 className="h-4 w-4" />
               <span className="hidden xl:inline">Account</span>
             </button>
-            <button
-              type="button"
+            <Link
+              href="/shop/cart"
               className="inline-flex items-center gap-2 rounded-2xl bg-[#7a0000] px-4 py-3 text-sm font-semibold text-white shadow-[0_16px_30px_rgba(122,0,0,0.18)]"
             >
               <ShoppingCart className="h-4 w-4" />
-              <span className="hidden xl:inline">Cart</span>
-            </button>
+              <span>{cartCount > 0 ? `Cart (${cartCount})` : "Cart"}</span>
+            </Link>
           </div>
         </div>
       </div>

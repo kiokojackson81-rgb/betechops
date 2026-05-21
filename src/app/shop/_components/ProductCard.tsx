@@ -1,7 +1,10 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
-import { MessageCircle, ShoppingCart } from "lucide-react";
+import { MessageCircle } from "lucide-react";
 import type { ShopProduct } from "@/app/shop/shopData";
+import AddToCartButton from "@/app/shop/_components/AddToCartButton";
 import { formatCurrency } from "@/app/shop/_components/shopStyles";
 
 const WHATSAPP_PHONE = "254722151083";
@@ -71,13 +74,10 @@ export default function ProductCard({ product }: ProductCardProps) {
         </div>
 
         <div className="mt-4 grid gap-2 sm:mt-5">
-          <button
-            type="button"
+          <AddToCartButton
+            productId={product.id}
             className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-2xl bg-[#7a0000] px-4 py-3 text-xs font-bold text-white shadow-[0_16px_30px_rgba(122,0,0,0.18)] transition hover:-translate-y-0.5 sm:min-h-[3.15rem] sm:text-sm"
-          >
-            <ShoppingCart className="h-4 w-4" />
-            Add to Cart
-          </button>
+          />
           <Link
             href={whatsappHref}
             target="_blank"
