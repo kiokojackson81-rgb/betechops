@@ -104,7 +104,7 @@ export default async function ShopCategoryPage({ params }: { params: Promise<{ s
                 <ShopStatePanel
                   eyebrow="Category pending"
                   title="Products will appear here."
-                  copy="This category is already planned in the Betech Solar store structure, but its mock products are not populated yet."
+                  copy="This category is already planned in the Betech Solar store structure, but its preview products are not populated yet."
                   primaryHref="/shop/request-quote"
                   primaryLabel="Request Quote"
                   secondaryHref="/shop"

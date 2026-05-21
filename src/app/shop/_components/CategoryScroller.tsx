@@ -29,6 +29,8 @@ type CategoryScrollerProps = {
 };
 
 export default function CategoryScroller({ categories }: CategoryScrollerProps) {
+  const getCategoryHref = (slug: string) => (slug === "request-quotation" ? "/shop/request-quote" : `/shop/category/${slug}`);
+
   return (
     <section className="py-12 sm:py-16">
       <div className={shopStyles.shell}>
@@ -48,7 +50,7 @@ export default function CategoryScroller({ categories }: CategoryScrollerProps) 
               return (
                 <Link
                   key={category.slug}
-                  href={category.slug === "request-quotation" ? "#quote" : `#${category.slug}`}
+                  href={getCategoryHref(category.slug)}
                   className="group w-[15.75rem] shrink-0 overflow-hidden rounded-[28px] border border-[#7a0000]/10 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.06)] transition duration-300 hover:-translate-y-1"
                 >
                   <div className="relative h-32 border-b border-[#7a0000]/10 bg-[linear-gradient(135deg,#fff7e6_0%,#ffffff_100%)]">
@@ -74,7 +76,7 @@ export default function CategoryScroller({ categories }: CategoryScrollerProps) 
             return (
               <Link
                 key={category.slug}
-                href={category.slug === "request-quotation" ? "#quote" : `#${category.slug}`}
+                href={getCategoryHref(category.slug)}
                 className="group overflow-hidden rounded-[30px] border border-[#7a0000]/10 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.06)] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_26px_60px_rgba(122,0,0,0.12)]"
               >
                 <div className="relative h-40 border-b border-[#7a0000]/10 bg-[linear-gradient(135deg,#fff7e6_0%,#ffffff_100%)]">

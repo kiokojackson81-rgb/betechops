@@ -33,7 +33,7 @@ export default function CartClient({ products }: CartClientProps) {
         <ShopStatePanel
           eyebrow="Your cart is empty"
           title="Start with genuine Betech Solar products."
-          copy="Add panels, inverters, batteries, pumps, heaters, or full kits to continue with the mock checkout flow."
+          copy="Add panels, inverters, batteries, pumps, heaters, or full kits to continue with the preview checkout flow."
           primaryHref="/shop"
           primaryLabel="Continue Shopping"
           secondaryHref="/shop/request-quote"

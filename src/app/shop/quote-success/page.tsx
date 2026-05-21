@@ -9,7 +9,7 @@ import { shopNavLinks } from "@/app/shop/shopData";
 
 export const metadata: Metadata = buildShopMetadata({
   title: "Quote Request Confirmation",
-  description: "Review your Betech Solar quote request reference and next steps while the shop remains in preview mode.",
+  description: "Review your Betech Solar quote request reference and next steps while the online store remains in preview mode.",
 });
 
 export default async function ShopQuoteSuccessPage({

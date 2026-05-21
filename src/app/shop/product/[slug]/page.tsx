@@ -128,7 +128,7 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
                     </div>
                     <div className="flex items-start gap-3">
                       <ShieldCheck className="mt-1 h-4 w-4 shrink-0 text-[#7a0000]" />
-                      <span>Mock checkout only for now. Real payment and ops flows will be integrated later.</span>
+                      <span>Preview checkout only for now. A Betech Solar team member will confirm stock, delivery, and payment steps before any live processing begins.</span>
                     </div>
                   </div>
                 </div>

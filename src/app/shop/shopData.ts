@@ -43,12 +43,12 @@ export type ShopProductSection = {
 };
 
 export const shopNavLinks = [
-  { label: "Solar Panels", href: "#solar-panels" },
-  { label: "Inverters", href: "#hybrid-inverters" },
-  { label: "Batteries", href: "#solar-batteries" },
-  { label: "Full Kits", href: "#best-selling-solar-kits" },
-  { label: "Pumps", href: "#water-pumps" },
-  { label: "Request Quote", href: "#quote" },
+  { label: "Solar Panels", href: "/shop/category/solar-panels" },
+  { label: "Inverters", href: "/shop/category/solar-inverters" },
+  { label: "Batteries", href: "/shop/category/solar-batteries" },
+  { label: "Full Kits", href: "/shop/category/solar-full-kits" },
+  { label: "Pumps", href: "/shop/category/solar-water-pumps" },
+  { label: "Request Quote", href: "/shop/request-quote" },
 ];
 
 export const shopCategories: ShopCategory[] = [

@@ -68,12 +68,12 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
 
   if (!detailedItems.length) {
     return (
-      <div className={`${shopStyles.softCard} p-6 sm:p-8`}>
-        <div className={shopStyles.sectionEyebrow}>Cart required</div>
-        <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-950">Add products before starting checkout.</h1>
-        <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">
-          This checkout stays mock-only for now and will create a safe pending ecommerce order later when ops integration starts.
-        </p>
+        <div className={`${shopStyles.softCard} p-6 sm:p-8`}>
+          <div className={shopStyles.sectionEyebrow}>Cart required</div>
+          <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-950">Add products before starting checkout.</h1>
+          <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">
+            This checkout stays in preview mode for now and will create a safe pending ecommerce order later when ops integration starts.
+          </p>
         <div className="mt-6">
           <Link href="/shop/cart" className={shopStyles.primaryButton}>
             Go to Cart
@@ -94,7 +94,7 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
           setError(null);
 
           try {
-            const result = await createShopOrder({
+            await createShopOrder({
               items: detailedItems.map((item) => ({
                 productId: item.product.id,
                 quantity: item.quantity,
@@ -133,19 +133,19 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
             });
             clearCartAfterOrder();
             router.push(
-              `/shop/order-success?ref=${encodeURIComponent(savedOrder.orderRef)}&mode=${encodeURIComponent(result.source || "mock")}`,
+              `/shop/order-success?ref=${encodeURIComponent(savedOrder.orderRef)}&mode=${encodeURIComponent("preview")}`,
             );
           } catch (submissionError) {
-            setError(submissionError instanceof Error ? submissionError.message : "Unable to create mock order.");
+            setError(submissionError instanceof Error ? submissionError.message : "Unable to create the preview order request.");
           } finally {
             setSubmitting(false);
           }
         }}
       >
         <div className={shopStyles.sectionEyebrow}>Checkout</div>
-        <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-950">Complete your mock Betech Solar checkout.</h1>
+        <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-950">Complete your Betech Solar preview checkout.</h1>
         <p className="mt-3 text-base leading-7 text-slate-600">
-          This phase does not connect live backend logic yet. Submitting creates a safe mock pending order only.
+          This preview does not connect live backend logic yet. Submitting creates a safe test order request only and does not confirm payment automatically.
         </p>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -266,10 +266,10 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
           <span>{formatCurrency(subtotal)}</span>
         </div>
         <p className="mt-4 text-sm leading-6 text-slate-500">
-          TODO: Checkout should create pending ecommerce order in ops and later connect customer, delivery, and receipt workflows.
+          Preview mode only: a Betech Solar team member will still confirm availability, delivery planning, and payment steps manually.
         </p>
         <p className="mt-2 text-sm leading-6 text-slate-500">
-          Safe flag: <code>NEXT_PUBLIC_SHOP_USE_OPS_API=false</code> keeps checkout in mock fallback mode.
+          Safe flag: <code>NEXT_PUBLIC_SHOP_USE_OPS_API=false</code> keeps checkout in preview fallback mode.
         </p>
       </aside>
     </div>

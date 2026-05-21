@@ -9,7 +9,7 @@ import { shopNavLinks } from "@/app/shop/shopData";
 
 export const metadata: Metadata = buildShopMetadata({
   title: "Order Confirmation Preview",
-  description: "Review your mock Betech Solar order reference, selected products, and confirmation status during preview testing.",
+  description: "Review your Betech Solar preview order reference, selected products, and confirmation status during customer testing.",
 });
 
 export default async function ShopOrderSuccessPage({

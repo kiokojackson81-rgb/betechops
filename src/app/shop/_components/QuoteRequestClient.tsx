@@ -85,7 +85,7 @@ export default function QuoteRequestClient({ preferredProduct = "" }: QuoteReque
           });
           router.push(`/shop/quote-success?ref=${encodeURIComponent(savedQuote.quoteRef)}`);
         } catch (submissionError) {
-          setError(submissionError instanceof Error ? submissionError.message : "Unable to send mock quote request.");
+          setError(submissionError instanceof Error ? submissionError.message : "Unable to send the preview quote request.");
         } finally {
           setSubmitting(false);
         }
@@ -210,7 +210,7 @@ export default function QuoteRequestClient({ preferredProduct = "" }: QuoteReque
         </Link>
       </div>
       <p className="mt-4 text-sm leading-6 text-slate-500">
-        Safe flag: <code>NEXT_PUBLIC_SHOP_USE_OPS_API=false</code> keeps quote submission in mock fallback mode.
+        Safe flag: <code>NEXT_PUBLIC_SHOP_USE_OPS_API=false</code> keeps quote submission in preview fallback mode.
       </p>
     </form>
   );

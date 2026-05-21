@@ -13,7 +13,7 @@ type OrderSuccessClientProps = {
   mode?: string;
 };
 
-export default function OrderSuccessClient({ orderRef, mode = "mock" }: OrderSuccessClientProps) {
+export default function OrderSuccessClient({ orderRef, mode = "preview" }: OrderSuccessClientProps) {
   const [order, setOrder] = useState<MockOrderRecord | null>(null);
 
   useEffect(() => {
@@ -35,11 +35,11 @@ export default function OrderSuccessClient({ orderRef, mode = "mock" }: OrderSuc
     <div className="grid gap-5">
       <div className={`${shopStyles.darkPanel} p-6 sm:p-10`}>
         <div className="inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">
-          Mock order received
+          Preview order received
         </div>
         <h1 className="mt-4 text-4xl font-black tracking-tight text-white">Your order has been received. Our Betech Solar team will contact you shortly.</h1>
         <p className="mt-4 max-w-2xl text-base leading-7 text-white/76">
-          This success state is still running in safe {mode} mode. Later, the same flow will hand off to pending ecommerce orders inside ops.
+          This success state is still running in safe {mode} preview mode. Payment has not been processed automatically, and our team will confirm availability, delivery, and next steps with you directly.
         </p>
         <div className="mt-6 grid gap-4 lg:grid-cols-[0.92fr_1.08fr]">
           <div className="rounded-[26px] border border-white/10 bg-white/10 p-5">
@@ -76,7 +76,7 @@ export default function OrderSuccessClient({ orderRef, mode = "mock" }: OrderSuc
                 </div>
               </div>
             ) : (
-              <p className="mt-4 text-sm leading-6 text-white/76">Your latest mock order summary will appear here after checkout submission.</p>
+              <p className="mt-4 text-sm leading-6 text-white/76">Your latest preview order summary will appear here after checkout submission.</p>
             )}
           </div>
         </div>

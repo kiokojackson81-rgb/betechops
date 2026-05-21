@@ -38,7 +38,7 @@ export default function QuoteSuccessClient({ quoteRef }: QuoteSuccessClientProps
         </div>
         <h1 className="mt-4 text-4xl font-black tracking-tight text-white">Our solar sizing team will contact you shortly.</h1>
         <p className="mt-4 max-w-2xl text-base leading-7 text-white/76">
-          We have logged your mock quote request and a Betech Solar team member will follow up with the right panel, inverter, battery, and accessory guidance.
+          We have logged your preview quote request and a Betech Solar team member will follow up with the right panel, inverter, battery, and accessory guidance.
         </p>
         <div className="mt-6 rounded-[26px] border border-white/10 bg-white/10 p-5">
           <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#ffd761]">Quote reference</div>
