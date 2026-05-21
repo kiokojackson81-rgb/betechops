@@ -120,3 +120,9 @@ If the ecommerce field migration causes issues:
 - Keep `showInShop=false` for products until the catalogue is reviewed again.
 - Roll back the deployment if needed.
 - POS core fields and sales flow should remain unaffected because the migration is additive only.
+
+## Migration readiness gate
+
+- Before applying `20260521094500_add_product_shop_fields`, confirm the target environment is already caught up on its earlier Prisma migrations.
+- If the live `Product` table still uses the legacy columns `key`, `unit`, `sellPrice`, and `active`, do not run the normal migration flow for the shop fields in that environment yet.
+- Reconcile the outstanding migration backlog first, then apply the additive shop-field migration through the project's standard migration process.
