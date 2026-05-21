@@ -157,3 +157,40 @@ If the ecommerce field migration causes issues:
 - Confirm a solar product can save with ecommerce fields.
 - Confirm `/shop/catalogue-preview` shows enabled products correctly.
 - Confirm the solar guard still rejects non-solar products.
+
+## Initial seeded shop-ready products
+
+The first clean solar catalogue set added to the existing POS Catalogue is:
+
+- `585W Solar Panel` -> `shopCategory=solar-panels`
+- `620W Solar Panel` -> `shopCategory=solar-panels`
+- `3.5KW Hybrid Inverter` -> `shopCategory=solar-inverters`
+- `5KW Hybrid Inverter` -> `shopCategory=solar-inverters`
+- `200AH Gel Battery` -> `shopCategory=solar-batteries`
+- `200AH Lithium Battery` -> `shopCategory=lithium-batteries`
+- `3KW Solar Full Kit` -> `shopCategory=solar-full-kits`
+- `DC 12V Solar Water Pump` -> `shopCategory=solar-water-pumps`
+- `Solar Flood Light` -> `shopCategory=solar-lights`
+
+All of the above were saved with:
+
+- valid positive price
+- `showInShop=true`
+- brand
+- short description
+- warranty
+- specs
+- blank `shopImageUrl` so category placeholders render safely for now
+
+## Current missing data and known gaps
+
+- Real image URLs are still missing for the initial seeded solar products.
+- Because the live `Product` table is still on the legacy POS shape, stock quantity is not available, so seeded ops-mode products currently map conservatively to `quote_only`.
+- Warranty and specs are now present for the seeded solar products, so those warnings are no longer blocking catalogue preview acceptance.
+
+## Current catalogue-preview status
+
+- `/shop/catalogue-preview` is clean for the initial seeded solar set.
+- The `9` seeded solar products appear as accepted for customer-facing `/shop`.
+- Existing non-solar products such as `Beef` and `Goat` remain rejected.
+- Missing image warnings remain internal only and do not leak technical details to customer pages.
