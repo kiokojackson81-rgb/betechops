@@ -57,12 +57,24 @@ export const adminHandoffWorkflow = [
   "Order status updates to confirmed/dispatched/delivered/cancelled.",
 ] as const;
 
+export const futureOrderStatuses = [
+  "pending",
+  "confirmed",
+  "awaiting_payment",
+  "paid",
+  "dispatched",
+  "delivered",
+  "cancelled",
+] as const;
+
+export const futureQuoteStatuses = ["new", "contacted", "quoted", "converted", "closed"] as const;
+
 export function buildMockOrderReference() {
-  return `BSO-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+  return `BT-SHOP-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 }
 
 export function buildMockQuoteReference() {
-  return `QUOTE-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+  return `BT-QUOTE-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 }
 
 export function buildEcommerceOrderDraft(input: {

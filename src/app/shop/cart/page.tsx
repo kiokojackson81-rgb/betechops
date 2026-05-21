@@ -3,6 +3,7 @@ import CartClient from "@/app/shop/_components/CartClient";
 import ShopBreadcrumbs from "@/app/shop/_components/ShopBreadcrumbs";
 import ShopFooter from "@/app/shop/_components/ShopFooter";
 import ShopHeader from "@/app/shop/_components/ShopHeader";
+import ShopSupportStrip from "@/app/shop/_components/ShopSupportStrip";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { getShopProducts } from "@/app/shop/shopApi";
 import { shopNavLinks } from "@/app/shop/shopData";
@@ -28,6 +29,9 @@ export default async function ShopCartPage() {
           </div>
           <div className="mt-6">
             <CartClient products={products} />
+          </div>
+          <div className="mt-6">
+            <ShopSupportStrip />
           </div>
         </div>
       </section>

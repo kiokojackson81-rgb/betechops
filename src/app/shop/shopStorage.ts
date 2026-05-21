@@ -1,0 +1,139 @@
+"use client";
+
+import { clearShopCart } from "@/app/shop/cartStore";
+
+const SHOP_ORDER_KEY = "betech-shop-last-order";
+const SHOP_QUOTE_KEY = "betech-shop-last-quote";
+const SHOP_ORDER_COUNTER_KEY = "betech-shop-order-counter";
+const SHOP_QUOTE_COUNTER_KEY = "betech-shop-quote-counter";
+
+export type MockOrderRecord = {
+  orderRef: string;
+  customerName: string;
+  phone: string;
+  location: string;
+  deliveryMethod: string;
+  paymentPreference: string;
+  items: Array<{
+    productId: string;
+    productName: string;
+    quantity: number;
+    unitPrice: number;
+    lineTotal: number;
+  }>;
+  subtotal: number;
+  notes?: string;
+  source: "mock";
+  status: "pending";
+  createdAt: string;
+};
+
+export type MockQuoteRecord = {
+  quoteRef: string;
+  customerName: string;
+  phone: string;
+  location: string;
+  propertyType: string;
+  loadDescription: string;
+  budgetRange: string;
+  preferredProducts: string;
+  notes?: string;
+  source: "mock";
+  status: "new";
+  createdAt: string;
+};
+
+function isBrowser() {
+  return typeof window !== "undefined";
+}
+
+function readJson<T>(key: string): T | null {
+  if (!isBrowser()) return null;
+
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+function writeJson(key: string, value: unknown) {
+  if (!isBrowser()) return;
+  window.localStorage.setItem(key, JSON.stringify(value));
+}
+
+function buildSequentialReference(prefix: "BT-SHOP" | "BT-QUOTE", counterKey: string) {
+  if (!isBrowser()) {
+    return `${prefix}-${new Date().getFullYear()}-0001`;
+  }
+
+  const year = new Date().getFullYear();
+  const current = readJson<{ year: number; count: number }>(counterKey);
+  const nextCount = current?.year === year ? current.count + 1 : 1;
+  writeJson(counterKey, { year, count: nextCount });
+
+  return `${prefix}-${year}-${String(nextCount).padStart(4, "0")}`;
+}
+
+export function saveMockOrder(input: Omit<MockOrderRecord, "orderRef" | "source" | "status" | "createdAt">) {
+  const order: MockOrderRecord = {
+    orderRef: buildSequentialReference("BT-SHOP", SHOP_ORDER_COUNTER_KEY),
+    source: "mock",
+    status: "pending",
+    createdAt: new Date().toISOString(),
+    ...input,
+  };
+
+  writeJson(SHOP_ORDER_KEY, order);
+  return order;
+}
+
+export function getLastMockOrder() {
+  return readJson<MockOrderRecord>(SHOP_ORDER_KEY);
+}
+
+export function saveMockQuote(input: Omit<MockQuoteRecord, "quoteRef" | "source" | "status" | "createdAt">) {
+  const quote: MockQuoteRecord = {
+    quoteRef: buildSequentialReference("BT-QUOTE", SHOP_QUOTE_COUNTER_KEY),
+    source: "mock",
+    status: "new",
+    createdAt: new Date().toISOString(),
+    ...input,
+  };
+
+  writeJson(SHOP_QUOTE_KEY, quote);
+  return quote;
+}
+
+export function getLastMockQuote() {
+  return readJson<MockQuoteRecord>(SHOP_QUOTE_KEY);
+}
+
+export function clearCartAfterOrder() {
+  clearShopCart();
+}
+
+export function buildStoredOrderItems(
+  items: Array<{
+    productId: string;
+    quantity: number;
+  }>,
+  productLookup: Map<string, { name: string; price: number }>,
+) {
+  return items.flatMap((item) => {
+    const product = productLookup.get(item.productId);
+    if (!product) return [];
+
+    return [
+      {
+        productId: item.productId,
+        productName: product.name,
+        quantity: item.quantity,
+        unitPrice: product.price,
+        lineTotal: product.price * item.quantity,
+      },
+    ];
+  });
+}

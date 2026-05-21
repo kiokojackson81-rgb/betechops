@@ -1,5 +1,6 @@
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
 import CheckoutClient from "@/app/shop/_components/CheckoutClient";
+import ShopSupportStrip from "@/app/shop/_components/ShopSupportStrip";
 import ShopBreadcrumbs from "@/app/shop/_components/ShopBreadcrumbs";
 import ShopFooter from "@/app/shop/_components/ShopFooter";
 import ShopHeader from "@/app/shop/_components/ShopHeader";
@@ -25,6 +26,9 @@ export default async function ShopCheckoutPage() {
           </div>
           <div className="mt-6">
             <CheckoutClient products={products} />
+          </div>
+          <div className="mt-6">
+            <ShopSupportStrip />
           </div>
         </div>
       </section>

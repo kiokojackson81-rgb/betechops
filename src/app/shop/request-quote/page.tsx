@@ -3,6 +3,7 @@ import QuoteRequestClient from "@/app/shop/_components/QuoteRequestClient";
 import ShopBreadcrumbs from "@/app/shop/_components/ShopBreadcrumbs";
 import ShopFooter from "@/app/shop/_components/ShopFooter";
 import ShopHeader from "@/app/shop/_components/ShopHeader";
+import ShopSupportStrip from "@/app/shop/_components/ShopSupportStrip";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { shopNavLinks } from "@/app/shop/shopData";
 
@@ -28,6 +29,9 @@ export default async function ShopRequestQuotePage({
           </div>
           <div className="mt-6">
             <QuoteRequestClient preferredProduct={params.product ?? ""} />
+          </div>
+          <div className="mt-6">
+            <ShopSupportStrip />
           </div>
         </div>
       </section>

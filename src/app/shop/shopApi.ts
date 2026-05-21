@@ -1,8 +1,6 @@
 import { allShopProducts, type ShopProduct } from "@/app/shop/shopData";
 import {
   buildEcommerceOrderDraft,
-  buildMockOrderReference,
-  buildMockQuoteReference,
   buildQuoteRequestDraft,
   isShopOpsApiEnabled,
 } from "@/app/shop/integrationPlan";
@@ -76,7 +74,6 @@ export async function createShopOrder(input: ShopOrderInput) {
   });
 
   const lineCount = input.items.reduce((sum, item) => sum + item.quantity, 0);
-  const orderRef = buildMockOrderReference();
 
   if (isShopOpsApiEnabled()) {
     const response = await fetch("http://127.0.0.1:3000/api/shop/orders", {
@@ -95,7 +92,6 @@ export async function createShopOrder(input: ShopOrderInput) {
     ok: true,
     source: "mock" as const,
     status: "pending_mock" as const,
-    orderRef,
     itemCount: lineCount,
     draft,
     payload: input,
@@ -131,7 +127,6 @@ export async function createQuoteRequest(input: QuoteRequestInput) {
   return {
     ok: true,
     source: "mock" as const,
-    reference: buildMockQuoteReference(),
     message: "Quote request placeholder accepted.",
     draft,
     request: input,

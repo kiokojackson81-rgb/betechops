@@ -3,13 +3,23 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { buildDetailedCart, clearShopCart, useShopCartItems } from "@/app/shop/cartStore";
+import { buildDetailedCart, useShopCartItems } from "@/app/shop/cartStore";
 import { createShopOrder } from "@/app/shop/shopApi";
 import type { ShopProduct } from "@/app/shop/shopData";
 import { formatCurrency, shopStyles } from "@/app/shop/_components/shopStyles";
+import { buildStoredOrderItems, clearCartAfterOrder, saveMockOrder } from "@/app/shop/shopStorage";
 
 type CheckoutClientProps = {
   products: ShopProduct[];
+};
+
+type CheckoutFieldErrors = {
+  fullName?: string;
+  phoneNumber?: string;
+  location?: string;
+  deliveryMethod?: string;
+  paymentPreference?: string;
+  cart?: string;
 };
 
 export default function CheckoutClient({ products }: CheckoutClientProps) {
@@ -19,14 +29,33 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
   const subtotal = detailedItems.reduce((sum, item) => sum + item.lineTotal, 0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<CheckoutFieldErrors>({});
   const [form, setForm] = useState({
     fullName: "",
     phoneNumber: "",
     location: "",
-    deliveryMethod: "Nairobi rider delivery",
-    paymentPreference: "Pay on delivery Nairobi",
+    deliveryMethod: "",
+    paymentPreference: "",
     notes: "",
   });
+
+  function validateForm() {
+    const nextErrors: CheckoutFieldErrors = {};
+
+    if (!form.fullName.trim()) nextErrors.fullName = "Please enter the customer name for this Betech Solar order.";
+    if (!form.phoneNumber.trim()) nextErrors.phoneNumber = "Please enter a phone number so our solar team can confirm the order.";
+    if (!form.location.trim()) nextErrors.location = "Please tell us the county or delivery location.";
+    if (!form.deliveryMethod.trim()) nextErrors.deliveryMethod = "Please choose how you want Betech Solar to deliver or prepare pickup.";
+    if (!form.paymentPreference.trim()) nextErrors.paymentPreference = "Please choose your preferred payment arrangement.";
+    if (!detailedItems.length) nextErrors.cart = "Your cart is empty. Add products before submitting this order.";
+
+    setFieldErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  }
+
+  const inputBaseClass = "min-h-[3.4rem] rounded-2xl border bg-white px-4 outline-none transition";
+  const resolveFieldClass = (fieldError?: string) =>
+    `${inputBaseClass} ${fieldError ? "border-red-300 ring-2 ring-red-100" : "border-[#7a0000]/10 focus:border-[#7a0000]/30"}`;
 
   if (!detailedItems.length) {
     return (
@@ -51,6 +80,7 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
         className={`${shopStyles.lightCard} p-5 sm:p-6`}
         onSubmit={async (event) => {
           event.preventDefault();
+          if (!validateForm()) return;
           setSubmitting(true);
           setError(null);
 
@@ -68,9 +98,26 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
               notes: form.notes,
             });
 
-            clearShopCart();
+            const savedOrder = saveMockOrder({
+              customerName: form.fullName.trim(),
+              phone: form.phoneNumber.trim(),
+              location: form.location.trim(),
+              deliveryMethod: form.deliveryMethod,
+              paymentPreference: form.paymentPreference,
+              notes: form.notes.trim() || undefined,
+              subtotal,
+              items: buildStoredOrderItems(
+                detailedItems.map((item) => ({
+                  productId: item.product.id,
+                  quantity: item.quantity,
+                })),
+                new Map(products.map((product) => [product.id, { name: product.name, price: product.price }])),
+              ),
+            });
+
+            clearCartAfterOrder();
             router.push(
-              `/shop/order-success?ref=${encodeURIComponent(result.orderRef)}&mode=${encodeURIComponent(result.source || "mock")}`,
+              `/shop/order-success?ref=${encodeURIComponent(savedOrder.orderRef)}&mode=${encodeURIComponent(result.source || "mock")}`,
             );
           } catch (submissionError) {
             setError(submissionError instanceof Error ? submissionError.message : "Unable to create mock order.");
@@ -89,53 +136,77 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
           <label className="grid gap-2 text-sm font-semibold text-slate-700">
             Full name
             <input
-              required
               value={form.fullName}
-              onChange={(event) => setForm((current) => ({ ...current, fullName: event.target.value }))}
-              className="min-h-[3.4rem] rounded-2xl border border-[#7a0000]/10 bg-white px-4 outline-none"
+              onChange={(event) => {
+                const value = event.target.value;
+                setForm((current) => ({ ...current, fullName: value }));
+                if (fieldErrors.fullName) setFieldErrors((current) => ({ ...current, fullName: undefined }));
+              }}
+              className={resolveFieldClass(fieldErrors.fullName)}
             />
+            {fieldErrors.fullName ? <span className="text-xs font-semibold text-red-600">{fieldErrors.fullName}</span> : null}
           </label>
           <label className="grid gap-2 text-sm font-semibold text-slate-700">
             Phone number
             <input
-              required
               value={form.phoneNumber}
-              onChange={(event) => setForm((current) => ({ ...current, phoneNumber: event.target.value }))}
-              className="min-h-[3.4rem] rounded-2xl border border-[#7a0000]/10 bg-white px-4 outline-none"
+              onChange={(event) => {
+                const value = event.target.value;
+                setForm((current) => ({ ...current, phoneNumber: value }));
+                if (fieldErrors.phoneNumber) setFieldErrors((current) => ({ ...current, phoneNumber: undefined }));
+              }}
+              className={resolveFieldClass(fieldErrors.phoneNumber)}
             />
+            {fieldErrors.phoneNumber ? <span className="text-xs font-semibold text-red-600">{fieldErrors.phoneNumber}</span> : null}
           </label>
           <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
             County / location
             <input
-              required
               value={form.location}
-              onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))}
-              className="min-h-[3.4rem] rounded-2xl border border-[#7a0000]/10 bg-white px-4 outline-none"
+              onChange={(event) => {
+                const value = event.target.value;
+                setForm((current) => ({ ...current, location: value }));
+                if (fieldErrors.location) setFieldErrors((current) => ({ ...current, location: undefined }));
+              }}
+              className={resolveFieldClass(fieldErrors.location)}
             />
+            {fieldErrors.location ? <span className="text-xs font-semibold text-red-600">{fieldErrors.location}</span> : null}
           </label>
           <label className="grid gap-2 text-sm font-semibold text-slate-700">
             Delivery method
             <select
               value={form.deliveryMethod}
-              onChange={(event) => setForm((current) => ({ ...current, deliveryMethod: event.target.value }))}
-              className="min-h-[3.4rem] rounded-2xl border border-[#7a0000]/10 bg-white px-4 outline-none"
+              onChange={(event) => {
+                const value = event.target.value;
+                setForm((current) => ({ ...current, deliveryMethod: value }));
+                if (fieldErrors.deliveryMethod) setFieldErrors((current) => ({ ...current, deliveryMethod: undefined }));
+              }}
+              className={resolveFieldClass(fieldErrors.deliveryMethod)}
             >
+              <option value="">Select delivery method</option>
               <option>Nairobi rider delivery</option>
               <option>Countrywide courier</option>
               <option>Shop pickup</option>
             </select>
+            {fieldErrors.deliveryMethod ? <span className="text-xs font-semibold text-red-600">{fieldErrors.deliveryMethod}</span> : null}
           </label>
           <label className="grid gap-2 text-sm font-semibold text-slate-700">
             Payment preference
             <select
               value={form.paymentPreference}
-              onChange={(event) => setForm((current) => ({ ...current, paymentPreference: event.target.value }))}
-              className="min-h-[3.4rem] rounded-2xl border border-[#7a0000]/10 bg-white px-4 outline-none"
+              onChange={(event) => {
+                const value = event.target.value;
+                setForm((current) => ({ ...current, paymentPreference: value }));
+                if (fieldErrors.paymentPreference) setFieldErrors((current) => ({ ...current, paymentPreference: undefined }));
+              }}
+              className={resolveFieldClass(fieldErrors.paymentPreference)}
             >
+              <option value="">Select payment preference</option>
               <option>Pay on delivery Nairobi</option>
               <option>Pay transport fee first</option>
               <option>Deposit/full payment</option>
             </select>
+            {fieldErrors.paymentPreference ? <span className="text-xs font-semibold text-red-600">{fieldErrors.paymentPreference}</span> : null}
           </label>
           <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
             Order notes
@@ -148,6 +219,7 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
           </label>
         </div>
 
+        {fieldErrors.cart ? <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{fieldErrors.cart}</div> : null}
         {error ? <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 
         <div className="mt-6 flex flex-col gap-3 sm:flex-row">

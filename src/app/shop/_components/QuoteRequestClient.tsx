@@ -1,17 +1,26 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { createQuoteRequest } from "@/app/shop/shopApi";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
+import { saveMockQuote } from "@/app/shop/shopStorage";
 
 type QuoteRequestClientProps = {
   preferredProduct?: string;
 };
 
 export default function QuoteRequestClient({ preferredProduct = "" }: QuoteRequestClientProps) {
-  const [submitted, setSubmitted] = useState<{ reference: string; name: string } | null>(null);
+  const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{
+    name?: string;
+    phone?: string;
+    location?: string;
+    propertyType?: string;
+  }>({});
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -22,27 +31,18 @@ export default function QuoteRequestClient({ preferredProduct = "" }: QuoteReque
     preferredProducts: preferredProduct,
     notes: "",
   });
+  const inputBaseClass = "min-h-[3.4rem] rounded-2xl border bg-white px-4 outline-none transition";
+  const resolveFieldClass = (fieldError?: string) =>
+    `${inputBaseClass} ${fieldError ? "border-red-300 ring-2 ring-red-100" : "border-[#7a0000]/10 focus:border-[#7a0000]/30"}`;
 
-  if (submitted) {
-    return (
-      <div className={`${shopStyles.darkPanel} p-6 sm:p-8`}>
-        <div className="inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">
-          Quote Request Sent
-        </div>
-        <h1 className="mt-4 text-3xl font-black tracking-tight text-white">Thanks, {submitted.name}.</h1>
-        <p className="mt-3 max-w-2xl text-base leading-7 text-white/76">
-          Our solar sizing team will contact you shortly. Your mock quote request reference is <span className="font-black text-white">{submitted.reference}</span>.
-        </p>
-        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-          <Link href="/shop" className={shopStyles.goldButton}>
-            Back to Shop
-          </Link>
-          <Link href="https://wa.me/254722151083" target="_blank" rel="noreferrer" className={shopStyles.whatsappButton}>
-            Talk to our solar team on WhatsApp
-          </Link>
-        </div>
-      </div>
-    );
+  function validateForm() {
+    const nextErrors: { name?: string; phone?: string; location?: string; propertyType?: string } = {};
+    if (!form.name.trim()) nextErrors.name = "Please enter your name so Betech Solar can prepare this quote.";
+    if (!form.phone.trim()) nextErrors.phone = "Please enter a phone number so our solar sizing team can reach you.";
+    if (!form.location.trim()) nextErrors.location = "Please tell us where the system will be installed or delivered.";
+    if (!form.propertyType.trim()) nextErrors.propertyType = "Please choose the property type for this quote.";
+    setFieldErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
   }
 
   return (
@@ -50,19 +50,38 @@ export default function QuoteRequestClient({ preferredProduct = "" }: QuoteReque
       className={`${shopStyles.lightCard} p-5 sm:p-6`}
       onSubmit={async (event) => {
         event.preventDefault();
+        if (!validateForm()) return;
         setSubmitting(true);
-        const result = await createQuoteRequest({
-          name: form.name,
-          phone: form.phone,
-          location: form.location,
-          propertyType: form.propertyType,
-          load: form.load,
-          budgetRange: form.budgetRange,
-          preferredProducts: form.preferredProducts,
-          notes: form.notes,
-        });
-        setSubmitted({ reference: result.reference, name: form.name });
-        setSubmitting(false);
+        setError(null);
+        try {
+          await createQuoteRequest({
+            name: form.name,
+            phone: form.phone,
+            location: form.location,
+            propertyType: form.propertyType,
+            load: form.load,
+            budgetRange: form.budgetRange,
+            preferredProducts: form.preferredProducts,
+            notes: form.notes,
+          });
+
+          const savedQuote = saveMockQuote({
+            customerName: form.name.trim(),
+            phone: form.phone.trim(),
+            location: form.location.trim(),
+            propertyType: form.propertyType,
+            loadDescription: form.load.trim(),
+            budgetRange: form.budgetRange,
+            preferredProducts: form.preferredProducts.trim(),
+            notes: form.notes.trim() || undefined,
+          });
+
+          router.push(`/shop/quote-success?ref=${encodeURIComponent(savedQuote.quoteRef)}`);
+        } catch (submissionError) {
+          setError(submissionError instanceof Error ? submissionError.message : "Unable to send mock quote request.");
+        } finally {
+          setSubmitting(false);
+        }
       }}
     >
       <div className={shopStyles.sectionEyebrow}>Request a Solar System Quote</div>
@@ -75,37 +94,52 @@ export default function QuoteRequestClient({ preferredProduct = "" }: QuoteReque
         <label className="grid gap-2 text-sm font-semibold text-slate-700">
           Customer name
           <input
-            required
             value={form.name}
-            onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-            className="min-h-[3.4rem] rounded-2xl border border-[#7a0000]/10 bg-white px-4 outline-none"
+            onChange={(event) => {
+              const value = event.target.value;
+              setForm((current) => ({ ...current, name: value }));
+              if (fieldErrors.name) setFieldErrors((current) => ({ ...current, name: undefined }));
+            }}
+            className={resolveFieldClass(fieldErrors.name)}
           />
+          {fieldErrors.name ? <span className="text-xs font-semibold text-red-600">{fieldErrors.name}</span> : null}
         </label>
         <label className="grid gap-2 text-sm font-semibold text-slate-700">
           Phone number
           <input
-            required
             value={form.phone}
-            onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
-            className="min-h-[3.4rem] rounded-2xl border border-[#7a0000]/10 bg-white px-4 outline-none"
+            onChange={(event) => {
+              const value = event.target.value;
+              setForm((current) => ({ ...current, phone: value }));
+              if (fieldErrors.phone) setFieldErrors((current) => ({ ...current, phone: undefined }));
+            }}
+            className={resolveFieldClass(fieldErrors.phone)}
           />
+          {fieldErrors.phone ? <span className="text-xs font-semibold text-red-600">{fieldErrors.phone}</span> : null}
         </label>
         <label className="grid gap-2 text-sm font-semibold text-slate-700">
           Location
           <input
-            required
             value={form.location}
-            onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))}
-            className="min-h-[3.4rem] rounded-2xl border border-[#7a0000]/10 bg-white px-4 outline-none"
+            onChange={(event) => {
+              const value = event.target.value;
+              setForm((current) => ({ ...current, location: value }));
+              if (fieldErrors.location) setFieldErrors((current) => ({ ...current, location: undefined }));
+            }}
+            className={resolveFieldClass(fieldErrors.location)}
           />
+          {fieldErrors.location ? <span className="text-xs font-semibold text-red-600">{fieldErrors.location}</span> : null}
         </label>
         <label className="grid gap-2 text-sm font-semibold text-slate-700">
           Property type
           <select
-            required
             value={form.propertyType}
-            onChange={(event) => setForm((current) => ({ ...current, propertyType: event.target.value }))}
-            className="min-h-[3.4rem] rounded-2xl border border-[#7a0000]/10 bg-white px-4 outline-none"
+            onChange={(event) => {
+              const value = event.target.value;
+              setForm((current) => ({ ...current, propertyType: value }));
+              if (fieldErrors.propertyType) setFieldErrors((current) => ({ ...current, propertyType: undefined }));
+            }}
+            className={resolveFieldClass(fieldErrors.propertyType)}
           >
             <option value="">Select property type</option>
             <option>Home</option>
@@ -114,6 +148,7 @@ export default function QuoteRequestClient({ preferredProduct = "" }: QuoteReque
             <option>Office</option>
             <option>School / institution</option>
           </select>
+          {fieldErrors.propertyType ? <span className="text-xs font-semibold text-red-600">{fieldErrors.propertyType}</span> : null}
         </label>
         <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
           Load / appliances
@@ -158,6 +193,7 @@ export default function QuoteRequestClient({ preferredProduct = "" }: QuoteReque
         </label>
       </div>
 
+      {error ? <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
       <div className="mt-6 flex flex-col gap-3 sm:flex-row">
         <button type="submit" disabled={submitting} className={shopStyles.primaryButton}>
           {submitting ? "Sending..." : "Submit Quote Request"}
