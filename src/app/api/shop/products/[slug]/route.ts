@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { buildMockProductsResponse, isShopOpsApiEnabled } from "@/app/shop/integrationPlan";
-import { getOpsCatalogueProductsReadOnly } from "@/app/shop/shopProductMapper";
+import { getOpsCatalogueProductsReadOnlyMapped } from "@/app/shop/shopProductMapper";
 import { allShopProducts } from "@/app/shop/shopData";
 
 const paramsSchema = z.object({
@@ -26,7 +26,7 @@ export async function GET(_: Request, context: { params: Promise<{ slug: string 
   }
 
   try {
-    const product = (await getOpsCatalogueProductsReadOnly()).find((item) => item.slug === parsed.data.slug) ?? null;
+    const product = (await getOpsCatalogueProductsReadOnlyMapped()).find((item) => item.slug === parsed.data.slug) ?? null;
 
     return NextResponse.json({
       ok: true,

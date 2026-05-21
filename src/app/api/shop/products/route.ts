@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { buildMockProductsResponse, isShopOpsApiEnabled } from "@/app/shop/integrationPlan";
-import { filterShopProducts, getOpsCatalogueProductsReadOnly } from "@/app/shop/shopProductMapper";
+import { filterShopProducts, getOpsCatalogueProductsReadOnlyMapped } from "@/app/shop/shopProductMapper";
 import { allShopProducts } from "@/app/shop/shopData";
 
 // TODO: Keep catalogue reads read-only until live ecommerce order handling is approved.
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const products = filterShopProducts(await getOpsCatalogueProductsReadOnly(), { category, q });
+    const products = filterShopProducts(await getOpsCatalogueProductsReadOnlyMapped(), { category, q });
 
     return NextResponse.json({
       ok: true,

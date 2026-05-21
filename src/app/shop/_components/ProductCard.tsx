@@ -26,6 +26,7 @@ export default function ProductCard({ product }: ProductCardProps) {
   const quoteHref = `https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent(
     `Hello Betech Solar, I need a quote for ${product.name}.`,
   )}`;
+  const priceLabel = product.source === "ops" ? "Betech price" : "Betech sample price";
 
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-[28px] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#fffaf1_0%,#ffffff_100%)] text-slate-950 shadow-[0_18px_40px_rgba(15,23,42,0.06)] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_28px_60px_rgba(122,0,0,0.14)]">
@@ -62,7 +63,7 @@ export default function ProductCard({ product }: ProductCardProps) {
         </ul>
 
         <div className="mt-4 rounded-[22px] bg-[linear-gradient(135deg,#7a0000_0%,#991010_100%)] px-3 py-3 text-white shadow-[0_14px_28px_rgba(122,0,0,0.14)]">
-          <div className="text-[10px] font-black uppercase tracking-[0.16em] text-[#ffd761]">Betech sample price</div>
+          <div className="text-[10px] font-black uppercase tracking-[0.16em] text-[#ffd761]">{priceLabel}</div>
           <div className="mt-1 flex items-end gap-2">
             <div className="text-lg font-black sm:text-2xl">{formatCurrency(product.price)}</div>
             {product.oldPrice ? <div className="pb-0.5 text-xs font-semibold text-white/55 line-through sm:text-sm">{formatCurrency(product.oldPrice)}</div> : null}

@@ -4,7 +4,7 @@ import {
   buildQuoteRequestDraft,
   isShopOpsApiEnabled,
 } from "@/app/shop/integrationPlan";
-import { filterShopProducts, getOpsCatalogueProductsReadOnly } from "@/app/shop/shopProductMapper";
+import { filterShopProducts, getOpsCatalogueProductsReadOnlyMapped } from "@/app/shop/shopProductMapper";
 
 export type ShopOrderInput = {
   items: Array<{
@@ -54,7 +54,7 @@ async function getServerShopProducts(input?: { category?: string; q?: string }):
   }
 
   try {
-    return filterShopProducts(await getOpsCatalogueProductsReadOnly(), input);
+    return filterShopProducts(await getOpsCatalogueProductsReadOnlyMapped(), input);
   } catch (error) {
     console.error("[shop] server-side product lookup fell back to mock data", error);
     return filterShopProducts(allShopProducts, input);

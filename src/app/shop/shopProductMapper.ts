@@ -21,6 +21,24 @@ type ShopCategoryDefinition = {
   image: string;
 };
 
+export type ShopProductMappingField = "category" | "price" | "brand" | "image" | "warranty" | "specs";
+
+export type ShopProductMappingWarning = {
+  field: ShopProductMappingField;
+  message: string;
+};
+
+export type ShopProductMappingPreview = {
+  product: ShopProduct | null;
+  opsProductId: string;
+  rawName: string;
+  rawCategory: string;
+  normalizedCategory: string;
+  warnings: ShopProductMappingWarning[];
+  includedInCatalog: boolean;
+  source: "ops";
+};
+
 const OPS_SHOP_CATEGORY_MAP: ShopCategoryDefinition[] = [
   {
     slug: "solar-panels",
@@ -58,6 +76,20 @@ const OPS_SHOP_CATEGORY_MAP: ShopCategoryDefinition[] = [
     image: "/agents/product-solar-kit-clean.png",
   },
   {
+    slug: "all-in-one-systems",
+    title: "All-in-One Systems",
+    keywords: ["all in one", "all-in-one", "aio", "integrated system"],
+    visualType: "kit",
+    image: "/agents/product-solar-kit-clean.png",
+  },
+  {
+    slug: "solar-water-heaters",
+    title: "Solar Water Heaters",
+    keywords: ["water heater", "heater", "hot water"],
+    visualType: "heater",
+    image: "/agents/cta-house-generated.png",
+  },
+  {
     slug: "solar-water-pumps",
     title: "Solar Water Pumps",
     keywords: ["pump", "water pump", "borehole"],
@@ -75,6 +107,13 @@ const OPS_SHOP_CATEGORY_MAP: ShopCategoryDefinition[] = [
     slug: "accessories",
     title: "Accessories",
     keywords: ["accessory", "accessories", "cable", "connector", "mount", "breaker"],
+    visualType: "kit",
+    image: "/agents/product-accessories-clean.png",
+  },
+  {
+    slug: "uncategorized",
+    title: "Uncategorized",
+    keywords: [],
     visualType: "kit",
     image: "/agents/product-accessories-clean.png",
   },
@@ -123,18 +162,41 @@ function matchCategoryDefinition(input: string) {
   );
 }
 
+function getCategoryDefinitionBySlug(slug: string) {
+  return OPS_SHOP_CATEGORY_MAP.find((entry) => entry.slug === slug) ?? OPS_SHOP_CATEGORY_MAP[OPS_SHOP_CATEGORY_MAP.length - 1];
+}
+
 function inferCategoryDefinition(product: Pick<OpsCatalogueProduct, "category" | "name" | "sku">) {
-  return (
-    matchCategoryDefinition(product.category) ??
+  const rawCategory = String(product.category || "").trim();
+  const matched =
+    matchCategoryDefinition(rawCategory) ??
     matchCategoryDefinition(product.name) ??
-    matchCategoryDefinition(product.sku) ?? {
-      slug: "accessories",
-      title: "Accessories",
-      keywords: ["accessories"],
-      visualType: "kit" as const,
-      image: "/agents/product-accessories-clean.png",
-    }
-  );
+    matchCategoryDefinition(product.sku);
+
+  if (matched) {
+    return {
+      definition: matched,
+      warning:
+        rawCategory && matchCategoryDefinition(rawCategory)
+          ? null
+          : {
+              field: "category" as const,
+              message: `Category "${rawCategory || "blank"}" was normalized to ${matched.title}.`,
+            },
+    };
+  }
+
+  const fallback = rawCategory ? getCategoryDefinitionBySlug("accessories") : getCategoryDefinitionBySlug("uncategorized");
+
+  return {
+    definition: fallback,
+    warning: {
+      field: "category" as const,
+      message: rawCategory
+        ? `Unknown category "${rawCategory}" was mapped to ${fallback.title}.`
+        : `Missing category was mapped to ${fallback.title}.`,
+    },
+  };
 }
 
 function inferBrand(name: string) {
@@ -146,16 +208,17 @@ function inferSpecs(product: OpsCatalogueProduct, categoryTitle: string) {
   const normalizedName = product.name.trim();
   const powerMatch = normalizedName.match(/(\d+(?:\.\d+)?)\s*(kw|kva|w|ah|v)/i);
 
-  return compactUnique([
+  const specs = compactUnique([
     powerMatch ? `${powerMatch[1]}${powerMatch[2].toUpperCase()} configuration` : null,
     categoryTitle,
     `SKU: ${product.sku}`,
-    "Ask Betech Solar for full technical specs and sizing support.",
   ]).slice(0, 4);
+
+  return specs.length ? specs : ["Contact us for full specs."];
 }
 
 function inferWarranty(product: OpsCatalogueProduct) {
-  return product.defaultWarranty?.trim() || "Warranty support available from Betech Solar.";
+  return product.defaultWarranty?.trim() || "Contact Betech Solar for warranty guidance.";
 }
 
 function inferStockStatus(product: OpsCatalogueProduct): ShopProduct["stockStatus"] {
@@ -176,31 +239,90 @@ function inferTags(product: OpsCatalogueProduct, category: ShopCategoryDefinitio
   ]).slice(0, 6);
 }
 
-export function mapOpsProductToShopProduct(product: OpsCatalogueProduct): ShopProduct | null {
-  const price = Number(product.sellingPrice);
-  if (!Number.isFinite(price) || price < 0) return null;
+function buildMappingWarnings(
+  product: OpsCatalogueProduct,
+  category: ShopCategoryDefinition,
+  price: number,
+  brand: string,
+  specs: string[],
+  warranty: string,
+  categoryWarning: ShopProductMappingWarning | null,
+) {
+  const warnings: ShopProductMappingWarning[] = [];
 
-  const category = inferCategoryDefinition(product);
+  if (categoryWarning) warnings.push(categoryWarning);
+  if (!String(product.category || "").trim()) {
+    warnings.push({ field: "category", message: "Category is blank in the ops catalogue." });
+  }
+  if (!Number.isFinite(price) || price < 0) {
+    warnings.push({ field: "price", message: "Price is missing or invalid, so the product is excluded from customer-facing catalogue results." });
+  }
+  if (brand === "Betech Solar") {
+    warnings.push({ field: "brand", message: "Brand was not found explicitly in the ops catalogue name and fell back to Betech Solar." });
+  }
+  if (!category.image) {
+    warnings.push({ field: "image", message: "No product image mapping was available, so a clean placeholder will be used." });
+  } else {
+    warnings.push({ field: "image", message: `Customer display uses the ${category.title} placeholder visual until ops image fields are ready.` });
+  }
+  if (!product.defaultWarranty?.trim()) {
+    warnings.push({ field: "warranty", message: "Warranty is missing in the ops catalogue. Customer pages fall back to contact-for-warranty guidance." });
+  }
+  if (
+    specs.length === 1 &&
+    specs[0] === "Contact us for full specs."
+  ) {
+    warnings.push({ field: "specs", message: "Specs are missing in the ops catalogue. Customer pages fall back to contact-for-specs guidance." });
+  }
+
+  return warnings;
+}
+
+function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview {
+  const price = Number(product.sellingPrice);
+  const { definition: category, warning: categoryWarning } = inferCategoryDefinition(product);
   const brand = inferBrand(product.name);
+  const specs = inferSpecs(product, category.title);
+  const warranty = inferWarranty(product);
+  const warnings = buildMappingWarnings(product, category, price, brand, specs, warranty, categoryWarning);
+  const includedInCatalog = Number.isFinite(price) && price >= 0;
+
+  const safeName = product.name.trim() || product.sku || `OPS Product ${product.id}`;
+  const mappedProduct: ShopProduct | null = includedInCatalog
+    ? {
+        id: `ops-${product.id}`,
+        slug: slugify(safeName),
+        name: safeName,
+        category: category.title,
+        brand,
+        price,
+        oldPrice: undefined,
+        image: category.image,
+        visualType: category.visualType,
+        specs,
+        warranty,
+        stockStatus: inferStockStatus(product),
+        tags: inferTags(product, category, brand),
+        whatsappMessage: `Hello Betech Solar, I want more details about ${safeName}.`,
+        source: "ops",
+        opsProductId: product.id,
+      }
+    : null;
 
   return {
-    id: `ops-${product.id}`,
-    slug: slugify(product.name || product.sku || product.id),
-    name: product.name.trim() || product.sku,
-    category: category.title,
-    brand,
-    price,
-    oldPrice: undefined,
-    image: category.image,
-    visualType: category.visualType,
-    specs: inferSpecs(product, category.title),
-    warranty: inferWarranty(product),
-    stockStatus: inferStockStatus(product),
-    tags: inferTags(product, category, brand),
-    whatsappMessage: `Hello Betech Solar, I want more details about ${product.name.trim() || product.sku}.`,
-    source: "ops",
+    product: mappedProduct,
     opsProductId: product.id,
+    rawName: safeName,
+    rawCategory: String(product.category || "").trim(),
+    normalizedCategory: category.title,
+    warnings,
+    includedInCatalog,
+    source: "ops",
   };
+}
+
+export function mapOpsProductToShopProduct(product: OpsCatalogueProduct): ShopProduct | null {
+  return mapOpsProduct(product).product;
 }
 
 export function filterShopProducts(
@@ -278,7 +400,11 @@ export async function getOpsCatalogueProductsReadOnly() {
     throw new Error(`Unsupported Product table shape for read-only shop sync. Columns: ${Array.from(available).join(", ")}`);
   }
 
-  return products
-    .map(mapOpsProductToShopProduct)
+  return products.map(mapOpsProduct).filter((entry): entry is ShopProductMappingPreview => Boolean(entry));
+}
+
+export async function getOpsCatalogueProductsReadOnlyMapped() {
+  return (await getOpsCatalogueProductsReadOnly())
+    .map((entry) => entry.product)
     .filter((entry): entry is ShopProduct => Boolean(entry));
 }

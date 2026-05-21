@@ -8,10 +8,12 @@ const defaultDescription =
 export function buildShopMetadata(input?: {
   title?: string;
   description?: string;
+  robots?: Metadata["robots"];
 }): Metadata {
   return {
     title: input?.title ? `${input.title} | ${defaultTitle}` : `${defaultTitle} | Solar Panels, Batteries, Inverters & Kits`,
     description: input?.description || defaultDescription,
+    robots: input?.robots,
   };
 }
 

@@ -76,6 +76,12 @@ export const phaseNineReadOnlySafetyNotes = [
   "Mock fallback must remain available until catalogue testing is complete.",
 ] as const;
 
+export const phaseTenCatalogueQaNotes = [
+  "Phase 10 audits live ops catalogue data for ecommerce display in read-only mode only.",
+  "No order creation, POS linkage, receipt creation, stock deduction, or payment mutation is allowed in catalogue QA mode.",
+  "Customer-facing /shop pages must continue to fall back to mock data if the ops catalogue is incomplete or unavailable.",
+] as const;
+
 export function buildMockOrderReference() {
   return `BT-SHOP-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 }
