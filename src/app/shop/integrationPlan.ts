@@ -85,6 +85,9 @@ export const phaseTenCatalogueQaNotes = [
 export const futureShopVisibilityNotes = [
   "Recommended future Product field: showInShop boolean default false.",
   "Once live ecommerce mode is enabled, only products with showInShop=true and status=active should appear in /shop.",
+  "showInShop=false by default prevents accidental exposure from the POS catalogue.",
+  "The non-solar keyword guard remains a secondary protection even after showInShop is added.",
+  "Live shop catalogue mode should only be enabled after /shop/catalogue-preview is clean.",
 ] as const;
 
 export function buildMockOrderReference() {

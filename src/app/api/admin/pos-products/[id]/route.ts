@@ -20,6 +20,12 @@ const updateSchema = z.object({
   commissionEnabled: z.boolean().optional(),
   commissionAmount: z.coerce.number().min(0).nullable().optional(),
   commissionRequiresApproval: z.boolean().optional(),
+  showInShop: z.boolean().optional(),
+  shopCategory: z.string().trim().max(120).nullable().optional(),
+  shopTitle: z.string().trim().max(255).nullable().optional(),
+  shopShortDescription: z.string().trim().max(1000).nullable().optional(),
+  imageUrl: z.string().trim().max(500).nullable().optional(),
+  brand: z.string().trim().max(120).nullable().optional(),
 });
 
 function normalizeSku(input: string) {
@@ -55,6 +61,7 @@ export async function PATCH(req: Request, context: ParamsContext) {
 
   const actorId = (auth.session?.user as { id?: string } | undefined)?.id ?? (await getActorId());
   const data = parsed.data;
+  // TODO: Persist shop-specific catalogue fields only after the Product table is upgraded safely.
   const nextVariableCost = data.variableCost ?? Boolean((existing as any).variableCost);
   const nextLastBuyingPrice =
     data.lastBuyingPrice !== undefined

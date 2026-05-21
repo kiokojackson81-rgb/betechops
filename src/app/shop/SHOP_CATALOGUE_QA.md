@@ -73,6 +73,19 @@ If the raw ops category is ambiguous or blank, fix it in ops before live launch 
 - Confirm all ecommerce-display prices before launch.
 - Confirm stock status logic so the storefront does not imply guaranteed availability incorrectly.
 
+## Admin checklist in POS Catalogue
+
+- Open `Admin -> POS Management -> Catalogue`.
+- Edit the product inside the existing POS Catalogue workflow.
+- Mark the product `Show in Online Shop` when the field becomes available.
+- Select the correct `shopCategory`.
+- Add or confirm price.
+- Add image URL when schema support is available.
+- Add warranty guidance.
+- Add specs or short description.
+- Confirm active status.
+- Confirm the product appears correctly in `/shop/catalogue-preview`.
+
 ## Live catalogue test mode
 
 Set:

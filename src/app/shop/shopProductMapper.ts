@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { ShopProduct, ShopProductVisualType } from "@/app/shop/shopData";
+import { SHOP_CATEGORY_OPTIONS } from "@/app/shop/shopCatalogConfig";
 
 type OpsCatalogueProduct = {
   id: string;
@@ -11,6 +12,12 @@ type OpsCatalogueProduct = {
   minStockLevel: number;
   stockQuantity: number;
   isActive: boolean;
+  showInShop?: boolean | null;
+  shopCategory?: string | null;
+  shopTitle?: string | null;
+  shopShortDescription?: string | null;
+  imageUrl?: string | null;
+  brand?: string | null;
 };
 
 type ShopCategoryDefinition = {
@@ -39,83 +46,67 @@ export type ShopProductMappingPreview = {
   rawName: string;
   rawCategory: string;
   normalizedCategory: string;
+  showInShopValue: boolean | null;
+  shopCategoryValue: string | null;
   warnings: ShopProductMappingWarning[];
   includedInCatalog: boolean;
-  rejectionReasons: ShopProductRejectionReason[];
+  rejectionReasons: string[];
   source: "ops";
 };
 
 const OPS_SHOP_CATEGORY_MAP: ShopCategoryDefinition[] = [
-  {
-    slug: "solar-panels",
-    title: "Solar Panels",
-    keywords: ["solar panel", "solar panels", "panel", "panels", "pv"],
-    visualType: "panel",
-    image: "/agents/product-solar-kit-clean.png",
-  },
-  {
-    slug: "solar-inverters",
-    title: "Solar Inverters",
-    keywords: ["inverter", "hybrid inverter", "off-grid inverter"],
-    visualType: "inverter",
-    image: "/agents/product-inverter-clean.png",
-  },
-  {
-    slug: "solar-batteries",
-    title: "Solar Batteries",
-    keywords: ["battery", "gel battery", "agm battery", "deep cycle"],
-    visualType: "battery",
-    image: "/agents/product-battery-clean.png",
-  },
-  {
-    slug: "lithium-batteries",
-    title: "Lithium Batteries",
-    keywords: ["lithium", "lifepo4"],
-    visualType: "battery",
-    image: "/agents/product-battery-clean.png",
-  },
-  {
-    slug: "solar-full-kits",
-    title: "Solar Full Kits",
-    keywords: ["kit", "full kit", "solar kit", "system"],
-    visualType: "kit",
-    image: "/agents/product-solar-kit-clean.png",
-  },
-  {
-    slug: "all-in-one-systems",
-    title: "All-in-One Systems",
-    keywords: ["all in one", "all-in-one", "aio", "integrated system"],
-    visualType: "kit",
-    image: "/agents/product-solar-kit-clean.png",
-  },
-  {
-    slug: "solar-water-heaters",
-    title: "Solar Water Heaters",
-    keywords: ["water heater", "heater", "hot water"],
-    visualType: "heater",
-    image: "/agents/cta-house-generated.png",
-  },
-  {
-    slug: "solar-water-pumps",
-    title: "Solar Water Pumps",
-    keywords: ["pump", "water pump", "borehole"],
-    visualType: "pump",
-    image: "/agents/product-water-pump-clean.png",
-  },
-  {
-    slug: "solar-lights",
-    title: "Solar Lights",
-    keywords: ["light", "lights", "flood light", "street light"],
-    visualType: "light",
-    image: "/agents/hero-generated-v2.png",
-  },
-  {
-    slug: "accessories",
-    title: "Accessories",
-    keywords: ["accessory", "accessories", "cable", "connector", "mount", "breaker"],
-    visualType: "kit",
-    image: "/agents/product-accessories-clean.png",
-  },
+  ...SHOP_CATEGORY_OPTIONS.map((option): ShopCategoryDefinition => ({
+    slug: option.value,
+    title: option.label,
+    keywords:
+      option.value === "solar-panels"
+        ? ["solar panel", "solar panels", "panel", "panels", "pv"]
+        : option.value === "solar-inverters"
+          ? ["inverter", "hybrid inverter", "off-grid inverter"]
+          : option.value === "solar-batteries"
+            ? ["battery", "gel battery", "agm battery", "deep cycle"]
+            : option.value === "lithium-batteries"
+              ? ["lithium", "lifepo4"]
+              : option.value === "solar-full-kits"
+                ? ["kit", "full kit", "solar kit", "system"]
+                : option.value === "all-in-one-systems"
+                  ? ["all in one", "all-in-one", "aio", "integrated system"]
+                  : option.value === "solar-water-heaters"
+                    ? ["water heater", "heater", "hot water"]
+                    : option.value === "solar-water-pumps"
+                      ? ["pump", "water pump", "borehole"]
+                      : option.value === "solar-lights"
+                        ? ["light", "lights", "flood light", "street light"]
+                        : ["accessory", "accessories", "cable", "connector", "mount", "breaker"],
+    visualType:
+      option.value === "solar-panels"
+        ? "panel"
+        : option.value === "solar-inverters"
+          ? "inverter"
+          : option.value === "solar-batteries" || option.value === "lithium-batteries"
+            ? "battery"
+            : option.value === "solar-water-pumps"
+              ? "pump"
+              : option.value === "solar-lights"
+                ? "light"
+                : option.value === "solar-water-heaters"
+                  ? "heater"
+                  : "kit",
+    image:
+      option.value === "solar-inverters"
+        ? "/agents/product-inverter-clean.png"
+        : option.value === "solar-batteries" || option.value === "lithium-batteries"
+          ? "/agents/product-battery-clean.png"
+          : option.value === "solar-water-pumps"
+            ? "/agents/product-water-pump-clean.png"
+            : option.value === "solar-lights"
+              ? "/agents/hero-generated-v2.png"
+              : option.value === "solar-water-heaters"
+                ? "/agents/cta-house-generated.png"
+                : option.value === "accessories"
+                  ? "/agents/product-accessories-clean.png"
+                  : "/agents/product-solar-kit-clean.png",
+  })),
   {
     slug: "uncategorized",
     title: "Uncategorized",
@@ -250,6 +241,11 @@ function inferCategoryDefinition(product: Pick<OpsCatalogueProduct, "category" |
   };
 }
 
+function normalizeShopCategoryValue(value: string | null | undefined) {
+  const normalized = slugify(String(value || ""));
+  return OPS_SHOP_CATEGORY_MAP.find((entry) => entry.slug === normalized) ?? null;
+}
+
 function inferBrand(name: string) {
   const hit = KNOWN_BRANDS.find((brand) => normalizeText(name).includes(normalizeText(brand)));
   return hit ?? "Betech Solar";
@@ -296,12 +292,13 @@ export function isSolarShopEligibleProduct(input: {
   tags?: string[] | null;
   specs?: string[] | null;
   price?: number | null;
+  showInShop?: boolean | null;
 }) {
   const name = String(input.name || "").trim();
   const price = Number(input.price);
   const haystacks = [name, String(input.category || ""), ...(input.tags || []), ...(input.specs || [])];
 
-  const rejectionReasons: ShopProductRejectionReason[] = [];
+  const rejectionReasons: string[] = [];
 
   if (!name) {
     rejectionReasons.push("rejected: missing required display name");
@@ -309,6 +306,10 @@ export function isSolarShopEligibleProduct(input: {
 
   if (!Number.isFinite(price) || price <= 0) {
     rejectionReasons.push("rejected: invalid price");
+  }
+
+  if (typeof input.showInShop === "boolean" && !input.showInShop) {
+    rejectionReasons.push("rejected: showInShop is false");
   }
 
   if (hasAnyKeyword(haystacks, NON_SOLAR_BLOCK_KEYWORDS) || !hasAnyKeyword(haystacks, SOLAR_ALLOW_KEYWORDS)) {
@@ -362,21 +363,28 @@ function buildMappingWarnings(
 
 function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview {
   const price = Number(product.sellingPrice);
-  const { definition: category, warning: categoryWarning } = inferCategoryDefinition(product);
+  const explicitShopCategory = normalizeShopCategoryValue(product.shopCategory);
+  const inferredCategory = inferCategoryDefinition(product);
+  const category = explicitShopCategory ?? inferredCategory.definition;
+  const categoryWarning = explicitShopCategory ? null : inferredCategory.warning;
   const safeName = product.name.trim() || product.sku || "";
-  const brand = inferBrand(safeName);
-  const specs = inferSpecs(product, category.title);
-  const warranty = inferWarranty(product);
+  const brand = product.brand?.trim() || inferBrand(safeName);
+  const specs = compactUnique([
+    product.shopShortDescription?.trim() || null,
+    ...inferSpecs(product, category.title),
+  ]).slice(0, 4);
+  const warranty = product.defaultWarranty?.trim() || inferWarranty(product);
   const warnings = buildMappingWarnings(product, category, price, brand, specs, warranty, categoryWarning);
   const eligibility = isSolarShopEligibleProduct({
-    name: safeName,
-    category: product.category || category.title,
+    name: product.shopTitle?.trim() || safeName,
+    category: product.shopCategory || product.category || category.title,
     tags: inferTags(product, category, brand),
     specs,
     price,
+    showInShop: product.showInShop,
   });
   const includedInCatalog = eligibility.eligible;
-  const fallbackName = safeName || `OPS Product ${product.id}`;
+  const fallbackName = product.shopTitle?.trim() || safeName || `OPS Product ${product.id}`;
   const mappedProduct: ShopProduct | null = includedInCatalog
     ? {
         id: `ops-${product.id}`,
@@ -386,7 +394,7 @@ function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview 
         brand,
         price,
         oldPrice: undefined,
-        image: category.image,
+        image: product.imageUrl?.trim() || category.image,
         visualType: category.visualType,
         specs,
         warranty,
@@ -404,6 +412,8 @@ function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview 
     rawName: fallbackName,
     rawCategory: String(product.category || "").trim(),
     normalizedCategory: category.title,
+    showInShopValue: typeof product.showInShop === "boolean" ? product.showInShop : null,
+    shopCategoryValue: product.shopCategory?.trim() || null,
     warnings,
     includedInCatalog,
     rejectionReasons: eligibility.rejectionReasons,
@@ -465,7 +475,13 @@ export async function getOpsCatalogueProductsReadOnly() {
         "defaultWarranty",
         COALESCE("minStockLevel", 0) AS "minStockLevel",
         COALESCE("stockQuantity", 0) AS "stockQuantity",
-        COALESCE("isActive", true) AS "isActive"
+        COALESCE("isActive", true) AS "isActive",
+        ${available.has("showInShop") ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
+        ${available.has("shopCategory") ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
+        ${available.has("shopTitle") ? `"shopTitle"` : `NULL::text`} AS "shopTitle",
+        ${available.has("shopShortDescription") ? `"shopShortDescription"` : `NULL::text`} AS "shopShortDescription",
+        ${available.has("imageUrl") ? `"imageUrl"` : `NULL::text`} AS "imageUrl",
+        ${available.has("brand") ? `"brand"` : `NULL::text`} AS "brand"
       FROM "Product"
       WHERE COALESCE("isActive", true) = true
       ORDER BY "name" ASC
@@ -481,7 +497,13 @@ export async function getOpsCatalogueProductsReadOnly() {
         NULL::text AS "defaultWarranty",
         0 AS "minStockLevel",
         0 AS "stockQuantity",
-        COALESCE("active", true) AS "isActive"
+        COALESCE("active", true) AS "isActive",
+        ${available.has("showInShop") ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
+        ${available.has("shopCategory") ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
+        ${available.has("shopTitle") ? `"shopTitle"` : `NULL::text`} AS "shopTitle",
+        ${available.has("shopShortDescription") ? `"shopShortDescription"` : `NULL::text`} AS "shopShortDescription",
+        ${available.has("imageUrl") ? `"imageUrl"` : `NULL::text`} AS "imageUrl",
+        ${available.has("brand") ? `"brand"` : `NULL::text`} AS "brand"
       FROM "Product"
       WHERE COALESCE("active", true) = true
       ORDER BY "name" ASC

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { findSimilarProducts } from "@/lib/posProductSimilarity";
 import { showToast } from "@/lib/ui/toast";
+import { SHOP_CATEGORY_OPTIONS } from "@/app/shop/shopCatalogConfig";
 
 type PosProduct = {
   id: string;
@@ -17,6 +18,24 @@ type PosProduct = {
   commissionEnabled: boolean;
   commissionAmount?: number | string | null;
   commissionRequiresApproval: boolean;
+  showInShop?: boolean | null;
+  shopCategory?: string | null;
+  shopTitle?: string | null;
+  shopShortDescription?: string | null;
+  imageUrl?: string | null;
+  brand?: string | null;
+};
+
+type PosCatalogueCapabilities = {
+  schemaMode: "modern" | "legacy";
+  showInShop: boolean;
+  shopCategory: boolean;
+  shopTitle: boolean;
+  shopShortDescription: boolean;
+  imageUrl: boolean;
+  brand: boolean;
+  warranty: boolean;
+  specs: boolean;
 };
 
 type CommissionApproval = {
@@ -44,6 +63,12 @@ type ProductDraft = {
   commissionEnabled: boolean;
   commissionAmount: string;
   commissionRequiresApproval: boolean;
+  showInShop: boolean;
+  shopCategory: string;
+  shopTitle: string;
+  shopShortDescription: string;
+  imageUrl: string;
+  brand: string;
 };
 
 const emptyDraft: ProductDraft = {
@@ -58,6 +83,24 @@ const emptyDraft: ProductDraft = {
   commissionEnabled: false,
   commissionAmount: "",
   commissionRequiresApproval: false,
+  showInShop: false,
+  shopCategory: "",
+  shopTitle: "",
+  shopShortDescription: "",
+  imageUrl: "",
+  brand: "",
+};
+
+const defaultCapabilities: PosCatalogueCapabilities = {
+  schemaMode: "legacy",
+  showInShop: false,
+  shopCategory: false,
+  shopTitle: false,
+  shopShortDescription: false,
+  imageUrl: false,
+  brand: false,
+  warranty: false,
+  specs: false,
 };
 
 const fieldClass =
@@ -100,6 +143,7 @@ function getApiErrorMessage(json: unknown, fallback: string) {
 
 export default function PosManagementClient() {
   const [products, setProducts] = useState<PosProduct[]>([]);
+  const [capabilities, setCapabilities] = useState<PosCatalogueCapabilities>(defaultCapabilities);
   const [approvals, setApprovals] = useState<CommissionApproval[]>([]);
   const [releasedApprovals, setReleasedApprovals] = useState<CommissionApproval[]>([]);
   const [draft, setDraft] = useState<ProductDraft>(emptyDraft);
@@ -127,10 +171,11 @@ export default function PosManagementClient() {
         fetch(`/api/admin/pos-commissions?status=released&limit=100`, { cache: "no-store" }),
       ]);
 
-      const productsJson = await productsRes.json().catch(() => ({ items: [] }));
+      const productsJson = await productsRes.json().catch(() => ({ items: [], capabilities: defaultCapabilities }));
       const approvalsJson = await approvalsRes.json().catch(() => ({ items: [] }));
       const releasedJson = await releasedRes.json().catch(() => ({ items: [] }));
       setProducts(Array.isArray(productsJson.items) ? productsJson.items : []);
+      setCapabilities(productsJson.capabilities && typeof productsJson.capabilities === "object" ? productsJson.capabilities : defaultCapabilities);
       setApprovals(Array.isArray(approvalsJson.items) ? approvalsJson.items : []);
       setReleasedApprovals(Array.isArray(releasedJson?.items) ? releasedJson.items : []);
     } catch (err) {
@@ -212,6 +257,12 @@ export default function PosManagementClient() {
         commissionEnabled: draft.commissionEnabled,
         commissionAmount: draft.commissionEnabled && draft.commissionAmount.trim() ? Number(draft.commissionAmount) : null,
         commissionRequiresApproval: draft.commissionEnabled ? draft.commissionRequiresApproval : false,
+        ...(capabilities.showInShop ? { showInShop: draft.showInShop } : {}),
+        ...(capabilities.shopCategory ? { shopCategory: draft.shopCategory || null } : {}),
+        ...(capabilities.shopTitle ? { shopTitle: draft.shopTitle.trim() || null } : {}),
+        ...(capabilities.shopShortDescription ? { shopShortDescription: draft.shopShortDescription.trim() || null } : {}),
+        ...(capabilities.imageUrl ? { imageUrl: draft.imageUrl.trim() || null } : {}),
+        ...(capabilities.brand ? { brand: draft.brand.trim() || null } : {}),
       };
 
       const url = draft.id ? `/api/admin/pos-products/${draft.id}` : "/api/admin/pos-products";
@@ -247,6 +298,12 @@ export default function PosManagementClient() {
       commissionEnabled: Boolean(product.commissionEnabled),
       commissionAmount: product.commissionAmount == null ? "" : String(product.commissionAmount),
       commissionRequiresApproval: Boolean(product.commissionRequiresApproval),
+      showInShop: Boolean(product.showInShop),
+      shopCategory: product.shopCategory ?? "",
+      shopTitle: product.shopTitle ?? "",
+      shopShortDescription: product.shopShortDescription ?? "",
+      imageUrl: product.imageUrl ?? "",
+      brand: product.brand ?? "",
     });
     formSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     showToast(`Editing ${product.name}`, "success");
@@ -266,6 +323,12 @@ export default function PosManagementClient() {
       commissionEnabled: true,
       commissionAmount: product.commissionAmount == null ? "" : String(product.commissionAmount),
       commissionRequiresApproval: Boolean(product.commissionRequiresApproval),
+      showInShop: Boolean(product.showInShop),
+      shopCategory: product.shopCategory ?? "",
+      shopTitle: product.shopTitle ?? "",
+      shopShortDescription: product.shopShortDescription ?? "",
+      imageUrl: product.imageUrl ?? "",
+      brand: product.brand ?? "",
     });
     formSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     showToast(`${product.commissionEnabled ? "Editing" : "Assigning"} commission for ${product.name}`, "success");
@@ -563,6 +626,94 @@ export default function PosManagementClient() {
                     disabled={!draft.commissionEnabled}
                   />
                   Require approval
+                </label>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-4">
+              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">Online Shop Controls</div>
+              <p className="mt-2 text-sm text-slate-300">
+                These controls feed the Betech Solar online shop from the existing POS Catalogue. Unsupported fields stay disabled until the Product table is upgraded safely.
+              </p>
+              {!(capabilities.showInShop || capabilities.shopCategory || capabilities.shopTitle || capabilities.shopShortDescription || capabilities.imageUrl || capabilities.brand) ? (
+                <div className="mt-3 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
+                  Live Product table is currently in <span className="font-semibold uppercase">{capabilities.schemaMode}</span> compatibility mode. `showInShop`, `shopCategory`, and optional shop display fields are planned but not yet persisted in this database shape.
+                </div>
+              ) : null}
+
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
+                  <label className="flex items-center gap-2 text-sm text-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={draft.showInShop}
+                      disabled={!capabilities.showInShop}
+                      onChange={(e) => setDraft((s) => ({ ...s, showInShop: e.target.checked }))}
+                    />
+                    Show in online shop
+                  </label>
+                  <div className="text-xs text-slate-500">Default should remain off until the product is shop-ready and solar-safe.</div>
+                </div>
+
+                <label className="text-sm text-slate-300">
+                  Shop category
+                  <select
+                    className={`${fieldClass} mt-1 disabled:cursor-not-allowed disabled:opacity-60`}
+                    value={draft.shopCategory}
+                    disabled={!capabilities.shopCategory}
+                    onChange={(e) => setDraft((s) => ({ ...s, shopCategory: e.target.value }))}
+                  >
+                    <option value="">Select shop category</option>
+                    {SHOP_CATEGORY_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="text-sm text-slate-300">
+                  Shop title
+                  <input
+                    className={`${fieldClass} mt-1 disabled:cursor-not-allowed disabled:opacity-60`}
+                    value={draft.shopTitle}
+                    disabled={!capabilities.shopTitle}
+                    onChange={(e) => setDraft((s) => ({ ...s, shopTitle: e.target.value }))}
+                    placeholder="Optional override for product name"
+                  />
+                </label>
+
+                <label className="text-sm text-slate-300">
+                  Shop brand
+                  <input
+                    className={`${fieldClass} mt-1 disabled:cursor-not-allowed disabled:opacity-60`}
+                    value={draft.brand}
+                    disabled={!capabilities.brand}
+                    onChange={(e) => setDraft((s) => ({ ...s, brand: e.target.value }))}
+                    placeholder="Optional ecommerce brand label"
+                  />
+                </label>
+
+                <label className="text-sm text-slate-300 md:col-span-2">
+                  Shop short description / specs
+                  <textarea
+                    className={`${fieldClass} mt-1 min-h-[96px] disabled:cursor-not-allowed disabled:opacity-60`}
+                    value={draft.shopShortDescription}
+                    disabled={!capabilities.shopShortDescription}
+                    onChange={(e) => setDraft((s) => ({ ...s, shopShortDescription: e.target.value }))}
+                    placeholder="Short customer-facing description or specs summary"
+                  />
+                </label>
+
+                <label className="text-sm text-slate-300 md:col-span-2">
+                  Product image URL
+                  <input
+                    className={`${fieldClass} mt-1 disabled:cursor-not-allowed disabled:opacity-60`}
+                    value={draft.imageUrl}
+                    disabled={!capabilities.imageUrl}
+                    onChange={(e) => setDraft((s) => ({ ...s, imageUrl: e.target.value }))}
+                    placeholder="https://..."
+                  />
                 </label>
               </div>
             </div>

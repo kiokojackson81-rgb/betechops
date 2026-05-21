@@ -94,6 +94,20 @@ export default async function ShopCataloguePreviewPage() {
                               </dd>
                             </div>
                             <div className="flex items-start justify-between gap-3">
+                              <dt className="font-semibold text-slate-500">POS category</dt>
+                              <dd className="text-right font-bold text-slate-900">{entry.rawCategory || "Blank"}</dd>
+                            </div>
+                            <div className="flex items-start justify-between gap-3">
+                              <dt className="font-semibold text-slate-500">showInShop</dt>
+                              <dd className="text-right font-bold text-slate-900">
+                                {entry.showInShopValue == null ? "Unavailable" : entry.showInShopValue ? "true" : "false"}
+                              </dd>
+                            </div>
+                            <div className="flex items-start justify-between gap-3">
+                              <dt className="font-semibold text-slate-500">shopCategory</dt>
+                              <dd className="text-right font-bold text-slate-900">{entry.shopCategoryValue || "Unavailable"}</dd>
+                            </div>
+                            <div className="flex items-start justify-between gap-3">
                               <dt className="font-semibold text-slate-500">Price</dt>
                               <dd className="font-bold text-slate-900">KES {entry.product!.price.toLocaleString("en-KE")}</dd>
                             </div>
@@ -108,6 +122,10 @@ export default async function ShopCataloguePreviewPage() {
                             <div className="flex items-start justify-between gap-3">
                               <dt className="font-semibold text-slate-500">Source</dt>
                               <dd className="text-right font-bold text-slate-900">{entry.product!.source}</dd>
+                            </div>
+                            <div className="flex items-start justify-between gap-3">
+                              <dt className="font-semibold text-slate-500">Status</dt>
+                              <dd className="text-right font-bold text-[#0f9d58]">Accepted for /shop</dd>
                             </div>
                           </dl>
                         </div>
@@ -161,6 +179,10 @@ export default async function ShopCataloguePreviewPage() {
                             {" -> "}
                             {entry.normalizedCategory}
                           </div>
+                          <div className="mt-2 text-sm font-semibold text-slate-500">
+                            showInShop: {entry.showInShopValue == null ? "Unavailable" : entry.showInShopValue ? "true" : "false"}
+                          </div>
+                          <div className="mt-2 text-sm font-semibold text-slate-500">shopCategory: {entry.shopCategoryValue || "Unavailable"}</div>
                           <div className="mt-2 text-sm font-semibold text-slate-500">Source: {entry.source}</div>
                         </div>
                         <div className="rounded-full border border-[#7a0000]/12 bg-[#fff3d8] px-4 py-2 text-sm font-black uppercase tracking-[0.16em] text-[#7a0000]">
