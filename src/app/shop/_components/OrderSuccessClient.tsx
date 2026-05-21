@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { MessageCircle, PhoneCall } from "lucide-react";
 import ShopSupportStrip from "@/app/shop/_components/ShopSupportStrip";
+import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import { formatCurrency, shopStyles } from "@/app/shop/_components/shopStyles";
 import { getLastMockOrder, type MockOrderRecord } from "@/app/shop/shopStorage";
 
@@ -80,10 +81,16 @@ export default function OrderSuccessClient({ orderRef, mode = "mock" }: OrderSuc
           </div>
         </div>
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <Link href={whatsappHref} target="_blank" rel="noreferrer" className={shopStyles.whatsappButton}>
+          <TrackedWhatsAppLink
+            href={whatsappHref}
+            className={shopStyles.whatsappButton}
+            label="Order confirmation WhatsApp"
+            context="order_success"
+            ariaLabel="Confirm this order on WhatsApp"
+          >
             <MessageCircle className="h-4 w-4" />
             Confirm on WhatsApp
-          </Link>
+          </TrackedWhatsAppLink>
           <Link href="tel:+254722151083" className={`${shopStyles.goldButton} gap-2`}>
             <PhoneCall className="h-4 w-4" />
             Call Betech Solar

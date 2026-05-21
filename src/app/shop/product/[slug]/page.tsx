@@ -1,6 +1,8 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BadgeCheck, MapPin, ShieldCheck, Truck } from "lucide-react";
+import ShopAnalyticsTracker from "@/app/shop/_components/ShopAnalyticsTracker";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
 import ProductCard from "@/app/shop/_components/ProductCard";
 import ShopBreadcrumbs from "@/app/shop/_components/ShopBreadcrumbs";
@@ -10,7 +12,25 @@ import ShopProductDetailActions from "@/app/shop/_components/ShopProductDetailAc
 import ShopProductVisual from "@/app/shop/_components/ShopProductVisual";
 import { formatCurrency, shopStyles } from "@/app/shop/_components/shopStyles";
 import { getShopProductBySlug, getShopProducts } from "@/app/shop/shopApi";
+import { buildProductJsonLd, buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks } from "@/app/shop/shopData";
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const product = await getShopProductBySlug(slug);
+
+  if (!product) {
+    return buildShopMetadata({
+      title: "Product Not Found",
+      description: "This Betech Solar product could not be found in the current shop preview.",
+    });
+  }
+
+  return buildShopMetadata({
+    title: `${product.name} | ${product.category}`,
+    description: `${product.name} from ${product.brand}. ${product.specs.slice(0, 2).join(". ")}. ${product.warranty}. Delivered countrywide by Betech Solar Solutions.`,
+  });
+}
 
 export default async function ShopProductDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -25,9 +45,12 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
     preorder: "Pre-order",
     quote_only: "Request quote",
   } as const;
+  const productJsonLd = buildProductJsonLd(product);
 
   return (
     <div className={shopStyles.page}>
+      <ShopAnalyticsTracker kind="product_view" payload={{ slug: product.slug, name: product.name, category: product.category, brand: product.brand }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }} />
       <ShopHeader navLinks={shopNavLinks} />
       <section className="py-8 sm:py-10">
         <div className={shopStyles.shell}>

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
 import CartClient from "@/app/shop/_components/CartClient";
 import ShopBreadcrumbs from "@/app/shop/_components/ShopBreadcrumbs";
@@ -6,7 +7,13 @@ import ShopHeader from "@/app/shop/_components/ShopHeader";
 import ShopSupportStrip from "@/app/shop/_components/ShopSupportStrip";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { getShopProducts } from "@/app/shop/shopApi";
+import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks } from "@/app/shop/shopData";
+
+export const metadata: Metadata = buildShopMetadata({
+  title: "Your Cart",
+  description: "Review your selected Betech Solar products, update quantities, and continue into the mock checkout preview.",
+});
 
 export default async function ShopCartPage() {
   const products = await getShopProducts();

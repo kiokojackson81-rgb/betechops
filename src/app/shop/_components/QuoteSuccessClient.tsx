@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { MessageCircle, PhoneCall } from "lucide-react";
 import ShopSupportStrip from "@/app/shop/_components/ShopSupportStrip";
+import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { getLastMockQuote, type MockQuoteRecord } from "@/app/shop/shopStorage";
 
@@ -52,10 +53,16 @@ export default function QuoteSuccessClient({ quoteRef }: QuoteSuccessClientProps
           ) : null}
         </div>
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <Link href={whatsappHref} target="_blank" rel="noreferrer" className={shopStyles.whatsappButton}>
+          <TrackedWhatsAppLink
+            href={whatsappHref}
+            className={shopStyles.whatsappButton}
+            label="Quote follow-up WhatsApp"
+            context="quote_success"
+            ariaLabel="Follow up on this quote on WhatsApp"
+          >
             <MessageCircle className="h-4 w-4" />
             Follow Up on WhatsApp
-          </Link>
+          </TrackedWhatsAppLink>
           <Link href="tel:+254722151083" className={`${shopStyles.goldButton} gap-2`}>
             <PhoneCall className="h-4 w-4" />
             Call Betech Solar

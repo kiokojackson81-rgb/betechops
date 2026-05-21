@@ -1,9 +1,16 @@
+import type { Metadata } from "next";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
 import QuoteSuccessClient from "@/app/shop/_components/QuoteSuccessClient";
 import ShopFooter from "@/app/shop/_components/ShopFooter";
 import ShopHeader from "@/app/shop/_components/ShopHeader";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
+import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks } from "@/app/shop/shopData";
+
+export const metadata: Metadata = buildShopMetadata({
+  title: "Quote Request Confirmation",
+  description: "Review your Betech Solar quote request reference and next steps while the shop remains in preview mode.",
+});
 
 export default async function ShopQuoteSuccessPage({
   searchParams,

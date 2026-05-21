@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Menu, ShoppingCart, User2, X } from "lucide-react";
+import ShopPreviewBanner from "@/app/shop/_components/ShopPreviewBanner";
 import ShopSearchBar from "@/app/shop/_components/ShopSearchBar";
 import { getShopCartCount, useShopCartItems } from "@/app/shop/cartStore";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
@@ -19,6 +20,7 @@ export default function ShopHeader({ navLinks }: ShopHeaderProps) {
 
   return (
     <header className={`sticky top-0 z-50 ${shopStyles.headerGlass}`}>
+      <ShopPreviewBanner />
       <div className={`${shopStyles.shell} py-3 sm:py-4`}>
         <div className="flex items-center justify-between gap-3 lg:hidden">
           <button

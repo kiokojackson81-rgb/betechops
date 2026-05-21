@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { MapPin, MessageCircle, Truck } from "lucide-react";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
+import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 
 export default function ShopSupportStrip() {
   return (
@@ -13,13 +13,25 @@ export default function ShopSupportStrip() {
           <div>
             <div className="text-sm font-black uppercase tracking-[0.14em] text-[#7a0000]">WhatsApp Support</div>
             <div className="mt-1 text-sm leading-6 text-slate-600">
-              <Link href="https://wa.me/254722151083" target="_blank" rel="noreferrer" className="font-semibold text-slate-950">
+              <TrackedWhatsAppLink
+                href="https://wa.me/254722151083"
+                className="font-semibold text-slate-950"
+                label="Support strip WhatsApp 0722"
+                context="support_strip"
+                ariaLabel="Chat with Betech Solar on WhatsApp using 0722 151 083"
+              >
                 0722 151 083
-              </Link>
+              </TrackedWhatsAppLink>
               {" / "}
-              <Link href="https://wa.me/254703241917" target="_blank" rel="noreferrer" className="font-semibold text-slate-950">
+              <TrackedWhatsAppLink
+                href="https://wa.me/254703241917"
+                className="font-semibold text-slate-950"
+                label="Support strip WhatsApp 0703"
+                context="support_strip"
+                ariaLabel="Chat with Betech Solar on WhatsApp using 0703 241 917"
+              >
                 0703 241 917
-              </Link>
+              </TrackedWhatsAppLink>
             </div>
           </div>
         </div>

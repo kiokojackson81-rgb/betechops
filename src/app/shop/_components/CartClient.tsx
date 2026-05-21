@@ -9,6 +9,7 @@ import {
 } from "@/app/shop/cartStore";
 import ShopProductVisual from "@/app/shop/_components/ShopProductVisual";
 import ShopStatePanel from "@/app/shop/_components/ShopStatePanel";
+import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import type { ShopProduct } from "@/app/shop/shopData";
 import { formatCurrency, shopStyles } from "@/app/shop/_components/shopStyles";
 
@@ -119,10 +120,16 @@ export default function CartClient({ products }: CartClientProps) {
           <Link href="/shop" className={shopStyles.secondaryButton}>
             Continue Shopping
           </Link>
-          <Link href={cartWhatsappHref} target="_blank" rel="noreferrer" className={shopStyles.whatsappButton}>
+          <TrackedWhatsAppLink
+            href={cartWhatsappHref}
+            className={shopStyles.whatsappButton}
+            label="Cart WhatsApp checkout"
+            context="cart_summary"
+            ariaLabel="Checkout this cart on WhatsApp"
+          >
             <MessageCircle className="h-4 w-4" />
             WhatsApp Checkout
-          </Link>
+          </TrackedWhatsAppLink>
         </div>
         <div className="mt-6 rounded-[24px] border border-[#7a0000]/10 bg-white p-4">
           <div className="text-sm font-black uppercase tracking-[0.16em] text-[#7a0000]">Not sure what you need?</div>

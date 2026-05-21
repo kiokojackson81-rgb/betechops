@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
 import CheckoutClient from "@/app/shop/_components/CheckoutClient";
 import ShopSupportStrip from "@/app/shop/_components/ShopSupportStrip";
@@ -6,7 +7,13 @@ import ShopFooter from "@/app/shop/_components/ShopFooter";
 import ShopHeader from "@/app/shop/_components/ShopHeader";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { getShopProducts } from "@/app/shop/shopApi";
+import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks } from "@/app/shop/shopData";
+
+export const metadata: Metadata = buildShopMetadata({
+  title: "Checkout Preview",
+  description: "Submit a mock Betech Solar order with delivery and payment preferences before live ops integration goes online.",
+});
 
 export default async function ShopCheckoutPage() {
   const products = await getShopProducts();

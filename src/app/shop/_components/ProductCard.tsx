@@ -5,6 +5,7 @@ import { ArrowUpRight, MessageCircle } from "lucide-react";
 import type { ShopProduct } from "@/app/shop/shopData";
 import AddToCartButton from "@/app/shop/_components/AddToCartButton";
 import ShopProductVisual from "@/app/shop/_components/ShopProductVisual";
+import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import { formatCurrency } from "@/app/shop/_components/shopStyles";
 
 const WHATSAPP_PHONE = "254722151083";
@@ -75,17 +76,19 @@ export default function ProductCard({ product }: ProductCardProps) {
         <div className="mt-4 grid gap-2 sm:mt-5">
           <AddToCartButton
             productId={product.id}
+            productName={product.name}
             className="inline-flex min-h-[3.1rem] items-center justify-center gap-2 rounded-2xl bg-[#7a0000] px-4 py-3 text-sm font-bold text-white shadow-[0_16px_30px_rgba(122,0,0,0.18)] transition hover:-translate-y-0.5 sm:min-h-[3.25rem]"
           />
-          <Link
+          <TrackedWhatsAppLink
             href={whatsappHref}
-            target="_blank"
-            rel="noreferrer"
             className="inline-flex min-h-[3.1rem] items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#11b86a_0%,#0f9d58_55%,#0b7c44_100%)] px-4 py-3 text-sm font-bold text-white shadow-[0_16px_34px_rgba(15,157,88,0.24)] transition hover:-translate-y-0.5 sm:min-h-[3.25rem]"
+            label={`WhatsApp order ${product.name}`}
+            context="product_card"
+            ariaLabel={`Order ${product.name} on WhatsApp`}
           >
             <MessageCircle className="h-4 w-4" />
             WhatsApp Order
-          </Link>
+          </TrackedWhatsAppLink>
           <Link
             href={quoteHref}
             target="_blank"

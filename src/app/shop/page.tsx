@@ -4,18 +4,17 @@ import { ArrowRight, BadgeCheck, Clock3, Headphones, MapPin, MessageCircleMore, 
 import CategoryScroller from "@/app/shop/_components/CategoryScroller";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
 import ProductSection from "@/app/shop/_components/ProductSection";
+import ShopAnalyticsTracker from "@/app/shop/_components/ShopAnalyticsTracker";
 import ShopFooter from "@/app/shop/_components/ShopFooter";
 import ShopHeader from "@/app/shop/_components/ShopHeader";
 import ShopHero from "@/app/shop/_components/ShopHero";
 import ShopStatePanel from "@/app/shop/_components/ShopStatePanel";
+import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
+import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { deliveryPaymentSteps, heroHighlights, shopCategories, shopNavLinks, shopProductSections, shopReasons, trustBadges } from "@/app/shop/shopData";
 
-export const metadata: Metadata = {
-  title: "Betech Solar Online Store | Solar Panels, Batteries, Inverters & Kits",
-  description:
-    "Shop genuine solar panels, inverters, batteries, lithium batteries, full solar kits, water pumps, lights and accessories from Betech Solar Solutions. Delivery countrywide.",
-};
+export const metadata: Metadata = buildShopMetadata();
 
 // Route planning for future isolated ecommerce expansion:
 // - /shop/product/[slug]
@@ -31,6 +30,7 @@ export const metadata: Metadata = {
 export default function ShopPage() {
   return (
     <div className={shopStyles.page}>
+      <ShopAnalyticsTracker kind="shop_view" payload={{ page: "/shop", brand: "Betech Solar Solutions" }} />
       <ShopHeader navLinks={shopNavLinks} />
       <ShopHero highlights={heroHighlights} trustBadges={trustBadges} />
       <CategoryScroller categories={shopCategories} />
@@ -72,15 +72,16 @@ export default function ShopPage() {
                   </p>
                 </div>
                 <div className="grid gap-3">
-                  <Link
+                  <TrackedWhatsAppLink
                     href="https://wa.me/254722151083?text=Hello%20Betech%20Solar%2C%20I%20need%20a%20custom%20system%20quotation."
-                    target="_blank"
-                    rel="noreferrer"
                     className={`${shopStyles.whatsappButton} min-h-[3.5rem]`}
+                    label="Hero quote WhatsApp"
+                    context="shop_quote_banner"
+                    ariaLabel="Request a free quote on WhatsApp"
                   >
                     <MessageCircleMore className="h-4 w-4" />
                     Request Free Quote
-                  </Link>
+                  </TrackedWhatsAppLink>
                   <Link href="#best-selling-solar-kits" className={`${shopStyles.secondaryButton} min-h-[3.5rem] bg-white/92`}>
                     Shop Products
                     <ArrowRight className="h-4 w-4" />

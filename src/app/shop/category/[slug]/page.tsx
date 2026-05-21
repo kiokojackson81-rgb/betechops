@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import CategoryScroller from "@/app/shop/_components/CategoryScroller";
@@ -9,10 +10,28 @@ import ShopHeader from "@/app/shop/_components/ShopHeader";
 import ShopStatePanel from "@/app/shop/_components/ShopStatePanel";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { getShopProducts } from "@/app/shop/shopApi";
+import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopCategories, shopNavLinks } from "@/app/shop/shopData";
 
 function normalizeCategory(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const category = shopCategories.find((item) => item.slug === slug || normalizeCategory(item.title) === slug);
+
+  if (!category) {
+    return buildShopMetadata({
+      title: "Shop Category",
+      description: "Browse solar categories in the Betech Solar online store preview.",
+    });
+  }
+
+  return buildShopMetadata({
+    title: `${category.title}`,
+    description: `${category.blurb} Browse this Betech Solar Solutions category and request a quote if you need help sizing the right system.`,
+  });
 }
 
 export default async function ShopCategoryPage({ params }: { params: Promise<{ slug: string }> }) {

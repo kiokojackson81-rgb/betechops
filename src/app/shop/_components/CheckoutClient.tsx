@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { buildDetailedCart, useShopCartItems } from "@/app/shop/cartStore";
 import { createShopOrder } from "@/app/shop/shopApi";
+import { trackCheckoutStarted, trackOrderSubmitted } from "@/app/shop/shopAnalytics";
 import type { ShopProduct } from "@/app/shop/shopData";
 import { formatCurrency, shopStyles } from "@/app/shop/_components/shopStyles";
 import { buildStoredOrderItems, clearCartAfterOrder, saveMockOrder } from "@/app/shop/shopStorage";
@@ -38,6 +39,14 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
     paymentPreference: "",
     notes: "",
   });
+
+  useEffect(() => {
+    if (!detailedItems.length) return;
+    trackCheckoutStarted({
+      itemCount: detailedItems.length,
+      subtotal,
+    });
+  }, [detailedItems.length, subtotal]);
 
   function validateForm() {
     const nextErrors: CheckoutFieldErrors = {};
@@ -115,6 +124,13 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
               ),
             });
 
+            trackOrderSubmitted({
+              orderRef: savedOrder.orderRef,
+              itemCount: savedOrder.items.length,
+              subtotal: savedOrder.subtotal,
+              deliveryMethod: savedOrder.deliveryMethod,
+              paymentPreference: savedOrder.paymentPreference,
+            });
             clearCartAfterOrder();
             router.push(
               `/shop/order-success?ref=${encodeURIComponent(savedOrder.orderRef)}&mode=${encodeURIComponent(result.source || "mock")}`,

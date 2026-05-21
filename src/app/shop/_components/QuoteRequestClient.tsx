@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { createQuoteRequest } from "@/app/shop/shopApi";
+import { trackQuoteSubmitted } from "@/app/shop/shopAnalytics";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { saveMockQuote } from "@/app/shop/shopStorage";
 
@@ -76,6 +77,12 @@ export default function QuoteRequestClient({ preferredProduct = "" }: QuoteReque
             notes: form.notes.trim() || undefined,
           });
 
+          trackQuoteSubmitted({
+            quoteRef: savedQuote.quoteRef,
+            propertyType: savedQuote.propertyType,
+            location: savedQuote.location,
+            preferredProducts: savedQuote.preferredProducts,
+          });
           router.push(`/shop/quote-success?ref=${encodeURIComponent(savedQuote.quoteRef)}`);
         } catch (submissionError) {
           setError(submissionError instanceof Error ? submissionError.message : "Unable to send mock quote request.");

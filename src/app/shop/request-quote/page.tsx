@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
 import QuoteRequestClient from "@/app/shop/_components/QuoteRequestClient";
 import ShopBreadcrumbs from "@/app/shop/_components/ShopBreadcrumbs";
@@ -5,7 +6,13 @@ import ShopFooter from "@/app/shop/_components/ShopFooter";
 import ShopHeader from "@/app/shop/_components/ShopHeader";
 import ShopSupportStrip from "@/app/shop/_components/ShopSupportStrip";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
+import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks } from "@/app/shop/shopData";
+
+export const metadata: Metadata = buildShopMetadata({
+  title: "Request a Solar System Quote",
+  description: "Request a Betech Solar system quote for panels, batteries, inverters, pumps, kits, and accessories with sizing guidance from our team.",
+});
 
 export default async function ShopRequestQuotePage({
   searchParams,
