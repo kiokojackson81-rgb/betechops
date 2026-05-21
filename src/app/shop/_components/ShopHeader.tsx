@@ -33,7 +33,7 @@ export default function ShopHeader({ navLinks }: ShopHeaderProps) {
             </div>
             <div className="min-w-0">
               <div className="truncate text-sm font-black uppercase tracking-[0.18em] text-[#7a0000]">Betech Solar</div>
-              <div className="truncate text-xs text-slate-500">Premium marketplace</div>
+              <div className="truncate text-xs text-slate-500">Online Store</div>
             </div>
           </Link>
 
@@ -83,7 +83,7 @@ export default function ShopHeader({ navLinks }: ShopHeaderProps) {
             </div>
             <div>
               <div className="text-[11px] font-black uppercase tracking-[0.28em] text-[#7a0000]">Betech Solar</div>
-              <div className="text-lg font-black tracking-tight text-slate-950">Premium Marketplace</div>
+              <div className="text-lg font-black tracking-tight text-slate-950">Online Store</div>
             </div>
           </Link>
 

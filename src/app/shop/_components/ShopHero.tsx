@@ -27,24 +27,23 @@ export default function ShopHero({ highlights, trustBadges }: ShopHeroProps) {
           <div className="grid gap-6 lg:grid-cols-[1.02fr_0.98fr] lg:items-center">
             <div className="relative z-10">
               <div className="inline-flex w-fit rounded-full border border-[#f2b20f]/30 bg-[#fff3d8] px-4 py-2 text-xs font-black uppercase tracking-[0.24em] text-[#7a0000] shadow-[0_12px_24px_rgba(242,178,15,0.18)]">
-                Betech Agents evolved into a premium solar marketplace
+                Official Betech Solar Solutions store
               </div>
 
               <h1 className="mt-5 max-w-3xl text-4xl font-black tracking-tight text-white sm:text-5xl lg:text-6xl">
-                Shop solar products with the same trusted Betech brand experience.
+                Shop Genuine Solar Products
               </h1>
               <p className="mt-4 max-w-2xl text-base leading-7 text-white/78 sm:text-lg">
-                Browse kits, panels, batteries, inverters, pumps, and lighting in a storefront built responsively from day one for both
-                mobile and desktop shopping.
+                Panels, Batteries, Inverters, Full Kits, Pumps &amp; Solar Accessories delivered countrywide from Betech Solar Solutions.
               </p>
 
               <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
                 <Link href="#best-selling-solar-kits" className={`${shopStyles.goldButton} min-h-[3.5rem] w-full sm:w-auto`}>
-                  Shop Solar Products
+                  Shop Products
                   <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link href="#quote" className={`${shopStyles.secondaryButton} min-h-[3.5rem] w-full bg-white/92 sm:w-auto`}>
-                  Request System Quote
+                  Request Free Quote
                   <MessageCircle className="h-4 w-4" />
                 </Link>
               </div>
@@ -52,15 +51,15 @@ export default function ShopHero({ highlights, trustBadges }: ShopHeroProps) {
               <div className="mt-6 flex flex-wrap gap-3 text-sm text-white/78">
                 <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/8 px-4 py-2 backdrop-blur">
                   <ShieldCheck className="h-4 w-4 text-[#ffd761]" />
-                  Warranty-backed systems
+                  Warranty support
                 </div>
                 <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/8 px-4 py-2 backdrop-blur">
                   <BadgeCheck className="h-4 w-4 text-[#ffd761]" />
-                  Genuine solar brands
+                  Genuine products
                 </div>
                 <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/8 px-4 py-2 backdrop-blur">
                   <Sparkles className="h-4 w-4 text-[#ffd761]" />
-                  Premium responsive browsing
+                  Expert solar guidance
                 </div>
               </div>
             </div>
@@ -82,7 +81,7 @@ export default function ShopHero({ highlights, trustBadges }: ShopHeroProps) {
                       <div className="relative h-[15rem] bg-[#f6eee2] sm:h-[20rem]">
                         <Image
                           src="/agents/hero-generated-v2.png"
-                          alt="Betech Solar marketplace hero"
+                          alt="Betech Solar Online Store hero"
                           fill
                           sizes="(max-width: 1024px) 100vw, 34rem"
                           className="object-cover object-center"
@@ -92,8 +91,8 @@ export default function ShopHero({ highlights, trustBadges }: ShopHeroProps) {
 
                       <div className="grid gap-3 p-4 sm:grid-cols-2">
                         <div className="rounded-[22px] bg-[linear-gradient(135deg,#7a0000_0%,#991010_100%)] px-4 py-4 text-white shadow-[0_16px_34px_rgba(122,0,0,0.18)]">
-                          <div className="text-sm font-bold uppercase tracking-[0.16em] text-[#ffd761]">Marketplace Ready</div>
-                          <div className="mt-2 text-2xl font-black">Panels to pumps</div>
+                          <div className="text-sm font-bold uppercase tracking-[0.16em] text-[#ffd761]">Betech Solar Solutions</div>
+                          <div className="mt-2 text-2xl font-black">Panels to full systems</div>
                         </div>
                         <div>{heroCard(highlights[2].label, highlights[2].value, highlights[2].note)}</div>
                       </div>

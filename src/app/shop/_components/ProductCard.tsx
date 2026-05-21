@@ -11,8 +11,18 @@ type ProductCardProps = {
 };
 
 export default function ProductCard({ product }: ProductCardProps) {
+  const stockLabelMap = {
+    in_stock: "In stock",
+    limited_stock: "Limited stock",
+    preorder: "Pre-order",
+    quote_only: "Request quote",
+  } as const;
+
   const whatsappHref = `https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent(
     `Hello Betech Solar, I want to order ${product.name} at ${formatCurrency(product.price)}.`,
+  )}`;
+  const quoteHref = `https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent(
+    `Hello Betech Solar, I need a quote for ${product.name}.`,
   )}`;
 
   return (
@@ -26,9 +36,9 @@ export default function ProductCard({ product }: ProductCardProps) {
           className="object-contain p-3 transition duration-500 group-hover:scale-[1.03] sm:p-4"
         />
         <div className="absolute left-3 top-3 inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#7a0000] shadow-[0_12px_24px_rgba(242,178,15,0.18)]">
-          {product.badge}
+          {product.brand}
         </div>
-        <div className="absolute right-3 top-3 inline-flex rounded-full bg-white/92 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600">
+        <div className="absolute right-3 top-3 max-w-[46%] truncate rounded-full bg-white/92 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600">
           {product.warranty}
         </div>
       </div>
@@ -36,6 +46,20 @@ export default function ProductCard({ product }: ProductCardProps) {
       <div className="flex flex-1 flex-col p-3 sm:p-4">
         <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]/75">{product.category}</div>
         <h3 className="mt-2 line-clamp-2 text-sm font-black leading-6 text-slate-950 sm:text-base">{product.name}</h3>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {product.tags.slice(0, 2).map((tag) => (
+            <span key={tag} className="rounded-full bg-[#fcf4e4] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[#7a0000]/80">
+              {tag.replace(/-/g, " ")}
+            </span>
+          ))}
+        </div>
+        <ul className="mt-3 grid gap-1 text-xs leading-5 text-slate-500">
+          {product.specs.slice(0, 2).map((spec) => (
+            <li key={spec} className="line-clamp-1">
+              {spec}
+            </li>
+          ))}
+        </ul>
 
         <div className="mt-4 flex items-end gap-2">
           <div className="text-lg font-black text-slate-950 sm:text-2xl">{formatCurrency(product.price)}</div>
@@ -43,7 +67,7 @@ export default function ProductCard({ product }: ProductCardProps) {
         </div>
 
         <div className="mt-3 inline-flex w-fit rounded-full border border-[#0f9d58]/14 bg-[#effcf4] px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-[#0f9d58]">
-          {product.availability}
+          {stockLabelMap[product.stockStatus]}
         </div>
 
         <div className="mt-4 grid gap-2 sm:mt-5">
@@ -62,6 +86,14 @@ export default function ProductCard({ product }: ProductCardProps) {
           >
             <MessageCircle className="h-4 w-4" />
             WhatsApp Order
+          </Link>
+          <Link
+            href={quoteHref}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex min-h-[2.75rem] items-center justify-center rounded-2xl border border-[#7a0000]/12 bg-white px-4 py-2 text-xs font-bold text-[#7a0000] transition hover:-translate-y-0.5 sm:text-sm"
+          >
+            Request Quote
           </Link>
         </div>
       </div>

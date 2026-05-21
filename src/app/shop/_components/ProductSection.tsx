@@ -18,7 +18,7 @@ export default function ProductSection({ section }: ProductSectionProps) {
             <p className="mt-3 text-base leading-7 text-slate-600">{section.description}</p>
           </div>
           <Link href="#quote" className={`${shopStyles.secondaryButton} w-full sm:w-auto`}>
-            View All
+            Request Quote
           </Link>
         </div>
 

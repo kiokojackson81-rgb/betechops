@@ -36,7 +36,7 @@ export default function CategoryScroller({ categories }: CategoryScrollerProps) 
           <div className="mx-auto h-1 w-16 rounded-full bg-gradient-to-r from-[#f2b20f] to-[#7a0000]" />
           <h2 className="mt-5 text-3xl font-black tracking-tight text-slate-950 md:text-5xl">Browse shop categories</h2>
           <p className="mt-4 text-base leading-7 text-slate-600">
-            Mobile uses a touch-friendly horizontal scroller, while desktop opens the same categories in a balanced premium grid.
+            Browse Betech Solar Solutions product lines on mobile, tablet, and desktop with a quote-first path built into the store.
           </p>
         </div>
 
