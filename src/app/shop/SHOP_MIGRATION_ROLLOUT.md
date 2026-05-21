@@ -334,3 +334,48 @@ node -r ts-node/register scripts/verify-product-shop-fields.ts
 - Test category pages.
 - Test product pages.
 - Keep checkout and quote submission in mock mode until the order integration phase.
+
+## Phase 16 execution log
+
+- Patch applied date: `2026-05-21`
+- Intended target confirmed: `ep-nameless-grass-ad162epj-pooler.c-2.us-east-1.aws.neon.tech/neondb`
+- Backup status: user confirmed backup or snapshot completed before execution
+
+Patch execution result:
+
+- `psql` was not installed on the local Windows host, so the additive patch file was executed with:
+- `npx prisma db execute --file prisma/manual-patches/add_product_shop_fields_only.sql --schema prisma/schema.prisma`
+- Result: `Script executed successfully.`
+
+Verifier result:
+
+- `npx tsx scripts/verify-product-shop-fields.ts`
+- Found all `7/7` required columns:
+  - `showInShop`
+  - `shopCategory`
+  - `shopShortDescription`
+  - `shopWarranty`
+  - `shopSpecs`
+  - `shopImageUrl`
+  - `shopBrand`
+- Capability result: POS Catalogue ecommerce controls can now be enabled by capability detection.
+
+Admin and catalogue verification result:
+
+- Legacy `Product` schema remained intact, and the new shop fields are now active on that table.
+- A temporary normal POS-style test row with `showInShop=false` saved successfully.
+- A temporary solar test row with `showInShop=true` and `shopCategory=solar-panels` saved successfully.
+- The solar test row was edited successfully by updating `shopSpecs` and `shopShortDescription`.
+- `/shop/catalogue-preview` under ops mode showed the solar test row as accepted for customer display.
+- Existing non-solar rows such as `Beef` and `Goat` remained rejected.
+- The temporary Phase 16 test rows were removed after verification so the resting state stays conservative.
+
+Observed limitation:
+
+- An authenticated browser session for `/admin/pos-management` was not available from this terminal environment, so the form was not manually clicked through in-browser.
+- Instead, post-patch verification relied on active capability detection, direct test-row save and edit round-trips on the live `Product` table, the `/api/shop/products` response under ops mode, and the rendered `/shop/catalogue-preview` output.
+
+Ops mode safety result:
+
+- With the temporary solar test row present, `/api/shop/products` returned `source: "ops"` and exposed only the accepted solar product.
+- After removing the temporary test rows, `/api/shop/products` returned `source: "mock"` again, confirming customer-safe fallback still works when no clean live solar products remain.
