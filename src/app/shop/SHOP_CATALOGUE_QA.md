@@ -126,3 +126,34 @@ If the ecommerce field migration causes issues:
 - Before applying `20260521094500_add_product_shop_fields`, confirm the target environment is already caught up on its earlier Prisma migrations.
 - If the live `Product` table still uses the legacy columns `key`, `unit`, `sellPrice`, and `active`, do not run the normal migration flow for the shop fields in that environment yet.
 - Reconcile the outstanding migration backlog first, then apply the additive shop-field migration through the project's standard migration process.
+
+## Migration backlog warning
+
+- The configured database currently shows a large unapplied Prisma migration backlog before `20260521094500_add_product_shop_fields`.
+- Do not run `prisma migrate deploy` blindly in that environment just to add the shop fields.
+- Treat the shop field rollout as a controlled schema change with staging verification first.
+
+## Manual patch path
+
+- If urgent ecommerce field activation is needed before full migration reconciliation, use `prisma/manual-patches/add_product_shop_fields_only.sql`.
+- The manual patch only adds:
+- `showInShop`
+- `shopCategory`
+- `shopShortDescription`
+- `shopWarranty`
+- `shopSpecs`
+- `shopImageUrl`
+- `shopBrand`
+- Take a database backup first.
+- Keep `showInShop=false` initially.
+- Enable products one by one from the POS Catalogue after review.
+
+## Post-patch verification checklist
+
+- Confirm the seven shop columns exist on `Product`.
+- Confirm `/api/admin/pos-products` reports shop field capability support.
+- Confirm `/admin/pos-management` still loads without POS regression.
+- Confirm a normal POS product can still save without ecommerce fields.
+- Confirm a solar product can save with ecommerce fields.
+- Confirm `/shop/catalogue-preview` shows enabled products correctly.
+- Confirm the solar guard still rejects non-solar products.
