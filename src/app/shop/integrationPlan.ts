@@ -82,6 +82,11 @@ export const phaseTenCatalogueQaNotes = [
   "Customer-facing /shop pages must continue to fall back to mock data if the ops catalogue is incomplete or unavailable.",
 ] as const;
 
+export const futureShopVisibilityNotes = [
+  "Recommended future Product field: showInShop boolean default false.",
+  "Once live ecommerce mode is enabled, only products with showInShop=true and status=active should appear in /shop.",
+] as const;
+
 export function buildMockOrderReference() {
   return `BT-SHOP-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 }

@@ -125,6 +125,12 @@ export default async function ShopCataloguePreviewPage() {
                             )}
                           </ul>
                         </div>
+                        <div className="rounded-[22px] border border-[#0f9d58]/10 bg-[#effcf4] px-4 py-4">
+                          <div className="text-[11px] font-black uppercase tracking-[0.16em] text-[#0f9d58]">Solar eligibility</div>
+                          <div className="mt-3 rounded-2xl border border-[#0f9d58]/12 bg-white px-3 py-2 text-sm font-bold text-[#0f9d58]">
+                            Accepted for customer-facing solar catalogue
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -138,7 +144,7 @@ export default async function ShopCataloguePreviewPage() {
                   <div className={shopStyles.sectionEyebrow}>Needs catalogue cleanup</div>
                   <h2 className="mt-4 text-3xl font-black tracking-tight text-slate-950">Excluded from customer-facing product lists</h2>
                   <p className="mt-3 max-w-3xl text-base leading-7 text-slate-600">
-                    Products below are blocked from the customer catalogue because critical ecommerce display data is missing or invalid, usually pricing.
+                    Products below are blocked from the customer catalogue because they are non-solar, missing core display data, or have invalid pricing.
                   </p>
                 </div>
               </div>
@@ -162,6 +168,11 @@ export default async function ShopCataloguePreviewPage() {
                         </div>
                       </div>
                       <ul className="mt-5 grid gap-2 text-sm leading-6 text-slate-700">
+                        {entry.rejectionReasons.map((reason) => (
+                          <li key={`${entry.opsProductId}-${reason}`} className="rounded-2xl border border-[#7a0000]/10 bg-[#fff3d8] px-4 py-3 font-bold text-[#7a0000]">
+                            {reason}
+                          </li>
+                        ))}
                         {entry.warnings.map((warning, index) => (
                           <li key={`${warning.field}-${index}`} className="rounded-2xl border border-[#7a0000]/10 bg-white px-4 py-3">
                             <span className="font-bold text-slate-900">{warning.field}:</span> {warning.message}

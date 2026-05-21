@@ -9,13 +9,24 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const category = searchParams.get("category");
   const q = searchParams.get("q");
+  const fallback = buildMockProductsResponse(filterShopProducts(allShopProducts, { category, q }));
 
   if (!isShopOpsApiEnabled()) {
-    return NextResponse.json(buildMockProductsResponse(filterShopProducts(allShopProducts, { category, q })));
+    return NextResponse.json(fallback);
   }
 
   try {
     const products = filterShopProducts(await getOpsCatalogueProductsReadOnlyMapped(), { category, q });
+
+    if (!products.length) {
+      return NextResponse.json({
+        ...fallback,
+        warning:
+          process.env.NODE_ENV !== "production"
+            ? "Ops catalogue returned no valid solar products; using mock fallback."
+            : undefined,
+      });
+    }
 
     return NextResponse.json({
       ok: true,
@@ -27,7 +38,7 @@ export async function GET(request: Request) {
     console.error("[shop] failed to read ops catalogue products; using mock fallback", error);
 
     return NextResponse.json({
-      ...buildMockProductsResponse(filterShopProducts(allShopProducts, { category, q })),
+      ...fallback,
       warning:
         process.env.NODE_ENV !== "production"
           ? "Ops catalogue read failed. Returning mock shop products instead."

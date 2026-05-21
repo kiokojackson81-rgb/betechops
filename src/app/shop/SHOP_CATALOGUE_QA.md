@@ -63,6 +63,16 @@ If the raw ops category is ambiguous or blank, fix it in ops before live launch 
 - Missing product descriptions/specs that leave the page too thin.
 - Missing image fields once real ecommerce media support is introduced.
 
+## Required ops cleanup before live ecommerce mode
+
+- Remove or hide non-solar items from the shop feed so butchery or food items never reach `/shop`.
+- Add an explicit ecommerce visibility flag later, for example `showInShop=true`.
+- Normalize catalogue categories into the approved Betech Solar shop categories.
+- Add product images suitable for ecommerce product cards and detail pages.
+- Add warranty and technical specs that are customer-readable.
+- Confirm all ecommerce-display prices before launch.
+- Confirm stock status logic so the storefront does not imply guaranteed availability incorrectly.
+
 ## Live catalogue test mode
 
 Set:

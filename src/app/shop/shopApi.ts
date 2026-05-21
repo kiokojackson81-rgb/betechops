@@ -54,7 +54,8 @@ async function getServerShopProducts(input?: { category?: string; q?: string }):
   }
 
   try {
-    return filterShopProducts(await getOpsCatalogueProductsReadOnlyMapped(), input);
+    const products = filterShopProducts(await getOpsCatalogueProductsReadOnlyMapped(), input);
+    return products.length ? products : filterShopProducts(allShopProducts, input);
   } catch (error) {
     console.error("[shop] server-side product lookup fell back to mock data", error);
     return filterShopProducts(allShopProducts, input);
@@ -75,7 +76,7 @@ export async function getShopProducts(input?: { category?: string; q?: string })
     getApiUrl(`/api/shop/products${query.toString() ? `?${query.toString()}` : ""}`),
   ).catch(() => null);
 
-  if (response?.products) return response.products;
+  if (response?.products?.length) return response.products;
 
   return filterShopProducts(allShopProducts, input);
 }

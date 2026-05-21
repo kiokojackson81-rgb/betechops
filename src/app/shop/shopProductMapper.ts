@@ -28,6 +28,11 @@ export type ShopProductMappingWarning = {
   message: string;
 };
 
+export type ShopProductRejectionReason =
+  | "rejected: non-solar keyword/category"
+  | "rejected: invalid price"
+  | "rejected: missing required display name";
+
 export type ShopProductMappingPreview = {
   product: ShopProduct | null;
   opsProductId: string;
@@ -36,6 +41,7 @@ export type ShopProductMappingPreview = {
   normalizedCategory: string;
   warnings: ShopProductMappingWarning[];
   includedInCatalog: boolean;
+  rejectionReasons: ShopProductRejectionReason[];
   source: "ops";
 };
 
@@ -131,6 +137,46 @@ const KNOWN_BRANDS = [
   "Vision",
 ] as const;
 
+const SOLAR_ALLOW_KEYWORDS = [
+  "solar",
+  "panel",
+  "inverter",
+  "battery",
+  "lithium",
+  "controller",
+  "charge controller",
+  "full kit",
+  "solar kit",
+  "all in one",
+  "water heater",
+  "water pump",
+  "pump",
+  "flood light",
+  "solar light",
+  "cable",
+  "breaker",
+  "connector",
+  "accessories",
+  "mounting",
+  "dc bulb",
+  "ac/dc",
+  "pv",
+] as const;
+
+const NON_SOLAR_BLOCK_KEYWORDS = [
+  "beef",
+  "goat",
+  "liver",
+  "meat",
+  "steak",
+  "mutura",
+  "food",
+  "butchery",
+  "chicken",
+  "pork",
+  "sausage",
+] as const;
+
 function normalizeText(value: string) {
   return value.trim().toLowerCase();
 }
@@ -151,6 +197,11 @@ function compactUnique(values: Array<string | null | undefined>) {
         .filter(Boolean),
     ),
   );
+}
+
+function hasAnyKeyword(haystacks: string[], keywords: readonly string[]) {
+  const normalizedHaystack = haystacks.map((value) => normalizeText(value)).join(" ");
+  return keywords.some((keyword) => normalizedHaystack.includes(normalizeText(keyword)));
 }
 
 function matchCategoryDefinition(input: string) {
@@ -239,6 +290,37 @@ function inferTags(product: OpsCatalogueProduct, category: ShopCategoryDefinitio
   ]).slice(0, 6);
 }
 
+export function isSolarShopEligibleProduct(input: {
+  name?: string | null;
+  category?: string | null;
+  tags?: string[] | null;
+  specs?: string[] | null;
+  price?: number | null;
+}) {
+  const name = String(input.name || "").trim();
+  const price = Number(input.price);
+  const haystacks = [name, String(input.category || ""), ...(input.tags || []), ...(input.specs || [])];
+
+  const rejectionReasons: ShopProductRejectionReason[] = [];
+
+  if (!name) {
+    rejectionReasons.push("rejected: missing required display name");
+  }
+
+  if (!Number.isFinite(price) || price <= 0) {
+    rejectionReasons.push("rejected: invalid price");
+  }
+
+  if (hasAnyKeyword(haystacks, NON_SOLAR_BLOCK_KEYWORDS) || !hasAnyKeyword(haystacks, SOLAR_ALLOW_KEYWORDS)) {
+    rejectionReasons.push("rejected: non-solar keyword/category");
+  }
+
+  return {
+    eligible: rejectionReasons.length === 0,
+    rejectionReasons,
+  };
+}
+
 function buildMappingWarnings(
   product: OpsCatalogueProduct,
   category: ShopCategoryDefinition,
@@ -281,18 +363,25 @@ function buildMappingWarnings(
 function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview {
   const price = Number(product.sellingPrice);
   const { definition: category, warning: categoryWarning } = inferCategoryDefinition(product);
-  const brand = inferBrand(product.name);
+  const safeName = product.name.trim() || product.sku || "";
+  const brand = inferBrand(safeName);
   const specs = inferSpecs(product, category.title);
   const warranty = inferWarranty(product);
   const warnings = buildMappingWarnings(product, category, price, brand, specs, warranty, categoryWarning);
-  const includedInCatalog = Number.isFinite(price) && price >= 0;
-
-  const safeName = product.name.trim() || product.sku || `OPS Product ${product.id}`;
+  const eligibility = isSolarShopEligibleProduct({
+    name: safeName,
+    category: product.category || category.title,
+    tags: inferTags(product, category, brand),
+    specs,
+    price,
+  });
+  const includedInCatalog = eligibility.eligible;
+  const fallbackName = safeName || `OPS Product ${product.id}`;
   const mappedProduct: ShopProduct | null = includedInCatalog
     ? {
         id: `ops-${product.id}`,
-        slug: slugify(safeName),
-        name: safeName,
+        slug: slugify(fallbackName),
+        name: fallbackName,
         category: category.title,
         brand,
         price,
@@ -303,7 +392,7 @@ function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview 
         warranty,
         stockStatus: inferStockStatus(product),
         tags: inferTags(product, category, brand),
-        whatsappMessage: `Hello Betech Solar, I want more details about ${safeName}.`,
+        whatsappMessage: `Hello Betech Solar, I want more details about ${fallbackName}.`,
         source: "ops",
         opsProductId: product.id,
       }
@@ -312,11 +401,12 @@ function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview 
   return {
     product: mappedProduct,
     opsProductId: product.id,
-    rawName: safeName,
+    rawName: fallbackName,
     rawCategory: String(product.category || "").trim(),
     normalizedCategory: category.title,
     warnings,
     includedInCatalog,
+    rejectionReasons: eligibility.rejectionReasons,
     source: "ops",
   };
 }
