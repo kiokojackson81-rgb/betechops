@@ -6,9 +6,13 @@ import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 const whatsappHref =
   "https://wa.me/254722151083?text=Hello%20Betech%20Solar%2C%20I%20want%20help%20choosing%20the%20right%20solar%20system.";
 
-export default function FloatingWhatsApp() {
+type FloatingWhatsAppProps = {
+  hideOnMobile?: boolean;
+};
+
+export default function FloatingWhatsApp({ hideOnMobile = false }: FloatingWhatsAppProps) {
   return (
-    <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-40 sm:right-6">
+    <div className={`fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-40 sm:right-6 ${hideOnMobile ? "hidden sm:block" : ""}`}>
       <TrackedWhatsAppLink
         href={whatsappHref}
         className="inline-flex min-h-[3.5rem] items-center gap-3 rounded-full border border-[#f2b20f]/22 bg-[linear-gradient(135deg,#16c768_0%,#0f9d58_55%,#0c8349_100%)] px-4 py-3 text-sm font-bold text-white shadow-[0_20px_45px_rgba(15,157,88,0.28)] transition duration-300 hover:-translate-y-0.5"

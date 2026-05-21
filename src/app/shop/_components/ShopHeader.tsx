@@ -3,9 +3,10 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Menu, ShoppingCart, User2, X } from "lucide-react";
+import { Headphones, Menu, ShoppingCart, User2, X } from "lucide-react";
 import ShopPreviewBanner from "@/app/shop/_components/ShopPreviewBanner";
 import ShopSearchBar from "@/app/shop/_components/ShopSearchBar";
+import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import { getShopCartCount, useShopCartItems } from "@/app/shop/cartStore";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 
@@ -86,7 +87,7 @@ export default function ShopHeader({ navLinks }: ShopHeaderProps) {
           </div>
         ) : null}
 
-        <div className="hidden items-center gap-6 lg:flex">
+        <div className="hidden items-center gap-5 lg:flex">
           <Link href="/shop" className="flex shrink-0 items-center gap-4">
             <div className="overflow-hidden rounded-2xl border border-[#7a0000]/10 bg-white shadow-[0_16px_30px_rgba(122,0,0,0.12)]">
               <Image src="/agents/betech-logo-crop.png" alt="Betech Solar" width={56} height={56} className="h-14 w-14 object-contain" />
@@ -101,19 +102,18 @@ export default function ShopHeader({ navLinks }: ShopHeaderProps) {
             <ShopSearchBar />
           </div>
 
-          <nav className="hidden min-w-0 items-center gap-1.5 lg:flex xl:gap-2">
-            {navLinks.map((item) => (
-              <Link
-                key={item.label}
-                href={item.href}
-                className="rounded-full border border-[#7a0000]/10 bg-white px-3 py-3 text-[13px] font-semibold text-slate-700 shadow-[0_10px_24px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:border-[#7a0000]/25 hover:text-[#7a0000]"
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2.5">
+            <TrackedWhatsAppLink
+              href="https://wa.me/254722151083?text=Hello%20Betech%20Solar%2C%20I%20need%20help%20choosing%20the%20right%20solar%20products."
+              className="inline-flex items-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#11b86a_0%,#0f9d58_55%,#0b7c44_100%)] px-4 py-3 text-sm font-semibold text-white shadow-[0_16px_30px_rgba(15,157,88,0.24)]"
+              label="Header WhatsApp support"
+              context="shop_header"
+              ariaLabel="Talk to Betech Solar on WhatsApp"
+            >
+              <Headphones className="h-4 w-4" />
+              <span className="hidden xl:inline">WhatsApp Support</span>
+              <span className="xl:hidden">Support</span>
+            </TrackedWhatsAppLink>
             <button
               type="button"
               className="inline-flex items-center gap-2 rounded-2xl border border-[#7a0000]/10 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-[0_12px_24px_rgba(15,23,42,0.05)]"

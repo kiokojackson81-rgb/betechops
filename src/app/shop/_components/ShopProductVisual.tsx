@@ -104,7 +104,7 @@ export default function ShopProductVisual({ visualType, productName, className =
             <div className={`${bars[2]} rounded-2xl ${config.bars[2]}`} />
           </div>
           <div className="max-w-[42%] rounded-[22px] border border-white/60 bg-white/78 px-3 py-2 text-right shadow-[0_14px_24px_rgba(15,23,42,0.06)] backdrop-blur">
-            <div className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Betech sample</div>
+            <div className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Betech Solar</div>
             <div className="mt-1 line-clamp-2 text-xs font-bold leading-5 text-slate-700">{productName}</div>
           </div>
         </div>

@@ -109,6 +109,13 @@ export const shopCategories: ShopCategory[] = [
     accent: "gold",
   },
   {
+    slug: "accessories",
+    title: "Accessories",
+    blurb: "Cables, breakers, connectors and mounting items for cleaner solar installs.",
+    image: "/agents/product-accessories-generated.png",
+    accent: "maroon",
+  },
+  {
     slug: "request-quotation",
     title: "Request a Solar System Quote",
     blurb: "Not sure what you need? Talk to Betech Solar for sizing guidance.",
@@ -129,12 +136,12 @@ export const heroHighlights = [
   {
     label: "Official Betech store",
     value: "Betech Solar Online Store",
-    note: "Built around real Betech Solar buying journeys for homes, biashara and farms.",
+    note: "Shop genuine solar products with warranty support, Nairobi pickup, and countrywide delivery.",
   },
   {
     label: "Delivered countrywide",
     value: "Panels to full systems",
-    note: "Shop genuine solar products with Nairobi pickup, rider delivery and courier options.",
+    note: "We deliver solar panels, batteries, inverters, pumps and kits across Kenya.",
   },
   {
     label: "Not sure what you need?",
@@ -465,9 +472,9 @@ export const footerGroups = [
     title: "Shop Categories",
     links: [
       { label: "Solar Panels", href: "#solar-panels" },
-      { label: "Inverters", href: "#hybrid-inverters" },
+      { label: "Inverters", href: "#solar-inverters" },
       { label: "Batteries", href: "#solar-batteries" },
-      { label: "Water Pumps", href: "#water-pumps" },
+      { label: "Water Pumps", href: "#solar-water-pumps" },
     ],
   },
   {
