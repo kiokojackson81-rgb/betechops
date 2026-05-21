@@ -4,6 +4,7 @@ import {
   buildQuoteRequestDraft,
   isShopOpsApiEnabled,
 } from "@/app/shop/integrationPlan";
+import { filterShopProducts, getOpsCatalogueProductsReadOnly } from "@/app/shop/shopProductMapper";
 
 export type ShopOrderInput = {
   items: Array<{
@@ -41,21 +42,52 @@ async function fetchJson<T>(input: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-// TODO: Replace mock data with ops catalogue API.
-export async function getShopProducts(): Promise<ShopProduct[]> {
-  if (isShopOpsApiEnabled()) {
-    const response = await fetchJson<{ products: ShopProduct[] }>("http://127.0.0.1:3000/api/shop/products").catch(() => null);
-    if (response?.products?.length) return response.products;
-  }
-  return allShopProducts;
+function getApiUrl(path: string) {
+  if (typeof window !== "undefined") return path;
+  const port = process.env.PORT || "3000";
+  return `http://127.0.0.1:${port}${path}`;
 }
 
-// TODO: Replace mock product lookup with ops catalogue API by slug.
-export async function getShopProductBySlug(slug: string): Promise<ShopProduct | null> {
-  if (isShopOpsApiEnabled()) {
-    const response = await fetchJson<{ product: ShopProduct | null }>(`http://127.0.0.1:3000/api/shop/products/${slug}`).catch(() => null);
-    if (response) return response.product;
+async function getServerShopProducts(input?: { category?: string; q?: string }): Promise<ShopProduct[]> {
+  if (!isShopOpsApiEnabled()) {
+    return filterShopProducts(allShopProducts, input);
   }
+
+  try {
+    return filterShopProducts(await getOpsCatalogueProductsReadOnly(), input);
+  } catch (error) {
+    console.error("[shop] server-side product lookup fell back to mock data", error);
+    return filterShopProducts(allShopProducts, input);
+  }
+}
+
+// TODO: Replace preview fallback with verified live ops catalogue reads after testing is complete.
+export async function getShopProducts(input?: { category?: string; q?: string }): Promise<ShopProduct[]> {
+  if (typeof window === "undefined") {
+    return getServerShopProducts(input);
+  }
+
+  const query = new URLSearchParams();
+  if (input?.category) query.set("category", input.category);
+  if (input?.q) query.set("q", input.q);
+
+  const response = await fetchJson<{ products: ShopProduct[] }>(
+    getApiUrl(`/api/shop/products${query.toString() ? `?${query.toString()}` : ""}`),
+  ).catch(() => null);
+
+  if (response?.products) return response.products;
+
+  return filterShopProducts(allShopProducts, input);
+}
+
+export async function getShopProductBySlug(slug: string): Promise<ShopProduct | null> {
+  if (typeof window === "undefined") {
+    return (await getServerShopProducts()).find((product) => product.slug === slug) ?? null;
+  }
+
+  const response = await fetchJson<{ product: ShopProduct | null }>(getApiUrl(`/api/shop/products/${slug}`)).catch(() => null);
+  if (response) return response.product;
+
   return allShopProducts.find((product) => product.slug === slug) ?? null;
 }
 

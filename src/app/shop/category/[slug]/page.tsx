@@ -36,11 +36,11 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function ShopCategoryPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const products = await getShopProducts();
   const category = shopCategories.find((item) => item.slug === slug || normalizeCategory(item.title) === slug);
 
   if (!category) notFound();
 
+  const products = await getShopProducts({ category: slug });
   const categoryProducts = products.filter(
     (product) => normalizeCategory(product.category) === slug || normalizeCategory(product.category) === normalizeCategory(category.title),
   );

@@ -30,8 +30,8 @@ export type ShopProduct = {
   stockStatus: "in_stock" | "limited_stock" | "preorder" | "quote_only";
   tags: string[];
   whatsappMessage: string;
-  source: "mock";
-  opsProductId: null;
+  source: "mock" | "ops";
+  opsProductId: string | null;
 };
 
 export type ShopProductSection = {

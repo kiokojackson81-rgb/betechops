@@ -69,6 +69,13 @@ export const futureOrderStatuses = [
 
 export const futureQuoteStatuses = ["new", "contacted", "quoted", "converted", "closed"] as const;
 
+export const phaseNineReadOnlySafetyNotes = [
+  "Phase 9 only connects /shop to the ops catalogue in read-only mode.",
+  "No ecommerce order creation is allowed against live ops yet.",
+  "No POS sale, receipt creation, stock deduction, or payment mutation is allowed.",
+  "Mock fallback must remain available until catalogue testing is complete.",
+] as const;
+
 export function buildMockOrderReference() {
   return `BT-SHOP-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 }
