@@ -1,0 +1,50 @@
+import Link from "next/link";
+import { footerGroups } from "@/app/shop/shopData";
+import { shopStyles } from "@/app/shop/_components/shopStyles";
+
+export default function ShopFooter() {
+  return (
+    <footer id="support" className="pt-14">
+      <div className={shopStyles.shell}>
+        <div className="overflow-hidden rounded-[34px] border border-[#7a0000]/10 bg-[linear-gradient(135deg,#2d0600_0%,#5f0000_35%,#140601_100%)] p-6 text-white shadow-[0_28px_70px_rgba(0,0,0,0.24)] sm:p-8">
+          <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr]">
+            <div className="max-w-sm">
+              <div className="text-[11px] font-black uppercase tracking-[0.28em] text-[#ffd761]">Betech Solar Marketplace</div>
+              <h2 className="mt-4 text-3xl font-black tracking-tight">Premium solar shopping, built to connect cleanly with ops later.</h2>
+              <p className="mt-4 text-sm leading-7 text-white/76">
+                This storefront is mock-data only for now, but the structure is ready for future catalogue, customer, POS, and receipt integrations.
+              </p>
+            </div>
+
+            {footerGroups.map((group) => (
+              <div key={group.title}>
+                <div className="text-sm font-black uppercase tracking-[0.18em] text-[#ffd761]">{group.title}</div>
+                <div className="mt-4 grid gap-3">
+                  {group.links.map((link) => {
+                    const external = link.href.startsWith("http");
+                    return (
+                      <Link
+                        key={link.label}
+                        href={link.href}
+                        target={external ? "_blank" : undefined}
+                        rel={external ? "noreferrer" : undefined}
+                        className="text-sm text-white/76 transition hover:text-white"
+                      >
+                        {link.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-8 flex flex-col gap-3 border-t border-white/10 pt-6 text-sm text-white/62 sm:flex-row sm:items-center sm:justify-between">
+            <div>Responsive storefront mock for mobile, tablet, and desktop.</div>
+            <div>Pramukh Plaza, Nairobi CBD</div>
+          </div>
+        </div>
+      </div>
+    </footer>
+  );
+}
