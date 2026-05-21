@@ -69,7 +69,9 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
             });
 
             clearShopCart();
-            router.push(`/shop/order-success?ref=${encodeURIComponent(result.orderRef)}`);
+            router.push(
+              `/shop/order-success?ref=${encodeURIComponent(result.orderRef)}&mode=${encodeURIComponent(result.source || "mock")}`,
+            );
           } catch (submissionError) {
             setError(submissionError instanceof Error ? submissionError.message : "Unable to create mock order.");
           } finally {
@@ -177,6 +179,9 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
         </div>
         <p className="mt-4 text-sm leading-6 text-slate-500">
           TODO: Checkout should create pending ecommerce order in ops and later connect customer, delivery, and receipt workflows.
+        </p>
+        <p className="mt-2 text-sm leading-6 text-slate-500">
+          Safe flag: <code>NEXT_PUBLIC_SHOP_USE_OPS_API=false</code> keeps checkout in mock fallback mode.
         </p>
       </aside>
     </div>

@@ -31,7 +31,7 @@ export default function QuoteRequestClient({ preferredProduct = "" }: QuoteReque
         </div>
         <h1 className="mt-4 text-3xl font-black tracking-tight text-white">Thanks, {submitted.name}.</h1>
         <p className="mt-3 max-w-2xl text-base leading-7 text-white/76">
-          Our mock quote flow accepted your request under reference <span className="font-black text-white">{submitted.reference}</span>.
+          Our solar sizing team will contact you shortly. Your mock quote request reference is <span className="font-black text-white">{submitted.reference}</span>.
         </p>
         <div className="mt-6 flex flex-col gap-3 sm:flex-row">
           <Link href="/shop" className={shopStyles.goldButton}>
@@ -166,6 +166,9 @@ export default function QuoteRequestClient({ preferredProduct = "" }: QuoteReque
           Back to Shop
         </Link>
       </div>
+      <p className="mt-4 text-sm leading-6 text-slate-500">
+        Safe flag: <code>NEXT_PUBLIC_SHOP_USE_OPS_API=false</code> keeps quote submission in mock fallback mode.
+      </p>
     </form>
   );
 }
