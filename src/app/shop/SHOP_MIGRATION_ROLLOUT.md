@@ -257,6 +257,10 @@ No destructive SQL is included.
 ## Safety and rollback notes
 
 - Take a fresh database backup before running the manual patch.
+- Confirm the exact `DATABASE_URL` target before opening any SQL session.
+- Confirm the current `Product` columns still match the expected pre-patch legacy shape.
+- Confirm the rollback owner and rollback procedure before execution.
+- Confirm the patch is additive only and contains no destructive SQL.
 - Run the patch in staging or a production-like clone first if available.
 - Verify the seven columns exist immediately after the patch.
 - Keep `showInShop=false` for all existing products initially.
@@ -264,6 +268,14 @@ No destructive SQL is included.
 - Keep the solar keyword guard active even after the patch.
 - Keep `NEXT_PUBLIC_SHOP_USE_OPS_API=false` until catalogue preview review is complete.
 - If anything behaves unexpectedly, keep mock mode active and roll back the deployment before changing customer-facing catalogue mode.
+
+## Pre-patch checklist
+
+- Take a database backup or Neon snapshot.
+- Confirm the `DATABASE_URL` target matches the intended environment.
+- Confirm the current `Product` table columns before patching.
+- Confirm the rollback plan and operator responsible for execution.
+- Confirm `prisma/manual-patches/add_product_shop_fields_only.sql` is additive only.
 
 ## Post-patch verification checklist
 
@@ -281,3 +293,44 @@ No destructive SQL is included.
 - Confirm a solar product can be edited with ecommerce fields saved.
 - Confirm `showInShop=false` products do not appear in `/shop/catalogue-preview`.
 - Confirm non-solar products remain rejected even if a user tries to flag them for the shop.
+
+## Patch command options
+
+Run manually only after the pre-patch checklist is complete:
+
+```bash
+psql "$DATABASE_URL" -f prisma/manual-patches/add_product_shop_fields_only.sql
+```
+
+PowerShell example:
+
+```powershell
+psql $env:DATABASE_URL -f prisma/manual-patches/add_product_shop_fields_only.sql
+```
+
+Read-only verification command:
+
+```bash
+node -r ts-node/register scripts/verify-product-shop-fields.ts
+```
+
+## Admin verification checklist
+
+- Open `/admin/pos-management`.
+- Create or edit a normal POS product.
+- Confirm the ecommerce fields are editable.
+- Save a product with `showInShop=false`.
+- Save one solar test product with `showInShop=true`.
+- Open `/shop/catalogue-preview`.
+- Confirm the solar test product is accepted.
+- Confirm non-solar products remain rejected by the solar guard.
+
+## Shop mode activation checklist
+
+- Keep `NEXT_PUBLIC_SHOP_USE_OPS_API=false` until `/shop/catalogue-preview` is clean.
+- After catalogue review, set `NEXT_PUBLIC_SHOP_USE_OPS_API=true`.
+- Redeploy the app.
+- Test `/shop`.
+- Test category pages.
+- Test product pages.
+- Keep checkout and quote submission in mock mode until the order integration phase.
