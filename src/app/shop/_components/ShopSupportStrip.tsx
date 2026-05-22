@@ -1,5 +1,4 @@
 import { MapPin, MessageCircle, Truck } from "lucide-react";
-import { shopStyles } from "@/app/shop/_components/shopStyles";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 
 export default function ShopSupportStrip() {

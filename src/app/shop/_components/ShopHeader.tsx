@@ -56,13 +56,13 @@ export default function ShopHeader({ navLinks }: ShopHeaderProps) {
                 </span>
               ) : null}
             </Link>
-            <button
-              type="button"
+            <Link
+              href="/shop/account"
               aria-label="Open account"
               className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[#7a0000]/10 bg-white text-slate-700 shadow-[0_10px_20px_rgba(15,23,42,0.05)]"
             >
               <User2 className="h-5 w-5" />
-            </button>
+            </Link>
           </div>
         </div>
 
@@ -114,13 +114,13 @@ export default function ShopHeader({ navLinks }: ShopHeaderProps) {
               <span className="hidden xl:inline">WhatsApp Support</span>
               <span className="xl:hidden">Support</span>
             </TrackedWhatsAppLink>
-            <button
-              type="button"
+            <Link
+              href="/shop/account"
               className="inline-flex items-center gap-2 rounded-2xl border border-[#7a0000]/10 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-700 shadow-[0_10px_20px_rgba(15,23,42,0.05)]"
             >
               <User2 className="h-4 w-4" />
               <span className="hidden xl:inline">Account</span>
-            </button>
+            </Link>
             <Link
               href="/shop/cart"
               className="inline-flex items-center gap-2 rounded-2xl bg-[#7a0000] px-3.5 py-2.5 text-sm font-semibold text-white shadow-[0_14px_24px_rgba(122,0,0,0.16)]"

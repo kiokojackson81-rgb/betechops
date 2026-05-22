@@ -4,14 +4,33 @@ import { clearShopCart } from "@/app/shop/cartStore";
 
 const SHOP_ORDER_KEY = "betech-shop-last-order";
 const SHOP_QUOTE_KEY = "betech-shop-last-quote";
+const SHOP_ORDER_HISTORY_KEY = "betech-shop-order-history";
+const SHOP_QUOTE_HISTORY_KEY = "betech-shop-quote-history";
+const SHOP_PROFILE_KEY = "betech-shop-customer-profile";
 const SHOP_ORDER_COUNTER_KEY = "betech-shop-order-counter";
 const SHOP_QUOTE_COUNTER_KEY = "betech-shop-quote-counter";
+
+export type ShopCustomerProfile = {
+  fullName: string;
+  phone: string;
+  whatsappNumber?: string;
+  email?: string;
+  countyTown?: string;
+  estateLandmark?: string;
+  locationNotes?: string;
+  updatedAt: string;
+};
 
 export type MockOrderRecord = {
   orderRef: string;
   customerName: string;
   phone: string;
+  whatsappNumber?: string;
+  email?: string;
   location: string;
+  countyTown?: string;
+  estateLandmark?: string;
+  locationNotes?: string;
   deliveryMethod: string;
   paymentPreference: string;
   items: Array<{
@@ -45,6 +64,12 @@ export type MockQuoteRecord = {
 
 function isBrowser() {
   return typeof window !== "undefined";
+}
+
+function appendHistory<T extends { createdAt: string }>(key: string, value: T) {
+  const current = readJson<T[]>(key);
+  const next = [value, ...(Array.isArray(current) ? current : [])].slice(0, 20);
+  writeJson(key, next);
 }
 
 function readJson<T>(key: string): T | null {
@@ -87,11 +112,16 @@ export function saveMockOrder(input: Omit<MockOrderRecord, "orderRef" | "source"
   };
 
   writeJson(SHOP_ORDER_KEY, order);
+  appendHistory(SHOP_ORDER_HISTORY_KEY, order);
   return order;
 }
 
 export function getLastMockOrder() {
   return readJson<MockOrderRecord>(SHOP_ORDER_KEY);
+}
+
+export function getMockOrderHistory() {
+  return readJson<MockOrderRecord[]>(SHOP_ORDER_HISTORY_KEY) ?? [];
 }
 
 export function saveMockQuote(input: Omit<MockQuoteRecord, "quoteRef" | "source" | "status" | "createdAt">) {
@@ -104,11 +134,30 @@ export function saveMockQuote(input: Omit<MockQuoteRecord, "quoteRef" | "source"
   };
 
   writeJson(SHOP_QUOTE_KEY, quote);
+  appendHistory(SHOP_QUOTE_HISTORY_KEY, quote);
   return quote;
 }
 
 export function getLastMockQuote() {
   return readJson<MockQuoteRecord>(SHOP_QUOTE_KEY);
+}
+
+export function getMockQuoteHistory() {
+  return readJson<MockQuoteRecord[]>(SHOP_QUOTE_HISTORY_KEY) ?? [];
+}
+
+export function saveShopCustomerProfile(input: Omit<ShopCustomerProfile, "updatedAt">) {
+  const profile: ShopCustomerProfile = {
+    ...input,
+    updatedAt: new Date().toISOString(),
+  };
+
+  writeJson(SHOP_PROFILE_KEY, profile);
+  return profile;
+}
+
+export function getShopCustomerProfile() {
+  return readJson<ShopCustomerProfile>(SHOP_PROFILE_KEY);
 }
 
 export function clearCartAfterOrder() {
