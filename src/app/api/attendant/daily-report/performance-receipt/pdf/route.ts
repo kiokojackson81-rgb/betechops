@@ -785,6 +785,7 @@ export async function GET(req: Request) {
   const isOnlineCategory =
     user?.attendantCategory === "JUMIA_KILIMALL_OPS" || user?.attendantCategory === "BETECH_OPS";
   const commissionConfig = await getUserCommissionConfigLike(userId);
+  const usesPosProfit10 = commissionConfig.salesCommissionMode === "POS_PROFIT_10";
   const posOwnershipMode = resolveOnlinePosOwnershipMode(attendantEmail);
   const staffOwnerOr: Prisma.ReceiptWhereInput[] = [
     { order: { attendantId: userId } },
@@ -887,6 +888,88 @@ export async function GET(req: Request) {
       commissionImpact: 0,
       productCommission: 0,
     });
+  }
+
+  if (usesPosProfit10 && rows.length === 0) {
+    const fallbackReceipts = (await prisma.receipt.findMany({
+      where: {
+        AND: [
+          {
+            OR: [
+              { generatedAt: { gte: period.start, lte: period.end } },
+              { createdAt: { gte: period.start, lte: period.end } },
+            ],
+          },
+          {
+            OR: [
+              { issuedById: userId },
+              { order: { attendantId: userId } },
+              { data: { path: ["attendantId"], equals: userId } },
+            ],
+          },
+        ],
+      },
+      select: {
+        id: true,
+        receiptNumber: true,
+        generatedAt: true,
+        createdAt: true,
+        totals: true,
+        data: true,
+        order: {
+          select: {
+            orderNumber: true,
+            status: true,
+            paymentStatus: true,
+            totalAmount: true,
+            items: {
+              select: {
+                quantity: true,
+                sellingPrice: true,
+                orderCosts: { select: { unitCost: true } },
+                profitSnapshots: {
+                  orderBy: { computedAt: "desc" },
+                  take: 1,
+                  select: { profit: true, unitCost: true, qty: true },
+                },
+                product: { select: { lastBuyingPrice: true } },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 1200,
+    })) as PosReceiptRow[];
+
+    for (const row of fallbackReceipts) {
+      const canonical =
+        normalizeReceiptNumber(row.receiptNumber) ||
+        normalizeReceiptNumber(row.order?.orderNumber) ||
+        row.id;
+      const paymentMethod = normalizePaymentMethod(
+        (row.data as any)?.paymentMethod ?? (row.totals as any)?.paymentMethod ?? "MPESA",
+      );
+      const dedupeKey = `${canonical}|${paymentMethod}`;
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      const date = row.generatedAt ?? row.createdAt;
+      rows.push({
+        dateIso: new Date(date).toISOString().slice(0, 10),
+        sortAt: date.toISOString(),
+        receiptNumber: row.receiptNumber || row.order?.orderNumber || canonical,
+        amount: extractReceiptAmount(row),
+        itemCount: (row.order?.items ?? []).reduce(
+          (sum, item) => sum + Math.max(1, Math.trunc(toNumber(item?.quantity) || 1)),
+          0,
+        ),
+        profit: extractReceiptProfit(row, extractReceiptAmount(row)),
+        paymentMethod,
+        status: (row.order?.paymentStatus || row.order?.status || "").toString().toUpperCase() || "UNKNOWN",
+        commissionImpact: 0,
+        productCommission: 0,
+      });
+    }
   }
 
   // Include marketing/support ledger receipts for attendants whose authoritative
@@ -1108,17 +1191,24 @@ export async function GET(req: Request) {
   const printedPosSales = rowsWithCommission.reduce((sum, row) => sum + Math.max(0, Number(row.amount ?? 0)), 0);
   const printedPosReceipts = rowsWithCommission.filter((row) => Math.max(0, Number(row.amount ?? 0)) > 0).length;
   const printedPosItems = rowsWithCommission.reduce((sum, row) => sum + Math.max(0, Number(row.itemCount ?? 0)), 0);
-  const summaryLinesForRender =
-    isOnlineCategory && (Number(onlinePosSummary?.totalReceipts ?? 0) <= 0 || Number(onlinePosSummary?.totalItems ?? 0) <= 0)
-      ? summaryLines.map((line) =>
-          line.label === "POS direct sales"
-            ? {
-                ...line,
-                note: `${printedPosReceipts} POS receipts / ${printedPosItems} POS items`,
-              }
-            : line,
-        )
-      : summaryLines;
+  const summaryLinesForRender = summaryLines.map((line) => {
+    if (line.label !== "POS direct sales") return line;
+    if (usesPosProfit10) {
+      return {
+        ...line,
+        sales: printedPosSales,
+        commission: rowsWithCommission.reduce((sum, row) => sum + Number(row.commissionImpact ?? 0), 0),
+        note: `${printedPosReceipts} POS receipts / ${printedPosItems} POS items`,
+      };
+    }
+    if (isOnlineCategory && (Number(onlinePosSummary?.totalReceipts ?? 0) <= 0 || Number(onlinePosSummary?.totalItems ?? 0) <= 0)) {
+      return {
+        ...line,
+        note: `${printedPosReceipts} POS receipts / ${printedPosItems} POS items`,
+      };
+    }
+    return line;
+  });
   const onlineDirectSales = summaryLinesForRender.find((line) => line.label === "POS direct sales")?.sales ?? 0;
 
   const html = renderHtml({
