@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 
 export const POS_TOTALS_MODES = ["NONE", "USER", "GLOBAL"] as const;
-export const SALES_COMMISSION_MODES = ["DEFAULT_TIERS", "JENIFFER_PRORATED", "BRENDAH_DIRECT"] as const;
+export const SALES_COMMISSION_MODES = ["DEFAULT_TIERS", "JENIFFER_PRORATED", "BRENDAH_DIRECT", "POS_PROFIT_10"] as const;
 
 export type PosTotalsMode = (typeof POS_TOTALS_MODES)[number];
 export type SalesCommissionMode = (typeof SALES_COMMISSION_MODES)[number];
@@ -21,13 +21,15 @@ export function deriveDefaultCommissionConfigFromUser(user: {
   const attendantCategory = (user.attendantCategory ?? "").toString().trim();
 
   const posTotalsMode: PosTotalsMode =
-    attendantCategory === "DIRECT_SALES_OPS" ? "USER" : "NONE";
+    attendantCategory === "DIRECT_SALES_OPS" || email === "justus@betech.co.ke" ? "USER" : "NONE";
 
   const salesCommissionMode: SalesCommissionMode =
     email === "jeniffer@betech.co.ke"
       ? "JENIFFER_PRORATED"
       : email === "brendah@betech.co.ke"
         ? "BRENDAH_DIRECT"
+        : email === "justus@betech.co.ke"
+          ? "POS_PROFIT_10"
         : "DEFAULT_TIERS";
 
   return { posTotalsMode, salesCommissionMode };

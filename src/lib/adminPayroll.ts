@@ -428,6 +428,8 @@ async function buildPayrollRowResolved(
         ? Number(calculateCumulativeCommission(totalSales).commission ?? 0)
         : commissionConfig.salesCommissionMode === "BRENDAH_DIRECT"
           ? Number(computeBrendahDirectCommission(totalSales, totalProfit).amount ?? 0)
+          : commissionConfig.salesCommissionMode === "POS_PROFIT_10"
+            ? Math.round(Math.max(0, totalProfit) * 0.1)
           : Number(computeSalesCommissionFromTiers(totalSales, totalProfit, tiers, totalProfit > 0 ? 0.05 : 0));
     const directCommissionTotal = salesCommission + Number(releasedPosCommission ?? 0);
     const productWorkCommission =
@@ -514,6 +516,8 @@ async function buildPayrollRowResolved(
         ? Number(calculateCumulativeCommission(totalSales).commission ?? 0)
         : commissionConfig.salesCommissionMode === "BRENDAH_DIRECT"
           ? Number(computeBrendahDirectCommission(totalSales, totalProfit).amount ?? 0)
+          : commissionConfig.salesCommissionMode === "POS_PROFIT_10"
+            ? Math.round(Math.max(0, totalProfit) * 0.1)
           : Number(computeSalesCommissionFromTiers(totalSales, totalProfit, tiers, totalProfit > 0 ? 0.05 : 0));
     const directCommissionTotal = salesCommission + Number(releasedPosCommission ?? 0);
     const productWorkCommission =
@@ -566,20 +570,30 @@ async function buildPayrollRowResolved(
     return applyPreviousNegativeBalanceCarry(attendant, period, row, options);
   }
 
-  const earningsSummary = await getEarningsSummaryForUser({ userId: attendant.id, asOf: period.start });
+  const [earningsSummary, commissionConfig] = await Promise.all([
+    getEarningsSummaryForUser({ userId: attendant.id, asOf: period.start }),
+    getUserCommissionConfigLike(attendant.id),
+  ]);
   const detail = ledger?.detail as { totalSales?: number; totalProfit?: number } | undefined;
   const detailProfitValue = Number(detail?.totalProfit ?? Number.NaN);
   const resolvedProfit =
     !Number.isNaN(detailProfitValue) && detailProfitValue !== 0
       ? detailProfitValue
       : Number(earningsSummary?.totalProfit ?? 0);
-  let commissionTotal = Number(ledger?.commissionTotal ?? 0);
+  const usesConfiguredCommissionMode =
+    commissionConfig.posTotalsMode !== "NONE" || commissionConfig.salesCommissionMode !== "DEFAULT_TIERS";
+  let commissionTotal = usesConfiguredCommissionMode
+    ? Number(earningsSummary?.commission ?? earningsSummary?.grossCommission ?? earningsSummary?.salesCommission ?? 0)
+    : Number(ledger?.commissionTotal ?? 0);
   if (commissionTotal <= 0) {
     commissionTotal = Number(earningsSummary?.salesCommission ?? 0);
   }
   if (commissionTotal <= 0) {
     commissionTotal = Number(ledger?.netCommission ?? ledger?.grossCommission ?? 0);
   }
+  const resolvedDirectCommission = usesConfiguredCommissionMode
+    ? Number(earningsSummary?.salesCommission ?? commissionTotal)
+    : Number(ledger?.commissionDirect ?? 0);
 
   const totalEarnings =
     Number(plan?.baseSalary ?? 0) +
@@ -598,11 +612,18 @@ async function buildPayrollRowResolved(
     transportAllowance: Number(plan?.defaultTransportAllowance ?? 0),
     commission: commissionTotal,
     commissionGross: commissionTotal,
-    commissionDirect: Number(ledger?.commissionDirect ?? 0),
+    commissionDirect: resolvedDirectCommission,
     commissionMarketplaceJumia: Number(ledger?.commissionMarketplaceJumia ?? 0),
     commissionMarketplaceKilimall: Number(ledger?.commissionMarketplaceKilimall ?? 0),
     commissionTotal,
-    commissionBreakdown: ledger?.commissionBreakdown ?? null,
+    commissionBreakdown:
+      usesConfiguredCommissionMode
+        ? {
+            direct: resolvedDirectCommission,
+            total: commissionTotal,
+            source: commissionConfig.salesCommissionMode,
+          }
+        : ledger?.commissionBreakdown ?? null,
     bonusTotal: adjustmentSummary.totalBonus,
     deductionTotal: totalDeductions,
     totalEarnings,

@@ -18,7 +18,7 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
   const [state, setState] = useState({ category: attendant.attendantCategory ?? "", isActive: attendant.isActive, password: "" });
   const [commission, setCommission] = useState<{
     posTotalsMode: "NONE" | "USER" | "GLOBAL";
-    salesCommissionMode: "DEFAULT_TIERS" | "JENIFFER_PRORATED" | "BRENDAH_DIRECT";
+    salesCommissionMode: "DEFAULT_TIERS" | "JENIFFER_PRORATED" | "BRENDAH_DIRECT" | "POS_PROFIT_10";
   }>({
     posTotalsMode: "NONE",
     salesCommissionMode: "DEFAULT_TIERS",
@@ -135,6 +135,7 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
               <option value="DEFAULT_TIERS">Default (tiered ladder)</option>
               <option value="JENIFFER_PRORATED">Prorated next tier (Jeniffer)</option>
               <option value="BRENDAH_DIRECT">Direct progressive (Brendah)</option>
+              <option value="POS_PROFIT_10">10% of POS profit</option>
             </select>
           </label>
         </div>

@@ -1862,6 +1862,7 @@ enum SalesCommissionMode {
   DEFAULT_TIERS
   JENIFFER_PRORATED
   BRENDAH_DIRECT
+  POS_PROFIT_10
 }
 
 enum AttendantCategory {

@@ -153,6 +153,7 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   const usePosTotals = commissionConfig.posTotalsMode !== "NONE";
   const isJeniffer = commissionConfig.salesCommissionMode === "JENIFFER_PRORATED";
   const isBrendah = commissionConfig.salesCommissionMode === "BRENDAH_DIRECT";
+  const isPosProfit10 = commissionConfig.salesCommissionMode === "POS_PROFIT_10";
   let posSummary: Awaited<ReturnType<typeof summarizePosReceiptsForPeriod>> | null = null;
   if (usePosTotals) {
     const userIdForPos = commissionConfig.posTotalsMode === "GLOBAL" ? null : opts.userId;
@@ -313,6 +314,8 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
       nextTarget: res.nextTarget ?? null,
       progressPercent: res.nextTarget ? Math.max(0, Math.min(1, totalSales / res.nextTarget)) : 1,
     };
+  } else if (isPosProfit10) {
+    salesCommission = Math.round(Math.max(0, totalProfit) * 0.1);
   } else {
     const fallbackPercent = totalProfit > 0 ? 0.05 : 0;
     salesCommission = computeSalesCommissionFromTiers(totalSales, totalProfit, tiers, fallbackPercent);
@@ -339,7 +342,7 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   // overrides). For others prefer a persisted `commissionTotal` when present.
   let finalGrossCommission: number;
   const ledgerPersistedCommission = ledger && (ledger as any).commissionTotal ? Number((ledger as any).commissionTotal) : 0;
-  if (isBrendah || isJeniffer) {
+  if (isBrendah || isJeniffer || isPosProfit10) {
     finalGrossCommission = computedGrossCommission;
   } else if (ledgerPersistedCommission > 0) {
     finalGrossCommission = ledgerPersistedCommission;

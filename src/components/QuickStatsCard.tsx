@@ -59,7 +59,7 @@ export function QuickStatsCard({
         {
           label:
             onlineOps.directCommission != null
-              ? "Direct commission (10% of POS profit)"
+              ? "Direct commission"
               : "Commission",
           value:
             onlineOps.directCommission != null
