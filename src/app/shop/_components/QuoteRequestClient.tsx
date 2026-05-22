@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { createQuoteRequest } from "@/app/shop/shopApi";
+import { createQuoteRequest } from "@/app/shop/shopSubmitApi";
 import { trackQuoteSubmitted } from "@/app/shop/shopAnalytics";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { saveMockQuote } from "@/app/shop/shopStorage";

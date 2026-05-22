@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { MessageCircle } from "lucide-react";
 import { buildDetailedCart, useShopCartItems } from "@/app/shop/cartStore";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
-import { createShopOrder } from "@/app/shop/shopApi";
+import { createShopOrder } from "@/app/shop/shopSubmitApi";
 import { trackCheckoutStarted, trackOrderSubmitted } from "@/app/shop/shopAnalytics";
 import type { ShopProduct } from "@/app/shop/shopData";
 import { formatCurrency, shopStyles } from "@/app/shop/_components/shopStyles";
