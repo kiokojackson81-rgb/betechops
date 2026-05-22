@@ -72,19 +72,20 @@ export default async function ShopPage() {
       <ShopHeader navLinks={shopNavLinks} />
       <ShopCategoryNav categories={shopCategories} />
       <ShopHero categories={shopCategories} />
+      <CategoryScroller categories={shopCategories} />
 
-      <section className="py-4 sm:py-5">
+      <section className="py-3">
         <div className={shopStyles.shell}>
-          <div className={`${shopStyles.lightCard} overflow-hidden px-4 py-4 sm:px-5`}>
-            <div className="grid gap-3 md:grid-cols-5">
+          <div className={`${shopStyles.lightCard} overflow-hidden px-3 py-3 sm:px-4`}>
+            <div className="grid gap-2 md:grid-cols-5">
               {topTrustItems.map((item) => {
                 const Icon = item.icon;
                 return (
-                  <div key={item.title} className="flex items-center gap-3 rounded-2xl bg-[#fcfaf7] px-3 py-3">
-                    <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#fff3d8] text-[#7a0000]">
-                      <Icon className="h-4 w-4" />
+                  <div key={item.title} className="flex items-center gap-2.5 rounded-2xl bg-[#fcfaf7] px-3 py-2.5">
+                    <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#fff3d8] text-[#7a0000]">
+                      <Icon className="h-3.5 w-3.5" />
                     </span>
-                    <div className="text-sm font-bold text-slate-700">{item.title}</div>
+                    <div className="text-xs font-bold text-slate-700 sm:text-sm">{item.title}</div>
                   </div>
                 );
               })}
@@ -93,13 +94,11 @@ export default async function ShopPage() {
         </div>
       </section>
 
-      <CategoryScroller categories={shopCategories} />
-
       {featuredProducts.length ? (
         <ProductSection
           id="featured-deals"
           title="Featured Deals"
-          subtitle="Popular Betech Solar picks arranged for easier browsing during shop preview testing."
+          subtitle="Popular Betech Solar picks for faster browsing."
           href="/shop"
           products={featuredProducts}
         />
@@ -109,7 +108,7 @@ export default async function ShopPage() {
         <ProductSection
           id="best-selling-solar-kits"
           title="Best Selling Solar Kits"
-          subtitle="Ready-built solar kits for home backup, biashara power and guided system upgrades."
+          subtitle="Ready-built kits for home backup and biashara power."
           href="/shop/category/solar-full-kits"
           products={kitProducts}
         />
@@ -119,7 +118,7 @@ export default async function ShopPage() {
         <ProductSection
           id="solar-panels"
           title="Solar Panels"
-          subtitle="High-output mono panels for rooftops, institutions, farms and clean daytime generation."
+          subtitle="High-output mono panels for rooftops and clean daytime generation."
           href="/shop/category/solar-panels"
           products={panelProducts}
         />
@@ -129,7 +128,7 @@ export default async function ShopPage() {
         <ProductSection
           id="solar-inverters"
           title="Inverters"
-          subtitle="Hybrid inverter options for starter systems, stronger backup setups and lithium-ready upgrades."
+          subtitle="Hybrid inverter options for starter and stronger backup setups."
           href="/shop/category/solar-inverters"
           products={inverterProducts}
         />
@@ -139,7 +138,7 @@ export default async function ShopPage() {
         <ProductSection
           id="solar-batteries"
           title="Batteries"
-          subtitle="Gel and lithium storage options for dependable reserve power and longer runtime."
+          subtitle="Gel and lithium storage for dependable reserve power."
           href="/shop/category/solar-batteries"
           products={batteryProducts}
         />
@@ -149,26 +148,26 @@ export default async function ShopPage() {
         <ProductSection
           id="solar-water-pumps"
           title="Water Pumps & Lights"
-          subtitle="Outdoor solar solutions for irrigation, compound lighting and water heating support."
+          subtitle="Outdoor solar solutions for irrigation and compound lighting."
           href="/shop/category/solar-water-pumps"
           products={outdoorProducts}
         />
       ) : null}
 
-      <section className="py-8 sm:py-10">
+      <section className="py-5 sm:py-6">
         <div className={shopStyles.shell}>
-          <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
-            <div className={`${shopStyles.lightCard} p-5 sm:p-6`}>
+          <div className="grid gap-3 lg:grid-cols-[1.08fr_0.92fr]">
+            <div className={`${shopStyles.lightCard} p-4 sm:p-5`}>
               <div className={shopStyles.sectionEyebrow}>Delivery and payment</div>
-              <h2 className="mt-4 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">How delivery and payment works</h2>
-              <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base sm:leading-7">
+              <h2 className="mt-3 text-xl font-black tracking-tight text-slate-950 sm:text-2xl">How delivery and payment works</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
                 We deliver solar panels, batteries, inverters, pumps and kits across Kenya. Checkout stays in preview mode while our team confirms stock, delivery and payment steps manually.
               </p>
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
                 {deliveryPaymentSteps.map((step) => (
-                  <div key={step.title} className="rounded-[22px] border border-[#7a0000]/10 bg-[#fcfaf7] p-4">
-                    <div className="text-sm font-black uppercase tracking-[0.14em] text-[#7a0000]">{step.title}</div>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">{step.copy}</p>
+                  <div key={step.title} className="rounded-[20px] border border-[#7a0000]/10 bg-[#fcfaf7] p-3.5">
+                    <div className="text-xs font-black uppercase tracking-[0.14em] text-[#7a0000] sm:text-sm">{step.title}</div>
+                    <p className="mt-1.5 text-sm leading-6 text-slate-600">{step.copy}</p>
                   </div>
                 ))}
               </div>
@@ -179,24 +178,24 @@ export default async function ShopPage() {
         </div>
       </section>
 
-      <section id="quote" className="pb-4 pt-2 sm:pb-6">
+      <section id="quote" className="pb-4 pt-1.5 sm:pb-5">
         <div className={shopStyles.shell}>
-          <div className={`${shopStyles.darkPanel} p-5 sm:p-6 lg:p-7`}>
-            <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+          <div className={`${shopStyles.darkPanel} p-4 sm:p-5 lg:p-6`}>
+            <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
               <div>
-                <div className="inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">
+                <div className="inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#7a0000]">
                   Not sure what you need?
                 </div>
-                <h2 className="mt-4 text-2xl font-black tracking-tight text-white sm:text-3xl">Request a solar quote and our team will help size your system.</h2>
-                <p className="mt-3 max-w-2xl text-sm leading-7 text-white/78 sm:text-base">
-                  Tell Betech Solar about your home, biashara, farm or pumping needs and we will guide the right panels, batteries, inverters and accessories before live ecommerce order processing starts.
+                <h2 className="mt-3 text-xl font-black tracking-tight text-white sm:text-2xl">Get help choosing the right inverter, battery and panels.</h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-white/78">
+                  Request a solar quote and our team will guide the right system for your home, biashara, farm or pumping needs.
                 </p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-                <Link href="/shop/request-quote" className={`${shopStyles.goldButton} min-h-[3.3rem] w-full`}>
+                <Link href="/shop/request-quote" className={`${shopStyles.goldButton} min-h-[2.9rem] w-full`}>
                   Request Free Quote
                 </Link>
-                <Link href="/shop/category/solar-full-kits" className={`${shopStyles.secondaryButton} min-h-[3.3rem] w-full bg-white/92`}>
+                <Link href="/shop/category/solar-full-kits" className={`${shopStyles.secondaryButton} min-h-[2.9rem] w-full bg-white/92`}>
                   Browse Full Kits
                 </Link>
               </div>

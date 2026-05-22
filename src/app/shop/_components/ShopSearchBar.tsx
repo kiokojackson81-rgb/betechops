@@ -8,8 +8,8 @@ export default function ShopSearchBar({ compact = false }: ShopSearchBarProps) {
   return (
     <form
       action="/shop"
-      className={`flex w-full items-center gap-2 rounded-full border border-[#7a0000]/12 bg-white px-3 shadow-[0_14px_32px_rgba(15,23,42,0.06)] ${
-        compact ? "min-h-[3.2rem]" : "min-h-[3.6rem]"
+      className={`flex w-full items-center gap-2 rounded-full border border-[#7a0000]/12 bg-white px-3 shadow-[0_12px_24px_rgba(15,23,42,0.05)] ${
+        compact ? "min-h-[2.95rem]" : "min-h-[3.15rem]"
       }`}
     >
       <label htmlFor={compact ? "shop-search-compact" : "shop-search"} className="sr-only">
@@ -27,7 +27,7 @@ export default function ShopSearchBar({ compact = false }: ShopSearchBarProps) {
         type="button"
         aria-label="Filter solar products"
         className={`inline-flex shrink-0 items-center justify-center rounded-full border border-[#7a0000]/10 bg-[#fff7ea] text-[#7a0000] ${
-          compact ? "h-10 w-10" : "h-11 w-11"
+          compact ? "h-9 w-9" : "h-10 w-10"
         }`}
       >
         <SlidersHorizontal className="h-4 w-4" />

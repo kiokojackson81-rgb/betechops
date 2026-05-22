@@ -32,19 +32,16 @@ export default function CategoryScroller({ categories }: CategoryScrollerProps) 
   const getCategoryHref = (slug: string) => (slug === "request-quotation" ? "/shop/request-quote" : `/shop/category/${slug}`);
 
   return (
-    <section className="py-6 sm:py-8">
+    <section className="py-4 sm:py-5">
       <div className={shopStyles.shell}>
         <div className="flex items-end justify-between gap-4">
           <div>
-            <div className={shopStyles.sectionEyebrow}>Browse categories</div>
-            <h2 className="mt-4 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">Shop by product type</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-              Browse solar panels, inverters, batteries, pumps, lights and quote-first options from the Betech Solar store.
-            </p>
+            <div className={shopStyles.sectionEyebrow}>Categories</div>
+            <h2 className="mt-3 text-xl font-black tracking-tight text-slate-950 sm:text-2xl">Shop by product type</h2>
           </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
           {categories.map((category) => {
             const Icon = iconMap[category.slug];
 
@@ -52,23 +49,19 @@ export default function CategoryScroller({ categories }: CategoryScrollerProps) 
               <Link
                 key={category.slug}
                 href={getCategoryHref(category.slug)}
-                className="group overflow-hidden rounded-[26px] border border-[#7a0000]/10 bg-white shadow-[0_16px_34px_rgba(15,23,42,0.05)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_22px_48px_rgba(122,0,0,0.10)]"
+                className="group overflow-hidden rounded-[22px] border border-[#7a0000]/10 bg-white shadow-[0_12px_24px_rgba(15,23,42,0.04)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_32px_rgba(122,0,0,0.08)]"
               >
-                <div className="relative h-24 border-b border-[#7a0000]/10 bg-[linear-gradient(135deg,#fff7e6_0%,#ffffff_100%)] sm:h-28">
-                  <Image src={category.image} alt={category.title} fill sizes="(max-width: 1024px) 50vw, 20vw" className="object-contain p-3 sm:p-4" />
+                <div className="relative h-16 border-b border-[#7a0000]/10 bg-[linear-gradient(135deg,#fff7e6_0%,#ffffff_100%)] sm:h-20">
+                  <Image src={category.image} alt={category.title} fill sizes="(max-width: 1024px) 50vw, 16vw" className="object-contain p-2.5 sm:p-3" />
                 </div>
-                <div className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl ${accentMap[category.accent]}`}>
-                      <Icon className="h-4 w-4" />
+                <div className="p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className={`inline-flex h-8 w-8 items-center justify-center rounded-xl ${accentMap[category.accent]}`}>
+                      <Icon className="h-3.5 w-3.5" />
                     </div>
-                    <span className="inline-flex items-center gap-1 rounded-full border border-[#7a0000]/8 bg-[#fcfaf7] px-3 py-1 text-xs font-semibold text-slate-500">
-                      Explore
-                      <ArrowUpRight className="h-3.5 w-3.5" />
-                    </span>
+                    <ArrowUpRight className="h-3.5 w-3.5 text-[#7a0000]/45" />
                   </div>
-                  <div className="mt-3 text-base font-black tracking-tight text-slate-950 sm:text-lg">{category.title}</div>
-                  <p className="mt-2 text-xs leading-5 text-slate-600 sm:text-sm">{category.blurb}</p>
+                  <div className="mt-2.5 line-clamp-2 text-sm font-black leading-5 tracking-tight text-slate-950">{category.title}</div>
                 </div>
               </Link>
             );
