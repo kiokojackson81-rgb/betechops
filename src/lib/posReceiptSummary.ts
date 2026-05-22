@@ -555,7 +555,7 @@ export async function summarizePosReceiptsForPeriod(period: {
     const profit =
       supportContext
         ? supportContext.profit - (Number((receipt?.data as any)?.agentSale?.commissionAmount ?? 0) || 0)
-        : extractProfit(receipt, sales);
+        : computeProfitFromCosts(receipt);
 
     if (salesIncluded && sales > 0) {
       totalSales += sales;
