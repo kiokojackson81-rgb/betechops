@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Headphones, MapPin, MessageCircle, ShieldCheck, Truck } from "lucide-react";
 import type { ShopCategory } from "@/app/shop/shopData";
+import { getShopCategoryDefinition } from "@/app/shop/shopCatalogConfig";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 
 type ShopHeroProps = {
@@ -9,21 +10,8 @@ type ShopHeroProps = {
 };
 
 function getCategoryHref(slug: string) {
-  return slug === "request-quotation" ? "/shop/request-quote" : `/shop/category/${slug}`;
+  return slug === "request-quote" ? "/shop/request-quote" : `/shop/category/${slug}`;
 }
-
-const sidebarCategories = [
-  "solar-panels",
-  "solar-inverters",
-  "solar-batteries",
-  "lithium-batteries",
-  "solar-full-kits",
-  "solar-water-pumps",
-  "solar-water-heaters",
-  "solar-lights",
-  "accessories",
-  "request-quotation",
-];
 
 const helpCards = [
   {
@@ -53,9 +41,7 @@ const helpCards = [
 ];
 
 export default function ShopHero({ categories }: ShopHeroProps) {
-  const categoryList = sidebarCategories
-    .map((slug) => categories.find((category) => category.slug === slug))
-    .filter((category): category is ShopCategory => Boolean(category));
+  const categoryList = categories.slice(0, 10);
 
   return (
     <section className="pt-3 sm:pt-4">
@@ -67,14 +53,31 @@ export default function ShopHero({ categories }: ShopHeroProps) {
             </div>
             <nav className="grid">
               {categoryList.map((category) => (
-                <Link
-                  key={category.slug}
-                  href={getCategoryHref(category.slug)}
-                  className="flex items-center justify-between gap-3 border-b border-[#7a0000]/6 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-[#fff7ea] hover:text-[#7a0000]"
-                >
-                  <span>{category.title}</span>
-                  <ArrowRight className="h-4 w-4 text-[#7a0000]/50" />
-                </Link>
+                <div key={category.slug} className="group relative">
+                  <Link
+                    href={getCategoryHref(category.slug)}
+                    className="flex items-center justify-between gap-3 border-b border-[#7a0000]/6 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-[#fff7ea] hover:text-[#7a0000]"
+                  >
+                    <span>{category.title}</span>
+                    <ArrowRight className="h-4 w-4 text-[#7a0000]/50" />
+                  </Link>
+                  {getShopCategoryDefinition(category.slug)?.subcategories.length ? (
+                    <div className="pointer-events-none absolute left-[calc(100%-0.1rem)] top-0 z-30 hidden w-[19rem] rounded-[22px] border border-[#7a0000]/10 bg-white p-3 opacity-0 shadow-[0_22px_44px_rgba(15,23,42,0.12)] transition duration-200 group-hover:pointer-events-auto group-hover:opacity-100 lg:block">
+                      <div className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000]">Subcategories</div>
+                      <div className="mt-2 grid gap-1.5">
+                        {getShopCategoryDefinition(category.slug)?.subcategories.map((subcategory) => (
+                          <Link
+                            key={subcategory.value}
+                            href={`/shop/category/${category.slug}?sub=${subcategory.value}`}
+                            className="rounded-2xl px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-[#fff7ea] hover:text-[#7a0000]"
+                          >
+                            {subcategory.label}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
               ))}
             </nav>
           </aside>

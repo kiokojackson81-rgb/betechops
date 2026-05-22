@@ -23,6 +23,7 @@ const updateSchema = z.object({
   commissionRequiresApproval: z.boolean().optional(),
   showInShop: z.boolean().optional(),
   shopCategory: z.string().trim().max(120).nullable().optional(),
+  shopSubcategory: z.string().trim().max(120).nullable().optional(),
   shopShortDescription: z.string().trim().max(1000).nullable().optional(),
   shopWarranty: z.string().trim().max(255).nullable().optional(),
   shopSpecs: z.string().trim().max(2000).nullable().optional(),
@@ -71,6 +72,7 @@ async function getExistingProductRecord(id: string, capabilities: Awaited<Return
             COALESCE("commissionRequiresApproval", false) AS "commissionRequiresApproval",
             ${capabilities.showInShop ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
             ${capabilities.shopCategory ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
+            ${capabilities.shopSubcategory ? `"shopSubcategory"` : `NULL::text`} AS "shopSubcategory",
             ${capabilities.shopShortDescription ? `"shopShortDescription"` : `NULL::text`} AS "shopShortDescription",
             ${capabilities.shopWarranty ? `"shopWarranty"` : `NULL::text`} AS "shopWarranty",
             ${capabilities.shopSpecs ? `"shopSpecs"` : `NULL::text`} AS "shopSpecs",
@@ -99,6 +101,7 @@ async function getExistingProductRecord(id: string, capabilities: Awaited<Return
             false AS "commissionRequiresApproval",
             ${capabilities.showInShop ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
             ${capabilities.shopCategory ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
+            ${capabilities.shopSubcategory ? `"shopSubcategory"` : `NULL::text`} AS "shopSubcategory",
             ${capabilities.shopShortDescription ? `"shopShortDescription"` : `NULL::text`} AS "shopShortDescription",
             ${capabilities.shopWarranty ? `"shopWarranty"` : `NULL::text`} AS "shopWarranty",
             ${capabilities.shopSpecs ? `"shopSpecs"` : `NULL::text`} AS "shopSpecs",
@@ -197,6 +200,7 @@ export async function PATCH(req: Request, context: ParamsContext) {
 
   if (capabilities.showInShop && data.showInShop !== undefined) pushSet("showInShop", data.showInShop);
   if (capabilities.shopCategory && data.shopCategory !== undefined) pushSet("shopCategory", normalizeOptionalText(data.shopCategory));
+  if (capabilities.shopSubcategory && data.shopSubcategory !== undefined) pushSet("shopSubcategory", normalizeOptionalText(data.shopSubcategory));
   if (capabilities.shopShortDescription && data.shopShortDescription !== undefined) pushSet("shopShortDescription", normalizeOptionalText(data.shopShortDescription));
   if (capabilities.shopWarranty && data.shopWarranty !== undefined) pushSet("shopWarranty", normalizeOptionalText(data.shopWarranty));
   if (capabilities.shopSpecs && data.shopSpecs !== undefined) pushSet("shopSpecs", normalizeOptionalText(data.shopSpecs));

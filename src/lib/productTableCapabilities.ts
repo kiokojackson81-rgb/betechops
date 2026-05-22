@@ -5,6 +5,7 @@ export type ProductTableCapabilities = {
   schemaMode: "modern" | "legacy";
   showInShop: boolean;
   shopCategory: boolean;
+  shopSubcategory: boolean;
   shopShortDescription: boolean;
   shopWarranty: boolean;
   shopSpecs: boolean;
@@ -32,6 +33,7 @@ export async function getProductTableCapabilities(prisma: PrismaClient): Promise
     schemaMode: modern ? "modern" : "legacy",
     showInShop: available.has("showInShop"),
     shopCategory: available.has("shopCategory"),
+    shopSubcategory: available.has("shopSubcategory"),
     shopShortDescription: available.has("shopShortDescription"),
     shopWarranty: available.has("shopWarranty"),
     shopSpecs: available.has("shopSpecs"),

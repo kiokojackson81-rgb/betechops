@@ -1,6 +1,19 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowUpRight, FileText, Lightbulb, PanelsTopLeft, SunMedium, Waves } from "lucide-react";
+import {
+  ArrowUpRight,
+  BatteryCharging,
+  Camera,
+  Cable,
+  FileText,
+  Lightbulb,
+  PanelsTopLeft,
+  Shield,
+  SunMedium,
+  Tv,
+  Waves,
+  Warehouse,
+} from "lucide-react";
 import type { ShopCategory } from "@/app/shop/shopData";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 
@@ -8,14 +21,17 @@ const iconMap = {
   "solar-panels": SunMedium,
   "solar-inverters": PanelsTopLeft,
   "solar-batteries": Lightbulb,
-  "lithium-batteries": Lightbulb,
   "solar-full-kits": PanelsTopLeft,
-  "all-in-one-systems": PanelsTopLeft,
   "solar-water-heaters": Waves,
   "solar-water-pumps": Waves,
   "solar-lights": Lightbulb,
-  accessories: PanelsTopLeft,
-  "request-quotation": FileText,
+  "solar-cameras-security": Camera,
+  "dc-appliances": Tv,
+  "solar-charge-controllers": Shield,
+  "solar-accessories": Cable,
+  "portable-power-stations": BatteryCharging,
+  "commercial-industrial-solar": Warehouse,
+  "request-quote": FileText,
 } as const;
 
 const accentMap = {
@@ -29,7 +45,7 @@ type CategoryScrollerProps = {
 };
 
 export default function CategoryScroller({ categories }: CategoryScrollerProps) {
-  const getCategoryHref = (slug: string) => (slug === "request-quotation" ? "/shop/request-quote" : `/shop/category/${slug}`);
+  const getCategoryHref = (slug: string) => (slug === "request-quote" ? "/shop/request-quote" : `/shop/category/${slug}`);
 
   return (
     <section className="py-4 sm:py-5">
@@ -41,9 +57,9 @@ export default function CategoryScroller({ categories }: CategoryScrollerProps) 
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+        <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
           {categories.map((category) => {
-            const Icon = iconMap[category.slug];
+            const Icon = iconMap[category.slug as keyof typeof iconMap] ?? PanelsTopLeft;
 
             return (
               <Link

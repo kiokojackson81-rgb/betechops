@@ -7,7 +7,7 @@ type ShopCategoryNavProps = {
 };
 
 function getCategoryHref(slug: string) {
-  return slug === "request-quotation" ? "/shop/request-quote" : `/shop/category/${slug}`;
+  return slug === "request-quote" ? "/shop/request-quote" : `/shop/category/${slug}`;
 }
 
 export default function ShopCategoryNav({ categories }: ShopCategoryNavProps) {

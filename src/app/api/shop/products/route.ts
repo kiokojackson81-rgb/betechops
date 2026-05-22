@@ -8,15 +8,16 @@ import { allShopProducts } from "@/app/shop/shopData";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const category = searchParams.get("category");
+  const subcategory = searchParams.get("subcategory");
   const q = searchParams.get("q");
-  const fallback = buildMockProductsResponse(filterShopProducts(allShopProducts, { category, q }));
+  const fallback = buildMockProductsResponse(filterShopProducts(allShopProducts, { category, subcategory, q }));
 
   if (!isShopOpsApiEnabled()) {
     return NextResponse.json(fallback);
   }
 
   try {
-    const products = filterShopProducts(await getOpsCatalogueProductsReadOnlyMapped(), { category, q });
+    const products = filterShopProducts(await getOpsCatalogueProductsReadOnlyMapped(), { category, subcategory, q });
 
     if (!products.length) {
       return NextResponse.json({

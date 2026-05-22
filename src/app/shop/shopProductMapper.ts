@@ -1,7 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { getProductTableCapabilities } from "@/lib/productTableCapabilities";
 import type { ShopProduct, ShopProductVisualType } from "@/app/shop/shopData";
-import { SHOP_CATEGORY_OPTIONS } from "@/app/shop/shopCatalogConfig";
+import {
+  expandShopSearchQuery,
+  getShopSubcategoryDefinition,
+  normalizeShopCategorySlug,
+  resolveShopSubcategory,
+  SHOP_CATEGORY_DEFINITIONS,
+} from "@/app/shop/shopCatalogConfig";
 
 type OpsCatalogueProduct = {
   id: string;
@@ -15,6 +21,7 @@ type OpsCatalogueProduct = {
   isActive: boolean;
   showInShop?: boolean | null;
   shopCategory?: string | null;
+  shopSubcategory?: string | null;
   shopShortDescription?: string | null;
   shopWarranty?: string | null;
   shopSpecs?: string | null;
@@ -50,6 +57,7 @@ export type ShopProductMappingPreview = {
   normalizedCategory: string;
   showInShopValue: boolean | null;
   shopCategoryValue: string | null;
+  shopSubcategoryValue: string | null;
   warnings: ShopProductMappingWarning[];
   includedInCatalog: boolean;
   rejectionReasons: string[];
@@ -57,57 +65,12 @@ export type ShopProductMappingPreview = {
 };
 
 const OPS_SHOP_CATEGORY_MAP: ShopCategoryDefinition[] = [
-  ...SHOP_CATEGORY_OPTIONS.map((option): ShopCategoryDefinition => ({
-    slug: option.value,
-    title: option.label,
-    keywords:
-      option.value === "solar-panels"
-        ? ["solar panel", "solar panels", "panel", "panels", "pv"]
-        : option.value === "solar-inverters"
-          ? ["inverter", "hybrid inverter", "off-grid inverter"]
-          : option.value === "solar-batteries"
-            ? ["battery", "gel battery", "agm battery", "deep cycle"]
-            : option.value === "lithium-batteries"
-              ? ["lithium", "lifepo4"]
-              : option.value === "solar-full-kits"
-                ? ["kit", "full kit", "solar kit", "system"]
-                : option.value === "all-in-one-systems"
-                  ? ["all in one", "all-in-one", "aio", "integrated system"]
-                  : option.value === "solar-water-heaters"
-                    ? ["water heater", "heater", "hot water"]
-                    : option.value === "solar-water-pumps"
-                      ? ["pump", "water pump", "borehole"]
-                      : option.value === "solar-lights"
-                        ? ["light", "lights", "flood light", "street light"]
-                        : ["accessory", "accessories", "cable", "connector", "mount", "breaker"],
-    visualType:
-      option.value === "solar-panels"
-        ? "panel"
-        : option.value === "solar-inverters"
-          ? "inverter"
-          : option.value === "solar-batteries" || option.value === "lithium-batteries"
-            ? "battery"
-            : option.value === "solar-water-pumps"
-              ? "pump"
-              : option.value === "solar-lights"
-                ? "light"
-                : option.value === "solar-water-heaters"
-                  ? "heater"
-                  : "kit",
-    image:
-      option.value === "solar-inverters"
-        ? "/agents/product-inverter-clean.png"
-        : option.value === "solar-batteries" || option.value === "lithium-batteries"
-          ? "/agents/product-battery-clean.png"
-          : option.value === "solar-water-pumps"
-            ? "/agents/product-water-pump-clean.png"
-            : option.value === "solar-lights"
-              ? "/agents/hero-generated-v2.png"
-              : option.value === "solar-water-heaters"
-                ? "/agents/cta-house-generated.png"
-                : option.value === "accessories"
-                  ? "/agents/product-accessories-clean.png"
-                  : "/agents/product-solar-kit-clean.png",
+  ...SHOP_CATEGORY_DEFINITIONS.map((category): ShopCategoryDefinition => ({
+    slug: category.value,
+    title: category.label,
+    keywords: category.keywords,
+    visualType: category.visualType,
+    image: category.image,
   })),
   {
     slug: "uncategorized",
@@ -244,7 +207,7 @@ function inferCategoryDefinition(product: Pick<OpsCatalogueProduct, "category" |
 }
 
 function normalizeShopCategoryValue(value: string | null | undefined) {
-  const normalized = slugify(String(value || ""));
+  const normalized = normalizeShopCategorySlug(value);
   return OPS_SHOP_CATEGORY_MAP.find((entry) => entry.slug === normalized) ?? null;
 }
 
@@ -371,6 +334,16 @@ function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview 
   const categoryWarning = explicitShopCategory ? null : inferredCategory.warning;
   const safeName = product.name.trim() || product.sku || "";
   const brand = product.shopBrand?.trim() || inferBrand(safeName);
+  const resolvedSubcategory =
+    getShopSubcategoryDefinition(category.slug, product.shopSubcategory) ??
+    resolveShopSubcategory(category.slug, [
+      product.shopSubcategory,
+      product.shopShortDescription,
+      product.shopSpecs,
+      product.name,
+      product.category,
+      product.sku,
+    ]);
   const specs = compactUnique([
     product.shopSpecs?.trim() || null,
     product.shopShortDescription?.trim() || null,
@@ -381,7 +354,11 @@ function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview 
   const eligibility = isSolarShopEligibleProduct({
     name: safeName,
     category: product.shopCategory || product.category || category.title,
-    tags: inferTags(product, category, brand),
+    tags: [
+      ...inferTags(product, category, brand),
+      resolvedSubcategory?.label || "",
+      resolvedSubcategory?.value || "",
+    ].filter(Boolean),
     specs,
     price,
     showInShop: product.showInShop,
@@ -394,6 +371,7 @@ function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview 
         slug: slugify(fallbackName),
         name: fallbackName,
         category: category.title,
+        subcategory: resolvedSubcategory?.label,
         brand,
         price,
         oldPrice: undefined,
@@ -402,7 +380,7 @@ function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview 
         specs,
         warranty,
         stockStatus: inferStockStatus(product),
-        tags: inferTags(product, category, brand),
+        tags: compactUnique([...inferTags(product, category, brand), resolvedSubcategory?.label, resolvedSubcategory?.value]).slice(0, 8),
         whatsappMessage: `Hello Betech Solar, I want more details about ${fallbackName}.`,
         source: "ops",
         opsProductId: product.id,
@@ -417,6 +395,7 @@ function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview 
     normalizedCategory: category.title,
     showInShopValue: typeof product.showInShop === "boolean" ? product.showInShop : null,
     shopCategoryValue: product.shopCategory?.trim() || null,
+    shopSubcategoryValue: product.shopSubcategory?.trim() || null,
     warnings,
     includedInCatalog,
     rejectionReasons: eligibility.rejectionReasons,
@@ -432,16 +411,24 @@ export function filterShopProducts(
   products: ShopProduct[],
   input?: {
     category?: string | null;
+    subcategory?: string | null;
     q?: string | null;
   },
 ) {
   const category = slugify(String(input?.category || ""));
+  const subcategory = slugify(String(input?.subcategory || ""));
   const query = normalizeText(String(input?.q || ""));
+  const queryNeedles = expandShopSearchQuery(query);
 
   return products.filter((product) => {
     const productCategory = slugify(product.category);
     const matchesCategory = !category || productCategory === category;
     if (!matchesCategory) return false;
+
+    const productSubcategory = slugify(product.subcategory || "");
+    const productTags = product.tags.map((tag) => slugify(tag));
+    const matchesSubcategory = !subcategory || productSubcategory === subcategory || productTags.includes(subcategory);
+    if (!matchesSubcategory) return false;
 
     if (!query) return true;
 
@@ -455,7 +442,7 @@ export function filterShopProducts(
       .join(" ")
       .toLowerCase();
 
-    return haystacks.includes(query);
+    return queryNeedles.every((needle) => haystacks.includes(needle.toLowerCase()));
   });
 }
 
@@ -479,6 +466,7 @@ export async function getOpsCatalogueProductsReadOnly() {
         COALESCE("isActive", true) AS "isActive",
         ${available.has("showInShop") ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
         ${available.has("shopCategory") ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
+        ${available.has("shopSubcategory") ? `"shopSubcategory"` : `NULL::text`} AS "shopSubcategory",
         ${available.has("shopShortDescription") ? `"shopShortDescription"` : `NULL::text`} AS "shopShortDescription",
         ${available.has("shopWarranty") ? `"shopWarranty"` : `NULL::text`} AS "shopWarranty",
         ${available.has("shopSpecs") ? `"shopSpecs"` : `NULL::text`} AS "shopSpecs",
@@ -502,6 +490,7 @@ export async function getOpsCatalogueProductsReadOnly() {
         COALESCE("active", true) AS "isActive",
         ${available.has("showInShop") ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
         ${available.has("shopCategory") ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
+        ${available.has("shopSubcategory") ? `"shopSubcategory"` : `NULL::text`} AS "shopSubcategory",
         ${available.has("shopShortDescription") ? `"shopShortDescription"` : `NULL::text`} AS "shopShortDescription",
         ${available.has("shopWarranty") ? `"shopWarranty"` : `NULL::text`} AS "shopWarranty",
         ${available.has("shopSpecs") ? `"shopSpecs"` : `NULL::text`} AS "shopSpecs",

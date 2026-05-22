@@ -22,6 +22,7 @@ const productSchema = z.object({
   commissionRequiresApproval: z.boolean().optional().default(false),
   showInShop: z.boolean().optional(),
   shopCategory: z.string().trim().max(120).nullable().optional(),
+  shopSubcategory: z.string().trim().max(120).nullable().optional(),
   shopShortDescription: z.string().trim().max(1000).nullable().optional(),
   shopWarranty: z.string().trim().max(255).nullable().optional(),
   shopSpecs: z.string().trim().max(2000).nullable().optional(),
@@ -85,6 +86,10 @@ function buildShopInsertFragments(capabilities: Awaited<ReturnType<typeof getPro
     columns.push(`"shopCategory"`);
     values.push(normalizeOptionalText(data.shopCategory));
   }
+  if (capabilities.shopSubcategory) {
+    columns.push(`"shopSubcategory"`);
+    values.push(normalizeOptionalText(data.shopSubcategory));
+  }
   if (capabilities.shopShortDescription) {
     columns.push(`"shopShortDescription"`);
     values.push(normalizeOptionalText(data.shopShortDescription));
@@ -138,6 +143,7 @@ export async function GET(req: Request) {
             COALESCE("commissionRequiresApproval", false) AS "commissionRequiresApproval",
             ${capabilities.showInShop ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
             ${capabilities.shopCategory ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
+            ${capabilities.shopSubcategory ? `"shopSubcategory"` : `NULL::text`} AS "shopSubcategory",
             ${capabilities.shopShortDescription ? `"shopShortDescription"` : `NULL::text`} AS "shopShortDescription",
             ${capabilities.shopWarranty ? `"shopWarranty"` : `NULL::text`} AS "shopWarranty",
             ${capabilities.shopSpecs ? `"shopSpecs"` : `NULL::text`} AS "shopSpecs",
@@ -176,6 +182,7 @@ export async function GET(req: Request) {
             false AS "commissionRequiresApproval",
             ${capabilities.showInShop ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
             ${capabilities.shopCategory ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
+            ${capabilities.shopSubcategory ? `"shopSubcategory"` : `NULL::text`} AS "shopSubcategory",
             ${capabilities.shopShortDescription ? `"shopShortDescription"` : `NULL::text`} AS "shopShortDescription",
             ${capabilities.shopWarranty ? `"shopWarranty"` : `NULL::text`} AS "shopWarranty",
             ${capabilities.shopSpecs ? `"shopSpecs"` : `NULL::text`} AS "shopSpecs",

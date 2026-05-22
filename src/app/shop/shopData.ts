@@ -1,3 +1,5 @@
+import { SHOP_CATEGORY_DEFINITIONS } from "@/app/shop/shopCatalogConfig";
+
 export type ShopCategory = {
   slug: string;
   title: string;
@@ -20,6 +22,7 @@ export type ShopProduct = {
   slug: string;
   name: string;
   category: string;
+  subcategory?: string;
   brand: string;
   price: number;
   oldPrice?: number;
@@ -43,86 +46,21 @@ export type ShopProductSection = {
 };
 
 export const shopNavLinks = [
+  { label: "Solar Full Kits", href: "/shop/category/solar-full-kits" },
   { label: "Solar Panels", href: "/shop/category/solar-panels" },
-  { label: "Inverters", href: "/shop/category/solar-inverters" },
   { label: "Batteries", href: "/shop/category/solar-batteries" },
-  { label: "Full Kits", href: "/shop/category/solar-full-kits" },
+  { label: "Inverters", href: "/shop/category/solar-inverters" },
   { label: "Pumps", href: "/shop/category/solar-water-pumps" },
   { label: "Request Quote", href: "/shop/request-quote" },
 ];
 
-export const shopCategories: ShopCategory[] = [
-  {
-    slug: "solar-panels",
-    title: "Solar Panels",
-    blurb: "High-output mono panels for homes, farms, biashara and backup systems.",
-    image: "/agents/product-solar-kit-generated.png",
-    accent: "gold",
-  },
-  {
-    slug: "solar-inverters",
-    title: "Solar Inverters",
-    blurb: "Hybrid inverter options for clean backup and solar power conversion.",
-    image: "/agents/product-inverter-generated.png",
-    accent: "maroon",
-  },
-  {
-    slug: "solar-batteries",
-    title: "Solar Batteries",
-    blurb: "Gel and deep-cycle battery options for dependable backup storage.",
-    image: "/agents/product-battery-generated.png",
-    accent: "green",
-  },
-  {
-    slug: "lithium-batteries",
-    title: "Lithium Batteries",
-    blurb: "Long-cycle lithium storage for modern home and business systems.",
-    image: "/agents/product-battery-generated.png",
-    accent: "gold",
-  },
-  {
-    slug: "solar-full-kits",
-    title: "Solar Full Kits",
-    blurb: "Ready-built kits for complete home and biashara solar setups.",
-    image: "/agents/product-solar-kit-generated.png",
-    accent: "maroon",
-  },
-  {
-    slug: "solar-water-pumps",
-    title: "Solar Water Pumps",
-    blurb: "DC pumping solutions for irrigation, livestock and remote water use.",
-    image: "/agents/product-water-pump-generated.png",
-    accent: "green",
-  },
-  {
-    slug: "solar-water-heaters",
-    title: "Solar Water Heaters",
-    blurb: "Hot water systems for homes, rentals and hospitality spaces.",
-    image: "/agents/cta-house-generated.png",
-    accent: "gold",
-  },
-  {
-    slug: "solar-lights",
-    title: "Solar Lights",
-    blurb: "Security and compound lighting for homes, shops and institutions.",
-    image: "/agents/hero-generated-v2.png",
-    accent: "gold",
-  },
-  {
-    slug: "accessories",
-    title: "Accessories",
-    blurb: "Cables, breakers, connectors and mounting items for cleaner solar installs.",
-    image: "/agents/product-accessories-generated.png",
-    accent: "maroon",
-  },
-  {
-    slug: "request-quotation",
-    title: "Request a Solar System Quote",
-    blurb: "Not sure what you need? Talk to Betech Solar for sizing guidance.",
-    image: "/agents/top-agents-card.png",
-    accent: "green",
-  },
-];
+export const shopCategories: ShopCategory[] = SHOP_CATEGORY_DEFINITIONS.map((category) => ({
+  slug: category.value,
+  title: category.label,
+  blurb: category.blurb,
+  image: category.image,
+  accent: category.accent,
+}));
 
 export const trustBadges = [
   { title: "Genuine products", copy: "Trusted solar brands supplied by Betech Solar Solutions." },

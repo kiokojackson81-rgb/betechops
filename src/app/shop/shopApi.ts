@@ -48,7 +48,13 @@ function getApiUrl(path: string) {
   return `http://127.0.0.1:${port}${path}`;
 }
 
-async function getServerShopProducts(input?: { category?: string; q?: string }): Promise<ShopProduct[]> {
+type ShopProductQuery = {
+  category?: string;
+  subcategory?: string;
+  q?: string;
+};
+
+async function getServerShopProducts(input?: ShopProductQuery): Promise<ShopProduct[]> {
   if (!isShopOpsApiEnabled()) {
     return filterShopProducts(allShopProducts, input);
   }
@@ -63,13 +69,14 @@ async function getServerShopProducts(input?: { category?: string; q?: string }):
 }
 
 // TODO: Replace preview fallback with verified live ops catalogue reads after testing is complete.
-export async function getShopProducts(input?: { category?: string; q?: string }): Promise<ShopProduct[]> {
+export async function getShopProducts(input?: ShopProductQuery): Promise<ShopProduct[]> {
   if (typeof window === "undefined") {
     return getServerShopProducts(input);
   }
 
   const query = new URLSearchParams();
   if (input?.category) query.set("category", input.category);
+  if (input?.subcategory) query.set("subcategory", input.subcategory);
   if (input?.q) query.set("q", input.q);
 
   const response = await fetchJson<{ products: ShopProduct[] }>(

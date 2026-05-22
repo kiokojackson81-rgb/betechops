@@ -21,19 +21,54 @@ Use this checklist before enabling customer-facing ops catalogue mode for `/shop
 
 Normalize ops catalogue products into one of these shop categories:
 
-- `Solar Panels`
-- `Solar Inverters`
-- `Solar Batteries`
-- `Lithium Batteries`
 - `Solar Full Kits`
-- `All-in-One Systems`
-- `Solar Water Heaters`
+- `Solar Panels`
+- `Solar Batteries`
+- `Solar Inverters`
 - `Solar Water Pumps`
 - `Solar Lights`
-- `Accessories`
+- `Solar Cameras & Security`
+- `DC Appliances`
+- `Solar Water Heaters`
+- `Solar Charge Controllers`
+- `Solar Accessories`
+- `Portable Power Stations`
+- `Commercial & Industrial Solar`
 - `Uncategorized`
 
 If the raw ops category is ambiguous or blank, fix it in ops before live launch where possible.
+
+### Final main category list
+
+- `solar-full-kits`
+- `solar-panels`
+- `solar-batteries`
+- `solar-inverters`
+- `solar-water-pumps`
+- `solar-lights`
+- `solar-cameras-security`
+- `dc-appliances`
+- `solar-water-heaters`
+- `solar-charge-controllers`
+- `solar-accessories`
+- `portable-power-stations`
+- `commercial-industrial-solar`
+
+### Subcategory structure
+
+- `Solar Full Kits`: Lithium Solar Kits, Gel Solar Kits, Home Backup Kits, Biashara Solar Kits, CCTV Solar Kits, Water Pump Solar Kits, Complete Home Systems, All-In-One Solar Systems, Starter Solar Kits, Heavy Duty Solar Systems
+- `Solar Panels`: Monocrystalline Panels, Polycrystalline Panels, Bifacial Solar Panels, Monofacial Solar Panels, Flexible Solar Panels, Portable Solar Panels, Half-Cut Panels, Tier 1 Solar Panels
+- `Solar Batteries`: Lithium Batteries, Gel Batteries, AGM Batteries, Tubular Batteries, Lead Acid Batteries, Deep Cycle Batteries, Rack Mount Batteries, Wall Mount Batteries
+- `Solar Inverters`: Hybrid Inverters, Non-Hybrid Inverters, Pure Sine Wave Inverters, Charger Inverters, On-Grid Inverters, Off-Grid Inverters, Low Frequency Inverters, High Frequency Inverters, Pumping Inverters, Three Phase Inverters
+- `Solar Water Pumps`: DC Solar Water Pumps, AC Solar Water Pumps, Submersible Pumps, Surface Pumps, Borehole Pumps, Shallow Well Pumps, Deep Well Pumps, Booster Pumps, Irrigation Pumps, Livestock Water Pumps, Hybrid Water Pumps, Solar Pump Kits, Pump Controllers, Pumping Inverters, Petrol Water Pumps
+- `Solar Lights`: Solar Street Lights, Solar Flood Lights, Solar Wall Lights, Solar Garden Lights, Solar Motion Sensor Lights, Solar Ceiling Lights, Solar Indoor Lights, Solar Security Lights, Solar Camping Lights
+- `Solar Cameras & Security`: Solar CCTV Cameras, 4G Solar Cameras, WiFi Solar Cameras, PTZ Solar Cameras, Solar Security Kits, NVR Kits, CCTV Accessories
+- `DC Appliances`: DC TVs, DC Woofers, DC Fridges, DC Fans, DC Freezers, DC Bulbs, DC Air Coolers
+- `Solar Water Heaters`: Pressurized Water Heaters, Non-Pressurized Water Heaters, Flat Plate Water Heaters, Vacuum Tube Water Heaters, Integrated Systems, Split Systems, Commercial Water Heaters
+- `Solar Charge Controllers`: PWM Controllers, MPPT Controllers, Bluetooth Controllers, LCD Controllers, High Voltage MPPTs
+- `Solar Accessories`: MC4 Connectors, Solar Cables, Battery Cables, Changeover Switches, Breakers, AVS Protectors, Surge Protectors, Fuse Holders, Distribution Boxes, Mounting Structures, Cable Clips, DC Bulbs, Solar Fans
+- `Portable Power Stations`: Lithium Power Stations, Gel Power Stations, Camping Power Stations, Backup Power Stations, Portable Solar Generators
+- `Commercial & Industrial Solar`: Commercial Solar Systems, Three Phase Systems, Industrial Batteries, High Voltage Systems, Commercial Inverters
 
 ## Price rules
 
@@ -79,12 +114,22 @@ If the raw ops category is ambiguous or blank, fix it in ops before live launch 
 - Edit the product inside the existing POS Catalogue workflow.
 - Mark the product `Show in Online Shop` when the field becomes available.
 - Select the correct `shopCategory`.
+- Select the correct `shopSubcategory` when DB support is enabled.
 - Add or confirm price.
 - Add image URL when schema support is available.
 - Add warranty guidance.
 - Add specs or short description.
 - Confirm active status.
 - Confirm the product appears correctly in `/shop/catalogue-preview`.
+
+### Recommended admin data-entry rules
+
+- Keep the product name customer-readable and include the most important power size, for example `585W Solar Panel` or `5KW Hybrid Inverter`.
+- Use `shopCategory` for the main store bucket and `shopSubcategory` for the finer ecommerce filter.
+- Keep brand in `shopBrand` when the generic POS product name is not enough for a customer-facing card.
+- Put a short customer-safe summary in `shopShortDescription`; keep `shopSpecs` concise and searchable.
+- Leave `shopImageUrl` blank if no clean product image is available yet so the shop placeholder system can take over safely.
+- Use Kenya-friendly searchable terms where possible, such as `200AH`, `5KVA`, `MPPT`, `borehole pump`, or `flood light`.
 
 ## Live catalogue test mode
 
@@ -111,6 +156,7 @@ Then verify:
 - Do not deduct stock.
 - Do not process payments.
 - Keep mock fallback available until catalogue QA is complete.
+- Keep the solar guard active even when `showInShop=true`.
 
 ## Rollback note
 
@@ -181,12 +227,14 @@ All of the above were saved with:
 - warranty
 - specs
 - blank `shopImageUrl` so category placeholders render safely for now
+- no `shopSubcategory` yet, because the DB field is still planned for a future additive patch
 
 ## Current missing data and known gaps
 
 - Real image URLs are still missing for the initial seeded solar products.
 - Because the live `Product` table is still on the legacy POS shape, stock quantity is not available, so seeded ops-mode products currently map conservatively to `quote_only`.
 - Warranty and specs are now present for the seeded solar products, so those warnings are no longer blocking catalogue preview acceptance.
+- `shopSubcategory String?` is still a planned future field. The storefront taxonomy and admin UI already support it as a compatibility-safe pending control.
 
 ## Current catalogue-preview status
 
@@ -194,3 +242,16 @@ All of the above were saved with:
 - The `9` seeded solar products appear as accepted for customer-facing `/shop`.
 - Existing non-solar products such as `Beef` and `Goat` remain rejected.
 - Missing image warnings remain internal only and do not leak technical details to customer pages.
+
+## Preview deployment audit
+
+- Preview URL currently checked: `https://betechops-2fat6wwc3-jackson-kiokos-projects.vercel.app/shop?_vercel_share=VhX05hT86Fh9cpGWXp4fpuYgXR6ZCgR2`
+- Current preview env status: `NEXT_PUBLIC_SHOP_USE_OPS_API` is still effectively `false` on the deployed preview.
+- Evidence: the live `/shop` preview still shows the mock-mode preview banner and customer-facing mock catalogue sections.
+- Route status checked on the live preview:
+- `/shop` loads successfully.
+- Customer-facing preview is still safe because mock checkout and quote flows remain in test mode.
+- Open issue before real-catalogue preview testing:
+- preview/staging Vercel env still needs `NEXT_PUBLIC_SHOP_USE_OPS_API=true`
+- production must remain `NEXT_PUBLIC_SHOP_USE_OPS_API=false`
+- Once the preview env is switched, re-check `/api/shop/products`, `/shop/catalogue-preview`, seeded category pages, and seeded product pages against the deployed preview URL.

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { findSimilarProducts } from "@/lib/posProductSimilarity";
 import { showToast } from "@/lib/ui/toast";
-import { SHOP_CATEGORY_OPTIONS } from "@/app/shop/shopCatalogConfig";
+import { getShopSubcategoryOptions, SHOP_CATEGORY_OPTIONS } from "@/app/shop/shopCatalogConfig";
 
 type PosProduct = {
   id: string;
@@ -20,6 +20,7 @@ type PosProduct = {
   commissionRequiresApproval: boolean;
   showInShop?: boolean | null;
   shopCategory?: string | null;
+  shopSubcategory?: string | null;
   shopShortDescription?: string | null;
   shopWarranty?: string | null;
   shopSpecs?: string | null;
@@ -31,6 +32,7 @@ type PosCatalogueCapabilities = {
   schemaMode: "modern" | "legacy";
   showInShop: boolean;
   shopCategory: boolean;
+  shopSubcategory: boolean;
   shopShortDescription: boolean;
   shopWarranty: boolean;
   shopSpecs: boolean;
@@ -67,6 +69,7 @@ type ProductDraft = {
   commissionRequiresApproval: boolean;
   showInShop: boolean;
   shopCategory: string;
+  shopSubcategory: string;
   shopShortDescription: string;
   shopWarranty: string;
   shopSpecs: string;
@@ -88,6 +91,7 @@ const emptyDraft: ProductDraft = {
   commissionRequiresApproval: false,
   showInShop: false,
   shopCategory: "",
+  shopSubcategory: "",
   shopShortDescription: "",
   shopWarranty: "",
   shopSpecs: "",
@@ -99,6 +103,7 @@ const defaultCapabilities: PosCatalogueCapabilities = {
   schemaMode: "legacy",
   showInShop: false,
   shopCategory: false,
+  shopSubcategory: false,
   shopShortDescription: false,
   shopWarranty: false,
   shopSpecs: false,
@@ -238,6 +243,7 @@ export default function PosManagementClient() {
       ),
     [draft.id, draft.name, products],
   );
+  const shopSubcategoryOptions = useMemo(() => getShopSubcategoryOptions(draft.shopCategory), [draft.shopCategory]);
 
   const submitDraft = async () => {
     if (!draft.name.trim()) return showToast("Product name is required", "error");
@@ -264,6 +270,7 @@ export default function PosManagementClient() {
         commissionRequiresApproval: draft.commissionEnabled ? draft.commissionRequiresApproval : false,
         ...(capabilities.showInShop ? { showInShop: draft.showInShop } : {}),
         ...(capabilities.shopCategory ? { shopCategory: draft.shopCategory || null } : {}),
+        ...(capabilities.shopSubcategory ? { shopSubcategory: draft.shopSubcategory || null } : {}),
         ...(capabilities.shopShortDescription ? { shopShortDescription: draft.shopShortDescription.trim() || null } : {}),
         ...(capabilities.shopWarranty ? { shopWarranty: draft.shopWarranty.trim() || null } : {}),
         ...(capabilities.shopSpecs ? { shopSpecs: draft.shopSpecs.trim() || null } : {}),
@@ -306,6 +313,7 @@ export default function PosManagementClient() {
       commissionRequiresApproval: Boolean(product.commissionRequiresApproval),
       showInShop: Boolean(product.showInShop),
       shopCategory: product.shopCategory ?? "",
+      shopSubcategory: product.shopSubcategory ?? "",
       shopShortDescription: product.shopShortDescription ?? "",
       shopWarranty: product.shopWarranty ?? "",
       shopSpecs: product.shopSpecs ?? "",
@@ -332,6 +340,7 @@ export default function PosManagementClient() {
       commissionRequiresApproval: Boolean(product.commissionRequiresApproval),
       showInShop: Boolean(product.showInShop),
       shopCategory: product.shopCategory ?? "",
+      shopSubcategory: product.shopSubcategory ?? "",
       shopShortDescription: product.shopShortDescription ?? "",
       shopWarranty: product.shopWarranty ?? "",
       shopSpecs: product.shopSpecs ?? "",
@@ -643,9 +652,9 @@ export default function PosManagementClient() {
               <p className="mt-2 text-sm text-slate-300">
                 These controls feed the Betech Solar online shop from the existing POS Catalogue. Unsupported fields stay disabled until the Product table is upgraded safely.
               </p>
-              {!(capabilities.showInShop || capabilities.shopCategory || capabilities.shopShortDescription || capabilities.shopWarranty || capabilities.shopSpecs || capabilities.shopImageUrl || capabilities.shopBrand) ? (
+              {!(capabilities.showInShop || capabilities.shopCategory || capabilities.shopSubcategory || capabilities.shopShortDescription || capabilities.shopWarranty || capabilities.shopSpecs || capabilities.shopImageUrl || capabilities.shopBrand) ? (
                 <div className="mt-3 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
-                  Live Product table is currently in <span className="font-semibold uppercase">{capabilities.schemaMode}</span> compatibility mode. `showInShop`, `shopCategory`, and the ecommerce display fields are planned but not yet fully persisted in this database shape.
+                  Live Product table is currently in <span className="font-semibold uppercase">{capabilities.schemaMode}</span> compatibility mode. `showInShop`, `shopCategory`, `shopSubcategory`, and the ecommerce display fields are planned but not yet fully persisted in this database shape.
                 </div>
               ) : null}
 
@@ -669,7 +678,7 @@ export default function PosManagementClient() {
                     className={`${fieldClass} mt-1 disabled:cursor-not-allowed disabled:opacity-60`}
                     value={draft.shopCategory}
                     disabled={!capabilities.shopCategory}
-                    onChange={(e) => setDraft((s) => ({ ...s, shopCategory: e.target.value }))}
+                    onChange={(e) => setDraft((s) => ({ ...s, shopCategory: e.target.value, shopSubcategory: "" }))}
                   >
                     <option value="">Select shop category</option>
                     {SHOP_CATEGORY_OPTIONS.map((option) => (
@@ -678,6 +687,26 @@ export default function PosManagementClient() {
                       </option>
                     ))}
                   </select>
+                </label>
+
+                <label className="text-sm text-slate-300">
+                  Shop subcategory
+                  <select
+                    className={`${fieldClass} mt-1 disabled:cursor-not-allowed disabled:opacity-60`}
+                    value={draft.shopSubcategory}
+                    disabled={!capabilities.shopSubcategory || !draft.shopCategory}
+                    onChange={(e) => setDraft((s) => ({ ...s, shopSubcategory: e.target.value }))}
+                  >
+                    <option value="">{draft.shopCategory ? "Select shop subcategory" : "Select category first"}</option>
+                    {shopSubcategoryOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  {!capabilities.shopSubcategory ? (
+                    <div className="mt-1 text-xs text-slate-500">Planned field. Future DB column: `shopSubcategory String?`.</div>
+                  ) : null}
                 </label>
 
                 <label className="text-sm text-slate-300">
