@@ -272,6 +272,7 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
   const period = selectedPeriod;
   const [userId, setUserId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [supervisorPerformanceTools, setSupervisorPerformanceTools] = useState(false);
   const [impersonated, setImpersonated] = useState<boolean>(false);
   const [impersonatedBy, setImpersonatedBy] = useState<string | null>(null);
@@ -388,6 +389,7 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
       if (!payload) return;
       if (payload?.user?.id) setUserId(payload.user.id);
       if (payload?.user?.role) setUserRole(payload.user.role);
+      if (payload?.user?.email) setUserEmail(String(payload.user.email));
       setSupervisorPerformanceTools(Boolean(payload?.flags?.supervisorPerformanceTools));
       // capture impersonation metadata when present so UI can surface it
       if (payload?.impersonated) {
@@ -934,6 +936,24 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
     tierProgress: marketplaceTierInfo.progress,
     tierMessage: marketplaceTierInfo.message,
   };
+  const selectedRangeJumiaCommission = Number(platformAggregates.find((platform) => platform.key === "JUMIA")?.commission ?? 0);
+  const selectedRangeKilimallCommission = Number(platformAggregates.find((platform) => platform.key === "KILIMALL")?.commission ?? 0);
+  const shouldUseSelectedRangeEarnings =
+    String(userEmail ?? "").toLowerCase().trim() === "benjamin@betech.co.ke" &&
+    directCommissionMode === "PROFIT_10";
+  const earningsSummaryForCard = shouldUseSelectedRangeEarnings
+    ? {
+        ...(payrollSummary ?? {}),
+        commissionDirect: quickDirectCommission,
+        directCommission: quickDirectCommission,
+        commissionMarketplaceJumia: selectedRangeJumiaCommission,
+        commissionMarketplaceKilimall: selectedRangeKilimallCommission,
+        marketplaceCommission: selectedRangeJumiaCommission + selectedRangeKilimallCommission,
+        commissionTotal: quickDirectCommission + selectedRangeJumiaCommission + selectedRangeKilimallCommission,
+        commission: quickDirectCommission + selectedRangeJumiaCommission + selectedRangeKilimallCommission,
+        grossCommission: quickDirectCommission + selectedRangeJumiaCommission + selectedRangeKilimallCommission,
+      }
+    : payrollSummary;
 
   const receiptsHistoryHref = userId
     ? `/receipts?attendantId=${encodeURIComponent(userId)}&start=${encodeURIComponent(
@@ -1208,7 +1228,7 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
             />
 
             <PayrollEarningsCard
-              summary={payrollSummary}
+              summary={earningsSummaryForCard}
               loading={payrollLoading}
               periodLabel={period.label}
               fallbackCommission={commission}
