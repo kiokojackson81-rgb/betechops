@@ -341,6 +341,13 @@ function attachReceiptCommissionImpact(args: {
   salesCommissionMode: string;
   tiers: { minSales: number; maxSales: number; payoutFlat: number }[];
 }) {
+  if (args.salesCommissionMode === "POS_PROFIT_10") {
+    return args.rows.map((row) => ({
+      ...row,
+      commissionImpact: Math.round(Math.max(0, Number(row.profit ?? 0)) * 0.1),
+    }));
+  }
+
   const chronological = [...args.rows].sort((a, b) => {
     const dateCompare = a.sortAt.localeCompare(b.sortAt);
     if (dateCompare !== 0) return dateCompare;
@@ -734,7 +741,11 @@ function renderHtml(args: {
       </table>
 
       <div class="note">
-        Sales commission is each receipt's marginal contribution to the period sales commission. Product commission comes from POS management product commissions assigned to the receipt items. This report intentionally excludes profit and buying price values.
+        ${
+          args.attendantEmail.toLowerCase() === "justus@betech.co.ke"
+            ? "Sales commission is 10% of each receipt's profit for this period. Product commission comes from POS management product commissions assigned to the receipt items."
+            : "Sales commission is each receipt's marginal contribution to the period sales commission. Product commission comes from POS management product commissions assigned to the receipt items. This report intentionally excludes profit and buying price values."
+        }
       </div>
     </body>
   </html>
@@ -773,6 +784,7 @@ export async function GET(req: Request) {
   const attendantEmail = user?.email ?? null;
   const isOnlineCategory =
     user?.attendantCategory === "JUMIA_KILIMALL_OPS" || user?.attendantCategory === "BETECH_OPS";
+  const commissionConfig = await getUserCommissionConfigLike(userId);
   const posOwnershipMode = resolveOnlinePosOwnershipMode(attendantEmail);
   const staffOwnerOr: Prisma.ReceiptWhereInput[] = [
     { order: { attendantId: userId } },
@@ -879,7 +891,9 @@ export async function GET(req: Request) {
 
   // Include marketing/support ledger receipts for attendants whose authoritative
   // totals are sourced from those ledgers (e.g. Brendah).
-  const includeLedgerRows = resolveDirectCommissionMode(attendantEmail) !== "PROFIT_10";
+  const includeLedgerRows =
+    resolveDirectCommissionMode(attendantEmail) !== "PROFIT_10" &&
+    commissionConfig.salesCommissionMode !== "POS_PROFIT_10";
   const [marketingRows, supportRows] = await Promise.all([
     includeLedgerRows
       ? (prisma.marketingReceipt.findMany({
@@ -1012,8 +1026,7 @@ export async function GET(req: Request) {
     applyProfitFallback(row, profitFallbacks.get(canonical) ?? 0);
   }
 
-  const [commissionConfig, commissionPeriod, productCommissions, payrollRow, onlinePosSummary] = await Promise.all([
-    getUserCommissionConfigLike(userId),
+  const [commissionPeriod, productCommissions, payrollRow, onlinePosSummary] = await Promise.all([
     getOrCreateCommissionPeriod(period.start),
     getPosProductCommissionsForPdf({ userId, start: period.start, end: period.end }),
     user
@@ -1029,13 +1042,14 @@ export async function GET(req: Request) {
         )
       : null,
     isOnlineCategory
-      ? summarizePosReceiptsForPeriod({
+        ? summarizePosReceiptsForPeriod({
           start: period.start,
           end: period.end,
           userId,
           ownershipMode: posOwnershipMode,
           supportPricingScope: "any",
           profitRecognitionMode: "salesDate",
+          paymentScope: commissionConfig.salesCommissionMode === "POS_PROFIT_10" ? "all" : "paidOnly",
         })
       : Promise.resolve(null),
   ]);
@@ -1087,6 +1101,10 @@ export async function GET(req: Request) {
     salesCommissionMode: commissionConfig.salesCommissionMode,
     tiers,
   }).sort((a, b) => (a.sortAt < b.sortAt ? 1 : -1));
+  const renderedReceiptCommission = rowsWithCommission.reduce(
+    (sum, row) => sum + Number(row.commissionImpact ?? 0) + Number(row.productCommission ?? 0),
+    0,
+  );
   const printedPosSales = rowsWithCommission.reduce((sum, row) => sum + Math.max(0, Number(row.amount ?? 0)), 0);
   const printedPosReceipts = rowsWithCommission.filter((row) => Math.max(0, Number(row.amount ?? 0)) > 0).length;
   const printedPosItems = rowsWithCommission.reduce((sum, row) => sum + Math.max(0, Number(row.itemCount ?? 0)), 0);
@@ -1122,7 +1140,10 @@ export async function GET(req: Request) {
     totalItems: isOnlineCategory
       ? Number(onlinePosSummary?.totalItems || printedPosItems || 0)
       : Number(payrollRow?.totalItems ?? earnings.totalItems ?? 0),
-    commission: Number(attendantCanonical.totalCommission ?? payrollRow?.commissionTotal ?? (earnings as any).grossCommission ?? (earnings as any).commission ?? 0),
+    commission:
+      commissionConfig.salesCommissionMode === "POS_PROFIT_10"
+        ? renderedReceiptCommission
+        : Number(attendantCanonical.totalCommission ?? payrollRow?.commissionTotal ?? (earnings as any).grossCommission ?? (earnings as any).commission ?? 0),
     totalNewProducts: Number(payrollRow?.newProducts ?? reportAgg._sum.newProducts ?? 0),
     totalEditedProducts: Number(payrollRow?.editedProducts ?? reportAgg._sum.productsEdited ?? 0),
     totalCopiedProducts: Number(payrollRow?.copiedProducts ?? reportAgg._sum.copiesUploaded ?? 0),
