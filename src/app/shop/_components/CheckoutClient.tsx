@@ -9,6 +9,7 @@ import { trackCheckoutStarted, trackOrderSubmitted } from "@/app/shop/shopAnalyt
 import type { ShopProduct } from "@/app/shop/shopData";
 import { formatCurrency, shopStyles } from "@/app/shop/_components/shopStyles";
 import { buildStoredOrderItems, clearCartAfterOrder, saveMockOrder } from "@/app/shop/shopStorage";
+import { getProductAvailabilityMessage } from "@/app/shop/shopAvailability";
 
 type CheckoutClientProps = {
   products: ShopProduct[];
@@ -28,6 +29,10 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
   const items = useShopCartItems();
   const detailedItems = buildDetailedCart(items, products);
   const subtotal = detailedItems.reduce((sum, item) => sum + item.lineTotal, 0);
+  const hasWarehouseItems = detailedItems.some((item) => item.product.availabilityType === "WAREHOUSE");
+  const availabilityNotice = hasWarehouseItems
+    ? "Some items in your order are available from warehouse. Pickup or delivery will be available after 1 day."
+    : "All items are available for immediate shop pickup.";
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<CheckoutFieldErrors>({});
@@ -147,6 +152,9 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
         <p className="mt-3 text-base leading-7 text-slate-600">
           This preview does not connect live backend logic yet. Submitting creates a safe test order request only and does not confirm payment automatically.
         </p>
+        <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-400/5 px-4 py-3 text-sm font-semibold text-slate-700">
+          {availabilityNotice}
+        </div>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2">
           <label className="grid gap-2 text-sm font-semibold text-slate-700">
@@ -256,6 +264,7 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
               <div>
                 <div className="text-sm font-black text-slate-950">{item.product.name}</div>
                 <div className="mt-1 text-xs text-slate-500">Qty {item.quantity}</div>
+                <div className="mt-1 text-[11px] font-medium text-slate-500">{getProductAvailabilityMessage(item.product)}</div>
               </div>
               <div className="text-sm font-semibold text-slate-950">{formatCurrency(item.lineTotal)}</div>
             </div>
@@ -264,6 +273,9 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
         <div className="mt-5 flex items-center justify-between text-lg font-black text-slate-950">
           <span>Estimated total</span>
           <span>{formatCurrency(subtotal)}</span>
+        </div>
+        <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-400/5 px-4 py-3 text-sm font-semibold text-slate-700">
+          {availabilityNotice}
         </div>
         <p className="mt-4 text-sm leading-6 text-slate-500">
           Preview mode only: a Betech Solar team member will still confirm availability, delivery planning, and payment steps manually.

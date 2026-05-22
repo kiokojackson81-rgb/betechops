@@ -8,6 +8,8 @@ import { z } from "zod";
 export const dynamic = "force-dynamic";
 
 const MAX_SKU_LENGTH = 80;
+const productStatusEnum = z.enum(["ACTIVE", "INACTIVE"]);
+const availabilityTypeEnum = z.enum(["SHOP", "WAREHOUSE"]);
 
 const updateSchema = z.object({
   sku: z.string().trim().min(1).max(255).optional(),
@@ -21,6 +23,20 @@ const updateSchema = z.object({
   commissionEnabled: z.boolean().optional(),
   commissionAmount: z.coerce.number().min(0).nullable().optional(),
   commissionRequiresApproval: z.boolean().optional(),
+  brand: z.string().trim().max(120).nullable().optional(),
+  shortDescription: z.string().trim().max(1000).nullable().optional(),
+  description: z.string().trim().max(10000).nullable().optional(),
+  specifications: z.union([z.string().trim().max(5000), z.array(z.string().trim().max(500)).max(30)]).nullable().optional(),
+  warrantyPeriod: z.string().trim().max(120).nullable().optional(),
+  warrantyNotes: z.string().trim().max(1000).nullable().optional(),
+  mainImageUrl: z.string().trim().max(500).nullable().optional(),
+  galleryImageUrls: z.array(z.string().trim().max(500)).max(12).nullable().optional(),
+  brandImageUrl: z.string().trim().max(500).nullable().optional(),
+  ecommerceVisible: z.boolean().optional(),
+  isFeatured: z.boolean().optional(),
+  status: productStatusEnum.optional(),
+  availabilityType: availabilityTypeEnum.optional(),
+  pickupDelayDays: z.coerce.number().int().min(0).max(1).optional(),
   showInShop: z.boolean().optional(),
   shopCategory: z.string().trim().max(120).nullable().optional(),
   shopSubcategory: z.string().trim().max(120).nullable().optional(),
@@ -29,6 +45,19 @@ const updateSchema = z.object({
   shopSpecs: z.string().trim().max(2000).nullable().optional(),
   shopImageUrl: z.string().trim().max(500).nullable().optional(),
   shopBrand: z.string().trim().max(120).nullable().optional(),
+}).superRefine((data, ctx) => {
+  if (data.availabilityType) {
+    const expectedPickupDelay = data.availabilityType === "WAREHOUSE" ? 1 : 0;
+    if (data.pickupDelayDays !== undefined && data.pickupDelayDays !== expectedPickupDelay) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["pickupDelayDays"],
+        message: data.availabilityType === "WAREHOUSE"
+          ? "Warehouse products must use a 1 day pickup delay"
+          : "Shop products must use a 0 day pickup delay",
+      });
+    }
+  }
 });
 
 function normalizeSku(input: string) {
@@ -43,6 +72,29 @@ function normalizeSku(input: string) {
 function normalizeOptionalText(value: string | null | undefined) {
   const normalized = value?.trim();
   return normalized ? normalized : null;
+}
+
+function normalizeSpecifications(value: string | string[] | null | undefined) {
+  if (Array.isArray(value)) {
+    const list = value.map((entry) => entry.trim()).filter(Boolean);
+    return list.length ? JSON.stringify(list) : null;
+  }
+
+  const normalized = normalizeOptionalText(value);
+  if (!normalized) return null;
+
+  const list = normalized
+    .split(/\r?\n|[,;]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  return JSON.stringify(list.length ? list : [normalized]);
+}
+
+function normalizeJsonStringArray(value: string[] | null | undefined) {
+  if (!Array.isArray(value)) return null;
+  const list = value.map((entry) => entry.trim()).filter(Boolean);
+  return list.length ? JSON.stringify(list) : null;
 }
 
 type ParamsContext = { params: { id: string } } | { params: Promise<{ id: string }> };
@@ -70,6 +122,20 @@ async function getExistingProductRecord(id: string, capabilities: Awaited<Return
             COALESCE("commissionEnabled", false) AS "commissionEnabled",
             "commissionAmount",
             COALESCE("commissionRequiresApproval", false) AS "commissionRequiresApproval",
+            ${capabilities.brand ? `"brand"` : `NULL::text`} AS "brand",
+            ${capabilities.shortDescription ? `"shortDescription"` : `NULL::text`} AS "shortDescription",
+            ${capabilities.description ? `"description"` : `NULL::text`} AS "description",
+            ${capabilities.specifications ? `"specifications"` : `NULL::jsonb`} AS "specifications",
+            ${capabilities.warrantyPeriod ? `"warrantyPeriod"` : `NULL::text`} AS "warrantyPeriod",
+            ${capabilities.warrantyNotes ? `"warrantyNotes"` : `NULL::text`} AS "warrantyNotes",
+            ${capabilities.mainImageUrl ? `"mainImageUrl"` : `NULL::text`} AS "mainImageUrl",
+            ${capabilities.galleryImageUrls ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
+            ${capabilities.brandImageUrl ? `"brandImageUrl"` : `NULL::text`} AS "brandImageUrl",
+            ${capabilities.ecommerceVisible ? `COALESCE("ecommerceVisible", false)` : `NULL::boolean`} AS "ecommerceVisible",
+            ${capabilities.isFeatured ? `COALESCE("isFeatured", false)` : `NULL::boolean`} AS "isFeatured",
+            ${capabilities.status ? `COALESCE("status", CASE WHEN COALESCE("isActive", true) THEN 'ACTIVE' ELSE 'INACTIVE' END)` : `NULL::text`} AS "status",
+            ${capabilities.availabilityType ? `COALESCE("availabilityType", 'SHOP')` : `NULL::text`} AS "availabilityType",
+            ${capabilities.pickupDelayDays ? `COALESCE("pickupDelayDays", 0)` : `NULL::int`} AS "pickupDelayDays",
             ${capabilities.showInShop ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
             ${capabilities.shopCategory ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
             ${capabilities.shopSubcategory ? `"shopSubcategory"` : `NULL::text`} AS "shopSubcategory",
@@ -99,6 +165,20 @@ async function getExistingProductRecord(id: string, capabilities: Awaited<Return
             false AS "commissionEnabled",
             NULL::numeric AS "commissionAmount",
             false AS "commissionRequiresApproval",
+            ${capabilities.brand ? `"brand"` : `NULL::text`} AS "brand",
+            ${capabilities.shortDescription ? `"shortDescription"` : `NULL::text`} AS "shortDescription",
+            ${capabilities.description ? `"description"` : `NULL::text`} AS "description",
+            ${capabilities.specifications ? `"specifications"` : `NULL::jsonb`} AS "specifications",
+            ${capabilities.warrantyPeriod ? `"warrantyPeriod"` : `NULL::text`} AS "warrantyPeriod",
+            ${capabilities.warrantyNotes ? `"warrantyNotes"` : `NULL::text`} AS "warrantyNotes",
+            ${capabilities.mainImageUrl ? `"mainImageUrl"` : `NULL::text`} AS "mainImageUrl",
+            ${capabilities.galleryImageUrls ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
+            ${capabilities.brandImageUrl ? `"brandImageUrl"` : `NULL::text`} AS "brandImageUrl",
+            ${capabilities.ecommerceVisible ? `COALESCE("ecommerceVisible", false)` : `NULL::boolean`} AS "ecommerceVisible",
+            ${capabilities.isFeatured ? `COALESCE("isFeatured", false)` : `NULL::boolean`} AS "isFeatured",
+            ${capabilities.status ? `COALESCE("status", CASE WHEN COALESCE("active", true) THEN 'ACTIVE' ELSE 'INACTIVE' END)` : `NULL::text`} AS "status",
+            ${capabilities.availabilityType ? `COALESCE("availabilityType", 'SHOP')` : `NULL::text`} AS "availabilityType",
+            ${capabilities.pickupDelayDays ? `COALESCE("pickupDelayDays", 0)` : `NULL::int`} AS "pickupDelayDays",
             ${capabilities.showInShop ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
             ${capabilities.shopCategory ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
             ${capabilities.shopSubcategory ? `"shopSubcategory"` : `NULL::text`} AS "shopSubcategory",
@@ -152,6 +232,9 @@ export async function PATCH(req: Request, context: ParamsContext) {
   const data = parsed.data;
   const nextVariableCost = data.variableCost ?? Boolean(existing.variableCost);
   const nextLastBuyingPrice = data.lastBuyingPrice !== undefined ? data.lastBuyingPrice : Number(existing.lastBuyingPrice ?? 0) || null;
+  const nextStatus = data.status ?? String(existing.status || (Boolean(existing.isActive) ? "ACTIVE" : "INACTIVE")).toUpperCase();
+  const normalizedAvailabilityType = data.availabilityType ?? String(existing.availabilityType || "SHOP").toUpperCase();
+  const normalizedPickupDelayDays = normalizedAvailabilityType === "WAREHOUSE" ? 1 : 0;
   if (capabilities.schemaMode === "modern" && !nextVariableCost && !(Number(nextLastBuyingPrice ?? 0) > 0)) {
     return noStoreJson(
       { error: { fieldErrors: { lastBuyingPrice: ["Buying price is required for fixed-cost products"] } } },
@@ -182,7 +265,7 @@ export async function PATCH(req: Request, context: ParamsContext) {
     }
     if (data.defaultWarranty !== undefined) pushSet("defaultWarranty", normalizeOptionalText(data.defaultWarranty));
     if (data.variableCost !== undefined) pushSet("variableCost", data.variableCost);
-    if (data.isActive !== undefined) pushSet("isActive", data.isActive);
+    if (data.isActive !== undefined || data.status !== undefined) pushSet("isActive", nextStatus === "ACTIVE" && Boolean(data.isActive ?? existing.isActive));
     if (data.commissionEnabled !== undefined) pushSet("commissionEnabled", data.commissionEnabled);
     if (data.commissionAmount !== undefined || data.commissionEnabled === false) {
       pushSet("commissionAmount", data.commissionEnabled === false ? null : data.commissionAmount ?? null);
@@ -195,17 +278,46 @@ export async function PATCH(req: Request, context: ParamsContext) {
     if (data.name !== undefined) pushSet("name", data.name);
     if (data.category !== undefined) pushSet("unit", data.category);
     if (data.sellingPrice !== undefined) pushSet("sellPrice", data.sellingPrice);
-    if (data.isActive !== undefined) pushSet("active", data.isActive);
+    if (data.isActive !== undefined || data.status !== undefined) pushSet("active", nextStatus === "ACTIVE" && Boolean(data.isActive ?? existing.isActive));
   }
 
-  if (capabilities.showInShop && data.showInShop !== undefined) pushSet("showInShop", data.showInShop);
+  if (capabilities.brand && data.brand !== undefined) pushSet("brand", normalizeOptionalText(data.brand));
+  if (capabilities.shortDescription && data.shortDescription !== undefined) pushSet("shortDescription", normalizeOptionalText(data.shortDescription));
+  if (capabilities.description && data.description !== undefined) pushSet("description", normalizeOptionalText(data.description));
+  if (capabilities.specifications && data.specifications !== undefined) pushSet("specifications", normalizeSpecifications(data.specifications));
+  if (capabilities.warrantyPeriod && data.warrantyPeriod !== undefined) pushSet("warrantyPeriod", normalizeOptionalText(data.warrantyPeriod));
+  if (capabilities.warrantyNotes && data.warrantyNotes !== undefined) pushSet("warrantyNotes", normalizeOptionalText(data.warrantyNotes));
+  if (capabilities.mainImageUrl && data.mainImageUrl !== undefined) pushSet("mainImageUrl", normalizeOptionalText(data.mainImageUrl));
+  if (capabilities.galleryImageUrls && data.galleryImageUrls !== undefined) pushSet("galleryImageUrls", normalizeJsonStringArray(data.galleryImageUrls));
+  if (capabilities.brandImageUrl && data.brandImageUrl !== undefined) pushSet("brandImageUrl", normalizeOptionalText(data.brandImageUrl));
+  if (capabilities.ecommerceVisible && data.ecommerceVisible !== undefined) pushSet("ecommerceVisible", data.ecommerceVisible);
+  if (capabilities.isFeatured && data.isFeatured !== undefined) pushSet("isFeatured", data.isFeatured);
+  if (capabilities.status && data.status !== undefined) pushSet("status", nextStatus);
+  if (capabilities.availabilityType && data.availabilityType !== undefined) pushSet("availabilityType", normalizedAvailabilityType);
+  if (capabilities.pickupDelayDays && (data.pickupDelayDays !== undefined || data.availabilityType !== undefined)) {
+    pushSet("pickupDelayDays", normalizedPickupDelayDays);
+  }
+
+  if (capabilities.showInShop && (data.showInShop !== undefined || data.ecommerceVisible !== undefined)) {
+    pushSet("showInShop", Boolean(data.ecommerceVisible ?? data.showInShop));
+  }
   if (capabilities.shopCategory && data.shopCategory !== undefined) pushSet("shopCategory", normalizeOptionalText(data.shopCategory));
   if (capabilities.shopSubcategory && data.shopSubcategory !== undefined) pushSet("shopSubcategory", normalizeOptionalText(data.shopSubcategory));
-  if (capabilities.shopShortDescription && data.shopShortDescription !== undefined) pushSet("shopShortDescription", normalizeOptionalText(data.shopShortDescription));
-  if (capabilities.shopWarranty && data.shopWarranty !== undefined) pushSet("shopWarranty", normalizeOptionalText(data.shopWarranty));
-  if (capabilities.shopSpecs && data.shopSpecs !== undefined) pushSet("shopSpecs", normalizeOptionalText(data.shopSpecs));
-  if (capabilities.shopImageUrl && data.shopImageUrl !== undefined) pushSet("shopImageUrl", normalizeOptionalText(data.shopImageUrl));
-  if (capabilities.shopBrand && data.shopBrand !== undefined) pushSet("shopBrand", normalizeOptionalText(data.shopBrand));
+  if (capabilities.shopShortDescription && (data.shopShortDescription !== undefined || data.shortDescription !== undefined)) {
+    pushSet("shopShortDescription", normalizeOptionalText(data.shortDescription ?? data.shopShortDescription));
+  }
+  if (capabilities.shopWarranty && (data.shopWarranty !== undefined || data.warrantyPeriod !== undefined)) {
+    pushSet("shopWarranty", normalizeOptionalText(data.warrantyPeriod ?? data.shopWarranty));
+  }
+  if (capabilities.shopSpecs && (data.shopSpecs !== undefined || data.specifications !== undefined)) {
+    pushSet("shopSpecs", normalizeOptionalText(Array.isArray(data.specifications) ? data.specifications.join(", ") : data.specifications ?? data.shopSpecs));
+  }
+  if (capabilities.shopImageUrl && (data.shopImageUrl !== undefined || data.mainImageUrl !== undefined)) {
+    pushSet("shopImageUrl", normalizeOptionalText(data.mainImageUrl ?? data.shopImageUrl));
+  }
+  if (capabilities.shopBrand && (data.shopBrand !== undefined || data.brand !== undefined)) {
+    pushSet("shopBrand", normalizeOptionalText(data.brand ?? data.shopBrand));
+  }
 
   if (!setClauses.length) {
     return noStoreJson({ ok: true, item: existing, backfill: { items: 0, orders: 0 } });

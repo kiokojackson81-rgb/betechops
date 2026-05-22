@@ -928,6 +928,20 @@ model Product {
   shopSpecs                  String?
   shopImageUrl               String?
   shopBrand                  String?
+  brand                      String?
+  shortDescription           String?
+  description                String?
+  specifications             Json?
+  warrantyPeriod             String?
+  warrantyNotes              String?
+  mainImageUrl               String?
+  galleryImageUrls           Json?
+  brandImageUrl              String?
+  ecommerceVisible           Boolean     @default(false)
+  isFeatured                 Boolean     @default(false)
+  status                     String      @default("ACTIVE")
+  availabilityType           String      @default("SHOP")
+  pickupDelayDays            Int         @default(0)
   variableCost               Boolean     @default(false)
   commissionEnabled          Boolean     @default(false)
   commissionAmount           Decimal?    @db.Decimal(12, 2)

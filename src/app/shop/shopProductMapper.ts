@@ -8,6 +8,11 @@ import {
   resolveShopSubcategory,
   SHOP_CATEGORY_DEFINITIONS,
 } from "@/app/shop/shopCatalogConfig";
+import {
+  getProductAvailabilityMessage,
+  getProductCheckoutAvailabilityMessage,
+  normalizeAvailabilityType,
+} from "@/app/shop/shopAvailability";
 
 type OpsCatalogueProduct = {
   id: string;
@@ -19,6 +24,20 @@ type OpsCatalogueProduct = {
   minStockLevel: number;
   stockQuantity: number;
   isActive: boolean;
+  brand?: string | null;
+  shortDescription?: string | null;
+  description?: string | null;
+  specifications?: unknown;
+  warrantyPeriod?: string | null;
+  warrantyNotes?: string | null;
+  mainImageUrl?: string | null;
+  galleryImageUrls?: unknown;
+  brandImageUrl?: string | null;
+  ecommerceVisible?: boolean | null;
+  isFeatured?: boolean | null;
+  status?: string | null;
+  availabilityType?: string | null;
+  pickupDelayDays?: number | null;
   showInShop?: boolean | null;
   shopCategory?: string | null;
   shopSubcategory?: string | null;
@@ -37,7 +56,13 @@ type ShopCategoryDefinition = {
   image: string;
 };
 
-export type ShopProductMappingField = "category" | "price" | "brand" | "image" | "warranty" | "specs";
+export type ShopProductMappingField =
+  | "category"
+  | "price"
+  | "brand"
+  | "image"
+  | "warranty"
+  | "specs";
 
 export type ShopProductMappingWarning = {
   field: ShopProductMappingField;
@@ -47,7 +72,10 @@ export type ShopProductMappingWarning = {
 export type ShopProductRejectionReason =
   | "rejected: non-solar keyword/category"
   | "rejected: invalid price"
-  | "rejected: missing required display name";
+  | "rejected: missing required display name"
+  | "rejected: ecommerceVisible is false"
+  | "rejected: inactive status"
+  | "rejected: showInShop is false";
 
 export type ShopProductMappingPreview = {
   product: ShopProduct | null;
@@ -155,6 +183,47 @@ function compactUnique(values: Array<string | null | undefined>) {
   );
 }
 
+function normalizeOptionalText(value: string | null | undefined) {
+  const normalized = String(value || "").trim();
+  return normalized || null;
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return compactUnique(
+      value.map((entry) => (typeof entry === "string" ? entry : String(entry ?? "").trim())),
+    );
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return compactUnique(
+          parsed.map((entry) => (typeof entry === "string" ? entry : String(entry ?? "").trim())),
+        );
+      }
+    } catch {
+      // Fall through to line-based parsing for legacy text values.
+    }
+
+    return compactUnique(
+      trimmed
+        .split(/\r?\n|[,;]+/)
+        .map((entry) => entry.trim()),
+    );
+  }
+
+  return [];
+}
+
+function normalizeSpecificationLines(value: unknown) {
+  return normalizeStringArray(value);
+}
+
 function hasAnyKeyword(haystacks: string[], keywords: readonly string[]) {
   const normalizedHaystack = haystacks.map((value) => normalizeText(value)).join(" ");
   return keywords.some((keyword) => normalizedHaystack.includes(normalizeText(keyword)));
@@ -258,6 +327,8 @@ export function isSolarShopEligibleProduct(input: {
   specs?: string[] | null;
   price?: number | null;
   showInShop?: boolean | null;
+  ecommerceVisible?: boolean | null;
+  status?: string | null;
 }) {
   const name = String(input.name || "").trim();
   const price = Number(input.price);
@@ -275,6 +346,14 @@ export function isSolarShopEligibleProduct(input: {
 
   if (typeof input.showInShop === "boolean" && !input.showInShop) {
     rejectionReasons.push("rejected: showInShop is false");
+  }
+
+  if (typeof input.ecommerceVisible === "boolean" && !input.ecommerceVisible) {
+    rejectionReasons.push("rejected: ecommerceVisible is false");
+  }
+
+  if (String(input.status || "ACTIVE").trim().toUpperCase() !== "ACTIVE") {
+    rejectionReasons.push("rejected: inactive status");
   }
 
   if (hasAnyKeyword(haystacks, NON_SOLAR_BLOCK_KEYWORDS) || !hasAnyKeyword(haystacks, SOLAR_ALLOW_KEYWORDS)) {
@@ -308,12 +387,16 @@ function buildMappingWarnings(
   if (brand === "Betech Solar") {
     warnings.push({ field: "brand", message: "Brand was not found explicitly in the ops catalogue name and fell back to Betech Solar." });
   }
-  if (!category.image) {
+  if (!(normalizeOptionalText(product.mainImageUrl) || normalizeOptionalText(product.shopImageUrl))) {
     warnings.push({ field: "image", message: "No product image mapping was available, so a clean placeholder will be used." });
-  } else {
-    warnings.push({ field: "image", message: `Customer display uses the ${category.title} placeholder visual until ops image fields are ready.` });
   }
-  if (!(product.shopWarranty?.trim() || product.defaultWarranty?.trim())) {
+  if (
+    !(
+      normalizeOptionalText(product.warrantyPeriod) ||
+      normalizeOptionalText(product.shopWarranty) ||
+      product.defaultWarranty?.trim()
+    )
+  ) {
     warnings.push({ field: "warranty", message: "Warranty is missing in the ops catalogue. Customer pages fall back to contact-for-warranty guidance." });
   }
   if (
@@ -333,24 +416,66 @@ function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview 
   const category = explicitShopCategory ?? inferredCategory.definition;
   const categoryWarning = explicitShopCategory ? null : inferredCategory.warning;
   const safeName = product.name.trim() || product.sku || "";
-  const brand = product.shopBrand?.trim() || inferBrand(safeName);
+  const brand =
+    normalizeOptionalText(product.shopBrand) ||
+    normalizeOptionalText(product.brand) ||
+    inferBrand(safeName);
   const resolvedSubcategory =
     getShopSubcategoryDefinition(category.slug, product.shopSubcategory) ??
     resolveShopSubcategory(category.slug, [
       product.shopSubcategory,
+      product.shortDescription,
       product.shopShortDescription,
+      ...normalizeSpecificationLines(product.specifications),
       product.shopSpecs,
       product.name,
       product.category,
       product.sku,
     ]);
+  const parsedSpecs = normalizeSpecificationLines(product.specifications);
   const specs = compactUnique([
+    normalizeOptionalText(product.shortDescription),
     product.shopSpecs?.trim() || null,
     product.shopShortDescription?.trim() || null,
+    ...parsedSpecs,
     ...inferSpecs(product, category.title),
   ]).slice(0, 4);
-  const warranty = product.shopWarranty?.trim() || product.defaultWarranty?.trim() || inferWarranty(product);
+  const warranty =
+    normalizeOptionalText(product.warrantyPeriod) ||
+    product.shopWarranty?.trim() ||
+    product.defaultWarranty?.trim() ||
+    inferWarranty(product);
+  const warrantyNotes = normalizeOptionalText(product.warrantyNotes);
+  const mainImage = normalizeOptionalText(product.mainImageUrl) || normalizeOptionalText(product.shopImageUrl) || category.image;
+  const galleryImages = compactUnique([mainImage, ...normalizeStringArray(product.galleryImageUrls)]).filter(Boolean);
+  const brandImage = normalizeOptionalText(product.brandImageUrl);
+  const fullDescription =
+    normalizeOptionalText(product.description) ||
+    normalizeOptionalText(product.shopShortDescription) ||
+    normalizeOptionalText(product.shortDescription);
+  const shortDescription =
+    normalizeOptionalText(product.shortDescription) ||
+    normalizeOptionalText(product.shopShortDescription) ||
+    specs[0] ||
+    "Contact us for full specs.";
+  const availabilityType = normalizeAvailabilityType(product.availabilityType);
+  const pickupDelayDays = availabilityType === "WAREHOUSE" ? 1 : 0;
+  const availabilityMessage = getProductAvailabilityMessage({
+    availabilityType,
+    pickupDelayDays,
+  });
+  const checkoutAvailabilityMessage = getProductCheckoutAvailabilityMessage({
+    availabilityType,
+    pickupDelayDays,
+  });
   const warnings = buildMappingWarnings(product, category, price, brand, specs, warranty, categoryWarning);
+  const ecommerceVisible =
+    typeof product.ecommerceVisible === "boolean"
+      ? product.ecommerceVisible
+      : typeof product.showInShop === "boolean"
+        ? product.showInShop
+        : null;
+  const status = normalizeOptionalText(product.status) || (product.isActive ? "ACTIVE" : "INACTIVE");
   const eligibility = isSolarShopEligibleProduct({
     name: safeName,
     category: product.shopCategory || product.category || category.title,
@@ -362,6 +487,8 @@ function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview 
     specs,
     price,
     showInShop: product.showInShop,
+    ecommerceVisible,
+    status,
   });
   const includedInCatalog = eligibility.eligible;
   const fallbackName = safeName || `OPS Product ${product.id}`;
@@ -375,10 +502,19 @@ function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview 
         brand,
         price,
         oldPrice: undefined,
-        image: product.shopImageUrl?.trim() || category.image,
+        image: mainImage,
+        galleryImages,
+        brandImage,
         visualType: category.visualType,
+        shortDescription,
+        fullDescription,
         specs,
         warranty,
+        warrantyNotes: warrantyNotes || undefined,
+        availabilityType,
+        pickupDelayDays,
+        availabilityMessage,
+        checkoutAvailabilityMessage,
         stockStatus: inferStockStatus(product),
         tags: compactUnique([...inferTags(product, category, brand), resolvedSubcategory?.label, resolvedSubcategory?.value]).slice(0, 8),
         whatsappMessage: `Hello Betech Solar, I want more details about ${fallbackName}.`,
@@ -393,7 +529,7 @@ function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview 
     rawName: fallbackName,
     rawCategory: String(product.category || "").trim(),
     normalizedCategory: category.title,
-    showInShopValue: typeof product.showInShop === "boolean" ? product.showInShop : null,
+    showInShopValue: ecommerceVisible,
     shopCategoryValue: product.shopCategory?.trim() || null,
     shopSubcategoryValue: product.shopSubcategory?.trim() || null,
     warnings,
@@ -464,6 +600,20 @@ export async function getOpsCatalogueProductsReadOnly() {
         COALESCE("minStockLevel", 0) AS "minStockLevel",
         COALESCE("stockQuantity", 0) AS "stockQuantity",
         COALESCE("isActive", true) AS "isActive",
+        ${available.has("brand") ? `"brand"` : `NULL::text`} AS "brand",
+        ${available.has("shortDescription") ? `"shortDescription"` : `NULL::text`} AS "shortDescription",
+        ${available.has("description") ? `"description"` : `NULL::text`} AS "description",
+        ${available.has("specifications") ? `"specifications"` : `NULL::jsonb`} AS "specifications",
+        ${available.has("warrantyPeriod") ? `"warrantyPeriod"` : `NULL::text`} AS "warrantyPeriod",
+        ${available.has("warrantyNotes") ? `"warrantyNotes"` : `NULL::text`} AS "warrantyNotes",
+        ${available.has("mainImageUrl") ? `"mainImageUrl"` : `NULL::text`} AS "mainImageUrl",
+        ${available.has("galleryImageUrls") ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
+        ${available.has("brandImageUrl") ? `"brandImageUrl"` : `NULL::text`} AS "brandImageUrl",
+        ${available.has("ecommerceVisible") ? `COALESCE("ecommerceVisible", false)` : `NULL::boolean`} AS "ecommerceVisible",
+        ${available.has("isFeatured") ? `COALESCE("isFeatured", false)` : `NULL::boolean`} AS "isFeatured",
+        ${available.has("status") ? `"status"` : `NULL::text`} AS "status",
+        ${available.has("availabilityType") ? `"availabilityType"` : `NULL::text`} AS "availabilityType",
+        ${available.has("pickupDelayDays") ? `COALESCE("pickupDelayDays", 0)` : `NULL::int`} AS "pickupDelayDays",
         ${available.has("showInShop") ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
         ${available.has("shopCategory") ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
         ${available.has("shopSubcategory") ? `"shopSubcategory"` : `NULL::text`} AS "shopSubcategory",
@@ -488,6 +638,20 @@ export async function getOpsCatalogueProductsReadOnly() {
         0 AS "minStockLevel",
         0 AS "stockQuantity",
         COALESCE("active", true) AS "isActive",
+        ${available.has("brand") ? `"brand"` : `NULL::text`} AS "brand",
+        ${available.has("shortDescription") ? `"shortDescription"` : `NULL::text`} AS "shortDescription",
+        ${available.has("description") ? `"description"` : `NULL::text`} AS "description",
+        ${available.has("specifications") ? `"specifications"` : `NULL::jsonb`} AS "specifications",
+        ${available.has("warrantyPeriod") ? `"warrantyPeriod"` : `NULL::text`} AS "warrantyPeriod",
+        ${available.has("warrantyNotes") ? `"warrantyNotes"` : `NULL::text`} AS "warrantyNotes",
+        ${available.has("mainImageUrl") ? `"mainImageUrl"` : `NULL::text`} AS "mainImageUrl",
+        ${available.has("galleryImageUrls") ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
+        ${available.has("brandImageUrl") ? `"brandImageUrl"` : `NULL::text`} AS "brandImageUrl",
+        ${available.has("ecommerceVisible") ? `COALESCE("ecommerceVisible", false)` : `NULL::boolean`} AS "ecommerceVisible",
+        ${available.has("isFeatured") ? `COALESCE("isFeatured", false)` : `NULL::boolean`} AS "isFeatured",
+        ${available.has("status") ? `"status"` : `NULL::text`} AS "status",
+        ${available.has("availabilityType") ? `"availabilityType"` : `NULL::text`} AS "availabilityType",
+        ${available.has("pickupDelayDays") ? `COALESCE("pickupDelayDays", 0)` : `NULL::int`} AS "pickupDelayDays",
         ${available.has("showInShop") ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
         ${available.has("shopCategory") ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
         ${available.has("shopSubcategory") ? `"shopSubcategory"` : `NULL::text`} AS "shopSubcategory",

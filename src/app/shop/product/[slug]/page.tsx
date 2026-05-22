@@ -14,6 +14,7 @@ import { formatCurrency, shopStyles } from "@/app/shop/_components/shopStyles";
 import { getShopProductBySlug, getShopProducts } from "@/app/shop/shopApi";
 import { buildProductJsonLd, buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks } from "@/app/shop/shopData";
+import { getProductAvailabilityBadge, getProductAvailabilityMessage, getProductCheckoutAvailabilityMessage } from "@/app/shop/shopAvailability";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
@@ -46,6 +47,10 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
     quote_only: "Request quote",
   } as const;
   const productJsonLd = buildProductJsonLd(product);
+  const availabilityBadge = getProductAvailabilityBadge(product);
+  const availabilityMessage = product.availabilityMessage || getProductAvailabilityMessage(product);
+  const checkoutAvailabilityMessage = product.checkoutAvailabilityMessage || getProductCheckoutAvailabilityMessage(product);
+  const galleryImages = product.galleryImages?.length ? product.galleryImages : [product.image];
 
   return (
     <div className={shopStyles.page}>
@@ -66,19 +71,23 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
             <div className={`${shopStyles.softCard} overflow-hidden p-4 sm:p-6`}>
               <div className="relative rounded-[30px] border border-[#7a0000]/10 bg-[#f6eee2]">
                 <div className="relative h-[18rem] sm:h-[24rem] lg:h-[30rem]">
-                  <div className="absolute inset-0 p-5 sm:p-7">
-                    <ShopProductVisual visualType={product.visualType} productName={product.name} className="h-full w-full rounded-[28px]" />
-                  </div>
+                  {product.image ? (
+                    <img src={product.image} alt={product.name} className="h-full w-full rounded-[28px] object-contain p-5 sm:p-7" />
+                  ) : (
+                    <div className="absolute inset-0 p-5 sm:p-7">
+                      <ShopProductVisual visualType={product.visualType} productName={product.name} className="h-full w-full rounded-[28px]" />
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="mt-4 grid grid-cols-3 gap-3">
-                {["Main view", "Installation view", "Product close-up"].map((label, index) => (
-                  <div key={label} className="rounded-[22px] border border-[#7a0000]/10 bg-white p-3 shadow-[0_14px_26px_rgba(15,23,42,0.05)]">
+                {galleryImages.slice(0, 3).map((imageUrl, index) => (
+                  <div key={`${imageUrl}-${index}`} className="rounded-[22px] border border-[#7a0000]/10 bg-white p-3 shadow-[0_14px_26px_rgba(15,23,42,0.05)]">
                     <div className="h-20 rounded-2xl bg-[#f6eee2] p-2">
-                      <ShopProductVisual visualType={product.visualType} productName={`${product.name} ${label}`} compact className="h-full w-full rounded-[18px]" />
+                      <img src={imageUrl} alt={`${product.name} gallery ${index + 1}`} className="h-full w-full rounded-[18px] object-contain" />
                     </div>
                     <div className="mt-2 text-center text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
-                      {index === 0 ? "Gallery" : label}
+                      {index === 0 ? "Main image" : `Gallery ${index + 1}`}
                     </div>
                   </div>
                 ))}
@@ -90,6 +99,7 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
                 <div className={shopStyles.sectionEyebrow}>{product.category}</div>
                 <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">{product.name}</h1>
                 <div className="mt-3 text-base font-semibold text-slate-500">Brand: {product.brand}</div>
+                {product.brandImage ? <img src={product.brandImage} alt={`${product.brand} logo`} className="mt-3 h-10 w-auto object-contain" /> : null}
                 <div className="mt-5 flex flex-wrap items-end gap-3">
                   <div className="text-3xl font-black text-slate-950">{formatCurrency(product.price)}</div>
                   {product.oldPrice ? <div className="text-base font-semibold text-slate-400 line-through">{formatCurrency(product.oldPrice)}</div> : null}
@@ -97,7 +107,16 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
                 <div className="mt-4 inline-flex rounded-full border border-[#0f9d58]/14 bg-[#effcf4] px-4 py-2 text-sm font-black uppercase tracking-[0.16em] text-[#0f9d58]">
                   {stockLabelMap[product.stockStatus]}
                 </div>
+                <div className="mt-3 inline-flex rounded-full border border-[#7a0000]/10 bg-[#fcfaf7] px-4 py-2 text-sm font-black text-[#7a0000]">
+                  {availabilityBadge}
+                </div>
                 <div className="mt-4 text-sm font-semibold text-slate-600">{product.warranty}</div>
+                {product.warrantyNotes ? <div className="mt-2 text-sm leading-6 text-slate-600">{product.warrantyNotes}</div> : null}
+                <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-400/5 px-4 py-3 text-sm font-semibold text-slate-700">
+                  <div>{availabilityMessage}</div>
+                  <div className="mt-1 text-xs font-medium text-slate-500">{checkoutAvailabilityMessage}</div>
+                </div>
+                {product.fullDescription ? <p className="mt-4 text-sm leading-7 text-slate-600">{product.fullDescription}</p> : null}
                 <div className="mt-6">
                   <ShopProductDetailActions product={product} />
                 </div>

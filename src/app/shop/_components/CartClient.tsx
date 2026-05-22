@@ -12,6 +12,7 @@ import ShopStatePanel from "@/app/shop/_components/ShopStatePanel";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import type { ShopProduct } from "@/app/shop/shopData";
 import { formatCurrency, shopStyles } from "@/app/shop/_components/shopStyles";
+import { getProductAvailabilityMessage } from "@/app/shop/shopAvailability";
 
 type CartClientProps = {
   products: ShopProduct[];
@@ -21,6 +22,10 @@ export default function CartClient({ products }: CartClientProps) {
   const items = useShopCartItems();
   const detailedItems = buildDetailedCart(items, products);
   const subtotal = detailedItems.reduce((sum, item) => sum + item.lineTotal, 0);
+  const hasWarehouseItems = detailedItems.some((item) => item.product.availabilityType === "WAREHOUSE");
+  const availabilityNotice = hasWarehouseItems
+    ? "Some items in your order are available from warehouse. Pickup or delivery will be available after 1 day."
+    : "All items are available for immediate shop pickup.";
   const cartWhatsappHref = `https://wa.me/254722151083?text=${encodeURIComponent(
     `Hello Betech Solar, I want to checkout these items: ${detailedItems
       .map((item) => `${item.product.name} x${item.quantity}`)
@@ -55,6 +60,7 @@ export default function CartClient({ products }: CartClientProps) {
               <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]/75">{product.category}</div>
               <h2 className="mt-2 text-lg font-black text-slate-950">{product.name}</h2>
               <div className="mt-2 text-sm text-slate-500">{product.brand}</div>
+              <div className="mt-2 text-xs font-semibold text-slate-500">{getProductAvailabilityMessage(product)}</div>
               <div className="mt-3 text-xl font-black text-slate-950">{formatCurrency(product.price)}</div>
             </div>
             <div className="flex flex-col gap-3 sm:items-end">
@@ -112,6 +118,9 @@ export default function CartClient({ products }: CartClientProps) {
             <span className="text-sm font-semibold text-slate-600">Estimated total</span>
             <span className="text-2xl font-black text-slate-950">{formatCurrency(subtotal)}</span>
           </div>
+        </div>
+        <div className="mt-4 rounded-[20px] border border-amber-400/20 bg-amber-400/5 px-4 py-3 text-sm font-semibold text-slate-700">
+          {availabilityNotice}
         </div>
         <div className="mt-6 grid gap-3">
           <Link href="/shop/checkout" className={shopStyles.primaryButton}>

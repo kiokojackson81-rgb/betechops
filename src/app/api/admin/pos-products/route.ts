@@ -7,6 +7,8 @@ import { z } from "zod";
 export const dynamic = "force-dynamic";
 
 const MAX_SKU_LENGTH = 80;
+const productStatusEnum = z.enum(["ACTIVE", "INACTIVE"]);
+const availabilityTypeEnum = z.enum(["SHOP", "WAREHOUSE"]);
 
 const productSchema = z.object({
   sku: z.string().trim().min(1).max(255).optional(),
@@ -20,6 +22,20 @@ const productSchema = z.object({
   commissionEnabled: z.boolean().optional().default(false),
   commissionAmount: z.coerce.number().min(0).nullable().optional(),
   commissionRequiresApproval: z.boolean().optional().default(false),
+  brand: z.string().trim().max(120).nullable().optional(),
+  shortDescription: z.string().trim().max(1000).nullable().optional(),
+  description: z.string().trim().max(10000).nullable().optional(),
+  specifications: z.union([z.string().trim().max(5000), z.array(z.string().trim().max(500)).max(30)]).nullable().optional(),
+  warrantyPeriod: z.string().trim().max(120).nullable().optional(),
+  warrantyNotes: z.string().trim().max(1000).nullable().optional(),
+  mainImageUrl: z.string().trim().max(500).nullable().optional(),
+  galleryImageUrls: z.array(z.string().trim().max(500)).max(12).nullable().optional(),
+  brandImageUrl: z.string().trim().max(500).nullable().optional(),
+  ecommerceVisible: z.boolean().optional().default(false),
+  isFeatured: z.boolean().optional().default(false),
+  status: productStatusEnum.optional().default("ACTIVE"),
+  availabilityType: availabilityTypeEnum.optional().default("SHOP"),
+  pickupDelayDays: z.coerce.number().int().min(0).max(1).optional(),
   showInShop: z.boolean().optional(),
   shopCategory: z.string().trim().max(120).nullable().optional(),
   shopSubcategory: z.string().trim().max(120).nullable().optional(),
@@ -34,6 +50,16 @@ const productSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ["lastBuyingPrice"],
       message: "Buying price is required for fixed-cost products",
+    });
+  }
+  const expectedPickupDelay = data.availabilityType === "WAREHOUSE" ? 1 : 0;
+  if (data.pickupDelayDays !== undefined && data.pickupDelayDays !== expectedPickupDelay) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["pickupDelayDays"],
+      message: data.availabilityType === "WAREHOUSE"
+        ? "Warehouse products must use a 1 day pickup delay"
+        : "Shop products must use a 0 day pickup delay",
     });
   }
 });
@@ -58,6 +84,29 @@ function normalizeOptionalText(value: string | null | undefined) {
   return normalized ? normalized : null;
 }
 
+function normalizeSpecifications(value: string | string[] | null | undefined) {
+  if (Array.isArray(value)) {
+    const list = value.map((entry) => entry.trim()).filter(Boolean);
+    return list.length ? JSON.stringify(list) : null;
+  }
+
+  const normalized = normalizeOptionalText(value);
+  if (!normalized) return null;
+
+  const list = normalized
+    .split(/\r?\n|[,;]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  return JSON.stringify(list.length ? list : [normalized]);
+}
+
+function normalizeJsonStringArray(value: string[] | null | undefined) {
+  if (!Array.isArray(value)) return null;
+  const list = value.map((entry) => entry.trim()).filter(Boolean);
+  return list.length ? JSON.stringify(list) : null;
+}
+
 async function findExistingSku(capabilities: Awaited<ReturnType<typeof getProductTableCapabilities>>, sku: string) {
   if (capabilities.schemaMode === "modern") {
     const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
@@ -77,10 +126,70 @@ async function findExistingSku(capabilities: Awaited<ReturnType<typeof getProduc
 function buildShopInsertFragments(capabilities: Awaited<ReturnType<typeof getProductTableCapabilities>>, data: z.infer<typeof productSchema>) {
   const columns: string[] = [];
   const values: unknown[] = [];
+  const normalizedStatus = data.status ?? (data.isActive ? "ACTIVE" : "INACTIVE");
+  const normalizedAvailabilityType = data.availabilityType ?? "SHOP";
+  const pickupDelayDays = normalizedAvailabilityType === "WAREHOUSE" ? 1 : 0;
+
+  if (capabilities.brand) {
+    columns.push(`"brand"`);
+    values.push(normalizeOptionalText(data.brand));
+  }
+  if (capabilities.shortDescription) {
+    columns.push(`"shortDescription"`);
+    values.push(normalizeOptionalText(data.shortDescription));
+  }
+  if (capabilities.description) {
+    columns.push(`"description"`);
+    values.push(normalizeOptionalText(data.description));
+  }
+  if (capabilities.specifications) {
+    columns.push(`"specifications"`);
+    values.push(normalizeSpecifications(data.specifications));
+  }
+  if (capabilities.warrantyPeriod) {
+    columns.push(`"warrantyPeriod"`);
+    values.push(normalizeOptionalText(data.warrantyPeriod));
+  }
+  if (capabilities.warrantyNotes) {
+    columns.push(`"warrantyNotes"`);
+    values.push(normalizeOptionalText(data.warrantyNotes));
+  }
+  if (capabilities.mainImageUrl) {
+    columns.push(`"mainImageUrl"`);
+    values.push(normalizeOptionalText(data.mainImageUrl));
+  }
+  if (capabilities.galleryImageUrls) {
+    columns.push(`"galleryImageUrls"`);
+    values.push(normalizeJsonStringArray(data.galleryImageUrls));
+  }
+  if (capabilities.brandImageUrl) {
+    columns.push(`"brandImageUrl"`);
+    values.push(normalizeOptionalText(data.brandImageUrl));
+  }
+  if (capabilities.ecommerceVisible) {
+    columns.push(`"ecommerceVisible"`);
+    values.push(Boolean(data.ecommerceVisible));
+  }
+  if (capabilities.isFeatured) {
+    columns.push(`"isFeatured"`);
+    values.push(Boolean(data.isFeatured));
+  }
+  if (capabilities.status) {
+    columns.push(`"status"`);
+    values.push(normalizedStatus);
+  }
+  if (capabilities.availabilityType) {
+    columns.push(`"availabilityType"`);
+    values.push(normalizedAvailabilityType);
+  }
+  if (capabilities.pickupDelayDays) {
+    columns.push(`"pickupDelayDays"`);
+    values.push(pickupDelayDays);
+  }
 
   if (capabilities.showInShop) {
     columns.push(`"showInShop"`);
-    values.push(Boolean(data.showInShop));
+    values.push(Boolean(data.ecommerceVisible ?? data.showInShop));
   }
   if (capabilities.shopCategory) {
     columns.push(`"shopCategory"`);
@@ -92,23 +201,23 @@ function buildShopInsertFragments(capabilities: Awaited<ReturnType<typeof getPro
   }
   if (capabilities.shopShortDescription) {
     columns.push(`"shopShortDescription"`);
-    values.push(normalizeOptionalText(data.shopShortDescription));
+    values.push(normalizeOptionalText(data.shortDescription ?? data.shopShortDescription));
   }
   if (capabilities.shopWarranty) {
     columns.push(`"shopWarranty"`);
-    values.push(normalizeOptionalText(data.shopWarranty));
+    values.push(normalizeOptionalText(data.warrantyPeriod ?? data.shopWarranty));
   }
   if (capabilities.shopSpecs) {
     columns.push(`"shopSpecs"`);
-    values.push(normalizeOptionalText(data.shopSpecs));
+    values.push(normalizeOptionalText(Array.isArray(data.specifications) ? data.specifications.join(", ") : data.specifications ?? data.shopSpecs));
   }
   if (capabilities.shopImageUrl) {
     columns.push(`"shopImageUrl"`);
-    values.push(normalizeOptionalText(data.shopImageUrl));
+    values.push(normalizeOptionalText(data.mainImageUrl ?? data.shopImageUrl));
   }
   if (capabilities.shopBrand) {
     columns.push(`"shopBrand"`);
-    values.push(normalizeOptionalText(data.shopBrand));
+    values.push(normalizeOptionalText(data.brand ?? data.shopBrand));
   }
 
   return { columns, values };
@@ -141,6 +250,20 @@ export async function GET(req: Request) {
             COALESCE("commissionEnabled", false) AS "commissionEnabled",
             "commissionAmount",
             COALESCE("commissionRequiresApproval", false) AS "commissionRequiresApproval",
+            ${capabilities.brand ? `"brand"` : `NULL::text`} AS "brand",
+            ${capabilities.shortDescription ? `"shortDescription"` : `NULL::text`} AS "shortDescription",
+            ${capabilities.description ? `"description"` : `NULL::text`} AS "description",
+            ${capabilities.specifications ? `"specifications"` : `NULL::jsonb`} AS "specifications",
+            ${capabilities.warrantyPeriod ? `"warrantyPeriod"` : `NULL::text`} AS "warrantyPeriod",
+            ${capabilities.warrantyNotes ? `"warrantyNotes"` : `NULL::text`} AS "warrantyNotes",
+            ${capabilities.mainImageUrl ? `"mainImageUrl"` : `NULL::text`} AS "mainImageUrl",
+            ${capabilities.galleryImageUrls ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
+            ${capabilities.brandImageUrl ? `"brandImageUrl"` : `NULL::text`} AS "brandImageUrl",
+            ${capabilities.ecommerceVisible ? `COALESCE("ecommerceVisible", false)` : `NULL::boolean`} AS "ecommerceVisible",
+            ${capabilities.isFeatured ? `COALESCE("isFeatured", false)` : `NULL::boolean`} AS "isFeatured",
+            ${capabilities.status ? `COALESCE("status", CASE WHEN COALESCE("isActive", true) THEN 'ACTIVE' ELSE 'INACTIVE' END)` : `NULL::text`} AS "status",
+            ${capabilities.availabilityType ? `COALESCE("availabilityType", 'SHOP')` : `NULL::text`} AS "availabilityType",
+            ${capabilities.pickupDelayDays ? `COALESCE("pickupDelayDays", 0)` : `NULL::int`} AS "pickupDelayDays",
             ${capabilities.showInShop ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
             ${capabilities.shopCategory ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
             ${capabilities.shopSubcategory ? `"shopSubcategory"` : `NULL::text`} AS "shopSubcategory",
@@ -180,6 +303,20 @@ export async function GET(req: Request) {
             false AS "commissionEnabled",
             NULL::numeric AS "commissionAmount",
             false AS "commissionRequiresApproval",
+            ${capabilities.brand ? `"brand"` : `NULL::text`} AS "brand",
+            ${capabilities.shortDescription ? `"shortDescription"` : `NULL::text`} AS "shortDescription",
+            ${capabilities.description ? `"description"` : `NULL::text`} AS "description",
+            ${capabilities.specifications ? `"specifications"` : `NULL::jsonb`} AS "specifications",
+            ${capabilities.warrantyPeriod ? `"warrantyPeriod"` : `NULL::text`} AS "warrantyPeriod",
+            ${capabilities.warrantyNotes ? `"warrantyNotes"` : `NULL::text`} AS "warrantyNotes",
+            ${capabilities.mainImageUrl ? `"mainImageUrl"` : `NULL::text`} AS "mainImageUrl",
+            ${capabilities.galleryImageUrls ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
+            ${capabilities.brandImageUrl ? `"brandImageUrl"` : `NULL::text`} AS "brandImageUrl",
+            ${capabilities.ecommerceVisible ? `COALESCE("ecommerceVisible", false)` : `NULL::boolean`} AS "ecommerceVisible",
+            ${capabilities.isFeatured ? `COALESCE("isFeatured", false)` : `NULL::boolean`} AS "isFeatured",
+            ${capabilities.status ? `COALESCE("status", CASE WHEN COALESCE("active", true) THEN 'ACTIVE' ELSE 'INACTIVE' END)` : `NULL::text`} AS "status",
+            ${capabilities.availabilityType ? `COALESCE("availabilityType", 'SHOP')` : `NULL::text`} AS "availabilityType",
+            ${capabilities.pickupDelayDays ? `COALESCE("pickupDelayDays", 0)` : `NULL::int`} AS "pickupDelayDays",
             ${capabilities.showInShop ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
             ${capabilities.shopCategory ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
             ${capabilities.shopSubcategory ? `"shopSubcategory"` : `NULL::text`} AS "shopSubcategory",
@@ -221,6 +358,8 @@ export async function POST(req: Request) {
   const capabilities = await getProductTableCapabilities(prisma);
   const actorId = (auth.session?.user as { id?: string } | undefined)?.id ?? (await getActorId());
   const data = parsed.data;
+  const normalizedStatus = data.status ?? (data.isActive ? "ACTIVE" : "INACTIVE");
+  const normalizedIsActive = normalizedStatus === "ACTIVE" && Boolean(data.isActive);
   const skuBase = slugifySku(data.sku || data.name);
 
   let sku = skuBase;
@@ -261,7 +400,7 @@ export async function POST(req: Request) {
         data.variableCost ? null : data.lastBuyingPrice ?? null,
         normalizeOptionalText(data.defaultWarranty),
         Boolean(data.variableCost),
-        Boolean(data.isActive),
+        normalizedIsActive,
         Boolean(data.commissionEnabled),
         data.commissionEnabled ? data.commissionAmount ?? 0 : null,
         data.commissionEnabled ? Boolean(data.commissionRequiresApproval) : false,
@@ -287,7 +426,7 @@ export async function POST(req: Request) {
         data.name,
         data.category,
         data.sellingPrice,
-        Boolean(data.isActive),
+        normalizedIsActive,
         ...shopFragments.values,
       ))[0];
 

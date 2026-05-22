@@ -11,6 +11,20 @@ export type ProductTableCapabilities = {
   shopSpecs: boolean;
   shopImageUrl: boolean;
   shopBrand: boolean;
+  brand: boolean;
+  shortDescription: boolean;
+  description: boolean;
+  specifications: boolean;
+  warrantyPeriod: boolean;
+  warrantyNotes: boolean;
+  mainImageUrl: boolean;
+  galleryImageUrls: boolean;
+  brandImageUrl: boolean;
+  ecommerceVisible: boolean;
+  isFeatured: boolean;
+  status: boolean;
+  availabilityType: boolean;
+  pickupDelayDays: boolean;
   defaultWarranty: boolean;
   modernPricing: boolean;
   legacyPricing: boolean;
@@ -39,6 +53,20 @@ export async function getProductTableCapabilities(prisma: PrismaClient): Promise
     shopSpecs: available.has("shopSpecs"),
     shopImageUrl: available.has("shopImageUrl"),
     shopBrand: available.has("shopBrand"),
+    brand: available.has("brand"),
+    shortDescription: available.has("shortDescription"),
+    description: available.has("description"),
+    specifications: available.has("specifications"),
+    warrantyPeriod: available.has("warrantyPeriod"),
+    warrantyNotes: available.has("warrantyNotes"),
+    mainImageUrl: available.has("mainImageUrl"),
+    galleryImageUrls: available.has("galleryImageUrls"),
+    brandImageUrl: available.has("brandImageUrl"),
+    ecommerceVisible: available.has("ecommerceVisible"),
+    isFeatured: available.has("isFeatured"),
+    status: available.has("status"),
+    availabilityType: available.has("availabilityType"),
+    pickupDelayDays: available.has("pickupDelayDays"),
     defaultWarranty: available.has("defaultWarranty"),
     modernPricing: available.has("sellingPrice"),
     legacyPricing: available.has("sellPrice"),

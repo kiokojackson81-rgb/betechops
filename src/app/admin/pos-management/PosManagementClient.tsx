@@ -18,6 +18,20 @@ type PosProduct = {
   commissionEnabled: boolean;
   commissionAmount?: number | string | null;
   commissionRequiresApproval: boolean;
+  brand?: string | null;
+  shortDescription?: string | null;
+  description?: string | null;
+  specifications?: string[] | string | null;
+  warrantyPeriod?: string | null;
+  warrantyNotes?: string | null;
+  mainImageUrl?: string | null;
+  galleryImageUrls?: string[] | null;
+  brandImageUrl?: string | null;
+  ecommerceVisible?: boolean | null;
+  isFeatured?: boolean | null;
+  status?: string | null;
+  availabilityType?: "SHOP" | "WAREHOUSE" | string | null;
+  pickupDelayDays?: number | null;
   showInShop?: boolean | null;
   shopCategory?: string | null;
   shopSubcategory?: string | null;
@@ -30,6 +44,20 @@ type PosProduct = {
 
 type PosCatalogueCapabilities = {
   schemaMode: "modern" | "legacy";
+  brand: boolean;
+  shortDescription: boolean;
+  description: boolean;
+  specifications: boolean;
+  warrantyPeriod: boolean;
+  warrantyNotes: boolean;
+  mainImageUrl: boolean;
+  galleryImageUrls: boolean;
+  brandImageUrl: boolean;
+  ecommerceVisible: boolean;
+  isFeatured: boolean;
+  status: boolean;
+  availabilityType: boolean;
+  pickupDelayDays: boolean;
   showInShop: boolean;
   shopCategory: boolean;
   shopSubcategory: boolean;
@@ -41,6 +69,8 @@ type PosCatalogueCapabilities = {
   warranty: boolean;
   specs: boolean;
 };
+
+type ProductAvailabilityType = "SHOP" | "WAREHOUSE";
 
 type CommissionApproval = {
   id: string;
@@ -67,6 +97,20 @@ type ProductDraft = {
   commissionEnabled: boolean;
   commissionAmount: string;
   commissionRequiresApproval: boolean;
+  brand: string;
+  shortDescription: string;
+  description: string;
+  specifications: string;
+  warrantyPeriod: string;
+  warrantyNotes: string;
+  mainImageUrl: string;
+  galleryImageUrls: string[];
+  brandImageUrl: string;
+  ecommerceVisible: boolean;
+  isFeatured: boolean;
+  status: "ACTIVE" | "INACTIVE";
+  availabilityType: ProductAvailabilityType;
+  pickupDelayDays: number;
   showInShop: boolean;
   shopCategory: string;
   shopSubcategory: string;
@@ -89,6 +133,20 @@ const emptyDraft: ProductDraft = {
   commissionEnabled: false,
   commissionAmount: "",
   commissionRequiresApproval: false,
+  brand: "",
+  shortDescription: "",
+  description: "",
+  specifications: "",
+  warrantyPeriod: "",
+  warrantyNotes: "",
+  mainImageUrl: "",
+  galleryImageUrls: [],
+  brandImageUrl: "",
+  ecommerceVisible: false,
+  isFeatured: false,
+  status: "ACTIVE",
+  availabilityType: "SHOP",
+  pickupDelayDays: 0,
   showInShop: false,
   shopCategory: "",
   shopSubcategory: "",
@@ -101,6 +159,20 @@ const emptyDraft: ProductDraft = {
 
 const defaultCapabilities: PosCatalogueCapabilities = {
   schemaMode: "legacy",
+  brand: false,
+  shortDescription: false,
+  description: false,
+  specifications: false,
+  warrantyPeriod: false,
+  warrantyNotes: false,
+  mainImageUrl: false,
+  galleryImageUrls: false,
+  brandImageUrl: false,
+  ecommerceVisible: false,
+  isFeatured: false,
+  status: false,
+  availabilityType: false,
+  pickupDelayDays: false,
   showInShop: false,
   shopCategory: false,
   shopSubcategory: false,
@@ -117,6 +189,38 @@ const fieldClass =
   "w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-400/60 focus:outline-none";
 
 const warrantyOptions = ["", "1 Year", "2 Years", "3 Years", "5 Years", "6 Years", "10 Years"];
+
+function normalizeAvailabilityType(value: string | null | undefined): ProductAvailabilityType {
+  return String(value || "").trim().toUpperCase() === "WAREHOUSE" ? "WAREHOUSE" : "SHOP";
+}
+
+function getAvailabilityPreviewMessage(type: ProductAvailabilityType) {
+  return type === "WAREHOUSE"
+    ? "Customer will see: Available from warehouse. Pickup or delivery available after 1 day."
+    : "Customer will see: Available at shop for immediate pickup.";
+}
+
+function parseStringArray(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => String(entry || "").trim()).filter(Boolean);
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed.map((entry) => String(entry || "").trim()).filter(Boolean);
+      }
+    } catch {
+      return trimmed
+        .split(/\r?\n|[,;]+/)
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+    }
+  }
+  return [];
+}
 
 function formatMoney(value: number | string | null | undefined) {
   const amount = Number(value ?? 0);
@@ -159,6 +263,7 @@ export default function PosManagementClient() {
   const [draft, setDraft] = useState<ProductDraft>(emptyDraft);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingKind, setUploadingKind] = useState<"main" | "gallery" | "brand" | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [approvalBusyId, setApprovalBusyId] = useState<string | null>(null);
@@ -244,6 +349,25 @@ export default function PosManagementClient() {
     [draft.id, draft.name, products],
   );
   const shopSubcategoryOptions = useMemo(() => getShopSubcategoryOptions(draft.shopCategory), [draft.shopCategory]);
+  const availabilityPreview = useMemo(() => getAvailabilityPreviewMessage(draft.availabilityType), [draft.availabilityType]);
+
+  const uploadProductImage = useCallback(async (file: File, kind: "main" | "gallery" | "brand") => {
+    setUploadingKind(kind);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("kind", kind);
+      form.append("productId", draft.id || draft.sku || draft.name || "draft");
+      const res = await fetch("/api/admin/pos-products/upload", { method: "POST", body: form });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(getApiErrorMessage(json, "Failed to upload image"));
+      const url = typeof json?.url === "string" ? json.url : "";
+      if (!url) throw new Error("Upload did not return a file URL");
+      return url;
+    } finally {
+      setUploadingKind(null);
+    }
+  }, [draft.id, draft.name, draft.sku]);
 
   const submitDraft = async () => {
     if (!draft.name.trim()) return showToast("Product name is required", "error");
@@ -264,10 +388,24 @@ export default function PosManagementClient() {
         lastBuyingPrice: draft.variableCost ? null : draft.lastBuyingPrice.trim() ? Number(draft.lastBuyingPrice) : null,
         defaultWarranty: draft.defaultWarranty.trim() || null,
         variableCost: draft.variableCost,
-        isActive: draft.isActive,
+        isActive: draft.status === "ACTIVE" && draft.isActive,
         commissionEnabled: draft.commissionEnabled,
         commissionAmount: draft.commissionEnabled && draft.commissionAmount.trim() ? Number(draft.commissionAmount) : null,
         commissionRequiresApproval: draft.commissionEnabled ? draft.commissionRequiresApproval : false,
+        ...(capabilities.brand ? { brand: draft.brand.trim() || null } : {}),
+        ...(capabilities.shortDescription ? { shortDescription: draft.shortDescription.trim() || null } : {}),
+        ...(capabilities.description ? { description: draft.description.trim() || null } : {}),
+        ...(capabilities.specifications ? { specifications: draft.specifications.trim() || null } : {}),
+        ...(capabilities.warrantyPeriod ? { warrantyPeriod: draft.warrantyPeriod.trim() || null } : {}),
+        ...(capabilities.warrantyNotes ? { warrantyNotes: draft.warrantyNotes.trim() || null } : {}),
+        ...(capabilities.mainImageUrl ? { mainImageUrl: draft.mainImageUrl.trim() || null } : {}),
+        ...(capabilities.galleryImageUrls ? { galleryImageUrls: draft.galleryImageUrls } : {}),
+        ...(capabilities.brandImageUrl ? { brandImageUrl: draft.brandImageUrl.trim() || null } : {}),
+        ...(capabilities.ecommerceVisible ? { ecommerceVisible: draft.ecommerceVisible } : {}),
+        ...(capabilities.isFeatured ? { isFeatured: draft.isFeatured } : {}),
+        ...(capabilities.status ? { status: draft.status } : {}),
+        ...(capabilities.availabilityType ? { availabilityType: draft.availabilityType } : {}),
+        ...(capabilities.pickupDelayDays ? { pickupDelayDays: draft.pickupDelayDays } : {}),
         ...(capabilities.showInShop ? { showInShop: draft.showInShop } : {}),
         ...(capabilities.shopCategory ? { shopCategory: draft.shopCategory || null } : {}),
         ...(capabilities.shopSubcategory ? { shopSubcategory: draft.shopSubcategory || null } : {}),
@@ -311,6 +449,20 @@ export default function PosManagementClient() {
       commissionEnabled: Boolean(product.commissionEnabled),
       commissionAmount: product.commissionAmount == null ? "" : String(product.commissionAmount),
       commissionRequiresApproval: Boolean(product.commissionRequiresApproval),
+      brand: product.brand ?? product.shopBrand ?? "",
+      shortDescription: product.shortDescription ?? product.shopShortDescription ?? "",
+      description: product.description ?? "",
+      specifications: Array.isArray(product.specifications) ? product.specifications.join("\n") : String(product.specifications ?? product.shopSpecs ?? ""),
+      warrantyPeriod: product.warrantyPeriod ?? product.shopWarranty ?? "",
+      warrantyNotes: product.warrantyNotes ?? "",
+      mainImageUrl: product.mainImageUrl ?? product.shopImageUrl ?? "",
+      galleryImageUrls: parseStringArray(product.galleryImageUrls),
+      brandImageUrl: product.brandImageUrl ?? "",
+      ecommerceVisible: Boolean(product.ecommerceVisible ?? product.showInShop),
+      isFeatured: Boolean(product.isFeatured),
+      status: String(product.status || (product.isActive ? "ACTIVE" : "INACTIVE")).toUpperCase() === "INACTIVE" ? "INACTIVE" : "ACTIVE",
+      availabilityType: normalizeAvailabilityType(product.availabilityType),
+      pickupDelayDays: normalizeAvailabilityType(product.availabilityType) === "WAREHOUSE" ? 1 : 0,
       showInShop: Boolean(product.showInShop),
       shopCategory: product.shopCategory ?? "",
       shopSubcategory: product.shopSubcategory ?? "",
@@ -338,6 +490,20 @@ export default function PosManagementClient() {
       commissionEnabled: true,
       commissionAmount: product.commissionAmount == null ? "" : String(product.commissionAmount),
       commissionRequiresApproval: Boolean(product.commissionRequiresApproval),
+      brand: product.brand ?? product.shopBrand ?? "",
+      shortDescription: product.shortDescription ?? product.shopShortDescription ?? "",
+      description: product.description ?? "",
+      specifications: Array.isArray(product.specifications) ? product.specifications.join("\n") : String(product.specifications ?? product.shopSpecs ?? ""),
+      warrantyPeriod: product.warrantyPeriod ?? product.shopWarranty ?? "",
+      warrantyNotes: product.warrantyNotes ?? "",
+      mainImageUrl: product.mainImageUrl ?? product.shopImageUrl ?? "",
+      galleryImageUrls: parseStringArray(product.galleryImageUrls),
+      brandImageUrl: product.brandImageUrl ?? "",
+      ecommerceVisible: Boolean(product.ecommerceVisible ?? product.showInShop),
+      isFeatured: Boolean(product.isFeatured),
+      status: String(product.status || (product.isActive ? "ACTIVE" : "INACTIVE")).toUpperCase() === "INACTIVE" ? "INACTIVE" : "ACTIVE",
+      availabilityType: normalizeAvailabilityType(product.availabilityType),
+      pickupDelayDays: normalizeAvailabilityType(product.availabilityType) === "WAREHOUSE" ? 1 : 0,
       showInShop: Boolean(product.showInShop),
       shopCategory: product.shopCategory ?? "",
       shopSubcategory: product.shopSubcategory ?? "",
@@ -628,7 +794,11 @@ export default function PosManagementClient() {
               </label>
               <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
                 <label className="flex items-center gap-2 text-sm text-slate-200">
-                  <input type="checkbox" checked={draft.isActive} onChange={(e) => setDraft((s) => ({ ...s, isActive: e.target.checked }))} />
+                  <input
+                    type="checkbox"
+                    checked={draft.isActive}
+                    onChange={(e) => setDraft((s) => ({ ...s, isActive: e.target.checked, status: e.target.checked ? "ACTIVE" : "INACTIVE" }))}
+                  />
                   Active in POS catalog
                 </label>
                 <label className="flex items-center gap-2 text-sm text-slate-200">
@@ -663,13 +833,46 @@ export default function PosManagementClient() {
                   <label className="flex items-center gap-2 text-sm text-slate-200">
                     <input
                       type="checkbox"
-                      checked={draft.showInShop}
-                      disabled={!capabilities.showInShop}
-                      onChange={(e) => setDraft((s) => ({ ...s, showInShop: e.target.checked }))}
+                      checked={draft.ecommerceVisible}
+                      disabled={!(capabilities.ecommerceVisible || capabilities.showInShop)}
+                      onChange={(e) =>
+                        setDraft((s) => ({
+                          ...s,
+                          ecommerceVisible: e.target.checked,
+                          showInShop: e.target.checked,
+                        }))
+                      }
                     />
-                    Show in online shop
+                    Ecommerce visible
                   </label>
                   <div className="text-xs text-slate-500">Default should remain off until the product is shop-ready and solar-safe.</div>
+                  <label className="flex items-center gap-2 text-sm text-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={draft.isFeatured}
+                      disabled={!capabilities.isFeatured}
+                      onChange={(e) => setDraft((s) => ({ ...s, isFeatured: e.target.checked }))}
+                    />
+                    Featured product
+                  </label>
+                  <label className="text-sm text-slate-300">
+                    Product status
+                    <select
+                      className={`${fieldClass} mt-1 disabled:cursor-not-allowed disabled:opacity-60`}
+                      value={draft.status}
+                      disabled={!capabilities.status}
+                      onChange={(e) =>
+                        setDraft((s) => ({
+                          ...s,
+                          status: e.target.value === "INACTIVE" ? "INACTIVE" : "ACTIVE",
+                          isActive: e.target.value !== "INACTIVE",
+                        }))
+                      }
+                    >
+                      <option value="ACTIVE">Active</option>
+                      <option value="INACTIVE">Inactive</option>
+                    </select>
+                  </label>
                 </div>
 
                 <label className="text-sm text-slate-300">
@@ -710,59 +913,193 @@ export default function PosManagementClient() {
                 </label>
 
                 <label className="text-sm text-slate-300">
-                  Shop brand
+                  Brand
                   <input
                     className={`${fieldClass} mt-1 disabled:cursor-not-allowed disabled:opacity-60`}
-                    value={draft.shopBrand}
-                    disabled={!capabilities.shopBrand}
-                    onChange={(e) => setDraft((s) => ({ ...s, shopBrand: e.target.value }))}
+                    value={draft.brand}
+                    disabled={!(capabilities.brand || capabilities.shopBrand)}
+                    onChange={(e) => setDraft((s) => ({ ...s, brand: e.target.value, shopBrand: e.target.value }))}
                     placeholder="Optional ecommerce brand label"
                   />
                 </label>
 
                 <label className="text-sm text-slate-300 md:col-span-2">
-                  Shop short description
+                  Short description
                   <textarea
                     className={`${fieldClass} mt-1 min-h-[96px] disabled:cursor-not-allowed disabled:opacity-60`}
-                    value={draft.shopShortDescription}
-                    disabled={!capabilities.shopShortDescription}
-                    onChange={(e) => setDraft((s) => ({ ...s, shopShortDescription: e.target.value }))}
+                    value={draft.shortDescription}
+                    disabled={!(capabilities.shortDescription || capabilities.shopShortDescription)}
+                    onChange={(e) => setDraft((s) => ({ ...s, shortDescription: e.target.value, shopShortDescription: e.target.value }))}
                     placeholder="Short customer-facing description"
                   />
                 </label>
 
                 <label className="text-sm text-slate-300">
-                  Shop warranty
+                  Warranty period
                   <input
                     className={`${fieldClass} mt-1 disabled:cursor-not-allowed disabled:opacity-60`}
-                    value={draft.shopWarranty}
-                    disabled={!capabilities.shopWarranty}
-                    onChange={(e) => setDraft((s) => ({ ...s, shopWarranty: e.target.value }))}
-                    placeholder="Customer-facing warranty summary"
+                    value={draft.warrantyPeriod}
+                    disabled={!(capabilities.warrantyPeriod || capabilities.shopWarranty)}
+                    onChange={(e) => setDraft((s) => ({ ...s, warrantyPeriod: e.target.value, shopWarranty: e.target.value }))}
+                    placeholder="Customer-facing warranty period"
                   />
                 </label>
 
                 <label className="text-sm text-slate-300">
-                  Shop specs
+                  Warranty notes
                   <textarea
                     className={`${fieldClass} mt-1 min-h-[96px] disabled:cursor-not-allowed disabled:opacity-60`}
-                    value={draft.shopSpecs}
-                    disabled={!capabilities.shopSpecs}
-                    onChange={(e) => setDraft((s) => ({ ...s, shopSpecs: e.target.value }))}
-                    placeholder="Customer-facing specs summary"
+                    value={draft.warrantyNotes}
+                    disabled={!capabilities.warrantyNotes}
+                    onChange={(e) => setDraft((s) => ({ ...s, warrantyNotes: e.target.value }))}
+                    placeholder="Any warranty exclusions or notes"
                   />
                 </label>
 
                 <label className="text-sm text-slate-300 md:col-span-2">
-                  Shop image URL
-                  <input
-                    className={`${fieldClass} mt-1 disabled:cursor-not-allowed disabled:opacity-60`}
-                    value={draft.shopImageUrl}
-                    disabled={!capabilities.shopImageUrl}
-                    onChange={(e) => setDraft((s) => ({ ...s, shopImageUrl: e.target.value }))}
-                    placeholder="https://..."
+                  Full description
+                  <textarea
+                    className={`${fieldClass} mt-1 min-h-[120px] disabled:cursor-not-allowed disabled:opacity-60`}
+                    value={draft.description}
+                    disabled={!capabilities.description}
+                    onChange={(e) => setDraft((s) => ({ ...s, description: e.target.value }))}
+                    placeholder="Detailed product description for ecommerce"
                   />
                 </label>
+
+                <label className="text-sm text-slate-300 md:col-span-2">
+                  Specifications
+                  <textarea
+                    className={`${fieldClass} mt-1 min-h-[96px] disabled:cursor-not-allowed disabled:opacity-60`}
+                    value={draft.specifications}
+                    disabled={!(capabilities.specifications || capabilities.shopSpecs)}
+                    onChange={(e) => setDraft((s) => ({ ...s, specifications: e.target.value, shopSpecs: e.target.value }))}
+                    placeholder="One spec per line"
+                  />
+                </label>
+
+                <label className="text-sm text-slate-300 md:col-span-2">
+                  Availability
+                  <div className="mt-1 grid gap-3 md:grid-cols-2">
+                    <label className="rounded-xl border border-slate-800 bg-slate-950/80 p-3 text-sm text-slate-200">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="availabilityType"
+                          checked={draft.availabilityType === "SHOP"}
+                          disabled={!capabilities.availabilityType}
+                          onChange={() => setDraft((s) => ({ ...s, availabilityType: "SHOP", pickupDelayDays: 0 }))}
+                        />
+                        Available at Shop
+                      </div>
+                      <div className="mt-2 text-xs text-slate-500">Same-day pickup message.</div>
+                    </label>
+                    <label className="rounded-xl border border-slate-800 bg-slate-950/80 p-3 text-sm text-slate-200">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="availabilityType"
+                          checked={draft.availabilityType === "WAREHOUSE"}
+                          disabled={!capabilities.availabilityType}
+                          onChange={() => setDraft((s) => ({ ...s, availabilityType: "WAREHOUSE", pickupDelayDays: 1 }))}
+                        />
+                        Available in Warehouse
+                      </div>
+                      <div className="mt-2 text-xs text-slate-500">Warn customer about 1 day pickup or delivery delay.</div>
+                    </label>
+                  </div>
+                  <div className="mt-2 rounded-xl border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-amber-100">
+                    {availabilityPreview}
+                  </div>
+                </label>
+
+                <div className="text-sm text-slate-300 md:col-span-2">
+                  Images
+                  <div className="mt-2 grid gap-4 md:grid-cols-3">
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
+                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Main image</div>
+                      {draft.mainImageUrl ? <img src={draft.mainImageUrl} alt="Main preview" className="mt-3 h-24 w-full rounded-lg object-cover" /> : <div className="mt-3 flex h-24 items-center justify-center rounded-lg border border-dashed border-slate-700 text-xs text-slate-500">No main image</div>}
+                      <input
+                        className="mt-3 block w-full text-xs text-slate-300"
+                        type="file"
+                        accept="image/*"
+                        disabled={!(capabilities.mainImageUrl || capabilities.shopImageUrl) || uploadingKind !== null}
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          try {
+                            const url = await uploadProductImage(file, "main");
+                            setDraft((s) => ({ ...s, mainImageUrl: url, shopImageUrl: url }));
+                            showToast("Main image uploaded", "success");
+                          } catch (err) {
+                            showToast(err instanceof Error ? err.message : "Failed to upload main image", "error");
+                          } finally {
+                            e.currentTarget.value = "";
+                          }
+                        }}
+                      />
+                      <button type="button" className="mt-2 text-xs text-slate-400 hover:text-white" onClick={() => setDraft((s) => ({ ...s, mainImageUrl: "", shopImageUrl: "" }))}>Remove main image</button>
+                    </div>
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
+                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Gallery images</div>
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        {draft.galleryImageUrls.length ? draft.galleryImageUrls.map((url, index) => (
+                          <div key={`${url}-${index}`} className="relative">
+                            <img src={url} alt={`Gallery ${index + 1}`} className="h-20 w-full rounded-lg object-cover" />
+                            <button type="button" className="absolute right-1 top-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white" onClick={() => setDraft((s) => ({ ...s, galleryImageUrls: s.galleryImageUrls.filter((_, itemIndex) => itemIndex !== index) }))}>Remove</button>
+                          </div>
+                        )) : <div className="col-span-2 flex h-20 items-center justify-center rounded-lg border border-dashed border-slate-700 text-xs text-slate-500">No gallery images</div>}
+                      </div>
+                      <input
+                        className="mt-3 block w-full text-xs text-slate-300"
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        disabled={!capabilities.galleryImageUrls || uploadingKind !== null}
+                        onChange={async (e) => {
+                          const files = Array.from(e.target.files || []);
+                          if (!files.length) return;
+                          try {
+                            const uploaded: string[] = [];
+                            for (const file of files) {
+                              uploaded.push(await uploadProductImage(file, "gallery"));
+                            }
+                            setDraft((s) => ({ ...s, galleryImageUrls: [...s.galleryImageUrls, ...uploaded] }));
+                            showToast("Gallery images uploaded", "success");
+                          } catch (err) {
+                            showToast(err instanceof Error ? err.message : "Failed to upload gallery images", "error");
+                          } finally {
+                            e.currentTarget.value = "";
+                          }
+                        }}
+                      />
+                    </div>
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
+                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Brand logo</div>
+                      {draft.brandImageUrl ? <img src={draft.brandImageUrl} alt="Brand preview" className="mt-3 h-24 w-full rounded-lg object-contain bg-white/5 p-2" /> : <div className="mt-3 flex h-24 items-center justify-center rounded-lg border border-dashed border-slate-700 text-xs text-slate-500">No brand logo</div>}
+                      <input
+                        className="mt-3 block w-full text-xs text-slate-300"
+                        type="file"
+                        accept="image/*"
+                        disabled={!capabilities.brandImageUrl || uploadingKind !== null}
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          try {
+                            const url = await uploadProductImage(file, "brand");
+                            setDraft((s) => ({ ...s, brandImageUrl: url }));
+                            showToast("Brand logo uploaded", "success");
+                          } catch (err) {
+                            showToast(err instanceof Error ? err.message : "Failed to upload brand logo", "error");
+                          } finally {
+                            e.currentTarget.value = "";
+                          }
+                        }}
+                      />
+                      <button type="button" className="mt-2 text-xs text-slate-400 hover:text-white" onClick={() => setDraft((s) => ({ ...s, brandImageUrl: "" }))}>Remove brand logo</button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 

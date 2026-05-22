@@ -27,9 +27,18 @@ export type ShopProduct = {
   price: number;
   oldPrice?: number;
   image: string;
+  galleryImages?: string[];
+  brandImage?: string | null;
   visualType: ShopProductVisualType;
+  shortDescription?: string;
+  fullDescription?: string;
   specs: string[];
   warranty: string;
+  warrantyNotes?: string;
+  availabilityType?: "SHOP" | "WAREHOUSE";
+  pickupDelayDays?: number;
+  availabilityMessage?: string;
+  checkoutAvailabilityMessage?: string;
   stockStatus: "in_stock" | "limited_stock" | "preorder" | "quote_only";
   tags: string[];
   whatsappMessage: string;
