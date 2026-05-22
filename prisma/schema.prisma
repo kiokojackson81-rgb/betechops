@@ -923,6 +923,7 @@ model Product {
   defaultWarranty            String?
   showInShop                 Boolean     @default(false)
   shopCategory               String?
+  shopSubcategory            String?
   shopShortDescription       String?
   shopWarranty               String?
   shopSpecs                  String?

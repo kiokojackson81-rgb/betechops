@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { findSimilarProducts } from "@/lib/posProductSimilarity";
 import { showToast } from "@/lib/ui/toast";
-import { getShopSubcategoryOptions, SHOP_CATEGORY_OPTIONS } from "@/app/shop/shopCatalogConfig";
+import { getShopSubcategoryOptions, SHOP_CATEGORY_DEFINITIONS, SHOP_CATEGORY_OPTIONS, resolveShopSubcategory } from "@/app/shop/shopCatalogConfig";
 
 type PosProduct = {
   id: string;
@@ -200,6 +200,27 @@ function getAvailabilityPreviewMessage(type: ProductAvailabilityType) {
     : "Customer will see: Available at shop for immediate pickup.";
 }
 
+function detectShopCategoryAndSubcategory(input: Pick<ProductDraft, "name" | "category" | "brand" | "specifications" | "shopCategory">) {
+  const haystack = [input.name, input.category, input.brand, input.specifications].join(" ").toLowerCase();
+  const directCategory =
+    SHOP_CATEGORY_DEFINITIONS.find((category) =>
+      category.keywords.some((keyword) => haystack.includes(keyword.toLowerCase())),
+    ) ?? SHOP_CATEGORY_DEFINITIONS.find((category) => category.value === input.shopCategory);
+
+  if (!directCategory) {
+    return { shopCategory: "", shopSubcategory: "" };
+  }
+
+  const subcategory =
+    resolveShopSubcategory(directCategory.value, [input.name, input.category, input.brand, input.specifications]) ??
+    null;
+
+  return {
+    shopCategory: directCategory.value,
+    shopSubcategory: subcategory?.value ?? "",
+  };
+}
+
 function parseStringArray(value: unknown) {
   if (Array.isArray(value)) {
     return value.map((entry) => String(entry || "").trim()).filter(Boolean);
@@ -368,6 +389,17 @@ export default function PosManagementClient() {
   );
   const shopSubcategoryOptions = useMemo(() => getShopSubcategoryOptions(draft.shopCategory), [draft.shopCategory]);
   const availabilityPreview = useMemo(() => getAvailabilityPreviewMessage(draft.availabilityType), [draft.availabilityType]);
+  const suggestedShopTaxonomy = useMemo(
+    () =>
+      detectShopCategoryAndSubcategory({
+        name: draft.name,
+        category: draft.category,
+        brand: draft.brand,
+        specifications: draft.specifications,
+        shopCategory: draft.shopCategory,
+      }),
+    [draft.brand, draft.category, draft.name, draft.shopCategory, draft.specifications],
+  );
 
   const uploadProductImage = useCallback(async (file: File, kind: "main" | "gallery" | "brand") => {
     setUploadingKind(kind);
@@ -393,6 +425,40 @@ export default function PosManagementClient() {
     window.requestAnimationFrame(() => {
       formSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
+  }, []);
+
+  const applySuggestedShopTaxonomy = useCallback(() => {
+    setDraft((current) => ({
+      ...current,
+      shopCategory: suggestedShopTaxonomy.shopCategory || current.shopCategory,
+      shopSubcategory: suggestedShopTaxonomy.shopSubcategory,
+    }));
+  }, [suggestedShopTaxonomy.shopCategory, suggestedShopTaxonomy.shopSubcategory]);
+
+  const applyQuickEcommerceDefaults = useCallback(() => {
+    setDraft((current) => {
+      const taxonomy = detectShopCategoryAndSubcategory({
+        name: current.name,
+        category: current.category,
+        brand: current.brand,
+        specifications: current.specifications,
+        shopCategory: current.shopCategory,
+      });
+
+      return {
+        ...current,
+        ecommerceVisible: true,
+        showInShop: true,
+        shopCategory: taxonomy.shopCategory || current.shopCategory,
+        shopSubcategory: taxonomy.shopSubcategory,
+        shopBrand: current.shopBrand || current.brand,
+        shopShortDescription: current.shopShortDescription || current.shortDescription,
+        shopWarranty: current.shopWarranty || current.warrantyPeriod || current.defaultWarranty,
+        shopSpecs: current.shopSpecs || current.specifications,
+        shopImageUrl: current.shopImageUrl || current.mainImageUrl,
+      };
+    });
+    setEditorOpen(true);
   }, []);
 
   const quickPatchProduct = useCallback(async (product: PosProduct, patch: Record<string, unknown>, successMessage: string) => {
@@ -739,6 +805,13 @@ export default function PosManagementClient() {
             >
               Add Product
             </button>
+            <button
+              type="button"
+              className="rounded-xl border border-emerald-400/30 px-4 py-2.5 text-sm font-semibold text-emerald-200 hover:bg-emerald-500/10"
+              onClick={applyQuickEcommerceDefaults}
+            >
+              Quick Shop Setup
+            </button>
           </div>
         </div>
 
@@ -803,6 +876,31 @@ export default function PosManagementClient() {
 
             {editorOpen ? (
             <>
+            <div className="mt-4 flex flex-wrap items-center gap-2 rounded-2xl border border-emerald-400/20 bg-emerald-500/5 px-4 py-3 text-sm text-slate-300">
+              <span className="font-semibold text-emerald-200">Quick setup:</span>
+              <button
+                type="button"
+                className="rounded-full border border-emerald-400/30 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/10"
+                onClick={applyQuickEcommerceDefaults}
+              >
+                Fill online shop defaults
+              </button>
+              <button
+                type="button"
+                className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/5"
+                onClick={applySuggestedShopTaxonomy}
+              >
+                Detect category & subcategory
+              </button>
+              {suggestedShopTaxonomy.shopCategory ? (
+                <span className="text-xs text-slate-400">
+                  Suggested: <span className="text-white">{SHOP_CATEGORY_OPTIONS.find((option) => option.value === suggestedShopTaxonomy.shopCategory)?.label}</span>
+                  {suggestedShopTaxonomy.shopSubcategory
+                    ? ` · ${shopSubcategoryOptions.find((option) => option.value === suggestedShopTaxonomy.shopSubcategory)?.label || suggestedShopTaxonomy.shopSubcategory}`
+                    : ""}
+                </span>
+              ) : null}
+            </div>
             <div className="mt-5 grid gap-4 md:grid-cols-2">
               <div className="text-sm text-slate-300">
                 <div className="flex items-center justify-between gap-3">
@@ -989,8 +1087,18 @@ export default function PosManagementClient() {
 
                 <label className="text-sm text-slate-300">
                   Shop category
+                  <div className="mt-1 flex items-center justify-between gap-2">
+                    <span className="text-xs text-slate-500">Main online shop category</span>
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-emerald-200 hover:text-emerald-100"
+                      onClick={applySuggestedShopTaxonomy}
+                    >
+                      Auto-detect
+                    </button>
+                  </div>
                   <select
-                    className={`${fieldClass} mt-1 disabled:cursor-not-allowed disabled:opacity-60`}
+                    className={`${fieldClass} mt-2 disabled:cursor-not-allowed disabled:opacity-60`}
                     value={draft.shopCategory}
                     disabled={!capabilities.shopCategory}
                     onChange={(e) => setDraft((s) => ({ ...s, shopCategory: e.target.value, shopSubcategory: "" }))}
@@ -1019,9 +1127,9 @@ export default function PosManagementClient() {
                       </option>
                     ))}
                   </select>
-                  {!capabilities.shopSubcategory ? (
-                    <div className="mt-1 text-xs text-slate-500">Planned field. Future DB column: `shopSubcategory String?`.</div>
-                  ) : null}
+                  <div className="mt-1 text-xs text-slate-500">
+                    {capabilities.shopSubcategory ? "Use a subcategory to keep the online shop organized and searchable." : "Subcategory support is being enabled on this database."}
+                  </div>
                 </label>
 
                 <label className="text-sm text-slate-300">
