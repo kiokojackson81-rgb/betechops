@@ -21,23 +21,20 @@ export default async function ShopCartPage() {
   return (
     <div className={shopStyles.page}>
       <ShopHeader navLinks={shopNavLinks} />
-      <section className="py-8 sm:py-10">
+      <section className="py-5 sm:py-6">
         <div className={shopStyles.shell}>
           <ShopBreadcrumbs items={[{ label: "Shop", href: "/shop" }, { label: "Cart" }]} />
-          <div className="mt-5">
+          <div className="mt-3">
             <div className={shopStyles.sectionEyebrow}>Cart</div>
-            <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Your Betech Solar cart</h1>
-            <p className="mt-3 max-w-3xl text-base leading-7 text-slate-600">
+            <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-[2rem]">Your Betech Solar cart</h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 sm:text-[15px]">
               Review quantities, remove products, continue shopping, or move into the safe preview checkout flow.
             </p>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-              Not sure what you need? Request a solar quote and our team will help size your system.
-            </p>
           </div>
-          <div className="mt-6">
+          <div className="mt-4">
             <CartClient products={products} />
           </div>
-          <div className="mt-6">
+          <div className="mt-4">
             <ShopSupportStrip />
           </div>
         </div>

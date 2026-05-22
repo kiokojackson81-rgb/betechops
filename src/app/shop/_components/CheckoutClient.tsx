@@ -73,13 +73,13 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
 
   if (!detailedItems.length) {
     return (
-        <div className={`${shopStyles.softCard} p-6 sm:p-8`}>
+      <div className="rounded-[20px] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#fffaf2_0%,#ffffff_100%)] p-5 shadow-[0_14px_32px_rgba(15,23,42,0.06)] sm:p-6">
           <div className={shopStyles.sectionEyebrow}>Cart required</div>
-          <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-950">Add products before starting checkout.</h1>
-          <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">
+          <h1 className="mt-3 text-2xl font-black tracking-tight text-slate-950">Add products before starting checkout.</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
             This checkout stays in preview mode for now and will create a safe pending ecommerce order later when ops integration starts.
           </p>
-        <div className="mt-6">
+        <div className="mt-4">
           <Link href="/shop/cart" className={shopStyles.primaryButton}>
             Go to Cart
           </Link>
@@ -89,9 +89,9 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
   }
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_330px]">
       <form
-        className={`${shopStyles.lightCard} p-5 sm:p-6`}
+        className="rounded-[20px] border border-[#7a0000]/10 bg-white p-4 shadow-[0_14px_32px_rgba(15,23,42,0.05)] sm:p-5"
         onSubmit={async (event) => {
           event.preventDefault();
           if (!validateForm()) return;
@@ -148,15 +148,15 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
         }}
       >
         <div className={shopStyles.sectionEyebrow}>Checkout</div>
-        <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-950">Complete your Betech Solar preview checkout.</h1>
-        <p className="mt-3 text-base leading-7 text-slate-600">
+        <h1 className="mt-3 text-2xl font-black tracking-tight text-slate-950 sm:text-[2rem]">Complete your Betech Solar preview checkout.</h1>
+        <p className="mt-2 text-sm leading-6 text-slate-600 sm:text-[15px]">
           This preview does not connect live backend logic yet. Submitting creates a safe test order request only and does not confirm payment automatically.
         </p>
-        <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-400/5 px-4 py-3 text-sm font-semibold text-slate-700">
+        <div className="mt-3 rounded-[16px] border border-amber-400/20 bg-amber-400/5 px-3 py-2.5 text-sm font-semibold leading-6 text-slate-700">
           {availabilityNotice}
         </div>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <label className="grid gap-2 text-sm font-semibold text-slate-700">
             Full name
             <input
@@ -235,10 +235,10 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
           <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
             Order notes
             <textarea
-              rows={5}
+              rows={4}
               value={form.notes}
               onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
-              className="rounded-[24px] border border-[#7a0000]/10 bg-white px-4 py-3 outline-none"
+              className="rounded-[16px] border border-[#7a0000]/10 bg-white px-4 py-3 outline-none"
             />
           </label>
         </div>
@@ -246,21 +246,21 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
         {fieldErrors.cart ? <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{fieldErrors.cart}</div> : null}
         {error ? <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 
-        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-          <button type="submit" disabled={submitting} className={shopStyles.primaryButton}>
+        <div className="mt-5 flex flex-col gap-2.5 sm:flex-row">
+          <button type="submit" disabled={submitting} className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(122,0,0,0.16)] transition hover:bg-[#610000]">
             {submitting ? "Creating Mock Order..." : "Submit Mock Order"}
           </button>
-          <Link href="/shop/cart" className={shopStyles.secondaryButton}>
+          <Link href="/shop/cart" className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] border border-[#7a0000]/16 bg-white px-4 py-2.5 text-sm font-bold text-slate-950 shadow-[0_10px_22px_rgba(15,23,42,0.04)] transition">
             Back to Cart
           </Link>
         </div>
       </form>
 
-      <aside className={`${shopStyles.softCard} h-fit p-5 sm:p-6 xl:sticky xl:top-28`}>
+      <aside className="h-fit self-start rounded-[20px] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#fffaf2_0%,#ffffff_100%)] p-4 shadow-[0_14px_32px_rgba(15,23,42,0.06)] xl:sticky xl:top-24">
         <div className={shopStyles.sectionEyebrow}>Order Summary</div>
-        <div className="mt-5 grid gap-4">
+        <div className="mt-4 grid gap-3">
           {detailedItems.map((item) => (
-            <div key={item.product.id} className="flex items-start justify-between gap-3 border-b border-[#7a0000]/10 pb-4">
+            <div key={item.product.id} className="flex items-start justify-between gap-3 border-b border-[#7a0000]/10 pb-3">
               <div>
                 <div className="text-sm font-black text-slate-950">{item.product.name}</div>
                 <div className="mt-1 text-xs text-slate-500">Qty {item.quantity}</div>
@@ -270,14 +270,14 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
             </div>
           ))}
         </div>
-        <div className="mt-5 flex items-center justify-between text-lg font-black text-slate-950">
+        <div className="mt-4 flex items-center justify-between text-lg font-black text-slate-950">
           <span>Estimated total</span>
           <span>{formatCurrency(subtotal)}</span>
         </div>
-        <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-400/5 px-4 py-3 text-sm font-semibold text-slate-700">
+        <div className="mt-3 rounded-[16px] border border-amber-400/20 bg-amber-400/5 px-3 py-2.5 text-sm font-semibold leading-6 text-slate-700">
           {availabilityNotice}
         </div>
-        <p className="mt-4 text-sm leading-6 text-slate-500">
+        <p className="mt-3 text-sm leading-6 text-slate-500">
           Preview mode only: a Betech Solar team member will still confirm availability, delivery planning, and payment steps manually.
         </p>
         <p className="mt-2 text-sm leading-6 text-slate-500">
