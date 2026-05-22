@@ -162,6 +162,7 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
       end,
       userId: userIdForPos,
       ownershipMode: userIdForPos ? "staffOnly" : undefined,
+      paymentScope: commissionConfig.salesCommissionMode === "POS_PROFIT_10" ? "all" : "paidOnly",
     });
   }
   if (usePosTotals && posSummary) {

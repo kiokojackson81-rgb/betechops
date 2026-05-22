@@ -11,7 +11,6 @@ import Button from "@/app/_components/Button";
 import { showToast } from "@/lib/ui/toast";
 import PeriodSwitcher from "@/app/_components/PeriodSwitcher";
 import useTradingPeriodQueryState from "@/app/_components/useTradingPeriodQueryState";
-import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import getLandingPage from "@/lib/getLandingPage";
 import { useCardLock, LockButton } from "@/app/_components/useCardLock";
 import { buildEarningsCardBreakdown } from "@/lib/earningsCardBreakdown";
@@ -44,6 +43,8 @@ type SupportSummaryResponse = {
     newBatteries: number;
     changedBatteries: number;
     batteryEarnings: number;
+    commission: number;
+    directCommission?: number;
   };
 };
 
@@ -93,7 +94,11 @@ export default function SupportOpsPage() {
   const { currentPeriod, selectedPeriod, selectedPeriodKey, setSelectedPeriod } =
     useTradingPeriodQueryState();
   const tradingPeriodLabel = selectedPeriod.label;
-  const payslipHref = useMemo(() => `/api/attendant/payslip?periodKey=${encodeURIComponent(selectedPeriodKey)}`, [selectedPeriodKey]);
+  const payslipHref = useMemo(() => {
+    const params = new URLSearchParams({ periodKey: selectedPeriodKey });
+    if (impersonateId) params.set("impersonateId", impersonateId);
+    return `/api/attendant/payslip?${params.toString()}`;
+  }, [impersonateId, selectedPeriodKey]);
   const performanceReportHref = useMemo(() => {
     const params = new URLSearchParams({ periodKey: selectedPeriodKey });
     if (impersonateId) params.set("impersonateId", impersonateId);
@@ -148,6 +153,10 @@ export default function SupportOpsPage() {
     try {
       const summaryParams = new URLSearchParams({ periodKey: selectedPeriodKey });
       const earningsParams = new URLSearchParams({ periodKey: selectedPeriodKey });
+      if (impersonateId) {
+        summaryParams.set("impersonateId", impersonateId);
+        earningsParams.set("attendantId", impersonateId);
+      }
       const [summaryRes, earningsRes] = await Promise.all([
         fetch(`/api/support/report/summary?${summaryParams.toString()}`, { credentials: "same-origin" }),
         fetch(`/api/payroll/summary?${earningsParams.toString()}`, { credentials: "same-origin" }),
@@ -170,7 +179,7 @@ export default function SupportOpsPage() {
     } catch {
       // no-op; UI already reflects optimistic data
     }
-  }, [selectedPeriodKey]);
+  }, [impersonateId, selectedPeriodKey]);
 
   useEffect(() => {
     if (!initialized) return;
@@ -222,16 +231,13 @@ export default function SupportOpsPage() {
     };
   }, [localPerformance, receipts.length, serverSummary?.aggregates, totals]);
 
-  const commissionSummary = useMemo(
-    () => getCommissionSummaryForSales(combined.sales),
-    [combined.sales],
-  );
-
   const performanceBonus = (combined.newBatteries + combined.changedBatteries) * 70;
-  const commissionDisplay =
-    typeof earningsSummary?.salesCommission === "number"
-      ? earningsSummary.salesCommission
-      : commissionSummary.commission;
+  const commissionDisplay = Number(
+    serverSummary?.aggregates.directCommission ??
+      serverSummary?.aggregates.commission ??
+      earningsSummary?.salesCommission ??
+      0,
+  );
 
   const handleReset = () => {
     setReceipts([]);
@@ -468,8 +474,7 @@ export default function SupportOpsPage() {
               newBatteries={combined.newBatteries}
               changedBatteries={combined.changedBatteries}
               performanceBonus={performanceBonus}
-              currentSalesForTier={combined.sales}
-              nextTarget={commissionSummary.nextTarget ?? null}
+              totalProfit={Number(serverSummary?.aggregates.totalProfit ?? totals.totalProfit)}
             />
 
             <SupportEarningsCard summary={earningsSummary} downloadHref={payslipHref} />
@@ -489,8 +494,7 @@ function SupportQuickStats({
   newBatteries,
   changedBatteries,
   performanceBonus,
-  currentSalesForTier,
-  nextTarget,
+  totalProfit,
 }: {
   periodLabel: string;
   receipts: number;
@@ -500,19 +504,9 @@ function SupportQuickStats({
   newBatteries: number;
   changedBatteries: number;
   performanceBonus: number;
-  currentSalesForTier: number;
-  nextTarget: number | null;
+  totalProfit: number;
 }) {
   const totalBatteries = newBatteries + changedBatteries;
-  const remaining =
-    typeof nextTarget === "number" && nextTarget > currentSalesForTier
-      ? nextTarget - currentSalesForTier
-      : 0;
-  const reachedTop = !nextTarget || remaining <= 0;
-  const progress =
-    typeof nextTarget === "number" && nextTarget > 0
-      ? Math.min((currentSalesForTier / nextTarget) * 100, 100)
-      : 100;
 
     const { locked, toggle } = useCardLock("support:quickstats");
     const mask = (v: React.ReactNode) => (locked ? "•••" : v);
@@ -584,19 +578,11 @@ function SupportQuickStats({
       </div>
       <div className="space-y-2">
         <p className="text-xs uppercase tracking-wide text-slate-400">
-          Progress to next tier
+          Commission basis
         </p>
         <p className="text-xs text-slate-200">
-          {reachedTop
-            ? "Reached highest tier for this period"
-            : `KES ${safeLocale(remaining)} more to unlock the next tier`}
+          {mask(`10% of POS receipt profit. Current profit total: KES ${safeLocale(totalProfit)}`)}
         </p>
-        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800">
-          <div
-            className="h-full rounded-full bg-emerald-500 transition-all"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
       </div>
     </Card>
   );

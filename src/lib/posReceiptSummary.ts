@@ -167,6 +167,7 @@ export async function summarizePosReceiptsForPeriod(period: {
   ownershipMode?: "hybrid" | "issuerOnly" | "staffOnly" | "staffDisplay";
   supportPricingScope?: "user" | "any";
   profitRecognitionMode?: "recognizedDate" | "salesDate";
+  paymentScope?: "paidOnly" | "all";
 }) {
   const ownerOr =
     period.userId && period.userId.length > 0
@@ -308,12 +309,15 @@ export async function summarizePosReceiptsForPeriod(period: {
   // - include only settled receipts for totals
   //   POD counts once delivered and the linked order is already PAID, even if
   //   the separate POD `paidAt` marker has not been set yet.
-  const filteredReceipts = receipts.filter((r: any) => {
-    if (isPodReceipt(r)) {
-      return isPodSettledForSales(r);
-    }
-    return isPosPaid(r);
-  }).filter((receipt) => matchesOwnershipMode(receipt, period.userId, period.ownershipMode));
+  const filteredReceipts = receipts
+    .filter((r: any) => {
+      if (period.paymentScope === "all") return true;
+      if (isPodReceipt(r)) {
+        return isPodSettledForSales(r);
+      }
+      return isPosPaid(r);
+    })
+    .filter((receipt) => matchesOwnershipMode(receipt, period.userId, period.ownershipMode));
 
   // Optional fallback costs: latest ProductCost per productId.
   const productCostMap = new Map<string, number>();
