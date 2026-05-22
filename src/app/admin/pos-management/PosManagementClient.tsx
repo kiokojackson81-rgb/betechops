@@ -270,10 +270,12 @@ export default function PosManagementClient() {
   const [bulkBusy, setBulkBusy] = useState<"activate" | "archive" | "delete" | null>(null);
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
   const [query, setQuery] = useState("");
+  const [catalogView, setCatalogView] = useState<"all" | "online" | "featured" | "warehouse" | "inactive">("all");
   const [showInactive, setShowInactive] = useState(false);
   const [buyingPriceFilter, setBuyingPriceFilter] = useState<"all" | "missing" | "set">("all");
   const [commissionFilter, setCommissionFilter] = useState<"all" | "enabled" | "disabled">("all");
   const [warrantyFilter, setWarrantyFilter] = useState<"all" | "with" | "without">("all");
+  const [editorOpen, setEditorOpen] = useState(false);
   const formSectionRef = useRef<HTMLElement | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -330,6 +332,10 @@ export default function PosManagementClient() {
   const filteredProducts = products.filter((product) => {
     const hasBuyingPrice = Number(product.lastBuyingPrice ?? 0) > 0;
     const hasWarranty = Boolean(product.defaultWarranty?.trim());
+    const visibleInShop = Boolean(product.ecommerceVisible ?? product.showInShop);
+    const featuredInShop = Boolean(product.isFeatured);
+    const warehouseOnly = normalizeAvailabilityType(product.availabilityType) === "WAREHOUSE";
+    const inactive = !product.isActive;
 
     if (buyingPriceFilter === "missing" && hasBuyingPrice) return false;
     if (buyingPriceFilter === "set" && !hasBuyingPrice) return false;
@@ -337,8 +343,20 @@ export default function PosManagementClient() {
     if (commissionFilter === "disabled" && product.commissionEnabled) return false;
     if (warrantyFilter === "with" && !hasWarranty) return false;
     if (warrantyFilter === "without" && hasWarranty) return false;
+    if (catalogView === "online" && !visibleInShop) return false;
+    if (catalogView === "featured" && !featuredInShop) return false;
+    if (catalogView === "warehouse" && !warehouseOnly) return false;
+    if (catalogView === "inactive" && !inactive) return false;
     return true;
   });
+  const catalogStats = useMemo(() => {
+    const total = products.length;
+    const online = products.filter((product) => Boolean(product.ecommerceVisible ?? product.showInShop)).length;
+    const featured = products.filter((product) => Boolean(product.isFeatured)).length;
+    const warehouse = products.filter((product) => normalizeAvailabilityType(product.availabilityType) === "WAREHOUSE").length;
+    const inactive = products.filter((product) => !product.isActive).length;
+    return { total, online, featured, warehouse, inactive };
+  }, [products]);
 
   const duplicateMatches = useMemo(
     () =>
@@ -368,6 +386,30 @@ export default function PosManagementClient() {
       setUploadingKind(null);
     }
   }, [draft.id, draft.name, draft.sku]);
+
+  const openCreateEditor = useCallback(() => {
+    setDraft(emptyDraft);
+    setEditorOpen(true);
+    window.requestAnimationFrame(() => {
+      formSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, []);
+
+  const quickPatchProduct = useCallback(async (product: PosProduct, patch: Record<string, unknown>, successMessage: string) => {
+    try {
+      const res = await fetch(`/api/admin/pos-products/${product.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(getApiErrorMessage(json, "Failed to update product"));
+      showToast(successMessage, "success");
+      await loadData(query);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to update product", "error");
+    }
+  }, [loadData, query]);
 
   const submitDraft = async () => {
     if (!draft.name.trim()) return showToast("Product name is required", "error");
@@ -427,6 +469,7 @@ export default function PosManagementClient() {
       if (!res.ok) throw new Error(getApiErrorMessage(json, "Failed to save product"));
       showToast(draft.id ? "Product updated" : "Product created", "success");
       setDraft(emptyDraft);
+      setEditorOpen(false);
       await loadData(query);
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Failed to save product", "error");
@@ -472,6 +515,7 @@ export default function PosManagementClient() {
       shopImageUrl: product.shopImageUrl ?? "",
       shopBrand: product.shopBrand ?? "",
     });
+    setEditorOpen(true);
     formSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     showToast(`Editing ${product.name}`, "success");
   };
@@ -513,6 +557,7 @@ export default function PosManagementClient() {
       shopImageUrl: product.shopImageUrl ?? "",
       shopBrand: product.shopBrand ?? "",
     });
+    setEditorOpen(true);
     formSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     showToast(`${product.commissionEnabled ? "Editing" : "Assigning"} commission for ${product.name}`, "success");
   };
@@ -529,6 +574,7 @@ export default function PosManagementClient() {
       if (!res.ok) throw new Error(getApiErrorMessage(json, "Failed to delete product"));
       if (draft.id === product.id) {
         setDraft(emptyDraft);
+        setEditorOpen(false);
       }
       showToast(json?.message || "Product deleted", "success");
       await loadData(query);
@@ -669,6 +715,58 @@ export default function PosManagementClient() {
 
   return (
     <div className="space-y-6">
+      <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-5 shadow-xl shadow-black/40">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Manage Products</p>
+            <h2 className="mt-1 text-2xl font-semibold text-white">Fast catalogue workflow for POS and online shop</h2>
+            <p className="mt-2 max-w-3xl text-sm text-slate-400">
+              Keep the product table as the daily workspace, then open the editor only when you need to add, fix, or publish an item.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-semibold text-slate-200 hover:bg-white/5"
+              onClick={() => void loadData(query)}
+            >
+              Refresh
+            </button>
+            <button
+              type="button"
+              className="rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-slate-950 shadow-lg shadow-amber-500/20"
+              onClick={openCreateEditor}
+            >
+              Add Product
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          {[
+            { key: "all", label: "All Products", value: catalogStats.total },
+            { key: "online", label: "Online Shop", value: catalogStats.online },
+            { key: "featured", label: "Featured", value: catalogStats.featured },
+            { key: "warehouse", label: "Warehouse", value: catalogStats.warehouse },
+            { key: "inactive", label: "Inactive", value: catalogStats.inactive },
+          ].map((card) => (
+            <button
+              key={card.key}
+              type="button"
+              onClick={() => setCatalogView(card.key as typeof catalogView)}
+              className={`rounded-2xl border px-4 py-3 text-left transition ${
+                catalogView === card.key
+                  ? "border-amber-400/50 bg-amber-400/10"
+                  : "border-slate-800 bg-slate-950/55 hover:bg-slate-950/75"
+              }`}
+            >
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{card.label}</div>
+              <div className="mt-2 text-2xl font-semibold text-white">{card.value}</div>
+            </button>
+          ))}
+        </div>
+      </section>
+
       <section ref={formSectionRef} className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
         <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
           <div>
@@ -677,20 +775,34 @@ export default function PosManagementClient() {
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Product Setup</p>
                 <h2 className="text-2xl font-semibold text-white">{draft.id ? "Edit POS product" : "Create POS product"}</h2>
                 <p className="mt-2 max-w-2xl text-sm text-slate-400">
-                  Set up POS products first, then manage the live catalog below. Keep pricing, SKU, and commission settings together in one place.
+                  Keep pricing, SKU, ecommerce details, images, and availability together in one compact editor.
                 </p>
               </div>
-              {draft.id ? (
+              <div className="flex gap-2">
                 <button
                   type="button"
                   className="rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-200 hover:bg-white/5"
-                  onClick={() => setDraft(emptyDraft)}
+                  onClick={() => setEditorOpen((current) => !current)}
                 >
-                  Reset
+                  {editorOpen ? "Collapse" : "Open editor"}
                 </button>
-              ) : null}
+                {(draft.id || editorOpen) ? (
+                  <button
+                    type="button"
+                    className="rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-200 hover:bg-white/5"
+                    onClick={() => {
+                      setDraft(emptyDraft);
+                      setEditorOpen(false);
+                    }}
+                  >
+                    Reset
+                  </button>
+                ) : null}
+              </div>
             </div>
 
+            {editorOpen ? (
+            <>
             <div className="mt-5 grid gap-4 md:grid-cols-2">
               <div className="text-sm text-slate-300">
                 <div className="flex items-center justify-between gap-3">
@@ -1133,6 +1245,12 @@ export default function PosManagementClient() {
                 </div>
               ) : null}
             </div>
+            </>
+            ) : (
+              <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-4 text-sm text-slate-300">
+                Open the editor when you want to add a new product, update ecommerce details, or fix pricing and commission data.
+              </div>
+            )}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
@@ -1263,20 +1381,20 @@ export default function PosManagementClient() {
         </section>
       </div>
 
-      <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Catalog</p>
-            <h2 className="text-2xl font-semibold text-white">POS products</h2>
-            <p className="mt-2 text-sm text-slate-400">Edit, delete, or review the products currently available to the POS catalog.</p>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-3">
-            <input
-              className="w-full max-w-sm rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
-              placeholder="Search products"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
+        <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Catalog</p>
+              <h2 className="text-2xl font-semibold text-white">Product Management</h2>
+              <p className="mt-2 text-sm text-slate-400">Search, filter, publish, archive, and edit products from one compact catalogue table.</p>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <input
+                className="w-full max-w-sm rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+                placeholder="Search name, SKU, or category"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
             <select
               className="rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
               value={buyingPriceFilter}
@@ -1308,8 +1426,29 @@ export default function PosManagementClient() {
               <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
               Show archived products
             </label>
+            </div>
           </div>
-        </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            {[
+              { key: "all", label: "All" },
+              { key: "online", label: "Online Shop" },
+              { key: "featured", label: "Featured" },
+              { key: "warehouse", label: "Warehouse" },
+              { key: "inactive", label: "Inactive" },
+            ].map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setCatalogView(item.key as typeof catalogView)}
+                className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                  catalogView === item.key ? "bg-amber-500 text-slate-950" : "border border-white/10 text-slate-300"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-3">
           <div className="text-sm text-slate-300">
@@ -1359,20 +1498,25 @@ export default function PosManagementClient() {
                   <input type="checkbox" checked={allOnPageSelected} onChange={toggleAllOnPage} disabled={!filteredProducts.length || !!bulkBusy} />
                 </th>
                 <th className="px-4 py-3">Product</th>
-                <th className="px-4 py-3">Prices</th>
-                <th className="px-4 py-3">Commission</th>
-                <th className="px-4 py-3">State</th>
+                <th className="px-4 py-3">Seller SKU</th>
+                <th className="px-4 py-3">Price</th>
+                <th className="px-4 py-3">Shop</th>
+                <th className="px-4 py-3">Active</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800 bg-slate-950/40">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-slate-400">Loading products...</td>
+                  <td colSpan={7} className="px-4 py-6 text-center text-slate-400">Loading products...</td>
                 </tr>
               ) : filteredProducts.length ? (
-                filteredProducts.map((product) => (
-                  <tr key={product.id} className={draft.id === product.id ? "bg-emerald-500/5" : undefined}>
+                filteredProducts.map((product) => {
+                  const visibleInShop = Boolean(product.ecommerceVisible ?? product.showInShop);
+                  const availabilityType = normalizeAvailabilityType(product.availabilityType);
+                  const displayImage = product.mainImageUrl || product.shopImageUrl || product.brandImageUrl || "";
+
+                  return <tr key={product.id} className={draft.id === product.id ? "bg-emerald-500/5" : undefined}>
                     <td className="px-4 py-3 align-top">
                       <input
                         type="checkbox"
@@ -1382,34 +1526,79 @@ export default function PosManagementClient() {
                       />
                     </td>
                     <td className="px-4 py-3 align-top">
-                      <div className="max-w-xl font-semibold leading-8 text-white">{product.name}</div>
-                      <div className="text-xs uppercase tracking-wide text-slate-400">{product.sku} · {product.category}</div>
-                    </td>
-                    <td className="px-4 py-3 align-top text-slate-200">
-                      <div>Selling: {formatMoney(product.sellingPrice)}</div>
-                      <div className="text-xs text-slate-400">
-                        {product.variableCost ? "Buying: priced later" : `Buying: ${formatMoney(product.lastBuyingPrice)}`}
-                      </div>
-                      <div className="text-xs text-slate-400">
-                        Warranty: {product.defaultWarranty || "None"}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 align-top text-slate-200">
-                      {product.commissionEnabled ? (
-                        <>
-                          <div>{formatMoney(product.commissionAmount)}</div>
-                          <div className="text-xs text-slate-400">
-                            {product.commissionRequiresApproval ? "Approval required" : "Auto release"}
+                      <div className="flex items-start gap-3">
+                        {displayImage ? (
+                          <img src={displayImage} alt={product.name} className="h-14 w-14 rounded-xl border border-slate-800 object-cover" />
+                        ) : (
+                          <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-400">
+                            {product.name.slice(0, 2).toUpperCase()}
                           </div>
-                        </>
-                      ) : (
-                        <span className="text-slate-500">Disabled</span>
-                      )}
+                        )}
+                        <div className="min-w-0">
+                          <div className="max-w-[280px] truncate font-semibold leading-6 text-white">{product.name}</div>
+                          <div className="text-xs text-slate-400">{product.category}</div>
+                          <div className="mt-1 flex flex-wrap gap-1.5">
+                            {product.brand ? <span className="rounded-full border border-slate-700 px-2 py-0.5 text-[10px] text-slate-300">{product.brand}</span> : null}
+                            {product.defaultWarranty ? <span className="rounded-full border border-slate-700 px-2 py-0.5 text-[10px] text-slate-300">{product.defaultWarranty}</span> : null}
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] ${availabilityType === "WAREHOUSE" ? "bg-amber-500/15 text-amber-100" : "bg-emerald-500/15 text-emerald-200"}`}>
+                              {availabilityType === "WAREHOUSE" ? "Warehouse" : "Shop"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 align-top text-slate-300">
+                      <div className="font-medium text-white">{product.sku}</div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        {product.shopCategory || "No shop category"}
+                        {product.shopSubcategory ? ` · ${product.shopSubcategory}` : ""}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 align-top text-slate-200">
+                      <div className="font-semibold text-white">{formatMoney(product.sellingPrice)}</div>
+                      <div className="mt-1 text-xs text-slate-400">
+                        {product.variableCost ? "Buying price later" : `Buying ${formatMoney(product.lastBuyingPrice)}`}
+                      </div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        {product.commissionEnabled ? `Commission ${formatMoney(product.commissionAmount)}` : "No commission"}
+                      </div>
                     </td>
                     <td className="px-4 py-3 align-top">
-                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${product.isActive ? "bg-emerald-500/15 text-emerald-200" : "bg-slate-800 text-slate-400"}`}>
-                        {product.isActive ? "Active" : "Inactive"}
-                      </span>
+                      <div className="space-y-2">
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${visibleInShop ? "bg-emerald-500/15 text-emerald-200" : "bg-slate-800 text-slate-400"}`}>
+                          {visibleInShop ? "Visible online" : "Hidden online"}
+                        </span>
+                        <button
+                          type="button"
+                          className="block rounded-lg border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-slate-200 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
+                          onClick={() => void quickPatchProduct(
+                            product,
+                            { ecommerceVisible: !visibleInShop, showInShop: !visibleInShop },
+                            visibleInShop ? "Removed from online shop" : "Published to online shop",
+                          )}
+                          disabled={!(capabilities.ecommerceVisible || capabilities.showInShop)}
+                        >
+                          {visibleInShop ? "Hide" : "Show"} in shop
+                        </button>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 align-top">
+                      <div className="space-y-2">
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${product.isActive ? "bg-emerald-500/15 text-emerald-200" : "bg-slate-800 text-slate-400"}`}>
+                          {product.isActive ? "Active" : "Inactive"}
+                        </span>
+                        <button
+                          type="button"
+                          className="block rounded-lg border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-slate-200 hover:bg-white/5"
+                          onClick={() => void quickPatchProduct(
+                            product,
+                            { isActive: !product.isActive, status: product.isActive ? "INACTIVE" : "ACTIVE" },
+                            product.isActive ? "Product archived" : "Product activated",
+                          )}
+                        >
+                          Set {product.isActive ? "inactive" : "active"}
+                        </button>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-right align-top">
                       <div className="flex flex-wrap justify-end gap-2">
@@ -1437,11 +1626,11 @@ export default function PosManagementClient() {
                         </button>
                       </div>
                     </td>
-                  </tr>
-                ))
+                  </tr>;
+                })
               ) : (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-slate-400">No POS products match the current filters.</td>
+                  <td colSpan={7} className="px-4 py-6 text-center text-slate-400">No POS products match the current filters.</td>
                 </tr>
               )}
             </tbody>
