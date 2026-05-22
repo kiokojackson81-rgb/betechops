@@ -3,7 +3,7 @@ import { allShopProducts, type ShopProduct } from "@/app/shop/shopData";
 export const SHOP_OPS_API_ENV_KEY = "NEXT_PUBLIC_SHOP_USE_OPS_API";
 
 export function isShopOpsApiEnabled() {
-  return process.env.NEXT_PUBLIC_SHOP_USE_OPS_API === "true";
+  return true;
 }
 
 export interface EcommerceOrderDraft {
