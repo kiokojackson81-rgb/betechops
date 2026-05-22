@@ -29,8 +29,8 @@ export default function ProductCard({ product }: ProductCardProps) {
       : null;
 
   return (
-    <article className="group flex h-full flex-col overflow-hidden rounded-[16px] border border-[#7a0000]/10 bg-white text-slate-950 shadow-[0_8px_18px_rgba(15,23,42,0.04)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(122,0,0,0.08)]">
-      <div className="relative h-20 overflow-hidden border-b border-[#7a0000]/8 bg-[#f8f1e8] sm:h-24 xl:h-28">
+    <article className="group flex h-full flex-col overflow-hidden rounded-[12px] border border-[#7a0000]/8 bg-white text-slate-950 shadow-[0_6px_14px_rgba(15,23,42,0.04)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_22px_rgba(122,0,0,0.06)]">
+      <div className="relative h-[4.5rem] overflow-hidden border-b border-[#7a0000]/8 bg-[#f8f1e8] sm:h-20 xl:h-24">
         <div className="absolute inset-0 p-2">
           <ShopProductVisual visualType={product.visualType} productName={product.name} compact className="h-full w-full" />
         </div>
@@ -44,38 +44,41 @@ export default function ProductCard({ product }: ProductCardProps) {
         ) : null}
       </div>
 
-      <div className="flex flex-1 flex-col p-2.5">
+      <div className="flex flex-1 flex-col p-2">
         <Link href={`/shop/product/${product.slug}`} className="block">
-          <h3 className="line-clamp-2 text-[13px] font-black leading-4.5 text-slate-950 transition group-hover:text-[#7a0000] sm:text-sm">
+          <h3 className="line-clamp-2 text-[12px] font-black leading-4 text-slate-950 transition group-hover:text-[#7a0000] sm:text-[13px]">
             {product.name}
           </h3>
         </Link>
-        <p className="mt-1 line-clamp-1 text-[11px] leading-4 text-slate-500">{product.specs[0] || "Contact us for full specs"}</p>
+        <p className="mt-1 line-clamp-1 text-[10px] leading-4 text-slate-500">{product.specs[0] || "Contact us for full specs"}</p>
 
-        <div className="mt-2">
-          <div className="text-sm font-black text-slate-950 sm:text-[15px]">{formatCurrency(product.price)}</div>
-          {product.oldPrice ? <div className="mt-0.5 text-[11px] font-medium text-slate-400 line-through">{formatCurrency(product.oldPrice)}</div> : null}
+        <div className="mt-1.5">
+          <div className="text-[15px] font-black text-slate-950">{formatCurrency(product.price)}</div>
+          <div className="mt-0.5 flex items-center gap-1.5">
+            {product.oldPrice ? <div className="text-[10px] font-medium text-slate-400 line-through">{formatCurrency(product.oldPrice)}</div> : null}
+            {discountPercent ? <div className="text-[10px] font-bold text-[#7a0000]">-{discountPercent}%</div> : null}
+          </div>
         </div>
 
-        <div className="mt-2 inline-flex w-fit rounded-full border border-[#0f9d58]/14 bg-[#effcf4] px-2 py-0.5 text-[8px] font-black uppercase tracking-[0.12em] text-[#0f9d58]">
+        <div className="mt-1.5 inline-flex w-fit rounded-full border border-[#0f9d58]/14 bg-[#effcf4] px-2 py-0.5 text-[8px] font-black uppercase tracking-[0.12em] text-[#0f9d58]">
           {stockLabelMap[product.stockStatus]}
         </div>
 
-        <div className="mt-2.5 grid grid-cols-2 gap-1.5">
+        <div className="mt-2 grid gap-1.5">
           <AddToCartButton
             productId={product.id}
             productName={product.name}
-            className="inline-flex min-h-[2.1rem] items-center justify-center rounded-xl bg-[#7a0000] px-2.5 py-1.5 text-[11px] font-bold text-white shadow-[0_8px_16px_rgba(122,0,0,0.14)] transition hover:-translate-y-0.5"
+            className="inline-flex min-h-[2.25rem] items-center justify-center rounded-[10px] bg-[#7a0000] px-2.5 py-1.5 text-[11px] font-bold text-white shadow-[0_8px_16px_rgba(122,0,0,0.12)] transition hover:-translate-y-0.5"
           />
           <TrackedWhatsAppLink
             href={whatsappHref}
-            className="inline-flex min-h-[2.1rem] items-center justify-center gap-1 rounded-xl bg-[linear-gradient(135deg,#11b86a_0%,#0f9d58_55%,#0b7c44_100%)] px-2 py-1.5 text-[11px] font-bold text-white shadow-[0_10px_18px_rgba(15,157,88,0.18)] transition hover:-translate-y-0.5"
+            className="inline-flex min-h-[2.25rem] items-center justify-center gap-1.5 rounded-[10px] bg-[linear-gradient(135deg,#11b86a_0%,#0f9d58_55%,#0b7c44_100%)] px-2 py-1.5 text-[11px] font-bold text-white shadow-[0_8px_16px_rgba(15,157,88,0.16)] transition hover:-translate-y-0.5"
             label={`WhatsApp order ${product.name}`}
             context="product_card"
             ariaLabel={`Order ${product.name} on WhatsApp`}
           >
             <MessageCircle className="h-3.5 w-3.5" />
-            WhatsApp
+            Order via WhatsApp
           </TrackedWhatsAppLink>
         </div>
       </div>

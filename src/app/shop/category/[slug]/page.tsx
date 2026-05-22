@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { ReactNode } from "react";
 import { ChevronDown, Filter, SlidersHorizontal, X } from "lucide-react";
-import CategoryScroller from "@/app/shop/_components/CategoryScroller";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
 import ProductCard from "@/app/shop/_components/ProductCard";
 import ShopBreadcrumbs from "@/app/shop/_components/ShopBreadcrumbs";
@@ -17,7 +17,7 @@ import {
 } from "@/app/shop/shopCatalogConfig";
 import { getShopProducts } from "@/app/shop/shopApi";
 import { buildShopMetadata } from "@/app/shop/shopMetadata";
-import { shopCategories, shopNavLinks, type ShopProduct } from "@/app/shop/shopData";
+import { shopNavLinks, type ShopProduct } from "@/app/shop/shopData";
 
 type CategoryPageProps = {
   params: Promise<{ slug: string }>;
@@ -55,9 +55,8 @@ const STOCK_OPTIONS = [
 
 const SORT_OPTIONS = [
   { value: "featured", label: "Popularity" },
+  { value: "name", label: "Latest" },
   { value: "price-low", label: "Price low-high" },
-  { value: "price-high", label: "Price high-low" },
-  { value: "name", label: "Newest" },
 ] as const;
 
 function buildCategoryDescription(category: ShopCategoryDefinition, subcategoryLabel?: string | null) {
@@ -89,8 +88,6 @@ function sortProducts(products: ShopProduct[], sort?: string) {
   switch (sort) {
     case "price-low":
       return items.sort((a, b) => a.price - b.price);
-    case "price-high":
-      return items.sort((a, b) => b.price - a.price);
     case "name":
       return items.sort((a, b) => a.name.localeCompare(b.name));
     default:
@@ -134,15 +131,20 @@ function CheckboxLink({
   href,
   label,
   active,
+  nested = false,
 }: {
   href: string;
   label: string;
   active: boolean;
+  nested?: boolean;
 }) {
   return (
-    <Link href={href} className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 text-sm text-slate-700 transition hover:bg-[#fff7ea] hover:text-[#7a0000]">
+    <Link
+      href={href}
+      className={`flex items-center gap-2 rounded-md px-1.5 py-1 text-xs text-slate-700 transition hover:text-[#7a0000] ${nested ? "pl-4" : ""}`}
+    >
       <span
-        className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border ${
+        className={`inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border ${
           active ? "border-[#7a0000] bg-[#7a0000]" : "border-slate-300 bg-white"
         }`}
       >
@@ -153,21 +155,30 @@ function CheckboxLink({
   );
 }
 
-function ActiveFilterChip({
-  label,
-  href,
-}: {
-  label: string;
-  href: string;
-}) {
+function ActiveFilterChip({ label, href }: { label: string; href: string }) {
   return (
     <Link
       href={href}
-      className="inline-flex min-h-[2rem] items-center gap-1.5 rounded-full border border-[#7a0000]/12 bg-[#fff7ea] px-3 py-1 text-xs font-semibold text-[#7a0000] transition hover:border-[#7a0000]/28"
+      className="inline-flex min-h-[1.85rem] items-center gap-1 rounded-full border border-[#7a0000]/10 bg-[#fff7ea] px-2.5 py-1 text-[11px] font-semibold text-[#7a0000]"
     >
       {label}
-      <X className="h-3.5 w-3.5" />
+      <X className="h-3 w-3" />
     </Link>
+  );
+}
+
+function FilterSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="border-b border-[#7a0000]/8 pb-3 last:border-b-0 last:pb-0">
+      <div className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-900">{title}</div>
+      <div className="mt-2 grid gap-0.5">{children}</div>
+    </div>
   );
 }
 
@@ -250,7 +261,7 @@ export default async function ShopCategoryPage({ params, searchParams }: Categor
   return (
     <div className={shopStyles.page}>
       <ShopHeader navLinks={shopNavLinks} />
-      <section className="py-4 sm:py-5">
+      <section className="py-3 sm:py-4">
         <div className={shopStyles.shell}>
           <ShopBreadcrumbs
             items={[
@@ -260,108 +271,78 @@ export default async function ShopCategoryPage({ params, searchParams }: Categor
             ]}
           />
 
-          <div className="mt-3 rounded-[18px] border border-[#7a0000]/10 bg-white px-4 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-              <div>
-                <div className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000]">Category</div>
-                <h1 className="mt-1.5 text-xl font-black tracking-tight text-slate-950 sm:text-2xl">
-                  {activeSubcategory ? activeSubcategory.label : category.label}
-                </h1>
-                <p className="mt-1 text-sm leading-6 text-slate-600">
-                  Shop genuine solar products with warranty support, Nairobi pickup, and countrywide delivery.
-                </p>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-[auto_auto] sm:items-center">
-                <div className="text-sm font-semibold text-slate-600">{filteredProducts.length} products found</div>
-                <form className="flex items-center gap-2 rounded-full border border-[#7a0000]/10 bg-[#fcfaf7] px-3 py-1.5">
-                  <label htmlFor="sort" className="text-xs font-semibold text-slate-500">
-                    Sort by
-                  </label>
-                  <input type="hidden" name="sub" value={filters.sub || ""} />
-                  <input type="hidden" name="brand" value={filters.brand || ""} />
-                  <input type="hidden" name="price" value={filters.price || ""} />
-                  <input type="hidden" name="stock" value={filters.stock || ""} />
-                  <input type="hidden" name="warranty" value={filters.warranty || ""} />
-                  <select
-                    id="sort"
-                    name="sort"
-                    defaultValue={filters.sort || "featured"}
-                    className="bg-transparent text-sm font-semibold text-slate-700 outline-none"
-                  >
-                    {SORT_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <button type="submit" className="rounded-full bg-[#7a0000] px-2.5 py-1 text-xs font-bold text-white">
-                    Apply
-                  </button>
-                </form>
-              </div>
-            </div>
-
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="text-xs font-black uppercase tracking-[0.14em] text-[#7a0000]">Related</span>
-              <Link
-                href={`/shop/category/${category.value}`}
-                className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                  !activeSubcategory ? "border-[#7a0000] bg-[#7a0000] text-white" : "border-[#7a0000]/10 bg-[#fcfaf7] text-slate-700 hover:text-[#7a0000]"
-                }`}
-              >
-                All {category.label}
-              </Link>
-              {category.subcategories.slice(0, 6).map((subcategory) => (
-                <Link
-                  key={subcategory.value}
-                  href={getFilterHref(category.value, filters, { sub: subcategory.value })}
-                  className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                    activeSubcategory?.value === subcategory.value
-                      ? "border-[#7a0000] bg-[#7a0000] text-white"
-                      : "border-[#7a0000]/10 bg-[#fcfaf7] text-slate-700 hover:text-[#7a0000]"
-                  }`}
-                >
-                  {subcategory.label}
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          <details className="mt-3 rounded-[16px] border border-[#7a0000]/10 bg-white p-3 shadow-[0_8px_20px_rgba(15,23,42,0.04)] lg:hidden">
+          <details className="mt-2 rounded-[12px] border border-[#7a0000]/10 bg-white px-3 py-2 shadow-[0_6px_16px_rgba(15,23,42,0.04)] lg:hidden">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold text-slate-900">
               <span className="inline-flex items-center gap-2">
                 <Filter className="h-4 w-4 text-[#7a0000]" />
-                Filter and sort
+                Filter / Sort
               </span>
               <ChevronDown className="h-4 w-4 text-slate-500" />
             </summary>
             <div className="mt-3 grid gap-3">
-              <div className="rounded-[14px] border border-[#7a0000]/8 bg-[#fcfaf7] p-3">
-                <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000]">Subcategories</div>
-                <div className="mt-2 grid gap-1">
-                  <CheckboxLink href={getFilterHref(category.value, filters, { sub: "" })} label={`All ${category.label}`} active={!activeSubcategory} />
-                  {category.subcategories.map((subcategory) => (
-                    <CheckboxLink
-                      key={subcategory.value}
-                      href={getFilterHref(category.value, filters, { sub: subcategory.value })}
-                      label={subcategory.label}
-                      active={activeSubcategory?.value === subcategory.value}
-                    />
+              <FilterSection title="Category">
+                <CheckboxLink href={getFilterHref(category.value, filters, { sub: "" })} label={category.label} active={!activeSubcategory} />
+                {category.subcategories.map((subcategory) => (
+                  <CheckboxLink
+                    key={subcategory.value}
+                    href={getFilterHref(category.value, filters, { sub: subcategory.value })}
+                    label={subcategory.label}
+                    active={activeSubcategory?.value === subcategory.value}
+                    nested
+                  />
+                ))}
+              </FilterSection>
+              {brandOptions.length ? (
+                <FilterSection title="Brand">
+                  {brandOptions.map((brand) => (
+                    <CheckboxLink key={brand} href={getFilterHref(category.value, filters, { brand })} label={brand} active={filters.brand === brand} />
                   ))}
+                </FilterSection>
+              ) : null}
+              <FilterSection title="Price">
+                {PRICE_OPTIONS.map((option) => (
+                  <CheckboxLink
+                    key={option.value}
+                    href={getFilterHref(category.value, filters, { price: option.value })}
+                    label={option.label}
+                    active={filters.price === option.value}
+                  />
+                ))}
+              </FilterSection>
+            </div>
+          </details>
+
+          <div className="mt-3 grid items-start gap-3 lg:grid-cols-[250px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)]">
+            <aside className="hidden lg:block">
+              <div className="sticky top-24 rounded-[14px] border border-[#7a0000]/10 bg-white p-3 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+                <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-[#7a0000]">
+                  <SlidersHorizontal className="h-4 w-4" />
+                  Filters
                 </div>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-[14px] border border-[#7a0000]/8 bg-[#fcfaf7] p-3">
-                  <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000]">Brand</div>
-                  <div className="mt-2 grid gap-1">
-                    {brandOptions.map((brand) => (
-                      <CheckboxLink key={brand} href={getFilterHref(category.value, filters, { brand })} label={brand} active={filters.brand === brand} />
+
+                <div className="grid gap-3">
+                  <FilterSection title="Category">
+                    <CheckboxLink href={getFilterHref(category.value, filters, { sub: "" })} label={category.label} active={!activeSubcategory} />
+                    {category.subcategories.map((subcategory) => (
+                      <CheckboxLink
+                        key={subcategory.value}
+                        href={getFilterHref(category.value, filters, { sub: subcategory.value })}
+                        label={subcategory.label}
+                        active={activeSubcategory?.value === subcategory.value}
+                        nested
+                      />
                     ))}
-                  </div>
-                </div>
-                <div className="rounded-[14px] border border-[#7a0000]/8 bg-[#fcfaf7] p-3">
-                  <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000]">Price</div>
-                  <div className="mt-2 grid gap-1">
+                  </FilterSection>
+
+                  {brandOptions.length ? (
+                    <FilterSection title="Brand">
+                      {brandOptions.map((brand) => (
+                        <CheckboxLink key={brand} href={getFilterHref(category.value, filters, { brand })} label={brand} active={filters.brand === brand} />
+                      ))}
+                    </FilterSection>
+                  ) : null}
+
+                  <FilterSection title="Price">
                     {PRICE_OPTIONS.map((option) => (
                       <CheckboxLink
                         key={option.value}
@@ -370,157 +351,129 @@ export default async function ShopCategoryPage({ params, searchParams }: Categor
                         active={filters.price === option.value}
                       />
                     ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </details>
+                  </FilterSection>
 
-          <div className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,260px)_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)]">
-            <aside className="hidden lg:block">
-              <div className="sticky top-24 rounded-[18px] border border-[#7a0000]/10 bg-white p-4 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
-                <div className="flex items-center gap-2 text-sm font-black uppercase tracking-[0.14em] text-[#7a0000]">
-                  <SlidersHorizontal className="h-4 w-4" />
-                  Filters
-                </div>
-
-                <div className="mt-4 grid gap-4 text-sm">
-                  <div>
-                    <div className="font-black uppercase tracking-[0.14em] text-slate-900">Category</div>
-                    <div className="mt-2 rounded-[14px] border border-[#7a0000]/8 bg-[#fcfaf7] p-2">
-                      <CheckboxLink href={getFilterHref(category.value, filters, { sub: "" })} label={category.label} active={!activeSubcategory} />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="font-black uppercase tracking-[0.14em] text-slate-900">Subcategories</div>
-                    <div className="mt-2 grid gap-1">
-                      {category.subcategories.map((subcategory) => (
-                        <CheckboxLink
-                          key={subcategory.value}
-                          href={getFilterHref(category.value, filters, { sub: subcategory.value })}
-                          label={subcategory.label}
-                          active={activeSubcategory?.value === subcategory.value}
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  {brandOptions.length ? (
-                    <div>
-                      <div className="font-black uppercase tracking-[0.14em] text-slate-900">Brand</div>
-                      <div className="mt-2 grid gap-1">
-                        {brandOptions.map((brand) => (
-                          <CheckboxLink key={brand} href={getFilterHref(category.value, filters, { brand })} label={brand} active={filters.brand === brand} />
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  <div>
-                    <div className="font-black uppercase tracking-[0.14em] text-slate-900">Price</div>
-                    <div className="mt-2 grid gap-1">
-                      {PRICE_OPTIONS.map((option) => (
-                        <CheckboxLink
-                          key={option.value}
-                          href={getFilterHref(category.value, filters, { price: option.value })}
-                          label={option.label}
-                          active={filters.price === option.value}
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="font-black uppercase tracking-[0.14em] text-slate-900">Stock</div>
-                    <div className="mt-2 grid gap-1">
-                      {STOCK_OPTIONS.map((option) => (
-                        <CheckboxLink
-                          key={option.value}
-                          href={getFilterHref(category.value, filters, { stock: option.value })}
-                          label={option.label}
-                          active={filters.stock === option.value}
-                        />
-                      ))}
-                    </div>
-                  </div>
+                  <FilterSection title="Stock">
+                    {STOCK_OPTIONS.map((option) => (
+                      <CheckboxLink
+                        key={option.value}
+                        href={getFilterHref(category.value, filters, { stock: option.value })}
+                        label={option.label}
+                        active={filters.stock === option.value}
+                      />
+                    ))}
+                  </FilterSection>
 
                   {warrantyOptions.length ? (
-                    <div>
-                      <div className="font-black uppercase tracking-[0.14em] text-slate-900">Warranty</div>
-                      <div className="mt-2 grid gap-1">
-                        {warrantyOptions.map((warranty) => (
-                          <CheckboxLink
-                            key={warranty}
-                            href={getFilterHref(category.value, filters, { warranty })}
-                            label={warranty}
-                            active={filters.warranty === warranty}
-                          />
-                        ))}
-                      </div>
-                    </div>
+                    <FilterSection title="Warranty">
+                      {warrantyOptions.map((warranty) => (
+                        <CheckboxLink
+                          key={warranty}
+                          href={getFilterHref(category.value, filters, { warranty })}
+                          label={warranty}
+                          active={filters.warranty === warranty}
+                        />
+                      ))}
+                    </FilterSection>
                   ) : null}
                 </div>
               </div>
             </aside>
 
-            <div className="grid gap-3">
-              {activeChips.length ? (
-                <div className="flex flex-wrap gap-2 rounded-[16px] border border-[#7a0000]/8 bg-white px-3 py-2 shadow-[0_8px_20px_rgba(15,23,42,0.04)]">
-                  {activeChips.map((chip) => (
-                    <ActiveFilterChip key={chip.label} label={chip.label} href={chip.href} />
-                  ))}
-                  <Link href={`/shop/category/${category.value}`} className="inline-flex min-h-[2rem] items-center text-xs font-bold text-slate-500 transition hover:text-[#7a0000]">
-                    Clear all
-                  </Link>
+            <div className="min-w-0">
+              <div className="rounded-[14px] border border-[#7a0000]/10 bg-white px-3 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+                <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <h1 className="text-lg font-black tracking-tight text-slate-950 sm:text-xl">
+                      {activeSubcategory ? activeSubcategory.label : category.label}
+                    </h1>
+                    <div className="mt-0.5 text-xs font-semibold text-slate-500">{filteredProducts.length} products found</div>
+                  </div>
+
+                  <form className="flex items-center gap-2 rounded-md border border-[#7a0000]/10 bg-[#fcfaf7] px-2.5 py-1.5">
+                    <label htmlFor="sort" className="text-xs font-semibold text-slate-500">
+                      Sort by
+                    </label>
+                    <input type="hidden" name="sub" value={filters.sub || ""} />
+                    <input type="hidden" name="brand" value={filters.brand || ""} />
+                    <input type="hidden" name="price" value={filters.price || ""} />
+                    <input type="hidden" name="stock" value={filters.stock || ""} />
+                    <input type="hidden" name="warranty" value={filters.warranty || ""} />
+                    <select
+                      id="sort"
+                      name="sort"
+                      defaultValue={filters.sort || "featured"}
+                      className="bg-transparent text-xs font-semibold text-slate-700 outline-none sm:text-sm"
+                    >
+                      {SORT_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button type="submit" className="rounded-md bg-[#7a0000] px-2 py-1 text-[11px] font-bold text-white">
+                      Apply
+                    </button>
+                  </form>
                 </div>
-              ) : null}
 
-              <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
-                {filteredProducts.map((product) => (
-                  <ProductCard key={product.id} product={product} />
-                ))}
-              </div>
-
-              {!filteredProducts.length ? (
-                <ShopStatePanel
-                  eyebrow="No matching products"
-                  title="Adjust your filters."
-                  copy="No products match this filter set yet. Try another subcategory or clear the selected filters to keep browsing the Betech Solar catalogue."
-                  primaryHref={`/shop/category/${category.value}`}
-                  primaryLabel={`View all ${category.label}`}
-                  secondaryHref={`/shop/request-quote?product=${encodeURIComponent(activeSubcategory?.label || category.label)}`}
-                  secondaryLabel="Request Quote"
-                />
-              ) : null}
-
-              <div className={`${shopStyles.darkPanel} mt-1 p-4 sm:p-5`}>
-                <div className="inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000]">
-                  Need sizing help?
-                </div>
-                <h2 className="mt-3 text-lg font-black tracking-tight text-white sm:text-xl">
-                  Get help choosing the right inverter, battery and panels.
-                </h2>
-                <p className="mt-2 text-sm leading-6 text-white/78">
-                  Our solar team can guide the right system for home backup, biashara, water pumping or security lighting.
-                </p>
-                <div className="mt-4 flex flex-col gap-2.5 sm:flex-row">
+                <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000]">Related</span>
                   <Link
-                    href={`/shop/request-quote?product=${encodeURIComponent(activeSubcategory?.label || category.label)}`}
-                    className={shopStyles.goldButton}
+                    href={`/shop/category/${category.value}`}
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
+                      !activeSubcategory ? "border-[#7a0000] bg-[#7a0000] text-white" : "border-[#7a0000]/10 bg-[#fcfaf7] text-slate-700 hover:text-[#7a0000]"
+                    }`}
                   >
-                    Request Quote
+                    All
                   </Link>
-                  <Link href="/shop" className={`${shopStyles.secondaryButton} bg-white/92`}>
-                    Continue shopping
-                  </Link>
+                  {category.subcategories.slice(0, 6).map((subcategory) => (
+                    <Link
+                      key={subcategory.value}
+                      href={getFilterHref(category.value, filters, { sub: subcategory.value })}
+                      className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
+                        activeSubcategory?.value === subcategory.value
+                          ? "border-[#7a0000] bg-[#7a0000] text-white"
+                          : "border-[#7a0000]/10 bg-[#fcfaf7] text-slate-700 hover:text-[#7a0000]"
+                      }`}
+                    >
+                      {subcategory.label}
+                    </Link>
+                  ))}
                 </div>
-              </div>
-            </div>
-          </div>
 
-          <div className="pt-5">
-            <CategoryScroller categories={shopCategories.slice(0, 6)} />
+                {activeChips.length ? (
+                  <div className="mt-2.5 flex flex-wrap gap-1.5 border-t border-[#7a0000]/8 pt-2.5">
+                    {activeChips.map((chip) => (
+                      <ActiveFilterChip key={chip.label} label={chip.label} href={chip.href} />
+                    ))}
+                    <Link href={`/shop/category/${category.value}`} className="inline-flex min-h-[1.85rem] items-center text-[11px] font-bold text-slate-500 hover:text-[#7a0000]">
+                      Clear all
+                    </Link>
+                  </div>
+                ) : null}
+              </div>
+
+              {filteredProducts.length ? (
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
+                  {filteredProducts.map((product) => (
+                    <ProductCard key={product.id} product={product} />
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-3">
+                  <ShopStatePanel
+                    eyebrow="No matching products"
+                    title="Adjust your filters."
+                    copy="No products match this filter set yet. Try another subcategory or clear the selected filters to keep browsing the Betech Solar catalogue."
+                    primaryHref={`/shop/category/${category.value}`}
+                    primaryLabel={`View all ${category.label}`}
+                    secondaryHref={`/shop/request-quote?product=${encodeURIComponent(activeSubcategory?.label || category.label)}`}
+                    secondaryLabel="Request Quote"
+                  />
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </section>
