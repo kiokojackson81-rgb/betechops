@@ -23,7 +23,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   if (!product) {
     return buildShopMetadata({
       title: "Product Not Found",
-      description: "This Betech Solar product could not be found in the current shop preview.",
+      description: "This Betech Solar product could not be found in the current shop catalogue.",
     });
   }
 

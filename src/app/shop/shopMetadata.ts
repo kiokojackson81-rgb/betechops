@@ -34,7 +34,7 @@ export function buildProductJsonLd(product: ShopProduct) {
       name: product.brand,
     },
     category: product.category,
-    description: `${product.specs.join(". ")}. ${product.warranty}. Betech Solar preview product data.`,
+    description: `${product.specs.join(". ")}. ${product.warranty}. Genuine Betech Solar product details and delivery support.`,
     offers: {
       "@type": "Offer",
       priceCurrency: "KES",

@@ -12,7 +12,7 @@ export default function ShopFooter() {
               <div className="text-[11px] font-black uppercase tracking-[0.28em] text-[#ffd761]">Betech Solar Online Store</div>
               <h2 className="mt-3 text-2xl font-black tracking-tight">Shop genuine solar products or request a solar system quote.</h2>
               <p className="mt-3 text-sm leading-6 text-white/76">
-                This storefront is running in preview mode for now, but it is prepared for later integration with Betech Solar Solutions operations.
+                Orders, delivery coordination, and product guidance are confirmed directly by Betech Solar Solutions.
               </p>
             </div>
 

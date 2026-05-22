@@ -8,14 +8,14 @@ import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks } from "@/app/shop/shopData";
 
 export const metadata: Metadata = buildShopMetadata({
-  title: "Order Confirmation Preview",
-  description: "Review your Betech Solar preview order reference, selected products, and confirmation status during customer testing.",
+  title: "Order Confirmation",
+  description: "Review your Betech Solar order reference, selected products, and confirmation status after checkout.",
 });
 
 export default async function ShopOrderSuccessPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ref?: string; mode?: string }>;
+  searchParams: Promise<{ ref?: string }>;
 }) {
   const params = await searchParams;
 
@@ -24,7 +24,7 @@ export default async function ShopOrderSuccessPage({
       <ShopHeader navLinks={shopNavLinks} />
       <section className="py-12 sm:py-16">
         <div className={shopStyles.shell}>
-          <OrderSuccessClient orderRef={params.ref} mode={params.mode} />
+          <OrderSuccessClient orderRef={params.ref} />
         </div>
       </section>
       <ShopFooter />

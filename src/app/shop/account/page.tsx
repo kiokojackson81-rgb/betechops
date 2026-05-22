@@ -10,8 +10,8 @@ import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks } from "@/app/shop/shopData";
 
 export const metadata: Metadata = buildShopMetadata({
-  title: "Customer Account Preview",
-  description: "Create a local Betech Solar customer profile, reuse it in checkout, and review recent preview orders and quote requests.",
+  title: "Customer Account",
+  description: "Save your Betech Solar customer profile, reuse it in checkout, and review recent orders and quote requests on this device.",
 });
 
 export default function ShopAccountPage() {
@@ -23,9 +23,9 @@ export default function ShopAccountPage() {
           <ShopBreadcrumbs items={[{ label: "Shop", href: "/shop" }, { label: "Account" }]} />
           <div className="mt-3">
             <div className={shopStyles.sectionEyebrow}>Account</div>
-            <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-[2rem]">Betech Solar customer account preview</h1>
+            <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-[2rem]">Betech Solar customer account</h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 sm:text-[15px]">
-              Save your customer profile locally, reuse it during checkout, and review recent preview orders and quote requests.
+              Save your customer profile on this device, reuse it during checkout, and review recent orders and quote requests.
             </p>
           </div>
           <div className="mt-4">

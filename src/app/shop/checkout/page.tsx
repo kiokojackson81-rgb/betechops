@@ -11,8 +11,8 @@ import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks } from "@/app/shop/shopData";
 
 export const metadata: Metadata = buildShopMetadata({
-  title: "Checkout Preview",
-  description: "Submit a preview Betech Solar order with delivery and payment preferences before live ops integration goes online.",
+  title: "Checkout",
+  description: "Submit your Betech Solar order details with delivery and payment preferences for team confirmation.",
 });
 
 export default async function ShopCheckoutPage() {
@@ -26,7 +26,7 @@ export default async function ShopCheckoutPage() {
           <ShopBreadcrumbs items={[{ label: "Shop", href: "/shop" }, { label: "Cart", href: "/shop/cart" }, { label: "Checkout" }]} />
           <div className="mt-3">
             <div className={shopStyles.sectionEyebrow}>Checkout</div>
-            <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-[2rem]">Preview checkout for Betech Solar Online Store</h1>
+            <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-[2rem]">Checkout for Betech Solar Online Store</h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 sm:text-[15px]">
               This flow collects customer, delivery, and payment preference details, but does not create a live POS record or process payment automatically yet.
             </p>

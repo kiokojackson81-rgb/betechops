@@ -190,7 +190,7 @@ export async function generateMetadata({ params, searchParams }: CategoryPagePro
   if (!category) {
     return buildShopMetadata({
       title: "Shop Category",
-      description: "Browse solar categories in the Betech Solar online store preview.",
+      description: "Browse solar categories in the Betech Solar online store.",
     });
   }
 

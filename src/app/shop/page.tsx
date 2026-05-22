@@ -161,7 +161,7 @@ export default async function ShopPage() {
               <div className={shopStyles.sectionEyebrow}>Delivery and payment</div>
               <h2 className="mt-3 text-xl font-black tracking-tight text-slate-950 sm:text-2xl">How delivery and payment works</h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                We deliver solar panels, batteries, inverters, pumps and kits across Kenya. Checkout stays in preview mode while our team confirms stock, delivery and payment steps manually.
+                We deliver solar panels, batteries, inverters, pumps and kits across Kenya. Orders are confirmed by our team after stock, delivery, and payment review.
               </p>
               <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
                 {deliveryPaymentSteps.map((step) => (

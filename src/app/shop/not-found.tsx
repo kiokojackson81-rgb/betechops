@@ -9,7 +9,7 @@ export default function ShopNotFound() {
           <ShopStatePanel
             eyebrow="Product not found"
             title="We could not find that Betech Solar product."
-            copy="The product may have moved, or this preview catalogue entry may not be available in the current test dataset."
+            copy="The product may have moved, or it may not be available in the current Betech Solar catalogue."
             primaryHref="/shop"
             primaryLabel="Back to Shop"
             secondaryHref="/shop/request-quote"

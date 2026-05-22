@@ -46,7 +46,7 @@ export default function AccountClient() {
   }, []);
 
   if (!loaded) {
-    return <div className="rounded-[20px] border border-[#7a0000]/10 bg-white p-5 text-sm text-slate-600 shadow-[0_14px_32px_rgba(15,23,42,0.05)]">Loading your Betech Solar customer profile preview...</div>;
+    return <div className="rounded-[20px] border border-[#7a0000]/10 bg-white p-5 text-sm text-slate-600 shadow-[0_14px_32px_rgba(15,23,42,0.05)]">Loading your Betech Solar customer profile...</div>;
   }
 
   const hasProfile = Boolean(form.fullName || form.phone || form.email || form.countyTown);
@@ -57,7 +57,7 @@ export default function AccountClient() {
         <div className={shopStyles.sectionEyebrow}>Customer profile</div>
         <h1 className="mt-3 text-2xl font-black tracking-tight text-slate-950">Create your Betech Solar customer profile</h1>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          Save your contact and delivery details locally for preview testing. Checkout can reuse this information automatically.
+          Save your contact and delivery details on this device. Checkout can reuse this information automatically.
         </p>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -114,7 +114,7 @@ export default function AccountClient() {
           <Link href="/shop/checkout" className={shopStyles.secondaryButton}>
             Use at Checkout
           </Link>
-          {saved ? <div className="text-sm font-semibold text-[#0f9d58]">Profile saved locally for preview.</div> : null}
+          {saved ? <div className="text-sm font-semibold text-[#0f9d58]">Profile saved on this device.</div> : null}
         </div>
       </section>
 
@@ -123,13 +123,13 @@ export default function AccountClient() {
           <div className={shopStyles.sectionEyebrow}>Preview account status</div>
           <div className="mt-3 text-sm leading-6 text-slate-600">
             {hasProfile
-              ? "This local preview profile will prefill checkout forms on this device."
-              : "No customer profile saved yet. Create your Betech Solar customer profile to speed up checkout testing."}
+              ? "This saved profile will prefill checkout forms on this device."
+              : "No customer profile saved yet. Create your Betech Solar customer profile to speed up checkout."}
           </div>
         </section>
 
         <section className="rounded-[20px] border border-[#7a0000]/10 bg-white p-4 shadow-[0_14px_32px_rgba(15,23,42,0.05)]">
-          <div className={shopStyles.sectionEyebrow}>Recent preview orders</div>
+          <div className={shopStyles.sectionEyebrow}>Recent orders</div>
           <div className="mt-3 grid gap-3">
             {orders.length ? orders.slice(0, 5).map((order) => (
               <div key={order.orderRef} className="rounded-[16px] border border-[#7a0000]/10 bg-[#fcfaf7] p-3">
@@ -137,7 +137,7 @@ export default function AccountClient() {
                 <div className="mt-1 text-xs text-slate-500">{order.customerName} • {order.deliveryMethod}</div>
                 <div className="mt-1 text-xs text-slate-500">{formatCurrency(order.subtotal)} • {order.items.length} items</div>
               </div>
-            )) : <div className="text-sm text-slate-500">No preview orders saved yet.</div>}
+            )) : <div className="text-sm text-slate-500">No recent orders saved yet.</div>}
           </div>
         </section>
 
@@ -150,7 +150,7 @@ export default function AccountClient() {
                 <div className="mt-1 text-xs text-slate-500">{quote.customerName} • {quote.propertyType || "Solar quote"}</div>
                 <div className="mt-1 text-xs text-slate-500">{quote.location || "Location pending"}</div>
               </div>
-            )) : <div className="text-sm text-slate-500">No preview quote requests saved yet.</div>}
+            )) : <div className="text-sm text-slate-500">No recent quote requests saved yet.</div>}
           </div>
         </section>
       </div>

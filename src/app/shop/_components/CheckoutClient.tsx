@@ -105,7 +105,7 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
     return (
       <div className="rounded-[20px] border border-[#7a0000]/10 bg-white p-5 shadow-[0_14px_32px_rgba(15,23,42,0.05)]">
         <div className={shopStyles.sectionEyebrow}>Checkout</div>
-        <div className="mt-3 text-sm text-slate-600">Loading your Betech Solar checkout preview...</div>
+        <div className="mt-3 text-sm text-slate-600">Loading your Betech Solar checkout...</div>
       </div>
     );
   }
@@ -116,7 +116,7 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
         <div className={shopStyles.sectionEyebrow}>Cart required</div>
         <h1 className="mt-3 text-2xl font-black tracking-tight text-slate-950">Your checkout is ready when your cart is ready.</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-          Add solar products to continue with preview checkout, or request a quote if you need help choosing the right system.
+          Add solar products to continue with checkout, or request a quote if you need help choosing the right system.
         </p>
         <div className="mt-4 flex flex-col gap-2.5 sm:flex-row">
           <Link href="/shop" className={shopStyles.primaryButton}>
@@ -206,18 +206,18 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
             });
 
             clearCartAfterOrder();
-            router.push(`/shop/order-success?ref=${encodeURIComponent(savedOrder.orderRef)}&mode=preview`);
+            router.push(`/shop/order-success?ref=${encodeURIComponent(savedOrder.orderRef)}`);
           } catch (submissionError) {
-            setError(submissionError instanceof Error ? submissionError.message : "Unable to create the preview order request.");
+            setError(submissionError instanceof Error ? submissionError.message : "Unable to create the order request.");
           } finally {
             setSubmitting(false);
           }
         }}
       >
         <div className={shopStyles.sectionEyebrow}>Checkout</div>
-        <h1 className="mt-3 text-2xl font-black tracking-tight text-slate-950 sm:text-[2rem]">Complete your Betech Solar preview checkout.</h1>
+        <h1 className="mt-3 text-2xl font-black tracking-tight text-slate-950 sm:text-[2rem]">Complete your Betech Solar checkout.</h1>
         <p className="mt-2 text-sm leading-6 text-slate-600 sm:text-[15px]">
-          Customer details, delivery preferences, and payment intent are saved in preview mode only. No live payment or POS receipt is created yet.
+          Customer details, delivery preferences, and payment intent are collected here first. Payment is not processed automatically on this page, and a Betech Solar team member confirms the next steps with you directly.
         </p>
         <div className="mt-3 rounded-[16px] border border-amber-400/20 bg-amber-400/5 px-3 py-2.5 text-sm font-semibold leading-6 text-slate-700">
           {availabilityNotice}
