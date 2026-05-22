@@ -6,6 +6,7 @@ export function normalizeAvailabilityType(value: string | null | undefined): Sho
 
 export function getProductAvailabilityMessage(product: {
   availabilityType?: string | null;
+  pickupDelayDays?: number | null;
 }) {
   const availabilityType = normalizeAvailabilityType(product.availabilityType);
 
@@ -22,6 +23,7 @@ export function getProductAvailabilityMessage(product: {
 
 export function getProductCheckoutAvailabilityMessage(product: {
   availabilityType?: string | null;
+  pickupDelayDays?: number | null;
 }) {
   const availabilityType = normalizeAvailabilityType(product.availabilityType);
 

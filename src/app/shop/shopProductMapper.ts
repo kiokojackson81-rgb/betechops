@@ -507,7 +507,7 @@ function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview 
         brandImage,
         visualType: category.visualType,
         shortDescription,
-        fullDescription,
+        fullDescription: fullDescription || undefined,
         specs,
         warranty,
         warrantyNotes: warrantyNotes || undefined,
