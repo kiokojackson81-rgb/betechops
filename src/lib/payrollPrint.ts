@@ -1,6 +1,6 @@
 import type { Branding } from "@prisma/client";
 
-import { getCategoryLabel } from "@/lib/getLandingPage";
+import { getPayrollCategoryLabel } from "@/lib/getLandingPage";
 import type { PayrollRow } from "@/app/admin/payroll/types";
 import type { TradingPeriod } from "@/lib/tradingPeriod";
 
@@ -78,7 +78,7 @@ export function renderPayrollPrintHtml(args: {
             <div class="secondary">${escapeHtml(row.email || "—")}</div>
           </td>
           <td>
-            <div class="primary">${escapeHtml(getCategoryLabel(row.attendantCategory))}</div>
+            <div class="primary">${escapeHtml(getPayrollCategoryLabel(row.attendantCategory, row.email))}</div>
             <div class="secondary">${row.isActive ? "Active" : "Inactive"}</div>
           </td>
           <td class="numeric">${escapeHtml(currency.format(Number(row.totalSales ?? 0)))}</td>

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 import Card from "@/app/_components/Card";
 import Input from "@/app/_components/Input";
-import { getCategoryLabel } from "@/lib/getLandingPage";
+import { getCategoryLabel, getPayrollCategoryLabel } from "@/lib/getLandingPage";
 import type { PayrollRow } from "./types";
 
 const categoryOrder = [
@@ -328,7 +328,7 @@ export default function PayrollTableClient({
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="text-xs text-slate-400">{getCategoryLabel(row.attendantCategory)}</span>
+                      <span className="text-xs text-slate-400">{getPayrollCategoryLabel(row.attendantCategory, row.email)}</span>
                       {isMarketing && (
                         <span className="ml-2 rounded-full bg-blue-500/20 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-blue-100">
                           Marketing Ops

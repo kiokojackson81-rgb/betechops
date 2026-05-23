@@ -1,8 +1,20 @@
 import PosManagementClient from "./PosManagementClient";
+import { auth } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default function PosManagementPage() {
+export default async function PosManagementPage() {
+  const session = await auth();
+  const role = String((session?.user as { role?: string } | undefined)?.role ?? "").toUpperCase();
+  const email = String((session?.user as { email?: string } | undefined)?.email ?? "").trim().toLowerCase();
+  const isBrendah = email === "brendah@betech.co.ke";
+  const hasFullAccess = role === "ADMIN" || role === "SUPERVISOR";
+
+  if (!hasFullAccess && !isBrendah) {
+    return redirect("/not-authorized");
+  }
+
   return (
     <main className="space-y-6">
       <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
@@ -12,7 +24,7 @@ export default function PosManagementPage() {
           Manage the catalog used on the receipts desk, define buying prices and per-product commission, and release or reject pending POS commission approvals.
         </p>
       </section>
-      <PosManagementClient />
+      <PosManagementClient limitedAccess={!hasFullAccess && isBrendah} />
     </main>
   );
 }

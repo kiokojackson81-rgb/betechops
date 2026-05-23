@@ -1,5 +1,5 @@
 import type { Branding } from "@prisma/client";
-import { getCategoryLabel } from "@/lib/getLandingPage";
+import { getPayrollCategoryLabel } from "@/lib/getLandingPage";
 import type { TradingPeriod } from "@/lib/tradingPeriod";
 import type { PayrollRow } from "@/app/admin/payroll/types";
 
@@ -231,7 +231,7 @@ export function buildPayslipPayload(args: {
     periodLabel: args.period.label,
     attendantName: args.attendant.name || args.attendant.email || args.attendant.id,
     attendantEmail: args.attendant.email || "-",
-    categoryLabel: getCategoryLabel(args.attendant.attendantCategory),
+    categoryLabel: getPayrollCategoryLabel(args.attendant.attendantCategory, args.attendant.email),
     statusLabel: args.attendant.isActive ? "Active" : "Inactive",
     workSummary: buildWorkSummary(args.row),
     earningsLines,

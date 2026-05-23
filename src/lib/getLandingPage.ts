@@ -69,4 +69,11 @@ export function getCategoryLabel(category?: string | null) {
   }
 }
 
+export function getPayrollCategoryLabel(category?: string | null, email?: string | null) {
+  if (String(email ?? "").trim().toLowerCase() === "brendah@betech.co.ke") {
+    return "Product Desk";
+  }
+  return getCategoryLabel(category);
+}
+
 export default getLandingPage;

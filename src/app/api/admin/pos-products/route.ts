@@ -1,4 +1,4 @@
-import { noStoreJson, requireRole, getActorId } from "@/lib/api";
+import { noStoreJson, requireRoleOrBrendah, getActorId } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { getProductTableCapabilities } from "@/lib/productTableCapabilities";
 import { Prisma } from "@prisma/client";
@@ -46,13 +46,6 @@ const productSchema = z.object({
   shopImageUrl: z.string().trim().max(500).nullable().optional(),
   shopBrand: z.string().trim().max(120).nullable().optional(),
 }).superRefine((data, ctx) => {
-  if (!data.variableCost && !(Number(data.lastBuyingPrice ?? 0) > 0)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["lastBuyingPrice"],
-      message: "Buying price is required for fixed-cost products",
-    });
-  }
   const expectedPickupDelay = data.availabilityType === "WAREHOUSE" ? 1 : 0;
   if (data.pickupDelayDays !== undefined && data.pickupDelayDays !== expectedPickupDelay) {
     ctx.addIssue({
@@ -214,7 +207,7 @@ function buildShopInsertFragments(capabilities: Awaited<ReturnType<typeof getPro
 }
 
 export async function GET(req: Request) {
-  const auth = await requireRole(["ADMIN", "SUPERVISOR"]);
+  const auth = await requireRoleOrBrendah(["ADMIN", "SUPERVISOR"]);
   if (!auth.ok) return auth.res;
 
   const { searchParams } = new URL(req.url);
@@ -338,7 +331,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const auth = await requireRole(["ADMIN"]);
+  const auth = await requireRoleOrBrendah(["ADMIN", "SUPERVISOR"]);
   if (!auth.ok) return auth.res;
 
   const body = await req.json().catch(() => ({}));
@@ -349,7 +342,23 @@ export async function POST(req: Request) {
 
   const capabilities = await getProductTableCapabilities(prisma);
   const actorId = (auth.session?.user as { id?: string } | undefined)?.id ?? (await getActorId());
-  const data = parsed.data;
+  const isBrendah = Boolean((auth as { isBrendah?: boolean }).isBrendah);
+  const data = isBrendah
+    ? {
+        ...parsed.data,
+        variableCost: true,
+        lastBuyingPrice: null,
+        commissionEnabled: false,
+        commissionAmount: null,
+        commissionRequiresApproval: false,
+      }
+    : parsed.data;
+  if (!isBrendah && !data.variableCost && !(Number(data.lastBuyingPrice ?? 0) > 0)) {
+    return noStoreJson(
+      { error: { fieldErrors: { lastBuyingPrice: ["Buying price is required for fixed-cost products"] } } },
+      { status: 400 },
+    );
+  }
   const normalizedStatus = data.status ?? (data.isActive ? "ACTIVE" : "INACTIVE");
   const normalizedIsActive = normalizedStatus === "ACTIVE" && Boolean(data.isActive);
   const skuBase = slugifySku(data.sku || data.name);

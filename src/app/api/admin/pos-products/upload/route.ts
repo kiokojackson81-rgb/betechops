@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { put } from "@vercel/blob";
-import { requireRole } from "@/lib/api";
+import { requireRoleOrBrendah } from "@/lib/api";
 
 export const runtime = "nodejs";
 
@@ -9,7 +9,7 @@ function sanitizePathPart(value: string) {
 }
 
 export async function POST(req: Request) {
-  const auth = await requireRole(["ADMIN", "SUPERVISOR"]);
+  const auth = await requireRoleOrBrendah(["ADMIN", "SUPERVISOR"]);
   if (!auth.ok) return auth.res;
 
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
