@@ -1,4 +1,4 @@
-import { noStoreJson, requireRole } from "@/lib/api";
+import { noStoreJson, requireRoleOrBrendah } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 const APPROVAL_PENDING_STATUSES = ["PENDING_APPROVAL", "PENDING"];
 
 export async function GET(req: Request) {
-  const auth = await requireRole(["ADMIN", "SUPERVISOR"]);
+  const auth = await requireRoleOrBrendah(["ADMIN", "SUPERVISOR"]);
   if (!auth.ok) return auth.res;
 
   const { searchParams } = new URL(req.url);

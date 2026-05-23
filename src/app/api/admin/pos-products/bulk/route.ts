@@ -1,4 +1,4 @@
-import { noStoreJson, requireRole, getActorId } from "@/lib/api";
+import { noStoreJson, requireRoleOrBrendah, getActorId } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
@@ -10,7 +10,7 @@ const bulkSchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const auth = await requireRole(["ADMIN"]);
+  const auth = await requireRoleOrBrendah(["ADMIN"]);
   if (!auth.ok) return auth.res;
 
   const body = await req.json().catch(() => ({}));

@@ -1,4 +1,4 @@
-import { noStoreJson, requireRole, getActorId } from "@/lib/api";
+import { noStoreJson, requireRoleOrBrendah, getActorId } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +12,7 @@ async function resolveId(context: ParamsContext) {
 }
 
 export async function POST(_req: Request, context: ParamsContext) {
-  const auth = await requireRole(["ADMIN"]);
+  const auth = await requireRoleOrBrendah(["ADMIN"]);
   if (!auth.ok) return auth.res;
 
   const id = await resolveId(context);

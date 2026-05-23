@@ -342,18 +342,8 @@ export async function POST(req: Request) {
 
   const capabilities = await getProductTableCapabilities(prisma);
   const actorId = (auth.session?.user as { id?: string } | undefined)?.id ?? (await getActorId());
-  const isBrendah = Boolean((auth as { isBrendah?: boolean }).isBrendah);
-  const data = isBrendah
-    ? {
-        ...parsed.data,
-        variableCost: true,
-        lastBuyingPrice: null,
-        commissionEnabled: false,
-        commissionAmount: null,
-        commissionRequiresApproval: false,
-      }
-    : parsed.data;
-  if (!isBrendah && !data.variableCost && !(Number(data.lastBuyingPrice ?? 0) > 0)) {
+  const data = parsed.data;
+  if (!data.variableCost && !(Number(data.lastBuyingPrice ?? 0) > 0)) {
     return noStoreJson(
       { error: { fieldErrors: { lastBuyingPrice: ["Buying price is required for fixed-cost products"] } } },
       { status: 400 },

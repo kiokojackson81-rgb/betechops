@@ -1,4 +1,4 @@
-import { noStoreJson, requireRole, requireRoleOrBrendah, getActorId } from "@/lib/api";
+import { noStoreJson, requireRoleOrBrendah, getActorId } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { getProductTableCapabilities } from "@/lib/productTableCapabilities";
 import { recomputeOrderEconomics } from "@/lib/recomputeOrderEconomics";
@@ -234,17 +234,7 @@ export async function PATCH(req: Request, context: ParamsContext) {
   }
 
   const actorId = (auth.session?.user as { id?: string } | undefined)?.id ?? (await getActorId());
-  const isBrendah = Boolean((auth as { isBrendah?: boolean }).isBrendah);
-  const data = isBrendah
-    ? {
-        ...parsed.data,
-        lastBuyingPrice: undefined,
-        variableCost: undefined,
-        commissionEnabled: undefined,
-        commissionAmount: undefined,
-        commissionRequiresApproval: undefined,
-      }
-    : parsed.data;
+  const data = parsed.data;
   const nextVariableCost = data.variableCost ?? Boolean(existing.variableCost);
   const nextLastBuyingPrice = data.lastBuyingPrice !== undefined ? data.lastBuyingPrice : Number(existing.lastBuyingPrice ?? 0) || null;
   const nextStatus = data.status ?? String(existing.status || (Boolean(existing.isActive) ? "ACTIVE" : "INACTIVE")).toUpperCase();
@@ -405,7 +395,7 @@ export async function PATCH(req: Request, context: ParamsContext) {
 }
 
 export async function DELETE(_: Request, context: ParamsContext) {
-  const auth = await requireRole(["ADMIN"]);
+  const auth = await requireRoleOrBrendah(["ADMIN"]);
   if (!auth.ok) return auth.res;
 
   const capabilities = await getProductTableCapabilities(prisma);
