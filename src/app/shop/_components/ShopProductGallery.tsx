@@ -1,23 +1,39 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, PlayCircle } from "lucide-react";
 import ShopProductVisual from "@/app/shop/_components/ShopProductVisual";
 import type { ShopProductVisualType } from "@/app/shop/shopData";
+
+type GalleryMediaItem =
+  | { type: "image"; src: string }
+  | { type: "video"; src: string };
 
 type ShopProductGalleryProps = {
   images: string[];
   productName: string;
   visualType: ShopProductVisualType;
+  videoEmbedUrl?: string | null;
 };
 
-export default function ShopProductGallery({ images, productName, visualType }: ShopProductGalleryProps) {
-  const galleryImages = useMemo(() => (images.length ? images : [""]), [images]);
+export default function ShopProductGallery({ images, productName, visualType, videoEmbedUrl }: ShopProductGalleryProps) {
+  const mediaItems = useMemo<GalleryMediaItem[]>(() => {
+    const baseImages = (images.length ? images : [""]).map((src) => ({ type: "image" as const, src }));
+    if (!videoEmbedUrl) return baseImages;
+    const insertAt = Math.min(2, baseImages.length);
+    return [
+      ...baseImages.slice(0, insertAt),
+      { type: "video", src: videoEmbedUrl },
+      ...baseImages.slice(insertAt),
+    ];
+  }, [images, videoEmbedUrl]);
   const [activeIndex, setActiveIndex] = useState(0);
-  const activeImage = galleryImages[activeIndex] || "";
+  const activeItem = mediaItems[activeIndex] || { type: "image" as const, src: "" };
+  const activeImage = activeItem.type === "image" ? activeItem.src : "";
+  const activeVideo = activeItem.type === "video" ? activeItem.src : null;
 
   function moveGallery(step: number) {
-    setActiveIndex((current) => (current + step + galleryImages.length) % galleryImages.length);
+    setActiveIndex((current) => (current + step + mediaItems.length) % mediaItems.length);
   }
 
   return (
@@ -26,9 +42,9 @@ export default function ShopProductGallery({ images, productName, visualType }: 
         <div className="relative overflow-hidden rounded-[30px] border border-white/80 bg-[#f8f2e9]">
           <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.95),transparent_72%)]" />
           <div className="absolute left-4 top-4 z-20 inline-flex items-center rounded-full border border-white/80 bg-white/90 px-3 py-1 text-[11px] font-semibold text-slate-600 shadow-[0_10px_22px_rgba(15,23,42,0.08)] backdrop-blur">
-            {activeIndex + 1} / {galleryImages.length}
+            {activeIndex + 1} / {mediaItems.length}
           </div>
-          {galleryImages.length > 1 ? (
+          {mediaItems.length > 1 ? (
             <>
               <button
                 type="button"
@@ -49,7 +65,17 @@ export default function ShopProductGallery({ images, productName, visualType }: 
             </>
           ) : null}
           <div className="relative h-[20rem] p-4 sm:h-[26rem] sm:p-5 lg:h-[35rem]">
-            {activeImage ? (
+            {activeVideo ? (
+              <div className="h-full w-full overflow-hidden rounded-[26px] bg-[#111111] shadow-[inset_0_0_0_1px_rgba(122,0,0,0.06)]">
+                <iframe
+                  src={`${activeVideo}${activeVideo.includes("?") ? "&" : "?"}autoplay=1`}
+                  title={`${productName} product video`}
+                  className="h-full w-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+            ) : activeImage ? (
               <div className="group h-full w-full overflow-hidden rounded-[26px] bg-white shadow-[inset_0_0_0_1px_rgba(122,0,0,0.06)]">
                 <img
                   src={activeImage}
@@ -68,11 +94,11 @@ export default function ShopProductGallery({ images, productName, visualType }: 
 
         <div className="border-t border-[#7a0000]/8 bg-white/92 px-3 py-3 sm:px-4">
           <div className="flex gap-2 overflow-x-auto pb-1">
-            {galleryImages.map((imageUrl, index) => {
+            {mediaItems.map((item, index) => {
               const isActive = index === activeIndex;
               return (
                 <button
-                  key={`${imageUrl}-${index}`}
+                  key={`${item.type}-${item.src}-${index}`}
                   type="button"
                   onClick={() => setActiveIndex(index)}
                   className={`relative h-20 w-20 shrink-0 overflow-hidden rounded-[20px] border bg-[#f7efe4] p-1.5 transition sm:h-24 sm:w-24 ${
@@ -80,10 +106,18 @@ export default function ShopProductGallery({ images, productName, visualType }: 
                       ? "border-[#7a0000]/35 shadow-[0_14px_28px_rgba(122,0,0,0.12)]"
                       : "border-[#7a0000]/10 hover:border-[#7a0000]/20"
                   }`}
-                  aria-label={`View product image ${index + 1}`}
+                  aria-label={item.type === "video" ? "Play product video" : `View product image ${index + 1}`}
                 >
-                  {imageUrl ? (
-                    <img src={imageUrl} alt={`${productName} thumbnail ${index + 1}`} className="h-full w-full rounded-[16px] object-contain bg-white" />
+                  {item.type === "video" ? (
+                    <div className="relative h-full w-full overflow-hidden rounded-[16px] bg-[linear-gradient(180deg,#2a120e_0%,#111111_100%)]">
+                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.14),transparent_60%)]" />
+                      <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-white">
+                        <PlayCircle className="h-7 w-7" />
+                        <span className="text-[10px] font-bold uppercase tracking-[0.14em]">Video</span>
+                      </div>
+                    </div>
+                  ) : item.src ? (
+                    <img src={item.src} alt={`${productName} thumbnail ${index + 1}`} className="h-full w-full rounded-[16px] object-contain bg-white" />
                   ) : (
                     <div className="h-full w-full rounded-[16px] bg-white p-1">
                       <ShopProductVisual visualType={visualType} productName={productName} compact className="h-full w-full" />

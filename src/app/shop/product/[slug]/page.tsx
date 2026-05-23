@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BadgeCheck, BatteryCharging, CreditCard, MapPin, PlayCircle, ShieldCheck, Store, SunMedium, Truck, Zap } from "lucide-react";
+import { BadgeCheck, BatteryCharging, CreditCard, MapPin, ShieldCheck, Store, SunMedium, Truck, Zap } from "lucide-react";
 import ShopAnalyticsTracker from "@/app/shop/_components/ShopAnalyticsTracker";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
 import ShopMobileStickyBar from "@/app/shop/_components/ShopMobileStickyBar";
@@ -204,7 +204,7 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
           />
 
           <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)] xl:items-start">
-            <ShopProductGallery images={galleryImages} productName={product.name} visualType={product.visualType} />
+            <ShopProductGallery images={galleryImages} productName={product.name} visualType={product.visualType} videoEmbedUrl={tiktokEmbedUrl} />
 
             <div className="grid gap-5">
               <div className={`${shopStyles.lightCard} p-4 sm:p-5 lg:p-6`}>
@@ -251,26 +251,6 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
                 <div className="mt-5">
                   <ShopProductDetailActions product={product} />
                 </div>
-                {tiktokEmbedUrl ? (
-                  <div className="mt-5 rounded-[24px] border border-slate-200/80 bg-white/90 p-3 shadow-[0_12px_24px_rgba(15,23,42,0.06)]">
-                    <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.16em] text-[#7a0000]">
-                      <PlayCircle className="h-4 w-4" />
-                      Product video
-                    </div>
-                    <div className="mt-2 text-sm leading-6 text-slate-600">
-                      Watch the TikTok product video here without leaving the Betech Solar website.
-                    </div>
-                    <div className="mt-3 overflow-hidden rounded-[20px] border border-slate-200 bg-slate-950">
-                      <iframe
-                        src={tiktokEmbedUrl}
-                        title={`${product.name} TikTok video`}
-                        className="aspect-[9/16] w-full"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                      />
-                    </div>
-                  </div>
-                ) : null}
               </div>
 
               <div className="grid gap-4 lg:grid-cols-[1.02fr_0.98fr]">

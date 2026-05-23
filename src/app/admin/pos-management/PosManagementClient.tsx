@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { findSimilarProducts } from "@/lib/posProductSimilarity";
 import { showToast } from "@/lib/ui/toast";
@@ -246,6 +247,14 @@ function parseStringArray(value: unknown) {
     }
   }
   return [];
+}
+
+function slugifyShopProductName(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 function formatMoney(value: number | string | null | undefined) {
@@ -1589,6 +1598,7 @@ export default function PosManagementClient() {
                   const visibleInShop = Boolean(product.ecommerceVisible ?? product.showInShop);
                   const availabilityType = normalizeAvailabilityType(product.availabilityType);
                   const displayImage = product.mainImageUrl || product.shopImageUrl || "";
+                  const shopHref = `/shop/product/${slugifyShopProductName(product.name)}`;
 
                   return <tr key={product.id} className={draft.id === product.id ? "bg-emerald-500/5" : undefined}>
                     <td className="px-4 py-3 align-top">
@@ -1609,7 +1619,19 @@ export default function PosManagementClient() {
                           </div>
                         )}
                         <div className="min-w-0">
-                          <div className="max-w-[280px] truncate font-semibold leading-6 text-white">{product.name}</div>
+                          {visibleInShop ? (
+                            <Link
+                              href={shopHref}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="block max-w-[280px] truncate font-semibold leading-6 text-white underline-offset-4 transition hover:text-emerald-200 hover:underline"
+                              title="Open live shop product page"
+                            >
+                              {product.name}
+                            </Link>
+                          ) : (
+                            <div className="max-w-[280px] truncate font-semibold leading-6 text-white">{product.name}</div>
+                          )}
                           <div className="text-xs text-slate-400">{product.category}</div>
                           <div className="mt-1 flex flex-wrap gap-1.5">
                             {product.brand ? <span className="rounded-full border border-slate-700 px-2 py-0.5 text-[10px] text-slate-300">{product.brand}</span> : null}
