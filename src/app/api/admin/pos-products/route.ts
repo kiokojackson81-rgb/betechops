@@ -2,6 +2,7 @@ import { noStoreJson, requireRoleOrBrendah, getActorId } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { getProductTableCapabilities } from "@/lib/productTableCapabilities";
 import { Prisma } from "@prisma/client";
+import { randomUUID } from "crypto";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -206,6 +207,36 @@ function buildShopInsertFragments(capabilities: Awaited<ReturnType<typeof getPro
   return { columns, values, casts };
 }
 
+function buildModernSystemInsertFragments(capabilities: Awaited<ReturnType<typeof getProductTableCapabilities>>) {
+  const columns: string[] = ['"id"'];
+  const values: unknown[] = [randomUUID()];
+  const casts: string[] = [""];
+  const now = new Date();
+
+  if (capabilities.available.has("minStockLevel")) {
+    columns.push('"minStockLevel"');
+    values.push(5);
+    casts.push("");
+  }
+  if (capabilities.available.has("stockQuantity")) {
+    columns.push('"stockQuantity"');
+    values.push(0);
+    casts.push("");
+  }
+  if (capabilities.available.has("createdAt")) {
+    columns.push('"createdAt"');
+    values.push(now);
+    casts.push("");
+  }
+  if (capabilities.available.has("updatedAt")) {
+    columns.push('"updatedAt"');
+    values.push(now);
+    casts.push("");
+  }
+
+  return { columns, values, casts };
+}
+
 function sanitizeBrendahProductCreate(data: z.infer<typeof productSchema>): z.infer<typeof productSchema> {
   return {
     ...data,
@@ -381,10 +412,12 @@ export async function POST(req: Request) {
   }
 
   const shopFragments = buildShopInsertFragments(capabilities, data);
+  const systemFragments = capabilities.schemaMode === "modern" ? buildModernSystemInsertFragments(capabilities) : null;
   const created = capabilities.schemaMode === "modern"
     ? (await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
         `
           INSERT INTO "Product" (
+            ${systemFragments?.columns.join(", ")},
             "sku",
             "name",
             "category",
@@ -399,11 +432,23 @@ export async function POST(req: Request) {
             ${shopFragments.columns.length ? `, ${shopFragments.columns.join(", ")}` : ""}
           )
           VALUES (
-            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11
-            ${shopFragments.values.map((_, index) => `,$${12 + index}${shopFragments.casts[index] || ""}`).join("")}
+            ${systemFragments?.values.map((_, index) => `$${index + 1}${systemFragments.casts[index] || ""}`).join(", ")},
+            $${(systemFragments?.values.length ?? 0) + 1},
+            $${(systemFragments?.values.length ?? 0) + 2},
+            $${(systemFragments?.values.length ?? 0) + 3},
+            $${(systemFragments?.values.length ?? 0) + 4},
+            $${(systemFragments?.values.length ?? 0) + 5},
+            $${(systemFragments?.values.length ?? 0) + 6},
+            $${(systemFragments?.values.length ?? 0) + 7},
+            $${(systemFragments?.values.length ?? 0) + 8},
+            $${(systemFragments?.values.length ?? 0) + 9},
+            $${(systemFragments?.values.length ?? 0) + 10},
+            $${(systemFragments?.values.length ?? 0) + 11}
+            ${shopFragments.values.map((_, index) => `,$${(systemFragments?.values.length ?? 0) + 12 + index}${shopFragments.casts[index] || ""}`).join("")}
           )
           RETURNING *
         `,
+        ...(systemFragments?.values ?? []),
         sku,
         data.name,
         data.category,
