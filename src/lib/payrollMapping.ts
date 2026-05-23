@@ -29,6 +29,8 @@ export type PayrollSummary = {
   commissionTotal?: number;
   totalCommission?: number;
   grossCommission?: number;
+  totalEarnings?: number;
+  totalDeductions?: number;
   netPay?: number;
   adjustmentEntries?: Array<{
     id: string;
@@ -58,6 +60,18 @@ export function mapPayrollToEarningsSummary(p: PayrollSummary | null, receiptsCo
   const bonusTotal = p.bonusTotal ?? 0;
   const commissionTopUpTotal = p.commissionTopUpTotal ?? 0;
   const penalties = p.penalties ?? 0;
+  const totalEarnings =
+    typeof p.totalEarnings === "number"
+      ? Number(p.totalEarnings ?? 0)
+      : baseSalary + (p.transportAllowance ?? 0) + totalCommission + bonusTotal + commissionTopUpTotal;
+  const totalDeductions =
+    typeof p.totalDeductions === "number"
+      ? Number(p.totalDeductions ?? 0)
+      : chama + lateness + discipline + otherDeductions + penalties;
+  const netPay =
+    typeof p.netPay === "number"
+      ? Number(p.netPay ?? 0)
+      : totalEarnings - totalDeductions;
   const adjustmentEntries = Array.isArray(p.adjustmentEntries)
     ? p.adjustmentEntries.map((entry) => ({
         id: entry.id,
@@ -98,9 +112,9 @@ export function mapPayrollToEarningsSummary(p: PayrollSummary | null, receiptsCo
     latenessTotal: lateness,
     disciplineTotal: discipline,
     otherDeductionsTotal: otherDeductions,
-    totalEarnings: baseSalary + (p.transportAllowance ?? 0) + totalCommission + bonusTotal + commissionTopUpTotal,
-    totalDeductions: chama + lateness + discipline + otherDeductions + penalties,
-    netPay: p.netPay ?? 0,
+    totalEarnings,
+    totalDeductions,
+    netPay,
     ledger: null,
     adjustmentEntries,
   };
@@ -124,6 +138,18 @@ export function mapPayrollToPayrollRow(p: PayrollSummary | null, userId: string 
   const bonus = p?.bonusTotal ?? 0;
   const commissionTopUp = p?.commissionTopUpTotal ?? 0;
   const penalties = p?.penalties ?? 0;
+  const totalEarnings =
+    typeof p?.totalEarnings === "number"
+      ? Number(p?.totalEarnings ?? 0)
+      : salary + transportAllowance + totalCommission + bonus + commissionTopUp;
+  const totalDeductions =
+    typeof p?.totalDeductions === "number"
+      ? Number(p?.totalDeductions ?? 0)
+      : chama + lateness + discipline + otherDeductions + penalties;
+  const netPay =
+    typeof p?.netPay === "number"
+      ? Number(p?.netPay ?? 0)
+      : totalEarnings - totalDeductions;
   const adjustmentEntries = Array.isArray(p?.adjustmentEntries)
     ? p!.adjustmentEntries.map((entry) => ({
         id: entry.id,
@@ -152,10 +178,10 @@ export function mapPayrollToPayrollRow(p: PayrollSummary | null, userId: string 
     commissionTotal: totalCommission,
     commissionBreakdown: p?.commissionBreakdown ?? null,
     bonusTotal: bonus + commissionTopUp,
-    deductionTotal: deductionTotal,
-    totalEarnings: salary + transportAllowance + totalCommission + bonus + commissionTopUp,
-    totalDeductions: deductionTotal,
-    netPay: p?.netPay ?? 0,
+    deductionTotal: totalDeductions,
+    totalEarnings,
+    totalDeductions,
+    netPay,
     totalSales: 0,
     totalProfit: 0,
     totalReceipts: 0,

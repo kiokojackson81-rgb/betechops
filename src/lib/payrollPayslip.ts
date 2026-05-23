@@ -1,6 +1,7 @@
 import type { Branding } from "@prisma/client";
 import { getPayrollCategoryLabel } from "@/lib/getLandingPage";
 import { buildEarningsCardBreakdown } from "@/lib/earningsCardBreakdown";
+import { mapPayrollToEarningsSummary } from "@/lib/payrollMapping";
 import type { TradingPeriod } from "@/lib/tradingPeriod";
 import type { PayrollRow } from "@/app/admin/payroll/types";
 
@@ -203,32 +204,46 @@ function buildWorkSummary(row: PayrollRow) {
 }
 
 function buildPayslipBreakdown(row: PayrollRow) {
-  const breakdown = buildEarningsCardBreakdown({
-    attendantCategory: row.attendantCategory,
-    baseSalary: row.baseSalary,
-    transportAllowance: row.transportAllowance,
-    commissionDirect: row.commissionDirect,
-    commissionMarketplaceJumia: row.commissionMarketplaceJumia,
-    commissionMarketplaceKilimall: row.commissionMarketplaceKilimall,
-    commissionTotal: row.commissionTotal,
-    totalEarnings: row.totalEarnings,
-    totalDeductions: row.totalDeductions,
-    netPay: row.netPay,
-    bonusTotal: row.adjustmentBreakdown.bonus,
-    commissionTopUpTotal: row.adjustmentBreakdown.commissionTopUp,
-    chamaTotal: row.adjustmentBreakdown.chama,
-    latenessTotal: row.adjustmentBreakdown.lateness,
-    disciplineTotal: row.adjustmentBreakdown.discipline,
-    otherDeductionsTotal: row.adjustmentBreakdown.other,
-    penalties: row.adjustmentBreakdown.penalties,
-    adjustmentEntries: row.adjustmentEntries.map((entry) => ({
-      id: entry.id,
-      label: entry.label,
-      amount: entry.amount,
-      adjustmentType: entry.adjustmentType,
-      adjustmentKind: entry.kind,
-    })),
-  });
+  const summary = mapPayrollToEarningsSummary(
+    {
+      periodLabel: "",
+      attendantCategory: row.attendantCategory,
+      baseSalary: row.baseSalary,
+      transportAllowance: row.transportAllowance,
+      totalSales: row.totalSales,
+      totalProfit: row.totalProfit,
+      totalItems: row.totalItems,
+      totalReceipts: row.totalReceipts,
+      newProducts: row.newProducts,
+      editedProducts: row.editedProducts,
+      copiedProducts: row.copiedProducts,
+      commissionDirect: row.commissionDirect,
+      commissionMarketplaceJumia: row.commissionMarketplaceJumia,
+      commissionMarketplaceKilimall: row.commissionMarketplaceKilimall,
+      commissionTotal: row.commissionTotal,
+      grossCommission: row.commissionGross,
+      bonusTotal: row.adjustmentBreakdown.bonus,
+      commissionTopUpTotal: row.adjustmentBreakdown.commissionTopUp,
+      chamaTotal: row.adjustmentBreakdown.chama,
+      latenessTotal: row.adjustmentBreakdown.lateness,
+      disciplineTotal: row.adjustmentBreakdown.discipline,
+      otherDeductionsTotal: row.adjustmentBreakdown.other,
+      penalties: row.adjustmentBreakdown.penalties,
+      totalEarnings: row.totalEarnings,
+      totalDeductions: row.totalDeductions,
+      netPay: row.netPay,
+      adjustmentEntries: row.adjustmentEntries.map((entry) => ({
+        id: entry.id,
+        label: entry.label,
+        amount: entry.amount,
+        adjustmentType: entry.adjustmentType,
+        adjustmentKind: entry.kind,
+      })),
+      commissionBreakdown: row.commissionBreakdown,
+    },
+    row.totalReceipts,
+  );
+  const breakdown = buildEarningsCardBreakdown(summary);
 
   return {
     earningsLines: breakdown.lines
