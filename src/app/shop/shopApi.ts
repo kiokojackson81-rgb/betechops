@@ -60,15 +60,13 @@ async function getServerShopProducts(input?: ShopProductQuery): Promise<ShopProd
   }
 
   try {
-    const products = filterShopProducts(await getOpsCatalogueProductsReadOnlyMapped(), input);
-    return products.length ? products : filterShopProducts(allShopProducts, input);
+    return filterShopProducts(await getOpsCatalogueProductsReadOnlyMapped(), input);
   } catch (error) {
-    console.error("[shop] server-side product lookup fell back to mock data", error);
-    return filterShopProducts(allShopProducts, input);
+    console.error("[shop] server-side product lookup failed in live ops mode", error);
+    return [];
   }
 }
 
-// TODO: Replace preview fallback with verified live ops catalogue reads after testing is complete.
 export async function getShopProducts(input?: ShopProductQuery): Promise<ShopProduct[]> {
   if (typeof window === "undefined") {
     return getServerShopProducts(input);
@@ -83,9 +81,9 @@ export async function getShopProducts(input?: ShopProductQuery): Promise<ShopPro
     getApiUrl(`/api/shop/products${query.toString() ? `?${query.toString()}` : ""}`),
   ).catch(() => null);
 
-  if (response?.products?.length) return response.products;
+  if (response && Array.isArray(response.products)) return response.products;
 
-  return filterShopProducts(allShopProducts, input);
+  return isShopOpsApiEnabled() ? [] : filterShopProducts(allShopProducts, input);
 }
 
 export async function getShopProductBySlug(slug: string): Promise<ShopProduct | null> {
@@ -96,7 +94,7 @@ export async function getShopProductBySlug(slug: string): Promise<ShopProduct | 
   const response = await fetchJson<{ product: ShopProduct | null }>(getApiUrl(`/api/shop/products/${slug}`)).catch(() => null);
   if (response) return response.product;
 
-  return allShopProducts.find((product) => product.slug === slug) ?? null;
+  return isShopOpsApiEnabled() ? null : allShopProducts.find((product) => product.slug === slug) ?? null;
 }
 
 // TODO: Checkout should create pending ecommerce order in ops.

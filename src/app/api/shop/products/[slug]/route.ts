@@ -35,17 +35,16 @@ export async function GET(_: Request, context: { params: Promise<{ slug: string 
       product,
     });
   } catch (error) {
-    console.error(`[shop] failed to read ops catalogue product for slug ${parsed.data.slug}; using mock fallback`, error);
-
-    const product = allShopProducts.find((item) => item.slug === parsed.data.slug) ?? null;
-
-    return NextResponse.json({
-      ...buildMockProductsResponse(product ? [product] : []),
-      product,
-      warning:
-        process.env.NODE_ENV !== "production"
-          ? "Ops catalogue read failed. Returning mock shop product instead."
-          : undefined,
-    });
+    console.error(`[shop] failed to read ops catalogue product for slug ${parsed.data.slug} in live mode`, error);
+    return NextResponse.json(
+      {
+        ok: false,
+        source: "ops" as const,
+        useOpsApi: true,
+        product: null,
+        error: "Ops catalogue read failed.",
+      },
+      { status: 503 },
+    );
   }
 }

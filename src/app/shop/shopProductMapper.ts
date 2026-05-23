@@ -73,9 +73,7 @@ export type ShopProductRejectionReason =
   | "rejected: non-solar keyword/category"
   | "rejected: invalid price"
   | "rejected: missing required display name"
-  | "rejected: ecommerceVisible is false"
-  | "rejected: inactive status"
-  | "rejected: showInShop is false";
+  | "rejected: inactive status";
 
 export type ShopProductMappingPreview = {
   product: ShopProduct | null;
@@ -342,14 +340,6 @@ export function isSolarShopEligibleProduct(input: {
 
   if (!Number.isFinite(price) || price <= 0) {
     rejectionReasons.push("rejected: invalid price");
-  }
-
-  if (typeof input.showInShop === "boolean" && !input.showInShop) {
-    rejectionReasons.push("rejected: showInShop is false");
-  }
-
-  if (typeof input.ecommerceVisible === "boolean" && !input.ecommerceVisible) {
-    rejectionReasons.push("rejected: ecommerceVisible is false");
   }
 
   if (String(input.status || "ACTIVE").trim().toUpperCase() !== "ACTIVE") {

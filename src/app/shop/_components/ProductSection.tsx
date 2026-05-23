@@ -7,11 +7,12 @@ type ProductSectionProps = {
   id: string;
   title: string;
   subtitle: string;
-  href: string;
+  href?: string;
+  linkLabel?: string;
   products: ShopProduct[];
 };
 
-export default function ProductSection({ id, title, subtitle, href, products }: ProductSectionProps) {
+export default function ProductSection({ id, title, subtitle, href, linkLabel = "See all", products }: ProductSectionProps) {
   return (
     <section id={id} className="py-3.5 sm:py-4">
       <div className={shopStyles.shell}>
@@ -21,9 +22,11 @@ export default function ProductSection({ id, title, subtitle, href, products }: 
               <h2 className="text-xl font-black tracking-tight text-slate-950 sm:text-2xl">{title}</h2>
               <p className="mt-0.5 text-xs leading-5 text-slate-600 sm:text-sm">{subtitle}</p>
             </div>
-            <Link href={href} className="inline-flex items-center text-sm font-black text-[#7a0000] transition hover:text-[#560000]">
-              See all
-            </Link>
+            {href ? (
+              <Link href={href} className="inline-flex items-center text-sm font-black text-[#7a0000] transition hover:text-[#560000]">
+                {linkLabel}
+              </Link>
+            ) : null}
           </div>
 
           <div className="grid grid-cols-2 gap-2.5 p-2.5 sm:gap-3 sm:p-3 lg:grid-cols-4 lg:p-4">

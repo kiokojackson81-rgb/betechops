@@ -19,16 +19,6 @@ export async function GET(request: Request) {
   try {
     const products = filterShopProducts(await getOpsCatalogueProductsReadOnlyMapped(), { category, subcategory, q });
 
-    if (!products.length) {
-      return NextResponse.json({
-        ...fallback,
-        warning:
-          process.env.NODE_ENV !== "production"
-            ? "Ops catalogue returned no valid solar products; using mock fallback."
-            : undefined,
-      });
-    }
-
     return NextResponse.json({
       ok: true,
       source: "ops" as const,
@@ -36,14 +26,16 @@ export async function GET(request: Request) {
       products,
     });
   } catch (error) {
-    console.error("[shop] failed to read ops catalogue products; using mock fallback", error);
-
-    return NextResponse.json({
-      ...fallback,
-      warning:
-        process.env.NODE_ENV !== "production"
-          ? "Ops catalogue read failed. Returning mock shop products instead."
-          : undefined,
-    });
+    console.error("[shop] failed to read ops catalogue products in live mode", error);
+    return NextResponse.json(
+      {
+        ok: false,
+        source: "ops" as const,
+        useOpsApi: true,
+        products: [],
+        error: "Ops catalogue read failed.",
+      },
+      { status: 503 },
+    );
   }
 }

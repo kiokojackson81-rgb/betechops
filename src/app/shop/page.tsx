@@ -25,7 +25,6 @@ export const metadata: Metadata = buildShopMetadata();
 // - /shop/checkout
 // - /shop/request-quote
 // - /shop/order-success
-// TODO: Replace mock data with ops catalogue API.
 // TODO: Checkout should create pending ecommerce order in ops.
 // TODO: Link customer to existing customer database.
 // TODO: Link completed order to receipt system.
@@ -39,19 +38,8 @@ function getProductsForCategories(products: ShopProduct[], categorySlugs: string
   return products.filter((product) => allowed.has(slugify(product.category))).slice(0, limit);
 }
 
-function getFeaturedProducts(products: ShopProduct[]) {
-  return [...products]
-    .sort((left, right) => {
-      const leftDiscount = (left.oldPrice || left.price) - left.price;
-      const rightDiscount = (right.oldPrice || right.price) - right.price;
-      return rightDiscount - leftDiscount;
-    })
-    .slice(0, 4);
-}
-
 export default async function ShopPage() {
   const products = await getShopProducts();
-  const featuredProducts = getFeaturedProducts(products);
   const kitProducts = getProductsForCategories(products, ["solar-full-kits"]);
   const panelProducts = getProductsForCategories(products, ["solar-panels"]);
   const inverterProducts = getProductsForCategories(products, ["solar-inverters"]);
@@ -94,13 +82,12 @@ export default async function ShopPage() {
         </div>
       </section>
 
-      {featuredProducts.length ? (
+      {products.length ? (
         <ProductSection
-          id="featured-deals"
-          title="Featured Deals"
-          subtitle="Popular Betech Solar picks for faster browsing."
-          href="/shop"
-          products={featuredProducts}
+          id="shop-catalogue"
+          title="Live Shop Catalogue"
+          subtitle="Real products currently published from POS Management for storefront testing."
+          products={products}
         />
       ) : null}
 
