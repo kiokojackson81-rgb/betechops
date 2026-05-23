@@ -5,6 +5,7 @@ import { getBranding } from "@/lib/branding";
 import { launchChromiumBrowser } from "@/lib/pdf/chromium";
 import { parseTradingPeriodKey, getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { buildPayrollRow } from "@/lib/adminPayroll";
+import { applyCanonicalPayrollOverrides } from "@/lib/payrollCanonical";
 import { buildPayslipPayload, renderPayslipDocumentHtml, sanitizeFilename } from "@/lib/payrollPayslip";
 
 export const runtime = "nodejs";
@@ -39,7 +40,7 @@ export async function GET(req: Request) {
 
   const slips = await Promise.all(
     attendants.map(async (attendant) => {
-      const row = await buildPayrollRow(attendant, period);
+      const row = await applyCanonicalPayrollOverrides(await buildPayrollRow(attendant, period), period);
       return buildPayslipPayload({
         attendant,
         row,

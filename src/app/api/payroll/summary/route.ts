@@ -4,8 +4,7 @@ import { authOptions } from "@/lib/nextAuth";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
 import { buildPayrollRow } from "@/lib/adminPayroll";
-import { getBrendahCommissionForPeriod } from "@/lib/brendahCommission";
-import type { PayrollRow } from "@/app/admin/payroll/types";
+import { applyCanonicalPayrollOverrides } from "@/lib/payrollCanonical";
 import type { TradingPeriod } from "@/lib/tradingPeriod";
 
 // Compatibility route for older clients that call /api/payroll/summary
@@ -18,37 +17,6 @@ export const dynamic = "force-dynamic";
 
 function parsePeriod(url: URL) {
   return parseTradingPeriodKey(url.searchParams.get("periodKey") ?? undefined) ?? getTradingPeriodFor(new Date());
-}
-
-async function applyBrendahCanonicalCommission(row: PayrollRow, period: TradingPeriod): Promise<PayrollRow> {
-  if ((row.email ?? "").toLowerCase().trim() !== "brendah@betech.co.ke") return row;
-
-  const result = await getBrendahCommissionForPeriod(row.attendantId, period);
-  const totalEarnings =
-    Number(row.baseSalary ?? 0) +
-    Number(row.transportAllowance ?? 0) +
-    result.commission +
-    Number(row.bonusTotal ?? 0);
-
-  return {
-    ...row,
-    totalSales: result.totalSales,
-    totalProfit: result.totalProfit,
-    totalReceipts: result.totalReceipts,
-    commission: result.commission,
-    commissionGross: result.commission,
-    commissionDirect: result.commission,
-    commissionTotal: result.commission,
-    totalEarnings,
-    netPay: totalEarnings - Number(row.totalDeductions ?? 0),
-    commissionBreakdown: {
-      ...(row.commissionBreakdown && typeof row.commissionBreakdown === "object" ? row.commissionBreakdown : {}),
-      source: "brendah-canonical",
-      mode: result.commissionMode,
-      reason: result.commissionReason,
-      periodKey: result.periodKey,
-    },
-  };
 }
 
 export async function GET(req: Request) {
@@ -78,7 +46,7 @@ export async function GET(req: Request) {
       if (!attendant) {
         return NextResponse.json({ error: "Attendant not found" }, { status: 404 });
       }
-      const row = await applyBrendahCanonicalCommission(await buildPayrollRow(attendant, period), period);
+      const row = await applyCanonicalPayrollOverrides(await buildPayrollRow(attendant, period), period);
       const payloadRow = { periodLabel: period.label, ...row };
       return NextResponse.json({ periodLabel: period.label, rows: [payloadRow], row: payloadRow });
     }
@@ -90,7 +58,7 @@ export async function GET(req: Request) {
     });
     const builtRows = await Promise.all(
       attendants.map(async (attendant) =>
-        applyBrendahCanonicalCommission(await buildPayrollRow(attendant, period), period),
+        applyCanonicalPayrollOverrides(await buildPayrollRow(attendant, period), period),
       ),
     );
     const rows = builtRows.map((row) => ({ periodLabel: period.label, ...row }));
@@ -109,7 +77,7 @@ export async function GET(req: Request) {
   if (!attendant) {
     return NextResponse.json({ error: "Attendant not found" }, { status: 404 });
   }
-  const row = await applyBrendahCanonicalCommission(await buildPayrollRow(attendant, period), period);
+  const row = await applyCanonicalPayrollOverrides(await buildPayrollRow(attendant, period), period);
   const payloadRow = { periodLabel: period.label, ...row };
   return NextResponse.json({ periodLabel: period.label, rows: [payloadRow], row: payloadRow });
 }

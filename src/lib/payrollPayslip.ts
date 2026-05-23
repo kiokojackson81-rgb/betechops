@@ -1,5 +1,6 @@
 import type { Branding } from "@prisma/client";
 import { getPayrollCategoryLabel } from "@/lib/getLandingPage";
+import { buildEarningsCardBreakdown } from "@/lib/earningsCardBreakdown";
 import type { TradingPeriod } from "@/lib/tradingPeriod";
 import type { PayrollRow } from "@/app/admin/payroll/types";
 
@@ -201,6 +202,47 @@ function buildWorkSummary(row: PayrollRow) {
   }
 }
 
+function buildPayslipBreakdown(row: PayrollRow) {
+  const breakdown = buildEarningsCardBreakdown({
+    attendantCategory: row.attendantCategory,
+    baseSalary: row.baseSalary,
+    transportAllowance: row.transportAllowance,
+    commissionDirect: row.commissionDirect,
+    commissionMarketplaceJumia: row.commissionMarketplaceJumia,
+    commissionMarketplaceKilimall: row.commissionMarketplaceKilimall,
+    commissionTotal: row.commissionTotal,
+    totalEarnings: row.totalEarnings,
+    totalDeductions: row.totalDeductions,
+    netPay: row.netPay,
+    bonusTotal: row.adjustmentBreakdown.bonus,
+    commissionTopUpTotal: row.adjustmentBreakdown.commissionTopUp,
+    chamaTotal: row.adjustmentBreakdown.chama,
+    latenessTotal: row.adjustmentBreakdown.lateness,
+    disciplineTotal: row.adjustmentBreakdown.discipline,
+    otherDeductionsTotal: row.adjustmentBreakdown.other,
+    penalties: row.adjustmentBreakdown.penalties,
+    adjustmentEntries: row.adjustmentEntries.map((entry) => ({
+      id: entry.id,
+      label: entry.label,
+      amount: entry.amount,
+      adjustmentType: entry.adjustmentType,
+      adjustmentKind: entry.kind,
+    })),
+  });
+
+  return {
+    earningsLines: breakdown.lines
+      .filter((line) => line.kind === "earning")
+      .map((line) => ({ label: line.label, amount: line.amount })),
+    deductionLines: breakdown.lines
+      .filter((line) => line.kind === "deduction")
+      .map((line) => ({ label: line.label, amount: line.amount })),
+    totalEarnings: breakdown.totalEarnings,
+    totalDeductions: breakdown.totalDeductions,
+    netPay: breakdown.netPay,
+  };
+}
+
 export function buildPayslipPayload(args: {
   attendant: AttendantLike;
   row: PayrollRow;
@@ -209,18 +251,7 @@ export function buildPayslipPayload(args: {
   generatedAt?: Date;
 }): PayslipPayload {
   const generatedAt = args.generatedAt ?? new Date();
-  const commissionLines = buildCommissionLines(args.row);
-  const adjustmentLines = buildAdjustmentLines(args.row);
-  const earningsLines = [
-    { label: "Base salary", amount: args.row.baseSalary },
-    { label: "Transport allowance", amount: args.row.transportAllowance },
-    ...commissionLines,
-    ...adjustmentLines.additionLines,
-  ].filter((line) => Number(line.amount ?? 0) !== 0);
-  const deductionLines = adjustmentLines.deductionLines.filter((line) => Number(line.amount ?? 0) !== 0);
-  const totalEarnings = earningsLines.reduce((sum, line) => sum + Number(line.amount ?? 0), 0);
-  const totalDeductions = deductionLines.reduce((sum, line) => sum + Number(line.amount ?? 0), 0);
-  const netPay = totalEarnings - totalDeductions;
+  const { earningsLines, deductionLines, totalEarnings, totalDeductions, netPay } = buildPayslipBreakdown(args.row);
 
   return {
     siteTitle: args.branding.siteTitle || "BetechOps",

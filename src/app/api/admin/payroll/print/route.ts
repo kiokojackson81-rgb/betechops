@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/api";
 import { getBranding } from "@/lib/branding";
 import { buildPayrollRow } from "@/lib/adminPayroll";
 import { launchChromiumBrowser } from "@/lib/pdf/chromium";
+import { applyCanonicalPayrollOverrides } from "@/lib/payrollCanonical";
 import { prisma } from "@/lib/prisma";
 import { renderPayrollPrintHtml } from "@/lib/payrollPrint";
 import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
@@ -35,7 +36,9 @@ export async function GET(req: Request) {
     getBranding(),
   ]);
 
-  const rows = await Promise.all(attendants.map((attendant) => buildPayrollRow(attendant, period)));
+  const rows = await Promise.all(
+    attendants.map(async (attendant) => applyCanonicalPayrollOverrides(await buildPayrollRow(attendant, period), period)),
+  );
   const html = renderPayrollPrintHtml({ period, rows, branding });
 
   const browser = await launchChromiumBrowser();
