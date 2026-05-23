@@ -12,6 +12,7 @@ const bulkSchema = z.object({
 export async function POST(req: Request) {
   const auth = await requireRoleOrBrendah(["ADMIN"]);
   if (!auth.ok) return auth.res;
+  if (auth.isBrendah) return noStoreJson({ error: "Not authorized for bulk product actions" }, { status: 403 });
 
   const body = await req.json().catch(() => ({}));
   const parsed = bulkSchema.safeParse(body);

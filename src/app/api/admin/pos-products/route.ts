@@ -206,6 +206,26 @@ function buildShopInsertFragments(capabilities: Awaited<ReturnType<typeof getPro
   return { columns, values, casts };
 }
 
+function sanitizeBrendahProductCreate(data: z.infer<typeof productSchema>): z.infer<typeof productSchema> {
+  return {
+    ...data,
+    category: "pos",
+    lastBuyingPrice: null,
+    defaultWarranty: null,
+    variableCost: false,
+    isActive: true,
+    commissionEnabled: false,
+    commissionAmount: null,
+    commissionRequiresApproval: false,
+    ecommerceVisible: true,
+    isFeatured: false,
+    status: "ACTIVE",
+    availabilityType: data.availabilityType ?? "SHOP",
+    pickupDelayDays: (data.availabilityType ?? "SHOP") === "WAREHOUSE" ? 1 : 0,
+    showInShop: true,
+  };
+}
+
 export async function GET(req: Request) {
   const auth = await requireRoleOrBrendah(["ADMIN", "SUPERVISOR"]);
   if (!auth.ok) return auth.res;
@@ -342,8 +362,8 @@ export async function POST(req: Request) {
 
   const capabilities = await getProductTableCapabilities(prisma);
   const actorId = (auth.session?.user as { id?: string } | undefined)?.id ?? (await getActorId());
-  const data = parsed.data;
-  if (!data.variableCost && !(Number(data.lastBuyingPrice ?? 0) > 0)) {
+  const data = auth.isBrendah ? sanitizeBrendahProductCreate(parsed.data) : parsed.data;
+  if (!auth.isBrendah && !data.variableCost && !(Number(data.lastBuyingPrice ?? 0) > 0)) {
     return noStoreJson(
       { error: { fieldErrors: { lastBuyingPrice: ["Buying price is required for fixed-cost products"] } } },
       { status: 400 },

@@ -125,6 +125,10 @@ type ProductDraft = {
   shopBrand: string;
 };
 
+type PosManagementClientProps = {
+  mode?: "admin" | "product-desk";
+};
+
 const emptyDraft: ProductDraft = {
   sku: "",
   name: "",
@@ -161,6 +165,14 @@ const emptyDraft: ProductDraft = {
   shopImageUrl: "",
   shopBrand: "",
 };
+
+function createDraftDefaults(mode: "admin" | "product-desk"): ProductDraft {
+  return {
+    ...emptyDraft,
+    ecommerceVisible: mode === "product-desk",
+    showInShop: mode === "product-desk",
+  };
+}
 
 const defaultCapabilities: PosCatalogueCapabilities = {
   schemaMode: "legacy",
@@ -290,12 +302,19 @@ function getApiErrorMessage(json: unknown, fallback: string) {
   return fallback;
 }
 
-export default function PosManagementClient() {
+export default function PosManagementClient({ mode = "admin" }: PosManagementClientProps) {
+  const isProductDeskMode = mode === "product-desk";
+  const canManagePricing = !isProductDeskMode;
+  const canManageCommissions = !isProductDeskMode;
+  const canManageActivation = !isProductDeskMode;
+  const canDeleteProducts = !isProductDeskMode;
+  const canUseBulkActions = !isProductDeskMode;
+  const canManageFeaturedStatus = !isProductDeskMode;
   const [products, setProducts] = useState<PosProduct[]>([]);
   const [capabilities, setCapabilities] = useState<PosCatalogueCapabilities>(defaultCapabilities);
   const [approvals, setApprovals] = useState<CommissionApproval[]>([]);
   const [releasedApprovals, setReleasedApprovals] = useState<CommissionApproval[]>([]);
-  const [draft, setDraft] = useState<ProductDraft>(emptyDraft);
+  const [draft, setDraft] = useState<ProductDraft>(() => createDraftDefaults(mode));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingKind, setUploadingKind] = useState<"main" | "gallery" | "brand" | null>(null);
@@ -320,13 +339,17 @@ export default function PosManagementClient() {
     try {
       const requests = [
         fetch(`${productApiBase}?q=${encodeURIComponent(productQuery)}&includeInactive=${showInactive ? "1" : "0"}&limit=200`, { cache: "no-store" }),
-        fetch(`/api/admin/pos-commissions?status=pending&limit=100`, { cache: "no-store" }),
-        fetch(`/api/admin/pos-commissions?status=released&limit=100`, { cache: "no-store" }),
+        ...(isProductDeskMode
+          ? []
+          : [
+              fetch(`/api/admin/pos-commissions?status=pending&limit=100`, { cache: "no-store" }),
+              fetch(`/api/admin/pos-commissions?status=released&limit=100`, { cache: "no-store" }),
+            ]),
       ];
       const responses = await Promise.all(requests);
       const productsRes = responses[0]!;
-      const approvalsRes = responses[1] ?? null;
-      const releasedRes = responses[2] ?? null;
+      const approvalsRes = isProductDeskMode ? null : responses[1] ?? null;
+      const releasedRes = isProductDeskMode ? null : responses[2] ?? null;
 
       const productsJson = await productsRes.json().catch(() => ({ items: [], capabilities: defaultCapabilities }));
       const approvalsJson = approvalsRes ? await approvalsRes.json().catch(() => ({ items: [] })) : { items: [] };
@@ -340,7 +363,7 @@ export default function PosManagementClient() {
     } finally {
       setLoading(false);
     }
-  }, [productApiBase, query, showInactive]);
+  }, [isProductDeskMode, productApiBase, query, showInactive]);
 
   useEffect(() => {
     void loadData("");
@@ -439,12 +462,12 @@ export default function PosManagementClient() {
   }, [draft.id, draft.name, draft.sku, productApiBase]);
 
   const openCreateEditor = useCallback(() => {
-    setDraft(emptyDraft);
+    setDraft(createDraftDefaults(mode));
     setEditorOpen(true);
     window.requestAnimationFrame(() => {
       formSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
-  }, []);
+  }, [mode]);
 
   const applySuggestedShopTaxonomy = useCallback(() => {
     setDraft((current) => ({
@@ -478,7 +501,7 @@ export default function PosManagementClient() {
       };
     });
     setEditorOpen(true);
-  }, []);
+  }, [mode]);
 
   const quickPatchProduct = useCallback(async (product: PosProduct, patch: Record<string, unknown>, successMessage: string) => {
     try {
@@ -499,10 +522,10 @@ export default function PosManagementClient() {
   const submitDraft = async () => {
     if (!draft.name.trim()) return showToast("Product name is required", "error");
     if (!draft.sellingPrice.trim()) return showToast("Selling price is required", "error");
-    if (!draft.variableCost && !draft.lastBuyingPrice.trim()) {
+    if (canManagePricing && !draft.variableCost && !draft.lastBuyingPrice.trim()) {
       return showToast("Buying price is required for fixed-cost products", "error");
     }
-    if (draft.commissionEnabled && !draft.commissionAmount.trim()) {
+    if (canManageCommissions && draft.commissionEnabled && !draft.commissionAmount.trim()) {
       return showToast("Commission amount is required when product commission is enabled", "error");
     }
     setSaving(true);
@@ -510,27 +533,34 @@ export default function PosManagementClient() {
       const payload = {
         sku: draft.sku || undefined,
         name: draft.name,
-        category: draft.category,
+        category: isProductDeskMode ? "pos" : draft.category,
         sellingPrice: Number(draft.sellingPrice || 0),
-        lastBuyingPrice: draft.variableCost ? null : draft.lastBuyingPrice.trim() ? Number(draft.lastBuyingPrice) : null,
-        defaultWarranty: draft.defaultWarranty.trim() || null,
-        variableCost: draft.variableCost,
-        isActive: draft.status === "ACTIVE" && draft.isActive,
-        commissionEnabled: draft.commissionEnabled,
-        commissionAmount: draft.commissionEnabled && draft.commissionAmount.trim() ? Number(draft.commissionAmount) : null,
-        commissionRequiresApproval: draft.commissionEnabled ? draft.commissionRequiresApproval : false,
+        ...(canManagePricing
+          ? {
+              lastBuyingPrice: draft.variableCost ? null : draft.lastBuyingPrice.trim() ? Number(draft.lastBuyingPrice) : null,
+              defaultWarranty: draft.defaultWarranty.trim() || null,
+              variableCost: draft.variableCost,
+            }
+          : {}),
+        isActive: isProductDeskMode ? true : draft.status === "ACTIVE" && draft.isActive,
+        commissionEnabled: isProductDeskMode ? false : draft.commissionEnabled,
+        commissionAmount:
+          canManageCommissions && draft.commissionEnabled && draft.commissionAmount.trim()
+            ? Number(draft.commissionAmount)
+            : null,
+        commissionRequiresApproval: canManageCommissions && draft.commissionEnabled ? draft.commissionRequiresApproval : false,
         ...(capabilities.brand ? { brand: draft.brand.trim() || null } : {}),
         ...(capabilities.shortDescription ? { shortDescription: draft.shortDescription.trim() || null } : {}),
         ...(capabilities.warrantyPeriod ? { warrantyPeriod: draft.warrantyPeriod.trim() || null } : {}),
         ...(capabilities.mainImageUrl ? { mainImageUrl: draft.mainImageUrl.trim() || null } : {}),
         ...(capabilities.galleryImageUrls ? { galleryImageUrls: draft.galleryImageUrls } : {}),
         ...(capabilities.tiktokVideoUrl ? { tiktokVideoUrl: draft.tiktokVideoUrl.trim() || null } : {}),
-        ...(capabilities.ecommerceVisible ? { ecommerceVisible: draft.ecommerceVisible } : {}),
-        ...(capabilities.isFeatured ? { isFeatured: draft.isFeatured } : {}),
-        ...(capabilities.status ? { status: draft.status } : {}),
+        ...(capabilities.ecommerceVisible ? { ecommerceVisible: isProductDeskMode ? true : draft.ecommerceVisible } : {}),
+        ...(capabilities.isFeatured ? { isFeatured: canManageFeaturedStatus ? draft.isFeatured : false } : {}),
+        ...(capabilities.status ? { status: isProductDeskMode ? "ACTIVE" : draft.status } : {}),
         ...(capabilities.availabilityType ? { availabilityType: draft.availabilityType } : {}),
         ...(capabilities.pickupDelayDays ? { pickupDelayDays: draft.pickupDelayDays } : {}),
-        ...(capabilities.showInShop ? { showInShop: draft.showInShop } : {}),
+        ...(capabilities.showInShop ? { showInShop: isProductDeskMode ? true : draft.showInShop } : {}),
         ...(capabilities.shopCategory ? { shopCategory: draft.shopCategory || null } : {}),
         ...(capabilities.shopSubcategory ? { shopSubcategory: draft.shopSubcategory || null } : {}),
         ...(capabilities.shopShortDescription ? { shopShortDescription: draft.shopShortDescription.trim() || null } : {}),
@@ -550,7 +580,7 @@ export default function PosManagementClient() {
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(getApiErrorMessage(json, "Failed to save product"));
       showToast(draft.id ? "Product updated" : "Product created", "success");
-      setDraft(emptyDraft);
+      setDraft(createDraftDefaults(mode));
       setEditorOpen(false);
       await loadData(query);
     } catch (err) {
@@ -657,7 +687,7 @@ export default function PosManagementClient() {
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(getApiErrorMessage(json, "Failed to delete product"));
       if (draft.id === product.id) {
-        setDraft(emptyDraft);
+        setDraft(createDraftDefaults(mode));
         setEditorOpen(false);
       }
       showToast(json?.message || "Product deleted", "success");
@@ -786,7 +816,7 @@ export default function PosManagementClient() {
       const json = await bulkRequest("delete");
       showToast(json?.message || "Bulk catalog cleanup complete", "success");
       if (draft.id && selectedIds[draft.id]) {
-        setDraft(emptyDraft);
+        setDraft(createDraftDefaults(mode));
       }
       clearSelection();
       await loadData(query);
@@ -805,7 +835,9 @@ export default function PosManagementClient() {
             <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Manage Products</p>
             <h2 className="mt-1 text-2xl font-semibold text-white">Fast catalogue workflow for POS and online shop</h2>
             <p className="mt-2 max-w-3xl text-sm text-slate-400">
-              Keep the product table as the daily workspace, then open the editor only when you need to add, fix, or publish an item.
+              {isProductDeskMode
+                ? "Create, edit, and publish shop-ready products without exposing admin-only pricing or commission controls."
+                : "Keep the product table as the daily workspace, then open the editor only when you need to add, fix, or publish an item."}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -866,7 +898,9 @@ export default function PosManagementClient() {
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Product Setup</p>
                 <h2 className="text-2xl font-semibold text-white">{draft.id ? "Edit POS product" : "Create POS product"}</h2>
                 <p className="mt-2 max-w-2xl text-sm text-slate-400">
-                  Keep pricing, SKU, ecommerce details, images, and availability together in one compact editor.
+                  {isProductDeskMode
+                    ? "Keep product content, images, TikTok, and shop publishing details together in one compact editor."
+                    : "Keep pricing, SKU, ecommerce details, images, and availability together in one compact editor."}
                 </p>
               </div>
               <div className="flex gap-2">
@@ -882,7 +916,7 @@ export default function PosManagementClient() {
                     type="button"
                     className="rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-200 hover:bg-white/5"
                     onClick={() => {
-                      setDraft(emptyDraft);
+                      setDraft(createDraftDefaults(mode));
                       setEditorOpen(false);
                     }}
                   >
@@ -971,78 +1005,84 @@ export default function PosManagementClient() {
                 SKU
                 <input className={`${fieldClass} mt-1`} value={draft.sku} onChange={(e) => setDraft((s) => ({ ...s, sku: e.target.value }))} placeholder="Auto-generated if empty" />
               </label>
-              <label className="text-sm text-slate-300">
-                Category
-                <input className={`${fieldClass} mt-1`} value={draft.category} onChange={(e) => setDraft((s) => ({ ...s, category: e.target.value }))} />
-              </label>
+              {!isProductDeskMode ? (
+                <label className="text-sm text-slate-300">
+                  Category
+                  <input className={`${fieldClass} mt-1`} value={draft.category} onChange={(e) => setDraft((s) => ({ ...s, category: e.target.value }))} />
+                </label>
+              ) : null}
               <label className="text-sm text-slate-300">
                 Selling price
                 <input className={`${fieldClass} mt-1`} type="number" min="0" value={draft.sellingPrice} onChange={(e) => setDraft((s) => ({ ...s, sellingPrice: e.target.value }))} />
               </label>
-              <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
-                <label className="flex items-center gap-2 text-sm text-slate-200">
-                  <input
-                    type="checkbox"
-                    checked={draft.variableCost}
-                    onChange={(e) =>
-                      setDraft((s) => ({
-                        ...s,
-                        variableCost: e.target.checked,
-                        lastBuyingPrice: e.target.checked ? "" : s.lastBuyingPrice,
-                      }))
-                    }
-                  />
-                  Variable-cost project
-                </label>
-                {draft.variableCost ? (
-                  <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
-                    Buying price is set later by an admin after the POS sale is captured.
+              {!isProductDeskMode ? (
+                <>
+                  <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
+                    <label className="flex items-center gap-2 text-sm text-slate-200">
+                      <input
+                        type="checkbox"
+                        checked={draft.variableCost}
+                        onChange={(e) =>
+                          setDraft((s) => ({
+                            ...s,
+                            variableCost: e.target.checked,
+                            lastBuyingPrice: e.target.checked ? "" : s.lastBuyingPrice,
+                          }))
+                        }
+                      />
+                      Variable-cost project
+                    </label>
+                    {draft.variableCost ? (
+                      <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
+                        Buying price is set later by an admin after the POS sale is captured.
+                      </div>
+                    ) : (
+                      <label className="block text-sm text-slate-300">
+                        Buying price
+                        <input className={`${fieldClass} mt-1`} type="number" min="0" value={draft.lastBuyingPrice} onChange={(e) => setDraft((s) => ({ ...s, lastBuyingPrice: e.target.value }))} />
+                      </label>
+                    )}
                   </div>
-                ) : (
-                  <label className="block text-sm text-slate-300">
-                    Buying price
-                    <input className={`${fieldClass} mt-1`} type="number" min="0" value={draft.lastBuyingPrice} onChange={(e) => setDraft((s) => ({ ...s, lastBuyingPrice: e.target.value }))} />
+                  <label className="text-sm text-slate-300">
+                    Default receipt warranty
+                    <select
+                      className={`${fieldClass} mt-1`}
+                      value={draft.defaultWarranty}
+                      onChange={(e) => setDraft((s) => ({ ...s, defaultWarranty: e.target.value }))}
+                    >
+                      <option value="">No default warranty</option>
+                      {warrantyOptions.filter(Boolean).map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
                   </label>
-                )}
-              </div>
-              <label className="text-sm text-slate-300">
-                Default receipt warranty
-                <select
-                  className={`${fieldClass} mt-1`}
-                  value={draft.defaultWarranty}
-                  onChange={(e) => setDraft((s) => ({ ...s, defaultWarranty: e.target.value }))}
-                >
-                  <option value="">No default warranty</option>
-                  {warrantyOptions.filter(Boolean).map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
-                <label className="flex items-center gap-2 text-sm text-slate-200">
-                  <input
-                    type="checkbox"
-                    checked={draft.isActive}
-                    onChange={(e) => setDraft((s) => ({ ...s, isActive: e.target.checked, status: e.target.checked ? "ACTIVE" : "INACTIVE" }))}
-                  />
-                  Active in POS catalog
-                </label>
-                <label className="flex items-center gap-2 text-sm text-slate-200">
-                  <input type="checkbox" checked={draft.commissionEnabled} onChange={(e) => setDraft((s) => ({ ...s, commissionEnabled: e.target.checked }))} />
-                  Enable product commission
-                </label>
-                <label className="flex items-center gap-2 text-sm text-slate-200">
-                  <input
-                    type="checkbox"
-                    checked={draft.commissionRequiresApproval}
-                    onChange={(e) => setDraft((s) => ({ ...s, commissionRequiresApproval: e.target.checked }))}
-                    disabled={!draft.commissionEnabled}
-                  />
-                  Require approval
-                </label>
-              </div>
+                  <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
+                    <label className="flex items-center gap-2 text-sm text-slate-200">
+                      <input
+                        type="checkbox"
+                        checked={draft.isActive}
+                        onChange={(e) => setDraft((s) => ({ ...s, isActive: e.target.checked, status: e.target.checked ? "ACTIVE" : "INACTIVE" }))}
+                      />
+                      Active in POS catalog
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-slate-200">
+                      <input type="checkbox" checked={draft.commissionEnabled} onChange={(e) => setDraft((s) => ({ ...s, commissionEnabled: e.target.checked }))} />
+                      Enable product commission
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-slate-200">
+                      <input
+                        type="checkbox"
+                        checked={draft.commissionRequiresApproval}
+                        onChange={(e) => setDraft((s) => ({ ...s, commissionRequiresApproval: e.target.checked }))}
+                        disabled={!draft.commissionEnabled}
+                      />
+                      Require approval
+                    </label>
+                  </div>
+                </>
+              ) : null}
             </div>
 
             <div className="mt-4 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-4">
@@ -1058,49 +1098,57 @@ export default function PosManagementClient() {
 
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
-                  <label className="flex items-center gap-2 text-sm text-slate-200">
-                    <input
-                      type="checkbox"
-                      checked={draft.ecommerceVisible}
-                      disabled={!(capabilities.ecommerceVisible || capabilities.showInShop)}
-                      onChange={(e) =>
-                        setDraft((s) => ({
-                          ...s,
-                          ecommerceVisible: e.target.checked,
-                          showInShop: e.target.checked,
-                        }))
-                      }
-                    />
-                    Ecommerce visible
-                  </label>
-                  <div className="text-xs text-slate-500">Default should remain off until the product is shop-ready and solar-safe.</div>
-                  <label className="flex items-center gap-2 text-sm text-slate-200">
-                    <input
-                      type="checkbox"
-                      checked={draft.isFeatured}
-                      disabled={!capabilities.isFeatured}
-                      onChange={(e) => setDraft((s) => ({ ...s, isFeatured: e.target.checked }))}
-                    />
-                    Featured product
-                  </label>
-                  <label className="text-sm text-slate-300">
-                    Product status
-                    <select
-                      className={`${fieldClass} mt-1 disabled:cursor-not-allowed disabled:opacity-60`}
-                      value={draft.status}
-                      disabled={!capabilities.status}
-                      onChange={(e) =>
-                        setDraft((s) => ({
-                          ...s,
-                          status: e.target.value === "INACTIVE" ? "INACTIVE" : "ACTIVE",
-                          isActive: e.target.value !== "INACTIVE",
-                        }))
-                      }
-                    >
-                      <option value="ACTIVE">Active</option>
-                      <option value="INACTIVE">Inactive</option>
-                    </select>
-                  </label>
+                  {isProductDeskMode ? (
+                    <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/5 px-3 py-3 text-sm text-emerald-100">
+                      Products from this desk save as <span className="font-semibold">Active</span> and <span className="font-semibold">visible in shop</span> by default.
+                    </div>
+                  ) : (
+                    <>
+                      <label className="flex items-center gap-2 text-sm text-slate-200">
+                        <input
+                          type="checkbox"
+                          checked={draft.ecommerceVisible}
+                          disabled={!(capabilities.ecommerceVisible || capabilities.showInShop)}
+                          onChange={(e) =>
+                            setDraft((s) => ({
+                              ...s,
+                              ecommerceVisible: e.target.checked,
+                              showInShop: e.target.checked,
+                            }))
+                          }
+                        />
+                        Ecommerce visible
+                      </label>
+                      <div className="text-xs text-slate-500">Default should remain off until the product is shop-ready and solar-safe.</div>
+                      <label className="flex items-center gap-2 text-sm text-slate-200">
+                        <input
+                          type="checkbox"
+                          checked={draft.isFeatured}
+                          disabled={!capabilities.isFeatured}
+                          onChange={(e) => setDraft((s) => ({ ...s, isFeatured: e.target.checked }))}
+                        />
+                        Featured product
+                      </label>
+                      <label className="text-sm text-slate-300">
+                        Product status
+                        <select
+                          className={`${fieldClass} mt-1 disabled:cursor-not-allowed disabled:opacity-60`}
+                          value={draft.status}
+                          disabled={!capabilities.status}
+                          onChange={(e) =>
+                            setDraft((s) => ({
+                              ...s,
+                              status: e.target.value === "INACTIVE" ? "INACTIVE" : "ACTIVE",
+                              isActive: e.target.value !== "INACTIVE",
+                            }))
+                          }
+                        >
+                          <option value="ACTIVE">Active</option>
+                          <option value="INACTIVE">Inactive</option>
+                        </select>
+                      </label>
+                    </>
+                  )}
                 </div>
 
                 <label className="text-sm text-slate-300">
@@ -1341,7 +1389,7 @@ export default function PosManagementClient() {
             )}
           </div>
 
-            <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
+            <div className={`grid gap-4 ${isProductDeskMode ? "sm:grid-cols-2 xl:grid-cols-2" : "sm:grid-cols-3 xl:grid-cols-1"}`}>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
               <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Catalog size</div>
               <div className="mt-3 text-3xl font-semibold text-white">{filteredProducts.length}</div>
@@ -1352,20 +1400,25 @@ export default function PosManagementClient() {
               <div className="mt-3 text-3xl font-semibold text-emerald-300">{filteredProducts.filter((product) => product.isActive).length}</div>
               <div className="mt-1 text-sm text-slate-400">Available for product selection at the receipts desk.</div>
             </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-              <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Pending approvals</div>
-              <div className="mt-3 text-3xl font-semibold text-amber-200">{approvals.length}</div>
-              <div className="mt-1 text-sm text-slate-400">Commission requests waiting for release or rejection.</div>
-            </div>
-            <a href="/admin/receipts/missing-buying" className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 hover:bg-amber-400/15">
-              <div className="text-xs uppercase tracking-[0.2em] text-amber-200">Admin pricing</div>
-              <div className="mt-3 text-lg font-semibold text-white">Price variable-cost sales</div>
-              <div className="mt-1 text-sm text-amber-100/80">Set buying prices after POS project sales so profit and commissions update.</div>
-            </a>
+            {!isProductDeskMode ? (
+              <>
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                  <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Pending approvals</div>
+                  <div className="mt-3 text-3xl font-semibold text-amber-200">{approvals.length}</div>
+                  <div className="mt-1 text-sm text-slate-400">Commission requests waiting for release or rejection.</div>
+                </div>
+                <a href="/admin/receipts/missing-buying" className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 hover:bg-amber-400/15">
+                  <div className="text-xs uppercase tracking-[0.2em] text-amber-200">Admin pricing</div>
+                  <div className="mt-3 text-lg font-semibold text-white">Price variable-cost sales</div>
+                  <div className="mt-1 text-sm text-amber-100/80">Set buying prices after POS project sales so profit and commissions update.</div>
+                </a>
+              </>
+            ) : null}
           </div>
         </div>
       </section>
 
+      {!isProductDeskMode ? (
       <div className="space-y-6">
         <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
           <div className="flex items-start justify-between gap-3">
@@ -1468,13 +1521,18 @@ export default function PosManagementClient() {
           </div>
         </section>
       </div>
+      ) : null}
 
         <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Catalog</p>
               <h2 className="text-2xl font-semibold text-white">Product Management</h2>
-              <p className="mt-2 text-sm text-slate-400">Search, filter, publish, archive, and edit products from one compact catalogue table.</p>
+              <p className="mt-2 text-sm text-slate-400">
+                {isProductDeskMode
+                  ? "Search, edit, and publish products to the shop from one compact catalogue table."
+                  : "Search, filter, publish, archive, and edit products from one compact catalogue table."}
+              </p>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-3">
               <input
@@ -1483,7 +1541,7 @@ export default function PosManagementClient() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
-            <select
+            {!isProductDeskMode ? <select
               className="rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
               value={buyingPriceFilter}
               onChange={(e) => setBuyingPriceFilter(e.target.value as "all" | "missing" | "set")}
@@ -1491,8 +1549,8 @@ export default function PosManagementClient() {
               <option value="all">All buying prices</option>
               <option value="missing">Without buying price</option>
               <option value="set">With buying price</option>
-            </select>
-            <select
+            </select> : null}
+            {!isProductDeskMode ? <select
               className="rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
               value={commissionFilter}
               onChange={(e) => setCommissionFilter(e.target.value as "all" | "enabled" | "disabled")}
@@ -1500,8 +1558,8 @@ export default function PosManagementClient() {
               <option value="all">All commissions</option>
               <option value="enabled">With commission</option>
               <option value="disabled">Without commission</option>
-            </select>
-            <select
+            </select> : null}
+            {!isProductDeskMode ? <select
               className="rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
               value={warrantyFilter}
               onChange={(e) => setWarrantyFilter(e.target.value as "all" | "with" | "without")}
@@ -1509,7 +1567,7 @@ export default function PosManagementClient() {
               <option value="all">All warranties</option>
               <option value="with">With warranty</option>
               <option value="without">Without warranty</option>
-            </select>
+            </select> : null}
             <label className="flex items-center gap-2 text-sm text-slate-300">
               <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
               Show archived products
@@ -1538,7 +1596,7 @@ export default function PosManagementClient() {
             ))}
           </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-3">
+        {!canUseBulkActions ? null : <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-3">
           <div className="text-sm text-slate-300">
             {selectedCount ? `${selectedCount} selected` : "Select products to update or clean up the catalog in bulk."}
           </div>
@@ -1576,15 +1634,15 @@ export default function PosManagementClient() {
               {bulkBusy === "delete" ? "Deleting..." : "Delete selected"}
             </button>
           </div>
-        </div>
+        </div>}
 
         <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-800">
           <table className="min-w-full divide-y divide-slate-800 text-sm">
             <thead className="bg-slate-950/70 text-left text-xs uppercase tracking-wide text-slate-400">
               <tr>
-                <th className="px-4 py-3">
+                {canUseBulkActions ? <th className="px-4 py-3">
                   <input type="checkbox" checked={allOnPageSelected} onChange={toggleAllOnPage} disabled={!filteredProducts.length || !!bulkBusy} />
-                </th>
+                </th> : null}
                 <th className="px-4 py-3">Product</th>
                 <th className="px-4 py-3">Seller SKU</th>
                 <th className="px-4 py-3">Price</th>
@@ -1596,7 +1654,7 @@ export default function PosManagementClient() {
             <tbody className="divide-y divide-slate-800 bg-slate-950/40">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-slate-400">Loading products...</td>
+                  <td colSpan={canUseBulkActions ? 7 : 6} className="px-4 py-6 text-center text-slate-400">Loading products...</td>
                 </tr>
               ) : filteredProducts.length ? (
                 filteredProducts.map((product) => {
@@ -1606,14 +1664,16 @@ export default function PosManagementClient() {
                   const shopHref = `/shop/product/${slugifyShopProductName(product.name)}`;
 
                   return <tr key={product.id} className={draft.id === product.id ? "bg-emerald-500/5" : undefined}>
-                    <td className="px-4 py-3 align-top">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(selectedIds[product.id])}
-                        onChange={() => toggleSelected(product.id)}
-                        disabled={!!bulkBusy}
-                      />
-                    </td>
+                    {canUseBulkActions ? (
+                      <td className="px-4 py-3 align-top">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(selectedIds[product.id])}
+                          onChange={() => toggleSelected(product.id)}
+                          disabled={!!bulkBusy}
+                        />
+                      </td>
+                    ) : null}
                     <td className="px-4 py-3 align-top">
                       <div className="flex items-start gap-3">
                         {displayImage ? (
@@ -1640,7 +1700,7 @@ export default function PosManagementClient() {
                           <div className="text-xs text-slate-400">{product.category}</div>
                           <div className="mt-1 flex flex-wrap gap-1.5">
                             {product.brand ? <span className="rounded-full border border-slate-700 px-2 py-0.5 text-[10px] text-slate-300">{product.brand}</span> : null}
-                            {product.defaultWarranty ? <span className="rounded-full border border-slate-700 px-2 py-0.5 text-[10px] text-slate-300">{product.defaultWarranty}</span> : null}
+                            {!isProductDeskMode && product.defaultWarranty ? <span className="rounded-full border border-slate-700 px-2 py-0.5 text-[10px] text-slate-300">{product.defaultWarranty}</span> : null}
                             <span className={`rounded-full px-2 py-0.5 text-[10px] ${availabilityType === "WAREHOUSE" ? "bg-amber-500/15 text-amber-100" : "bg-emerald-500/15 text-emerald-200"}`}>
                               {availabilityType === "WAREHOUSE" ? "Warehouse" : "Shop"}
                             </span>
@@ -1657,12 +1717,12 @@ export default function PosManagementClient() {
                     </td>
                     <td className="px-4 py-3 align-top text-slate-200">
                       <div className="font-semibold text-white">{formatMoney(product.sellingPrice)}</div>
-                      <div className="mt-1 text-xs text-slate-400">
+                      {canManagePricing ? <div className="mt-1 text-xs text-slate-400">
                         {product.variableCost ? "Buying price later" : `Buying ${formatMoney(product.lastBuyingPrice)}`}
-                      </div>
-                      <div className="mt-1 text-xs text-slate-500">
+                      </div> : null}
+                      {canManageCommissions ? <div className="mt-1 text-xs text-slate-500">
                         {product.commissionEnabled ? `Commission ${formatMoney(product.commissionAmount)}` : "No commission"}
-                      </div>
+                      </div> : null}
                     </td>
                     <td className="px-4 py-3 align-top">
                       <div className="space-y-2">
@@ -1688,7 +1748,7 @@ export default function PosManagementClient() {
                         <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${product.isActive ? "bg-emerald-500/15 text-emerald-200" : "bg-slate-800 text-slate-400"}`}>
                           {product.isActive ? "Active" : "Inactive"}
                         </span>
-                        <button
+                        {canManageActivation ? <button
                           type="button"
                           className="block rounded-lg border border-white/10 px-2.5 py-1 text-[11px] font-semibold text-slate-200 hover:bg-white/5"
                           onClick={() => void quickPatchProduct(
@@ -1698,7 +1758,7 @@ export default function PosManagementClient() {
                           )}
                         >
                           Set {product.isActive ? "inactive" : "active"}
-                        </button>
+                        </button> : null}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right align-top">
@@ -1710,28 +1770,28 @@ export default function PosManagementClient() {
                         >
                           Edit
                         </button>
-                        <button
+                        {canManageCommissions ? <button
                           type="button"
                           className="rounded-xl border border-amber-400/30 px-3 py-2 text-xs font-semibold text-amber-100 hover:bg-amber-400/10"
                           onClick={() => startCommissionEdit(product)}
                         >
                           {product.commissionEnabled ? "Edit commission" : "Assign commission"}
-                        </button>
-                        <button
+                        </button> : null}
+                        {canDeleteProducts ? <button
                           type="button"
                           className="rounded-xl border border-rose-500/40 px-3 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                           onClick={() => void deleteProduct(product)}
                           disabled={deletingId === product.id}
                         >
                           {deletingId === product.id ? "Deleting..." : "Delete"}
-                        </button>
+                        </button> : null}
                       </div>
                     </td>
                   </tr>;
                 })
               ) : (
                 <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-slate-400">No POS products match the current filters.</td>
+                  <td colSpan={canUseBulkActions ? 7 : 6} className="px-4 py-6 text-center text-slate-400">No POS products match the current filters.</td>
                 </tr>
               )}
             </tbody>

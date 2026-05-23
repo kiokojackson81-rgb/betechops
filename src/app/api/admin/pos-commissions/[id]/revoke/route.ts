@@ -14,6 +14,7 @@ async function resolveId(context: ParamsContext) {
 export async function POST(_req: Request, context: ParamsContext) {
   const auth = await requireRoleOrBrendah(["ADMIN"]);
   if (!auth.ok) return auth.res;
+  if (auth.isBrendah) return noStoreJson({ error: "Not authorized to revoke commissions" }, { status: 403 });
 
   const id = await resolveId(context);
   const existing = await prisma.commissionEarning.findUnique({ where: { id } });

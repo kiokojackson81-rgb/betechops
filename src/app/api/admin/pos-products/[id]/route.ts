@@ -98,6 +98,39 @@ function normalizeJsonStringArray(value: string[] | null | undefined) {
   return list.length ? JSON.stringify(list) : null;
 }
 
+function sanitizeBrendahProductUpdate(data: z.infer<typeof updateSchema>): z.infer<typeof updateSchema> {
+  const nextAvailabilityType = data.availabilityType ?? "SHOP";
+  return {
+    sku: data.sku,
+    name: data.name,
+    sellingPrice: data.sellingPrice,
+    brand: data.brand,
+    shortDescription: data.shortDescription,
+    description: data.description,
+    specifications: data.specifications,
+    warrantyPeriod: data.warrantyPeriod,
+    warrantyNotes: data.warrantyNotes,
+    mainImageUrl: data.mainImageUrl,
+    galleryImageUrls: data.galleryImageUrls,
+    brandImageUrl: data.brandImageUrl,
+    tiktokVideoUrl: data.tiktokVideoUrl,
+    ecommerceVisible: true,
+    isFeatured: false,
+    status: "ACTIVE" as const,
+    availabilityType: nextAvailabilityType,
+    pickupDelayDays: nextAvailabilityType === "WAREHOUSE" ? 1 : 0,
+    showInShop: true,
+    shopCategory: data.shopCategory,
+    shopSubcategory: data.shopSubcategory,
+    shopShortDescription: data.shopShortDescription,
+    shopWarranty: data.shopWarranty,
+    shopSpecs: data.shopSpecs,
+    shopImageUrl: data.shopImageUrl,
+    shopBrand: data.shopBrand,
+    isActive: true,
+  };
+}
+
 const JSONB_PRODUCT_COLUMNS = new Set(["specifications", "galleryImageUrls"]);
 
 type ParamsContext = { params: { id: string } } | { params: Promise<{ id: string }> };
@@ -234,13 +267,13 @@ export async function PATCH(req: Request, context: ParamsContext) {
   }
 
   const actorId = (auth.session?.user as { id?: string } | undefined)?.id ?? (await getActorId());
-  const data = parsed.data;
+  const data = auth.isBrendah ? sanitizeBrendahProductUpdate(parsed.data) : parsed.data;
   const nextVariableCost = data.variableCost ?? Boolean(existing.variableCost);
   const nextLastBuyingPrice = data.lastBuyingPrice !== undefined ? data.lastBuyingPrice : Number(existing.lastBuyingPrice ?? 0) || null;
   const nextStatus = data.status ?? String(existing.status || (Boolean(existing.isActive) ? "ACTIVE" : "INACTIVE")).toUpperCase();
   const normalizedAvailabilityType = data.availabilityType ?? String(existing.availabilityType || "SHOP").toUpperCase();
   const normalizedPickupDelayDays = normalizedAvailabilityType === "WAREHOUSE" ? 1 : 0;
-  if (capabilities.schemaMode === "modern" && !nextVariableCost && !(Number(nextLastBuyingPrice ?? 0) > 0)) {
+  if (!auth.isBrendah && capabilities.schemaMode === "modern" && !nextVariableCost && !(Number(nextLastBuyingPrice ?? 0) > 0)) {
     return noStoreJson(
       { error: { fieldErrors: { lastBuyingPrice: ["Buying price is required for fixed-cost products"] } } },
       { status: 400 },
@@ -397,6 +430,7 @@ export async function PATCH(req: Request, context: ParamsContext) {
 export async function DELETE(_: Request, context: ParamsContext) {
   const auth = await requireRoleOrBrendah(["ADMIN"]);
   if (!auth.ok) return auth.res;
+  if (auth.isBrendah) return noStoreJson({ error: "Not authorized to delete products" }, { status: 403 });
 
   const capabilities = await getProductTableCapabilities(prisma);
   const id = await resolveId(context);

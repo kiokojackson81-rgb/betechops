@@ -24,7 +24,7 @@ export default async function PosManagementPage() {
           Manage the catalog used on the receipts desk, define buying prices and per-product commission, and release or reject pending POS commission approvals.
         </p>
       </section>
-      <PosManagementClient />
+      <PosManagementClient mode={isBrendah ? "product-desk" : "admin"} />
     </main>
   );
 }

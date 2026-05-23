@@ -8,6 +8,7 @@ const APPROVAL_PENDING_STATUSES = ["PENDING_APPROVAL", "PENDING"];
 export async function GET(req: Request) {
   const auth = await requireRoleOrBrendah(["ADMIN", "SUPERVISOR"]);
   if (!auth.ok) return auth.res;
+  if (auth.isBrendah) return noStoreJson({ error: "Not authorized to view commission approvals" }, { status: 403 });
 
   const { searchParams } = new URL(req.url);
   const status = (searchParams.get("status") || "pending").trim().toUpperCase();

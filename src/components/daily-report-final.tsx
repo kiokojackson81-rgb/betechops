@@ -993,7 +993,7 @@ export default function DailyReportFinal() {
             <div>
               <h1 className="text-3xl font-semibold">Product desk</h1>
               <p className="text-sm text-slate-300">
-                Create, edit, price, publish, and manage products here without leaving Brendah&apos;s account.
+                Create, edit, and publish products here without leaving Brendah&apos;s account. Admin-only pricing, commission, and delete controls stay hidden.
               </p>
             </div>
             <button
@@ -1006,7 +1006,7 @@ export default function DailyReportFinal() {
           </header>
 
           <div id="product-desk">
-            <PosManagementClient />
+            <PosManagementClient mode="product-desk" />
           </div>
         </main>
       </div>
