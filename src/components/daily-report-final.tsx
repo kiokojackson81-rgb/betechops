@@ -16,6 +16,7 @@ import PeriodSwitcher from "@/app/_components/PeriodSwitcher";
 import useTradingPeriodQueryState from "@/app/_components/useTradingPeriodQueryState";
 import { withImpersonateId } from "@/lib/impersonation";
 import { mapPayrollToEarningsSummary } from "@/lib/payrollMapping";
+import PosManagementClient from "@/app/admin/pos-management/PosManagementClient";
 
 type PaymentMethod = "MPESA" | "CASH";
 
@@ -100,7 +101,7 @@ const inputClasses =
 const textareaClasses =
   "w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500";
 export default function DailyReportFinal() {
-  const [currentView, setCurrentView] = useState<"dashboard" | "receipts">("dashboard");
+  const [currentView, setCurrentView] = useState<"dashboard" | "receipts" | "product-desk">("dashboard");
 
   // receipts-history controls (used when #my-receipts)
   const todayIso = toKenyaIsoDate(new Date());
@@ -168,7 +169,7 @@ export default function DailyReportFinal() {
         return;
       }
       if (window.location.hash === "#product-desk") {
-        window.location.assign("/admin/pos-management");
+        setCurrentView("product-desk");
         return;
       }
       setCurrentView("dashboard");
@@ -179,8 +180,8 @@ export default function DailyReportFinal() {
   }, []);
 
   useEffect(() => {
-    if (currentView !== "receipts") return;
-    const el = document.getElementById("my-receipts");
+    if (currentView !== "receipts" && currentView !== "product-desk") return;
+    const el = document.getElementById(currentView === "receipts" ? "my-receipts" : "product-desk");
     el?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [currentView]);
 
@@ -984,6 +985,34 @@ export default function DailyReportFinal() {
     );
   }
 
+  if (currentView === "product-desk" && isBrendahView) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100">
+        <main className="mx-auto max-w-7xl space-y-6 p-6">
+          <header className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-semibold">Product desk</h1>
+              <p className="text-sm text-slate-300">
+                Create, edit, price, publish, and manage products here without leaving Brendah&apos;s account.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={backToDashboard}
+              className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
+            >
+              Back to dashboard
+            </button>
+          </header>
+
+          <div id="product-desk">
+            <PosManagementClient />
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 px-5 py-6 text-slate-50 lg:px-8">
       <div className="mx-auto flex w-full max-w-[1460px] flex-col gap-6">
@@ -1007,11 +1036,12 @@ export default function DailyReportFinal() {
               {/* Header actions extracted to shared component */}
               <HeaderActions
                 receiptsHref="#my-receipts"
-                productDeskHref={isBrendahView ? "/admin/pos-management" : undefined}
+                productDeskHref={isBrendahView ? "#product-desk" : undefined}
                 createHref={`/receipts?view=create`}
                 wellnessHref={withImpersonateId("/attendant/wellness", impersonateId)}
                 onSignOut={() => signOut({ callbackUrl: "/attendant/login" })}
                 onReceiptsClick={() => setCurrentView("receipts")}
+                onProductDeskClick={isBrendahView ? () => setCurrentView("product-desk") : undefined}
                 showProductDesk={isBrendahView}
                 showDot={true}
               />
