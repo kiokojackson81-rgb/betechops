@@ -336,7 +336,7 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
   const [shopAllTimeTotal, setShopAllTimeTotal] = useState(0);
 
   const tradingWeeks = useMemo<TradingWeekChip[]>(() => {
-    const weeks = getOnlineOpsWeeksForTradingPeriod(period, period.end, 4);
+    const weeks = getOnlineOpsWeeksForTradingPeriod(period, new Date(), 4);
     return weeks.map((wk) => ({
       key: wk.startInput,
       label: wk.label.replace(/–/g, "-"),
@@ -345,7 +345,7 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
     }));
   }, [period]);
   const marketplacePeriodWindow = useMemo(
-    () => getOnlineOpsWindowForTradingPeriod(period, period.end, 4),
+    () => getOnlineOpsWindowForTradingPeriod(period, new Date(), 4),
     [period],
   );
   const [activeWeekKeys, setActiveWeekKeys] = useState<string[]>([]);

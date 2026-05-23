@@ -262,7 +262,7 @@ export async function generateOnlinePerformancePdfResponse(opts: {
   enforceEligibleIndividual?: boolean;
 }) {
   const { userId, period, enforceEligibleIndividual = false } = opts;
-  const fullWeeksWindow = getOnlineOpsWindowForTradingPeriod(period, period.end, 4);
+  const fullWeeksWindow = getOnlineOpsWindowForTradingPeriod(period, new Date(), 4);
   const weeks = fullWeeksWindow.weeks;
 
   const user = await prisma.user.findUnique({

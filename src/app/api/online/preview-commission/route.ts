@@ -39,7 +39,7 @@ export async function GET(req: Request) {
   const start = startParam ?? period.start;
   const end = endParam ?? period.end;
   const marketplaceWindow = requestedPeriod
-    ? getOnlineOpsWindowForTradingPeriod(requestedPeriod, requestedPeriod.end, 4)
+    ? getOnlineOpsWindowForTradingPeriod(requestedPeriod, new Date(), 4)
     : { start, end };
   const user = await prisma.user.findUnique({ where: { id: attendantId }, select: { email: true } });
 

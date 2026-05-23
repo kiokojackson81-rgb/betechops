@@ -622,7 +622,7 @@ export async function getAssignedMarketplaceSalesForPeriod(
 
 export async function getOnlineQuickStats(attendantId: string, opts?: { period?: TradingPeriod }): Promise<OnlineQuickStats> {
   const period = opts?.period ?? getTradingPeriodFor(new Date());
-  const marketplaceWindow = getOnlineOpsWindowForTradingPeriod(period, period.end, 4);
+  const marketplaceWindow = getOnlineOpsWindowForTradingPeriod(period, new Date(), 4);
   const [directStats, marketplaceSalesSummary, earnings, commissionConfig] = await Promise.all([
     getDirectSalesStats(attendantId, period),
     getAssignedMarketplaceSalesForPeriod(attendantId, {
@@ -695,7 +695,7 @@ export async function getOnlineQuickStats(attendantId: string, opts?: { period?:
 
 export async function getOnlineEarningsSummary(attendantId: string, opts?: { period?: TradingPeriod }): Promise<OnlineEarningsSummary> {
   const period = opts?.period ?? getTradingPeriodFor(new Date());
-  const marketplaceWindow = getOnlineOpsWindowForTradingPeriod(period, period.end, 4);
+  const marketplaceWindow = getOnlineOpsWindowForTradingPeriod(period, new Date(), 4);
   const { roles } = await getMarketplaceAssignmentsForUser(attendantId);
 
   await ensurePayrollAdjustmentStorage();

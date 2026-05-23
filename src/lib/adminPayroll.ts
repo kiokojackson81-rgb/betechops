@@ -315,7 +315,7 @@ async function buildPayrollRowResolved(
   adjustmentSummary.breakdown.penalties = penalties;
 
   if (isOnlineCategory(attendant.attendantCategory)) {
-    const marketplaceWindow = getOnlineOpsWindowForTradingPeriod(period, period.end, 4);
+    const marketplaceWindow = getOnlineOpsWindowForTradingPeriod(period, new Date(), 4);
     const [onlineSummary, posSummary] = await Promise.all([
       getOnlineEarningsSummary(attendant.id, { period }),
       summarizePosReceiptsForPeriod({

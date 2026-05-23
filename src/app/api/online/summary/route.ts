@@ -186,7 +186,7 @@ export async function GET(req: Request) {
   await getOrCreateCommissionPeriod(period.start);
   const start = period.start;
   const end = period.end;
-  const marketplaceWindow = getOnlineOpsWindowForTradingPeriod(period, period.end, 4);
+  const marketplaceWindow = getOnlineOpsWindowForTradingPeriod(period, new Date(), 4);
   const periodLabel = `${start.toLocaleDateString("en-KE", {
     day: "2-digit",
     month: "short",

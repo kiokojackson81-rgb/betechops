@@ -517,7 +517,7 @@ async function getPerformanceSummaryLines(args: {
     )} POS items`;
   }
 
-  const marketplaceWindow = getOnlineOpsWindowForTradingPeriod(args.period, args.period.end, 4);
+  const marketplaceWindow = getOnlineOpsWindowForTradingPeriod(args.period, new Date(), 4);
   const [onlineSummary, marketplaceSales] = await Promise.all([
     getOnlineEarningsSummary(args.userId, { period: args.period }),
     getAssignedMarketplaceSalesForPeriod(args.userId, {

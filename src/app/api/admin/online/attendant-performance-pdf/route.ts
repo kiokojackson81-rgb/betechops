@@ -166,7 +166,7 @@ export async function GET(req: Request) {
     }
 
     const period = parseTradingPeriodKey(periodKey) ?? getTradingPeriodFor(new Date());
-    const onlineWindow = getOnlineOpsWindowForTradingPeriod(period, period.end, 4);
+    const onlineWindow = getOnlineOpsWindowForTradingPeriod(period, new Date(), 4);
     const startIso = period.start.toISOString().slice(0, 10);
     const endIso = period.end.toISOString().slice(0, 10);
 
