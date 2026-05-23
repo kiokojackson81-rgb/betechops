@@ -290,7 +290,7 @@ function getApiErrorMessage(json: unknown, fallback: string) {
   return fallback;
 }
 
-export default function PosManagementClient({ limitedAccess = false }: { limitedAccess?: boolean }) {
+export default function PosManagementClient() {
   const [products, setProducts] = useState<PosProduct[]>([]);
   const [capabilities, setCapabilities] = useState<PosCatalogueCapabilities>(defaultCapabilities);
   const [approvals, setApprovals] = useState<CommissionApproval[]>([]);
@@ -318,13 +318,11 @@ export default function PosManagementClient({ limitedAccess = false }: { limited
   const loadData = useCallback(async (productQuery = query) => {
     setLoading(true);
     try {
-      const requests = limitedAccess
-        ? [fetch(`${productApiBase}?q=${encodeURIComponent(productQuery)}&includeInactive=${showInactive ? "1" : "0"}&limit=200`, { cache: "no-store" })]
-        : [
-            fetch(`${productApiBase}?q=${encodeURIComponent(productQuery)}&includeInactive=${showInactive ? "1" : "0"}&limit=200`, { cache: "no-store" }),
-            fetch(`/api/admin/pos-commissions?status=pending&limit=100`, { cache: "no-store" }),
-            fetch(`/api/admin/pos-commissions?status=released&limit=100`, { cache: "no-store" }),
-          ];
+      const requests = [
+        fetch(`${productApiBase}?q=${encodeURIComponent(productQuery)}&includeInactive=${showInactive ? "1" : "0"}&limit=200`, { cache: "no-store" }),
+        fetch(`/api/admin/pos-commissions?status=pending&limit=100`, { cache: "no-store" }),
+        fetch(`/api/admin/pos-commissions?status=released&limit=100`, { cache: "no-store" }),
+      ];
       const responses = await Promise.all(requests);
       const productsRes = responses[0]!;
       const approvalsRes = responses[1] ?? null;
@@ -342,7 +340,7 @@ export default function PosManagementClient({ limitedAccess = false }: { limited
     } finally {
       setLoading(false);
     }
-  }, [limitedAccess, productApiBase, query, showInactive]);
+  }, [productApiBase, query, showInactive]);
 
   useEffect(() => {
     void loadData("");
@@ -501,10 +499,10 @@ export default function PosManagementClient({ limitedAccess = false }: { limited
   const submitDraft = async () => {
     if (!draft.name.trim()) return showToast("Product name is required", "error");
     if (!draft.sellingPrice.trim()) return showToast("Selling price is required", "error");
-    if (!limitedAccess && !draft.variableCost && !draft.lastBuyingPrice.trim()) {
+    if (!draft.variableCost && !draft.lastBuyingPrice.trim()) {
       return showToast("Buying price is required for fixed-cost products", "error");
     }
-    if (!limitedAccess && draft.commissionEnabled && !draft.commissionAmount.trim()) {
+    if (draft.commissionEnabled && !draft.commissionAmount.trim()) {
       return showToast("Commission amount is required when product commission is enabled", "error");
     }
     setSaving(true);
@@ -514,21 +512,13 @@ export default function PosManagementClient({ limitedAccess = false }: { limited
         name: draft.name,
         category: draft.category,
         sellingPrice: Number(draft.sellingPrice || 0),
-        ...(!limitedAccess
-          ? {
-              lastBuyingPrice: draft.variableCost ? null : draft.lastBuyingPrice.trim() ? Number(draft.lastBuyingPrice) : null,
-            }
-          : {}),
+        lastBuyingPrice: draft.variableCost ? null : draft.lastBuyingPrice.trim() ? Number(draft.lastBuyingPrice) : null,
         defaultWarranty: draft.defaultWarranty.trim() || null,
-        ...(!limitedAccess ? { variableCost: draft.variableCost } : {}),
+        variableCost: draft.variableCost,
         isActive: draft.status === "ACTIVE" && draft.isActive,
-        ...(!limitedAccess
-          ? {
-              commissionEnabled: draft.commissionEnabled,
-              commissionAmount: draft.commissionEnabled && draft.commissionAmount.trim() ? Number(draft.commissionAmount) : null,
-              commissionRequiresApproval: draft.commissionEnabled ? draft.commissionRequiresApproval : false,
-            }
-          : {}),
+        commissionEnabled: draft.commissionEnabled,
+        commissionAmount: draft.commissionEnabled && draft.commissionAmount.trim() ? Number(draft.commissionAmount) : null,
+        commissionRequiresApproval: draft.commissionEnabled ? draft.commissionRequiresApproval : false,
         ...(capabilities.brand ? { brand: draft.brand.trim() || null } : {}),
         ...(capabilities.shortDescription ? { shortDescription: draft.shortDescription.trim() || null } : {}),
         ...(capabilities.warrantyPeriod ? { warrantyPeriod: draft.warrantyPeriod.trim() || null } : {}),
@@ -817,11 +807,6 @@ export default function PosManagementClient({ limitedAccess = false }: { limited
             <p className="mt-2 max-w-3xl text-sm text-slate-400">
               Keep the product table as the daily workspace, then open the editor only when you need to add, fix, or publish an item.
             </p>
-            {limitedAccess ? (
-              <p className="mt-2 max-w-3xl text-sm text-emerald-200">
-                Product desk access is enabled for Brendah. Product content, images, online-shop fields, and TikTok links can be edited here; buying prices, commission approvals, and catalog cleanup remain admin-only.
-              </p>
-            ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
             <button
@@ -995,37 +980,29 @@ export default function PosManagementClient({ limitedAccess = false }: { limited
                 <input className={`${fieldClass} mt-1`} type="number" min="0" value={draft.sellingPrice} onChange={(e) => setDraft((s) => ({ ...s, sellingPrice: e.target.value }))} />
               </label>
               <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
-                {limitedAccess ? (
+                <label className="flex items-center gap-2 text-sm text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={draft.variableCost}
+                    onChange={(e) =>
+                      setDraft((s) => ({
+                        ...s,
+                        variableCost: e.target.checked,
+                        lastBuyingPrice: e.target.checked ? "" : s.lastBuyingPrice,
+                      }))
+                    }
+                  />
+                  Variable-cost project
+                </label>
+                {draft.variableCost ? (
                   <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
-                    Buying price is set later by an admin after the product has been prepared in the product desk.
+                    Buying price is set later by an admin after the POS sale is captured.
                   </div>
                 ) : (
-                  <>
-                    <label className="flex items-center gap-2 text-sm text-slate-200">
-                      <input
-                        type="checkbox"
-                        checked={draft.variableCost}
-                        onChange={(e) =>
-                          setDraft((s) => ({
-                            ...s,
-                            variableCost: e.target.checked,
-                            lastBuyingPrice: e.target.checked ? "" : s.lastBuyingPrice,
-                          }))
-                        }
-                      />
-                      Variable-cost project
-                    </label>
-                    {draft.variableCost ? (
-                      <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
-                        Buying price is set later by an admin after the POS sale is captured.
-                      </div>
-                    ) : (
-                      <label className="block text-sm text-slate-300">
-                        Buying price
-                        <input className={`${fieldClass} mt-1`} type="number" min="0" value={draft.lastBuyingPrice} onChange={(e) => setDraft((s) => ({ ...s, lastBuyingPrice: e.target.value }))} />
-                      </label>
-                    )}
-                  </>
+                  <label className="block text-sm text-slate-300">
+                    Buying price
+                    <input className={`${fieldClass} mt-1`} type="number" min="0" value={draft.lastBuyingPrice} onChange={(e) => setDraft((s) => ({ ...s, lastBuyingPrice: e.target.value }))} />
+                  </label>
                 )}
               </div>
               <label className="text-sm text-slate-300">
@@ -1052,27 +1029,19 @@ export default function PosManagementClient({ limitedAccess = false }: { limited
                   />
                   Active in POS catalog
                 </label>
-                {limitedAccess ? (
-                  <div className="rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-xs text-slate-400">
-                    Commission setup stays under admin control.
-                  </div>
-                ) : (
-                  <>
-                    <label className="flex items-center gap-2 text-sm text-slate-200">
-                      <input type="checkbox" checked={draft.commissionEnabled} onChange={(e) => setDraft((s) => ({ ...s, commissionEnabled: e.target.checked }))} />
-                      Enable product commission
-                    </label>
-                    <label className="flex items-center gap-2 text-sm text-slate-200">
-                      <input
-                        type="checkbox"
-                        checked={draft.commissionRequiresApproval}
-                        onChange={(e) => setDraft((s) => ({ ...s, commissionRequiresApproval: e.target.checked }))}
-                        disabled={!draft.commissionEnabled}
-                      />
-                      Require approval
-                    </label>
-                  </>
-                )}
+                <label className="flex items-center gap-2 text-sm text-slate-200">
+                  <input type="checkbox" checked={draft.commissionEnabled} onChange={(e) => setDraft((s) => ({ ...s, commissionEnabled: e.target.checked }))} />
+                  Enable product commission
+                </label>
+                <label className="flex items-center gap-2 text-sm text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={draft.commissionRequiresApproval}
+                    onChange={(e) => setDraft((s) => ({ ...s, commissionRequiresApproval: e.target.checked }))}
+                    disabled={!draft.commissionEnabled}
+                  />
+                  Require approval
+                </label>
               </div>
             </div>
 
@@ -1334,7 +1303,7 @@ export default function PosManagementClient({ limitedAccess = false }: { limited
               </div>
             </div>
 
-            {!limitedAccess && draft.commissionEnabled ? (
+            {draft.commissionEnabled ? (
               <div className="mt-4">
                 <label className="text-sm text-slate-300">
                   Commission per sold item
@@ -1383,26 +1352,21 @@ export default function PosManagementClient({ limitedAccess = false }: { limited
               <div className="mt-3 text-3xl font-semibold text-emerald-300">{filteredProducts.filter((product) => product.isActive).length}</div>
               <div className="mt-1 text-sm text-slate-400">Available for product selection at the receipts desk.</div>
             </div>
-            {!limitedAccess ? (
-              <>
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                  <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Pending approvals</div>
-                  <div className="mt-3 text-3xl font-semibold text-amber-200">{approvals.length}</div>
-                  <div className="mt-1 text-sm text-slate-400">Commission requests waiting for release or rejection.</div>
-                </div>
-                <a href="/admin/receipts/missing-buying" className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 hover:bg-amber-400/15">
-                  <div className="text-xs uppercase tracking-[0.2em] text-amber-200">Admin pricing</div>
-                  <div className="mt-3 text-lg font-semibold text-white">Price variable-cost sales</div>
-                  <div className="mt-1 text-sm text-amber-100/80">Set buying prices after POS project sales so profit and commissions update.</div>
-                </a>
-              </>
-            ) : null}
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+              <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Pending approvals</div>
+              <div className="mt-3 text-3xl font-semibold text-amber-200">{approvals.length}</div>
+              <div className="mt-1 text-sm text-slate-400">Commission requests waiting for release or rejection.</div>
+            </div>
+            <a href="/admin/receipts/missing-buying" className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 hover:bg-amber-400/15">
+              <div className="text-xs uppercase tracking-[0.2em] text-amber-200">Admin pricing</div>
+              <div className="mt-3 text-lg font-semibold text-white">Price variable-cost sales</div>
+              <div className="mt-1 text-sm text-amber-100/80">Set buying prices after POS project sales so profit and commissions update.</div>
+            </a>
           </div>
         </div>
       </section>
 
       <div className="space-y-6">
-        {!limitedAccess ? (
         <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -1503,7 +1467,6 @@ export default function PosManagementClient({ limitedAccess = false }: { limited
             </div>
           </div>
         </section>
-        ) : null}
       </div>
 
         <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
@@ -1520,7 +1483,7 @@ export default function PosManagementClient({ limitedAccess = false }: { limited
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
-            {!limitedAccess ? <select
+            <select
               className="rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
               value={buyingPriceFilter}
               onChange={(e) => setBuyingPriceFilter(e.target.value as "all" | "missing" | "set")}
@@ -1528,8 +1491,8 @@ export default function PosManagementClient({ limitedAccess = false }: { limited
               <option value="all">All buying prices</option>
               <option value="missing">Without buying price</option>
               <option value="set">With buying price</option>
-            </select> : null}
-            {!limitedAccess ? <select
+            </select>
+            <select
               className="rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
               value={commissionFilter}
               onChange={(e) => setCommissionFilter(e.target.value as "all" | "enabled" | "disabled")}
@@ -1537,8 +1500,8 @@ export default function PosManagementClient({ limitedAccess = false }: { limited
               <option value="all">All commissions</option>
               <option value="enabled">With commission</option>
               <option value="disabled">Without commission</option>
-            </select> : null}
-            {!limitedAccess ? <select
+            </select>
+            <select
               className="rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
               value={warrantyFilter}
               onChange={(e) => setWarrantyFilter(e.target.value as "all" | "with" | "without")}
@@ -1546,7 +1509,7 @@ export default function PosManagementClient({ limitedAccess = false }: { limited
               <option value="all">All warranties</option>
               <option value="with">With warranty</option>
               <option value="without">Without warranty</option>
-            </select> : null}
+            </select>
             <label className="flex items-center gap-2 text-sm text-slate-300">
               <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
               Show archived products
@@ -1575,7 +1538,7 @@ export default function PosManagementClient({ limitedAccess = false }: { limited
             ))}
           </div>
 
-        {!limitedAccess ? <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-3">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-3">
           <div className="text-sm text-slate-300">
             {selectedCount ? `${selectedCount} selected` : "Select products to update or clean up the catalog in bulk."}
           </div>
@@ -1613,15 +1576,15 @@ export default function PosManagementClient({ limitedAccess = false }: { limited
               {bulkBusy === "delete" ? "Deleting..." : "Delete selected"}
             </button>
           </div>
-        </div> : null}
+        </div>
 
         <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-800">
           <table className="min-w-full divide-y divide-slate-800 text-sm">
             <thead className="bg-slate-950/70 text-left text-xs uppercase tracking-wide text-slate-400">
               <tr>
-                {!limitedAccess ? <th className="px-4 py-3">
+                <th className="px-4 py-3">
                   <input type="checkbox" checked={allOnPageSelected} onChange={toggleAllOnPage} disabled={!filteredProducts.length || !!bulkBusy} />
-                </th> : null}
+                </th>
                 <th className="px-4 py-3">Product</th>
                 <th className="px-4 py-3">Seller SKU</th>
                 <th className="px-4 py-3">Price</th>
@@ -1633,7 +1596,7 @@ export default function PosManagementClient({ limitedAccess = false }: { limited
             <tbody className="divide-y divide-slate-800 bg-slate-950/40">
               {loading ? (
                 <tr>
-                  <td colSpan={limitedAccess ? 6 : 7} className="px-4 py-6 text-center text-slate-400">Loading products...</td>
+                  <td colSpan={7} className="px-4 py-6 text-center text-slate-400">Loading products...</td>
                 </tr>
               ) : filteredProducts.length ? (
                 filteredProducts.map((product) => {
@@ -1643,14 +1606,14 @@ export default function PosManagementClient({ limitedAccess = false }: { limited
                   const shopHref = `/shop/product/${slugifyShopProductName(product.name)}`;
 
                   return <tr key={product.id} className={draft.id === product.id ? "bg-emerald-500/5" : undefined}>
-                    {!limitedAccess ? <td className="px-4 py-3 align-top">
+                    <td className="px-4 py-3 align-top">
                       <input
                         type="checkbox"
                         checked={Boolean(selectedIds[product.id])}
                         onChange={() => toggleSelected(product.id)}
                         disabled={!!bulkBusy}
                       />
-                    </td> : null}
+                    </td>
                     <td className="px-4 py-3 align-top">
                       <div className="flex items-start gap-3">
                         {displayImage ? (
@@ -1747,28 +1710,28 @@ export default function PosManagementClient({ limitedAccess = false }: { limited
                         >
                           Edit
                         </button>
-                        {!limitedAccess ? <button
+                        <button
                           type="button"
                           className="rounded-xl border border-amber-400/30 px-3 py-2 text-xs font-semibold text-amber-100 hover:bg-amber-400/10"
                           onClick={() => startCommissionEdit(product)}
                         >
                           {product.commissionEnabled ? "Edit commission" : "Assign commission"}
-                        </button> : null}
-                        {!limitedAccess ? <button
+                        </button>
+                        <button
                           type="button"
                           className="rounded-xl border border-rose-500/40 px-3 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                           onClick={() => void deleteProduct(product)}
                           disabled={deletingId === product.id}
                         >
                           {deletingId === product.id ? "Deleting..." : "Delete"}
-                        </button> : null}
+                        </button>
                       </div>
                     </td>
                   </tr>;
                 })
               ) : (
                 <tr>
-                  <td colSpan={limitedAccess ? 6 : 7} className="px-4 py-6 text-center text-slate-400">No POS products match the current filters.</td>
+                  <td colSpan={7} className="px-4 py-6 text-center text-slate-400">No POS products match the current filters.</td>
                 </tr>
               )}
             </tbody>
