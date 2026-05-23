@@ -130,7 +130,9 @@ function extractTikTokVideoId(value: string | null | undefined) {
 
 function getTikTokEmbedUrl(value: string | null | undefined) {
   const videoId = extractTikTokVideoId(value);
-  return videoId ? `https://www.tiktok.com/embed/v3/${videoId}` : null;
+  return videoId
+    ? `https://www.tiktok.com/player/v1/${videoId}?controls=1&progress_bar=1&play_button=1&volume_control=1&fullscreen_button=1&timestamp=1&description=0&music_info=0&rel=0&native_context_menu=1`
+    : null;
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
