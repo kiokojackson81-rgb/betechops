@@ -936,24 +936,7 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
     tierProgress: marketplaceTierInfo.progress,
     tierMessage: marketplaceTierInfo.message,
   };
-  const selectedRangeJumiaCommission = Number(platformAggregates.find((platform) => platform.key === "JUMIA")?.commission ?? 0);
-  const selectedRangeKilimallCommission = Number(platformAggregates.find((platform) => platform.key === "KILIMALL")?.commission ?? 0);
-  const shouldUseSelectedRangeEarnings =
-    String(userEmail ?? "").toLowerCase().trim() === "benjamin@betech.co.ke" &&
-    directCommissionMode === "PROFIT_10";
-  const earningsSummaryForCard = shouldUseSelectedRangeEarnings
-    ? {
-        ...(payrollSummary ?? {}),
-        commissionDirect: quickDirectCommission,
-        directCommission: quickDirectCommission,
-        commissionMarketplaceJumia: selectedRangeJumiaCommission,
-        commissionMarketplaceKilimall: selectedRangeKilimallCommission,
-        marketplaceCommission: selectedRangeJumiaCommission + selectedRangeKilimallCommission,
-        commissionTotal: quickDirectCommission + selectedRangeJumiaCommission + selectedRangeKilimallCommission,
-        commission: quickDirectCommission + selectedRangeJumiaCommission + selectedRangeKilimallCommission,
-        grossCommission: quickDirectCommission + selectedRangeJumiaCommission + selectedRangeKilimallCommission,
-      }
-    : payrollSummary;
+  const earningsSummaryForCard = payrollSummary;
 
   const receiptsHistoryHref = userId
     ? `/receipts?attendantId=${encodeURIComponent(userId)}&start=${encodeURIComponent(
