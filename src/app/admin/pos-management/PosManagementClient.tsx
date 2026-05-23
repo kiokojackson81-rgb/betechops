@@ -827,16 +827,23 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
     }
   };
 
+  const shellSpacingClass = isProductDeskMode ? "space-y-4" : "space-y-6";
+  const sectionClass = isProductDeskMode
+    ? "rounded-[28px] border border-white/10 bg-slate-900/90 p-4 shadow-xl shadow-black/35"
+    : "rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40";
+  const compactTitleClass = isProductDeskMode ? "text-xl font-semibold text-white" : "text-2xl font-semibold text-white";
+  const compactCellClass = isProductDeskMode ? "px-3 py-2.5" : "px-4 py-3";
+
   return (
-    <div className="space-y-6">
-      <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-5 shadow-xl shadow-black/40">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+    <div className={shellSpacingClass}>
+      <section className={isProductDeskMode ? "rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.96)_0%,rgba(15,23,42,0.88)_100%)] p-4 shadow-xl shadow-black/35" : "rounded-3xl border border-white/10 bg-slate-900/80 p-5 shadow-xl shadow-black/40"}>
+        <div className={`flex flex-col ${isProductDeskMode ? "gap-3 lg:flex-row lg:items-end lg:justify-between" : "gap-4 xl:flex-row xl:items-end xl:justify-between"}`}>
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Manage Products</p>
-            <h2 className="mt-1 text-2xl font-semibold text-white">Fast catalogue workflow for POS and online shop</h2>
-            <p className="mt-2 max-w-3xl text-sm text-slate-400">
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">{isProductDeskMode ? "Product Desk" : "Manage Products"}</p>
+            <h2 className={`mt-1 ${compactTitleClass}`}>{isProductDeskMode ? "Create and publish products faster" : "Fast catalogue workflow for POS and online shop"}</h2>
+            <p className={`mt-2 ${isProductDeskMode ? "max-w-2xl text-[13px] leading-6 text-slate-400" : "max-w-3xl text-sm text-slate-400"}`}>
               {isProductDeskMode
-                ? "Create, edit, and publish shop-ready products without exposing admin-only pricing or commission controls."
+                ? "Keep the desk focused on content, images, TikTok, and shop publishing without admin pricing or commission clutter."
                 : "Keep the product table as the daily workspace, then open the editor only when you need to add, fix, or publish an item."}
             </p>
           </div>
@@ -865,7 +872,7 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className={`mt-4 grid gap-3 ${isProductDeskMode ? "sm:grid-cols-2 xl:grid-cols-4" : "sm:grid-cols-2 xl:grid-cols-5"}`}>
           {[
             { key: "all", label: "All Products", value: catalogStats.total },
             { key: "online", label: "Online Shop", value: catalogStats.online },
@@ -877,27 +884,33 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
               key={card.key}
               type="button"
               onClick={() => setCatalogView(card.key as typeof catalogView)}
-              className={`rounded-2xl border px-4 py-3 text-left transition ${
+              className={`rounded-2xl border ${isProductDeskMode ? "px-3.5 py-3" : "px-4 py-3"} text-left transition ${
                 catalogView === card.key
                   ? "border-amber-400/50 bg-amber-400/10"
                   : "border-slate-800 bg-slate-950/55 hover:bg-slate-950/75"
               }`}
             >
               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{card.label}</div>
-              <div className="mt-2 text-2xl font-semibold text-white">{card.value}</div>
+              <div className={`mt-2 font-semibold text-white ${isProductDeskMode ? "text-xl" : "text-2xl"}`}>{card.value}</div>
             </button>
           ))}
+          {isProductDeskMode ? (
+            <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/5 px-3.5 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-200">Desk flow</div>
+              <div className="mt-2 text-sm font-semibold text-white">Add product, fill shop fields, save, then fine-tune from the table.</div>
+            </div>
+          ) : null}
         </div>
       </section>
 
-      <section ref={formSectionRef} className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
-        <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
+      <section ref={formSectionRef} className={sectionClass}>
+        <div className={`grid ${isProductDeskMode ? "gap-4 xl:grid-cols-[1.45fr_0.55fr]" : "gap-6 xl:grid-cols-[1.25fr_0.75fr]"}`}>
           <div>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Product Setup</p>
-                <h2 className="text-2xl font-semibold text-white">{draft.id ? "Edit POS product" : "Create POS product"}</h2>
-                <p className="mt-2 max-w-2xl text-sm text-slate-400">
+                <h2 className={compactTitleClass}>{draft.id ? "Edit POS product" : "Create POS product"}</h2>
+                <p className={`mt-2 max-w-2xl ${isProductDeskMode ? "text-[13px] leading-6 text-slate-400" : "text-sm text-slate-400"}`}>
                   {isProductDeskMode
                     ? "Keep product content, images, TikTok, and shop publishing details together in one compact editor."
                     : "Keep pricing, SKU, ecommerce details, images, and availability together in one compact editor."}
@@ -928,7 +941,7 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
 
             {editorOpen ? (
             <>
-            <div className="mt-4 flex flex-wrap items-center gap-2 rounded-2xl border border-emerald-400/20 bg-emerald-500/5 px-4 py-3 text-sm text-slate-300">
+            <div className={`mt-4 flex flex-wrap items-center gap-2 rounded-2xl border border-emerald-400/20 bg-emerald-500/5 ${isProductDeskMode ? "px-3 py-2.5 text-[13px]" : "px-4 py-3 text-sm"} text-slate-300`}>
               <span className="font-semibold text-emerald-200">Quick setup:</span>
               <button
                 type="button"
@@ -953,7 +966,7 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
                 </span>
               ) : null}
             </div>
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <div className={`mt-5 grid ${isProductDeskMode ? "gap-3 md:grid-cols-2" : "gap-4 md:grid-cols-2"}`}>
               <div className="text-sm text-slate-300">
                 <div className="flex items-center justify-between gap-3">
                   <span>Product name</span>
@@ -1085,7 +1098,7 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
               ) : null}
             </div>
 
-            <div className="mt-4 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-4">
+            <div className={`mt-4 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 ${isProductDeskMode ? "p-3.5" : "p-4"}`}>
               <div className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">Online Shop Controls</div>
               <p className="mt-2 text-sm text-slate-300">
                 These controls feed the Betech Solar online shop from the existing POS Catalogue. Unsupported fields stay disabled until the Product table is upgraded safely.
@@ -1366,7 +1379,7 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
               </div>
             ) : null}
 
-            <div className="mt-5 flex flex-wrap items-center gap-3">
+            <div className={`mt-5 flex flex-wrap items-center gap-3 ${isProductDeskMode ? "border-t border-slate-800 pt-4" : ""}`}>
               <button
                 type="button"
                 className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
@@ -1383,23 +1396,32 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
             </div>
             </>
             ) : (
-              <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-4 text-sm text-slate-300">
-                Open the editor when you want to add a new product, update ecommerce details, or fix pricing and commission data.
+              <div className={`mt-4 rounded-2xl border border-slate-800 bg-slate-950/60 ${isProductDeskMode ? "px-3.5 py-3 text-[13px]" : "px-4 py-4 text-sm"} text-slate-300`}>
+                {isProductDeskMode
+                  ? "Open the editor only when needed, then keep routine publishing and corrections moving from the catalog below."
+                  : "Open the editor when you want to add a new product, update ecommerce details, or fix pricing and commission data."}
               </div>
             )}
           </div>
 
-            <div className={`grid gap-4 ${isProductDeskMode ? "sm:grid-cols-2 xl:grid-cols-2" : "sm:grid-cols-3 xl:grid-cols-1"}`}>
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+            <div className={`grid gap-3 ${isProductDeskMode ? "sm:grid-cols-2 xl:grid-cols-1 xl:content-start" : "sm:grid-cols-3 xl:grid-cols-1"}`}>
+            <div className={`rounded-2xl border border-slate-800 bg-slate-950/60 ${isProductDeskMode ? "p-3.5" : "p-4"}`}>
               <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Catalog size</div>
-              <div className="mt-3 text-3xl font-semibold text-white">{filteredProducts.length}</div>
-              <div className="mt-1 text-sm text-slate-400">Products currently loaded in the POS catalog view.</div>
+              <div className={`mt-3 font-semibold text-white ${isProductDeskMode ? "text-2xl" : "text-3xl"}`}>{filteredProducts.length}</div>
+              <div className={`${isProductDeskMode ? "mt-1 text-[13px]" : "mt-1 text-sm"} text-slate-400`}>Products currently loaded in the POS catalog view.</div>
             </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+            <div className={`rounded-2xl border border-slate-800 bg-slate-950/60 ${isProductDeskMode ? "p-3.5" : "p-4"}`}>
               <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Active products</div>
-              <div className="mt-3 text-3xl font-semibold text-emerald-300">{filteredProducts.filter((product) => product.isActive).length}</div>
-              <div className="mt-1 text-sm text-slate-400">Available for product selection at the receipts desk.</div>
+              <div className={`mt-3 font-semibold text-emerald-300 ${isProductDeskMode ? "text-2xl" : "text-3xl"}`}>{filteredProducts.filter((product) => product.isActive).length}</div>
+              <div className={`${isProductDeskMode ? "mt-1 text-[13px]" : "mt-1 text-sm"} text-slate-400`}>Available for product selection at the receipts desk.</div>
             </div>
+            {isProductDeskMode ? (
+              <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/5 p-3.5">
+                <div className="text-xs uppercase tracking-[0.2em] text-emerald-200">Publishing defaults</div>
+                <div className="mt-2 text-sm font-medium text-white">Products from this desk save active and visible in shop.</div>
+                <div className="mt-1 text-[13px] text-emerald-100/80">Keep focus on content quality, images, and correct shop classification.</div>
+              </div>
+            ) : null}
             {!isProductDeskMode ? (
               <>
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
@@ -1523,12 +1545,12 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
       </div>
       ) : null}
 
-        <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
+        <section className={sectionClass}>
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Catalog</p>
-              <h2 className="text-2xl font-semibold text-white">Product Management</h2>
-              <p className="mt-2 text-sm text-slate-400">
+              <h2 className={compactTitleClass}>Product Management</h2>
+              <p className={`mt-2 ${isProductDeskMode ? "text-[13px] leading-6 text-slate-400" : "text-sm text-slate-400"}`}>
                 {isProductDeskMode
                   ? "Search, edit, and publish products to the shop from one compact catalogue table."
                   : "Search, filter, publish, archive, and edit products from one compact catalogue table."}
@@ -1536,7 +1558,7 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
             </div>
             <div className="flex flex-wrap items-center justify-end gap-3">
               <input
-                className="w-full max-w-sm rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+                className={`w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 ${isProductDeskMode ? "xl:min-w-[22rem]" : "max-w-sm"}`}
                 placeholder="Search name, SKU, or category"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -1568,14 +1590,14 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
               <option value="with">With warranty</option>
               <option value="without">Without warranty</option>
             </select> : null}
-            <label className="flex items-center gap-2 text-sm text-slate-300">
+            <label className={`flex items-center gap-2 ${isProductDeskMode ? "text-[13px]" : "text-sm"} text-slate-300`}>
               <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
               Show archived products
             </label>
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className={`mt-4 flex flex-wrap gap-2 ${isProductDeskMode ? "border-t border-slate-800 pt-3" : ""}`}>
             {[
               { key: "all", label: "All" },
               { key: "online", label: "Online Shop" },
@@ -1636,25 +1658,25 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
           </div>
         </div>}
 
-        <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-800">
+        <div className={`mt-4 overflow-x-auto rounded-2xl border border-slate-800 ${isProductDeskMode ? "bg-slate-950/30" : ""}`}>
           <table className="min-w-full divide-y divide-slate-800 text-sm">
             <thead className="bg-slate-950/70 text-left text-xs uppercase tracking-wide text-slate-400">
               <tr>
-                {canUseBulkActions ? <th className="px-4 py-3">
+                {canUseBulkActions ? <th className={compactCellClass}>
                   <input type="checkbox" checked={allOnPageSelected} onChange={toggleAllOnPage} disabled={!filteredProducts.length || !!bulkBusy} />
                 </th> : null}
-                <th className="px-4 py-3">Product</th>
-                <th className="px-4 py-3">Seller SKU</th>
-                <th className="px-4 py-3">Price</th>
-                <th className="px-4 py-3">Shop</th>
-                <th className="px-4 py-3">Active</th>
-                <th className="px-4 py-3 text-right">Actions</th>
+                <th className={compactCellClass}>Product</th>
+                <th className={compactCellClass}>Seller SKU</th>
+                <th className={compactCellClass}>Price</th>
+                <th className={compactCellClass}>Shop</th>
+                <th className={compactCellClass}>Active</th>
+                <th className={`${compactCellClass} text-right`}>Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800 bg-slate-950/40">
               {loading ? (
                 <tr>
-                  <td colSpan={canUseBulkActions ? 7 : 6} className="px-4 py-6 text-center text-slate-400">Loading products...</td>
+                  <td colSpan={canUseBulkActions ? 7 : 6} className={`${compactCellClass} py-6 text-center text-slate-400`}>Loading products...</td>
                 </tr>
               ) : filteredProducts.length ? (
                 filteredProducts.map((product) => {
@@ -1665,7 +1687,7 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
 
                   return <tr key={product.id} className={draft.id === product.id ? "bg-emerald-500/5" : undefined}>
                     {canUseBulkActions ? (
-                      <td className="px-4 py-3 align-top">
+                      <td className={`${compactCellClass} align-top`}>
                         <input
                           type="checkbox"
                           checked={Boolean(selectedIds[product.id])}
@@ -1674,12 +1696,12 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
                         />
                       </td>
                     ) : null}
-                    <td className="px-4 py-3 align-top">
-                      <div className="flex items-start gap-3">
+                    <td className={`${compactCellClass} align-top`}>
+                      <div className={`flex items-start ${isProductDeskMode ? "gap-2.5" : "gap-3"}`}>
                         {displayImage ? (
-                          <img src={displayImage} alt={product.name} className="h-14 w-14 rounded-xl border border-slate-800 object-cover" />
+                          <img src={displayImage} alt={product.name} className={`${isProductDeskMode ? "h-12 w-12" : "h-14 w-14"} rounded-xl border border-slate-800 object-cover`} />
                         ) : (
-                          <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-400">
+                          <div className={`flex ${isProductDeskMode ? "h-12 w-12" : "h-14 w-14"} items-center justify-center rounded-xl border border-slate-800 bg-slate-900 text-xs font-semibold text-slate-400`}>
                             {product.name.slice(0, 2).toUpperCase()}
                           </div>
                         )}
@@ -1708,14 +1730,14 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 align-top text-slate-300">
+                    <td className={`${compactCellClass} align-top text-slate-300`}>
                       <div className="font-medium text-white">{product.sku}</div>
                       <div className="mt-1 text-xs text-slate-500">
                         {product.shopCategory || "No shop category"}
                         {product.shopSubcategory ? ` · ${product.shopSubcategory}` : ""}
                       </div>
                     </td>
-                    <td className="px-4 py-3 align-top text-slate-200">
+                    <td className={`${compactCellClass} align-top text-slate-200`}>
                       <div className="font-semibold text-white">{formatMoney(product.sellingPrice)}</div>
                       {canManagePricing ? <div className="mt-1 text-xs text-slate-400">
                         {product.variableCost ? "Buying price later" : `Buying ${formatMoney(product.lastBuyingPrice)}`}
@@ -1724,7 +1746,7 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
                         {product.commissionEnabled ? `Commission ${formatMoney(product.commissionAmount)}` : "No commission"}
                       </div> : null}
                     </td>
-                    <td className="px-4 py-3 align-top">
+                    <td className={`${compactCellClass} align-top`}>
                       <div className="space-y-2">
                         <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${visibleInShop ? "bg-emerald-500/15 text-emerald-200" : "bg-slate-800 text-slate-400"}`}>
                           {visibleInShop ? "Visible online" : "Hidden online"}
@@ -1743,7 +1765,7 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
                         </button>
                       </div>
                     </td>
-                    <td className="px-4 py-3 align-top">
+                    <td className={`${compactCellClass} align-top`}>
                       <div className="space-y-2">
                         <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${product.isActive ? "bg-emerald-500/15 text-emerald-200" : "bg-slate-800 text-slate-400"}`}>
                           {product.isActive ? "Active" : "Inactive"}
@@ -1761,7 +1783,7 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
                         </button> : null}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-right align-top">
+                    <td className={`${compactCellClass} text-right align-top`}>
                       <div className="flex flex-wrap justify-end gap-2">
                         <button
                           type="button"
@@ -1791,7 +1813,7 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
                 })
               ) : (
                 <tr>
-                  <td colSpan={canUseBulkActions ? 7 : 6} className="px-4 py-6 text-center text-slate-400">No POS products match the current filters.</td>
+                  <td colSpan={canUseBulkActions ? 7 : 6} className={`${compactCellClass} py-6 text-center text-slate-400`}>No POS products match the current filters.</td>
                 </tr>
               )}
             </tbody>
