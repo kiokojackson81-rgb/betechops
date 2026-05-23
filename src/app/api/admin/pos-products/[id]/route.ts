@@ -97,6 +97,8 @@ function normalizeJsonStringArray(value: string[] | null | undefined) {
   return list.length ? JSON.stringify(list) : null;
 }
 
+const JSONB_PRODUCT_COLUMNS = new Set(["specifications", "galleryImageUrls"]);
+
 type ParamsContext = { params: { id: string } } | { params: Promise<{ id: string }> };
 
 async function resolveId(context: ParamsContext) {
@@ -252,7 +254,8 @@ export async function PATCH(req: Request, context: ParamsContext) {
   const values: unknown[] = [];
   const pushSet = (column: string, value: unknown) => {
     values.push(value);
-    setClauses.push(`"${column}" = $${values.length}`);
+    const castSuffix = JSONB_PRODUCT_COLUMNS.has(column) ? "::jsonb" : "";
+    setClauses.push(`"${column}" = $${values.length}${castSuffix}`);
   };
 
   if (capabilities.schemaMode === "modern") {

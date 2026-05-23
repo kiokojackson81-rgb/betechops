@@ -107,6 +107,8 @@ function normalizeJsonStringArray(value: string[] | null | undefined) {
   return list.length ? JSON.stringify(list) : null;
 }
 
+const JSONB_PRODUCT_COLUMNS = new Set(["specifications", "galleryImageUrls"]);
+
 async function findExistingSku(capabilities: Awaited<ReturnType<typeof getProductTableCapabilities>>, sku: string) {
   if (capabilities.schemaMode === "modern") {
     const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
@@ -126,101 +128,85 @@ async function findExistingSku(capabilities: Awaited<ReturnType<typeof getProduc
 function buildShopInsertFragments(capabilities: Awaited<ReturnType<typeof getProductTableCapabilities>>, data: z.infer<typeof productSchema>) {
   const columns: string[] = [];
   const values: unknown[] = [];
+  const casts: string[] = [];
+  const pushColumn = (column: string, value: unknown) => {
+    columns.push(`"${column}"`);
+    values.push(value);
+    casts.push(JSONB_PRODUCT_COLUMNS.has(column) ? "::jsonb" : "");
+  };
   const normalizedStatus = data.status ?? (data.isActive ? "ACTIVE" : "INACTIVE");
   const normalizedAvailabilityType = data.availabilityType ?? "SHOP";
   const pickupDelayDays = normalizedAvailabilityType === "WAREHOUSE" ? 1 : 0;
 
   if (capabilities.brand) {
-    columns.push(`"brand"`);
-    values.push(normalizeOptionalText(data.brand));
+    pushColumn("brand", normalizeOptionalText(data.brand));
   }
   if (capabilities.shortDescription) {
-    columns.push(`"shortDescription"`);
-    values.push(normalizeOptionalText(data.shortDescription));
+    pushColumn("shortDescription", normalizeOptionalText(data.shortDescription));
   }
   if (capabilities.description) {
-    columns.push(`"description"`);
-    values.push(normalizeOptionalText(data.description));
+    pushColumn("description", normalizeOptionalText(data.description));
   }
   if (capabilities.specifications) {
-    columns.push(`"specifications"`);
-    values.push(normalizeSpecifications(data.specifications));
+    pushColumn("specifications", normalizeSpecifications(data.specifications));
   }
   if (capabilities.warrantyPeriod) {
-    columns.push(`"warrantyPeriod"`);
-    values.push(normalizeOptionalText(data.warrantyPeriod));
+    pushColumn("warrantyPeriod", normalizeOptionalText(data.warrantyPeriod));
   }
   if (capabilities.warrantyNotes) {
-    columns.push(`"warrantyNotes"`);
-    values.push(normalizeOptionalText(data.warrantyNotes));
+    pushColumn("warrantyNotes", normalizeOptionalText(data.warrantyNotes));
   }
   if (capabilities.mainImageUrl) {
-    columns.push(`"mainImageUrl"`);
-    values.push(normalizeOptionalText(data.mainImageUrl));
+    pushColumn("mainImageUrl", normalizeOptionalText(data.mainImageUrl));
   }
   if (capabilities.galleryImageUrls) {
-    columns.push(`"galleryImageUrls"`);
-    values.push(normalizeJsonStringArray(data.galleryImageUrls));
+    pushColumn("galleryImageUrls", normalizeJsonStringArray(data.galleryImageUrls));
   }
   if (capabilities.brandImageUrl) {
-    columns.push(`"brandImageUrl"`);
-    values.push(normalizeOptionalText(data.brandImageUrl));
+    pushColumn("brandImageUrl", normalizeOptionalText(data.brandImageUrl));
   }
   if (capabilities.ecommerceVisible) {
-    columns.push(`"ecommerceVisible"`);
-    values.push(Boolean(data.ecommerceVisible));
+    pushColumn("ecommerceVisible", Boolean(data.ecommerceVisible));
   }
   if (capabilities.isFeatured) {
-    columns.push(`"isFeatured"`);
-    values.push(Boolean(data.isFeatured));
+    pushColumn("isFeatured", Boolean(data.isFeatured));
   }
   if (capabilities.status) {
-    columns.push(`"status"`);
-    values.push(normalizedStatus);
+    pushColumn("status", normalizedStatus);
   }
   if (capabilities.availabilityType) {
-    columns.push(`"availabilityType"`);
-    values.push(normalizedAvailabilityType);
+    pushColumn("availabilityType", normalizedAvailabilityType);
   }
   if (capabilities.pickupDelayDays) {
-    columns.push(`"pickupDelayDays"`);
-    values.push(pickupDelayDays);
+    pushColumn("pickupDelayDays", pickupDelayDays);
   }
 
   if (capabilities.showInShop) {
-    columns.push(`"showInShop"`);
-    values.push(Boolean(data.ecommerceVisible ?? data.showInShop));
+    pushColumn("showInShop", Boolean(data.ecommerceVisible ?? data.showInShop));
   }
   if (capabilities.shopCategory) {
-    columns.push(`"shopCategory"`);
-    values.push(normalizeOptionalText(data.shopCategory));
+    pushColumn("shopCategory", normalizeOptionalText(data.shopCategory));
   }
   if (capabilities.shopSubcategory) {
-    columns.push(`"shopSubcategory"`);
-    values.push(normalizeOptionalText(data.shopSubcategory));
+    pushColumn("shopSubcategory", normalizeOptionalText(data.shopSubcategory));
   }
   if (capabilities.shopShortDescription) {
-    columns.push(`"shopShortDescription"`);
-    values.push(normalizeOptionalText(data.shortDescription ?? data.shopShortDescription));
+    pushColumn("shopShortDescription", normalizeOptionalText(data.shortDescription ?? data.shopShortDescription));
   }
   if (capabilities.shopWarranty) {
-    columns.push(`"shopWarranty"`);
-    values.push(normalizeOptionalText(data.warrantyPeriod ?? data.shopWarranty));
+    pushColumn("shopWarranty", normalizeOptionalText(data.warrantyPeriod ?? data.shopWarranty));
   }
   if (capabilities.shopSpecs) {
-    columns.push(`"shopSpecs"`);
-    values.push(normalizeOptionalText(Array.isArray(data.specifications) ? data.specifications.join(", ") : data.specifications ?? data.shopSpecs));
+    pushColumn("shopSpecs", normalizeOptionalText(Array.isArray(data.specifications) ? data.specifications.join(", ") : data.specifications ?? data.shopSpecs));
   }
   if (capabilities.shopImageUrl) {
-    columns.push(`"shopImageUrl"`);
-    values.push(normalizeOptionalText(data.mainImageUrl ?? data.shopImageUrl));
+    pushColumn("shopImageUrl", normalizeOptionalText(data.mainImageUrl ?? data.shopImageUrl));
   }
   if (capabilities.shopBrand) {
-    columns.push(`"shopBrand"`);
-    values.push(normalizeOptionalText(data.brand ?? data.shopBrand));
+    pushColumn("shopBrand", normalizeOptionalText(data.brand ?? data.shopBrand));
   }
 
-  return { columns, values };
+  return { columns, values, casts };
 }
 
 export async function GET(req: Request) {
@@ -389,7 +375,7 @@ export async function POST(req: Request) {
           )
           VALUES (
             $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11
-            ${shopFragments.values.map((_, index) => `,$${12 + index}`).join("")}
+            ${shopFragments.values.map((_, index) => `,$${12 + index}${shopFragments.casts[index] || ""}`).join("")}
           )
           RETURNING *
         `,
@@ -418,7 +404,7 @@ export async function POST(req: Request) {
           )
           VALUES (
             $1,$2,$3,$4,$5
-            ${shopFragments.values.map((_, index) => `,$${6 + index}`).join("")}
+            ${shopFragments.values.map((_, index) => `,$${6 + index}${shopFragments.casts[index] || ""}`).join("")}
           )
           RETURNING *
         `,
