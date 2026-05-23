@@ -1,16 +1,40 @@
 import type { PayrollRow } from "@/app/admin/payroll/types";
 import { getBrendahCommissionForPeriod } from "@/lib/brendahCommission";
 import { computeOnlinePeriodCommission, resolveDirectCommissionMode } from "@/lib/onlineCommission";
-import { getAssignedMarketplaceSalesForPeriod } from "@/lib/onlineOps";
-import { getOnlineOpsWindowForTradingPeriod } from "@/lib/onlineOpsWeeks";
+import { prisma } from "@/lib/prisma";
+import { getOnlineOpsWeeksForTradingPeriod } from "@/lib/onlineOpsWeeks";
 import type { TradingPeriod } from "@/lib/tradingPeriod";
 
 async function computeProfit10MarketplaceSplit(attendantId: string, period: TradingPeriod) {
-  const marketplaceWindow = getOnlineOpsWindowForTradingPeriod(period, new Date(), 4);
-  const summary = await getAssignedMarketplaceSalesForPeriod(attendantId, marketplaceWindow);
-  if (!summary.rows.length) {
+  const weeks = getOnlineOpsWeeksForTradingPeriod(period, new Date(), 4);
+  const weekStarts = weeks.map((week) => week.weekStart);
+  if (!weekStarts.length) {
     return { jumiaCommission: 0, kilimallCommission: 0, totalCommission: 0 };
   }
+
+  const manualRows = await prisma.weeklySale.findMany({
+    where: {
+      userId: attendantId,
+      source: "MANUAL",
+      status: { not: "REJECTED" },
+      weekStart: { in: weekStarts },
+    },
+    select: {
+      platform: true,
+      amount: true,
+    },
+  });
+
+  if (!manualRows.length) {
+    return { jumiaCommission: 0, kilimallCommission: 0, totalCommission: 0 };
+  }
+
+  const jumiaSales = manualRows
+    .filter((row) => String(row.platform ?? "").toUpperCase() === "JUMIA")
+    .reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
+  const kilimallSales = manualRows
+    .filter((row) => String(row.platform ?? "").toUpperCase() === "KILIMALL")
+    .reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
 
   const result = computeOnlinePeriodCommission(
     {
@@ -19,8 +43,8 @@ async function computeProfit10MarketplaceSplit(attendantId: string, period: Trad
       periodEnd: period.end,
       directSales: 0,
       directProfit: 0,
-      jumiaSales: Number(summary.totals.jumiaSales ?? 0),
-      kilimallSales: Number(summary.totals.kilimallSales ?? 0),
+      jumiaSales,
+      kilimallSales,
     },
     { directCommissionMode: "PROFIT_10" },
   );
