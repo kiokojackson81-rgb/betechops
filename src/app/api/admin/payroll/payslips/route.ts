@@ -7,6 +7,7 @@ import { parseTradingPeriodKey, getTradingPeriodFor } from "@/lib/tradingPeriod"
 import { buildPayrollRow } from "@/lib/adminPayroll";
 import { applyCanonicalPayrollOverrides } from "@/lib/payrollCanonical";
 import { buildPayslipPayload, renderPayslipDocumentHtml, sanitizeFilename } from "@/lib/payrollPayslip";
+import { payrollEligibleUserWhere } from "@/lib/payrollEligibility";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,7 +22,7 @@ export async function GET(req: Request) {
 
   const [attendants, branding] = await Promise.all([
     prisma.user.findMany({
-      where: { role: { in: ["ATTENDANT", "SUPERVISOR"] } },
+      where: payrollEligibleUserWhere(),
       orderBy: [{ attendantCategory: "asc" }, { name: "asc" }],
       select: {
         id: true,

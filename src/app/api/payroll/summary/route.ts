@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
 import { buildPayrollRow } from "@/lib/adminPayroll";
 import { applyCanonicalPayrollOverrides } from "@/lib/payrollCanonical";
+import { payrollEligibleUserWhere } from "@/lib/payrollEligibility";
 import type { TradingPeriod } from "@/lib/tradingPeriod";
 
 // Compatibility route for older clients that call /api/payroll/summary
@@ -52,7 +53,7 @@ export async function GET(req: Request) {
     }
 
     const attendants = await prisma.user.findMany({
-      where: { role: { in: ["ATTENDANT", "SUPERVISOR"] } },
+      where: payrollEligibleUserWhere(),
       orderBy: [{ attendantCategory: "asc" }, { name: "asc" }],
       select: { id: true, name: true, email: true, attendantCategory: true, isActive: true },
     });

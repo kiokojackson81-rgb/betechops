@@ -6,6 +6,7 @@ import { getOrCreateCommissionPeriod } from "@/lib/commission";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 import { buildPayrollRow } from "@/lib/adminPayroll";
 import { applyCanonicalPayrollOverrides } from "@/lib/payrollCanonical";
+import { payrollEligibleUserWhere } from "@/lib/payrollEligibility";
 import type { TradingPeriod } from "@/lib/tradingPeriod";
 
 export const dynamic = "force-dynamic";
@@ -37,10 +38,7 @@ export async function GET(req: Request) {
 
   await getOrCreateCommissionPeriod(period.start);
   const attendants = await prisma.user.findMany({
-    where: {
-      role: { in: ["ATTENDANT", "SUPERVISOR"] },
-      ...(attendantIdParam ? { id: attendantIdParam } : {}),
-    },
+    where: payrollEligibleUserWhere(attendantIdParam ? { id: attendantIdParam } : {}),
     orderBy: [{ attendantCategory: "asc" }, { name: "asc" }],
     select: { id: true, name: true, email: true, attendantCategory: true, isActive: true },
   });

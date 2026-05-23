@@ -15,6 +15,7 @@ import { buildPayrollRow } from "@/lib/adminPayroll";
 import { ensurePayrollAdjustmentStorage } from "@/lib/payrollAdjustmentStorage";
 import type { PayrollRow } from "@/app/admin/payroll/types";
 import { applyCanonicalPayrollOverrides } from "@/lib/payrollCanonical";
+import { payrollEligibleUserWhere } from "@/lib/payrollEligibility";
 
 export const dynamic = "force-dynamic";
 
@@ -195,7 +196,7 @@ export default async function PayrollPage({
     : null;
 
   const peerAttendants = await prisma.user.findMany({
-    where: { role: { in: ["ATTENDANT", "SUPERVISOR"] } },
+    where: payrollEligibleUserWhere(),
     orderBy: [{ attendantCategory: "asc" }, { name: "asc" }],
     select: {
       id: true,

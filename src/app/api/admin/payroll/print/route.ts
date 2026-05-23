@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { renderPayrollPrintHtml } from "@/lib/payrollPrint";
 import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
 import { sanitizeFilename } from "@/lib/payrollPayslip";
+import { payrollEligibleUserWhere } from "@/lib/payrollEligibility";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,7 +24,7 @@ export async function GET(req: Request) {
 
   const [attendants, branding] = await Promise.all([
     prisma.user.findMany({
-      where: { role: { in: ["ATTENDANT", "SUPERVISOR"] } },
+      where: payrollEligibleUserWhere(),
       orderBy: [{ attendantCategory: "asc" }, { name: "asc" }],
       select: {
         id: true,

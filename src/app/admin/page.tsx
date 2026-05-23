@@ -31,6 +31,7 @@ import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { buildPayrollRow } from "@/lib/adminPayroll";
 import { applyCanonicalPayrollOverrides } from "@/lib/payrollCanonical";
+import { payrollEligibleUserWhere } from "@/lib/payrollEligibility";
 import { getUnpricedDailySalesForCurrentPeriod } from "@/lib/marketingUnpricedSales";
 import { groupMarketingUnpricedSales } from "@/lib/unpricedReceiptGrouping";
 
@@ -467,7 +468,7 @@ async function getDashboardData() {
       select: { orderedAt: true, platform: true, sellingPrice: true, profit: true, status: true },
     }),
     prisma.user.findMany({
-      where: { role: { in: ["ATTENDANT", "SUPERVISOR"] }, isActive: true },
+      where: payrollEligibleUserWhere({ isActive: true }),
       orderBy: [{ attendantCategory: "asc" }, { name: "asc" }],
       select: { id: true, name: true, email: true, attendantCategory: true, isActive: true },
     }),

@@ -12,6 +12,7 @@ import PayrollTableClient from "./PayrollTableClient";
 import type { PayrollRow } from "./types";
 import { buildPayrollRow } from "@/lib/adminPayroll";
 import { applyCanonicalPayrollOverrides } from "@/lib/payrollCanonical";
+import { payrollEligibleUserWhere } from "@/lib/payrollEligibility";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,7 @@ export default async function AdminPayrollPage({
   const nextPeriod = isCurrentPeriod ? null : getNextTradingPeriod(period);
 
   const attendants = await prisma.user.findMany({
-    where: { role: { in: ["ATTENDANT", "SUPERVISOR"] } },
+    where: payrollEligibleUserWhere(),
     orderBy: [{ attendantCategory: "asc" }, { name: "asc" }],
     select: {
       id: true,
