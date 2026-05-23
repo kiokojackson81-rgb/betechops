@@ -97,7 +97,7 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
             <div className="grid gap-5">
               <div className={`${shopStyles.lightCard} p-5 sm:p-6`}>
                 <div className={shopStyles.sectionEyebrow}>{product.category}</div>
-                <h1 className="mt-4 text-2xl font-black leading-tight tracking-tight text-slate-950 sm:text-3xl xl:text-[2.2rem]">{product.name}</h1>
+                <h1 className="mt-4 text-xl font-black leading-tight tracking-tight text-slate-950 sm:text-2xl xl:text-[1.9rem]">{product.name}</h1>
                 <div className="mt-3 text-base font-semibold text-slate-500">Brand: {product.brand}</div>
                 {product.brandImage ? <img src={product.brandImage} alt={`${product.brand} logo`} className="mt-3 h-10 w-auto object-contain" /> : null}
                 <div className="mt-5 flex flex-wrap items-end gap-3">
