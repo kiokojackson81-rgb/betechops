@@ -18,15 +18,15 @@ export default function ShopProductDetailActions({ product }: ShopProductDetailA
   const quoteHref = `/shop/request-quote?product=${encodeURIComponent(product.name)}`;
 
   return (
-    <div className="grid gap-3 sm:grid-cols-3">
+    <div className="grid gap-2.5 sm:grid-cols-3">
       <AddToCartButton
         productId={product.id}
         productName={product.name}
-        className="inline-flex min-h-[3.4rem] items-center justify-center gap-2 rounded-2xl bg-[#7a0000] px-5 py-3 text-sm font-bold text-white shadow-[0_18px_35px_rgba(122,0,0,0.18)] transition hover:-translate-y-0.5"
+        className="inline-flex min-h-[3.1rem] items-center justify-center gap-2 rounded-2xl bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_16px_30px_rgba(122,0,0,0.16)] transition hover:-translate-y-0.5"
       />
       <TrackedWhatsAppLink
         href={whatsappHref}
-        className="inline-flex min-h-[3.4rem] items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#11b86a_0%,#0f9d58_55%,#0b7c44_100%)] px-5 py-3 text-sm font-bold text-white shadow-[0_18px_38px_rgba(15,157,88,0.26)] transition hover:-translate-y-0.5"
+        className="inline-flex min-h-[3.1rem] items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#11b86a_0%,#0f9d58_55%,#0b7c44_100%)] px-4 py-2.5 text-sm font-bold text-white shadow-[0_16px_32px_rgba(15,157,88,0.22)] transition hover:-translate-y-0.5"
         label={`WhatsApp order ${product.name}`}
         context="product_detail"
         ariaLabel={`Order ${product.name} on WhatsApp`}
@@ -36,7 +36,7 @@ export default function ShopProductDetailActions({ product }: ShopProductDetailA
       </TrackedWhatsAppLink>
       <Link
         href={quoteHref}
-        className="inline-flex min-h-[3.4rem] items-center justify-center rounded-2xl border border-[#7a0000]/18 bg-white px-5 py-3 text-sm font-bold text-slate-950 shadow-[0_14px_30px_rgba(15,23,42,0.05)] transition hover:-translate-y-0.5 hover:border-[#7a0000]/35"
+        className="inline-flex min-h-[3.1rem] items-center justify-center rounded-2xl border border-[#7a0000]/18 bg-white px-4 py-2.5 text-sm font-bold text-slate-950 shadow-[0_12px_24px_rgba(15,23,42,0.05)] transition hover:-translate-y-0.5 hover:border-[#7a0000]/35"
       >
         Request Quote
       </Link>
