@@ -33,6 +33,7 @@ type OpsCatalogueProduct = {
   mainImageUrl?: string | null;
   galleryImageUrls?: unknown;
   brandImageUrl?: string | null;
+  tiktokVideoUrl?: string | null;
   ecommerceVisible?: boolean | null;
   isFeatured?: boolean | null;
   status?: string | null;
@@ -439,6 +440,7 @@ function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview 
   const mainImage = normalizeOptionalText(product.mainImageUrl) || normalizeOptionalText(product.shopImageUrl) || category.image;
   const galleryImages = compactUnique([mainImage, ...normalizeStringArray(product.galleryImageUrls)]).filter(Boolean);
   const brandImage = normalizeOptionalText(product.brandImageUrl);
+  const tiktokVideoUrl = normalizeOptionalText(product.tiktokVideoUrl);
   const fullDescription =
     normalizeOptionalText(product.description) ||
     normalizeOptionalText(product.shopShortDescription) ||
@@ -495,6 +497,7 @@ function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview 
         image: mainImage,
         galleryImages,
         brandImage,
+        tiktokVideoUrl,
         visualType: category.visualType,
         shortDescription,
         fullDescription: fullDescription || undefined,
@@ -599,6 +602,7 @@ export async function getOpsCatalogueProductsReadOnly() {
         ${available.has("mainImageUrl") ? `"mainImageUrl"` : `NULL::text`} AS "mainImageUrl",
         ${available.has("galleryImageUrls") ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
         ${available.has("brandImageUrl") ? `"brandImageUrl"` : `NULL::text`} AS "brandImageUrl",
+        ${available.has("tiktokVideoUrl") ? `"tiktokVideoUrl"` : `NULL::text`} AS "tiktokVideoUrl",
         ${available.has("ecommerceVisible") ? `COALESCE("ecommerceVisible", false)` : `NULL::boolean`} AS "ecommerceVisible",
         ${available.has("isFeatured") ? `COALESCE("isFeatured", false)` : `NULL::boolean`} AS "isFeatured",
         ${available.has("status") ? `"status"` : `NULL::text`} AS "status",
@@ -637,6 +641,7 @@ export async function getOpsCatalogueProductsReadOnly() {
         ${available.has("mainImageUrl") ? `"mainImageUrl"` : `NULL::text`} AS "mainImageUrl",
         ${available.has("galleryImageUrls") ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
         ${available.has("brandImageUrl") ? `"brandImageUrl"` : `NULL::text`} AS "brandImageUrl",
+        ${available.has("tiktokVideoUrl") ? `"tiktokVideoUrl"` : `NULL::text`} AS "tiktokVideoUrl",
         ${available.has("ecommerceVisible") ? `COALESCE("ecommerceVisible", false)` : `NULL::boolean`} AS "ecommerceVisible",
         ${available.has("isFeatured") ? `COALESCE("isFeatured", false)` : `NULL::boolean`} AS "isFeatured",
         ${available.has("status") ? `"status"` : `NULL::text`} AS "status",

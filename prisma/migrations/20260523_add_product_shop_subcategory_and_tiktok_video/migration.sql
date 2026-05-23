@@ -1,0 +1,2 @@
+ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "shopSubcategory" TEXT;
+ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "tiktokVideoUrl" TEXT;

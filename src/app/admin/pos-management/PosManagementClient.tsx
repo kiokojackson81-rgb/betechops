@@ -27,6 +27,7 @@ type PosProduct = {
   mainImageUrl?: string | null;
   galleryImageUrls?: string[] | null;
   brandImageUrl?: string | null;
+  tiktokVideoUrl?: string | null;
   ecommerceVisible?: boolean | null;
   isFeatured?: boolean | null;
   status?: string | null;
@@ -53,6 +54,7 @@ type PosCatalogueCapabilities = {
   mainImageUrl: boolean;
   galleryImageUrls: boolean;
   brandImageUrl: boolean;
+  tiktokVideoUrl: boolean;
   ecommerceVisible: boolean;
   isFeatured: boolean;
   status: boolean;
@@ -106,6 +108,7 @@ type ProductDraft = {
   mainImageUrl: string;
   galleryImageUrls: string[];
   brandImageUrl: string;
+  tiktokVideoUrl: string;
   ecommerceVisible: boolean;
   isFeatured: boolean;
   status: "ACTIVE" | "INACTIVE";
@@ -142,6 +145,7 @@ const emptyDraft: ProductDraft = {
   mainImageUrl: "",
   galleryImageUrls: [],
   brandImageUrl: "",
+  tiktokVideoUrl: "",
   ecommerceVisible: false,
   isFeatured: false,
   status: "ACTIVE",
@@ -168,6 +172,7 @@ const defaultCapabilities: PosCatalogueCapabilities = {
   mainImageUrl: false,
   galleryImageUrls: false,
   brandImageUrl: false,
+  tiktokVideoUrl: false,
   ecommerceVisible: false,
   isFeatured: false,
   status: false,
@@ -502,13 +507,10 @@ export default function PosManagementClient() {
         commissionRequiresApproval: draft.commissionEnabled ? draft.commissionRequiresApproval : false,
         ...(capabilities.brand ? { brand: draft.brand.trim() || null } : {}),
         ...(capabilities.shortDescription ? { shortDescription: draft.shortDescription.trim() || null } : {}),
-        ...(capabilities.description ? { description: draft.description.trim() || null } : {}),
-        ...(capabilities.specifications ? { specifications: draft.specifications.trim() || null } : {}),
         ...(capabilities.warrantyPeriod ? { warrantyPeriod: draft.warrantyPeriod.trim() || null } : {}),
-        ...(capabilities.warrantyNotes ? { warrantyNotes: draft.warrantyNotes.trim() || null } : {}),
         ...(capabilities.mainImageUrl ? { mainImageUrl: draft.mainImageUrl.trim() || null } : {}),
         ...(capabilities.galleryImageUrls ? { galleryImageUrls: draft.galleryImageUrls } : {}),
-        ...(capabilities.brandImageUrl ? { brandImageUrl: draft.brandImageUrl.trim() || null } : {}),
+        ...(capabilities.tiktokVideoUrl ? { tiktokVideoUrl: draft.tiktokVideoUrl.trim() || null } : {}),
         ...(capabilities.ecommerceVisible ? { ecommerceVisible: draft.ecommerceVisible } : {}),
         ...(capabilities.isFeatured ? { isFeatured: draft.isFeatured } : {}),
         ...(capabilities.status ? { status: draft.status } : {}),
@@ -567,6 +569,7 @@ export default function PosManagementClient() {
       mainImageUrl: product.mainImageUrl ?? product.shopImageUrl ?? "",
       galleryImageUrls: parseStringArray(product.galleryImageUrls),
       brandImageUrl: product.brandImageUrl ?? "",
+      tiktokVideoUrl: product.tiktokVideoUrl ?? "",
       ecommerceVisible: Boolean(product.ecommerceVisible ?? product.showInShop),
       isFeatured: Boolean(product.isFeatured),
       status: String(product.status || (product.isActive ? "ACTIVE" : "INACTIVE")).toUpperCase() === "INACTIVE" ? "INACTIVE" : "ACTIVE",
@@ -609,6 +612,7 @@ export default function PosManagementClient() {
       mainImageUrl: product.mainImageUrl ?? product.shopImageUrl ?? "",
       galleryImageUrls: parseStringArray(product.galleryImageUrls),
       brandImageUrl: product.brandImageUrl ?? "",
+      tiktokVideoUrl: product.tiktokVideoUrl ?? "",
       ecommerceVisible: Boolean(product.ecommerceVisible ?? product.showInShop),
       isFeatured: Boolean(product.isFeatured),
       status: String(product.status || (product.isActive ? "ACTIVE" : "INACTIVE")).toUpperCase() === "INACTIVE" ? "INACTIVE" : "ACTIVE",
@@ -1156,46 +1160,32 @@ export default function PosManagementClient() {
 
                 <label className="text-sm text-slate-300">
                   Warranty period
-                  <input
+                  <select
                     className={`${fieldClass} mt-1 disabled:cursor-not-allowed disabled:opacity-60`}
                     value={draft.warrantyPeriod}
                     disabled={!(capabilities.warrantyPeriod || capabilities.shopWarranty)}
                     onChange={(e) => setDraft((s) => ({ ...s, warrantyPeriod: e.target.value, shopWarranty: e.target.value }))}
-                    placeholder="Customer-facing warranty period"
-                  />
-                </label>
-
-                <label className="text-sm text-slate-300">
-                  Warranty notes
-                  <textarea
-                    className={`${fieldClass} mt-1 min-h-[96px] disabled:cursor-not-allowed disabled:opacity-60`}
-                    value={draft.warrantyNotes}
-                    disabled={!capabilities.warrantyNotes}
-                    onChange={(e) => setDraft((s) => ({ ...s, warrantyNotes: e.target.value }))}
-                    placeholder="Any warranty exclusions or notes"
-                  />
+                  >
+                    {warrantyOptions.map((option) => (
+                      <option key={option || "none"} value={option}>
+                        {option || "Select warranty period"}
+                      </option>
+                    ))}
+                  </select>
                 </label>
 
                 <label className="text-sm text-slate-300 md:col-span-2">
-                  Full description
-                  <textarea
-                    className={`${fieldClass} mt-1 min-h-[120px] disabled:cursor-not-allowed disabled:opacity-60`}
-                    value={draft.description}
-                    disabled={!capabilities.description}
-                    onChange={(e) => setDraft((s) => ({ ...s, description: e.target.value }))}
-                    placeholder="Detailed product description for ecommerce"
+                  TikTok video link
+                  <input
+                    className={`${fieldClass} mt-1 disabled:cursor-not-allowed disabled:opacity-60`}
+                    value={draft.tiktokVideoUrl}
+                    disabled={!capabilities.tiktokVideoUrl}
+                    onChange={(e) => setDraft((s) => ({ ...s, tiktokVideoUrl: e.target.value }))}
+                    placeholder="https://www.tiktok.com/@account/video/1234567890"
                   />
-                </label>
-
-                <label className="text-sm text-slate-300 md:col-span-2">
-                  Specifications
-                  <textarea
-                    className={`${fieldClass} mt-1 min-h-[96px] disabled:cursor-not-allowed disabled:opacity-60`}
-                    value={draft.specifications}
-                    disabled={!(capabilities.specifications || capabilities.shopSpecs)}
-                    onChange={(e) => setDraft((s) => ({ ...s, specifications: e.target.value, shopSpecs: e.target.value }))}
-                    placeholder="One spec per line"
-                  />
+                  <div className="mt-1 text-xs text-slate-500">
+                    Paste the TikTok product video link. The video will be embedded directly on the product page.
+                  </div>
                 </label>
 
                 <label className="text-sm text-slate-300 md:col-span-2">
@@ -1235,7 +1225,7 @@ export default function PosManagementClient() {
 
                 <div className="text-sm text-slate-300 md:col-span-2">
                   Images
-                  <div className="mt-2 grid gap-4 md:grid-cols-3">
+                  <div className="mt-2 grid gap-4 md:grid-cols-2">
                     <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
                       <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Main image</div>
                       {draft.mainImageUrl ? <img src={draft.mainImageUrl} alt="Main preview" className="mt-3 h-24 w-full rounded-lg object-cover" /> : <div className="mt-3 flex h-24 items-center justify-center rounded-lg border border-dashed border-slate-700 text-xs text-slate-500">No main image</div>}
@@ -1293,30 +1283,6 @@ export default function PosManagementClient() {
                           }
                         }}
                       />
-                    </div>
-                    <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
-                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Brand logo</div>
-                      {draft.brandImageUrl ? <img src={draft.brandImageUrl} alt="Brand preview" className="mt-3 h-24 w-full rounded-lg object-contain bg-white/5 p-2" /> : <div className="mt-3 flex h-24 items-center justify-center rounded-lg border border-dashed border-slate-700 text-xs text-slate-500">No brand logo</div>}
-                      <input
-                        className="mt-3 block w-full text-xs text-slate-300"
-                        type="file"
-                        accept="image/*"
-                        disabled={!capabilities.brandImageUrl || uploadingKind !== null}
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          try {
-                            const url = await uploadProductImage(file, "brand");
-                            setDraft((s) => ({ ...s, brandImageUrl: url }));
-                            showToast("Brand logo uploaded", "success");
-                          } catch (err) {
-                            showToast(err instanceof Error ? err.message : "Failed to upload brand logo", "error");
-                          } finally {
-                            e.currentTarget.value = "";
-                          }
-                        }}
-                      />
-                      <button type="button" className="mt-2 text-xs text-slate-400 hover:text-white" onClick={() => setDraft((s) => ({ ...s, brandImageUrl: "" }))}>Remove brand logo</button>
                     </div>
                   </div>
                 </div>
@@ -1622,7 +1588,7 @@ export default function PosManagementClient() {
                 filteredProducts.map((product) => {
                   const visibleInShop = Boolean(product.ecommerceVisible ?? product.showInShop);
                   const availabilityType = normalizeAvailabilityType(product.availabilityType);
-                  const displayImage = product.mainImageUrl || product.shopImageUrl || product.brandImageUrl || "";
+                  const displayImage = product.mainImageUrl || product.shopImageUrl || "";
 
                   return <tr key={product.id} className={draft.id === product.id ? "bg-emerald-500/5" : undefined}>
                     <td className="px-4 py-3 align-top">

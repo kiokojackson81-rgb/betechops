@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BadgeCheck, BatteryCharging, CreditCard, MapPin, ShieldCheck, Store, SunMedium, Truck, Zap } from "lucide-react";
+import { BadgeCheck, BatteryCharging, CreditCard, MapPin, PlayCircle, ShieldCheck, Store, SunMedium, Truck, Zap } from "lucide-react";
 import ShopAnalyticsTracker from "@/app/shop/_components/ShopAnalyticsTracker";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
 import ShopMobileStickyBar from "@/app/shop/_components/ShopMobileStickyBar";
@@ -117,6 +117,22 @@ function buildValueProposition(product: ShopProduct) {
   return "Professional solar product support, clear pricing, and nationwide delivery from Betech Solar.";
 }
 
+function extractTikTokVideoId(value: string | null | undefined) {
+  const normalized = String(value || "").trim();
+  if (!normalized) return null;
+
+  const directMatch = normalized.match(/\/video\/(\d{8,})/i);
+  if (directMatch) return directMatch[1];
+
+  const digitsOnly = normalized.match(/\b(\d{8,})\b/);
+  return digitsOnly ? digitsOnly[1] : null;
+}
+
+function getTikTokEmbedUrl(value: string | null | undefined) {
+  const videoId = extractTikTokVideoId(value);
+  return videoId ? `https://www.tiktok.com/embed/v3/${videoId}` : null;
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const product = await getShopProductBySlug(slug);
@@ -156,6 +172,7 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
   const breadcrumbTitle = buildBreadcrumbTitle(product);
   const specSummary = buildSpecSummary(product);
   const valueProposition = buildValueProposition(product);
+  const tiktokEmbedUrl = getTikTokEmbedUrl(product.tiktokVideoUrl);
   const keyHighlights = [
     { icon: <Zap className="h-4 w-4" />, label: specSummary[0] || product.specs[0] || "Solar Configuration" },
     { icon: <BatteryCharging className="h-4 w-4" />, label: specSummary[1] || product.specs[1] || "Battery Support" },
@@ -210,8 +227,6 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
                     ))}
                   </ul>
                 ) : null}
-                {product.brandImage ? <img src={product.brandImage} alt={`${product.brand} logo`} className="mt-4 h-8 w-auto object-contain" /> : null}
-
                 <div className="mt-5 grid gap-3 rounded-[26px] border border-[#7a0000]/8 bg-[linear-gradient(180deg,#fffaf4_0%,#ffffff_100%)] p-4 shadow-[0_16px_30px_rgba(15,23,42,0.04)]">
                   <div className="flex flex-wrap items-end gap-3">
                     <div className="text-[2rem] font-bold tracking-[-0.03em] text-slate-950 sm:text-[2.35rem]">{formatCurrency(product.price)}</div>
@@ -236,6 +251,26 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
                 <div className="mt-5">
                   <ShopProductDetailActions product={product} />
                 </div>
+                {tiktokEmbedUrl ? (
+                  <div className="mt-5 rounded-[24px] border border-slate-200/80 bg-white/90 p-3 shadow-[0_12px_24px_rgba(15,23,42,0.06)]">
+                    <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.16em] text-[#7a0000]">
+                      <PlayCircle className="h-4 w-4" />
+                      Product video
+                    </div>
+                    <div className="mt-2 text-sm leading-6 text-slate-600">
+                      Watch the TikTok product video here without leaving the Betech Solar website.
+                    </div>
+                    <div className="mt-3 overflow-hidden rounded-[20px] border border-slate-200 bg-slate-950">
+                      <iframe
+                        src={tiktokEmbedUrl}
+                        title={`${product.name} TikTok video`}
+                        className="aspect-[9/16] w-full"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               <div className="grid gap-4 lg:grid-cols-[1.02fr_0.98fr]">

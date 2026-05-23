@@ -20,6 +20,7 @@ export type ProductTableCapabilities = {
   mainImageUrl: boolean;
   galleryImageUrls: boolean;
   brandImageUrl: boolean;
+  tiktokVideoUrl: boolean;
   ecommerceVisible: boolean;
   isFeatured: boolean;
   status: boolean;
@@ -62,6 +63,7 @@ export async function getProductTableCapabilities(prisma: PrismaClient): Promise
     mainImageUrl: available.has("mainImageUrl"),
     galleryImageUrls: available.has("galleryImageUrls"),
     brandImageUrl: available.has("brandImageUrl"),
+    tiktokVideoUrl: available.has("tiktokVideoUrl"),
     ecommerceVisible: available.has("ecommerceVisible"),
     isFeatured: available.has("isFeatured"),
     status: available.has("status"),

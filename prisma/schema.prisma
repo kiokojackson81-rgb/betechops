@@ -938,6 +938,7 @@ model Product {
   mainImageUrl               String?
   galleryImageUrls           Json?
   brandImageUrl              String?
+  tiktokVideoUrl             String?
   ecommerceVisible           Boolean     @default(false)
   isFeatured                 Boolean     @default(false)
   status                     String      @default("ACTIVE")

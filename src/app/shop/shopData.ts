@@ -29,6 +29,7 @@ export type ShopProduct = {
   image: string;
   galleryImages?: string[];
   brandImage?: string | null;
+  tiktokVideoUrl?: string | null;
   visualType: ShopProductVisualType;
   shortDescription?: string;
   fullDescription?: string;
