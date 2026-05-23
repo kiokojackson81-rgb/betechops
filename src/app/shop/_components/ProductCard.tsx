@@ -32,7 +32,7 @@ export default function ProductCard({ product }: ProductCardProps) {
 
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-[24px] border border-[#7a0000]/8 bg-white text-slate-950 shadow-[0_12px_28px_rgba(15,23,42,0.05)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_22px_42px_rgba(122,0,0,0.08)]">
-      <div className="relative h-36 overflow-hidden border-b border-[#7a0000]/8 bg-[linear-gradient(180deg,#fbf5eb_0%,#ffffff_100%)] sm:h-40 xl:h-44">
+      <div className="relative h-40 overflow-hidden border-b border-[#7a0000]/8 bg-[linear-gradient(180deg,#fbf5eb_0%,#ffffff_100%)] sm:h-44 xl:h-48">
         <div className="absolute inset-0 p-3">
           {product.image ? (
             <img src={product.image} alt={product.name} className="h-full w-full object-contain transition duration-500 group-hover:scale-[1.03]" />
@@ -50,13 +50,13 @@ export default function ProductCard({ product }: ProductCardProps) {
         ) : null}
       </div>
 
-      <div className="flex flex-1 flex-col p-3.5">
+      <div className="flex flex-1 flex-col p-4">
         <Link href={`/shop/product/${product.slug}`} className="block">
-          <h3 className="line-clamp-2 text-[14px] font-bold leading-5 tracking-[-0.01em] text-slate-950 transition group-hover:text-[#7a0000]">
+          <h3 className="line-clamp-2 min-h-[2.8rem] text-[15px] font-bold leading-5 tracking-[-0.01em] text-slate-950 transition group-hover:text-[#7a0000]">
             {product.name}
           </h3>
         </Link>
-        <p className="mt-1.5 line-clamp-2 text-[11px] leading-4 text-slate-500">{product.specs[0] || "Contact us for full specs"}</p>
+        <p className="mt-1.5 line-clamp-2 min-h-[2rem] text-[11px] leading-4 text-slate-500">{product.specs[0] || "Contact us for full specs"}</p>
 
         <div className="mt-2.5">
           <div className="text-[18px] font-bold tracking-[-0.02em] text-slate-950">{formatCurrency(product.price)}</div>
@@ -73,7 +73,7 @@ export default function ProductCard({ product }: ProductCardProps) {
           {availabilityBadge}
         </div>
 
-        <div className="mt-3 grid gap-2">
+        <div className="mt-auto pt-4 grid gap-2">
           <AddToCartButton
             productId={product.id}
             productName={product.name}

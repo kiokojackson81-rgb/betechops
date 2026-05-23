@@ -18,28 +18,30 @@ export default function ShopProductDetailActions({ product }: ShopProductDetailA
   const quoteHref = `/shop/request-quote?product=${encodeURIComponent(product.name)}`;
 
   return (
-    <div className="grid gap-2.5 sm:grid-cols-3">
+    <div className="grid gap-3">
       <AddToCartButton
         productId={product.id}
         productName={product.name}
-        className="inline-flex min-h-[3.1rem] items-center justify-center gap-2 rounded-2xl bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_16px_30px_rgba(122,0,0,0.16)] transition hover:-translate-y-0.5"
+        className="inline-flex min-h-[3.55rem] items-center justify-center gap-2 rounded-[20px] bg-[#7a0000] px-5 py-3 text-sm font-bold text-white shadow-[0_20px_36px_rgba(122,0,0,0.18)] transition duration-200 hover:-translate-y-0.5 hover:bg-[#660000] hover:shadow-[0_24px_42px_rgba(122,0,0,0.24)]"
       />
-      <TrackedWhatsAppLink
-        href={whatsappHref}
-        className="inline-flex min-h-[3.1rem] items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#11b86a_0%,#0f9d58_55%,#0b7c44_100%)] px-4 py-2.5 text-sm font-bold text-white shadow-[0_16px_32px_rgba(15,157,88,0.22)] transition hover:-translate-y-0.5"
-        label={`WhatsApp order ${product.name}`}
-        context="product_detail"
-        ariaLabel={`Order ${product.name} on WhatsApp`}
-      >
-        <MessageCircle className="h-4 w-4" />
-        WhatsApp Order
-      </TrackedWhatsAppLink>
-      <Link
-        href={quoteHref}
-        className="inline-flex min-h-[3.1rem] items-center justify-center rounded-2xl border border-[#7a0000]/18 bg-white px-4 py-2.5 text-sm font-bold text-slate-950 shadow-[0_12px_24px_rgba(15,23,42,0.05)] transition hover:-translate-y-0.5 hover:border-[#7a0000]/35"
-      >
-        Request Quote
-      </Link>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <TrackedWhatsAppLink
+          href={whatsappHref}
+          className="inline-flex min-h-[3.35rem] items-center justify-center gap-2 rounded-[20px] bg-[linear-gradient(135deg,#11b86a_0%,#0f9d58_55%,#0b7c44_100%)] px-4 py-3 text-sm font-bold text-white shadow-[0_18px_34px_rgba(15,157,88,0.22)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_22px_40px_rgba(15,157,88,0.28)]"
+          label={`WhatsApp order ${product.name}`}
+          context="product_detail"
+          ariaLabel={`Order ${product.name} on WhatsApp`}
+        >
+          <MessageCircle className="h-4 w-4" />
+          WhatsApp Order
+        </TrackedWhatsAppLink>
+        <Link
+          href={quoteHref}
+          className="inline-flex min-h-[3.35rem] items-center justify-center rounded-[20px] border border-[#7a0000]/18 bg-white px-4 py-3 text-sm font-bold text-slate-950 shadow-[0_14px_30px_rgba(15,23,42,0.06)] transition duration-200 hover:-translate-y-0.5 hover:border-[#7a0000]/35 hover:shadow-[0_18px_34px_rgba(15,23,42,0.08)]"
+        >
+          Request Quote
+        </Link>
+      </div>
     </div>
   );
 }

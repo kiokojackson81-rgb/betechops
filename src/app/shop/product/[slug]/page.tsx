@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BadgeCheck, BatteryCharging, CreditCard, MapPin, ShieldCheck, Store, SunMedium, Truck, Zap } from "lucide-react";
+import { BadgeCheck, BatteryCharging, CreditCard, Headphones, MapPin, ShieldCheck, Store, SunMedium, Truck, Zap } from "lucide-react";
 import ShopAnalyticsTracker from "@/app/shop/_components/ShopAnalyticsTracker";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
 import ShopMobileStickyBar from "@/app/shop/_components/ShopMobileStickyBar";
@@ -183,11 +183,68 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
     { icon: <Truck className="h-4 w-4" />, label: "Nationwide Delivery" },
     { icon: <Store className="h-4 w-4" />, label: "Nairobi Shop Pickup" },
   ];
-  const trustItems = [
+  const supportItems = [
     { icon: <Truck className="h-4 w-4" />, title: "Nationwide Courier", copy: "Panels, batteries, kits, and accessories delivered across Kenya." },
     { icon: <MapPin className="h-4 w-4" />, title: "Nairobi Pickup", copy: "Collect from our Pramukh Plaza shop once your order is confirmed." },
     { icon: <CreditCard className="h-4 w-4" />, title: "Secure M-Pesa Payment", copy: "Our team confirms stock, transport, and payment steps before fulfilment." },
-    { icon: <ShieldCheck className="h-4 w-4" />, title: "WhatsApp Support", copy: "Talk directly to Betech Solar for sizing, delivery, and ordering help." },
+    { icon: <Headphones className="h-4 w-4" />, title: "WhatsApp Support", copy: "Talk directly to Betech Solar for sizing, delivery, and ordering help." },
+  ];
+  const detailAccordions = [
+    {
+      title: "Full specifications",
+      content: (
+        <ul className="grid gap-3 text-sm leading-6 text-slate-600">
+          {product.specs.map((spec) => (
+            <li key={spec} className="flex items-start gap-3">
+              <BadgeCheck className="mt-1 h-4 w-4 shrink-0 text-[#7a0000]" />
+              <span>{spec}</span>
+            </li>
+          ))}
+        </ul>
+      ),
+    },
+    {
+      title: "Delivery, payment & support",
+      content: (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {supportItems.map((item) => (
+            <div key={item.title} className="rounded-[20px] border border-[#7a0000]/8 bg-[#fcfaf8] px-4 py-3">
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#fff1dc] text-[#7a0000]">
+                  {item.icon}
+                </span>
+                <div>
+                  <div className="text-sm font-bold text-slate-900">{item.title}</div>
+                  <div className="mt-1 text-sm leading-5 text-slate-600">{item.copy}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ),
+    },
+    {
+      title: "Product details",
+      content: (
+        <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+          <div className="text-sm leading-7 text-slate-600">
+            {product.fullDescription || `${visualTitle} comes with Betech Solar support for selection, ordering, and delivery planning.`}
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-[18px] border border-[#7a0000]/8 bg-[#fcfaf8] px-4 py-3">
+              <div className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000]">Warranty</div>
+              <div className="mt-2 text-sm font-semibold text-slate-900">{product.warranty}</div>
+              {product.warrantyNotes ? <div className="mt-1 text-sm leading-5 text-slate-600">{product.warrantyNotes}</div> : null}
+            </div>
+            <div className="rounded-[18px] border border-[#7a0000]/8 bg-[#fcfaf8] px-4 py-3">
+              <div className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000]">Availability</div>
+              <div className="mt-2 text-sm font-semibold text-slate-900">{availabilityBadge}</div>
+              <div className="mt-1 text-sm leading-5 text-slate-600">{availabilityMessage}</div>
+            </div>
+          </div>
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -195,7 +252,7 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
       <ShopAnalyticsTracker kind="product_view" payload={{ slug: product.slug, name: product.name, category: product.category, brand: product.brand }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }} />
       <ShopHeader navLinks={shopNavLinks} />
-      <section className="py-8 sm:py-10">
+      <section className="py-5 sm:py-7">
         <div className={shopStyles.shell}>
           <ShopBreadcrumbs
             items={[
@@ -205,125 +262,156 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
             ]}
           />
 
-          <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)] xl:items-start">
+          <div className="mt-4 grid gap-5 xl:grid-cols-[minmax(0,1.04fr)_minmax(0,0.96fr)] xl:items-start">
             <ShopProductGallery images={galleryImages} productName={product.name} visualType={product.visualType} videoEmbedUrl={tiktokEmbedUrl} />
 
-            <div className="grid gap-5">
-              <div className={`${shopStyles.lightCard} p-4 sm:p-5 lg:p-6`}>
-                <div className={shopStyles.sectionEyebrow}>{product.category}</div>
-                <div className="mt-4 max-w-3xl">
-                  <h1 className="text-[30px] font-bold leading-[1.05] tracking-[-0.02em] text-slate-950 sm:text-[34px] xl:text-[42px]">
-                    {visualTitle}
-                  </h1>
-                </div>
-                <div className="mt-3 max-w-2xl text-[15px] leading-6 text-slate-600">
-                  {valueProposition}
-                </div>
-                {specSummary.length ? (
-                  <ul className="mt-4 grid gap-2 text-sm leading-5 text-slate-600">
-                    {specSummary.map((spec) => (
-                      <li key={spec} className="flex items-start gap-2.5">
-                        <span className="mt-[0.42rem] h-1.5 w-1.5 shrink-0 rounded-full bg-[#7a0000]/55" />
-                        <span>{spec}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-                <div className="mt-5 grid gap-3 rounded-[26px] border border-[#7a0000]/8 bg-[linear-gradient(180deg,#fffaf4_0%,#ffffff_100%)] p-4 shadow-[0_16px_30px_rgba(15,23,42,0.04)]">
-                  <div className="flex flex-wrap items-end gap-3">
-                    <div className="text-[2rem] font-bold tracking-[-0.03em] text-slate-950 sm:text-[2.35rem]">{formatCurrency(product.price)}</div>
-                    {product.oldPrice ? <div className="pb-1 text-base font-semibold text-slate-400 line-through">{formatCurrency(product.oldPrice)}</div> : null}
-                  </div>
-                  <div className="flex flex-wrap gap-2.5">
-                    <div className="inline-flex rounded-full border border-[#0f9d58]/14 bg-[#effcf4] px-3.5 py-1.5 text-xs font-bold uppercase tracking-[0.14em] text-[#0f9d58]">
+            <div className="xl:sticky xl:top-24">
+              <div className="overflow-hidden rounded-[32px] border border-[#7a0000]/10 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.08)]">
+                <div className="border-b border-[#7a0000]/8 bg-[radial-gradient(circle_at_top_right,rgba(242,178,15,0.16),transparent_34%),linear-gradient(180deg,#fffdf8_0%,#fff7ee_100%)] px-5 py-5 sm:px-6 sm:py-6">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <div className={shopStyles.sectionEyebrow}>{product.category}</div>
+                    <div className="inline-flex rounded-full border border-[#0f9d58]/14 bg-[#effcf4] px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] text-[#0f9d58]">
                       {stockLabelMap[product.stockStatus]}
                     </div>
-                    <div className="inline-flex rounded-full border border-[#7a0000]/10 bg-[#fcfaf7] px-3.5 py-1.5 text-xs font-bold text-[#7a0000]">
+                    <div className="inline-flex rounded-full border border-[#7a0000]/10 bg-white/92 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.12em] text-[#7a0000]">
                       {availabilityBadge}
                     </div>
                   </div>
-                  <div className="rounded-2xl border border-amber-400/20 bg-amber-400/5 px-4 py-3 text-sm font-semibold text-slate-700">
-                    <div>{availabilityMessage}</div>
-                    <div className="mt-1 text-xs font-medium text-slate-500">{checkoutAvailabilityMessage}</div>
+                  <div className="mt-4 max-w-3xl">
+                    <h1 className="max-w-[16ch] text-[clamp(2rem,3.5vw,3.35rem)] font-bold leading-[1.02] tracking-[-0.03em] text-slate-950">
+                      {visualTitle}
+                    </h1>
                   </div>
-                </div>
-
-                <div className="mt-4 text-sm font-semibold text-slate-600">{product.warranty}</div>
-                {product.warrantyNotes ? <div className="mt-2 text-sm leading-6 text-slate-600">{product.warrantyNotes}</div> : null}
-                <div className="mt-5">
-                  <ShopProductDetailActions product={product} />
-                </div>
-              </div>
-
-              <div className="grid gap-4 lg:grid-cols-[1.02fr_0.98fr]">
-                <div className={`${shopStyles.softCard} p-4 sm:p-5`}>
-                  <div className="text-sm font-black uppercase tracking-[0.18em] text-[#7a0000]">System highlights</div>
-                  <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
-                    {keyHighlights.map((item) => (
-                      <div key={item.label} className="flex items-start gap-3 rounded-[20px] border border-[#7a0000]/8 bg-white/90 px-3.5 py-3 shadow-[0_10px_20px_rgba(15,23,42,0.04)]">
-                        <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#fff3d8] text-[#7a0000]">
-                          {item.icon}
-                        </span>
-                        <div className="text-sm font-semibold leading-5 text-slate-700">{item.label}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-4 rounded-[22px] border border-[#7a0000]/8 bg-white/90 px-4 py-4">
-                    <div className="text-sm font-black uppercase tracking-[0.16em] text-[#7a0000]">Full specifications</div>
-                    <ul className="mt-3 grid gap-2.5 text-sm leading-6 text-slate-600">
-                      {product.specs.map((spec) => (
-                        <li key={spec} className="flex items-start gap-3">
-                          <BadgeCheck className="mt-1 h-4 w-4 shrink-0 text-[#7a0000]" />
+                  <div className="mt-3 max-w-2xl text-[15px] leading-6 text-slate-600">{valueProposition}</div>
+                  {specSummary.length ? (
+                    <div className="mt-5 grid gap-2 sm:grid-cols-2">
+                      {specSummary.map((spec) => (
+                        <div key={spec} className="flex items-start gap-2.5 rounded-[18px] border border-white/90 bg-white/88 px-3.5 py-3 text-sm font-medium text-slate-700 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+                          <span className="mt-[0.42rem] h-1.5 w-1.5 shrink-0 rounded-full bg-[#7a0000]/55" />
                           <span>{spec}</span>
-                        </li>
+                        </div>
                       ))}
-                    </ul>
-                  </div>
+                    </div>
+                  ) : null}
                 </div>
 
-                <div className={`${shopStyles.softCard} p-4 sm:p-5`}>
-                  <div className="text-sm font-black uppercase tracking-[0.18em] text-[#0f9d58]">Delivery, payment & trust</div>
-                  <div className="mt-4 grid gap-2.5">
-                    {trustItems.map((item) => (
-                      <div key={item.title} className="rounded-[20px] border border-[#0f9d58]/10 bg-[linear-gradient(180deg,#f5fff9_0%,#ffffff_100%)] px-4 py-3.5 shadow-[0_10px_20px_rgba(15,157,88,0.05)]">
-                        <div className="flex items-start gap-3">
-                          <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#eafaf1] text-[#0f9d58]">
-                            {item.icon}
-                          </span>
-                          <div>
-                            <div className="text-sm font-bold text-slate-900">{item.title}</div>
-                            <div className="mt-1 text-sm leading-5 text-slate-600">{item.copy}</div>
-                          </div>
+                <div className="grid gap-5 px-5 py-5 sm:px-6 sm:py-6">
+                  <div className="grid gap-4 rounded-[28px] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#ffffff_0%,#fffaf3_100%)] p-5 shadow-[0_18px_40px_rgba(15,23,42,0.05)]">
+                    <div className="flex flex-wrap items-end justify-between gap-3">
+                      <div>
+                        <div className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">Price</div>
+                        <div className="mt-2 flex flex-wrap items-end gap-3">
+                          <div className="text-[2rem] font-bold tracking-[-0.04em] text-slate-950 sm:text-[2.5rem]">{formatCurrency(product.price)}</div>
+                          {product.oldPrice ? <div className="pb-1 text-base font-semibold text-slate-400 line-through">{formatCurrency(product.oldPrice)}</div> : null}
                         </div>
                       </div>
-                    ))}
+                      <div className="rounded-2xl border border-amber-400/20 bg-amber-400/6 px-4 py-3 text-right">
+                        <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000]">Pickup & delivery</div>
+                        <div className="mt-1 text-sm font-semibold text-slate-800">{checkoutAvailabilityMessage}</div>
+                      </div>
+                    </div>
+                    <div className="rounded-[22px] border border-[#7a0000]/8 bg-[#fcfaf7] px-4 py-3 text-sm leading-6 text-slate-700">
+                      {availabilityMessage}
+                    </div>
+                    <ShopProductDetailActions product={product} />
                   </div>
-                  {product.fullDescription ? <p className="mt-4 text-sm leading-7 text-slate-600">{product.fullDescription}</p> : null}
-                </div>
-              </div>
 
-              <div className={`${shopStyles.darkPanel} p-5 sm:p-6`}>
-                <div className="inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">
-                  Not sure what you need?
-                </div>
-                <h2 className="mt-4 text-2xl font-black tracking-tight text-white">Request a solar quote and our team will help size your system.</h2>
-                <p className="mt-3 text-sm leading-7 text-white/76">
-                  Our team will help match the right panels, inverter, battery, and accessories to your home, biashara, or farm needs before you place an order.
-                </p>
-                <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-                  <Link href={`/shop/request-quote?product=${encodeURIComponent(product.name)}`} className={shopStyles.goldButton}>
-                    Request Quote
-                  </Link>
-                  <Link href="/shop/cart" className={`${shopStyles.secondaryButton} bg-white/92`}>
-                    View Cart
-                  </Link>
+                  <div className="rounded-[28px] border border-[#7a0000]/8 bg-[#fffaf4] p-5">
+                    <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">Key highlights</div>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      {keyHighlights.map((item) => (
+                        <div key={item.label} className="flex items-start gap-3 rounded-[18px] bg-white px-3.5 py-3 shadow-[0_10px_20px_rgba(15,23,42,0.04)]">
+                          <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#fff1dc] text-[#7a0000]">
+                            {item.icon}
+                          </span>
+                          <div className="text-sm font-semibold leading-5 text-slate-700">{item.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[28px] border border-[#7a0000]/8 bg-white">
+                    <div className="border-b border-[#7a0000]/8 px-5 py-4">
+                      <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">Delivery & support</div>
+                      <div className="mt-2 text-sm text-slate-600">Everything needed to order, pay, collect, or get guidance without hunting across separate cards.</div>
+                    </div>
+                    <div className="grid gap-3 px-5 py-4 sm:grid-cols-2">
+                      {supportItems.map((item) => (
+                        <div key={item.title} className="rounded-[18px] border border-[#7a0000]/8 bg-[#fcfaf8] px-4 py-3">
+                          <div className="flex items-start gap-3">
+                            <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#fff1dc] text-[#7a0000]">
+                              {item.icon}
+                            </span>
+                            <div>
+                              <div className="text-sm font-bold text-slate-900">{item.title}</div>
+                              <div className="mt-1 text-sm leading-5 text-slate-600">{item.copy}</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
+          <div className="mt-5 grid gap-5">
+            <div className="overflow-hidden rounded-[30px] border border-[#7a0000]/10 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+              <div className="grid gap-0 lg:grid-cols-[1.3fr_0.7fr]">
+                <div className="border-b border-[#7a0000]/8 px-5 py-5 sm:px-6 lg:border-b-0 lg:border-r">
+                  <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">Marketplace product summary</div>
+                  <h2 className="mt-3 text-[clamp(1.4rem,2.2vw,2rem)] font-bold tracking-[-0.03em] text-slate-950">{visualTitle}</h2>
+                  <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600">{product.fullDescription || valueProposition}</p>
+                </div>
+                <div className="grid gap-3 bg-[linear-gradient(180deg,#fffaf2_0%,#ffffff_100%)] px-5 py-5 sm:px-6">
+                  <div className="rounded-[18px] border border-[#7a0000]/8 bg-white px-4 py-3">
+                    <div className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000]">Warranty</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-900">{product.warranty}</div>
+                    {product.warrantyNotes ? <div className="mt-1 text-sm leading-5 text-slate-600">{product.warrantyNotes}</div> : null}
+                  </div>
+                  <div className="rounded-[18px] border border-[#7a0000]/8 bg-white px-4 py-3">
+                    <div className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000]">Ordering</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-900">Add to Cart, WhatsApp Order, or Request Quote</div>
+                    <div className="mt-1 text-sm leading-5 text-slate-600">Choose the flow that matches the product, delivery, and consultation you need.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-3">
+              {detailAccordions.map((section, index) => (
+                <details key={section.title} className="group overflow-hidden rounded-[26px] border border-[#7a0000]/10 bg-white shadow-[0_12px_30px_rgba(15,23,42,0.05)]" open={index === 0}>
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-left sm:px-6">
+                    <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">{section.title}</div>
+                    <div className="text-sm font-semibold text-slate-500 transition group-open:rotate-45">+</div>
+                  </summary>
+                  <div className="border-t border-[#7a0000]/8 px-5 py-5 sm:px-6">{section.content}</div>
+                </details>
+              ))}
+            </div>
+
+            <div className={`${shopStyles.darkPanel} p-5 sm:p-6`}>
+              <div className="inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">
+                Need help choosing?
+              </div>
+              <h2 className="mt-4 text-2xl font-black tracking-tight text-white">Request a solar quote and our team will help size your system.</h2>
+              <p className="mt-3 max-w-3xl text-sm leading-7 text-white/76">
+                Our team will help match the right panels, inverter, battery, and accessories to your home, biashara, or farm needs before you place an order.
+              </p>
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                <Link href={`/shop/request-quote?product=${encodeURIComponent(product.name)}`} className={shopStyles.goldButton}>
+                  Request Quote
+                </Link>
+                <Link href="/shop/cart" className={`${shopStyles.secondaryButton} bg-white/92`}>
+                  View Cart
+                </Link>
+              </div>
+            </div>
+          </div>
+
           {relatedProducts.length ? (
-            <section className="pt-12 sm:pt-16">
+            <section className="pt-10 sm:pt-12">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <div className={shopStyles.sectionEyebrow}>Related products</div>
@@ -333,14 +421,14 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
                   Continue Shopping
                 </Link>
               </div>
-              <div className="mt-6 hidden gap-4 md:grid md:grid-cols-2 lg:grid-cols-4">
+              <div className="mt-6 hidden gap-4 xl:grid xl:grid-cols-4">
                 {relatedProducts.map((item) => (
                   <ProductCard key={item.id} product={item} />
                 ))}
               </div>
-              <div className="mt-6 flex gap-3 overflow-x-auto pb-2 md:hidden">
+              <div className="mt-6 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 xl:hidden">
                 {relatedProducts.map((item) => (
-                  <div key={item.id} className="w-[78vw] max-w-[18rem] shrink-0">
+                  <div key={item.id} className="w-[78vw] max-w-[19rem] shrink-0 snap-start md:w-[22rem]">
                     <ProductCard product={item} />
                   </div>
                 ))}

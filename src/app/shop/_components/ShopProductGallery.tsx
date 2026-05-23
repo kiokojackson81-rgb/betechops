@@ -110,26 +110,26 @@ export default function ShopProductGallery({ images, productName, visualType, vi
     const frameHeight = expanded
       ? "h-[82vh]"
       : activeOrientation === "portrait"
-        ? "h-[32rem] sm:h-[38rem] lg:h-[42rem]"
+        ? "h-[22rem] sm:h-[28rem] lg:h-[34rem]"
         : activeOrientation === "square"
-          ? "h-[24rem] sm:h-[30rem] lg:h-[34rem]"
-          : "h-[22rem] sm:h-[28rem] lg:h-[34rem]";
+          ? "h-[20rem] sm:h-[24rem] lg:h-[30rem]"
+          : "h-[18.5rem] sm:h-[22rem] lg:h-[28rem]";
     const imageShellWidth = expanded
       ? "max-w-[92vw]"
       : activeOrientation === "portrait"
-        ? "max-w-[28rem] sm:max-w-[32rem]"
+        ? "max-w-[23rem] sm:max-w-[27rem] lg:max-w-[30rem]"
         : activeOrientation === "square"
-          ? "max-w-[36rem] sm:max-w-[40rem] lg:max-w-[44rem]"
+          ? "max-w-[28rem] sm:max-w-[34rem] lg:max-w-[38rem]"
           : "max-w-full";
     const videoShellWidth = expanded ? "max-w-[26rem] sm:max-w-[30rem] md:max-w-[34rem]" : "max-w-[24rem] sm:max-w-[27rem] lg:max-w-[30rem]";
 
     return (
-      <div className={`relative flex ${frameHeight} items-center justify-center overflow-hidden rounded-[28px]`}>
+      <div className={`relative flex ${frameHeight} items-center justify-center overflow-hidden rounded-[26px]`}>
         {isVideo ? (
           <>
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.14),transparent_38%),linear-gradient(180deg,#220d0b_0%,#0f0f11_100%)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.12),transparent_34%),linear-gradient(180deg,#221411_0%,#0b0d11_100%)]" />
             <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.05),transparent_28%,transparent_72%,rgba(255,255,255,0.05))]" />
-            <div className={`relative z-10 w-full ${videoShellWidth} overflow-hidden rounded-[26px] border border-white/15 bg-black shadow-[0_28px_60px_rgba(0,0,0,0.35)]`}>
+            <div className={`relative z-10 w-full ${videoShellWidth} overflow-hidden rounded-[24px] border border-white/10 bg-black shadow-[0_24px_48px_rgba(0,0,0,0.3)]`}>
               <div className="aspect-[9/16] w-full">
                 <iframe
                   src={buildVideoSrc(activeItem.src, true)}
@@ -144,22 +144,22 @@ export default function ShopProductGallery({ images, productName, visualType, vi
         ) : activeItem.src ? (
           <>
             <div
-              className="absolute inset-0 scale-110 bg-center bg-cover opacity-24 blur-2xl"
+              className="absolute inset-0 scale-110 bg-center bg-cover opacity-20 blur-2xl"
               style={{ backgroundImage: `url("${activeItem.src}")` }}
             />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.28),transparent_48%),linear-gradient(180deg,rgba(255,248,240,0.95)_0%,rgba(247,239,228,0.88)_100%)]" />
-            <div className={`relative z-10 w-full ${imageShellWidth} overflow-hidden rounded-[26px] bg-white/94 shadow-[0_24px_56px_rgba(15,23,42,0.12)]`}>
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_38%),linear-gradient(180deg,#241713_0%,#13161d_100%)]" />
+            <div className={`relative z-10 w-full ${imageShellWidth} overflow-hidden rounded-[24px] bg-[linear-gradient(180deg,#f7efe5_0%,#ffffff_100%)] shadow-[0_22px_48px_rgba(0,0,0,0.22)]`}>
               <img
                 src={activeItem.src}
                 alt={productName}
-                className="h-full max-h-[82vh] w-full object-contain"
+                className="h-full max-h-[82vh] w-full object-contain p-2 sm:p-3"
                 loading="eager"
                 onLoad={(event) => handleImageLoad(activeItem.src, event)}
               />
             </div>
           </>
         ) : (
-          <div className="relative z-10 h-full w-full overflow-hidden rounded-[26px] bg-white p-5 shadow-[inset_0_0_0_1px_rgba(122,0,0,0.06)]">
+          <div className="relative z-10 h-full w-full overflow-hidden rounded-[24px] bg-white p-4 shadow-[inset_0_0_0_1px_rgba(122,0,0,0.06)]">
             <ShopProductVisual visualType={visualType} productName={productName} className="h-full w-full" />
           </div>
         )}
@@ -183,17 +183,16 @@ export default function ShopProductGallery({ images, productName, visualType, vi
   return (
     <>
       <div className="lg:sticky lg:top-24">
-        <div className="overflow-hidden rounded-[32px] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#fff6ea_0%,#ffffff_100%)] shadow-[0_24px_60px_rgba(15,23,42,0.08)]">
-          <div className="relative overflow-hidden rounded-[30px] border border-white/80 bg-[#f8f2e9]">
-            <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.95),transparent_72%)]" />
-            <div className="absolute left-4 top-4 z-20 inline-flex items-center rounded-full border border-white/80 bg-white/90 px-3 py-1 text-[11px] font-semibold text-slate-600 shadow-[0_10px_22px_rgba(15,23,42,0.08)] backdrop-blur">
+        <div className="overflow-hidden rounded-[32px] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#10141c_0%,#1b1210_100%)] shadow-[0_28px_64px_rgba(15,23,42,0.16)]">
+          <div className="relative overflow-hidden rounded-[30px] border border-white/8 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_26%),linear-gradient(180deg,#17202a_0%,#130d0c_100%)]">
+            <div className="absolute left-4 top-4 z-20 inline-flex items-center rounded-full border border-white/12 bg-black/26 px-3 py-1 text-[11px] font-semibold text-white/82 shadow-[0_10px_22px_rgba(0,0,0,0.22)] backdrop-blur">
               {activeIndex + 1} / {mediaItems.length}
             </div>
             <button
               type="button"
               aria-label="Open fullscreen media viewer"
               onClick={() => setLightboxOpen(true)}
-              className="absolute right-4 top-4 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/80 bg-white/88 text-slate-700 shadow-[0_16px_30px_rgba(15,23,42,0.12)] transition hover:scale-[1.02] hover:text-[#7a0000]"
+              className="absolute right-4 top-4 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/12 bg-black/26 text-white shadow-[0_16px_30px_rgba(0,0,0,0.22)] transition hover:scale-[1.02] hover:bg-black/36"
             >
               <Expand className="h-5 w-5" />
             </button>
@@ -203,7 +202,7 @@ export default function ShopProductGallery({ images, productName, visualType, vi
                   type="button"
                   aria-label="Previous product media"
                   onClick={() => moveGallery(-1)}
-                  className="absolute left-4 top-1/2 z-20 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/80 bg-white/88 text-slate-700 shadow-[0_16px_30px_rgba(15,23,42,0.12)] transition hover:scale-[1.02] hover:text-[#7a0000]"
+                  className="absolute left-4 top-1/2 z-20 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/12 bg-black/26 text-white shadow-[0_16px_30px_rgba(0,0,0,0.22)] transition hover:scale-[1.02] hover:bg-black/36"
                 >
                   <ChevronLeft className="h-5 w-5" />
                 </button>
@@ -211,7 +210,7 @@ export default function ShopProductGallery({ images, productName, visualType, vi
                   type="button"
                   aria-label="Next product media"
                   onClick={() => moveGallery(1)}
-                  className="absolute right-4 top-1/2 z-20 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/80 bg-white/88 text-slate-700 shadow-[0_16px_30px_rgba(15,23,42,0.12)] transition hover:scale-[1.02] hover:text-[#7a0000]"
+                  className="absolute right-4 top-1/2 z-20 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/12 bg-black/26 text-white shadow-[0_16px_30px_rgba(0,0,0,0.22)] transition hover:scale-[1.02] hover:bg-black/36"
                 >
                   <ChevronRight className="h-5 w-5" />
                 </button>
@@ -219,7 +218,7 @@ export default function ShopProductGallery({ images, productName, visualType, vi
             ) : null}
             <button
               type="button"
-              className="block w-full p-4 sm:p-5"
+              className="block w-full p-3 sm:p-4"
               onTouchStart={handleTouchStart}
               onTouchEnd={handleTouchEnd}
               onClick={() => setLightboxOpen(true)}
@@ -228,7 +227,7 @@ export default function ShopProductGallery({ images, productName, visualType, vi
             </button>
           </div>
 
-          <div className="border-t border-[#7a0000]/8 bg-white/92 px-3 py-3 sm:px-4">
+          <div className="border-t border-white/8 bg-[#f7efe4] px-3 py-3 sm:px-4">
             <div className="flex gap-2 overflow-x-auto pb-1">
               {mediaItems.map((item, index) => {
                 const isActive = index === activeIndex;
@@ -237,7 +236,7 @@ export default function ShopProductGallery({ images, productName, visualType, vi
                     key={`${item.type}-${item.src}-${index}`}
                     type="button"
                     onClick={() => setMediaIndex(index)}
-                    className={`group relative h-20 w-20 shrink-0 overflow-hidden rounded-[20px] border bg-[#f7efe4] p-1.5 transition sm:h-24 sm:w-24 ${
+                    className={`group relative h-20 w-20 shrink-0 overflow-hidden rounded-[18px] border bg-white/82 p-1.5 transition sm:h-24 sm:w-24 ${
                       isActive
                         ? "border-[#7a0000]/35 shadow-[0_14px_28px_rgba(122,0,0,0.12)]"
                         : "border-[#7a0000]/10 hover:-translate-y-0.5 hover:border-[#7a0000]/24 hover:shadow-[0_10px_18px_rgba(15,23,42,0.08)]"
