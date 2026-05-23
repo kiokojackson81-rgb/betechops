@@ -11,6 +11,7 @@ import { requireRole } from "@/lib/api";
 import PayrollTableClient from "./PayrollTableClient";
 import type { PayrollRow } from "./types";
 import { buildPayrollRow } from "@/lib/adminPayroll";
+import { applyCanonicalPayrollOverrides } from "@/lib/payrollCanonical";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +50,9 @@ export default async function AdminPayrollPage({
     },
   });
 
-  const rows: PayrollRow[] = await Promise.all(attendants.map((attendant) => buildPayrollRow(attendant, period)));
+  const rows: PayrollRow[] = await Promise.all(
+    attendants.map(async (attendant) => applyCanonicalPayrollOverrides(await buildPayrollRow(attendant, period), period)),
+  );
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6">

@@ -10,6 +10,7 @@ import getAttendantCommissionSummary from "@/lib/attendantCommission";
 import type { Role } from "@prisma/client";
 import { buildPayrollRow } from "@/lib/adminPayroll";
 import { getBrendahCommissionForPeriod } from "@/lib/brendahCommission";
+import { applyCanonicalPayrollOverrides } from "@/lib/payrollCanonical";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +51,7 @@ export async function GET(req: Request) {
         },
       },
     }),
-    buildPayrollRow(targetUser, period),
+    applyCanonicalPayrollOverrides(await buildPayrollRow(targetUser, period), period),
     isBrendahTarget ? getBrendahCommissionForPeriod(userId, period) : Promise.resolve(null),
   ]);
   const attendantCanonical = await getAttendantCommissionSummary({ attendantId: userId, start: period.start, end: period.end });

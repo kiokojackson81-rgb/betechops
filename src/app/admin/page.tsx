@@ -30,6 +30,7 @@ import AdminPrivacyToggle from "@/app/admin/_components/AdminPrivacyToggle";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { buildPayrollRow } from "@/lib/adminPayroll";
+import { applyCanonicalPayrollOverrides } from "@/lib/payrollCanonical";
 import { getUnpricedDailySalesForCurrentPeriod } from "@/lib/marketingUnpricedSales";
 import { groupMarketingUnpricedSales } from "@/lib/unpricedReceiptGrouping";
 
@@ -472,7 +473,9 @@ async function getDashboardData() {
     }),
   ]);
 
-  const payrollRows = await Promise.all(payrollUsers.map((user) => buildPayrollRow(user, tradingPeriod)));
+  const payrollRows = await Promise.all(
+    payrollUsers.map(async (user) => applyCanonicalPayrollOverrides(await buildPayrollRow(user, tradingPeriod), tradingPeriod)),
+  );
   const payrollTotals = payrollRows.reduce(
     (acc, row) => {
       acc.base += Number(row.baseSalary ?? 0) + Number(row.transportAllowance ?? 0);

@@ -14,6 +14,7 @@ import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
 import { buildPayrollRow } from "@/lib/adminPayroll";
 import { ensurePayrollAdjustmentStorage } from "@/lib/payrollAdjustmentStorage";
 import type { PayrollRow } from "@/app/admin/payroll/types";
+import { applyCanonicalPayrollOverrides } from "@/lib/payrollCanonical";
 
 export const dynamic = "force-dynamic";
 
@@ -103,14 +104,17 @@ export default async function PayrollPage({
         },
       },
     })) ?? null;
-  const payrollRow = await buildPayrollRow(
-    {
-      id: attendant.id,
-      name: attendant.name,
-      email: attendant.email,
-      attendantCategory: attendant.attendantCategory ?? null,
-      isActive: attendant.isActive,
-    },
+  const payrollRow = await applyCanonicalPayrollOverrides(
+    await buildPayrollRow(
+      {
+        id: attendant.id,
+        name: attendant.name,
+        email: attendant.email,
+        attendantCategory: attendant.attendantCategory ?? null,
+        isActive: attendant.isActive,
+      },
+      period,
+    ),
     period,
   );
   const summary = {
@@ -201,7 +205,9 @@ export default async function PayrollPage({
       isActive: true,
     },
   });
-  const peerRows = await Promise.all(peerAttendants.map((peer) => buildPayrollRow(peer, period)));
+  const peerRows = await Promise.all(
+    peerAttendants.map(async (peer) => applyCanonicalPayrollOverrides(await buildPayrollRow(peer, period), period)),
+  );
   const categoryRows = peerRows.filter((row) => row.attendantCategory === payrollRow.attendantCategory);
 
   const salesRankCompany = rankBy(peerRows, attendantId, (row) => row.totalSales);

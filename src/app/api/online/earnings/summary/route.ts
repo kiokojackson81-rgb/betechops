@@ -5,6 +5,7 @@ import { getOnlineEarningsSummary } from "@/lib/onlineOps";
 import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
 import { prisma } from "@/lib/prisma";
 import { buildPayrollRow } from "@/lib/adminPayroll";
+import { applyCanonicalPayrollOverrides } from "@/lib/payrollCanonical";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +51,7 @@ export async function GET(req: Request) {
 
   const [summary, payrollRow] = await Promise.all([
     getOnlineEarningsSummary(attendantId, { period }),
-    buildPayrollRow(attendant, period),
+    applyCanonicalPayrollOverrides(await buildPayrollRow(attendant, period), period),
   ]);
 
   const payload = {
