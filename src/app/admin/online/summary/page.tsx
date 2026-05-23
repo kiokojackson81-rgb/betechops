@@ -299,6 +299,10 @@ export default async function AdminOnlineSummaryPage({ searchParams }: { searchP
           Current trading period: {period.label}. Snapshot below uses the last 4 full Monday–Sunday weeks within this
           period.
         </p>
+        <p className="text-xs text-amber-300">
+          Attendant totals and PDF exports on this page are based only on those 4 full marketplace weeks, not the full
+          25th–24th trading-period date span.
+        </p>
         <div className="flex flex-wrap gap-2 pt-1">
           <Link
             href="/admin/online/summary"
@@ -436,6 +440,10 @@ export default async function AdminOnlineSummaryPage({ searchParams }: { searchP
 
             <div className="mt-4">
               <p className="text-xs uppercase tracking-wide text-slate-400">Per attendant totals (manual)</p>
+              <p className="mt-1 text-xs text-slate-500">
+                Current-period totals below are the sum of the 4 full weeks shown at left. For this view, that is{" "}
+                {last4Weeks.map((wk) => wk.label).join(", ")}.
+              </p>
               <div className="mt-2 overflow-x-auto">
                 <table className="w-full min-w-[520px] text-left text-sm">
                   <thead>

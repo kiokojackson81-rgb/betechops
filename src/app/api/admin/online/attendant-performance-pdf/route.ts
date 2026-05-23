@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getBranding } from "@/lib/branding";
 import { launchChromiumBrowser } from "@/lib/pdf/chromium";
 import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
+import { getOnlineOpsWindowForTradingPeriod } from "@/lib/onlineOpsWeeks";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +28,7 @@ function renderHtml(opts: {
   periodLabel: string;
   periodStartIso: string;
   periodEndIso: string;
+  windowLabel: string;
   letterheadUrl: string | null;
   totalsByShop: Array<{ platform: string; shopName: string; total: number }>;
   weeklyRows: Array<{ weekLabel: string; platform: string; shopName: string; amount: number; status: string }>;
@@ -87,6 +89,7 @@ function renderHtml(opts: {
       <div class="muted">Generated: ${opts.generatedAtIso}</div>
       <h1>${opts.title}</h1>
       <div class="muted">Trading period: ${opts.periodLabel} (${opts.periodStartIso} – ${opts.periodEndIso})</div>
+      <div class="muted">Marketplace full weeks used: ${opts.windowLabel}</div>
 
       <div class="summary">
         <div><strong>Grand total (manual weekly sales):</strong> ${currency.format(opts.grandTotal)}</div>
@@ -163,6 +166,7 @@ export async function GET(req: Request) {
     }
 
     const period = parseTradingPeriodKey(periodKey) ?? getTradingPeriodFor(new Date());
+    const onlineWindow = getOnlineOpsWindowForTradingPeriod(period, period.end, 4);
     const startIso = period.start.toISOString().slice(0, 10);
     const endIso = period.end.toISOString().slice(0, 10);
 
@@ -177,7 +181,7 @@ export async function GET(req: Request) {
         userId: attendantId,
         source: "MANUAL",
         status: { not: "REJECTED" },
-        AND: [{ weekEnd: { gte: period.start } }, { weekStart: { lte: period.end } }],
+        weekStart: { in: onlineWindow.weeks.map((week) => week.weekStart) },
       },
       include: { shop: { select: { id: true, name: true } } },
       orderBy: [{ weekStart: "asc" }, { platform: "asc" }, { shopId: "asc" }],
@@ -221,6 +225,7 @@ export async function GET(req: Request) {
       periodLabel: period.label,
       periodStartIso: startIso,
       periodEndIso: endIso,
+      windowLabel: onlineWindow.label,
       letterheadUrl,
       totalsByShop,
       weeklyRows,
