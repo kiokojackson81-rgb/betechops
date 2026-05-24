@@ -65,19 +65,30 @@ export default function CategoryScroller({ categories }: CategoryScrollerProps) 
               <Link
                 key={category.slug}
                 href={getCategoryHref(category.slug)}
-                className="group overflow-hidden rounded-[22px] border border-[#7a0000]/10 bg-white shadow-[0_12px_24px_rgba(15,23,42,0.04)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_32px_rgba(122,0,0,0.08)]"
+                className="group relative overflow-hidden rounded-[22px] border border-[#7a0000]/10 bg-white shadow-[0_12px_24px_rgba(15,23,42,0.04)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_32px_rgba(122,0,0,0.08)]"
               >
-                <div className="relative h-16 border-b border-[#7a0000]/10 bg-[linear-gradient(135deg,#fff7e6_0%,#ffffff_100%)] sm:h-20">
-                  <Image src={category.image} alt={category.title} fill sizes="(max-width: 1024px) 50vw, 16vw" className="object-contain p-2.5 sm:p-3" />
-                </div>
-                <div className="p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className={`inline-flex h-8 w-8 items-center justify-center rounded-xl ${accentMap[category.accent]}`}>
+                <div className="relative h-40 bg-slate-100 sm:h-44">
+                  <Image
+                    src={category.image}
+                    alt={category.title}
+                    fill
+                    sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 16vw"
+                    className="object-cover transition duration-500 group-hover:scale-[1.04]"
+                  />
+                  <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.08)_0%,rgba(15,23,42,0.22)_42%,rgba(15,23,42,0.82)_100%)]" />
+                  <div className="absolute inset-x-0 top-0 flex items-center justify-between p-3">
+                    <div className={`inline-flex h-9 w-9 items-center justify-center rounded-xl shadow-[0_8px_20px_rgba(15,23,42,0.18)] ${accentMap[category.accent]}`}>
                       <Icon className="h-3.5 w-3.5" />
                     </div>
-                    <ArrowUpRight className="h-3.5 w-3.5 text-[#7a0000]/45" />
+                    <div className="rounded-full border border-white/25 bg-black/20 p-2 text-white/90 backdrop-blur-sm">
+                      <ArrowUpRight className="h-3.5 w-3.5" />
+                    </div>
                   </div>
-                  <div className="mt-2.5 line-clamp-2 text-sm font-black leading-5 tracking-tight text-slate-950">{category.title}</div>
+                  <div className="absolute inset-x-0 bottom-0 p-3.5">
+                    <div className="max-w-[14ch] text-base font-black leading-[1.05] tracking-tight text-white drop-shadow-[0_3px_12px_rgba(15,23,42,0.45)] sm:text-[1.05rem]">
+                      {category.title}
+                    </div>
+                  </div>
                 </div>
               </Link>
             );
