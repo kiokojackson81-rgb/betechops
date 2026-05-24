@@ -9,6 +9,18 @@ const nextConfig: NextConfig & { outputFileTracingRoot?: string; outputFileTraci
   outputFileTracingIncludes: {
     "/*": ["./node_modules/@sparticuz/chromium/**"],
   },
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "**.public.blob.vercel-storage.com",
+      },
+      {
+        protocol: "https",
+        hostname: "blob.vercel-storage.com",
+      },
+    ],
+  },
   // Turbopack is now the default in Next 16. Provide an explicit (even if empty)
   // config so builds that still rely on legacy webpack hooks don't error out.
   turbopack: {},

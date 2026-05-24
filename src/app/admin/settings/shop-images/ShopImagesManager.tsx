@@ -18,6 +18,7 @@ type Props = {
 export default function ShopImagesManager({ initialSlots }: Props) {
   const [slots, setSlots] = useState(initialSlots);
   const [statusByKey, setStatusByKey] = useState<Record<string, string>>({});
+  const isRemoteImage = (value: string) => /^https?:\/\//i.test(value);
 
   const heroSlot = useMemo(() => slots.find((slot) => slot.kind === "hero") ?? null, [slots]);
   const categorySlots = useMemo(() => slots.filter((slot) => slot.kind === "category"), [slots]);
@@ -87,12 +88,20 @@ export default function ShopImagesManager({ initialSlots }: Props) {
           <div className="mt-4 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
             <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-950/40">
               <div className="relative aspect-[16/7]">
-                <Image src={heroSlot.currentUrl} alt={heroSlot.label} fill sizes="100vw" className="object-cover" />
+                <Image
+                  src={heroSlot.currentUrl}
+                  alt={heroSlot.label}
+                  fill
+                  unoptimized={isRemoteImage(heroSlot.currentUrl)}
+                  sizes="100vw"
+                  className="object-cover"
+                />
               </div>
             </div>
             <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
               <div className="text-sm font-medium text-slate-200">Upload new banner</div>
-              <p className="mt-1 text-xs leading-5 text-slate-400">Best fit: wide horizontal image, around 1500 x 500 px or 3:1 ratio.</p>
+              <p className="mt-1 text-xs leading-5 text-slate-400">Recommended size: 1500 x 500 px. Best fit: wide horizontal image with a 3:1 ratio.</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">Use a tightly cropped banner with no empty margins so it fills the card cleanly.</p>
               <input
                 type="file"
                 accept="image/*"
@@ -145,9 +154,18 @@ export default function ShopImagesManager({ initialSlots }: Props) {
 
               <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/50">
                 <div className="relative aspect-[3/1]">
-                  <Image src={slot.currentUrl} alt={slot.label} fill sizes="(max-width: 1280px) 50vw, 33vw" className="object-contain bg-[linear-gradient(135deg,#fff7e6_0%,#ffffff_100%)] p-2" />
+                  <Image
+                    src={slot.currentUrl}
+                    alt={slot.label}
+                    fill
+                    unoptimized={isRemoteImage(slot.currentUrl)}
+                    sizes="(max-width: 1280px) 50vw, 33vw"
+                    className="object-contain bg-[linear-gradient(135deg,#fff7e6_0%,#ffffff_100%)] p-2"
+                  />
                 </div>
               </div>
+              <p className="mt-3 text-xs leading-5 text-slate-400">Recommended size: 1500 x 500 px or any clean 3:1 banner image.</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">Best results come from images cropped tightly to the product with no inner whitespace.</p>
 
               <input
                 type="file"

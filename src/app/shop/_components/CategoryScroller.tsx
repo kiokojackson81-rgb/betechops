@@ -46,6 +46,7 @@ type CategoryScrollerProps = {
 
 export default function CategoryScroller({ categories }: CategoryScrollerProps) {
   const getCategoryHref = (slug: string) => (slug === "request-quote" ? "/shop/request-quote" : `/shop/category/${slug}`);
+  const isRemoteImage = (value: string) => /^https?:\/\//i.test(value);
 
   return (
     <section className="py-4 sm:py-5">
@@ -68,7 +69,14 @@ export default function CategoryScroller({ categories }: CategoryScrollerProps) 
                 className="group overflow-hidden rounded-[22px] border border-[#7a0000]/10 bg-white shadow-[0_12px_24px_rgba(15,23,42,0.04)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_32px_rgba(122,0,0,0.08)]"
               >
                 <div className="relative h-16 border-b border-[#7a0000]/10 bg-[linear-gradient(135deg,#fff7e6_0%,#ffffff_100%)] sm:h-20">
-                  <Image src={category.image} alt={category.title} fill sizes="(max-width: 1024px) 50vw, 16vw" className="object-contain p-2.5 sm:p-3" />
+                  <Image
+                    src={category.image}
+                    alt={category.title}
+                    fill
+                    unoptimized={isRemoteImage(category.image)}
+                    sizes="(max-width: 1024px) 50vw, 16vw"
+                    className="object-contain p-2.5 sm:p-3"
+                  />
                 </div>
                 <div className="p-3">
                   <div className="flex items-center justify-between gap-2">

@@ -43,6 +43,7 @@ const helpCards = [
 
 export default function ShopHero({ categories, heroImageUrl = "/agents/hero-generated-v2.png" }: ShopHeroProps) {
   const categoryList = categories.slice(0, 10);
+  const isRemoteImage = /^https?:\/\//i.test(heroImageUrl);
 
   return (
     <section className="pt-3 sm:pt-4">
@@ -114,6 +115,7 @@ export default function ShopHero({ categories, heroImageUrl = "/agents/hero-gene
                     src={heroImageUrl}
                     alt="Betech Solar ecommerce banner"
                     fill
+                    unoptimized={isRemoteImage}
                     sizes="(max-width: 768px) 100vw, 42vw"
                     className="object-cover object-center"
                   />
