@@ -224,6 +224,13 @@ export default function AdminSettings() {
             <div className="font-semibold">Jumia Shipping Stations</div>
             <div className="text-sm text-slate-400">Set default shipping station per shop and discover providers.</div>
           </a>
+          <a
+            href="/admin/settings/shop-images"
+            className="block rounded-lg border border-white/10 bg-black/20 p-4 hover:bg-white/5"
+          >
+            <div className="font-semibold">Shop Images</div>
+            <div className="text-sm text-slate-400">Upload and replace category tile images and the home hero banner.</div>
+          </a>
         </div>
       </section>
 

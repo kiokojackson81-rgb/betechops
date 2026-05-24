@@ -7,6 +7,7 @@ import { shopStyles } from "@/app/shop/_components/shopStyles";
 
 type ShopHeroProps = {
   categories: ShopCategory[];
+  heroImageUrl?: string;
 };
 
 function getCategoryHref(slug: string) {
@@ -40,7 +41,7 @@ const helpCards = [
   },
 ];
 
-export default function ShopHero({ categories }: ShopHeroProps) {
+export default function ShopHero({ categories, heroImageUrl = "/agents/hero-generated-v2.png" }: ShopHeroProps) {
   const categoryList = categories.slice(0, 10);
 
   return (
@@ -110,7 +111,7 @@ export default function ShopHero({ categories }: ShopHeroProps) {
               <div className="overflow-hidden rounded-[24px] border border-white/10 bg-white/8 shadow-[0_18px_40px_rgba(0,0,0,0.18)] backdrop-blur">
                 <div className="relative h-32 sm:h-36 md:h-[18rem]">
                   <Image
-                    src="/agents/hero-generated-v2.png"
+                    src={heroImageUrl}
                     alt="Betech Solar ecommerce banner"
                     fill
                     sizes="(max-width: 768px) 100vw, 42vw"

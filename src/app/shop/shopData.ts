@@ -64,13 +64,17 @@ export const shopNavLinks = [
   { label: "Request Quote", href: "/shop/request-quote" },
 ];
 
-export const shopCategories: ShopCategory[] = SHOP_CATEGORY_DEFINITIONS.map((category) => ({
-  slug: category.value,
-  title: category.label,
-  blurb: category.blurb,
-  image: category.image,
-  accent: category.accent,
-}));
+export function buildShopCategories(imageOverrides: Record<string, string> = {}): ShopCategory[] {
+  return SHOP_CATEGORY_DEFINITIONS.map((category) => ({
+    slug: category.value,
+    title: category.label,
+    blurb: category.blurb,
+    image: imageOverrides[category.value] ?? category.image,
+    accent: category.accent,
+  }));
+}
+
+export const shopCategories: ShopCategory[] = buildShopCategories();
 
 export const trustBadges = [
   { title: "Genuine products", copy: "Trusted solar brands supplied by Betech Solar Solutions." },

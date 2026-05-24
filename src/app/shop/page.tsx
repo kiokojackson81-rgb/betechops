@@ -13,10 +13,12 @@ import ShopMobileDock from "@/app/shop/_components/ShopMobileDock";
 import ShopSupportStrip from "@/app/shop/_components/ShopSupportStrip";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { buildShopMetadata } from "@/app/shop/shopMetadata";
-import { deliveryPaymentSteps, shopCategories, shopNavLinks, type ShopProduct } from "@/app/shop/shopData";
+import { buildShopCategories, deliveryPaymentSteps, shopNavLinks, type ShopProduct } from "@/app/shop/shopData";
 import { getShopProducts } from "@/app/shop/shopApi";
+import { getShopImageOverrides } from "@/lib/shopImageOverrides";
 
 export const metadata: Metadata = buildShopMetadata();
+export const dynamic = "force-dynamic";
 
 // Route planning for future isolated ecommerce expansion:
 // - /shop/product/[slug]
@@ -39,7 +41,8 @@ function getProductsForCategories(products: ShopProduct[], categorySlugs: string
 }
 
 export default async function ShopPage() {
-  const products = await getShopProducts();
+  const [products, imageOverrides] = await Promise.all([getShopProducts(), getShopImageOverrides()]);
+  const categories = buildShopCategories(imageOverrides.categoryImages);
   const kitProducts = getProductsForCategories(products, ["solar-full-kits"]);
   const panelProducts = getProductsForCategories(products, ["solar-panels"]);
   const inverterProducts = getProductsForCategories(products, ["solar-inverters"]);
@@ -55,12 +58,12 @@ export default async function ShopPage() {
   ];
 
   return (
-    <div className={`${shopStyles.page} pb-40 sm:pb-28`}>
+      <div className={`${shopStyles.page} pb-40 sm:pb-28`}>
       <ShopAnalyticsTracker kind="shop_view" payload={{ page: "/shop", brand: "Betech Solar Solutions" }} />
       <ShopHeader navLinks={shopNavLinks} />
-      <ShopCategoryNav categories={shopCategories} />
-      <ShopHero categories={shopCategories} />
-      <CategoryScroller categories={shopCategories} />
+      <ShopCategoryNav categories={categories} />
+      <ShopHero categories={categories} heroImageUrl={imageOverrides.heroBannerUrl ?? undefined} />
+      <CategoryScroller categories={categories} />
 
       <section className="py-3">
         <div className={shopStyles.shell}>
