@@ -13,9 +13,9 @@ import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 import { computeAdminReceiptSummary } from "@/lib/adminReceiptsSummary";
 import {
   computeSalesCommissionFromTiers,
+  computeJenifferProratedCommission,
   getOrCreateCommissionPeriod,
 } from "@/lib/commission";
-import { calculateCumulativeCommission } from "@/lib/commissionCommon";
 import { getUserCommissionConfigLike } from "@/lib/userCommissionConfig";
 import { ensurePayrollAdjustmentStorage } from "@/lib/payrollAdjustmentStorage";
 import { getReleasedPosProductCommissionForStaffPeriod } from "@/lib/posProductCommission";
@@ -425,7 +425,7 @@ async function buildPayrollRowResolved(
     }));
     const salesCommission =
       commissionConfig.salesCommissionMode === "JENIFFER_PRORATED"
-        ? Number(calculateCumulativeCommission(totalSales).commission ?? 0)
+        ? Number(computeJenifferProratedCommission(totalSales, tiers).commission ?? 0)
         : commissionConfig.salesCommissionMode === "BRENDAH_DIRECT"
           ? Number(computeBrendahDirectCommission(totalSales, totalProfit).amount ?? 0)
           : commissionConfig.salesCommissionMode === "POS_PROFIT_10"
@@ -513,7 +513,7 @@ async function buildPayrollRowResolved(
     }));
     const salesCommission =
       commissionConfig.salesCommissionMode === "JENIFFER_PRORATED"
-        ? Number(calculateCumulativeCommission(totalSales).commission ?? 0)
+        ? Number(computeJenifferProratedCommission(totalSales, tiers).commission ?? 0)
         : commissionConfig.salesCommissionMode === "BRENDAH_DIRECT"
           ? Number(computeBrendahDirectCommission(totalSales, totalProfit).amount ?? 0)
           : commissionConfig.salesCommissionMode === "POS_PROFIT_10"

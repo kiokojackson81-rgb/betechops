@@ -1,6 +1,6 @@
 import { calculateCumulativeCommission } from "@/lib/commissionCommon";
 import { computeMarketplaceCommission, computeOnlinePeriodCommission } from "@/lib/onlineCommission";
-import { computeSalesCommissionFromTiers } from "../commission";
+import { computeJenifferProratedCommission, computeSalesCommissionFromTiers } from "../commission";
 
 describe("computeSalesCommissionFromTiers - basic cases", () => {
   const tiers = [
@@ -50,6 +50,26 @@ test("commission ladder basic checks", () => {
   expect(calculateCumulativeCommission(1_000_000).commission).toBe(10_000);
   expect(calculateCumulativeCommission(2_000_000).commission).toBe(25_000);
   expect(calculateCumulativeCommission(3_000_000).commission).toBe(45_000);
+});
+
+test("jeniffer prorated commission grows between completed bands", () => {
+  const tiers = [
+    { minSales: 500_000, maxSales: 1_000_000, payoutFlat: 10_000 },
+    { minSales: 2_000_000, maxSales: 2_000_000, payoutFlat: 15_000 },
+    { minSales: 3_000_000, maxSales: 3_000_000, payoutFlat: 20_000 },
+  ];
+
+  const midBand = computeJenifferProratedCommission(1_500_000, tiers);
+  expect(Math.round(midBand.baseCommission)).toBe(10_000);
+  expect(Math.round(midBand.prorated)).toBe(7_500);
+  expect(Math.round(midBand.commission)).toBe(17_500);
+  expect(midBand.nextTarget).toBe(2_000_000);
+  expect(midBand.progressPercent).toBeCloseTo(0.5);
+
+  const fullSecondBand = computeJenifferProratedCommission(2_000_000, tiers);
+  expect(Math.round(fullSecondBand.commission)).toBe(25_000);
+  expect(Math.round(fullSecondBand.baseCommission)).toBe(25_000);
+  expect(Math.round(fullSecondBand.prorated)).toBe(0);
 });
 
 test("online marketplace commission starts at 1M", () => {

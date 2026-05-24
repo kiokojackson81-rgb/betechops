@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
-import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers, computeProductCommissions } from "./commission";
-import { calculateCumulativeCommission } from "./commissionCommon";
+import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers, computeProductCommissions, computeJenifferProratedCommission } from "./commission";
 import { computeDirectCommission, computeBrendahDirectCommission } from "./onlineCommission";
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
 import { getSupportPeriodAggregates } from "@/lib/supportEntries";
@@ -306,14 +305,21 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   let jenifferProgress: any = null;
 
   if (isJeniffer) {
-    const res = calculateCumulativeCommission(totalSales);
+    const res = computeJenifferProratedCommission(
+      totalSales,
+      tiers.map((tier: any) => ({
+        minSales: Number(tier.minSales),
+        maxSales: tier.maxSales == null ? null : Number(tier.maxSales),
+        payoutFlat: Number(tier.payoutFlat),
+      })),
+    );
     salesCommission = Number(res.commission ?? 0);
     jenifferProgress = {
       commission: salesCommission,
-      baseCommission: salesCommission,
-      prorated: 0,
+      baseCommission: Number(res.baseCommission ?? 0),
+      prorated: Number(res.prorated ?? 0),
       nextTarget: res.nextTarget ?? null,
-      progressPercent: res.nextTarget ? Math.max(0, Math.min(1, totalSales / res.nextTarget)) : 1,
+      progressPercent: Number(res.progressPercent ?? 0),
     };
   } else if (isPosProfit10) {
     salesCommission = Math.round(Math.max(0, totalProfit) * 0.1);
