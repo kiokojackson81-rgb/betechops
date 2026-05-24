@@ -40,7 +40,7 @@ export const SHOP_CATEGORY_DEFINITIONS: ShopCategoryDefinition[] = [
     value: "solar-full-kits",
     label: "Solar Full Kits",
     blurb: "Ready-built kits for home backup, biashara systems and complete solar setups.",
-    image: "/agents/product-solar-kit-generated.png",
+    image: "/agents/category-solar-full-kits.png",
     accent: "maroon",
     visualType: "kit",
     keywords: ["solar full kit", "solar kit", "complete home system", "all in one", "starter solar kit", "heavy duty solar system"],
