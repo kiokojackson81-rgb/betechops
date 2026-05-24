@@ -27,7 +27,13 @@ export default async function PosManagementPage() {
               Manage the catalog used on the receipts desk, define buying prices and per-product commission, and release or reject pending POS commission approvals.
             </p>
           </div>
-          <div className="flex shrink-0">
+          <div className="flex shrink-0 flex-wrap gap-3">
+            <Link
+              href="/admin/customers"
+              className="inline-flex min-h-[2.75rem] items-center justify-center rounded-2xl border border-cyan-500/35 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/15"
+            >
+              Open Customers
+            </Link>
             <Link
               href="/admin/settings/shop-images"
               className="inline-flex min-h-[2.75rem] items-center justify-center rounded-2xl border border-emerald-500/35 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-500/15"
