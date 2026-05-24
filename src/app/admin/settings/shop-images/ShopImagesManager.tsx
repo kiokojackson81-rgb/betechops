@@ -153,19 +153,25 @@ export default function ShopImagesManager({ initialSlots }: Props) {
               </div>
 
               <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/50">
-                <div className="relative aspect-[3/1]">
-                  <Image
-                    src={slot.currentUrl}
-                    alt={slot.label}
-                    fill
-                    unoptimized={isRemoteImage(slot.currentUrl)}
-                    sizes="(max-width: 1280px) 50vw, 33vw"
-                    className="object-contain bg-[linear-gradient(135deg,#fff7e6_0%,#ffffff_100%)] p-2"
-                  />
+                <div className="flex aspect-[4/5] flex-col bg-white">
+                  <div className="relative basis-[68%] overflow-hidden bg-neutral-100">
+                    <Image
+                      src={slot.currentUrl}
+                      alt={slot.label}
+                      fill
+                      unoptimized={isRemoteImage(slot.currentUrl)}
+                      sizes="(max-width: 1280px) 50vw, 33vw"
+                      className="object-cover object-center"
+                    />
+                  </div>
+                  <div className="flex basis-[32%] items-end justify-between gap-3 p-4">
+                    <div className="text-base font-black leading-[1.1] tracking-tight text-slate-950">{slot.label}</div>
+                    <div className="text-[#7a0000]/55">↗</div>
+                  </div>
                 </div>
               </div>
-              <p className="mt-3 text-xs leading-5 text-slate-400">Recommended size: 1500 x 500 px or any clean 3:1 banner image.</p>
-              <p className="mt-1 text-xs leading-5 text-slate-500">Best results come from images cropped tightly to the product with no inner whitespace.</p>
+              <p className="mt-3 text-xs leading-5 text-slate-400">Recommended size: 1600 x 1200 px. Upload as JPG in a 4:3 ratio.</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">Keep the product centered, avoid inner whitespace, and leave only a small safe margin around important items.</p>
 
               <input
                 type="file"

@@ -58,7 +58,7 @@ export default function CategoryScroller({ categories }: CategoryScrollerProps) 
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
           {categories.map((category) => {
             const Icon = iconMap[category.slug as keyof typeof iconMap] ?? PanelsTopLeft;
 
@@ -66,26 +66,34 @@ export default function CategoryScroller({ categories }: CategoryScrollerProps) 
               <Link
                 key={category.slug}
                 href={getCategoryHref(category.slug)}
-                className="group overflow-hidden rounded-[22px] border border-[#7a0000]/10 bg-white shadow-[0_12px_24px_rgba(15,23,42,0.04)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_32px_rgba(122,0,0,0.08)]"
+                className="group aspect-[4/5] overflow-hidden rounded-2xl border border-[#7a0000]/10 bg-white shadow-[0_12px_24px_rgba(15,23,42,0.04)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_32px_rgba(122,0,0,0.08)]"
               >
-                <div className="relative h-16 border-b border-[#7a0000]/10 bg-[linear-gradient(135deg,#fff7e6_0%,#ffffff_100%)] sm:h-20">
-                  <Image
-                    src={category.image}
-                    alt={category.title}
-                    fill
-                    unoptimized={isRemoteImage(category.image)}
-                    sizes="(max-width: 1024px) 50vw, 16vw"
-                    className="object-contain p-2.5 sm:p-3"
-                  />
-                </div>
-                <div className="p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className={`inline-flex h-8 w-8 items-center justify-center rounded-xl ${accentMap[category.accent]}`}>
-                      <Icon className="h-3.5 w-3.5" />
-                    </div>
-                    <ArrowUpRight className="h-3.5 w-3.5 text-[#7a0000]/45" />
+                <div className="flex h-full flex-col">
+                  <div className="relative basis-[68%] overflow-hidden bg-neutral-100">
+                    <Image
+                      src={category.image}
+                      alt={category.title}
+                      fill
+                      unoptimized={isRemoteImage(category.image)}
+                      sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 20vw"
+                      className="h-full w-full object-cover object-center transition-transform duration-500 group-hover:scale-105"
+                    />
                   </div>
-                  <div className="mt-2.5 line-clamp-2 text-sm font-black leading-5 tracking-tight text-slate-950">{category.title}</div>
+                  <div className="flex basis-[32%] items-end justify-between gap-3 p-4">
+                    <div className="flex min-w-0 items-end gap-3">
+                      <div className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${accentMap[category.accent]}`}>
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="line-clamp-2 text-base font-black leading-[1.1] tracking-tight text-slate-950 sm:text-[1.05rem]">
+                          {category.title}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mb-0.5 shrink-0 text-[#7a0000]/55 transition group-hover:text-[#7a0000]">
+                      <ArrowUpRight className="h-4 w-4" />
+                    </div>
+                  </div>
                 </div>
               </Link>
             );

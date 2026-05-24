@@ -17,6 +17,15 @@ Use this checklist before enabling customer-facing ops catalogue mode for `/shop
 - Use bright, well-cropped product photos on neutral backgrounds where possible.
 - If no real image is available yet, the shop will fall back to a category placeholder visual.
 
+## Category image upload standard
+
+- `1600 x 1200 px`
+- `JPG`
+- `4:3` ratio
+- no inner whitespace
+- centered product
+- `object-cover` display
+
 ## Category naming rules
 
 Normalize ops catalogue products into one of these shop categories:
