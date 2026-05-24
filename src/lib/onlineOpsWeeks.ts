@@ -37,7 +37,11 @@ export function getOnlineOpsWeeksForTradingPeriod(
   reference: Date = new Date(),
   count = 4,
 ): OnlineOpsWeekCard[] {
-  const anchor = new Date(Math.min(period.end.getTime(), reference.getTime()));
+  const isActivePeriod = reference.getTime() < period.end.getTime();
+  const effectiveReference = isActivePeriod
+    ? new Date(reference.getTime() - MS_PER_DAY)
+    : reference;
+  const anchor = new Date(Math.min(period.end.getTime(), effectiveReference.getTime()));
 
   // Build all Sundays that fall within this trading period (Nairobi-local).
   const sundays: Date[] = [];
