@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BadgeCheck, BatteryCharging, CreditCard, Headphones, MapPin, ShieldCheck, Store, SunMedium, Truck, Zap } from "lucide-react";
+import { BadgeCheck, CreditCard, Headphones, MapPin, Truck } from "lucide-react";
 import ShopAnalyticsTracker from "@/app/shop/_components/ShopAnalyticsTracker";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
 import ShopMobileStickyBar from "@/app/shop/_components/ShopMobileStickyBar";
@@ -175,14 +175,6 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
   const specSummary = buildSpecSummary(product);
   const valueProposition = buildValueProposition(product);
   const tiktokEmbedUrl = getTikTokEmbedUrl(product.tiktokVideoUrl);
-  const keyHighlights = [
-    { icon: <Zap className="h-4 w-4" />, label: specSummary[0] || product.specs[0] || "Solar Configuration" },
-    { icon: <BatteryCharging className="h-4 w-4" />, label: specSummary[1] || product.specs[1] || "Battery Support" },
-    { icon: <SunMedium className="h-4 w-4" />, label: specSummary[2] || product.specs[2] || "Panel Setup" },
-    { icon: <ShieldCheck className="h-4 w-4" />, label: product.warranty || "Warranty Support" },
-    { icon: <Truck className="h-4 w-4" />, label: "Nationwide Delivery" },
-    { icon: <Store className="h-4 w-4" />, label: "Nairobi Shop Pickup" },
-  ];
   const supportItems = [
     { icon: <Truck className="h-4 w-4" />, title: "Nationwide Courier", copy: "Panels, batteries, kits, and accessories delivered across Kenya." },
     { icon: <MapPin className="h-4 w-4" />, title: "Nairobi Pickup", copy: "Collect from our Pramukh Plaza shop once your order is confirmed." },
@@ -320,20 +312,6 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
                       {availabilityMessage}
                     </div>
                     <ShopProductDetailActions product={product} />
-                  </div>
-
-                  <div className="rounded-[22px] border border-[#7a0000]/8 bg-[#fffaf4] p-4 sm:rounded-[28px] sm:p-5">
-                    <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">Key highlights</div>
-                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                      {keyHighlights.map((item) => (
-                        <div key={item.label} className="flex items-start gap-3 rounded-[18px] bg-white px-3.5 py-3 shadow-[0_10px_20px_rgba(15,23,42,0.04)]">
-                          <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#fff1dc] text-[#7a0000]">
-                            {item.icon}
-                          </span>
-                          <div className="text-sm font-semibold leading-5 text-slate-700">{item.label}</div>
-                        </div>
-                      ))}
-                    </div>
                   </div>
 
                   <div className="rounded-[28px] border border-[#7a0000]/8 bg-white">
