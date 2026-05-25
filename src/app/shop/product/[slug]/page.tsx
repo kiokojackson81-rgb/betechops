@@ -238,20 +238,20 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
                         We deliver and install anywhere in Kenya, or you can order online and collect from our Nairobi CBD shop.
                       </div>
                     </div>
-                    <div className="mt-4 grid gap-2.5 sm:mt-4 sm:grid-cols-2">
+                    <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
                       {supportItems.map((item) => (
                         <div
                           key={item.title}
-                          className="flex h-full min-h-[10.25rem] items-start gap-3 rounded-2xl border border-[#7a0000]/8 bg-[#fcfaf8] p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-md md:p-5"
+                          className="flex h-full min-h-[9.25rem] items-start gap-3 rounded-2xl border border-[#7a0000]/8 bg-[#fcfaf8] p-3.5 transition-all duration-300 hover:-translate-y-1 hover:shadow-md md:p-4"
                         >
                           <span className="mt-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#fff1dc] text-[#7a0000]">
                             {item.icon}
                           </span>
-                          <div className="max-w-[29ch]">
+                          <div className="max-w-[24ch]">
                             <div className="text-lg font-extrabold text-slate-900">{item.title}</div>
-                            <div className="mt-1 text-[13px] leading-5 text-slate-600 md:text-[14px] md:leading-5">{item.copy}</div>
+                            <div className="mt-1 text-[12px] leading-[1.4rem] text-slate-600 md:text-[13px] md:leading-[1.35rem]">{item.copy}</div>
                             {"detail" in item && item.detail ? (
-                              <div className={`mt-1.5 whitespace-pre-line text-[13px] leading-5 md:text-[14px] md:leading-5 ${item.title === "WhatsApp Support" ? "font-bold text-slate-900" : "font-medium text-slate-700"}`}>
+                              <div className={`mt-1.5 whitespace-pre-line text-[12px] leading-[1.35rem] md:text-[13px] md:leading-[1.35rem] ${item.title === "WhatsApp Support" ? "font-bold text-slate-900" : "font-medium text-slate-700"}`}>
                                 {item.detail}
                               </div>
                             ) : null}
