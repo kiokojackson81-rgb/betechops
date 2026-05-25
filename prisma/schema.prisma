@@ -48,6 +48,7 @@ model User {
   marketplaceReturnAttachmentsUploaded MarketplaceReturnAttachment[]   @relation("MarketplaceReturnAttachment_uploadedBy")
   orders                               Order[]
   issuedReceipts                       Receipt[]                       @relation("issuedBy")
+  confirmedWebsiteOrders              WebsiteOrder[]                  @relation("websiteOrderConfirmedBy")
   returnsApproved                      ReturnCase[]                    @relation("ReturnApprovedBy")
   returnsCreated                       ReturnCase[]                    @relation("ReturnCreatedBy")
   evidenceTaken                        ReturnEvidence[]                @relation("EvidenceTaker")
@@ -954,6 +955,7 @@ model Product {
   createdAt                  DateTime    @default(now())
   updatedAt                  DateTime    @updatedAt
   orders                     OrderItem[]
+  websiteOrderItems          WebsiteOrderItem[]
 }
 
 model Order {
@@ -1403,6 +1405,57 @@ model Receipt {
   issuedBy            User?         @relation("issuedBy", fields: [issuedById], references: [id])
   order               Order         @relation(fields: [orderId], references: [id])
   files               ReceiptFile[]
+  websiteOrders       WebsiteOrder[]
+}
+
+model WebsiteOrder {
+  id               String             @id @default(cuid())
+  orderRef         String             @unique
+  customerName     String
+  customerPhone    String
+  customerLocation String
+  customerEmail    String?
+  deliveryMethod   String
+  paymentMethod    String
+  orderType        WebsiteOrderType
+  status           WebsiteOrderStatus @default(PENDING)
+  subtotal         Decimal            @db.Decimal(12, 2)
+  deliveryFee      Decimal?           @db.Decimal(12, 2)
+  total            Decimal            @db.Decimal(12, 2)
+  notes            String?
+  source           String             @default("WEBSITE")
+  receiptId        String?            @unique
+  confirmedAt      DateTime?
+  confirmedById    String?
+  cancelledAt      DateTime?
+  metadata         Json?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  confirmedBy      User?              @relation("websiteOrderConfirmedBy", fields: [confirmedById], references: [id])
+  receipt          Receipt?           @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+  items            WebsiteOrderItem[]
+
+  @@index([status, createdAt])
+  @@index([orderType, createdAt])
+}
+
+model WebsiteOrderItem {
+  id             String       @id @default(cuid())
+  websiteOrderId String
+  productId      String?
+  productName    String
+  quantity       Int
+  unitPrice      Decimal      @db.Decimal(12, 2)
+  total          Decimal      @db.Decimal(12, 2)
+  sku            String?
+  category       String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  product        Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  websiteOrder   WebsiteOrder @relation(fields: [websiteOrderId], references: [id], onDelete: Cascade)
+
+  @@index([websiteOrderId])
+  @@index([productId])
 }
 
 model ReceiptFile {
@@ -1923,6 +1976,22 @@ enum PriceSource {
 enum PaymentMethod {
   CASH
   MPESA
+}
+
+enum WebsiteOrderStatus {
+  PENDING
+  CONFIRMED
+  RECEIPT_ISSUED
+  PROCESSING
+  DELIVERED
+  CANCELLED
+}
+
+enum WebsiteOrderType {
+  POD
+  PREPAID
+  SHOP_PICKUP
+  QUOTE_FIRST
 }
 
 enum DiscrepancyType {

@@ -1,63 +1,103 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import { adminHandoffWorkflow, buildEcommerceOrderDraft, buildMockOrderReference } from "@/app/shop/integrationPlan";
-import { allShopProducts } from "@/app/shop/shopData";
+import { prisma } from "@/lib/prisma";
+import {
+  buildWebsiteOrderRef,
+  deriveWebsiteOrderType,
+  serializeWebsiteOrder,
+  websiteOrderAdminInclude,
+  websiteOrderCreateSchema,
+} from "@/lib/websiteOrders";
+import { getShopProducts } from "@/app/shop/shopApi";
 
-const orderSchema = z.object({
-  items: z.array(
-    z.object({
-      productId: z.string().trim().min(1),
-      quantity: z.number().int().positive(),
-    }),
-  ).min(1),
-  customerName: z.string().trim().min(2),
-  customerPhone: z.string().trim().min(7),
-  location: z.string().trim().min(2),
-  deliveryMethod: z.string().trim().min(2),
-  paymentPreference: z.string().trim().min(2),
-  notes: z.string().optional(),
-});
+export const dynamic = "force-dynamic";
 
-// TODO: Persist draft into ops ecommerce order table when integration is enabled.
-// TODO: Link matching customer from existing customer database.
-// TODO: Link final receipt/POS record back to this draft order.
-export async function GET() {
-  return NextResponse.json({
-    ok: true,
-    source: "mock" as const,
-    orders: [],
-    workflow: adminHandoffWorkflow,
-  });
+async function buildUniqueOrderRef() {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const orderRef = buildWebsiteOrderRef();
+    const existing = await prisma.websiteOrder.findUnique({ where: { orderRef }, select: { id: true } });
+    if (!existing) return orderRef;
+  }
+  throw new Error("Unable to generate website order reference");
 }
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
-  const parsed = orderSchema.safeParse(body);
+  const parsed = websiteOrderCreateSchema.safeParse(body);
 
   if (!parsed.success) {
     return NextResponse.json({ ok: false, error: "Invalid order payload.", issues: parsed.error.flatten() }, { status: 400 });
   }
 
-  const allKnown = parsed.data.items.every((item) => allShopProducts.some((product) => product.id === item.productId));
-  if (!allKnown) {
+  const data = parsed.data;
+  const products = await getShopProducts();
+  const productMap = new Map(products.map((product) => [product.id, product]));
+  const missingProduct = data.items.find((item) => !productMap.has(item.productId));
+
+  if (missingProduct) {
     return NextResponse.json({ ok: false, error: "One or more products were not found." }, { status: 400 });
   }
 
-  const draft = buildEcommerceOrderDraft({
-    customerName: parsed.data.customerName,
-    phone: parsed.data.customerPhone,
-    location: parsed.data.location,
-    deliveryMethod: parsed.data.deliveryMethod,
-    paymentPreference: parsed.data.paymentPreference,
-    items: parsed.data.items,
-    notes: parsed.data.notes,
+  const orderRef = await buildUniqueOrderRef();
+  const orderType = deriveWebsiteOrderType(data.deliveryMethod, data.paymentMethod);
+  const items = data.items.map((item) => {
+    const product = productMap.get(item.productId)!;
+    const quantity = Math.max(1, item.quantity);
+    const unitPrice = Number(product.price || 0);
+    return {
+      productId: product.id,
+      productName: product.name,
+      quantity,
+      unitPrice,
+      total: unitPrice * quantity,
+      sku: null,
+      category: product.category ?? null,
+    };
+  });
+  const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+
+  const created = await prisma.websiteOrder.create({
+    data: {
+      orderRef,
+      customerName: data.customerName.trim(),
+      customerPhone: data.customerPhone.trim(),
+      customerLocation: data.customerLocation.trim(),
+      customerEmail: data.customerEmail?.trim() || null,
+      deliveryMethod: data.deliveryMethod.trim(),
+      paymentMethod: data.paymentMethod.trim(),
+      orderType,
+      status: "PENDING",
+      subtotal,
+      total: subtotal,
+      notes: data.notes?.trim() || null,
+      source: "WEBSITE",
+      metadata: {
+        checkoutSource: "shop",
+      },
+      items: {
+        create: items.map((item) => ({
+          productId: item.productId,
+          productName: item.productName,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          total: item.total,
+          sku: item.sku,
+          category: item.category,
+        })),
+      },
+    },
+    include: websiteOrderAdminInclude,
   });
 
   return NextResponse.json({
     ok: true,
-    source: "mock" as const,
-    status: "pending_mock" as const,
-    orderRef: buildMockOrderReference(),
-    draft,
+    source: "website",
+    orderRef: created.orderRef,
+    status: created.status,
+    successUrl: `/shop/order-success?ref=${encodeURIComponent(created.orderRef)}`,
+    order: serializeWebsiteOrder(created),
   });
+}
+
+export async function GET() {
+  return NextResponse.json({ ok: true, message: "Use POST /api/shop/orders to place website orders." });
 }

@@ -1666,6 +1666,26 @@ export async function POST(req: NextRequest) {
               // ignore
             }
 
+      if (payload?.websiteOrderId && (tx as any).websiteOrder) {
+        try {
+          await (tx as any).websiteOrder.update({
+            where: { id: String(payload.websiteOrderId) },
+            data: {
+              receiptId: receipt.id,
+              status: "RECEIPT_ISSUED",
+              metadata: {
+                ...(payload?.metadata && typeof payload.metadata === "object" ? payload.metadata : {}),
+                linkedReceiptId: receipt.id,
+                linkedReceiptNumber: receiptData.receiptNumber,
+                linkedAt: new Date().toISOString(),
+              },
+            },
+          });
+        } catch (websiteOrderLinkErr) {
+          console.error("[receipts] failed to link website order to receipt", websiteOrderLinkErr);
+        }
+      }
+
       return { orderRef: orderUpsert.orderNumber, receiptId: receipt.id };
     });
 

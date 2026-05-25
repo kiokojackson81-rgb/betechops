@@ -36,16 +36,16 @@ export default function OrderSuccessClient({ orderRef }: OrderSuccessClientProps
         <div className="inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">
           Order received
         </div>
-        <h1 className="mt-4 text-4xl font-black tracking-tight text-white">Your order has been received. Our Betech Solar team will contact you shortly.</h1>
+        <h1 className="mt-4 text-4xl font-black tracking-tight text-white">Your order has been received. Our Betech Solar team will confirm availability, delivery, and payment details shortly.</h1>
         <p className="mt-4 max-w-2xl text-base leading-7 text-white/76">
-          Payment has not been processed automatically on this page. Our team will confirm availability, delivery, and the next steps with you directly.
+          Payment has not been processed automatically on this page. Your website checkout stays pending until a Betech Solar admin confirms the order and issues the correct receipt.
         </p>
         <div className="mt-6 grid gap-4 lg:grid-cols-[0.92fr_1.08fr]">
           <div className="rounded-[26px] border border-white/10 bg-white/10 p-5">
             <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#ffd761]">Order reference</div>
             <div className="mt-2 text-2xl font-black text-white">{order?.orderRef || orderRef || "BT-SHOP-REF"}</div>
             <div className="mt-4 inline-flex rounded-full border border-[#f2b20f]/30 bg-[#fff3d8]/12 px-4 py-2 text-sm font-black uppercase tracking-[0.14em] text-[#ffd761]">
-              Pending Betech confirmation
+              Pending confirmation
             </div>
             {order ? (
               <div className="mt-5 grid gap-2 text-sm leading-6 text-white/76">

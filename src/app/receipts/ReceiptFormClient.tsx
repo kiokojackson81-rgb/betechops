@@ -114,6 +114,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogResults, setCatalogResults] = useState<CatalogProduct[]>([]);
   const [duplicateCatalogPool, setDuplicateCatalogPool] = useState<CatalogProduct[]>([]);
+  const [websiteOrderId, setWebsiteOrderId] = useState<string | null>(null);
+  const [websiteOrderRef, setWebsiteOrderRef] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -159,6 +161,61 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const encoded = params.get("prefill");
+    if (!encoded) return;
+
+    try {
+      const normalized = encoded.replace(/-/g, "+").replace(/_/g, "/");
+      const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+      const decoded = atob(padded);
+      const bytes = Uint8Array.from(decoded, (char) => char.charCodeAt(0));
+      const parsed = JSON.parse(new TextDecoder().decode(bytes)) as any;
+
+      if (parsed.websiteOrderId) setWebsiteOrderId(String(parsed.websiteOrderId));
+      if (parsed.websiteOrderRef) setWebsiteOrderRef(String(parsed.websiteOrderRef));
+      if (parsed.customerName) setCustomerName(String(parsed.customerName));
+      if (parsed.customerPhone) setCustomerPhone(String(parsed.customerPhone));
+      if (parsed.deliveryAddress) {
+        setDeliveryAddress(String(parsed.deliveryAddress));
+        setShowAddressInput(true);
+      }
+      if (parsed.customerType && ["walk-in", "online", "delivery", "pod"].includes(parsed.customerType)) {
+        setCustomerType(parsed.customerType);
+      }
+      if (parsed.deliveryStatus && ["pending", "delivered", "failed"].includes(parsed.deliveryStatus)) {
+        setDeliveryStatus(parsed.deliveryStatus);
+      }
+      if (parsed.notes) {
+        setNotes(String(parsed.notes));
+      }
+      if (parsed.podDelivery?.note) {
+        setPodNote(String(parsed.podDelivery.note));
+      }
+      if (parsed.paymentMethod === "CASH") {
+        setSelectedPaymentMethods({ MPESA: false, CASH: true });
+      } else if (parsed.paymentMethod === "MPESA") {
+        setSelectedPaymentMethods({ MPESA: true, CASH: false });
+      }
+      if (Array.isArray(parsed.items) && parsed.items.length) {
+        setItems(
+          parsed.items.map((item: any) => ({
+            ...newItem(),
+            title: String(item.title || item.productName || "Item"),
+            quantity: Math.max(1, Number(item.quantity || 1)),
+            unitPrice: Number(item.unitPrice || 0),
+            productId: item.productId ? String(item.productId) : undefined,
+            sku: item.sku ? String(item.sku) : undefined,
+          })),
+        );
+      }
+    } catch (error) {
+      showToast("Failed to load website order receipt draft", "error");
+    }
   }, []);
 
   useEffect(() => {
@@ -671,12 +728,20 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         deliveryStatus: customerType === "delivery" ? deliveryStatus : undefined,
         podDelivery: customerType === "pod" ? { note: podNote || "" } : undefined,
         notes,
+        websiteOrderId: websiteOrderId || undefined,
         globalWarranty: globalWarranty || undefined,
         deposit: docType === "LAYAWAY" ? deposit : undefined,
         paymentBreakdown: {
           cash: numericCashPaid,
           mpesa: numericMpesaPaid,
         },
+        metadata: websiteOrderId
+          ? {
+              source: "WEBSITE",
+              websiteOrderId,
+              websiteOrderRef,
+            }
+          : undefined,
         items: normalizedItems,
       };
 

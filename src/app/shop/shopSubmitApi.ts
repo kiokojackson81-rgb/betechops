@@ -1,6 +1,6 @@
 "use client";
 
-import { buildEcommerceOrderDraft, buildQuoteRequestDraft } from "@/app/shop/integrationPlan";
+import { buildQuoteRequestDraft } from "@/app/shop/integrationPlan";
 
 export type ShopOrderInput = {
   items: Array<{
@@ -9,9 +9,10 @@ export type ShopOrderInput = {
   }>;
   customerName: string;
   customerPhone: string;
-  location: string;
+  customerEmail?: string;
+  customerLocation: string;
   deliveryMethod: string;
-  paymentPreference: string;
+  paymentMethod: string;
   notes?: string;
 };
 
@@ -24,6 +25,15 @@ export type QuoteRequestInput = {
   budgetRange?: string;
   preferredProducts?: string;
   notes?: string;
+};
+
+export type ShopOrderResponse = {
+  ok: true;
+  source: "website";
+  orderRef: string;
+  status: "PENDING";
+  successUrl: string;
+  order: unknown;
 };
 
 async function postJson<T>(path: string, body: unknown): Promise<T> {
@@ -41,31 +51,8 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export async function createShopOrder(input: ShopOrderInput) {
-  try {
-    return await postJson("/api/shop/orders", input);
-  } catch {
-    const draft = buildEcommerceOrderDraft({
-      customerName: input.customerName,
-      phone: input.customerPhone,
-      location: input.location,
-      deliveryMethod: input.deliveryMethod,
-      paymentPreference: input.paymentPreference,
-      items: input.items,
-      notes: input.notes,
-    });
-
-    const lineCount = input.items.reduce((sum, item) => sum + item.quantity, 0);
-
-    return {
-      ok: true,
-      source: "mock" as const,
-      status: "pending_mock" as const,
-      itemCount: lineCount,
-      draft,
-      payload: input,
-    };
-  }
+export async function createShopOrder(input: ShopOrderInput): Promise<ShopOrderResponse> {
+  return postJson("/api/shop/orders", input);
 }
 
 export async function createQuoteRequest(input: QuoteRequestInput) {

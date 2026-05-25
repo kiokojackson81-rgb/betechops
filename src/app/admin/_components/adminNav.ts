@@ -26,7 +26,15 @@ export const NAV: AdminNavItem[] = [
       { href: "/admin/agents/fraud", label: "Fraud & Risk" },
     ],
   },
-  { href: "/admin/orders", label: "Orders", icon: Package },
+  {
+    href: "/admin/orders",
+    label: "Orders",
+    icon: Package,
+    children: [
+      { href: "/admin/orders", label: "Jumia Orders" },
+      { href: "/admin/orders/website", label: "Pending Website Orders" },
+    ],
+  },
   {
     href: "/admin/receipts",
     label: "POS Management",

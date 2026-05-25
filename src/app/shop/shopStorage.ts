@@ -21,7 +21,7 @@ export type ShopCustomerProfile = {
   updatedAt: string;
 };
 
-export type MockOrderRecord = {
+export type ShopOrderRecord = {
   orderRef: string;
   customerName: string;
   phone: string;
@@ -42,10 +42,12 @@ export type MockOrderRecord = {
   }>;
   subtotal: number;
   notes?: string;
-  source: "mock";
-  status: "pending";
+  source: "mock" | "website";
+  status: "pending" | "PENDING";
   createdAt: string;
 };
+
+export type MockOrderRecord = ShopOrderRecord;
 
 export type MockQuoteRecord = {
   quoteRef: string;
@@ -102,11 +104,17 @@ function buildSequentialReference(prefix: "BT-SHOP" | "BT-QUOTE", counterKey: st
   return `${prefix}-${year}-${String(nextCount).padStart(4, "0")}`;
 }
 
-export function saveMockOrder(input: Omit<MockOrderRecord, "orderRef" | "source" | "status" | "createdAt">) {
-  const order: MockOrderRecord = {
-    orderRef: buildSequentialReference("BT-SHOP", SHOP_ORDER_COUNTER_KEY),
-    source: "mock",
-    status: "pending",
+export function saveMockOrder(
+  input: Omit<ShopOrderRecord, "orderRef" | "source" | "status" | "createdAt"> & {
+    orderRef?: string;
+    source?: ShopOrderRecord["source"];
+    status?: ShopOrderRecord["status"];
+  },
+) {
+  const order: ShopOrderRecord = {
+    orderRef: input.orderRef || buildSequentialReference("BT-SHOP", SHOP_ORDER_COUNTER_KEY),
+    source: input.source || "mock",
+    status: input.status || "pending",
     createdAt: new Date().toISOString(),
     ...input,
   };
@@ -117,11 +125,11 @@ export function saveMockOrder(input: Omit<MockOrderRecord, "orderRef" | "source"
 }
 
 export function getLastMockOrder() {
-  return readJson<MockOrderRecord>(SHOP_ORDER_KEY);
+  return readJson<ShopOrderRecord>(SHOP_ORDER_KEY);
 }
 
 export function getMockOrderHistory() {
-  return readJson<MockOrderRecord[]>(SHOP_ORDER_HISTORY_KEY) ?? [];
+  return readJson<ShopOrderRecord[]>(SHOP_ORDER_HISTORY_KEY) ?? [];
 }
 
 export function saveMockQuote(input: Omit<MockQuoteRecord, "quoteRef" | "source" | "status" | "createdAt">) {

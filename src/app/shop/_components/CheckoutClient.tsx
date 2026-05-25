@@ -148,18 +148,17 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
           try {
             const locationSummary = [form.countyTown.trim(), form.estateLandmark.trim()].filter(Boolean).join(" - ");
             // TODO: later create customer in existing ops customer base.
-            // TODO: later create pending ecommerce order for admin processing in ops/POS.
-            // TODO: later generate receipt only after admin approval/payment.
-            await createShopOrder({
+            const orderResponse = await createShopOrder({
               items: detailedItems.map((item) => ({
                 productId: item.product.id,
                 quantity: item.quantity,
               })),
               customerName: form.fullName,
               customerPhone: form.phoneNumber,
-              location: locationSummary || form.countyTown,
+              customerEmail: form.email.trim() || undefined,
+              customerLocation: locationSummary || form.countyTown,
               deliveryMethod: form.deliveryMethod,
-              paymentPreference: form.paymentPreference,
+              paymentMethod: form.paymentPreference,
               notes: [form.locationNotes.trim(), `WhatsApp: ${form.whatsappNumber.trim()}`, form.email.trim() ? `Email: ${form.email.trim()}` : ""]
                 .filter(Boolean)
                 .join(" | "),
@@ -176,6 +175,7 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
             });
 
             const savedOrder = saveMockOrder({
+              orderRef: orderResponse.orderRef,
               customerName: form.fullName.trim(),
               phone: form.phoneNumber.trim(),
               whatsappNumber: form.whatsappNumber.trim(),
@@ -188,6 +188,8 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
               paymentPreference: form.paymentPreference,
               notes: form.locationNotes.trim() || undefined,
               subtotal,
+              source: "website",
+              status: "PENDING",
               items: buildStoredOrderItems(
                 detailedItems.map((item) => ({
                   productId: item.product.id,
@@ -206,7 +208,7 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
             });
 
             clearCartAfterOrder();
-            router.push(`/shop/order-success?ref=${encodeURIComponent(savedOrder.orderRef)}`);
+            router.push(orderResponse.successUrl || `/shop/order-success?ref=${encodeURIComponent(savedOrder.orderRef)}`);
           } catch (submissionError) {
             setError(submissionError instanceof Error ? submissionError.message : "Unable to create the order request.");
           } finally {
@@ -301,7 +303,7 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
 
         <div className="mt-5 flex flex-col gap-2.5 sm:flex-row">
           <button type="submit" disabled={submitting} className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(122,0,0,0.16)] transition hover:bg-[#610000]">
-            {submitting ? "Creating Preview Order..." : "Place Preview Order"}
+            {submitting ? "Submitting Website Order..." : "Place Order Request"}
           </button>
           <Link href="/shop/cart" className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] border border-[#7a0000]/16 bg-white px-4 py-2.5 text-sm font-bold text-slate-950 shadow-[0_10px_22px_rgba(15,23,42,0.04)] transition">
             Back to Cart
@@ -347,7 +349,7 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
             disabled={submitting}
             className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(122,0,0,0.16)]"
           >
-            Place Preview Order
+            Place Order Request
           </button>
           <TrackedWhatsAppLink
             href={summaryWhatsappHref}

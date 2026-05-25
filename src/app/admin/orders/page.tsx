@@ -1,5 +1,6 @@
 import OrdersFilters from './_components/OrdersFilters';
 import OrdersLiveData from './_components/OrdersLiveData';
+import Link from 'next/link';
 import { absUrl, withParams } from '@/lib/abs-url';
 import { prisma } from '@/lib/prisma';
 import AutoRefresh from '@/app/_components/AutoRefresh';
@@ -327,6 +328,13 @@ export default async function OrdersPage(props: unknown) {
           )}
         </div>
         <div className="pt-1 flex items-center gap-4">
+          <Link
+            href="/admin/orders/website"
+            className="px-3 py-1 rounded border border-emerald-400/20 bg-emerald-500/10 hover:bg-emerald-500/20 text-sm text-emerald-300"
+            title="Review pending website orders before routing them into the receipts desk"
+          >
+            Pending Website Orders
+          </Link>
           <SyncNowButton />
           <OrdersSSE
             status={params.status}

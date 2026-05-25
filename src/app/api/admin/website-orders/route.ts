@@ -1,0 +1,49 @@
+import { NextRequest, NextResponse } from "next/server";
+import { WebsiteOrderStatus } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+import {
+  requireWebsiteOrdersAdmin,
+  serializeWebsiteOrder,
+  WEBSITE_ORDER_ACTIVE_STATUSES,
+  websiteOrderAdminInclude,
+} from "@/lib/websiteOrders";
+
+export const dynamic = "force-dynamic";
+
+export async function GET(request: NextRequest) {
+  const guard = await requireWebsiteOrdersAdmin();
+  if (!guard.ok) {
+    return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+  }
+
+  const searchParams = request.nextUrl.searchParams;
+  const statusParam = (searchParams.get("status") || "PENDING").toUpperCase();
+  const q = (searchParams.get("q") || "").trim();
+  const statuses =
+    statusParam === "ALL"
+      ? WEBSITE_ORDER_ACTIVE_STATUSES
+      : WEBSITE_ORDER_ACTIVE_STATUSES.filter((status) => status === statusParam);
+
+  const orders = await prisma.websiteOrder.findMany({
+    where: {
+      status: { in: statuses.length ? statuses : [WebsiteOrderStatus.PENDING] },
+      ...(q
+        ? {
+            OR: [
+              { orderRef: { contains: q, mode: "insensitive" } },
+              { customerName: { contains: q, mode: "insensitive" } },
+              { customerPhone: { contains: q, mode: "insensitive" } },
+              { customerLocation: { contains: q, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    },
+    include: websiteOrderAdminInclude,
+    orderBy: [{ createdAt: "desc" }],
+  });
+
+  return NextResponse.json({
+    ok: true,
+    orders: orders.map(serializeWebsiteOrder),
+  });
+}

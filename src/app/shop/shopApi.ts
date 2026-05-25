@@ -1,6 +1,5 @@
 import { allShopProducts, type ShopProduct } from "@/app/shop/shopData";
 import {
-  buildEcommerceOrderDraft,
   buildQuoteRequestDraft,
   isShopOpsApiEnabled,
 } from "@/app/shop/integrationPlan";
@@ -13,9 +12,10 @@ export type ShopOrderInput = {
   }>;
   customerName: string;
   customerPhone: string;
-  location: string;
+  customerEmail?: string;
+  customerLocation: string;
   deliveryMethod: string;
-  paymentPreference: string;
+  paymentMethod: string;
   notes?: string;
 };
 
@@ -97,22 +97,7 @@ export async function getShopProductBySlug(slug: string): Promise<ShopProduct | 
   return isShopOpsApiEnabled() ? null : allShopProducts.find((product) => product.slug === slug) ?? null;
 }
 
-// TODO: Checkout should create pending ecommerce order in ops.
-// TODO: Link customer to existing customer database.
-// TODO: Link completed order to receipt system.
 export async function createShopOrder(input: ShopOrderInput) {
-  const draft = buildEcommerceOrderDraft({
-    customerName: input.customerName,
-    phone: input.customerPhone,
-    location: input.location,
-    deliveryMethod: input.deliveryMethod,
-    paymentPreference: input.paymentPreference,
-    items: input.items,
-    notes: input.notes,
-  });
-
-  const lineCount = input.items.reduce((sum, item) => sum + item.quantity, 0);
-
   if (isShopOpsApiEnabled()) {
     const response = await fetch("http://127.0.0.1:3000/api/shop/orders", {
       method: "POST",
@@ -126,14 +111,7 @@ export async function createShopOrder(input: ShopOrderInput) {
     }
   }
 
-  return {
-    ok: true,
-    source: "mock" as const,
-    status: "pending_mock" as const,
-    itemCount: lineCount,
-    draft,
-    payload: input,
-  };
+  throw new Error("Unable to create website order.");
 }
 
 // TODO: Replace placeholder quote creation with ops-integrated lead capture.
