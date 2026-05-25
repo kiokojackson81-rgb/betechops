@@ -2,18 +2,56 @@ import { z } from "zod";
 import { SHOP_CATEGORY_DEFINITIONS } from "@/app/shop/shopCatalogConfig";
 import { extractJsonObject, getOpenAiClient, responseText } from "@/lib/ai/openai";
 
+function normalizeAiString(value: unknown) {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value).trim();
+  return "";
+}
+
+function normalizeAiStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .flatMap((entry) => normalizeAiStringArray(entry))
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>)
+      .flatMap(([key, entry]) => {
+        const normalizedEntry = normalizeAiString(entry);
+        if (normalizedEntry) return [`${key}: ${normalizedEntry}`];
+        if (Array.isArray(entry)) {
+          const nested = normalizeAiStringArray(entry);
+          return nested.length ? [`${key}: ${nested.join(", ")}`] : [];
+        }
+        return [key];
+      })
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+
+  const normalized = normalizeAiString(value);
+  if (!normalized) return [];
+
+  return normalized
+    .split(/\r?\n|[;,]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
 const ocrSchema = z.object({
-  titleHint: z.string().default(""),
-  brand: z.string().default(""),
-  shopCategory: z.string().default(""),
-  shopSubcategory: z.string().default(""),
-  visibleSpecs: z.array(z.string()).default([]),
-  keyFeatures: z.array(z.string()).default([]),
-  usageExamples: z.array(z.string()).default([]),
-  accessoryItems: z.array(z.string()).default([]),
-  textToRemove: z.array(z.string()).default([]),
-  ignoredMarketingText: z.array(z.string()).default([]),
-  notes: z.array(z.string()).default([]),
+  titleHint: z.preprocess(normalizeAiString, z.string().default("")),
+  brand: z.preprocess(normalizeAiString, z.string().default("")),
+  shopCategory: z.preprocess(normalizeAiString, z.string().default("")),
+  shopSubcategory: z.preprocess(normalizeAiString, z.string().default("")),
+  visibleSpecs: z.preprocess(normalizeAiStringArray, z.array(z.string()).default([])),
+  keyFeatures: z.preprocess(normalizeAiStringArray, z.array(z.string()).default([])),
+  usageExamples: z.preprocess(normalizeAiStringArray, z.array(z.string()).default([])),
+  accessoryItems: z.preprocess(normalizeAiStringArray, z.array(z.string()).default([])),
+  textToRemove: z.preprocess(normalizeAiStringArray, z.array(z.string()).default([])),
+  ignoredMarketingText: z.preprocess(normalizeAiStringArray, z.array(z.string()).default([])),
+  notes: z.preprocess(normalizeAiStringArray, z.array(z.string()).default([])),
 });
 
 export type ProductOcrResult = z.infer<typeof ocrSchema>;

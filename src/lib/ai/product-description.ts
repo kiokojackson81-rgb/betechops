@@ -2,18 +2,56 @@ import { z } from "zod";
 import { extractJsonObject, getOpenAiClient, responseText } from "@/lib/ai/openai";
 import type { ProductOcrResult } from "@/lib/ai/product-ocr";
 
+function normalizeAiString(value: unknown) {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value).trim();
+  return "";
+}
+
+function normalizeAiStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .flatMap((entry) => normalizeAiStringArray(entry))
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>)
+      .flatMap(([key, entry]) => {
+        const normalizedEntry = normalizeAiString(entry);
+        if (normalizedEntry) return [`${key}: ${normalizedEntry}`];
+        if (Array.isArray(entry)) {
+          const nested = normalizeAiStringArray(entry);
+          return nested.length ? [`${key}: ${nested.join(", ")}`] : [];
+        }
+        return [key];
+      })
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+
+  const normalized = normalizeAiString(value);
+  if (!normalized) return [];
+
+  return normalized
+    .split(/\r?\n|[;,]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
 const descriptionSchema = z.object({
-  productName: z.string().default(""),
-  seoTitle: z.string().default(""),
-  shortDescription: z.string().default(""),
-  ecommerceDescription: z.string().default(""),
-  bulletSpecs: z.array(z.string()).default([]),
-  keyFeatures: z.array(z.string()).default([]),
-  usageExamples: z.array(z.string()).default([]),
-  shopCategory: z.string().default(""),
-  shopSubcategory: z.string().default(""),
-  brand: z.string().default(""),
-  tags: z.array(z.string()).default([]),
+  productName: z.preprocess(normalizeAiString, z.string().default("")),
+  seoTitle: z.preprocess(normalizeAiString, z.string().default("")),
+  shortDescription: z.preprocess(normalizeAiString, z.string().default("")),
+  ecommerceDescription: z.preprocess(normalizeAiString, z.string().default("")),
+  bulletSpecs: z.preprocess(normalizeAiStringArray, z.array(z.string()).default([])),
+  keyFeatures: z.preprocess(normalizeAiStringArray, z.array(z.string()).default([])),
+  usageExamples: z.preprocess(normalizeAiStringArray, z.array(z.string()).default([])),
+  shopCategory: z.preprocess(normalizeAiString, z.string().default("")),
+  shopSubcategory: z.preprocess(normalizeAiString, z.string().default("")),
+  brand: z.preprocess(normalizeAiString, z.string().default("")),
+  tags: z.preprocess(normalizeAiStringArray, z.array(z.string()).default([])),
 });
 
 export type ProductDescriptionResult = z.infer<typeof descriptionSchema>;
