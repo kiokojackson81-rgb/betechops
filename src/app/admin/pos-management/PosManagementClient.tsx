@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { findSimilarProducts } from "@/lib/posProductSimilarity";
 import { showToast } from "@/lib/ui/toast";
+import { getAcceptedImageUploadHint, getAcceptedImageUploadValue } from "@/lib/images/uploadImageFormat";
 import { getShopSubcategoryOptions, SHOP_CATEGORY_DEFINITIONS, SHOP_CATEGORY_OPTIONS, resolveShopSubcategory } from "@/app/shop/shopCatalogConfig";
 
 type PosProduct = {
@@ -333,6 +334,8 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
   const formSectionRef = useRef<HTMLElement | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   const productApiBase = "/api/admin/pos-products";
+  const imageUploadAccept = getAcceptedImageUploadValue();
+  const imageUploadFormats = getAcceptedImageUploadHint();
 
   const loadData = useCallback(async (productQuery = query) => {
     setLoading(true);
@@ -1300,14 +1303,18 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
 
                 <div className="text-sm text-slate-300 md:col-span-2">
                   Images
+                  <div className="mt-1 text-xs leading-5 text-slate-500">
+                    Accepted formats: {imageUploadFormats}. Best product images: `1600 x 1600 px` square for the main image and gallery, bright product-centered crop, no inner whitespace.
+                  </div>
                   <div className="mt-2 grid gap-4 md:grid-cols-2">
                     <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
                       <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Main image</div>
+                      <div className="mt-1 text-[11px] leading-5 text-slate-500">Recommended: `1600 x 1600 px` square. Use JPG, PNG, or WebP for the cleanest storefront result.</div>
                       {draft.mainImageUrl ? <img src={draft.mainImageUrl} alt="Main preview" className="mt-3 h-24 w-full rounded-lg object-cover" /> : <div className="mt-3 flex h-24 items-center justify-center rounded-lg border border-dashed border-slate-700 text-xs text-slate-500">No main image</div>}
                       <input
                         className="mt-3 block w-full text-xs text-slate-300"
                         type="file"
-                        accept="image/*"
+                        accept={imageUploadAccept}
                         disabled={!(capabilities.mainImageUrl || capabilities.shopImageUrl) || uploadingKind !== null}
                         onChange={async (e) => {
                           const file = e.target.files?.[0];
@@ -1327,6 +1334,7 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
                     </div>
                     <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
                       <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Gallery images</div>
+                      <div className="mt-1 text-[11px] leading-5 text-slate-500">Recommended: `1600 x 1600 px` square or `1600 x 1200 px` landscape, tightly cropped around the product.</div>
                       <div className="mt-3 grid grid-cols-2 gap-2">
                         {draft.galleryImageUrls.length ? draft.galleryImageUrls.map((url, index) => (
                           <div key={`${url}-${index}`} className="relative">
@@ -1338,7 +1346,7 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
                       <input
                         className="mt-3 block w-full text-xs text-slate-300"
                         type="file"
-                        accept="image/*"
+                        accept={imageUploadAccept}
                         multiple
                         disabled={!capabilities.galleryImageUrls || uploadingKind !== null}
                         onChange={async (e) => {

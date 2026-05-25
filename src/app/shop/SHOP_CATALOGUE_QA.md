@@ -14,7 +14,10 @@ Use this checklist before enabling customer-facing ops catalogue mode for `/shop
 
 - Product images should support clean `object-contain` presentation.
 - Recommended minimum size: `1200x1200`.
+- Best product image size: `1600 x 1600 px`.
+- Accepted upload formats in admin tools: `JPG`, `PNG`, `WebP`, `AVIF`, `GIF`, `BMP`, `SVG`, `TIFF`, `HEIC`, `HEIF`.
 - Use bright, well-cropped product photos on neutral backgrounds where possible.
+- Keep the product centered and remove inner empty margins before uploading.
 - If no real image is available yet, the shop will fall back to a category placeholder visual.
 
 ## Category image upload standard

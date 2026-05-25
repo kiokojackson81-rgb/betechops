@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useMemo, useState } from "react";
+import { getAcceptedImageUploadHint, getAcceptedImageUploadValue } from "@/lib/images/uploadImageFormat";
 
 type ShopImageSlot = {
   kind: "hero" | "category";
@@ -19,6 +20,8 @@ export default function ShopImagesManager({ initialSlots }: Props) {
   const [slots, setSlots] = useState(initialSlots);
   const [statusByKey, setStatusByKey] = useState<Record<string, string>>({});
   const isRemoteImage = (value: string) => /^https?:\/\//i.test(value);
+  const uploadAccept = getAcceptedImageUploadValue();
+  const uploadFormats = getAcceptedImageUploadHint();
 
   const heroSlot = useMemo(() => slots.find((slot) => slot.kind === "hero") ?? null, [slots]);
   const categorySlots = useMemo(() => slots.filter((slot) => slot.kind === "category"), [slots]);
@@ -73,6 +76,9 @@ export default function ShopImagesManager({ initialSlots }: Props) {
         <p className="mt-2 max-w-3xl text-sm text-slate-400">
           Replace storefront category and home-banner images by uploading a new file. Changes save to the database and reflect on the shop immediately.
         </p>
+        <p className="mt-2 text-xs leading-5 text-slate-500">
+          Accepted upload formats: {uploadFormats}. Best results come from web-friendly JPG, PNG, or WebP files.
+        </p>
       </div>
 
       {heroSlot ? (
@@ -102,9 +108,10 @@ export default function ShopImagesManager({ initialSlots }: Props) {
               <div className="text-sm font-medium text-slate-200">Upload new banner</div>
               <p className="mt-1 text-xs leading-5 text-slate-400">Recommended size: 1500 x 500 px. Best fit: wide horizontal image with a 3:1 ratio.</p>
               <p className="mt-1 text-xs leading-5 text-slate-500">Use a tightly cropped banner with no empty margins so it fills the card cleanly.</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">Accepted formats: {uploadFormats}.</p>
               <input
                 type="file"
-                accept="image/*"
+                accept={uploadAccept}
                 className="mt-4 block w-full rounded-lg border border-white/10 bg-slate-950/60 p-2 text-sm text-slate-200 file:mr-3 file:rounded-md file:border-0 file:bg-emerald-500/15 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-emerald-200"
                 onChange={async (event) => {
                   const file = event.target.files?.[0];
@@ -172,10 +179,11 @@ export default function ShopImagesManager({ initialSlots }: Props) {
               </div>
               <p className="mt-3 text-xs leading-5 text-slate-400">Recommended size: 1600 x 1200 px. Upload as JPG in a 4:3 ratio.</p>
               <p className="mt-1 text-xs leading-5 text-slate-500">Keep the product centered, avoid inner whitespace, and leave only a small safe margin around important items.</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">Accepted formats: {uploadFormats}.</p>
 
               <input
                 type="file"
-                accept="image/*"
+                accept={uploadAccept}
                 className="mt-3 block w-full rounded-lg border border-white/10 bg-slate-950/60 p-2 text-sm text-slate-200 file:mr-3 file:rounded-md file:border-0 file:bg-emerald-500/15 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-emerald-200"
                 onChange={async (event) => {
                   const file = event.target.files?.[0];
