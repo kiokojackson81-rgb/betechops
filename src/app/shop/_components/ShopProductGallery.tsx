@@ -143,16 +143,12 @@ export default function ShopProductGallery({ images, productName, visualType, vi
           </>
         ) : activeItem.src ? (
           <>
-            <div
-              className="absolute inset-0 scale-110 bg-center bg-cover opacity-20 blur-2xl"
-              style={{ backgroundImage: `url("${activeItem.src}")` }}
-            />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_38%),linear-gradient(180deg,#241713_0%,#13161d_100%)]" />
-            <div className={`relative z-10 w-full ${imageShellWidth} overflow-hidden rounded-[24px] bg-[linear-gradient(180deg,#f7efe5_0%,#ffffff_100%)] shadow-[0_22px_48px_rgba(0,0,0,0.22)]`}>
+            <div className="absolute inset-0 bg-[linear-gradient(180deg,#fffaf3_0%,#fffefe_100%)]" />
+            <div className={`relative z-10 w-full ${imageShellWidth} overflow-hidden rounded-[24px] bg-white shadow-[0_16px_34px_rgba(15,23,42,0.08)]`}>
               <img
                 src={activeItem.src}
                 alt={productName}
-                className="h-full max-h-[82vh] w-full object-contain p-2 sm:p-3"
+                className="h-full max-h-[82vh] w-full object-contain p-1.5 sm:p-2"
                 loading="eager"
                 onLoad={(event) => handleImageLoad(activeItem.src, event)}
               />
@@ -183,8 +179,8 @@ export default function ShopProductGallery({ images, productName, visualType, vi
   return (
     <>
       <div className="lg:sticky lg:top-24">
-        <div className="overflow-hidden rounded-[28px] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#10141c_0%,#1b1210_100%)] shadow-[0_20px_44px_rgba(15,23,42,0.14)] sm:rounded-[32px]">
-          <div className="relative overflow-hidden rounded-[26px] border border-white/8 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_26%),linear-gradient(180deg,#17202a_0%,#130d0c_100%)] sm:rounded-[30px]">
+        <div className="overflow-hidden rounded-[28px] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#fff7ef_0%,#fffdf9_100%)] shadow-[0_20px_44px_rgba(15,23,42,0.08)] sm:rounded-[32px]">
+          <div className="relative overflow-hidden rounded-[26px] border border-[#7a0000]/8 bg-[linear-gradient(180deg,#fffaf4_0%,#fffefe_100%)] sm:rounded-[30px]">
             <div className="absolute left-4 top-4 z-20 inline-flex items-center rounded-full border border-white/12 bg-black/26 px-3 py-1 text-[11px] font-semibold text-white/82 shadow-[0_10px_22px_rgba(0,0,0,0.22)] backdrop-blur">
               {activeIndex + 1} / {mediaItems.length}
             </div>
