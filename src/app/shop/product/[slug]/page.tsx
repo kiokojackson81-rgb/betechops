@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BadgeCheck } from "lucide-react";
+import { BadgeCheck, CreditCard, Headphones, MapPin, Truck } from "lucide-react";
 import ShopAnalyticsTracker from "@/app/shop/_components/ShopAnalyticsTracker";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
 import ShopMobileStickyBar from "@/app/shop/_components/ShopMobileStickyBar";
@@ -118,6 +118,34 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
   const visualTitle = buildVisualTitle(product);
   const breadcrumbTitle = buildBreadcrumbTitle(product);
   const tiktokEmbedUrl = getTikTokEmbedUrl(product.tiktokVideoUrl);
+  const supportItems = [
+    {
+      icon: <Truck className="h-4 w-4" />,
+      title: "Nationwide Delivery",
+      copy:
+        "We deliver solar panels, batteries, inverters, pumps, full kits, and accessories countrywide using your preferred courier service. Large systems can also be delivered using our company vehicle.",
+    },
+    {
+      icon: <MapPin className="h-4 w-4" />,
+      title: "Nairobi Shop Pickup",
+      copy:
+        "Collect your order directly from our Nairobi CBD shop once confirmed.",
+      detail: "Pramukh Plaza, 3rd Floor, Shop No. 3\nJunction of Munyu Road & Sheikh Karume Road\nNairobi CBD",
+    },
+    {
+      icon: <CreditCard className="h-4 w-4" />,
+      title: "Secure Payment Options",
+      copy:
+        "Secure payment via M-Pesa. We offer both prepayment and pay-on-delivery options depending on your location and order type.",
+    },
+    {
+      icon: <Headphones className="h-4 w-4" />,
+      title: "WhatsApp Support",
+      copy:
+        "Talk directly with our team on WhatsApp for product recommendations, sizing, delivery assistance, and ordering help.",
+      detail: "+254 722 151 083",
+    },
+  ];
   const detailAccordions = [
     {
       title: "Key specifications",
@@ -196,6 +224,36 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
                       {availabilityMessage}
                     </div>
                     <ShopProductDetailActions product={product} />
+                  </div>
+
+                  <div className="rounded-[24px] border border-[#7a0000]/8 bg-white p-4 sm:rounded-[28px] sm:p-5">
+                    <div className="border-b border-[#7a0000]/8 pb-4">
+                      <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">Delivery & support</div>
+                      <div className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                        We deliver and install anywhere in Kenya, or you can order online and collect from our Nairobi CBD shop.
+                      </div>
+                    </div>
+                    <div className="mt-4 grid gap-3 sm:mt-5 sm:grid-cols-2">
+                      {supportItems.map((item) => (
+                        <div
+                          key={item.title}
+                          className="flex h-full min-h-[13rem] items-start gap-3 rounded-[18px] border border-[#7a0000]/8 bg-[#fcfaf8] px-4 py-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-md sm:px-5 sm:py-5"
+                        >
+                          <span className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#fff1dc] text-[#7a0000]">
+                            {item.icon}
+                          </span>
+                          <div className="max-w-[30ch]">
+                            <div className="text-[15px] font-extrabold text-slate-900">{item.title}</div>
+                            <div className="mt-2 text-sm leading-6 text-slate-600">{item.copy}</div>
+                            {"detail" in item && item.detail ? (
+                              <div className={`mt-3 whitespace-pre-line text-sm leading-6 ${item.title === "WhatsApp Support" ? "font-bold text-slate-900" : "font-medium text-slate-700"}`}>
+                                {item.detail}
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
