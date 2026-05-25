@@ -110,10 +110,10 @@ export default function ShopProductGallery({ images, productName, visualType, vi
     const frameHeight = expanded
       ? "h-[82vh]"
       : activeOrientation === "portrait"
-        ? "h-[18rem] sm:h-[22rem] lg:h-[26rem] xl:h-[29rem]"
+        ? "h-[16rem] sm:h-[19rem] lg:h-[22rem] xl:h-[24rem]"
         : activeOrientation === "square"
-          ? "h-[17rem] sm:h-[20rem] lg:h-[24rem] xl:h-[27rem]"
-          : "h-[15.5rem] sm:h-[18rem] lg:h-[21rem] xl:h-[24rem]";
+          ? "h-[15rem] sm:h-[18rem] lg:h-[20rem] xl:h-[22rem]"
+          : "h-[13.5rem] sm:h-[16rem] lg:h-[18rem] xl:h-[20rem]";
     const imageShellWidth = expanded
       ? "max-w-[92vw]"
       : activeOrientation === "portrait"
@@ -218,7 +218,7 @@ export default function ShopProductGallery({ images, productName, visualType, vi
             ) : null}
             <button
               type="button"
-              className="block w-full p-2.5 sm:p-3.5"
+              className="block w-full p-2 sm:p-3"
               onTouchStart={handleTouchStart}
               onTouchEnd={handleTouchEnd}
               onClick={() => setLightboxOpen(true)}
@@ -227,7 +227,7 @@ export default function ShopProductGallery({ images, productName, visualType, vi
             </button>
           </div>
 
-          <div className="border-t border-white/8 bg-[#f7efe4] px-2.5 py-2.5 sm:px-4 sm:py-3">
+          <div className="border-t border-white/8 bg-[#f7efe4] px-2 py-2 sm:px-3 sm:py-2.5">
             <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {mediaItems.map((item, index) => {
                 const isActive = index === activeIndex;
@@ -236,7 +236,7 @@ export default function ShopProductGallery({ images, productName, visualType, vi
                     key={`${item.type}-${item.src}-${index}`}
                     type="button"
                     onClick={() => setMediaIndex(index)}
-                    className={`group relative h-16 w-16 shrink-0 overflow-hidden rounded-[16px] border bg-white/82 p-1 sm:h-20 sm:w-20 sm:rounded-[18px] sm:p-1.5 transition ${
+                    className={`group relative h-14 w-14 shrink-0 overflow-hidden rounded-[14px] border bg-white/82 p-1 sm:h-16 sm:w-16 sm:rounded-[16px] sm:p-1 transition ${
                       isActive
                         ? "border-[#7a0000]/35 shadow-[0_14px_28px_rgba(122,0,0,0.12)]"
                         : "border-[#7a0000]/10 hover:-translate-y-0.5 hover:border-[#7a0000]/24 hover:shadow-[0_10px_18px_rgba(15,23,42,0.08)]"
