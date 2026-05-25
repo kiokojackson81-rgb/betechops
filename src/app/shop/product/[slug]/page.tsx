@@ -188,8 +188,8 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
 
             <div className="xl:sticky xl:top-24">
               <div className="overflow-hidden rounded-[24px] border border-[#7a0000]/10 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.08)] sm:rounded-[32px]">
-                <div className="border-b border-[#7a0000]/8 bg-[radial-gradient(circle_at_top_right,rgba(242,178,15,0.16),transparent_34%),linear-gradient(180deg,#fffdf8_0%,#fff7ee_100%)] px-4 py-4 sm:px-6 sm:py-6">
-                  <div className="flex flex-wrap items-center gap-2.5">
+                <div className="border-b border-[#7a0000]/8 bg-[radial-gradient(circle_at_top_right,rgba(242,178,15,0.16),transparent_34%),linear-gradient(180deg,#fffdf8_0%,#fff7ee_100%)] px-4 py-3.5 sm:px-6 sm:py-5">
+                  <div className="flex flex-wrap items-center gap-2">
                     <div className={shopStyles.sectionEyebrow}>{product.category}</div>
                     <div className="inline-flex rounded-full border border-[#0f9d58]/14 bg-[#effcf4] px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] text-[#0f9d58]">
                       {stockLabelMap[product.stockStatus]}
@@ -198,16 +198,16 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
                       {availabilityBadge}
                     </div>
                   </div>
-                  <div className="mt-4 max-w-3xl">
-                    <h1 className="max-w-none text-[clamp(1.25rem,2.4vw,2rem)] font-bold leading-[1.1] tracking-[-0.03em] text-slate-950 sm:max-w-[20ch]">
+                  <div className="mt-3">
+                    <h1 className="max-w-[26ch] text-2xl font-extrabold leading-[1.1] tracking-tight text-slate-950 md:text-3xl">
                       {visualTitle}
                     </h1>
                   </div>
                 </div>
 
-                <div className="grid gap-4 px-4 py-4 sm:gap-5 sm:px-6 sm:py-6">
-                  <div className="grid gap-4 rounded-[22px] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#ffffff_0%,#fffaf3_100%)] p-4 shadow-[0_18px_40px_rgba(15,23,42,0.05)] sm:rounded-[28px] sm:p-5">
-                    <div className="flex flex-wrap items-end justify-between gap-3">
+                <div className="grid gap-4 px-4 py-4 sm:gap-5 sm:px-6 sm:py-5">
+                  <div className="grid gap-3 rounded-[22px] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#ffffff_0%,#fffaf3_100%)] p-4 shadow-[0_18px_40px_rgba(15,23,42,0.05)] sm:rounded-[28px] sm:p-5">
+                    <div className="flex flex-wrap items-end justify-between gap-2.5">
                       <div>
                         <div className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">Price</div>
                         <div className="mt-2 flex flex-wrap items-end gap-3">
