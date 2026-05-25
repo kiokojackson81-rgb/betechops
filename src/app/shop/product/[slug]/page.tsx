@@ -123,7 +123,7 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
       icon: <Truck className="h-4 w-4" />,
       title: "Nationwide Delivery",
       copy:
-        "We deliver solar panels, batteries, inverters, pumps, full kits, and accessories countrywide using your preferred courier service. Large systems can also be delivered using our company vehicle.",
+        "We deliver countrywide using your preferred courier, rider, or our company van depending on your location and order size.",
     },
     {
       icon: <MapPin className="h-4 w-4" />,
@@ -242,16 +242,16 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
                       {supportItems.map((item) => (
                         <div
                           key={item.title}
-                          className="flex h-full min-h-[11.25rem] items-start gap-3 rounded-2xl border border-[#7a0000]/8 bg-[#fcfaf8] p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-md md:p-6"
+                          className="flex h-full min-h-[10.25rem] items-start gap-3 rounded-2xl border border-[#7a0000]/8 bg-[#fcfaf8] p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-md md:p-5"
                         >
                           <span className="mt-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#fff1dc] text-[#7a0000]">
                             {item.icon}
                           </span>
                           <div className="max-w-[29ch]">
                             <div className="text-lg font-extrabold text-slate-900">{item.title}</div>
-                            <div className="mt-1.5 text-sm leading-5 text-slate-600 md:text-[15px] md:leading-6">{item.copy}</div>
+                            <div className="mt-1 text-[13px] leading-5 text-slate-600 md:text-[14px] md:leading-5">{item.copy}</div>
                             {"detail" in item && item.detail ? (
-                              <div className={`mt-2 whitespace-pre-line text-sm leading-5 md:text-[15px] md:leading-6 ${item.title === "WhatsApp Support" ? "font-bold text-slate-900" : "font-medium text-slate-700"}`}>
+                              <div className={`mt-1.5 whitespace-pre-line text-[13px] leading-5 md:text-[14px] md:leading-5 ${item.title === "WhatsApp Support" ? "font-bold text-slate-900" : "font-medium text-slate-700"}`}>
                                 {item.detail}
                               </div>
                             ) : null}
