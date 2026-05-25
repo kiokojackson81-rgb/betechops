@@ -206,8 +206,8 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
                 </div>
 
                 <div className="grid gap-4 px-4 py-4 sm:gap-5 sm:px-6 sm:py-5">
-                  <div className="grid gap-3 rounded-[22px] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#ffffff_0%,#fffaf3_100%)] p-4 shadow-[0_18px_40px_rgba(15,23,42,0.05)] sm:rounded-[28px] sm:p-5">
-                    <div className="flex flex-wrap items-end justify-between gap-2.5">
+                  <div className="grid gap-2.5 rounded-[22px] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#ffffff_0%,#fffaf3_100%)] p-4 shadow-[0_18px_40px_rgba(15,23,42,0.05)] sm:rounded-[28px] sm:p-5">
+                    <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:justify-between">
                       <div>
                         <div className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">Price</div>
                         <div className="mt-2 flex flex-wrap items-end gap-3">
@@ -215,9 +215,9 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
                           {product.oldPrice ? <div className="pb-1 text-base font-semibold text-slate-400 line-through">{formatCurrency(product.oldPrice)}</div> : null}
                         </div>
                       </div>
-                      <div className="w-full rounded-2xl border border-amber-400/20 bg-amber-400/6 px-4 py-3 text-left sm:w-auto sm:text-right">
+                      <div className="w-full rounded-2xl border border-amber-400/20 bg-amber-400/8 px-3.5 py-2.5 text-left md:w-auto md:min-w-[15rem]">
                         <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000]">Pickup & delivery</div>
-                        <div className="mt-1 text-sm font-semibold text-slate-800">{checkoutAvailabilityMessage}</div>
+                        <div className="mt-1 text-sm font-semibold leading-5 text-slate-800">{checkoutAvailabilityMessage}</div>
                       </div>
                     </div>
                     <div className="rounded-[22px] border border-[#7a0000]/8 bg-[#fcfaf7] px-4 py-3 text-sm leading-6 text-slate-700">
