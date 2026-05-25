@@ -238,20 +238,20 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
                         We deliver and install anywhere in Kenya, or you can order online and collect from our Nairobi CBD shop.
                       </div>
                     </div>
-                    <div className="mt-4 grid gap-3 sm:mt-5 sm:grid-cols-2">
+                    <div className="mt-4 grid gap-2.5 sm:mt-4 sm:grid-cols-2">
                       {supportItems.map((item) => (
                         <div
                           key={item.title}
-                          className="flex h-full min-h-[13rem] items-start gap-3 rounded-[18px] border border-[#7a0000]/8 bg-[#fcfaf8] px-4 py-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-md sm:px-5 sm:py-5"
+                          className="flex h-full min-h-[11.25rem] items-start gap-3 rounded-2xl border border-[#7a0000]/8 bg-[#fcfaf8] p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-md md:p-6"
                         >
-                          <span className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#fff1dc] text-[#7a0000]">
+                          <span className="mt-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#fff1dc] text-[#7a0000]">
                             {item.icon}
                           </span>
-                          <div className="max-w-[30ch]">
-                            <div className="text-[15px] font-extrabold text-slate-900">{item.title}</div>
-                            <div className="mt-2 text-sm leading-6 text-slate-600">{item.copy}</div>
+                          <div className="max-w-[29ch]">
+                            <div className="text-lg font-extrabold text-slate-900">{item.title}</div>
+                            <div className="mt-1.5 text-sm leading-5 text-slate-600 md:text-[15px] md:leading-6">{item.copy}</div>
                             {"detail" in item && item.detail ? (
-                              <div className={`mt-3 whitespace-pre-line text-sm leading-6 ${item.title === "WhatsApp Support" ? "font-bold text-slate-900" : "font-medium text-slate-700"}`}>
+                              <div className={`mt-2 whitespace-pre-line text-sm leading-5 md:text-[15px] md:leading-6 ${item.title === "WhatsApp Support" ? "font-bold text-slate-900" : "font-medium text-slate-700"}`}>
                                 {item.detail}
                               </div>
                             ) : null}
