@@ -14,6 +14,7 @@ type ShopProductGalleryProps = {
   productName: string;
   visualType: ShopProductVisualType;
   videoEmbedUrl?: string | null;
+  videoSourceUrl?: string | null;
 };
 
 type ImageMeta = {
@@ -39,7 +40,7 @@ function getTouchDelta(startX: number | null, endX: number) {
   return endX - startX;
 }
 
-export default function ShopProductGallery({ images, productName, visualType, videoEmbedUrl }: ShopProductGalleryProps) {
+export default function ShopProductGallery({ images, productName, visualType, videoEmbedUrl, videoSourceUrl }: ShopProductGalleryProps) {
   const mediaItems = useMemo<GalleryMediaItem[]>(() => {
     const baseImages = (images.length ? images : [""]).map((src) => ({ type: "image" as const, src }));
     if (!videoEmbedUrl) return baseImages;
@@ -139,6 +140,18 @@ export default function ShopProductGallery({ images, productName, visualType, vi
                   allowFullScreen
                 />
               </div>
+              {videoSourceUrl ? (
+                <div className="border-t border-white/10 bg-black px-3 py-2 text-center">
+                  <a
+                    href={videoSourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs font-semibold text-white/88 underline underline-offset-4 hover:text-white"
+                  >
+                    Open TikTok video directly
+                  </a>
+                </div>
+              ) : null}
             </div>
           </>
         ) : activeItem.src ? (

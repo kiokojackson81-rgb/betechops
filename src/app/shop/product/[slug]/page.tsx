@@ -131,7 +131,7 @@ function extractTikTokVideoId(value: string | null | undefined) {
 function getTikTokEmbedUrl(value: string | null | undefined) {
   const videoId = extractTikTokVideoId(value);
   return videoId
-    ? `https://www.tiktok.com/player/v1/${videoId}?controls=1&progress_bar=1&play_button=1&volume_control=1&fullscreen_button=1&timestamp=1&description=0&music_info=0&rel=0&native_context_menu=1`
+    ? `https://www.tiktok.com/embed/v3/${videoId}`
     : null;
 }
 
@@ -263,7 +263,13 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
           />
 
           <div className="mt-4 grid gap-4 sm:gap-5 xl:grid-cols-[minmax(0,0.96fr)_minmax(0,1.04fr)] xl:items-start">
-            <ShopProductGallery images={galleryImages} productName={product.name} visualType={product.visualType} videoEmbedUrl={tiktokEmbedUrl} />
+            <ShopProductGallery
+              images={galleryImages}
+              productName={product.name}
+              visualType={product.visualType}
+              videoEmbedUrl={tiktokEmbedUrl}
+              videoSourceUrl={product.tiktokVideoUrl}
+            />
 
             <div className="xl:sticky xl:top-24">
               <div className="overflow-hidden rounded-[24px] border border-[#7a0000]/10 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.08)] sm:rounded-[32px]">
@@ -278,7 +284,7 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
                     </div>
                   </div>
                   <div className="mt-4 max-w-3xl">
-                    <h1 className="max-w-none text-[clamp(1.75rem,8vw,3.35rem)] font-bold leading-[1.02] tracking-[-0.03em] text-slate-950 sm:max-w-[16ch]">
+                    <h1 className="max-w-none text-[clamp(1.4rem,4vw,2.55rem)] font-bold leading-[1.06] tracking-[-0.03em] text-slate-950 sm:max-w-[18ch]">
                       {visualTitle}
                     </h1>
                   </div>
