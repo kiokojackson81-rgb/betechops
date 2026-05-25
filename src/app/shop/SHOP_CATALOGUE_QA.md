@@ -20,6 +20,15 @@ Use this checklist before enabling customer-facing ops catalogue mode for `/shop
 - Keep the product centered and remove inner empty margins before uploading.
 - If no real image is available yet, the shop will fall back to a category placeholder visual.
 
+## AI product cleanup standard
+
+- Supplier poster input can include prices, phone numbers, promo stickers, and clutter.
+- AI cleanup should output a clean storefront image on a white background without changing the real hardware shape.
+- Recommended AI storefront output: `1600 x 1200 px` `JPG`
+- Recommended transparent output: `1024 x 1024 px` `PNG`
+- Recommended square thumbnail: `600 x 600 px`
+- Use `AI Clean Image` before publishing when the original supplier image contains heavy marketing text.
+
 ## Category image upload standard
 
 - `1600 x 1200 px`
