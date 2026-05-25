@@ -956,32 +956,6 @@ model Product {
   updatedAt                  DateTime    @updatedAt
   orders                     OrderItem[]
   websiteOrderItems          WebsiteOrderItem[]
-  aiJobs                     ProductAiJob[]
-}
-
-model ProductAiJob {
-  id                 String   @id @default(cuid())
-  productId          String?
-  kind               String
-  status             String   @default("pending")
-  sourceImageUrl     String?
-  sourceImageKey     String?
-  createdById        String?
-  options            Json?
-  analysis           Json?
-  generatedDraft     Json?
-  cleanImageUrl      String?
-  transparentImageUrl String?
-  thumbnailUrl       String?
-  bannerImageUrl     String?
-  error              String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  product            Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
-
-  @@index([status, createdAt])
-  @@index([kind, createdAt])
-  @@index([productId, createdAt])
 }
 
 model Order {

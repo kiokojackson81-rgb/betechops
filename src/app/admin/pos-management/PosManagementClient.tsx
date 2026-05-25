@@ -126,54 +126,6 @@ type ProductDraft = {
   shopBrand: string;
 };
 
-type ProductAiJobRecord = {
-  id: string;
-  kind: string;
-  status: string;
-  sourceImageUrl?: string | null;
-  cleanImageUrl?: string | null;
-  transparentImageUrl?: string | null;
-  thumbnailUrl?: string | null;
-  bannerImageUrl?: string | null;
-  error?: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type ProductAiResult = {
-  analysis?: {
-    extracted?: {
-      titleHint?: string;
-      brand?: string;
-      shopCategory?: string;
-      shopSubcategory?: string;
-      visibleSpecs?: string[];
-      keyFeatures?: string[];
-      usageExamples?: string[];
-      textToRemove?: string[];
-      ignoredMarketingText?: string[];
-      notes?: string[];
-    };
-    generated?: {
-      productName?: string;
-      shortDescription?: string;
-      ecommerceDescription?: string;
-      bulletSpecs?: string[];
-      keyFeatures?: string[];
-      tags?: string[];
-    };
-  };
-  patch?: Partial<ProductDraft>;
-  outputs?: {
-    sourceImageUrl?: string;
-    sourceImageKey?: string;
-    cleanImageUrl?: string;
-    transparentImageUrl?: string;
-    thumbnailUrl?: string;
-    bannerImageUrl?: string;
-  };
-};
-
 type PosManagementClientProps = {
   mode?: "admin" | "product-desk";
 };
@@ -368,15 +320,6 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
   const [saving, setSaving] = useState(false);
   const [uploadingKind, setUploadingKind] = useState<"main" | "gallery" | "brand" | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
-  const [productAiBusy, setProductAiBusy] = useState<"clean-image" | "generate-description" | "detect-category" | "create-product-draft" | null>(null);
-  const [productAiJob, setProductAiJob] = useState<ProductAiJobRecord | null>(null);
-  const [productAiResult, setProductAiResult] = useState<ProductAiResult | null>(null);
-  const [aiCleanupOptions, setAiCleanupOptions] = useState({
-    transparentBackground: true,
-    removeAllText: true,
-    keepSupplierLogo: false,
-    generateBanner: true,
-  });
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [approvalBusyId, setApprovalBusyId] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState<"activate" | "archive" | "delete" | null>(null);
@@ -391,7 +334,6 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
   const formSectionRef = useRef<HTMLElement | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   const productApiBase = "/api/admin/pos-products";
-  const productAiApiBase = "/api/admin/product-ai";
   const imageUploadAccept = getAcceptedImageUploadValue();
   const imageUploadFormats = getAcceptedImageUploadHint();
 
@@ -524,8 +466,6 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
 
   const openCreateEditor = useCallback(() => {
     setDraft(createDraftDefaults(mode));
-    setProductAiJob(null);
-    setProductAiResult(null);
     setEditorOpen(true);
     window.requestAnimationFrame(() => {
       formSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -654,8 +594,6 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
   };
 
   const startEdit = (product: PosProduct) => {
-    setProductAiJob(null);
-    setProductAiResult(null);
     setDraft({
       id: product.id,
       sku: product.sku,
@@ -699,8 +637,6 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
   };
 
   const startCommissionEdit = (product: PosProduct) => {
-    setProductAiJob(null);
-    setProductAiResult(null);
     setDraft({
       id: product.id,
       sku: product.sku,
@@ -795,58 +731,6 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
       setAiBusy(false);
     }
   };
-
-  const applyAiPatch = useCallback((patch: Partial<ProductDraft> | null | undefined) => {
-    if (!patch) return;
-    setDraft((current) => ({
-      ...current,
-      ...patch,
-      galleryImageUrls: Array.isArray(patch.galleryImageUrls)
-        ? Array.from(new Set([...patch.galleryImageUrls.filter(Boolean), ...current.galleryImageUrls.filter(Boolean)]))
-        : current.galleryImageUrls,
-    }));
-  }, []);
-
-  const runProductAi = useCallback(async (action: "clean-image" | "generate-description" | "detect-category" | "create-product-draft") => {
-    const sourceImage = draft.mainImageUrl || draft.shopImageUrl || draft.galleryImageUrls[0] || "";
-    if (!sourceImage && (action === "clean-image" || action === "generate-description" || action === "detect-category" || action === "create-product-draft")) {
-      showToast("Upload a supplier poster or product image first", "error");
-      return;
-    }
-
-    setProductAiBusy(action);
-    try {
-      const res = await fetch(productAiApiBase, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action,
-          productId: draft.id || null,
-          imageUrl: sourceImage || null,
-          draft,
-          options: aiCleanupOptions,
-        }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(getApiErrorMessage(json, "AI product processing failed"));
-
-      setProductAiJob((json?.job ?? null) as ProductAiJobRecord | null);
-      setProductAiResult((json?.result ?? null) as ProductAiResult | null);
-      applyAiPatch((json?.result?.patch ?? null) as Partial<ProductDraft> | null);
-
-      if (action === "clean-image" || action === "create-product-draft") {
-        showToast("AI cleanup finished. Review the generated assets before saving.", "success");
-      } else if (action === "detect-category") {
-        showToast("AI category suggestion applied", "success");
-      } else {
-        showToast("AI product draft updated", "success");
-      }
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "AI product processing failed", "error");
-    } finally {
-      setProductAiBusy(null);
-    }
-  }, [aiCleanupOptions, applyAiPatch, draft, productAiApiBase]);
 
   const updateApproval = async (id: string, action: "approve" | "reject" | "revoke") => {
     setApprovalBusyId(id);
@@ -1084,169 +968,6 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
                     : ""}
                 </span>
               ) : null}
-            </div>
-            <div className={`mt-3 rounded-2xl border border-cyan-400/20 bg-cyan-500/5 ${isProductDeskMode ? "px-3 py-3" : "px-4 py-4"}`}>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200">AI Product Studio</div>
-                  <div className="mt-1 max-w-3xl text-xs leading-5 text-slate-400">
-                    Upload a supplier poster, then clean the image, remove price text, detect category, and generate shop-ready copy from the visible facts.
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="rounded-full border border-cyan-400/30 px-3 py-1.5 text-xs font-semibold text-cyan-100 hover:bg-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-60"
-                    onClick={() => void runProductAi("clean-image")}
-                    disabled={productAiBusy !== null}
-                  >
-                    {productAiBusy === "clean-image" ? "Cleaning..." : "AI Clean Image"}
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
-                    onClick={() => void runProductAi("generate-description")}
-                    disabled={productAiBusy !== null}
-                  >
-                    {productAiBusy === "generate-description" ? "Generating..." : "AI Generate Description"}
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
-                    onClick={() => void runProductAi("detect-category")}
-                    disabled={productAiBusy !== null}
-                  >
-                    {productAiBusy === "detect-category" ? "Detecting..." : "AI Detect Category"}
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-full border border-emerald-400/30 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-60"
-                    onClick={() => void runProductAi("create-product-draft")}
-                    disabled={productAiBusy !== null}
-                  >
-                    {productAiBusy === "create-product-draft" ? "Drafting..." : "AI Create Product Draft"}
-                  </button>
-                </div>
-              </div>
-              <div className={`mt-3 grid gap-2 ${isProductDeskMode ? "sm:grid-cols-2" : "sm:grid-cols-4"}`}>
-                <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-xs text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={aiCleanupOptions.transparentBackground}
-                    onChange={(e) => setAiCleanupOptions((current) => ({ ...current, transparentBackground: e.target.checked }))}
-                  />
-                  Use transparent background
-                </label>
-                <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-xs text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={aiCleanupOptions.removeAllText}
-                    onChange={(e) => setAiCleanupOptions((current) => ({ ...current, removeAllText: e.target.checked }))}
-                  />
-                  Remove all text
-                </label>
-                <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-xs text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={aiCleanupOptions.keepSupplierLogo}
-                    onChange={(e) => setAiCleanupOptions((current) => ({ ...current, keepSupplierLogo: e.target.checked }))}
-                  />
-                  Keep supplier logo
-                </label>
-                <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-xs text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={aiCleanupOptions.generateBanner}
-                    onChange={(e) => setAiCleanupOptions((current) => ({ ...current, generateBanner: e.target.checked }))}
-                  />
-                  Generate ecommerce banner
-                </label>
-              </div>
-              <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Before</div>
-                    <button
-                      type="button"
-                      className="text-xs font-semibold text-slate-400 hover:text-white"
-                      onClick={() => {
-                        const original = productAiResult?.outputs?.sourceImageUrl || productAiJob?.sourceImageUrl || "";
-                        if (!original) return;
-                        setDraft((current) => ({ ...current, mainImageUrl: original, shopImageUrl: original }));
-                      }}
-                    >
-                      Restore original
-                    </button>
-                  </div>
-                  {productAiResult?.outputs?.sourceImageUrl || draft.mainImageUrl ? (
-                    <img
-                      src={productAiResult?.outputs?.sourceImageUrl || draft.mainImageUrl}
-                      alt="Original supplier poster"
-                      className="mt-3 h-40 w-full rounded-xl object-cover"
-                    />
-                  ) : (
-                    <div className="mt-3 flex h-40 items-center justify-center rounded-xl border border-dashed border-slate-700 text-xs text-slate-500">
-                      Upload a supplier poster to preview the original image.
-                    </div>
-                  )}
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">After</div>
-                    <button
-                      type="button"
-                      className="text-xs font-semibold text-cyan-200 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                      onClick={() => void runProductAi("clean-image")}
-                      disabled={productAiBusy !== null}
-                    >
-                      Regenerate
-                    </button>
-                  </div>
-                  {productAiResult?.outputs?.cleanImageUrl || productAiJob?.cleanImageUrl ? (
-                    <img
-                      src={productAiResult?.outputs?.cleanImageUrl || productAiJob?.cleanImageUrl || ""}
-                      alt="AI cleaned product image"
-                      className="mt-3 h-40 w-full rounded-xl object-cover"
-                    />
-                  ) : (
-                    <div className="mt-3 flex h-40 items-center justify-center rounded-xl border border-dashed border-slate-700 text-xs text-slate-500">
-                      AI-cleaned product image will appear here.
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="mt-3 grid gap-3 lg:grid-cols-[1.35fr_0.65fr]">
-                <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-3">
-                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Detected facts</div>
-                  <div className="mt-2 grid gap-3 md:grid-cols-2">
-                    <div>
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Specs</div>
-                      <div className="mt-2 space-y-1 text-xs text-slate-300">
-                        {(productAiResult?.analysis?.extracted?.visibleSpecs || []).length ? (productAiResult?.analysis?.extracted?.visibleSpecs || []).map((item, index) => (
-                          <div key={`${item}-${index}`}>• {item}</div>
-                        )) : <div className="text-slate-500">No extracted specs yet.</div>}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Text removed</div>
-                      <div className="mt-2 space-y-1 text-xs text-slate-300">
-                        {(productAiResult?.analysis?.extracted?.textToRemove || []).length ? (productAiResult?.analysis?.extracted?.textToRemove || []).map((item, index) => (
-                          <div key={`${item}-${index}`}>• {item}</div>
-                        )) : <div className="text-slate-500">No removable poster text detected yet.</div>}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-3">
-                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Output guide</div>
-                  <div className="mt-2 space-y-2 text-xs leading-5 text-slate-300">
-                    <div>Main storefront image: <span className="font-semibold text-white">1600 x 1200 px</span></div>
-                    <div>Transparent PNG: <span className="font-semibold text-white">1024 x 1024 px</span></div>
-                    <div>Square thumbnail: <span className="font-semibold text-white">600 x 600 px</span></div>
-                    <div>Source posters are best when uploaded with the full product visible and no crop cutoffs.</div>
-                  </div>
-                </div>
-              </div>
             </div>
             <div className={`mt-5 grid ${isProductDeskMode ? "gap-3 md:grid-cols-2" : "gap-4 md:grid-cols-2"}`}>
               <div className="text-sm text-slate-300">
