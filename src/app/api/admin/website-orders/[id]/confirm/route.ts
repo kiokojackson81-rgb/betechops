@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { WebsiteOrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireWebsiteOrdersAdmin, serializeWebsiteOrder, websiteOrderAdminInclude } from "@/lib/websiteOrders";
+import { ensureWebsiteOrdersSchema, requireWebsiteOrdersAdmin, serializeWebsiteOrder, websiteOrderAdminInclude } from "@/lib/websiteOrders";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +10,7 @@ export async function POST(_: NextRequest, context: { params: Promise<any> }) {
   if (!guard.ok) {
     return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
   }
+  await ensureWebsiteOrdersSchema();
 
   const { id } = (await context.params) as { id: string };
   const existing = await prisma.websiteOrder.findUnique({ where: { id }, select: { id: true, status: true } });

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import {
   buildWebsiteOrderRef,
   deriveWebsiteOrderType,
+  ensureWebsiteOrdersSchema,
   serializeWebsiteOrder,
   websiteOrderAdminInclude,
   websiteOrderCreateSchema,
@@ -10,6 +11,12 @@ import {
 import { getShopProducts } from "@/app/shop/shopApi";
 
 export const dynamic = "force-dynamic";
+
+function buildEntityId() {
+  return typeof crypto?.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `btweb_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
 
 async function buildUniqueOrderRef() {
   for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -29,6 +36,7 @@ export async function POST(request: Request) {
   }
 
   const data = parsed.data;
+  await ensureWebsiteOrdersSchema();
   const products = await getShopProducts();
   const productMap = new Map(products.map((product) => [product.id, product]));
   const missingProduct = data.items.find((item) => !productMap.has(item.productId));
@@ -57,6 +65,7 @@ export async function POST(request: Request) {
 
   const created = await prisma.websiteOrder.create({
     data: {
+      id: buildEntityId(),
       orderRef,
       customerName: data.customerName.trim(),
       customerPhone: data.customerPhone.trim(),
@@ -75,6 +84,7 @@ export async function POST(request: Request) {
       },
       items: {
         create: items.map((item) => ({
+          id: buildEntityId(),
           productId: item.productId,
           productName: item.productName,
           quantity: item.quantity,

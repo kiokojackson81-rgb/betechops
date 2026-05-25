@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import {
   buildWebsiteOrderReceiptPrefill,
+  ensureWebsiteOrdersSchema,
   isWebsiteOrderPod,
   requireWebsiteOrdersAdmin,
   serializeWebsiteOrder,
@@ -25,6 +26,7 @@ export async function POST(request: NextRequest, context: { params: Promise<any>
   if (!guard.ok) {
     return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
   }
+  await ensureWebsiteOrdersSchema();
 
   const { id } = (await context.params) as { id: string };
   const body = await request.json().catch(() => ({}));

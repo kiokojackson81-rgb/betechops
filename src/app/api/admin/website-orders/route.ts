@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { WebsiteOrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
+  ensureWebsiteOrdersSchema,
   requireWebsiteOrdersAdmin,
   serializeWebsiteOrder,
   WEBSITE_ORDER_ACTIVE_STATUSES,
@@ -15,6 +16,7 @@ export async function GET(request: NextRequest) {
   if (!guard.ok) {
     return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
   }
+  await ensureWebsiteOrdersSchema();
 
   const searchParams = request.nextUrl.searchParams;
   const statusParam = (searchParams.get("status") || "PENDING").toUpperCase();

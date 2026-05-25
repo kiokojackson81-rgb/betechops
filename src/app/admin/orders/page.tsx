@@ -3,6 +3,7 @@ import OrdersLiveData from './_components/OrdersLiveData';
 import Link from 'next/link';
 import { absUrl, withParams } from '@/lib/abs-url';
 import { prisma } from '@/lib/prisma';
+import { ensureWebsiteOrdersSchema } from '@/lib/websiteOrders';
 import AutoRefresh from '@/app/_components/AutoRefresh';
 import OrdersSSE from './_components/OrdersSSE';
 import SyncNowButton from './_components/SyncNowButton';
@@ -122,6 +123,7 @@ function normalizeApiOrder(raw: Record<string, unknown>): OrdersRow {
 
 export default async function OrdersPage(props: unknown) {
   const headerStore = await headers();
+  await ensureWebsiteOrdersSchema();
   const searchParams: Record<string, string | string[] | undefined> = ((props as { searchParams?: Record<string, string | string[] | undefined> })?.searchParams) || {};
   const toStr = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
@@ -222,6 +224,15 @@ export default async function OrdersPage(props: unknown) {
     }
   })();
 
+  const websitePendingCountPromise = (async () => {
+    try {
+      return await prisma.websiteOrder.count({ where: { status: "PENDING" } });
+    } catch (error) {
+      console.error("[orders.page] website pending count query failed", error);
+      return null as number | null;
+    }
+  })();
+
   let syncedShops: Array<{ id: string; name: string; account: { label: string | null } | null }> = [];
   let syncBootstrapError: unknown = null;
   try {
@@ -239,6 +250,7 @@ export default async function OrdersPage(props: unknown) {
   }
 
   const legacyShops = await legacyShopsPromise;
+  const websitePendingCount = await websitePendingCountPromise;
 
   const shopOptions = [
     ...legacyShops.map((shop) => ({ id: shop.id, name: shop.name })),
@@ -333,7 +345,7 @@ export default async function OrdersPage(props: unknown) {
             className="px-3 py-1 rounded border border-emerald-400/20 bg-emerald-500/10 hover:bg-emerald-500/20 text-sm text-emerald-300"
             title="Review pending website orders before routing them into the receipts desk"
           >
-            Pending Website Orders
+            Pending Website Orders{typeof websitePendingCount === "number" ? ` (${websitePendingCount})` : ""}
           </Link>
           <SyncNowButton />
           <OrdersSSE

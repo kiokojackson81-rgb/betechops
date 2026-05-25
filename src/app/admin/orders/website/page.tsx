@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import WebsiteOrdersAdminClient from "@/app/admin/orders/website/WebsiteOrdersAdminClient";
-import { serializeWebsiteOrder, websiteOrderAdminInclude } from "@/lib/websiteOrders";
+import { ensureWebsiteOrdersSchema, serializeWebsiteOrder, websiteOrderAdminInclude } from "@/lib/websiteOrders";
 
 export const dynamic = "force-dynamic";
 
 export default async function WebsiteOrdersPage() {
+  await ensureWebsiteOrdersSchema();
   const orders = await prisma.websiteOrder.findMany({
     include: websiteOrderAdminInclude,
     orderBy: [{ createdAt: "desc" }],

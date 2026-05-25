@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { WebsiteOrderStatus } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { requireWebsiteOrdersAdmin, serializeWebsiteOrder, websiteOrderAdminInclude } from "@/lib/websiteOrders";
+import { ensureWebsiteOrdersSchema, requireWebsiteOrdersAdmin, serializeWebsiteOrder, websiteOrderAdminInclude } from "@/lib/websiteOrders";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +15,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<any
   if (!guard.ok) {
     return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
   }
+  await ensureWebsiteOrdersSchema();
 
   const { id } = (await context.params) as { id: string };
   const body = await request.json().catch(() => null);
