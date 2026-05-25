@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BadgeCheck, CreditCard, Headphones, MapPin, Truck } from "lucide-react";
+import { BadgeCheck } from "lucide-react";
 import ShopAnalyticsTracker from "@/app/shop/_components/ShopAnalyticsTracker";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
 import ShopMobileStickyBar from "@/app/shop/_components/ShopMobileStickyBar";
@@ -62,61 +62,6 @@ function buildBreadcrumbTitle(product: ShopProduct) {
   return toDisplayCase(segments.slice(0, 2).join(", ") || normalizedName, product.brand);
 }
 
-function formatSummarySegment(segment: string, brand?: string) {
-  let cleaned = normalizeProductText(segment);
-  cleaned = cleaned.replace(/\bplus installation accessories\b/gi, "").trim();
-  cleaned = cleaned.replace(/\binstallation accessories\b/gi, "Installation Accessories Included");
-  cleaned = cleaned.replace(/\b(\d+)\s+(\d+(?:\.\d+)?)w\b/gi, "$1 x $2W");
-  cleaned = cleaned.replace(/\b(\d+(?:\.\d+)?)kw\s*\(\s*([^)]+)\s*\)/gi, (_, capacity: string, detail: string) => {
-    const formattedDetail = detail
-      .split("/")
-      .map((part) => formatUnitValue(part.trim()))
-      .join(" / ");
-    return `${capacity}KWh (${formattedDetail})`;
-  });
-  cleaned = formatUnitValue(cleaned);
-  cleaned = cleaned.replace(/\bsolar panel\b/gi, (match, offset, fullText) => (/^\s*\d+\s*x\s/i.test(fullText) ? "Solar Panels" : match));
-  return toDisplayCase(cleaned, brand);
-}
-
-function buildSpecSummary(product: ShopProduct) {
-  const normalizedName = normalizeProductText(product.name);
-  const commaSegments = normalizedName
-    .split(",")
-    .map((segment) => segment.trim())
-    .filter(Boolean);
-
-  const summary: string[] = [];
-
-  for (const segment of commaSegments.slice(1)) {
-    const includesAccessories = /installation accessories/i.test(segment);
-    const cleanedSegment = formatSummarySegment(segment, product.brand);
-    if (cleanedSegment && !summary.includes(cleanedSegment)) summary.push(cleanedSegment);
-    if (includesAccessories && !summary.includes("Installation Accessories Included")) {
-      summary.push("Installation Accessories Included");
-    }
-    if (summary.length >= 4) break;
-  }
-
-  if (!summary.length) {
-    for (const spec of product.specs.slice(0, 4)) {
-      const cleanedSpec = formatSummarySegment(spec, product.brand);
-      if (cleanedSpec && !summary.includes(cleanedSpec)) summary.push(cleanedSpec);
-    }
-  }
-
-  return summary.slice(0, 4);
-}
-
-function buildValueProposition(product: ShopProduct) {
-  const category = product.category.toLowerCase();
-  if (category.includes("kit")) return "Complete solar backup solution for homes, biashara, farms, and offices.";
-  if (category.includes("panel")) return "High-efficiency solar generation built for reliable home, biashara, and project installs.";
-  if (category.includes("batter")) return "Reliable energy storage designed for clean backup, longer runtime, and daily solar cycling.";
-  if (category.includes("inverter")) return "Smart power conversion for stable solar backup, grid support, and everyday appliance use.";
-  return "Professional solar product support, clear pricing, and nationwide delivery from Betech Solar.";
-}
-
 function extractTikTokVideoId(value: string | null | undefined) {
   const normalized = String(value || "").trim();
   if (!normalized) return null;
@@ -172,18 +117,10 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
   const galleryImages = product.galleryImages?.length ? product.galleryImages : [product.image];
   const visualTitle = buildVisualTitle(product);
   const breadcrumbTitle = buildBreadcrumbTitle(product);
-  const specSummary = buildSpecSummary(product);
-  const valueProposition = buildValueProposition(product);
   const tiktokEmbedUrl = getTikTokEmbedUrl(product.tiktokVideoUrl);
-  const supportItems = [
-    { icon: <Truck className="h-4 w-4" />, title: "Nationwide Courier", copy: "Panels, batteries, kits, and accessories delivered across Kenya." },
-    { icon: <MapPin className="h-4 w-4" />, title: "Nairobi Pickup", copy: "Collect from our Pramukh Plaza shop once your order is confirmed." },
-    { icon: <CreditCard className="h-4 w-4" />, title: "Secure M-Pesa Payment", copy: "Our team confirms stock, transport, and payment steps before fulfilment." },
-    { icon: <Headphones className="h-4 w-4" />, title: "WhatsApp Support", copy: "Talk directly to Betech Solar for sizing, delivery, and ordering help." },
-  ];
   const detailAccordions = [
     {
-      title: "Full specifications",
+      title: "Key specifications",
       content: (
         <ul className="grid gap-3 text-sm leading-6 text-slate-600">
           {product.specs.map((spec) => (
@@ -193,48 +130,6 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
             </li>
           ))}
         </ul>
-      ),
-    },
-    {
-      title: "Delivery, payment & support",
-      content: (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {supportItems.map((item) => (
-            <div key={item.title} className="rounded-[20px] border border-[#7a0000]/8 bg-[#fcfaf8] px-4 py-3">
-              <div className="flex items-start gap-3">
-                <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#fff1dc] text-[#7a0000]">
-                  {item.icon}
-                </span>
-                <div>
-                  <div className="text-sm font-bold text-slate-900">{item.title}</div>
-                  <div className="mt-1 text-sm leading-5 text-slate-600">{item.copy}</div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      ),
-    },
-    {
-      title: "Product details",
-      content: (
-        <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-          <div className="text-sm leading-7 text-slate-600">
-            {product.fullDescription || `${visualTitle} comes with Betech Solar support for selection, ordering, and delivery planning.`}
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-[18px] border border-[#7a0000]/8 bg-[#fcfaf8] px-4 py-3">
-              <div className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000]">Warranty</div>
-              <div className="mt-2 text-sm font-semibold text-slate-900">{product.warranty}</div>
-              {product.warrantyNotes ? <div className="mt-1 text-sm leading-5 text-slate-600">{product.warrantyNotes}</div> : null}
-            </div>
-            <div className="rounded-[18px] border border-[#7a0000]/8 bg-[#fcfaf8] px-4 py-3">
-              <div className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000]">Availability</div>
-              <div className="mt-2 text-sm font-semibold text-slate-900">{availabilityBadge}</div>
-              <div className="mt-1 text-sm leading-5 text-slate-600">{availabilityMessage}</div>
-            </div>
-          </div>
-        </div>
       ),
     },
   ];
@@ -276,21 +171,10 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
                     </div>
                   </div>
                   <div className="mt-4 max-w-3xl">
-                    <h1 className="max-w-none text-[clamp(1.4rem,4vw,2.55rem)] font-bold leading-[1.06] tracking-[-0.03em] text-slate-950 sm:max-w-[18ch]">
+                    <h1 className="max-w-none text-[clamp(1.25rem,2.4vw,2rem)] font-bold leading-[1.1] tracking-[-0.03em] text-slate-950 sm:max-w-[20ch]">
                       {visualTitle}
                     </h1>
                   </div>
-                  <div className="mt-3 max-w-2xl text-[14px] leading-5 text-slate-600 sm:text-[15px] sm:leading-6">{valueProposition}</div>
-                  {specSummary.length ? (
-                    <div className="mt-4 grid gap-2 sm:mt-5 sm:grid-cols-2">
-                      {specSummary.map((spec) => (
-                        <div key={spec} className="flex items-start gap-2.5 rounded-[16px] border border-white/90 bg-white/88 px-3 py-2.5 text-[13px] font-medium text-slate-700 shadow-[0_10px_24px_rgba(15,23,42,0.04)] sm:rounded-[18px] sm:px-3.5 sm:py-3 sm:text-sm">
-                          <span className="mt-[0.42rem] h-1.5 w-1.5 shrink-0 rounded-full bg-[#7a0000]/55" />
-                          <span>{spec}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
                 </div>
 
                 <div className="grid gap-4 px-4 py-4 sm:gap-5 sm:px-6 sm:py-6">
@@ -313,56 +197,12 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
                     </div>
                     <ShopProductDetailActions product={product} />
                   </div>
-
-                  <div className="rounded-[28px] border border-[#7a0000]/8 bg-white">
-                    <div className="border-b border-[#7a0000]/8 px-5 py-4">
-                      <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">Delivery & support</div>
-                      <div className="mt-2 text-sm text-slate-600">Everything needed to order, pay, collect, or get guidance without hunting across separate cards.</div>
-                    </div>
-                    <div className="grid gap-3 px-5 py-4 sm:grid-cols-2">
-                      {supportItems.map((item) => (
-                        <div key={item.title} className="rounded-[16px] border border-[#7a0000]/8 bg-[#fcfaf8] px-3.5 py-3 sm:rounded-[18px] sm:px-4">
-                          <div className="flex items-start gap-3">
-                            <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#fff1dc] text-[#7a0000]">
-                              {item.icon}
-                            </span>
-                            <div>
-                              <div className="text-sm font-bold text-slate-900">{item.title}</div>
-                              <div className="mt-1 text-sm leading-5 text-slate-600">{item.copy}</div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
           </div>
 
           <div className="mt-5 grid gap-5">
-            <div className="overflow-hidden rounded-[22px] border border-[#7a0000]/10 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.06)] sm:rounded-[30px]">
-              <div className="grid gap-0 lg:grid-cols-[1.3fr_0.7fr]">
-                <div className="border-b border-[#7a0000]/8 px-4 py-4 sm:px-6 sm:py-5 lg:border-b-0 lg:border-r">
-                  <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">Marketplace product summary</div>
-                  <h2 className="mt-3 text-[clamp(1.4rem,2.2vw,2rem)] font-bold tracking-[-0.03em] text-slate-950">{visualTitle}</h2>
-                  <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600">{product.fullDescription || valueProposition}</p>
-                </div>
-                <div className="grid gap-3 bg-[linear-gradient(180deg,#fffaf2_0%,#ffffff_100%)] px-4 py-4 sm:px-6 sm:py-5">
-                  <div className="rounded-[18px] border border-[#7a0000]/8 bg-white px-4 py-3">
-                    <div className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000]">Warranty</div>
-                    <div className="mt-2 text-sm font-semibold text-slate-900">{product.warranty}</div>
-                    {product.warrantyNotes ? <div className="mt-1 text-sm leading-5 text-slate-600">{product.warrantyNotes}</div> : null}
-                  </div>
-                  <div className="rounded-[18px] border border-[#7a0000]/8 bg-white px-4 py-3">
-                    <div className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000]">Ordering</div>
-                    <div className="mt-2 text-sm font-semibold text-slate-900">Add to Cart, WhatsApp Order, or Request Quote</div>
-                    <div className="mt-1 text-sm leading-5 text-slate-600">Choose the flow that matches the product, delivery, and consultation you need.</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
             <div className="grid gap-3">
               {detailAccordions.map((section, index) => (
                 <details key={section.title} className="group overflow-hidden rounded-[20px] border border-[#7a0000]/10 bg-white shadow-[0_12px_30px_rgba(15,23,42,0.05)] sm:rounded-[26px]" open={index === 0}>
@@ -375,23 +215,6 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
               ))}
             </div>
 
-            <div className={`${shopStyles.darkPanel} p-5 sm:p-6`}>
-              <div className="inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">
-                Need help choosing?
-              </div>
-              <h2 className="mt-4 text-2xl font-black tracking-tight text-white">Request a solar quote and our team will help size your system.</h2>
-              <p className="mt-3 max-w-3xl text-sm leading-7 text-white/76">
-                Our team will help match the right panels, inverter, battery, and accessories to your home, biashara, or farm needs before you place an order.
-              </p>
-              <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-                <Link href={`/shop/request-quote?product=${encodeURIComponent(product.name)}`} className={shopStyles.goldButton}>
-                  Request Quote
-                </Link>
-                <Link href="/shop/cart" className={`${shopStyles.secondaryButton} bg-white/92`}>
-                  View Cart
-                </Link>
-              </div>
-            </div>
           </div>
 
           {relatedProducts.length ? (
