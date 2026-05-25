@@ -62,13 +62,13 @@ export default function CartClient({ products }: CartClientProps) {
       <div className="grid gap-3 self-start">
         {detailedItems.map(({ product, quantity, lineTotal }) => (
           <article key={product.id} className="rounded-[18px] border border-[#7a0000]/10 bg-white p-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
-            <div className="flex gap-3 sm:items-center">
-              <div className="relative h-[5.8rem] w-[5.8rem] shrink-0 rounded-[14px] border border-[#7a0000]/8 bg-[#f6eee2] p-2 sm:h-[6.5rem] sm:w-[6.5rem]">
+            <div className="flex items-start gap-3 sm:items-center">
+              <div className="relative h-[5rem] w-[5rem] shrink-0 rounded-[14px] border border-[#7a0000]/8 bg-[#f6eee2] p-2 sm:h-[6.5rem] sm:w-[6.5rem]">
                 <ShopProductVisual visualType={product.visualType} productName={product.name} compact className="h-full w-full" />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-[10px] font-black uppercase tracking-[0.16em] text-[#7a0000]/75">{product.category}</div>
-                <h2 className="mt-1 line-clamp-2 text-[15px] font-black leading-5 text-slate-950 sm:text-base">{product.name}</h2>
+                <h2 className="mt-1 line-clamp-2 text-[14px] font-black leading-[1.15rem] text-slate-950 sm:text-base sm:leading-5">{product.name}</h2>
                 <div className="mt-1 text-xs text-slate-500">{product.brand}</div>
                 <div className="mt-1 line-clamp-1 text-[11px] text-slate-500">{product.specs[0] || "Contact us for full specs"}</div>
                 <div className="mt-1 text-[11px] font-semibold text-slate-500">{getProductAvailabilityMessage(product)}</div>
@@ -175,7 +175,7 @@ export default function CartClient({ products }: CartClientProps) {
         ) : null}
       </div>
 
-      <aside className="h-fit self-start rounded-[20px] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#fffaf2_0%,#ffffff_100%)] p-4 shadow-[0_14px_32px_rgba(15,23,42,0.06)] xl:sticky xl:top-24">
+      <aside className="order-first h-fit self-start rounded-[20px] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#fffaf2_0%,#ffffff_100%)] p-4 shadow-[0_14px_32px_rgba(15,23,42,0.06)] xl:order-none xl:sticky xl:top-24">
         <div className={shopStyles.sectionEyebrow}>Order Summary</div>
         <div className="mt-4 grid gap-2.5 text-sm text-slate-600">
           <div className="flex items-center justify-between">

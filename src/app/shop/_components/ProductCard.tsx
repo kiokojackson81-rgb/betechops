@@ -31,35 +31,35 @@ export default function ProductCard({ product }: ProductCardProps) {
       : null;
 
   return (
-    <article className="group flex h-full flex-col overflow-hidden rounded-[24px] border border-[#7a0000]/8 bg-white text-slate-950 shadow-[0_12px_28px_rgba(15,23,42,0.05)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_22px_42px_rgba(122,0,0,0.08)]">
-      <div className="relative h-40 overflow-hidden border-b border-[#7a0000]/8 bg-[linear-gradient(180deg,#fbf5eb_0%,#ffffff_100%)] sm:h-44 xl:h-48">
-        <div className="absolute inset-0 p-3">
+    <article className="group flex h-full flex-col overflow-hidden rounded-[20px] border border-[#7a0000]/8 bg-white text-slate-950 shadow-[0_12px_28px_rgba(15,23,42,0.05)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_22px_42px_rgba(122,0,0,0.08)] sm:rounded-[24px]">
+      <div className="relative h-32 overflow-hidden border-b border-[#7a0000]/8 bg-[linear-gradient(180deg,#fbf5eb_0%,#ffffff_100%)] sm:h-44 xl:h-48">
+        <div className="absolute inset-0 p-2.5 sm:p-3">
           {product.image ? (
             <img src={product.image} alt={product.name} className="h-full w-full object-contain transition duration-500 group-hover:scale-[1.03]" />
           ) : (
             <ShopProductVisual visualType={product.visualType} productName={product.name} compact className="h-full w-full" />
           )}
         </div>
-        <div className="absolute left-3 top-3 inline-flex rounded-full bg-[#fff3d8] px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-[#7a0000]">
+        <div className="absolute left-2.5 top-2.5 inline-flex max-w-[70%] truncate rounded-full bg-[#fff3d8] px-2 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-[#7a0000] sm:left-3 sm:top-3 sm:px-2.5">
           {product.brand}
         </div>
         {discountPercent ? (
-          <div className="absolute right-3 top-3 inline-flex rounded-full bg-[#7a0000] px-2 py-1 text-[9px] font-black uppercase tracking-[0.1em] text-white">
+          <div className="absolute right-2.5 top-2.5 inline-flex rounded-full bg-[#7a0000] px-2 py-1 text-[9px] font-black uppercase tracking-[0.1em] text-white sm:right-3 sm:top-3">
             -{discountPercent}%
           </div>
         ) : null}
       </div>
 
-      <div className="flex flex-1 flex-col p-4">
+      <div className="flex flex-1 flex-col p-3.5 sm:p-4">
         <Link href={`/shop/product/${product.slug}`} className="block">
-          <h3 className="line-clamp-2 min-h-[2.8rem] text-[15px] font-bold leading-5 tracking-[-0.01em] text-slate-950 transition group-hover:text-[#7a0000]">
+          <h3 className="line-clamp-2 min-h-[2.45rem] text-[14px] font-bold leading-[1.15rem] tracking-[-0.01em] text-slate-950 transition group-hover:text-[#7a0000] sm:min-h-[2.8rem] sm:text-[15px] sm:leading-5">
             {product.name}
           </h3>
         </Link>
-        <p className="mt-1.5 line-clamp-2 min-h-[2rem] text-[11px] leading-4 text-slate-500">{product.specs[0] || "Contact us for full specs"}</p>
+        <p className="mt-1.5 line-clamp-2 min-h-[1.8rem] text-[10px] leading-4 text-slate-500 sm:min-h-[2rem] sm:text-[11px]">{product.specs[0] || "Contact us for full specs"}</p>
 
         <div className="mt-2.5">
-          <div className="text-[18px] font-bold tracking-[-0.02em] text-slate-950">{formatCurrency(product.price)}</div>
+          <div className="text-[17px] font-bold tracking-[-0.02em] text-slate-950 sm:text-[18px]">{formatCurrency(product.price)}</div>
           <div className="mt-1 flex items-center gap-1.5">
             {product.oldPrice ? <div className="text-[11px] font-medium text-slate-400 line-through">{formatCurrency(product.oldPrice)}</div> : null}
             {discountPercent ? <div className="text-[11px] font-bold text-[#7a0000]">-{discountPercent}%</div> : null}
@@ -73,15 +73,15 @@ export default function ProductCard({ product }: ProductCardProps) {
           {availabilityBadge}
         </div>
 
-        <div className="mt-auto pt-4 grid gap-2">
+        <div className="mt-auto grid gap-2 pt-3.5 sm:pt-4">
           <AddToCartButton
             productId={product.id}
             productName={product.name}
-            className="inline-flex min-h-[2.7rem] items-center justify-center rounded-[16px] bg-[#7a0000] px-3 py-2 text-[12px] font-bold text-white shadow-[0_10px_20px_rgba(122,0,0,0.12)] transition hover:-translate-y-0.5"
+            className="inline-flex min-h-[2.7rem] items-center justify-center rounded-[16px] bg-[#7a0000] px-3 py-2 text-[11px] font-bold text-white shadow-[0_10px_20px_rgba(122,0,0,0.12)] transition hover:-translate-y-0.5 sm:text-[12px]"
           />
           <TrackedWhatsAppLink
             href={whatsappHref}
-            className="inline-flex min-h-[2.7rem] items-center justify-center gap-1.5 rounded-[16px] bg-[linear-gradient(135deg,#11b86a_0%,#0f9d58_55%,#0b7c44_100%)] px-3 py-2 text-[12px] font-bold text-white shadow-[0_10px_20px_rgba(15,157,88,0.16)] transition hover:-translate-y-0.5"
+            className="inline-flex min-h-[2.7rem] items-center justify-center gap-1.5 rounded-[16px] bg-[linear-gradient(135deg,#11b86a_0%,#0f9d58_55%,#0b7c44_100%)] px-3 py-2 text-[11px] font-bold text-white shadow-[0_10px_20px_rgba(15,157,88,0.16)] transition hover:-translate-y-0.5 sm:text-[12px]"
             label={`WhatsApp order ${product.name}`}
             context="product_card"
             ariaLabel={`Order ${product.name} on WhatsApp`}

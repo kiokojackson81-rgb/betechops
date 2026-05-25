@@ -261,7 +261,7 @@ export default async function ShopCategoryPage({ params, searchParams }: Categor
   return (
     <div className={shopStyles.page}>
       <ShopHeader navLinks={shopNavLinks} />
-      <section className="py-3 sm:py-4">
+      <section className="py-2.5 sm:py-4">
         <div className={shopStyles.shell}>
           <ShopBreadcrumbs
             items={[
@@ -271,7 +271,7 @@ export default async function ShopCategoryPage({ params, searchParams }: Categor
             ]}
           />
 
-          <details className="mt-2 rounded-[12px] border border-[#7a0000]/10 bg-white px-3 py-2 shadow-[0_6px_16px_rgba(15,23,42,0.04)] lg:hidden">
+          <details className="mt-2 rounded-[14px] border border-[#7a0000]/10 bg-white px-3 py-2.5 shadow-[0_6px_16px_rgba(15,23,42,0.04)] lg:hidden">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold text-slate-900">
               <span className="inline-flex items-center gap-2">
                 <Filter className="h-4 w-4 text-[#7a0000]" />
@@ -306,6 +306,16 @@ export default async function ShopCategoryPage({ params, searchParams }: Categor
                     href={getFilterHref(category.value, filters, { price: option.value })}
                     label={option.label}
                     active={filters.price === option.value}
+                  />
+                ))}
+              </FilterSection>
+              <FilterSection title="Stock">
+                {STOCK_OPTIONS.map((option) => (
+                  <CheckboxLink
+                    key={option.value}
+                    href={getFilterHref(category.value, filters, { stock: option.value })}
+                    label={option.label}
+                    active={filters.stock === option.value}
                   />
                 ))}
               </FilterSection>
@@ -381,7 +391,7 @@ export default async function ShopCategoryPage({ params, searchParams }: Categor
             </aside>
 
             <div className="min-w-0">
-              <div className="rounded-[14px] border border-[#7a0000]/10 bg-white px-3 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+              <div className="rounded-[16px] border border-[#7a0000]/10 bg-white px-3 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.04)] sm:rounded-[14px]">
                 <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
                   <div>
                     <h1 className="text-lg font-black tracking-tight text-slate-950 sm:text-xl">
@@ -390,7 +400,7 @@ export default async function ShopCategoryPage({ params, searchParams }: Categor
                     <div className="mt-0.5 text-xs font-semibold text-slate-500">{filteredProducts.length} products found</div>
                   </div>
 
-                  <form className="flex items-center gap-2 rounded-md border border-[#7a0000]/10 bg-[#fcfaf7] px-2.5 py-1.5">
+                  <form className="flex flex-wrap items-center gap-2 rounded-md border border-[#7a0000]/10 bg-[#fcfaf7] px-2.5 py-2 sm:flex-nowrap sm:py-1.5">
                     <label htmlFor="sort" className="text-xs font-semibold text-slate-500">
                       Sort by
                     </label>
@@ -411,13 +421,13 @@ export default async function ShopCategoryPage({ params, searchParams }: Categor
                         </option>
                       ))}
                     </select>
-                    <button type="submit" className="rounded-md bg-[#7a0000] px-2 py-1 text-[11px] font-bold text-white">
+                    <button type="submit" className="w-full rounded-md bg-[#7a0000] px-2 py-1.5 text-[11px] font-bold text-white sm:w-auto sm:py-1">
                       Apply
                     </button>
                   </form>
                 </div>
 
-                <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                <div className="mt-2.5 -mx-1 flex flex-nowrap items-center gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
                   <span className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000]">Related</span>
                   <Link
                     href={`/shop/category/${category.value}`}
@@ -455,7 +465,7 @@ export default async function ShopCategoryPage({ params, searchParams }: Categor
               </div>
 
               {filteredProducts.length ? (
-                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
                   {filteredProducts.map((product) => (
                     <ProductCard key={product.id} product={product} />
                   ))}

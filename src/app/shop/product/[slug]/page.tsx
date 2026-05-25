@@ -252,7 +252,7 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
       <ShopAnalyticsTracker kind="product_view" payload={{ slug: product.slug, name: product.name, category: product.category, brand: product.brand }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }} />
       <ShopHeader navLinks={shopNavLinks} />
-      <section className="py-5 sm:py-7">
+      <section className="py-4 sm:py-7">
         <div className={shopStyles.shell}>
           <ShopBreadcrumbs
             items={[
@@ -262,12 +262,12 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
             ]}
           />
 
-          <div className="mt-4 grid gap-5 xl:grid-cols-[minmax(0,1.04fr)_minmax(0,0.96fr)] xl:items-start">
+          <div className="mt-4 grid gap-4 sm:gap-5 xl:grid-cols-[minmax(0,1.04fr)_minmax(0,0.96fr)] xl:items-start">
             <ShopProductGallery images={galleryImages} productName={product.name} visualType={product.visualType} videoEmbedUrl={tiktokEmbedUrl} />
 
             <div className="xl:sticky xl:top-24">
-              <div className="overflow-hidden rounded-[32px] border border-[#7a0000]/10 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.08)]">
-                <div className="border-b border-[#7a0000]/8 bg-[radial-gradient(circle_at_top_right,rgba(242,178,15,0.16),transparent_34%),linear-gradient(180deg,#fffdf8_0%,#fff7ee_100%)] px-5 py-5 sm:px-6 sm:py-6">
+              <div className="overflow-hidden rounded-[24px] border border-[#7a0000]/10 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.08)] sm:rounded-[32px]">
+                <div className="border-b border-[#7a0000]/8 bg-[radial-gradient(circle_at_top_right,rgba(242,178,15,0.16),transparent_34%),linear-gradient(180deg,#fffdf8_0%,#fff7ee_100%)] px-4 py-4 sm:px-6 sm:py-6">
                   <div className="flex flex-wrap items-center gap-2.5">
                     <div className={shopStyles.sectionEyebrow}>{product.category}</div>
                     <div className="inline-flex rounded-full border border-[#0f9d58]/14 bg-[#effcf4] px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] text-[#0f9d58]">
@@ -278,15 +278,15 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
                     </div>
                   </div>
                   <div className="mt-4 max-w-3xl">
-                    <h1 className="max-w-[16ch] text-[clamp(2rem,3.5vw,3.35rem)] font-bold leading-[1.02] tracking-[-0.03em] text-slate-950">
+                    <h1 className="max-w-none text-[clamp(1.75rem,8vw,3.35rem)] font-bold leading-[1.02] tracking-[-0.03em] text-slate-950 sm:max-w-[16ch]">
                       {visualTitle}
                     </h1>
                   </div>
-                  <div className="mt-3 max-w-2xl text-[15px] leading-6 text-slate-600">{valueProposition}</div>
+                  <div className="mt-3 max-w-2xl text-[14px] leading-5 text-slate-600 sm:text-[15px] sm:leading-6">{valueProposition}</div>
                   {specSummary.length ? (
-                    <div className="mt-5 grid gap-2 sm:grid-cols-2">
+                    <div className="mt-4 grid gap-2 sm:mt-5 sm:grid-cols-2">
                       {specSummary.map((spec) => (
-                        <div key={spec} className="flex items-start gap-2.5 rounded-[18px] border border-white/90 bg-white/88 px-3.5 py-3 text-sm font-medium text-slate-700 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+                        <div key={spec} className="flex items-start gap-2.5 rounded-[16px] border border-white/90 bg-white/88 px-3 py-2.5 text-[13px] font-medium text-slate-700 shadow-[0_10px_24px_rgba(15,23,42,0.04)] sm:rounded-[18px] sm:px-3.5 sm:py-3 sm:text-sm">
                           <span className="mt-[0.42rem] h-1.5 w-1.5 shrink-0 rounded-full bg-[#7a0000]/55" />
                           <span>{spec}</span>
                         </div>
@@ -295,17 +295,17 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
                   ) : null}
                 </div>
 
-                <div className="grid gap-5 px-5 py-5 sm:px-6 sm:py-6">
-                  <div className="grid gap-4 rounded-[28px] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#ffffff_0%,#fffaf3_100%)] p-5 shadow-[0_18px_40px_rgba(15,23,42,0.05)]">
+                <div className="grid gap-4 px-4 py-4 sm:gap-5 sm:px-6 sm:py-6">
+                  <div className="grid gap-4 rounded-[22px] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#ffffff_0%,#fffaf3_100%)] p-4 shadow-[0_18px_40px_rgba(15,23,42,0.05)] sm:rounded-[28px] sm:p-5">
                     <div className="flex flex-wrap items-end justify-between gap-3">
                       <div>
                         <div className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">Price</div>
                         <div className="mt-2 flex flex-wrap items-end gap-3">
-                          <div className="text-[2rem] font-bold tracking-[-0.04em] text-slate-950 sm:text-[2.5rem]">{formatCurrency(product.price)}</div>
+                          <div className="text-[1.75rem] font-bold tracking-[-0.04em] text-slate-950 sm:text-[2.5rem]">{formatCurrency(product.price)}</div>
                           {product.oldPrice ? <div className="pb-1 text-base font-semibold text-slate-400 line-through">{formatCurrency(product.oldPrice)}</div> : null}
                         </div>
                       </div>
-                      <div className="rounded-2xl border border-amber-400/20 bg-amber-400/6 px-4 py-3 text-right">
+                      <div className="w-full rounded-2xl border border-amber-400/20 bg-amber-400/6 px-4 py-3 text-left sm:w-auto sm:text-right">
                         <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000]">Pickup & delivery</div>
                         <div className="mt-1 text-sm font-semibold text-slate-800">{checkoutAvailabilityMessage}</div>
                       </div>
@@ -316,7 +316,7 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
                     <ShopProductDetailActions product={product} />
                   </div>
 
-                  <div className="rounded-[28px] border border-[#7a0000]/8 bg-[#fffaf4] p-5">
+                  <div className="rounded-[22px] border border-[#7a0000]/8 bg-[#fffaf4] p-4 sm:rounded-[28px] sm:p-5">
                     <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">Key highlights</div>
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
                       {keyHighlights.map((item) => (
@@ -337,7 +337,7 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
                     </div>
                     <div className="grid gap-3 px-5 py-4 sm:grid-cols-2">
                       {supportItems.map((item) => (
-                        <div key={item.title} className="rounded-[18px] border border-[#7a0000]/8 bg-[#fcfaf8] px-4 py-3">
+                        <div key={item.title} className="rounded-[16px] border border-[#7a0000]/8 bg-[#fcfaf8] px-3.5 py-3 sm:rounded-[18px] sm:px-4">
                           <div className="flex items-start gap-3">
                             <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#fff1dc] text-[#7a0000]">
                               {item.icon}
@@ -357,14 +357,14 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
           </div>
 
           <div className="mt-5 grid gap-5">
-            <div className="overflow-hidden rounded-[30px] border border-[#7a0000]/10 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+            <div className="overflow-hidden rounded-[22px] border border-[#7a0000]/10 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.06)] sm:rounded-[30px]">
               <div className="grid gap-0 lg:grid-cols-[1.3fr_0.7fr]">
-                <div className="border-b border-[#7a0000]/8 px-5 py-5 sm:px-6 lg:border-b-0 lg:border-r">
+                <div className="border-b border-[#7a0000]/8 px-4 py-4 sm:px-6 sm:py-5 lg:border-b-0 lg:border-r">
                   <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">Marketplace product summary</div>
                   <h2 className="mt-3 text-[clamp(1.4rem,2.2vw,2rem)] font-bold tracking-[-0.03em] text-slate-950">{visualTitle}</h2>
                   <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600">{product.fullDescription || valueProposition}</p>
                 </div>
-                <div className="grid gap-3 bg-[linear-gradient(180deg,#fffaf2_0%,#ffffff_100%)] px-5 py-5 sm:px-6">
+                <div className="grid gap-3 bg-[linear-gradient(180deg,#fffaf2_0%,#ffffff_100%)] px-4 py-4 sm:px-6 sm:py-5">
                   <div className="rounded-[18px] border border-[#7a0000]/8 bg-white px-4 py-3">
                     <div className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000]">Warranty</div>
                     <div className="mt-2 text-sm font-semibold text-slate-900">{product.warranty}</div>
@@ -381,12 +381,12 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
 
             <div className="grid gap-3">
               {detailAccordions.map((section, index) => (
-                <details key={section.title} className="group overflow-hidden rounded-[26px] border border-[#7a0000]/10 bg-white shadow-[0_12px_30px_rgba(15,23,42,0.05)]" open={index === 0}>
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-left sm:px-6">
+                <details key={section.title} className="group overflow-hidden rounded-[20px] border border-[#7a0000]/10 bg-white shadow-[0_12px_30px_rgba(15,23,42,0.05)] sm:rounded-[26px]" open={index === 0}>
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 text-left sm:px-6">
                     <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">{section.title}</div>
                     <div className="text-sm font-semibold text-slate-500 transition group-open:rotate-45">+</div>
                   </summary>
-                  <div className="border-t border-[#7a0000]/8 px-5 py-5 sm:px-6">{section.content}</div>
+                  <div className="border-t border-[#7a0000]/8 px-4 py-4 sm:px-6 sm:py-5">{section.content}</div>
                 </details>
               ))}
             </div>
@@ -426,9 +426,9 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
                   <ProductCard key={item.id} product={item} />
                 ))}
               </div>
-              <div className="mt-6 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 xl:hidden">
+              <div className="mt-6 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden xl:hidden">
                 {relatedProducts.map((item) => (
-                  <div key={item.id} className="w-[78vw] max-w-[19rem] shrink-0 snap-start md:w-[22rem]">
+                  <div key={item.id} className="w-[82vw] max-w-[19rem] shrink-0 snap-start md:w-[22rem]">
                     <ProductCard product={item} />
                   </div>
                 ))}

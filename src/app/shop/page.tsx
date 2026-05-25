@@ -65,18 +65,18 @@ export default async function ShopPage() {
       <ShopHero categories={categories} heroImageUrl={imageOverrides.heroBannerUrl ?? undefined} />
       <CategoryScroller categories={categories} />
 
-      <section className="py-3">
+      <section className="py-2.5 sm:py-3">
         <div className={shopStyles.shell}>
           <div className={`${shopStyles.lightCard} overflow-hidden px-3 py-3 sm:px-4`}>
-            <div className="grid gap-2 md:grid-cols-5">
+            <div className="grid gap-2 grid-cols-2 md:grid-cols-5">
               {topTrustItems.map((item) => {
                 const Icon = item.icon;
                 return (
-                  <div key={item.title} className="flex items-center gap-2.5 rounded-2xl bg-[#fcfaf7] px-3 py-2.5">
+                  <div key={item.title} className="flex items-center gap-2 rounded-2xl bg-[#fcfaf7] px-3 py-2.5">
                     <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#fff3d8] text-[#7a0000]">
                       <Icon className="h-3.5 w-3.5" />
                     </span>
-                    <div className="text-xs font-bold text-slate-700 sm:text-sm">{item.title}</div>
+                    <div className="text-[11px] font-bold leading-4 text-slate-700 sm:text-sm">{item.title}</div>
                   </div>
                 );
               })}
@@ -144,7 +144,7 @@ export default async function ShopPage() {
         />
       ) : null}
 
-      <section className="py-5 sm:py-6">
+      <section className="py-4 sm:py-6">
         <div className={shopStyles.shell}>
           <div className="grid gap-3 lg:grid-cols-[1.08fr_0.92fr]">
             <div className={`${shopStyles.lightCard} p-4 sm:p-5`}>
@@ -155,9 +155,9 @@ export default async function ShopPage() {
               </p>
               <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
                 {deliveryPaymentSteps.map((step) => (
-                  <div key={step.title} className="rounded-[20px] border border-[#7a0000]/10 bg-[#fcfaf7] p-3.5">
-                    <div className="text-xs font-black uppercase tracking-[0.14em] text-[#7a0000] sm:text-sm">{step.title}</div>
-                    <p className="mt-1.5 text-sm leading-6 text-slate-600">{step.copy}</p>
+                  <div key={step.title} className="rounded-[18px] border border-[#7a0000]/10 bg-[#fcfaf7] p-3.5 sm:rounded-[20px]">
+                    <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000] sm:text-sm">{step.title}</div>
+                    <p className="mt-1.5 text-[13px] leading-5 text-slate-600 sm:text-sm sm:leading-6">{step.copy}</p>
                   </div>
                 ))}
               </div>

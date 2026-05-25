@@ -215,8 +215,8 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
         }}
       >
         <div className={shopStyles.sectionEyebrow}>Checkout</div>
-        <h1 className="mt-3 text-2xl font-black tracking-tight text-slate-950 sm:text-[2rem]">Complete your Betech Solar checkout.</h1>
-        <p className="mt-2 text-sm leading-6 text-slate-600 sm:text-[15px]">
+        <h1 className="mt-3 text-[1.75rem] font-black tracking-tight text-slate-950 sm:text-[2rem]">Complete your Betech Solar checkout.</h1>
+        <p className="mt-2 text-[13px] leading-5 text-slate-600 sm:text-[15px] sm:leading-6">
           Customer details, delivery preferences, and payment intent are collected here first. Payment is not processed automatically on this page, and a Betech Solar team member confirms the next steps with you directly.
         </p>
         <div className="mt-3 rounded-[16px] border border-amber-400/20 bg-amber-400/5 px-3 py-2.5 text-sm font-semibold leading-6 text-slate-700">
@@ -309,7 +309,7 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
         </div>
       </form>
 
-      <aside className="h-fit self-start rounded-[20px] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#fffaf2_0%,#ffffff_100%)] p-4 shadow-[0_14px_32px_rgba(15,23,42,0.06)] xl:sticky xl:top-24">
+      <aside className="order-first h-fit self-start rounded-[20px] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#fffaf2_0%,#ffffff_100%)] p-4 shadow-[0_14px_32px_rgba(15,23,42,0.06)] xl:order-none xl:sticky xl:top-24">
         <div className={shopStyles.sectionEyebrow}>Order Summary</div>
         <div className="mt-4 grid gap-3">
           {detailedItems.map((item) => (

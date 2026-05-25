@@ -46,7 +46,7 @@ export default function ShopHero({ categories, heroImageUrl = "/agents/hero-gene
   const isRemoteImage = /^https?:\/\//i.test(heroImageUrl);
 
   return (
-    <section className="pt-3 sm:pt-4">
+    <section className="pt-2.5 sm:pt-4">
       <div className={shopStyles.shell}>
         <div className="grid gap-3 lg:grid-cols-[0.24fr_0.52fr_0.24fr]">
           <aside className={`${shopStyles.lightCard} hidden h-fit overflow-hidden lg:block`}>
@@ -84,16 +84,16 @@ export default function ShopHero({ categories, heroImageUrl = "/agents/hero-gene
             </nav>
           </aside>
 
-          <div className={`${shopStyles.darkPanel} overflow-hidden p-3.5 sm:p-4 lg:p-5`}>
+          <div className={`${shopStyles.darkPanel} overflow-hidden p-3 sm:p-4 lg:p-5`}>
             <div className="grid gap-3 md:grid-cols-[1.08fr_0.92fr] md:items-center">
               <div>
                 <div className="inline-flex w-fit rounded-full border border-[#f2b20f]/30 bg-[#fff3d8] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#7a0000] shadow-[0_10px_18px_rgba(242,178,15,0.16)]">
                   Betech Solar Online Store
                 </div>
-                <h1 className="mt-3 max-w-2xl text-2xl font-black tracking-tight text-white sm:text-3xl lg:text-[2rem]">
+                <h1 className="mt-3 max-w-2xl text-[1.8rem] font-black tracking-tight text-white sm:text-3xl lg:text-[2rem]">
                   Shop Genuine Solar Products
                 </h1>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-white/78">
+                <p className="mt-2 max-w-2xl text-[13px] leading-5 text-white/78 sm:text-sm sm:leading-6">
                   Genuine solar products with warranty support, Nairobi pickup and countrywide delivery.
                 </p>
                 <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
@@ -106,11 +106,11 @@ export default function ShopHero({ categories, heroImageUrl = "/agents/hero-gene
                     <Headphones className="h-4 w-4" />
                   </Link>
                 </div>
-                <div className="mt-3 text-xs leading-5 text-white/72 sm:text-sm">We deliver solar panels, batteries, inverters, pumps and kits across Kenya.</div>
+                <div className="mt-3 text-[12px] leading-5 text-white/72 sm:text-sm">We deliver solar panels, batteries, inverters, pumps and kits across Kenya.</div>
               </div>
 
-              <div className="overflow-hidden rounded-[24px] border border-white/10 bg-white/8 shadow-[0_18px_40px_rgba(0,0,0,0.18)] backdrop-blur">
-                <div className="relative h-32 sm:h-36 md:h-[18rem]">
+              <div className="overflow-hidden rounded-[22px] border border-white/10 bg-white/8 shadow-[0_18px_40px_rgba(0,0,0,0.18)] backdrop-blur sm:rounded-[24px]">
+                <div className="relative h-44 sm:h-52 md:h-[18rem]">
                   <Image
                     src={heroImageUrl}
                     alt="Betech Solar ecommerce banner"
@@ -120,18 +120,18 @@ export default function ShopHero({ categories, heroImageUrl = "/agents/hero-gene
                     className="object-cover object-center"
                   />
                   <div className="absolute inset-0 bg-gradient-to-r from-[#2a0700]/50 via-transparent to-[#2a0700]/18" />
-                  <div className="absolute bottom-0 left-0 right-0 p-3.5 sm:p-4">
+                  <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4">
                     <div className="inline-flex rounded-full bg-white/92 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-[#7a0000]">
                       Solar deals and support
                     </div>
-                    <div className="mt-2 max-w-sm text-lg font-black leading-6 text-white sm:text-xl">Panels, batteries, inverters, pumps and full kits in one place.</div>
+                    <div className="mt-2 max-w-sm text-base font-black leading-5 text-white sm:text-xl sm:leading-6">Panels, batteries, inverters, pumps and full kits in one place.</div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="grid gap-2.5">
+          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-1">
             {helpCards.map((card) => {
               const Icon = card.icon;
               const external = card.href.startsWith("http");
