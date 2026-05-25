@@ -110,18 +110,18 @@ export default function ShopProductGallery({ images, productName, visualType, vi
     const frameHeight = expanded
       ? "h-[82vh]"
       : activeOrientation === "portrait"
-        ? "h-[22rem] sm:h-[28rem] lg:h-[34rem]"
+        ? "h-[18rem] sm:h-[22rem] lg:h-[26rem] xl:h-[29rem]"
         : activeOrientation === "square"
-          ? "h-[20rem] sm:h-[24rem] lg:h-[30rem]"
-          : "h-[18.5rem] sm:h-[22rem] lg:h-[28rem]";
+          ? "h-[17rem] sm:h-[20rem] lg:h-[24rem] xl:h-[27rem]"
+          : "h-[15.5rem] sm:h-[18rem] lg:h-[21rem] xl:h-[24rem]";
     const imageShellWidth = expanded
       ? "max-w-[92vw]"
       : activeOrientation === "portrait"
-        ? "max-w-[23rem] sm:max-w-[27rem] lg:max-w-[30rem]"
+        ? "max-w-[18rem] sm:max-w-[21rem] lg:max-w-[23rem] xl:max-w-[25rem]"
         : activeOrientation === "square"
-          ? "max-w-[28rem] sm:max-w-[34rem] lg:max-w-[38rem]"
-          : "max-w-full";
-    const videoShellWidth = expanded ? "max-w-[26rem] sm:max-w-[30rem] md:max-w-[34rem]" : "max-w-[24rem] sm:max-w-[27rem] lg:max-w-[30rem]";
+          ? "max-w-[21rem] sm:max-w-[24rem] lg:max-w-[28rem] xl:max-w-[30rem]"
+          : "max-w-[23rem] sm:max-w-[28rem] md:max-w-[34rem] lg:max-w-[38rem] xl:max-w-[42rem]";
+    const videoShellWidth = expanded ? "max-w-[26rem] sm:max-w-[30rem] md:max-w-[34rem]" : "max-w-[18rem] sm:max-w-[21rem] lg:max-w-[24rem] xl:max-w-[26rem]";
 
     return (
       <div className={`relative flex ${frameHeight} items-center justify-center overflow-hidden rounded-[26px]`}>
@@ -183,8 +183,8 @@ export default function ShopProductGallery({ images, productName, visualType, vi
   return (
     <>
       <div className="lg:sticky lg:top-24">
-        <div className="overflow-hidden rounded-[32px] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#10141c_0%,#1b1210_100%)] shadow-[0_28px_64px_rgba(15,23,42,0.16)]">
-          <div className="relative overflow-hidden rounded-[30px] border border-white/8 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_26%),linear-gradient(180deg,#17202a_0%,#130d0c_100%)]">
+        <div className="overflow-hidden rounded-[28px] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#10141c_0%,#1b1210_100%)] shadow-[0_20px_44px_rgba(15,23,42,0.14)] sm:rounded-[32px]">
+          <div className="relative overflow-hidden rounded-[26px] border border-white/8 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_26%),linear-gradient(180deg,#17202a_0%,#130d0c_100%)] sm:rounded-[30px]">
             <div className="absolute left-4 top-4 z-20 inline-flex items-center rounded-full border border-white/12 bg-black/26 px-3 py-1 text-[11px] font-semibold text-white/82 shadow-[0_10px_22px_rgba(0,0,0,0.22)] backdrop-blur">
               {activeIndex + 1} / {mediaItems.length}
             </div>
@@ -218,7 +218,7 @@ export default function ShopProductGallery({ images, productName, visualType, vi
             ) : null}
             <button
               type="button"
-              className="block w-full p-3 sm:p-4"
+              className="block w-full p-2.5 sm:p-3.5"
               onTouchStart={handleTouchStart}
               onTouchEnd={handleTouchEnd}
               onClick={() => setLightboxOpen(true)}
@@ -227,8 +227,8 @@ export default function ShopProductGallery({ images, productName, visualType, vi
             </button>
           </div>
 
-          <div className="border-t border-white/8 bg-[#f7efe4] px-3 py-3 sm:px-4">
-            <div className="flex gap-2 overflow-x-auto pb-1">
+          <div className="border-t border-white/8 bg-[#f7efe4] px-2.5 py-2.5 sm:px-4 sm:py-3">
+            <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {mediaItems.map((item, index) => {
                 const isActive = index === activeIndex;
                 return (
@@ -236,7 +236,7 @@ export default function ShopProductGallery({ images, productName, visualType, vi
                     key={`${item.type}-${item.src}-${index}`}
                     type="button"
                     onClick={() => setMediaIndex(index)}
-                    className={`group relative h-20 w-20 shrink-0 overflow-hidden rounded-[18px] border bg-white/82 p-1.5 transition sm:h-24 sm:w-24 ${
+                    className={`group relative h-16 w-16 shrink-0 overflow-hidden rounded-[16px] border bg-white/82 p-1 sm:h-20 sm:w-20 sm:rounded-[18px] sm:p-1.5 transition ${
                       isActive
                         ? "border-[#7a0000]/35 shadow-[0_14px_28px_rgba(122,0,0,0.12)]"
                         : "border-[#7a0000]/10 hover:-translate-y-0.5 hover:border-[#7a0000]/24 hover:shadow-[0_10px_18px_rgba(15,23,42,0.08)]"

@@ -262,7 +262,7 @@ export default async function ShopProductDetailPage({ params }: { params: Promis
             ]}
           />
 
-          <div className="mt-4 grid gap-4 sm:gap-5 xl:grid-cols-[minmax(0,1.04fr)_minmax(0,0.96fr)] xl:items-start">
+          <div className="mt-4 grid gap-4 sm:gap-5 xl:grid-cols-[minmax(0,0.96fr)_minmax(0,1.04fr)] xl:items-start">
             <ShopProductGallery images={galleryImages} productName={product.name} visualType={product.visualType} videoEmbedUrl={tiktokEmbedUrl} />
 
             <div className="xl:sticky xl:top-24">
