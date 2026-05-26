@@ -413,6 +413,78 @@ export function buildWebsiteOrderReceiptPrefill(order: ReturnType<typeof seriali
   };
 }
 
+export const WEBSITE_ORDER_LIFECYCLE: WebsiteOrderStatus[] = [
+  WebsiteOrderStatus.PENDING,
+  WebsiteOrderStatus.PROCESSING,
+  WebsiteOrderStatus.RECEIPT_ISSUED,
+  WebsiteOrderStatus.DISPATCHED,
+  WebsiteOrderStatus.PAYMENT_CONFIRMED,
+  WebsiteOrderStatus.DELIVERED,
+] as const;
+
+export function canAdvanceWebsiteOrderStatus(current: WebsiteOrderStatus, next: WebsiteOrderStatus) {
+  if (current === next) {
+    return {
+      ok: false as const,
+      error: `Website order is already ${next.replace(/_/g, " ").toLowerCase()}.`,
+    };
+  }
+
+  if (next === WebsiteOrderStatus.CANCELLED) {
+    if (current === WebsiteOrderStatus.DELIVERED || current === WebsiteOrderStatus.CANCELLED) {
+      return {
+        ok: false as const,
+        error: "Delivered or cancelled website orders cannot be cancelled again.",
+      };
+    }
+    return { ok: true as const };
+  }
+
+  const allowedTransitions: Partial<Record<WebsiteOrderStatus, WebsiteOrderStatus[]>> = {
+    [WebsiteOrderStatus.PENDING]: [WebsiteOrderStatus.PROCESSING],
+    [WebsiteOrderStatus.CONFIRMED]: [WebsiteOrderStatus.PROCESSING],
+    [WebsiteOrderStatus.PROCESSING]: [WebsiteOrderStatus.RECEIPT_ISSUED],
+    [WebsiteOrderStatus.RECEIPT_ISSUED]: [WebsiteOrderStatus.DISPATCHED],
+    [WebsiteOrderStatus.DISPATCHED]: [WebsiteOrderStatus.PAYMENT_CONFIRMED],
+    [WebsiteOrderStatus.PAYMENT_CONFIRMED]: [WebsiteOrderStatus.DELIVERED],
+  };
+
+  const allowedNext = allowedTransitions[current] ?? [];
+  if (!allowedNext.includes(next)) {
+    return {
+      ok: false as const,
+      error: `Website order must move from ${current.replace(/_/g, " ")} to the next step before ${next.replace(/_/g, " ")}.`,
+    };
+  }
+
+  return { ok: true as const };
+}
+
+export function buildWebsiteOrderReceiptPayload(order: ReturnType<typeof serializeWebsiteOrder>, mode: "pod" | "normal") {
+  const prefill = buildWebsiteOrderReceiptPrefill(order, mode);
+  return {
+    serial: order.orderRef,
+    docType: "RECEIPT",
+    customerName: order.customerName,
+    customerPhone: order.customerPhone,
+    customerEmail: order.customerEmail || undefined,
+    customerType: prefill.customerType,
+    deliveryAddress: prefill.deliveryAddress,
+    paymentMethod: prefill.paymentMethod,
+    notes: prefill.notes,
+    metadata: prefill.metadata,
+    podDelivery: prefill.podDelivery,
+    websiteOrderId: order.id,
+    items: prefill.items.map((item) => ({
+      productId: item.productId ?? undefined,
+      title: item.title,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      sku: item.sku ?? undefined,
+    })),
+  };
+}
+
 export async function requireWebsiteOrdersAdmin() {
   const session = await auth();
   const role = (session?.user as { role?: string } | undefined)?.role ?? null;

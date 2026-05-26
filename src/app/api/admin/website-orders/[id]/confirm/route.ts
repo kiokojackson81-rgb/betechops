@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma, WebsiteOrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { ensureWebsiteOrdersSchema, requireWebsiteOrdersAdmin, serializeWebsiteOrder, websiteOrderAdminInclude } from "@/lib/websiteOrders";
+import {
+  canAdvanceWebsiteOrderStatus,
+  ensureWebsiteOrdersSchema,
+  requireWebsiteOrdersAdmin,
+  serializeWebsiteOrder,
+  websiteOrderAdminInclude,
+} from "@/lib/websiteOrders";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +28,11 @@ export async function POST(_: NextRequest, context: { params: Promise<any> }) {
     return NextResponse.json({ ok: false, error: "Cancelled website orders cannot be confirmed." }, { status: 400 });
   }
 
+  const transition = canAdvanceWebsiteOrderStatus(existing.status, WebsiteOrderStatus.PROCESSING);
+  if (!transition.ok) {
+    return NextResponse.json({ ok: false, error: transition.error }, { status: 409 });
+  }
+
   const metadata =
     existing.metadata && typeof existing.metadata === "object"
       ? (existing.metadata as Record<string, unknown>)
@@ -30,13 +41,7 @@ export async function POST(_: NextRequest, context: { params: Promise<any> }) {
   const order = await prisma.websiteOrder.update({
     where: { id },
     data: {
-      status:
-        existing.status === WebsiteOrderStatus.DELIVERED ||
-        existing.status === WebsiteOrderStatus.PAYMENT_CONFIRMED ||
-        existing.status === WebsiteOrderStatus.DISPATCHED ||
-        existing.status === WebsiteOrderStatus.RECEIPT_ISSUED
-          ? existing.status
-          : WebsiteOrderStatus.PROCESSING,
+      status: WebsiteOrderStatus.PROCESSING,
       confirmedAt: new Date(),
       confirmedById: guard.userId,
       metadata: {

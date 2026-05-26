@@ -163,7 +163,7 @@ export default function WebsiteOrdersAdminClient({ initialOrders }: Props) {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-white/10 bg-[var(--panel,#121723)]">
-        <div className="grid grid-cols-[56px_minmax(180px,1.3fr)_minmax(120px,0.8fr)_minmax(150px,1fr)_minmax(130px,0.9fr)_minmax(100px,0.7fr)_minmax(120px,0.7fr)_minmax(120px,0.8fr)_minmax(180px,1fr)] gap-3 border-b border-white/10 px-4 py-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+        <div className="grid grid-cols-[56px_minmax(220px,1.5fr)_minmax(120px,0.8fr)_minmax(150px,1fr)_minmax(130px,0.9fr)_minmax(120px,0.8fr)_minmax(120px,0.8fr)_minmax(120px,0.8fr)] gap-3 border-b border-white/10 px-4 py-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
           <div>Open</div>
           <div>Customer</div>
           <div>Phone</div>
@@ -172,7 +172,6 @@ export default function WebsiteOrdersAdminClient({ initialOrders }: Props) {
           <div>Payment</div>
           <div>Total</div>
           <div>Status</div>
-          <div>Actions</div>
         </div>
 
         {filteredOrders.length ? (
@@ -180,7 +179,7 @@ export default function WebsiteOrdersAdminClient({ initialOrders }: Props) {
             const open = expandedId === order.id;
             return (
               <div key={order.id} className="border-b border-white/10 last:border-b-0">
-                <div className="grid grid-cols-[56px_minmax(180px,1.3fr)_minmax(120px,0.8fr)_minmax(150px,1fr)_minmax(130px,0.9fr)_minmax(100px,0.7fr)_minmax(120px,0.7fr)_minmax(120px,0.8fr)_minmax(180px,1fr)] gap-3 px-4 py-4 text-sm">
+                <div className="grid grid-cols-[56px_minmax(220px,1.5fr)_minmax(120px,0.8fr)_minmax(150px,1fr)_minmax(130px,0.9fr)_minmax(120px,0.8fr)_minmax(120px,0.8fr)_minmax(120px,0.8fr)] gap-3 px-4 py-4 text-sm">
                   <button
                     type="button"
                     onClick={() => setExpandedId(open ? null : order.id)}
@@ -203,33 +202,8 @@ export default function WebsiteOrdersAdminClient({ initialOrders }: Props) {
                       {order.status.replace(/_/g, " ")}
                     </span>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setConfirmTarget(order)}
-                      disabled={order.status === "CANCELLED" || order.status === "DELIVERED" || busyAction?.startsWith(order.id)}
-                      className="rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/18 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {order.status === "PENDING" || order.status === "CONFIRMED" ? "Start processing" : "View next step"}
-                    </button>
-                    {order.status === "DELIVERED" && !order.receiptId ? (
-                      <button
-                        type="button"
-                        onClick={() => handleRouteToReceipt(order, order.orderType === "POD" ? "pod" : "normal").catch((error: Error) => setMessage(error.message))}
-                        disabled={busyAction?.startsWith(order.id)}
-                        className="rounded-lg border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition hover:bg-amber-500/18 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        Continue to receipts
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => handleStatusUpdate(order.id, "CANCELLED").catch((error: Error) => setMessage(error.message))}
-                      disabled={order.status === "CANCELLED" || busyAction?.startsWith(order.id)}
-                      className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      Cancel
-                    </button>
+                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                    {open ? "Admin actions below" : "Open order"}
                   </div>
                 </div>
 
@@ -317,7 +291,7 @@ export default function WebsiteOrdersAdminClient({ initialOrders }: Props) {
                                 disabled={busyAction?.startsWith(order.id)}
                                 className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
                               >
-                                Issue Receipt
+                                Issue Receipt Automatically
                               </button>
                             )}
                             {order.status === "RECEIPT_ISSUED" && (
@@ -361,7 +335,17 @@ export default function WebsiteOrdersAdminClient({ initialOrders }: Props) {
                                 disabled={busyAction?.startsWith(order.id)}
                                 className="rounded-lg border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition hover:bg-amber-500/18 disabled:cursor-not-allowed disabled:opacity-60"
                               >
-                                Continue to Receipts
+                                Create Missing Receipt
+                              </button>
+                            )}
+                            {order.status !== "CANCELLED" && order.status !== "DELIVERED" && (
+                              <button
+                                type="button"
+                                onClick={() => handleStatusUpdate(order.id, "CANCELLED").catch((error: Error) => setMessage(error.message))}
+                                disabled={busyAction?.startsWith(order.id)}
+                                className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                Cancel Order
                               </button>
                             )}
                           </div>
@@ -394,7 +378,7 @@ export default function WebsiteOrdersAdminClient({ initialOrders }: Props) {
             <div className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">Start Website Order Processing</div>
             <h2 className="mt-2 text-2xl font-bold text-white">{confirmTarget.orderRef}</h2>
             <p className="mt-3 text-sm leading-6 text-slate-300">
-              Review this customer order and move it into processing. Receipt creation will happen after the order is delivered.
+              Review this customer order and move it into processing. The system will only allow each next action once, and receipt issuance will be handled from the admin action flow.
             </p>
             <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
               <div className="font-semibold text-white">{confirmTarget.customerName}</div>

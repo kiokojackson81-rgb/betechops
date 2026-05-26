@@ -108,6 +108,52 @@ export async function POST(request: Request) {
   });
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  await ensureWebsiteOrdersSchema();
+  const url = request?.url ? new URL(request.url) : null;
+  const orderRef = String(url?.searchParams.get("ref") || "").trim();
+
+  if (orderRef) {
+    const order = await prisma.websiteOrder.findUnique({
+      where: { orderRef },
+      include: websiteOrderAdminInclude,
+    });
+
+    if (!order) {
+      return NextResponse.json({ ok: false, error: "Order not found." }, { status: 404 });
+    }
+
+    const serialized = serializeWebsiteOrder(order);
+    return NextResponse.json({
+      ok: true,
+      order: {
+        id: serialized.id,
+        orderRef: serialized.orderRef,
+        customerName: serialized.customerName,
+        customerPhone: serialized.customerPhone,
+        customerLocation: serialized.customerLocation,
+        customerEmail: serialized.customerEmail,
+        deliveryMethod: serialized.deliveryMethod,
+        paymentMethod: serialized.paymentMethod,
+        orderType: serialized.orderType,
+        status: serialized.status,
+        subtotal: serialized.subtotal,
+        total: serialized.total,
+        receiptId: serialized.receiptId,
+        receipt: serialized.receipt,
+        createdAt: serialized.createdAt,
+        updatedAt: serialized.updatedAt,
+        processingAt: serialized.processingAt,
+        receiptIssuedAt: serialized.receiptIssuedAt,
+        dispatchedAt: serialized.dispatchedAt,
+        paymentConfirmedAt: serialized.paymentConfirmedAt,
+        paymentConfirmationMethod: serialized.paymentConfirmationMethod,
+        paymentConfirmationReference: serialized.paymentConfirmationReference,
+        deliveredAt: serialized.deliveredAt,
+        items: serialized.items,
+      },
+    });
+  }
+
   return NextResponse.json({ ok: true, message: "Use POST /api/shop/orders to place website orders." });
 }

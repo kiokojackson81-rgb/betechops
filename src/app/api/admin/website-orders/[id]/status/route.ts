@@ -2,7 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma, WebsiteOrderStatus } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { ensureWebsiteOrdersSchema, requireWebsiteOrdersAdmin, serializeWebsiteOrder, websiteOrderAdminInclude } from "@/lib/websiteOrders";
+import {
+  buildWebsiteOrderReceiptPayload,
+  canAdvanceWebsiteOrderStatus,
+  ensureWebsiteOrdersSchema,
+  isWebsiteOrderPod,
+  requireWebsiteOrdersAdmin,
+  serializeWebsiteOrder,
+  websiteOrderAdminInclude,
+} from "@/lib/websiteOrders";
 
 export const dynamic = "force-dynamic";
 
@@ -28,18 +36,19 @@ export async function PATCH(request: NextRequest, context: { params: Promise<any
 
   const existing = await prisma.websiteOrder.findUnique({
     where: { id },
-    select: {
-      id: true,
-      metadata: true,
-      status: true,
-    },
+    include: websiteOrderAdminInclude,
   }).catch(() => null);
 
   if (!existing) {
     return NextResponse.json({ ok: false, error: "Website order not found." }, { status: 404 });
   }
 
-  const metadata =
+  const transition = canAdvanceWebsiteOrderStatus(existing.status, parsed.data.status);
+  if (!transition.ok) {
+    return NextResponse.json({ ok: false, error: transition.error }, { status: 409 });
+  }
+
+  let metadata =
     existing.metadata && typeof existing.metadata === "object"
       ? { ...(existing.metadata as Record<string, unknown>) }
       : {};
@@ -51,7 +60,41 @@ export async function PATCH(request: NextRequest, context: { params: Promise<any
   }
 
   if (parsed.data.status === WebsiteOrderStatus.RECEIPT_ISSUED) {
+    if (existing.receiptId) {
+      return NextResponse.json({ ok: false, error: "Receipt has already been issued for this website order." }, { status: 409 });
+    }
+    const serialized = serializeWebsiteOrder(existing);
+    const mode = isWebsiteOrderPod(serialized.orderType, serialized.paymentMethod) ? "pod" : "normal";
+    const receiptPayload = buildWebsiteOrderReceiptPayload(serialized, mode);
+    const receiptResponse = await fetch(new URL("/api/receipts?link=1", request.nextUrl.origin), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(request.headers.get("cookie") ? { cookie: request.headers.get("cookie") as string } : {}),
+      },
+      body: JSON.stringify(receiptPayload),
+      cache: "no-store",
+    });
+    const receiptData = await receiptResponse.json().catch(() => null);
+    if (!receiptResponse.ok || !receiptData?.ok) {
+      return NextResponse.json(
+        { ok: false, error: receiptData?.message || receiptData?.error || "Failed to create receipt automatically." },
+        { status: 500 },
+      );
+    }
+    const latestLinked = await prisma.websiteOrder.findUnique({
+      where: { id },
+      select: { metadata: true, receiptId: true },
+    });
+    if (latestLinked?.metadata && typeof latestLinked.metadata === "object") {
+      metadata = { ...(latestLinked.metadata as Record<string, unknown>) };
+    }
+    if (latestLinked?.receiptId) {
+      updates.receiptId = latestLinked.receiptId;
+    }
     metadata.receiptIssuedAt = nowIso;
+    metadata.receiptFlowMode = mode;
+    metadata.receiptIssuedAutomatically = true;
   }
 
   if (parsed.data.status === WebsiteOrderStatus.DISPATCHED) {
