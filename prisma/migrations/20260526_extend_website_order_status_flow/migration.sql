@@ -1,0 +1,7 @@
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'WebsiteOrderStatus') THEN
+    ALTER TYPE "WebsiteOrderStatus" ADD VALUE IF NOT EXISTS 'DISPATCHED';
+    ALTER TYPE "WebsiteOrderStatus" ADD VALUE IF NOT EXISTS 'PAYMENT_CONFIRMED';
+  END IF;
+END $$;

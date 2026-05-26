@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { WebsiteOrderStatus } from "@prisma/client";
+import { Prisma, WebsiteOrderStatus } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import {
@@ -48,9 +48,32 @@ export async function POST(request: NextRequest, context: { params: Promise<any>
     return NextResponse.json({ ok: false, error: "Cancelled website orders cannot be routed to receipts." }, { status: 400 });
   }
 
+  if (existing.status !== WebsiteOrderStatus.DELIVERED && existing.status !== WebsiteOrderStatus.RECEIPT_ISSUED) {
+    return NextResponse.json(
+      { ok: false, error: "Only delivered website orders can continue into the receipts desk." },
+      { status: 400 },
+    );
+  }
+
   const order = serializeWebsiteOrder(existing);
   const defaultMode = isWebsiteOrderPod(order.orderType, order.paymentMethod) ? "pod" : "normal";
   const mode = parsed.data.mode ?? defaultMode;
+  const currentMetadata =
+    existing.metadata && typeof existing.metadata === "object"
+      ? (existing.metadata as Record<string, unknown>)
+      : {};
+
+  await prisma.websiteOrder.update({
+    where: { id },
+    data: {
+      metadata: {
+        ...currentMetadata,
+        receiptFlowMode: mode,
+        receiptDraftOpenedAt: new Date().toISOString(),
+      } as Prisma.InputJsonValue,
+    },
+  }).catch(() => null);
+
   const prefill = buildWebsiteOrderReceiptPrefill(order, mode);
   const url = `/receipts?prefill=${encodeURIComponent(encodePrefill(prefill))}`;
 

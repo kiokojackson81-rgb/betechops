@@ -1668,12 +1668,20 @@ export async function POST(req: NextRequest) {
 
       if (payload?.websiteOrderId && (tx as any).websiteOrder) {
         try {
+          const existingWebsiteOrder = await (tx as any).websiteOrder.findUnique({
+            where: { id: String(payload.websiteOrderId) },
+            select: { metadata: true },
+          });
+          const existingMetadata =
+            existingWebsiteOrder?.metadata && typeof existingWebsiteOrder.metadata === "object"
+              ? (existingWebsiteOrder.metadata as Record<string, unknown>)
+              : {};
           await (tx as any).websiteOrder.update({
             where: { id: String(payload.websiteOrderId) },
             data: {
               receiptId: receipt.id,
-              status: "RECEIPT_ISSUED",
               metadata: {
+                ...existingMetadata,
                 ...(payload?.metadata && typeof payload.metadata === "object" ? payload.metadata : {}),
                 linkedReceiptId: receipt.id,
                 linkedReceiptNumber: receiptData.receiptNumber,

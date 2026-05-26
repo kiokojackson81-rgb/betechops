@@ -10,13 +10,17 @@ const WEBSITE_ORDER_SCHEMA_SQL = [
       CREATE TYPE "WebsiteOrderStatus" AS ENUM (
         'PENDING',
         'CONFIRMED',
-        'RECEIPT_ISSUED',
         'PROCESSING',
+        'RECEIPT_ISSUED',
+        'DISPATCHED',
+        'PAYMENT_CONFIRMED',
         'DELIVERED',
         'CANCELLED'
       );
     END IF;
   END $$`,
+  `ALTER TYPE "WebsiteOrderStatus" ADD VALUE IF NOT EXISTS 'DISPATCHED'`,
+  `ALTER TYPE "WebsiteOrderStatus" ADD VALUE IF NOT EXISTS 'PAYMENT_CONFIRMED'`,
   `DO $$
   BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'WebsiteOrderType') THEN
@@ -245,6 +249,14 @@ export type SerializedWebsiteOrder = {
     email: string | null;
   } | null;
   cancelledAt: string | null;
+  processingAt: string | null;
+  receiptIssuedAt: string | null;
+  dispatchedAt: string | null;
+  paymentConfirmedAt: string | null;
+  paymentConfirmationMethod: string | null;
+  paymentConfirmationReference: string | null;
+  deliveredAt: string | null;
+  receiptFlowMode: "pod" | "normal" | null;
   metadata: unknown;
   createdAt: string;
   updatedAt: string;
@@ -263,10 +275,32 @@ export type SerializedWebsiteOrder = {
   }>;
 };
 
+function readWebsiteOrderMetadata(metadata: unknown) {
+  const base = metadata && typeof metadata === "object" ? (metadata as Record<string, unknown>) : {};
+  const readString = (key: string) => {
+    const value = base[key];
+    return typeof value === "string" && value.trim() ? value.trim() : null;
+  };
+
+  const receiptFlowModeRaw = readString("receiptFlowMode");
+  return {
+    processingAt: readString("processingAt"),
+    receiptIssuedAt: readString("receiptIssuedAt"),
+    dispatchedAt: readString("dispatchedAt"),
+    paymentConfirmedAt: readString("paymentConfirmedAt"),
+    paymentConfirmationMethod: readString("paymentConfirmationMethod"),
+    paymentConfirmationReference: readString("paymentConfirmationReference"),
+    deliveredAt: readString("deliveredAt"),
+    receiptFlowMode: receiptFlowModeRaw === "pod" || receiptFlowModeRaw === "normal" ? receiptFlowModeRaw : null,
+  } as const;
+}
+
 export function serializeWebsiteOrder(order: WebsiteOrderListRow) {
   const subtotal = toNumberValue(order.subtotal) ?? 0;
   const deliveryFee = toNumberValue(order.deliveryFee);
   const total = toNumberValue(order.total) ?? 0;
+  const metadata = order.metadata ?? null;
+  const lifecycle = readWebsiteOrderMetadata(metadata);
 
   return {
     id: order.id,
@@ -301,7 +335,15 @@ export function serializeWebsiteOrder(order: WebsiteOrderListRow) {
         }
       : null,
     cancelledAt: order.cancelledAt?.toISOString() ?? null,
-    metadata: order.metadata ?? null,
+    processingAt: lifecycle.processingAt,
+    receiptIssuedAt: lifecycle.receiptIssuedAt,
+    dispatchedAt: lifecycle.dispatchedAt,
+    paymentConfirmedAt: lifecycle.paymentConfirmedAt,
+    paymentConfirmationMethod: lifecycle.paymentConfirmationMethod,
+    paymentConfirmationReference: lifecycle.paymentConfirmationReference,
+    deliveredAt: lifecycle.deliveredAt,
+    receiptFlowMode: lifecycle.receiptFlowMode,
+    metadata,
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
     itemCount: order.items.reduce((sum, item) => sum + item.quantity, 0),
@@ -323,10 +365,18 @@ export function serializeWebsiteOrder(order: WebsiteOrderListRow) {
 export function buildWebsiteOrderReceiptPrefill(order: ReturnType<typeof serializeWebsiteOrder>, mode: "pod" | "normal") {
   const isPickup = order.orderType === WebsiteOrderType.SHOP_PICKUP || order.deliveryMethod.toLowerCase().includes("pickup");
   const customerType = mode === "pod" ? "pod" : isPickup ? "online" : "delivery";
-  const paymentMethod = mode === "pod" ? "CASH" : "MPESA";
+  const paymentMethod =
+    order.paymentConfirmationMethod?.toUpperCase() === "MPESA"
+      ? "MPESA"
+      : order.paymentConfirmationMethod?.toUpperCase() === "CASH"
+        ? "CASH"
+        : mode === "pod"
+          ? "CASH"
+          : "MPESA";
   const notes = [
     `Website order ref: ${order.orderRef}`,
     `Website payment option: ${order.paymentMethod}`,
+    order.paymentConfirmationMethod ? `Website payment confirmed: ${order.paymentConfirmationMethod}${order.paymentConfirmationReference ? ` (${order.paymentConfirmationReference})` : ""}` : "",
     `Website delivery method: ${order.deliveryMethod}`,
     order.notes || "",
   ]
@@ -393,8 +443,10 @@ export async function ensureWebsiteOrdersSchema() {
 export const WEBSITE_ORDER_ACTIVE_STATUSES: WebsiteOrderStatus[] = [
   WebsiteOrderStatus.PENDING,
   WebsiteOrderStatus.CONFIRMED,
-  WebsiteOrderStatus.RECEIPT_ISSUED,
   WebsiteOrderStatus.PROCESSING,
+  WebsiteOrderStatus.RECEIPT_ISSUED,
+  WebsiteOrderStatus.DISPATCHED,
+  WebsiteOrderStatus.PAYMENT_CONFIRMED,
   WebsiteOrderStatus.DELIVERED,
   WebsiteOrderStatus.CANCELLED,
 ];

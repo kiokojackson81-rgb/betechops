@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { WebsiteOrderStatus } from "@prisma/client";
+import { Prisma, WebsiteOrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ensureWebsiteOrdersSchema, requireWebsiteOrdersAdmin, serializeWebsiteOrder, websiteOrderAdminInclude } from "@/lib/websiteOrders";
 
@@ -13,7 +13,7 @@ export async function POST(_: NextRequest, context: { params: Promise<any> }) {
   await ensureWebsiteOrdersSchema();
 
   const { id } = (await context.params) as { id: string };
-  const existing = await prisma.websiteOrder.findUnique({ where: { id }, select: { id: true, status: true } });
+  const existing = await prisma.websiteOrder.findUnique({ where: { id }, select: { id: true, status: true, metadata: true } });
   if (!existing) {
     return NextResponse.json({ ok: false, error: "Website order not found." }, { status: 404 });
   }
@@ -22,12 +22,27 @@ export async function POST(_: NextRequest, context: { params: Promise<any> }) {
     return NextResponse.json({ ok: false, error: "Cancelled website orders cannot be confirmed." }, { status: 400 });
   }
 
+  const metadata =
+    existing.metadata && typeof existing.metadata === "object"
+      ? (existing.metadata as Record<string, unknown>)
+      : {};
+
   const order = await prisma.websiteOrder.update({
     where: { id },
     data: {
-      status: existing.status === WebsiteOrderStatus.RECEIPT_ISSUED ? existing.status : WebsiteOrderStatus.CONFIRMED,
+      status:
+        existing.status === WebsiteOrderStatus.DELIVERED ||
+        existing.status === WebsiteOrderStatus.PAYMENT_CONFIRMED ||
+        existing.status === WebsiteOrderStatus.DISPATCHED ||
+        existing.status === WebsiteOrderStatus.RECEIPT_ISSUED
+          ? existing.status
+          : WebsiteOrderStatus.PROCESSING,
       confirmedAt: new Date(),
       confirmedById: guard.userId,
+      metadata: {
+        ...metadata,
+        processingAt: metadata.processingAt ?? new Date().toISOString(),
+      } as Prisma.InputJsonValue,
     },
     include: websiteOrderAdminInclude,
   });

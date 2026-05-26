@@ -9,7 +9,8 @@ type Props = {
   initialOrders: SerializedWebsiteOrder[];
 };
 
-const STATUS_OPTIONS = ["ALL", "PENDING", "CONFIRMED", "RECEIPT_ISSUED", "PROCESSING", "DELIVERED", "CANCELLED"] as const;
+const STATUS_OPTIONS = ["ALL", "PENDING", "PROCESSING", "RECEIPT_ISSUED", "DISPATCHED", "PAYMENT_CONFIRMED", "DELIVERED", "CANCELLED"] as const;
+const WEBSITE_LIFECYCLE = ["PENDING", "PROCESSING", "RECEIPT_ISSUED", "DISPATCHED", "PAYMENT_CONFIRMED", "DELIVERED"] as const;
 
 function formatCurrency(value: number) {
   return `Ksh ${value.toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
@@ -27,6 +28,9 @@ export default function WebsiteOrdersAdminClient({ initialOrders }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(initialOrders[0]?.id ?? null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [confirmTarget, setConfirmTarget] = useState<SerializedWebsiteOrder | null>(null);
+  const [paymentTarget, setPaymentTarget] = useState<SerializedWebsiteOrder | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState("MPESA");
+  const [paymentReference, setPaymentReference] = useState("");
   const [message, setMessage] = useState<string | null>(null);
 
   const filteredOrders = useMemo(() => {
@@ -75,20 +79,38 @@ export default function WebsiteOrdersAdminClient({ initialOrders }: Props) {
     }
   }
 
-  async function handleConfirmAndRoute(mode: "pod" | "normal") {
-    if (!confirmTarget) return;
-    const orderId = confirmTarget.id;
+  async function handlePaymentConfirm() {
+    if (!paymentTarget) return;
+    const orderId = paymentTarget.id;
+    setBusyAction(`${orderId}:PAYMENT_CONFIRMED`);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/admin/website-orders/${orderId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "PAYMENT_CONFIRMED",
+          paymentConfirmationMethod: paymentMethod,
+          paymentConfirmationReference: paymentReference,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.ok) throw new Error(data?.error || "Failed to confirm payment.");
+      setOrders((current) => current.map((order) => (order.id === orderId ? data.order : order)));
+      setPaymentTarget(null);
+      setPaymentMethod("MPESA");
+      setPaymentReference("");
+      setMessage("Payment confirmation saved.");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleRouteToReceipt(order: SerializedWebsiteOrder, mode: "pod" | "normal") {
+    const orderId = order.id;
     setBusyAction(`${orderId}:${mode}`);
     setMessage(null);
     try {
-      const confirmResponse = await fetch(`/api/admin/website-orders/${orderId}/confirm`, {
-        method: "POST",
-      });
-      const confirmData = await confirmResponse.json().catch(() => null);
-      if (!confirmResponse.ok || !confirmData?.ok) {
-        throw new Error(confirmData?.error || "Failed to confirm website order.");
-      }
-
       const draftResponse = await fetch(`/api/admin/website-orders/${orderId}/create-receipt-draft`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -99,8 +121,6 @@ export default function WebsiteOrdersAdminClient({ initialOrders }: Props) {
         throw new Error(draftData?.error || "Failed to create receipt draft.");
       }
 
-      setOrders((current) => current.map((order) => (order.id === orderId ? confirmData.order : order)));
-      setConfirmTarget(null);
       window.location.href = draftData.url;
     } finally {
       setBusyAction(null);
@@ -187,11 +207,21 @@ export default function WebsiteOrdersAdminClient({ initialOrders }: Props) {
                     <button
                       type="button"
                       onClick={() => setConfirmTarget(order)}
-                      disabled={Boolean(order.receiptId) || order.status === "CANCELLED" || busyAction?.startsWith(order.id)}
+                      disabled={order.status === "CANCELLED" || order.status === "DELIVERED" || busyAction?.startsWith(order.id)}
                       className="rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/18 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {order.status === "CONFIRMED" || order.status === "RECEIPT_ISSUED" ? "Continue to receipt" : "Confirm order"}
+                      {order.status === "PENDING" || order.status === "CONFIRMED" ? "Start processing" : "View next step"}
                     </button>
+                    {order.status === "DELIVERED" && !order.receiptId ? (
+                      <button
+                        type="button"
+                        onClick={() => handleRouteToReceipt(order, order.orderType === "POD" ? "pod" : "normal").catch((error: Error) => setMessage(error.message))}
+                        disabled={busyAction?.startsWith(order.id)}
+                        className="rounded-lg border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition hover:bg-amber-500/18 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Continue to receipts
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => handleStatusUpdate(order.id, "CANCELLED").catch((error: Error) => setMessage(error.message))}
@@ -212,6 +242,7 @@ export default function WebsiteOrdersAdminClient({ initialOrders }: Props) {
                           <div className="mt-3 grid gap-2 text-sm text-slate-200">
                             <div><span className="text-slate-500">Email:</span> {order.customerEmail || "-"}</div>
                             <div><span className="text-slate-500">Order type:</span> {order.orderType.replace(/_/g, " ")}</div>
+                            <div><span className="text-slate-500">Payment confirmed:</span> {order.paymentConfirmationMethod ? `${order.paymentConfirmationMethod}${order.paymentConfirmationReference ? ` · ${order.paymentConfirmationReference}` : ""}` : "-"}</div>
                             <div><span className="text-slate-500">Notes:</span> {order.notes || "-"}</div>
                             <div><span className="text-slate-500">Confirmed by:</span> {order.confirmedBy?.name || "-"}</div>
                             <div><span className="text-slate-500">Receipt:</span> {order.receipt?.receiptNumber || "-"}</div>
@@ -251,7 +282,7 @@ export default function WebsiteOrdersAdminClient({ initialOrders }: Props) {
                         <div className="rounded-xl border border-white/10 bg-white/5 p-4">
                           <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Lifecycle</div>
                           <div className="mt-3 flex flex-wrap gap-2">
-                            {["PENDING", "CONFIRMED", "RECEIPT_ISSUED", "PROCESSING", "DELIVERED"].map((step) => (
+                            {WEBSITE_LIFECYCLE.map((step) => (
                               <span
                                 key={step}
                                 className={`inline-flex rounded-full px-3 py-1 text-xs font-bold uppercase tracking-[0.1em] ${
@@ -269,22 +300,70 @@ export default function WebsiteOrdersAdminClient({ initialOrders }: Props) {
                         <div className="rounded-xl border border-white/10 bg-white/5 p-4">
                           <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Admin actions</div>
                           <div className="mt-3 flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleStatusUpdate(order.id, "PROCESSING").catch((error: Error) => setMessage(error.message))}
-                              disabled={order.status === "CANCELLED" || order.status === "DELIVERED" || busyAction?.startsWith(order.id)}
-                              className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              Mark Processing
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleStatusUpdate(order.id, "DELIVERED").catch((error: Error) => setMessage(error.message))}
-                              disabled={order.status === "CANCELLED" || order.status === "DELIVERED" || busyAction?.startsWith(order.id)}
-                              className="rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/18 disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              Mark Delivered
-                            </button>
+                            {(order.status === "PENDING" || order.status === "CONFIRMED") && (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmTarget(order)}
+                                disabled={busyAction?.startsWith(order.id)}
+                                className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                Start Processing
+                              </button>
+                            )}
+                            {order.status === "PROCESSING" && (
+                              <button
+                                type="button"
+                                onClick={() => handleStatusUpdate(order.id, "RECEIPT_ISSUED").catch((error: Error) => setMessage(error.message))}
+                                disabled={busyAction?.startsWith(order.id)}
+                                className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                Issue Receipt
+                              </button>
+                            )}
+                            {order.status === "RECEIPT_ISSUED" && (
+                              <button
+                                type="button"
+                                onClick={() => handleStatusUpdate(order.id, "DISPATCHED").catch((error: Error) => setMessage(error.message))}
+                                disabled={busyAction?.startsWith(order.id)}
+                                className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                Mark Dispatch / Picked
+                              </button>
+                            )}
+                            {order.status === "DISPATCHED" && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPaymentTarget(order);
+                                  setPaymentMethod(order.paymentConfirmationMethod || "MPESA");
+                                  setPaymentReference(order.paymentConfirmationReference || "");
+                                }}
+                                disabled={busyAction?.startsWith(order.id)}
+                                className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                Confirm Payment
+                              </button>
+                            )}
+                            {order.status === "PAYMENT_CONFIRMED" && (
+                              <button
+                                type="button"
+                                onClick={() => handleStatusUpdate(order.id, "DELIVERED").catch((error: Error) => setMessage(error.message))}
+                                disabled={busyAction?.startsWith(order.id)}
+                                className="rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/18 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                Mark Delivered
+                              </button>
+                            )}
+                            {order.status === "DELIVERED" && !order.receiptId && (
+                              <button
+                                type="button"
+                                onClick={() => handleRouteToReceipt(order, order.orderType === "POD" ? "pod" : "normal").catch((error: Error) => setMessage(error.message))}
+                                disabled={busyAction?.startsWith(order.id)}
+                                className="rounded-lg border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition hover:bg-amber-500/18 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                Continue to Receipts
+                              </button>
+                            )}
                           </div>
                         </div>
 
@@ -312,10 +391,10 @@ export default function WebsiteOrdersAdminClient({ initialOrders }: Props) {
       {confirmTarget ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#020617]/70 px-4">
           <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-[#111827] p-6 shadow-2xl">
-            <div className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">Confirm Website Order</div>
+            <div className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">Start Website Order Processing</div>
             <h2 className="mt-2 text-2xl font-bold text-white">{confirmTarget.orderRef}</h2>
             <p className="mt-3 text-sm leading-6 text-slate-300">
-              Confirm this customer order and choose how to process the receipt.
+              Review this customer order and move it into processing. Receipt creation will happen after the order is delivered.
             </p>
             <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
               <div className="font-semibold text-white">{confirmTarget.customerName}</div>
@@ -326,25 +405,92 @@ export default function WebsiteOrdersAdminClient({ initialOrders }: Props) {
             <div className="mt-5 flex flex-col gap-3 sm:flex-row">
               <button
                 type="button"
-                onClick={() => handleConfirmAndRoute("pod").catch((error: Error) => setMessage(error.message))}
-                disabled={Boolean(busyAction)}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-3 text-sm font-bold text-slate-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {busyAction === `${confirmTarget.id}:pod` ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Process as POD
-              </button>
-              <button
-                type="button"
-                onClick={() => handleConfirmAndRoute("normal").catch((error: Error) => setMessage(error.message))}
+                onClick={async () => {
+                  setBusyAction(`${confirmTarget.id}:PROCESSING`);
+                  setMessage(null);
+                  try {
+                    const confirmResponse = await fetch(`/api/admin/website-orders/${confirmTarget.id}/confirm`, {
+                      method: "POST",
+                    });
+                    const confirmData = await confirmResponse.json().catch(() => null);
+                    if (!confirmResponse.ok || !confirmData?.ok) {
+                      throw new Error(confirmData?.error || "Failed to start website order processing.");
+                    }
+                    setOrders((current) => current.map((order) => (order.id === confirmTarget.id ? confirmData.order : order)));
+                    setConfirmTarget(null);
+                    setMessage("Website order moved to processing.");
+                  } finally {
+                    setBusyAction(null);
+                  }
+                }}
                 disabled={Boolean(busyAction)}
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 text-sm font-bold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {busyAction === `${confirmTarget.id}:normal` ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Process as Normal POS Receipt
+                {busyAction === `${confirmTarget.id}:PROCESSING` ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Start Processing
               </button>
               <button
                 type="button"
                 onClick={() => setConfirmTarget(null)}
+                disabled={Boolean(busyAction)}
+                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/10 px-4 py-3 text-sm font-semibold text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {paymentTarget ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#020617]/70 px-4">
+          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#111827] p-6 shadow-2xl">
+            <div className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">Confirm Payment</div>
+            <h2 className="mt-2 text-2xl font-bold text-white">{paymentTarget.orderRef}</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-300">
+              Enter the payment confirmation details before moving this website order to delivered.
+            </p>
+            <div className="mt-4 grid gap-3">
+              <label className="grid gap-2 text-sm font-semibold text-slate-200">
+                Payment method
+                <select
+                  value={paymentMethod}
+                  onChange={(event) => setPaymentMethod(event.target.value)}
+                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-white"
+                >
+                  <option value="MPESA">MPESA</option>
+                  <option value="CASH">CASH</option>
+                  <option value="BANK">BANK</option>
+                  <option value="CARD">CARD</option>
+                </select>
+              </label>
+              <label className="grid gap-2 text-sm font-semibold text-slate-200">
+                Payment reference
+                <input
+                  value={paymentReference}
+                  onChange={(event) => setPaymentReference(event.target.value)}
+                  placeholder="Optional MPESA code / transaction ref"
+                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-white outline-none"
+                />
+              </label>
+            </div>
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => handlePaymentConfirm().catch((error: Error) => setMessage(error.message))}
+                disabled={Boolean(busyAction)}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 text-sm font-bold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {busyAction === `${paymentTarget.id}:PAYMENT_CONFIRMED` ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Save Payment Confirmation
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPaymentTarget(null);
+                  setPaymentMethod("MPESA");
+                  setPaymentReference("");
+                }}
                 disabled={Boolean(busyAction)}
                 className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/10 px-4 py-3 text-sm font-semibold text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
               >
