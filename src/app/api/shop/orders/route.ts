@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     const quantity = Math.max(1, item.quantity);
     const unitPrice = Number(product.price || 0);
     return {
-      productId: product.id,
+      productId: product.opsProductId ?? (product.source === "mock" ? null : product.id),
       productName: product.name,
       quantity,
       unitPrice,
