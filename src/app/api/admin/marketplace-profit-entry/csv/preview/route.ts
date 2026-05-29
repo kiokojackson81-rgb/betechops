@@ -6,6 +6,8 @@ import { mondayToSundayNairobiWindow, normalizeWeekStartFromParam } from "@/lib/
 import { aggregateMarketplaceStatementRows, parseMarketplaceStatementCsv } from "@/lib/marketplaceStatementCsv";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { upsertManualWeeklySale } from "@/lib/manualWeeklySaleUpsert";
+import { maybeAutoSendDividedWhatsappReport } from "@/lib/dividedWhatsapp";
+import { maybeAutoSendPricingWeekWhatsapp } from "@/lib/pricingWeekWhatsapp";
 import { isMarketplaceStatementDraftTableAvailable } from "@/lib/statementDraftTable";
 import { createHash } from "node:crypto";
 
@@ -470,6 +472,21 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("[csv-preview] weekly sale upsert failed", err);
+  }
+
+  try {
+    await maybeAutoSendDividedWhatsappReport({
+      weekStartRaw: weekStart.toISOString().slice(0, 10),
+      actorId,
+      source: "csv-preview",
+    });
+    await maybeAutoSendPricingWeekWhatsapp({
+      weekStartRaw: weekStart.toISOString().slice(0, 10),
+      actorId,
+      source: "csv-preview",
+    });
+  } catch (err) {
+    console.error("[csv-preview] auto-send failed", err);
   }
 
   return NextResponse.json({

@@ -5,6 +5,8 @@ import { requireRoleOrBenjamin } from "@/lib/api";
 import { normalizeWeekStartFromParam } from "@/lib/weekWindow";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { upsertManualWeeklySale } from "@/lib/manualWeeklySaleUpsert";
+import { maybeAutoSendDividedWhatsappReport } from "@/lib/dividedWhatsapp";
+import { maybeAutoSendPricingWeekWhatsapp } from "@/lib/pricingWeekWhatsapp";
 import { parseKilimallOrdersXlsx, filterOrdersToLastFullWeek, filterOrdersToWeekStart } from "@/lib/kilimallOrdersXlsx";
 import { isMarketplaceStatementDraftTableAvailable } from "@/lib/statementDraftTable";
 import { createHash } from "node:crypto";
@@ -385,6 +387,21 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("[xlsx-preview] weekly sale upsert failed", err);
+  }
+
+  try {
+    await maybeAutoSendDividedWhatsappReport({
+      weekStartRaw: weekStart.toISOString().slice(0, 10),
+      actorId,
+      source: "xlsx-preview",
+    });
+    await maybeAutoSendPricingWeekWhatsapp({
+      weekStartRaw: weekStart.toISOString().slice(0, 10),
+      actorId,
+      source: "xlsx-preview",
+    });
+  } catch (err) {
+    console.error("[xlsx-preview] auto-send failed", err);
   }
 
   return NextResponse.json({
