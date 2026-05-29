@@ -430,7 +430,6 @@ export async function PATCH(req: Request, context: ParamsContext) {
 export async function DELETE(_: Request, context: ParamsContext) {
   const auth = await requireRoleOrBrendah(["ADMIN"]);
   if (!auth.ok) return auth.res;
-  if (auth.isBrendah) return noStoreJson({ error: "Not authorized to delete products" }, { status: 403 });
 
   const capabilities = await getProductTableCapabilities(prisma);
   const id = await resolveId(context);
