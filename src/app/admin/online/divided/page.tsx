@@ -2,7 +2,12 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
-import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
+import {
+  getNextTradingPeriod,
+  getPreviousTradingPeriod,
+  getTradingPeriodFor,
+  parseTradingPeriodKey,
+} from "@/lib/tradingPeriod";
 import { getOnlineOpsWeeksForTradingPeriod } from "@/lib/onlineOpsWeeks";
 import { canonicalNairobiWeekStartUtc, parseDateOnlyUtc } from "@/lib/weekWindow";
 
@@ -36,6 +41,10 @@ export default async function AdminOnlineDividedPage({ searchParams }: { searchP
   const resolved = await Promise.resolve(searchParams ?? {});
   const period = parseTradingPeriodKey(resolved.periodKey) ?? getTradingPeriodFor(new Date());
   const now = new Date();
+  const previousPeriod = getPreviousTradingPeriod(period);
+  const nextPeriod = getNextTradingPeriod(period);
+  const currentPeriod = getTradingPeriodFor(new Date());
+  const lastPeriod = getPreviousTradingPeriod(currentPeriod);
 
   const last4Weeks = getLast4FullWeeksForTradingPeriod(period, now);
   const last4WeekStartInputs = new Set(last4Weeks.map((w) => w.startInput));
@@ -55,15 +64,52 @@ export default async function AdminOnlineDividedPage({ searchParams }: { searchP
         <p className="text-xs uppercase tracking-wide text-slate-400">Online ops</p>
         <h1 className="text-2xl font-semibold text-white">Divided view</h1>
         <p className="text-sm text-slate-400">
-          Current trading period: {period.label}. Select a week from the last 4 full Monday–Sunday weeks to see divided
-          calculations.
+          Trading period: {period.label}. Select a full Monday-Sunday week below. Use the period controls to move back
+          and review older weeks.
         </p>
+        <div className="flex flex-wrap gap-2 pt-1">
+          <Link
+            href={`/admin/online/divided?periodKey=${encodeURIComponent(currentPeriod.key)}`}
+            className={`rounded-full border px-4 py-2 text-sm font-semibold ${
+              period.key === currentPeriod.key
+                ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-200"
+                : "border-white/10 text-slate-200 hover:bg-white/5"
+            }`}
+          >
+            Current period
+          </Link>
+          <Link
+            href={`/admin/online/divided?periodKey=${encodeURIComponent(lastPeriod.key)}`}
+            className={`rounded-full border px-4 py-2 text-sm font-semibold ${
+              period.key === lastPeriod.key
+                ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-200"
+                : "border-white/10 text-slate-200 hover:bg-white/5"
+            }`}
+          >
+            Previous period
+          </Link>
+        </div>
       </header>
 
       <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
+        <div className="mb-4 flex flex-wrap gap-2">
+          <Link
+            href={`/admin/online/divided?periodKey=${encodeURIComponent(previousPeriod.key)}`}
+            className="inline-flex items-center justify-center rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5"
+          >
+            ← Previous period
+          </Link>
+          <Link
+            href={`/admin/online/divided?periodKey=${encodeURIComponent(nextPeriod.key)}`}
+            className="inline-flex items-center justify-center rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5"
+          >
+            Next period →
+          </Link>
+        </div>
+
         <div className="mt-1 grid gap-4 lg:grid-cols-3">
           <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-            <p className="text-xs uppercase tracking-wide text-slate-400">Weeks (last 4)</p>
+            <p className="text-xs uppercase tracking-wide text-slate-400">Weeks In This Period</p>
             <div className="mt-3 space-y-2 text-sm text-slate-200">
               {last4Weeks.map((wk) => (
                 <Link
