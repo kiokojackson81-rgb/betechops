@@ -315,7 +315,10 @@ export async function GET(req: Request) {
               OR "sku" ILIKE $3
               OR COALESCE("category", '') ILIKE $3
             )
-          ORDER BY COALESCE("isActive", true) DESC, "name" ASC
+          ORDER BY
+            COALESCE("isActive", true) DESC,
+            ${capabilities.available.has("createdAt") ? `"createdAt" DESC,` : ""}
+            "name" ASC
           LIMIT $4
         `,
         includeInactive,
@@ -369,7 +372,10 @@ export async function GET(req: Request) {
               OR COALESCE("key", '') ILIKE $3
               OR COALESCE("unit", '') ILIKE $3
             )
-          ORDER BY COALESCE("active", true) DESC, "name" ASC
+          ORDER BY
+            COALESCE("active", true) DESC,
+            ${capabilities.available.has("createdAt") ? `"createdAt" DESC,` : ""}
+            "name" ASC
           LIMIT $4
         `,
         includeInactive,
