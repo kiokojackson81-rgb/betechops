@@ -6,7 +6,7 @@ import ToastContainer from "@/app/_components/ToastContainer";
 import MarketplaceWeeklyCsvUpload from "@/app/_components/MarketplaceWeeklyCsvUpload.client";
 import { showToast } from "@/lib/ui/toast";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
-import { getOnlineOpsWeeksForTradingPeriod } from "@/lib/onlineOpsWeeks";
+import { ATTENDANT_ONLINE_OPS_WEEK_COUNT, getOnlineOpsWeeksForTradingPeriod } from "@/lib/onlineOpsWeeks";
 import { WeeklySaleSource, WeeklySaleStatus, type Platform } from "@prisma/client";
 
 type ShopPayload = {
@@ -47,7 +47,10 @@ export default function AttendantManualWeeklyPage() {
   const [weekStart, setWeekStart] = useState("");
 
   const period = useMemo(() => getTradingPeriodFor(new Date()), []);
-  const weeks = useMemo(() => getOnlineOpsWeeksForTradingPeriod(period, new Date(), 4), [period]);
+  const weeks = useMemo(
+    () => getOnlineOpsWeeksForTradingPeriod(period, new Date(), ATTENDANT_ONLINE_OPS_WEEK_COUNT),
+    [period],
+  );
 
   useEffect(() => {
     const last = weeks.at(-1);

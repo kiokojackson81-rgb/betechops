@@ -32,6 +32,8 @@ export type OnlineOpsWeeksWindow = {
   key: string;
 };
 
+export const ATTENDANT_ONLINE_OPS_WEEK_COUNT = 8;
+
 export function getOnlineOpsWeeksForTradingPeriod(
   period: { start: Date; end: Date },
   reference: Date = new Date(),

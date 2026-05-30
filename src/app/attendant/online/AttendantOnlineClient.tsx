@@ -8,7 +8,11 @@ import QuickStatsCard from "@/components/QuickStatsCard";
 import { useCardLock, LockButton } from "@/app/_components/useCardLock";
 import PeriodSwitcher from "@/app/_components/PeriodSwitcher";
 import useTradingPeriodQueryState from "@/app/_components/useTradingPeriodQueryState";
-import { getOnlineOpsWeeksForTradingPeriod, getOnlineOpsWindowForTradingPeriod } from "@/lib/onlineOpsWeeks";
+import {
+  ATTENDANT_ONLINE_OPS_WEEK_COUNT,
+  getOnlineOpsWeeksForTradingPeriod,
+  getOnlineOpsWindowForTradingPeriod,
+} from "@/lib/onlineOpsWeeks";
 import { computeMarketplaceCommission } from "@/lib/onlineCommission";
 import { showToast } from "@/lib/ui/toast";
 import Link from "next/link";
@@ -336,7 +340,7 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
   const [shopAllTimeTotal, setShopAllTimeTotal] = useState(0);
 
   const tradingWeeks = useMemo<TradingWeekChip[]>(() => {
-    const weeks = getOnlineOpsWeeksForTradingPeriod(period, new Date(), 4);
+    const weeks = getOnlineOpsWeeksForTradingPeriod(period, new Date(), ATTENDANT_ONLINE_OPS_WEEK_COUNT);
     return weeks.map((wk) => ({
       key: wk.startInput,
       label: wk.label.replace(/–/g, "-"),
@@ -345,7 +349,7 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
     }));
   }, [period]);
   const marketplacePeriodWindow = useMemo(
-    () => getOnlineOpsWindowForTradingPeriod(period, new Date(), 4),
+    () => getOnlineOpsWindowForTradingPeriod(period, new Date(), ATTENDANT_ONLINE_OPS_WEEK_COUNT),
     [period],
   );
   const [activeWeekKeys, setActiveWeekKeys] = useState<string[]>([]);
@@ -1170,7 +1174,7 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
                         </button>
                   </div>
                   <div className="mt-3 text-xs text-slate-400">
-                    Weeks shown are the last 4 full weeks in the selected trading period.
+                    Weeks shown are the last {ATTENDANT_ONLINE_OPS_WEEK_COUNT} full weeks in the selected trading period.
                   </div>
                 </div>
                 <div className="border-t border-slate-800 px-4 pt-3">

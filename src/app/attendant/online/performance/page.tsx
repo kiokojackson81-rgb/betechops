@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
-import { getOnlineOpsWeeksForTradingPeriod } from "@/lib/onlineOpsWeeks";
+import { ATTENDANT_ONLINE_OPS_WEEK_COUNT, getOnlineOpsWeeksForTradingPeriod } from "@/lib/onlineOpsWeeks";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 
@@ -18,7 +18,7 @@ export default async function AttendantPerformancePage() {
 
   const period = getTradingPeriodFor(new Date());
   const now = new Date();
-  const weeks = getOnlineOpsWeeksForTradingPeriod(period, now, 4);
+  const weeks = getOnlineOpsWeeksForTradingPeriod(period, now, ATTENDANT_ONLINE_OPS_WEEK_COUNT);
   const weekStarts = weeks.map((w) => w.weekStart);
 
   let dbReady = true;
