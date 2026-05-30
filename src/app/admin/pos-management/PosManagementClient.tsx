@@ -95,7 +95,6 @@ type ProductDraft = {
   category: string;
   sellingPrice: string;
   lastBuyingPrice: string;
-  defaultWarranty: string;
   variableCost: boolean;
   isActive: boolean;
   commissionEnabled: boolean;
@@ -136,7 +135,6 @@ const emptyDraft: ProductDraft = {
   category: "pos",
   sellingPrice: "",
   lastBuyingPrice: "",
-  defaultWarranty: "",
   variableCost: false,
   isActive: true,
   commissionEnabled: false,
@@ -152,12 +150,12 @@ const emptyDraft: ProductDraft = {
   galleryImageUrls: [],
   brandImageUrl: "",
   tiktokVideoUrl: "",
-  ecommerceVisible: false,
+  ecommerceVisible: true,
   isFeatured: false,
   status: "ACTIVE",
   availabilityType: "SHOP",
   pickupDelayDays: 0,
-  showInShop: false,
+  showInShop: true,
   shopCategory: "",
   shopSubcategory: "",
   shopShortDescription: "",
@@ -397,7 +395,7 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
 
   const filteredProducts = products.filter((product) => {
     const hasBuyingPrice = Number(product.lastBuyingPrice ?? 0) > 0;
-    const hasWarranty = Boolean(product.defaultWarranty?.trim());
+    const hasWarranty = Boolean((product.warrantyPeriod ?? product.shopWarranty)?.trim());
     const visibleInShop = Boolean(product.ecommerceVisible ?? product.showInShop);
     const featuredInShop = Boolean(product.isFeatured);
     const warehouseOnly = normalizeAvailabilityType(product.availabilityType) === "WAREHOUSE";
@@ -498,7 +496,7 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
         shopSubcategory: taxonomy.shopSubcategory,
         shopBrand: current.shopBrand || current.brand,
         shopShortDescription: current.shopShortDescription || current.shortDescription,
-        shopWarranty: current.shopWarranty || current.warrantyPeriod || current.defaultWarranty,
+        shopWarranty: current.shopWarranty || current.warrantyPeriod,
         shopSpecs: current.shopSpecs || current.specifications,
         shopImageUrl: current.shopImageUrl || current.mainImageUrl,
       };
@@ -525,9 +523,6 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
   const submitDraft = async () => {
     if (!draft.name.trim()) return showToast("Product name is required", "error");
     if (!draft.sellingPrice.trim()) return showToast("Selling price is required", "error");
-    if (canManagePricing && !draft.variableCost && !draft.lastBuyingPrice.trim()) {
-      return showToast("Buying price is required for fixed-cost products", "error");
-    }
     if (canManageCommissions && draft.commissionEnabled && !draft.commissionAmount.trim()) {
       return showToast("Commission amount is required when product commission is enabled", "error");
     }
@@ -536,12 +531,11 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
       const payload = {
         sku: draft.sku || undefined,
         name: draft.name,
-        category: isProductDeskMode ? "pos" : draft.category,
+        category: "pos",
         sellingPrice: Number(draft.sellingPrice || 0),
         ...(canManagePricing
           ? {
               lastBuyingPrice: draft.variableCost ? null : draft.lastBuyingPrice.trim() ? Number(draft.lastBuyingPrice) : null,
-              defaultWarranty: draft.defaultWarranty.trim() || null,
               variableCost: draft.variableCost,
             }
           : {}),
@@ -601,7 +595,6 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
       category: product.category,
       sellingPrice: String(product.sellingPrice ?? ""),
       lastBuyingPrice: product.lastBuyingPrice == null ? "" : String(product.lastBuyingPrice),
-      defaultWarranty: product.defaultWarranty ?? "",
       variableCost: Boolean(product.variableCost),
       isActive: Boolean(product.isActive),
       commissionEnabled: Boolean(product.commissionEnabled),
@@ -644,7 +637,6 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
       category: product.category,
       sellingPrice: String(product.sellingPrice ?? ""),
       lastBuyingPrice: product.lastBuyingPrice == null ? "" : String(product.lastBuyingPrice),
-      defaultWarranty: product.defaultWarranty ?? "",
       variableCost: Boolean(product.variableCost),
       isActive: Boolean(product.isActive),
       commissionEnabled: true,
@@ -1021,12 +1013,6 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
                 SKU
                 <input className={`${fieldClass} mt-1`} value={draft.sku} onChange={(e) => setDraft((s) => ({ ...s, sku: e.target.value }))} placeholder="Auto-generated if empty" />
               </label>
-              {!isProductDeskMode ? (
-                <label className="text-sm text-slate-300">
-                  Category
-                  <input className={`${fieldClass} mt-1`} value={draft.category} onChange={(e) => setDraft((s) => ({ ...s, category: e.target.value }))} />
-                </label>
-              ) : null}
               <label className="text-sm text-slate-300">
                 Selling price
                 <input className={`${fieldClass} mt-1`} type="number" min="0" value={draft.sellingPrice} onChange={(e) => setDraft((s) => ({ ...s, sellingPrice: e.target.value }))} />
@@ -1048,32 +1034,11 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
                       />
                       Variable-cost project
                     </label>
-                    {draft.variableCost ? (
-                      <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
-                        Buying price is set later by an admin after the POS sale is captured.
-                      </div>
-                    ) : (
-                      <label className="block text-sm text-slate-300">
-                        Buying price
-                        <input className={`${fieldClass} mt-1`} type="number" min="0" value={draft.lastBuyingPrice} onChange={(e) => setDraft((s) => ({ ...s, lastBuyingPrice: e.target.value }))} />
-                      </label>
-                    )}
+                    <label className="block text-sm text-slate-300">
+                      Buying price
+                      <input className={`${fieldClass} mt-1`} type="number" min="0" value={draft.lastBuyingPrice} onChange={(e) => setDraft((s) => ({ ...s, lastBuyingPrice: e.target.value }))} placeholder="Optional" />
+                    </label>
                   </div>
-                  <label className="text-sm text-slate-300">
-                    Default receipt warranty
-                    <select
-                      className={`${fieldClass} mt-1`}
-                      value={draft.defaultWarranty}
-                      onChange={(e) => setDraft((s) => ({ ...s, defaultWarranty: e.target.value }))}
-                    >
-                      <option value="">No default warranty</option>
-                      {warrantyOptions.filter(Boolean).map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
                   <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
                     <label className="flex items-center gap-2 text-sm text-slate-200">
                       <input
@@ -1133,9 +1098,9 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
                             }))
                           }
                         />
-                        Ecommerce visible
+                        Visible on website
                       </label>
-                      <div className="text-xs text-slate-500">Default should remain off until the product is shop-ready and solar-safe.</div>
+                      <div className="text-xs text-slate-500">Products are visible by default. Turn this off only when you want to hide one from the website.</div>
                       <label className="flex items-center gap-2 text-sm text-slate-200">
                         <input
                           type="checkbox"
@@ -1730,7 +1695,7 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
                           <div className="text-xs text-slate-400">{product.category}</div>
                           <div className="mt-1 flex flex-wrap gap-1.5">
                             {product.brand ? <span className="rounded-full border border-slate-700 px-2 py-0.5 text-[10px] text-slate-300">{product.brand}</span> : null}
-                            {!isProductDeskMode && product.defaultWarranty ? <span className="rounded-full border border-slate-700 px-2 py-0.5 text-[10px] text-slate-300">{product.defaultWarranty}</span> : null}
+                            {!isProductDeskMode && (product.warrantyPeriod ?? product.shopWarranty) ? <span className="rounded-full border border-slate-700 px-2 py-0.5 text-[10px] text-slate-300">{product.warrantyPeriod ?? product.shopWarranty}</span> : null}
                             <span className={`rounded-full px-2 py-0.5 text-[10px] ${availabilityType === "WAREHOUSE" ? "bg-amber-500/15 text-amber-100" : "bg-emerald-500/15 text-emerald-200"}`}>
                               {availabilityType === "WAREHOUSE" ? "Warehouse" : "Shop"}
                             </span>

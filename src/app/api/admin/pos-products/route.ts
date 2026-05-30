@@ -24,7 +24,7 @@ const productSchema = z.object({
   commissionAmount: z.coerce.number().min(0).nullable().optional(),
   commissionRequiresApproval: z.boolean().optional().default(false),
   brand: z.string().trim().max(120).nullable().optional(),
-  shortDescription: z.string().trim().max(1000).nullable().optional(),
+  shortDescription: z.string().trim().max(3000).nullable().optional(),
   description: z.string().trim().max(10000).nullable().optional(),
   specifications: z.union([z.string().trim().max(5000), z.array(z.string().trim().max(500)).max(30)]).nullable().optional(),
   warrantyPeriod: z.string().trim().max(120).nullable().optional(),
@@ -33,7 +33,7 @@ const productSchema = z.object({
   galleryImageUrls: z.array(z.string().trim().max(500)).max(12).nullable().optional(),
   brandImageUrl: z.string().trim().max(500).nullable().optional(),
   tiktokVideoUrl: z.string().trim().max(500).nullable().optional(),
-  ecommerceVisible: z.boolean().optional().default(false),
+  ecommerceVisible: z.boolean().optional().default(true),
   isFeatured: z.boolean().optional().default(false),
   status: productStatusEnum.optional().default("ACTIVE"),
   availabilityType: availabilityTypeEnum.optional().default("SHOP"),
@@ -41,7 +41,7 @@ const productSchema = z.object({
   showInShop: z.boolean().optional(),
   shopCategory: z.string().trim().max(120).nullable().optional(),
   shopSubcategory: z.string().trim().max(120).nullable().optional(),
-  shopShortDescription: z.string().trim().max(1000).nullable().optional(),
+  shopShortDescription: z.string().trim().max(3000).nullable().optional(),
   shopWarranty: z.string().trim().max(255).nullable().optional(),
   shopSpecs: z.string().trim().max(2000).nullable().optional(),
   shopImageUrl: z.string().trim().max(500).nullable().optional(),
@@ -253,7 +253,7 @@ function sanitizeBrendahProductCreate(data: z.infer<typeof productSchema>): z.in
     status: "ACTIVE",
     availabilityType: data.availabilityType ?? "SHOP",
     pickupDelayDays: (data.availabilityType ?? "SHOP") === "WAREHOUSE" ? 1 : 0,
-    showInShop: true,
+    showInShop: Boolean(data.ecommerceVisible ?? data.showInShop ?? true),
   };
 }
 
@@ -394,12 +394,6 @@ export async function POST(req: Request) {
   const capabilities = await getProductTableCapabilities(prisma);
   const actorId = (auth.session?.user as { id?: string } | undefined)?.id ?? (await getActorId());
   const data = auth.isBrendah ? sanitizeBrendahProductCreate(parsed.data) : parsed.data;
-  if (!auth.isBrendah && !data.variableCost && !(Number(data.lastBuyingPrice ?? 0) > 0)) {
-    return noStoreJson(
-      { error: { fieldErrors: { lastBuyingPrice: ["Buying price is required for fixed-cost products"] } } },
-      { status: 400 },
-    );
-  }
   const normalizedStatus = data.status ?? (data.isActive ? "ACTIVE" : "INACTIVE");
   const normalizedIsActive = normalizedStatus === "ACTIVE" && Boolean(data.isActive);
   const skuBase = slugifySku(data.sku || data.name);

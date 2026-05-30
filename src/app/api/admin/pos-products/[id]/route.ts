@@ -24,7 +24,7 @@ const updateSchema = z.object({
   commissionAmount: z.coerce.number().min(0).nullable().optional(),
   commissionRequiresApproval: z.boolean().optional(),
   brand: z.string().trim().max(120).nullable().optional(),
-  shortDescription: z.string().trim().max(1000).nullable().optional(),
+  shortDescription: z.string().trim().max(3000).nullable().optional(),
   description: z.string().trim().max(10000).nullable().optional(),
   specifications: z.union([z.string().trim().max(5000), z.array(z.string().trim().max(500)).max(30)]).nullable().optional(),
   warrantyPeriod: z.string().trim().max(120).nullable().optional(),
@@ -41,7 +41,7 @@ const updateSchema = z.object({
   showInShop: z.boolean().optional(),
   shopCategory: z.string().trim().max(120).nullable().optional(),
   shopSubcategory: z.string().trim().max(120).nullable().optional(),
-  shopShortDescription: z.string().trim().max(1000).nullable().optional(),
+  shopShortDescription: z.string().trim().max(3000).nullable().optional(),
   shopWarranty: z.string().trim().max(255).nullable().optional(),
   shopSpecs: z.string().trim().max(2000).nullable().optional(),
   shopImageUrl: z.string().trim().max(500).nullable().optional(),
@@ -119,7 +119,7 @@ function sanitizeBrendahProductUpdate(data: z.infer<typeof updateSchema>): z.inf
     status: "ACTIVE" as const,
     availabilityType: nextAvailabilityType,
     pickupDelayDays: nextAvailabilityType === "WAREHOUSE" ? 1 : 0,
-    showInShop: true,
+    showInShop: Boolean(data.ecommerceVisible ?? data.showInShop ?? true),
     shopCategory: data.shopCategory,
     shopSubcategory: data.shopSubcategory,
     shopShortDescription: data.shopShortDescription,
@@ -273,13 +273,6 @@ export async function PATCH(req: Request, context: ParamsContext) {
   const nextStatus = data.status ?? String(existing.status || (Boolean(existing.isActive) ? "ACTIVE" : "INACTIVE")).toUpperCase();
   const normalizedAvailabilityType = data.availabilityType ?? String(existing.availabilityType || "SHOP").toUpperCase();
   const normalizedPickupDelayDays = normalizedAvailabilityType === "WAREHOUSE" ? 1 : 0;
-  if (!auth.isBrendah && capabilities.schemaMode === "modern" && !nextVariableCost && !(Number(nextLastBuyingPrice ?? 0) > 0)) {
-    return noStoreJson(
-      { error: { fieldErrors: { lastBuyingPrice: ["Buying price is required for fixed-cost products"] } } },
-      { status: 400 },
-    );
-  }
-
   const nextSku = data.sku ? normalizeSku(data.sku) : undefined;
   if (nextSku) {
     const duplicate = await findDuplicateSku(id, nextSku, capabilities);
