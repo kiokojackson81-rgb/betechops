@@ -12,7 +12,7 @@ import ShopHeader from "@/app/shop/_components/ShopHeader";
 import ShopProductDetailActions from "@/app/shop/_components/ShopProductDetailActions";
 import ShopProductGallery from "@/app/shop/_components/ShopProductGallery";
 import { formatCurrency, shopStyles } from "@/app/shop/_components/shopStyles";
-import { getShopProductBySlug, getShopProducts } from "@/app/shop/shopApi";
+import { getShopProductBySlug, getShopProductBySlugOrOpsProductId, getShopProducts } from "@/app/shop/shopApi";
 import { buildProductJsonLd, buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks, type ShopProduct } from "@/app/shop/shopData";
 import { getProductAvailabilityBadge, getProductAvailabilityMessage, getProductCheckoutAvailabilityMessage } from "@/app/shop/shopAvailability";
@@ -97,9 +97,16 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   });
 }
 
-export default async function ShopProductDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function ShopProductDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ opsProductId?: string }> | { opsProductId?: string };
+}) {
   const { slug } = await params;
-  const product = await getShopProductBySlug(slug);
+  const resolvedSearchParams = await Promise.resolve(searchParams ?? {});
+  const product = await getShopProductBySlugOrOpsProductId(slug, resolvedSearchParams.opsProductId);
   if (!product) notFound();
 
   const products = await getShopProducts();

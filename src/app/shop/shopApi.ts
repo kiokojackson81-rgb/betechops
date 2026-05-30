@@ -97,6 +97,29 @@ export async function getShopProductBySlug(slug: string): Promise<ShopProduct | 
   return isShopOpsApiEnabled() ? null : allShopProducts.find((product) => product.slug === slug) ?? null;
 }
 
+export async function getShopProductBySlugOrOpsProductId(slug: string, opsProductId?: string | null): Promise<ShopProduct | null> {
+  const normalizedOpsProductId = String(opsProductId || "").trim();
+
+  if (typeof window === "undefined") {
+    const products = await getServerShopProducts();
+    return (
+      products.find((product) => product.slug === slug) ??
+      (normalizedOpsProductId ? products.find((product) => product.opsProductId === normalizedOpsProductId) : null) ??
+      null
+    );
+  }
+
+  const productBySlug = await getShopProductBySlug(slug);
+  if (productBySlug || !normalizedOpsProductId) return productBySlug;
+
+  const response = await fetchJson<{ products: ShopProduct[] }>(getApiUrl(`/api/shop/products`)).catch(() => null);
+  if (response?.products) {
+    return response.products.find((product) => product.opsProductId === normalizedOpsProductId) ?? null;
+  }
+
+  return null;
+}
+
 export async function createShopOrder(input: ShopOrderInput) {
   if (isShopOpsApiEnabled()) {
     const response = await fetch("http://127.0.0.1:3000/api/shop/orders", {
