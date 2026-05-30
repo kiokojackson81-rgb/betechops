@@ -520,6 +520,37 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
     }
   }, [loadData, productApiBase, query]);
 
+  const persistImageFields = useCallback(
+    async (patch: Partial<Pick<ProductDraft, "mainImageUrl" | "galleryImageUrls" | "brandImageUrl" | "shopImageUrl">>) => {
+      if (!draft.id) return;
+
+      const payload: Record<string, unknown> = {};
+      if (patch.mainImageUrl !== undefined && capabilities.mainImageUrl) {
+        payload.mainImageUrl = patch.mainImageUrl.trim() || null;
+      }
+      if (patch.galleryImageUrls !== undefined && capabilities.galleryImageUrls) {
+        payload.galleryImageUrls = patch.galleryImageUrls;
+      }
+      if (patch.brandImageUrl !== undefined && capabilities.brandImageUrl) {
+        payload.brandImageUrl = patch.brandImageUrl.trim() || null;
+      }
+      if (patch.shopImageUrl !== undefined && capabilities.shopImageUrl) {
+        payload.shopImageUrl = patch.shopImageUrl.trim() || null;
+      }
+      if (!Object.keys(payload).length) return;
+
+      const res = await fetch(`${productApiBase}/${draft.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(getApiErrorMessage(json, "Failed to save image changes"));
+      await loadData(query);
+    },
+    [capabilities.brandImageUrl, capabilities.galleryImageUrls, capabilities.mainImageUrl, capabilities.shopImageUrl, draft.id, loadData, productApiBase, query],
+  );
+
   const submitDraft = async () => {
     if (!draft.name.trim()) return showToast("Product name is required", "error");
     if (!draft.sellingPrice.trim()) return showToast("Selling price is required", "error");
@@ -1287,6 +1318,7 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
                           try {
                             const url = await uploadProductImage(file, "main");
                             setDraft((s) => ({ ...s, mainImageUrl: url, shopImageUrl: url }));
+                            await persistImageFields({ mainImageUrl: url, shopImageUrl: url });
                             showToast("Main image uploaded", "success");
                           } catch (err) {
                             showToast(err instanceof Error ? err.message : "Failed to upload main image", "error");
@@ -1295,7 +1327,21 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
                           }
                         }}
                       />
-                      <button type="button" className="mt-2 text-xs text-slate-400 hover:text-white" onClick={() => setDraft((s) => ({ ...s, mainImageUrl: "", shopImageUrl: "" }))}>Remove main image</button>
+                      <button
+                        type="button"
+                        className="mt-2 text-xs text-slate-400 hover:text-white"
+                        onClick={async () => {
+                          setDraft((s) => ({ ...s, mainImageUrl: "", shopImageUrl: "" }));
+                          try {
+                            await persistImageFields({ mainImageUrl: "", shopImageUrl: "" });
+                            showToast("Main image removed", "success");
+                          } catch (err) {
+                            showToast(err instanceof Error ? err.message : "Failed to remove main image", "error");
+                          }
+                        }}
+                      >
+                        Remove main image
+                      </button>
                     </div>
                     <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
                       <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Gallery images</div>
@@ -1304,7 +1350,22 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
                         {draft.galleryImageUrls.length ? draft.galleryImageUrls.map((url, index) => (
                           <div key={`${url}-${index}`} className="relative">
                             <img src={url} alt={`Gallery ${index + 1}`} className="h-20 w-full rounded-lg object-cover" />
-                            <button type="button" className="absolute right-1 top-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white" onClick={() => setDraft((s) => ({ ...s, galleryImageUrls: s.galleryImageUrls.filter((_, itemIndex) => itemIndex !== index) }))}>Remove</button>
+                            <button
+                              type="button"
+                              className="absolute right-1 top-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white"
+                              onClick={async () => {
+                                const nextGallery = draft.galleryImageUrls.filter((_, itemIndex) => itemIndex !== index);
+                                setDraft((s) => ({ ...s, galleryImageUrls: nextGallery }));
+                                try {
+                                  await persistImageFields({ galleryImageUrls: nextGallery });
+                                  showToast("Gallery image removed", "success");
+                                } catch (err) {
+                                  showToast(err instanceof Error ? err.message : "Failed to remove gallery image", "error");
+                                }
+                              }}
+                            >
+                              Remove
+                            </button>
                           </div>
                         )) : <div className="col-span-2 flex h-20 items-center justify-center rounded-lg border border-dashed border-slate-700 text-xs text-slate-500">No gallery images</div>}
                       </div>
@@ -1322,7 +1383,9 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
                             for (const file of files) {
                               uploaded.push(await uploadProductImage(file, "gallery"));
                             }
-                            setDraft((s) => ({ ...s, galleryImageUrls: [...s.galleryImageUrls, ...uploaded] }));
+                            const nextGallery = [...draft.galleryImageUrls, ...uploaded];
+                            setDraft((s) => ({ ...s, galleryImageUrls: nextGallery }));
+                            await persistImageFields({ galleryImageUrls: nextGallery });
                             showToast("Gallery images uploaded", "success");
                           } catch (err) {
                             showToast(err instanceof Error ? err.message : "Failed to upload gallery images", "error");
