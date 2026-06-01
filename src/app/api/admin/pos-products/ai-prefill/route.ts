@@ -8,6 +8,38 @@ export const runtime = "nodejs";
 
 const client = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 
+function normalizeOptionalString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeSellingPrice(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "string") return null;
+  const digits = value.replace(/[^\d.]/g, "").trim();
+  if (!digits) return null;
+  const parsed = Number(digits);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeSpecifications(value: unknown) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => normalizeOptionalString(item))
+      .filter(Boolean)
+      .slice(0, 12);
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(/\r?\n|(?:^|\s)[-*•]\s+|(?<=\.)\s+(?=[A-Z])/)
+      .map((item) => item.replace(/^[-*•]\s*/, "").trim())
+      .filter(Boolean)
+      .slice(0, 12);
+  }
+
+  return [];
+}
+
 const aiProductPrefillSchema = z.object({
   name: z.string().trim().default(""),
   brand: z.string().trim().default(""),
@@ -73,8 +105,18 @@ export async function POST(req: Request) {
 
     const content = completion.choices?.[0]?.message?.content ?? "";
     const parsedJson = JSON.parse(content || "{}");
-    const parsed = aiProductPrefillSchema.safeParse(parsedJson);
+    const normalizedProduct = {
+      name: normalizeOptionalString(parsedJson?.name),
+      brand: normalizeOptionalString(parsedJson?.brand),
+      sellingPrice: normalizeSellingPrice(parsedJson?.sellingPrice),
+      warrantyPeriod: normalizeOptionalString(parsedJson?.warrantyPeriod),
+      shortDescription: normalizeOptionalString(parsedJson?.shortDescription),
+      description: normalizeOptionalString(parsedJson?.description),
+      specifications: normalizeSpecifications(parsedJson?.specifications),
+    };
+    const parsed = aiProductPrefillSchema.safeParse(normalizedProduct);
     if (!parsed.success) {
+      console.error("[admin/pos-products/ai-prefill] invalid AI payload", parsed.error.flatten(), parsedJson);
       throw new Error("AI returned invalid product details");
     }
 
