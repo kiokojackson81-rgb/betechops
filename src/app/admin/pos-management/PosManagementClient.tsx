@@ -2030,7 +2030,7 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
                   const visibleInShop = Boolean(product.ecommerceVisible ?? product.showInShop);
                   const availabilityType = normalizeAvailabilityType(product.availabilityType);
                   const displayImage = product.mainImageUrl || product.shopImageUrl || "";
-                  const shopHref = `/shop/product/${slugifyShopProductName(product.name)}?opsProductId=${encodeURIComponent(product.id)}`;
+                  const shopHref = `/shop/product/${slugifyShopProductName(product.name)}`;
 
                   return <tr key={product.id} className={draft.id === product.id ? "bg-emerald-500/5" : undefined}>
                     {canUseBulkActions ? (
