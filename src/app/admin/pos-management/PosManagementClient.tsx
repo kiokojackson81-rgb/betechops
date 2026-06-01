@@ -184,8 +184,8 @@ const emptyDraft: ProductDraft = {
 function createDraftDefaults(mode: "admin" | "product-desk"): ProductDraft {
   return {
     ...emptyDraft,
-    ecommerceVisible: mode === "product-desk",
-    showInShop: mode === "product-desk",
+    ecommerceVisible: true,
+    showInShop: true,
   };
 }
 
@@ -843,12 +843,12 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
         ...(capabilities.mainImageUrl ? { mainImageUrl: draft.mainImageUrl.trim() || null } : {}),
         ...(capabilities.galleryImageUrls ? { galleryImageUrls: draft.galleryImageUrls } : {}),
         ...(capabilities.tiktokVideoUrl ? { tiktokVideoUrl: draft.tiktokVideoUrl.trim() || null } : {}),
-        ...(capabilities.ecommerceVisible ? { ecommerceVisible: isProductDeskMode ? true : draft.ecommerceVisible } : {}),
+        ...(capabilities.ecommerceVisible ? { ecommerceVisible: draft.id ? draft.ecommerceVisible : true } : {}),
         ...(capabilities.isFeatured ? { isFeatured: canManageFeaturedStatus ? draft.isFeatured : false } : {}),
         ...(capabilities.status ? { status: isProductDeskMode ? "ACTIVE" : draft.status } : {}),
         ...(capabilities.availabilityType ? { availabilityType: draft.availabilityType } : {}),
         ...(capabilities.pickupDelayDays ? { pickupDelayDays: draft.pickupDelayDays } : {}),
-        ...(capabilities.showInShop ? { showInShop: isProductDeskMode ? true : draft.showInShop } : {}),
+        ...(capabilities.showInShop ? { showInShop: draft.id ? draft.showInShop : true } : {}),
         ...(capabilities.shopCategory ? { shopCategory: draft.shopCategory || null } : {}),
         ...(capabilities.shopSubcategory ? { shopSubcategory: draft.shopSubcategory || null } : {}),
         ...(capabilities.shopShortDescription ? { shopShortDescription: draft.shopShortDescription.trim() || null } : {}),

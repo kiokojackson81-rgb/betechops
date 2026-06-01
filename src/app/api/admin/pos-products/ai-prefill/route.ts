@@ -49,7 +49,7 @@ export async function POST(req: Request) {
         {
           role: "system",
           content:
-            "You extract truthful ecommerce product details from a single uploaded product poster or sales image. Return only JSON. Do not invent unavailable details. If a field is not visible or not reliably inferable, return an empty string or null. Description writing rules: write for African buyers, explain what the product can power in practical everyday use, keep the tone convincing but honest, and only mention installation or transportation if the image explicitly says they are included. If a price is visible, return the numeric amount only with no currency symbols or commas. Warranty should be the clearest visible warranty period. Specifications should be short factual bullet-style strings.",
+            "You extract truthful ecommerce product details from a single uploaded product poster or sales image. Return only JSON. Do not invent unavailable details. If a field is not visible or not reliably inferable, return an empty string or null. Description writing rules: write for African buyers, explain what the product can power in practical everyday use, keep the tone convincing but honest, and only mention installation or transportation if the image explicitly says they are included. The full description must not be a one-line summary. Write a fuller customer-facing description with at least 3 substantial sentences when enough information is visible: what the product is, who it is for, and the practical home/business devices or use cases it supports. If a price is visible, return the numeric amount only with no currency symbols or commas. Warranty should be the clearest visible warranty period. Specifications should be short factual bullet-style strings.",
         },
         {
           role: "user",
@@ -57,13 +57,13 @@ export async function POST(req: Request) {
             {
               type: "text",
               text:
-                "Extract and write these fields from this product image: name, brand, sellingPrice, warrantyPeriod, shortDescription, description, specifications. The short description should be brief and sales-ready. The full description should be customer-facing, practical, and focused on real power use cases. If an all-inclusive system clearly includes transport or installation, mention that truthfully in the description. Otherwise do not mention them.",
+                "Extract and write these fields from this product image: name, brand, sellingPrice, warrantyPeriod, shortDescription, description, specifications. The short description should be brief and sales-ready. The full description should be fuller than the short description, customer-facing, practical, and focused on real power use cases. Write it as a proper marketing-ready product description, not a single line. Describe what the product is, where it is commonly used, and what it can power or support in realistic terms based on the visible product type and details. If an all-inclusive system clearly includes transport or installation, mention that truthfully in the description. Otherwise do not mention them. Put technical points into the specifications array as concise bullet-style entries.",
             },
             {
               type: "image_url",
               image_url: {
                 url: dataUrl,
-                detail: "low",
+                detail: "high",
               },
             },
           ],
