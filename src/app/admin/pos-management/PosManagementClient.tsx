@@ -551,33 +551,26 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
 
     const sourceWidth = sourceImage.naturalWidth || sourceImage.width;
     const sourceHeight = sourceImage.naturalHeight || sourceImage.height;
-    const sourceAspect = sourceWidth / sourceHeight;
-    const targetAspect = PRODUCT_GALLERY_AI_WIDTH / PRODUCT_GALLERY_AI_HEIGHT;
+    const coverScale = Math.max(PRODUCT_GALLERY_AI_WIDTH / sourceWidth, PRODUCT_GALLERY_AI_HEIGHT / sourceHeight);
+    const coverWidth = Math.round(sourceWidth * coverScale);
+    const coverHeight = Math.round(sourceHeight * coverScale);
+    const coverX = Math.round((PRODUCT_GALLERY_AI_WIDTH - coverWidth) / 2);
+    const coverY = Math.round((PRODUCT_GALLERY_AI_HEIGHT - coverHeight) / 2);
 
-    let cropWidth = sourceWidth;
-    let cropHeight = sourceHeight;
-    let cropX = 0;
-    let cropY = 0;
+    context.filter = "blur(28px) brightness(1.03)";
+    context.drawImage(sourceImage, coverX, coverY, coverWidth, coverHeight);
+    context.filter = "none";
+    context.fillStyle = "rgba(255,255,255,0.16)";
+    context.fillRect(0, 0, PRODUCT_GALLERY_AI_WIDTH, PRODUCT_GALLERY_AI_HEIGHT);
 
-    if (sourceAspect > targetAspect) {
-      cropWidth = Math.round(sourceHeight * targetAspect);
-      cropX = Math.max(0, Math.round((sourceWidth - cropWidth) / 2));
-    } else if (sourceAspect < targetAspect) {
-      cropHeight = Math.round(sourceWidth / targetAspect);
-      cropY = Math.max(0, Math.round((sourceHeight - cropHeight) / 2));
-    }
+    // Fit the full generated artwork inside the target canvas so text and branding stay intact.
+    const containScale = Math.min(PRODUCT_GALLERY_AI_WIDTH / sourceWidth, PRODUCT_GALLERY_AI_HEIGHT / sourceHeight);
+    const containWidth = Math.round(sourceWidth * containScale);
+    const containHeight = Math.round(sourceHeight * containScale);
+    const containX = Math.round((PRODUCT_GALLERY_AI_WIDTH - containWidth) / 2);
+    const containY = Math.round((PRODUCT_GALLERY_AI_HEIGHT - containHeight) / 2);
 
-    context.drawImage(
-      sourceImage,
-      cropX,
-      cropY,
-      cropWidth,
-      cropHeight,
-      0,
-      0,
-      PRODUCT_GALLERY_AI_WIDTH,
-      PRODUCT_GALLERY_AI_HEIGHT,
-    );
+    context.drawImage(sourceImage, containX, containY, containWidth, containHeight);
 
     const resizedBlob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob((result) => {

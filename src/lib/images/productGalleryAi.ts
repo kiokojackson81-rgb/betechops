@@ -9,6 +9,8 @@ Keep all original wording, logos, prices, specifications, icons, badges, contact
 
 Reframe the design into a clean wide product image layout similar to a website catalog banner. The image should fill the frame well with minimal empty margins. Arrange the content so the main product is large, centered, sharp, and professional, while all text sections remain balanced and fully visible.
 
+Preserve the entire source artwork from edge to edge. No text may be cut off, hidden, truncated, or pushed outside the frame. If the original design is tall or square, reduce and reposition the composition so everything remains visible inside the wide canvas.
+
 Requirements:
 
 - Output size: 1774 x 887 px
