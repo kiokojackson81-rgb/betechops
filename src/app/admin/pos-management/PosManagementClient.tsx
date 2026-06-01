@@ -698,12 +698,20 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
   const applyAiPrefill = useCallback((product: AiProductPrefill) => {
     setDraft((current) => {
       const nextBrand = product.brand.trim();
+      const nextName = product.name.trim() || current.name;
       const nextWarranty = product.warrantyPeriod.trim();
       const nextShortDescription = product.shortDescription.trim();
       const nextDescription = product.description.trim();
       const nextSpecifications = Array.isArray(product.specifications)
         ? product.specifications.map((item) => item.trim()).filter(Boolean).join("\n")
         : "";
+      const nextShopTaxonomy = detectShopCategoryAndSubcategory({
+        name: nextName,
+        category: current.category,
+        brand: nextBrand || current.brand,
+        specifications: nextSpecifications || current.specifications,
+        shopCategory: current.shopCategory,
+      });
       const nextSellingPrice =
         typeof product.sellingPrice === "number" && Number.isFinite(product.sellingPrice) && product.sellingPrice > 0
           ? String(Math.round(product.sellingPrice))
@@ -711,7 +719,7 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
 
       return {
         ...current,
-        name: product.name.trim() || current.name,
+        name: nextName,
         brand: nextBrand || current.brand,
         shopBrand: nextBrand || current.shopBrand,
         sellingPrice: nextSellingPrice,
@@ -722,6 +730,8 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
         description: nextDescription || current.description,
         specifications: nextSpecifications || current.specifications,
         shopSpecs: nextSpecifications || current.shopSpecs,
+        shopCategory: nextShopTaxonomy.shopCategory || current.shopCategory,
+        shopSubcategory: nextShopTaxonomy.shopSubcategory || current.shopSubcategory,
       };
     });
   }, []);
