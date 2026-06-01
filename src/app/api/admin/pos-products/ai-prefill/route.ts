@@ -74,14 +74,14 @@ export async function POST(req: Request) {
     const dataUrl = `data:${mimeType};base64,${base64Image}`;
 
     const completion = await client.chat.completions.create({
-      model: "gpt-4.1-mini",
+      model: "gpt-4.1",
       temperature: 0.2,
       response_format: { type: "json_object" },
       messages: [
         {
           role: "system",
           content:
-            "You extract truthful ecommerce product details from a single uploaded product poster or sales image. Return only JSON. Do not invent unavailable details. If a field is not visible or not reliably inferable, return an empty string or null. Description writing rules: write for African buyers, explain what the product can power in practical everyday use, keep the tone convincing but honest, and only mention installation or transportation if the image explicitly says they are included. The full description must not be a one-line summary. Write a fuller customer-facing description with at least 3 substantial sentences when enough information is visible: what the product is, who it is for, and the practical home/business devices or use cases it supports. If a price is visible, return the numeric amount only with no currency symbols or commas. Warranty should be the clearest visible warranty period. Specifications should be short factual bullet-style strings.",
+            "You extract truthful ecommerce product details from a single uploaded product poster or sales image. Return only JSON. Do not invent unavailable details. If a field is not visible or not reliably inferable, return an empty string or null. Write for African buyers and practical Kenyan use cases. If a price is visible, return the numeric amount only with no currency symbols or commas. Warranty should be the clearest visible warranty period. Specifications should be short factual bullet-style strings. The full description must be rich and properly structured, not a one-line summary. When the image is a full system package or contains enough details, write a long-form customer-facing description with section headings and bullet-style lines inside the description string. Use only sections supported by the image, such as: Price, System Components, Key Features, Warranty, What This System Can Power, Ideal For, and Package Benefits. Only mention installation, transportation, included accessories, or nationwide service if the image explicitly says they are included.",
         },
         {
           role: "user",
@@ -89,7 +89,7 @@ export async function POST(req: Request) {
             {
               type: "text",
               text:
-                "Extract and write these fields from this product image: name, brand, sellingPrice, warrantyPeriod, shortDescription, description, specifications. The short description should be brief and sales-ready. The full description should be fuller than the short description, customer-facing, practical, and focused on real power use cases. Write it as a proper marketing-ready product description, not a single line. Describe what the product is, where it is commonly used, and what it can power or support in realistic terms based on the visible product type and details. If an all-inclusive system clearly includes transport or installation, mention that truthfully in the description. Otherwise do not mention them. Put technical points into the specifications array as concise bullet-style entries.",
+                "Extract and write these fields from this product image: name, brand, sellingPrice, warrantyPeriod, shortDescription, description, specifications. The short description should be brief and sales-ready. The full description should be much more detailed than the short description. For solar systems and bundled packages, write a proper long-form product description similar to a catalogue entry. Start with a short opening overview paragraph, then include clear sections when visible from the image: Price, System Components, Key Features, Warranty, What This System Can Power, Ideal For, and Package Benefits. Under those sections, include concise bullet-style lines in plain text. Be convincing but truthful. Describe what the system can power in realistic home, office, farm, or business use based on the visible wattage, battery, inverter, panel count, or written claims. Only mention transport, installation, all-inclusive accessories, or nationwide coverage if the image explicitly confirms them. Put core technical points into the specifications array as concise factual entries.",
             },
             {
               type: "image_url",
