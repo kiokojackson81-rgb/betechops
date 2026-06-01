@@ -546,6 +546,8 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
     canvas.height = PRODUCT_GALLERY_AI_HEIGHT;
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Browser canvas is unavailable");
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
 
     const sourceWidth = sourceImage.naturalWidth || sourceImage.width;
     const sourceHeight = sourceImage.naturalHeight || sourceImage.height;
@@ -584,10 +586,10 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
           return;
         }
         resolve(result);
-      }, "image/jpeg", 0.95);
+      }, "image/png");
     });
 
-    return new File([resizedBlob], "website-gallery-wide.jpg", { type: "image/jpeg" });
+    return new File([resizedBlob], "website-gallery-wide.png", { type: "image/png" });
   }, [loadImageElement]);
 
   const openCreateEditor = useCallback(() => {

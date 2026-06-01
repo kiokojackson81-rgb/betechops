@@ -40,10 +40,9 @@ export async function POST(req: Request) {
       image: inputFile,
       prompt: PRODUCT_GALLERY_AI_PROMPT,
       size: "1536x1024",
-      quality: "medium" as any,
-      input_fidelity: "low" as any,
-      output_format: "jpeg",
-      output_compression: 82,
+      quality: "high" as any,
+      input_fidelity: "high" as any,
+      output_format: "png",
       background: "opaque",
       user: (auth.session?.user as { id?: string } | undefined)?.id,
     } as any);
@@ -55,7 +54,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       imageBase64,
-      mimeType: "image/jpeg",
+      mimeType: "image/png",
       width: PRODUCT_GALLERY_AI_WIDTH,
       height: PRODUCT_GALLERY_AI_HEIGHT,
     });
