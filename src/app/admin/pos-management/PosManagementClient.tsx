@@ -7,6 +7,7 @@ import { showToast } from "@/lib/ui/toast";
 import { getAcceptedImageUploadHint, getAcceptedImageUploadValue } from "@/lib/images/uploadImageFormat";
 import {
   PRODUCT_GALLERY_AI_HEIGHT,
+  PRODUCT_GALLERY_AI_MAX_SOURCE_EDGE,
   PRODUCT_GALLERY_AI_SOURCE_TYPES,
   PRODUCT_GALLERY_AI_WIDTH,
 } from "@/lib/images/productGalleryAi";
@@ -494,18 +495,19 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
   }, []);
 
   const normalizeSourceImageForAi = useCallback(async (file: File) => {
-    if (PRODUCT_GALLERY_AI_SOURCE_TYPES.has(file.type)) {
-      return file;
-    }
-
     if (!file.type.startsWith("image/") || file.type === "image/svg+xml") {
       throw new Error("AI redesign currently supports JPG, PNG, or WebP source images");
     }
 
+    const preferredMimeType = PRODUCT_GALLERY_AI_SOURCE_TYPES.has(file.type) ? file.type : "image/jpeg";
     const sourceImage = await loadImageElement(file);
+    const sourceWidth = sourceImage.naturalWidth || sourceImage.width;
+    const sourceHeight = sourceImage.naturalHeight || sourceImage.height;
+    const longestEdge = Math.max(sourceWidth, sourceHeight);
+    const scale = longestEdge > PRODUCT_GALLERY_AI_MAX_SOURCE_EDGE ? PRODUCT_GALLERY_AI_MAX_SOURCE_EDGE / longestEdge : 1;
     const canvas = document.createElement("canvas");
-    canvas.width = sourceImage.naturalWidth || sourceImage.width;
-    canvas.height = sourceImage.naturalHeight || sourceImage.height;
+    canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+    canvas.height = Math.max(1, Math.round(sourceHeight * scale));
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Browser image conversion is unavailable");
     context.drawImage(sourceImage, 0, 0, canvas.width, canvas.height);
@@ -517,11 +519,13 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
           return;
         }
         resolve(result);
-      }, "image/jpeg", 0.95);
+      }, preferredMimeType, preferredMimeType === "image/jpeg" ? 0.9 : undefined);
     });
 
     const normalizedName = file.name.replace(/\.[^.]+$/, "") || "product-image";
-    return new File([normalizedBlob], `${normalizedName}.jpg`, { type: "image/jpeg" });
+    const normalizedExtension =
+      preferredMimeType === "image/png" ? "png" : preferredMimeType === "image/webp" ? "webp" : "jpg";
+    return new File([normalizedBlob], `${normalizedName}.${normalizedExtension}`, { type: preferredMimeType });
   }, [loadImageElement]);
 
   const resizeAiProductGalleryImage = useCallback(async (blob: Blob) => {

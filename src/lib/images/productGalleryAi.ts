@@ -1,5 +1,6 @@
 export const PRODUCT_GALLERY_AI_WIDTH = 1774;
 export const PRODUCT_GALLERY_AI_HEIGHT = 887;
+export const PRODUCT_GALLERY_AI_MAX_SOURCE_EDGE = 1600;
 
 // OpenAI image models work best when asked to preserve the source text and branding exactly.
 export const PRODUCT_GALLERY_AI_PROMPT = `Redesign and resize this image into a wide website product gallery image.

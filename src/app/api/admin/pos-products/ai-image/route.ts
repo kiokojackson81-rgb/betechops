@@ -40,8 +40,10 @@ export async function POST(req: Request) {
       image: inputFile,
       prompt: PRODUCT_GALLERY_AI_PROMPT,
       size: "1776x896" as any,
-      quality: "high" as any,
+      quality: "medium" as any,
+      input_fidelity: "low" as any,
       output_format: "jpeg",
+      output_compression: 82,
       background: "opaque",
       user: (auth.session?.user as { id?: string } | undefined)?.id,
     } as any);
