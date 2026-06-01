@@ -39,7 +39,7 @@ export async function POST(req: Request) {
       model: "gpt-image-1",
       image: inputFile,
       prompt: PRODUCT_GALLERY_AI_PROMPT,
-      size: "1776x896" as any,
+      size: "1536x1024",
       quality: "medium" as any,
       input_fidelity: "low" as any,
       output_format: "jpeg",
