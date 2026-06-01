@@ -334,6 +334,7 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
   const [saving, setSaving] = useState(false);
   const [uploadingKind, setUploadingKind] = useState<"main" | "gallery" | "brand" | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
+  const [aiAction, setAiAction] = useState<"prefill" | "redesign" | "both" | null>(null);
   const [pendingMainImageFile, setPendingMainImageFile] = useState<File | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [approvalBusyId, setApprovalBusyId] = useState<string | null>(null);
@@ -736,75 +737,93 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
     });
   }, []);
 
-  const applyAiAssist = useCallback(async () => {
+  const runAiPrefill = useCallback(async (sourceFile: File) => {
+    const prefillForm = new FormData();
+    prefillForm.append("file", sourceFile);
+
+    const prefillResponse = await fetch(`${productApiBase}/ai-prefill`, {
+      method: "POST",
+      body: prefillForm,
+    });
+    const prefillJson = await prefillResponse.json().catch(() => ({}));
+
+    if (!prefillResponse.ok) {
+      throw new Error(getApiErrorMessage(prefillJson, "AI product prefill failed"));
+    }
+
+    const product = (prefillJson?.product ?? null) as AiProductPrefill | null;
+    if (!product) {
+      throw new Error("AI did not return product details");
+    }
+
+    applyAiPrefill(product);
+  }, [applyAiPrefill, productApiBase]);
+
+  const runAiImageRedesign = useCallback(async (sourceFile: File) => {
+    const imageForm = new FormData();
+    imageForm.append("file", sourceFile);
+
+    const imageResponse = await fetch(`${productApiBase}/ai-image`, {
+      method: "POST",
+      body: imageForm,
+    });
+    const imageJson = await imageResponse.json().catch(() => ({}));
+
+    if (!imageResponse.ok) {
+      throw new Error(getApiErrorMessage(imageJson, "AI image redesign failed"));
+    }
+
+    const imageBase64 = typeof imageJson?.imageBase64 === "string" ? imageJson.imageBase64 : "";
+    const mimeType = typeof imageJson?.mimeType === "string" ? imageJson.mimeType : "image/jpeg";
+    if (!imageBase64) {
+      throw new Error("AI image redesign returned no image");
+    }
+
+    const aiBlob = decodeBase64Image(imageBase64, mimeType);
+    const galleryFile = await resizeAiProductGalleryImage(aiBlob);
+    const url = await uploadProductImage(galleryFile, "main");
+    setDraft((current) => ({ ...current, mainImageUrl: url, shopImageUrl: url }));
+    await persistImageFields({ mainImageUrl: url, shopImageUrl: url });
+  }, [decodeBase64Image, persistImageFields, productApiBase, resizeAiProductGalleryImage, uploadProductImage]);
+
+  const applyAiAssist = useCallback(async (mode: "prefill" | "redesign" | "both") => {
     if (!pendingMainImageFile) {
       showToast("Choose an image first", "error");
       return;
     }
 
     setAiBusy(true);
+    setAiAction(mode);
     try {
       const sourceFile = await normalizeSourceImageForAi(pendingMainImageFile);
-      const imageForm = new FormData();
-      imageForm.append("file", sourceFile);
-      const prefillForm = new FormData();
-      prefillForm.append("file", sourceFile);
 
-      const [imageResponse, prefillResponse] = await Promise.all([
-        fetch(`${productApiBase}/ai-image`, {
-          method: "POST",
-          body: imageForm,
-        }),
-        fetch(`${productApiBase}/ai-prefill`, {
-          method: "POST",
-          body: prefillForm,
-        }),
-      ]);
-
-      const imageJson = await imageResponse.json().catch(() => ({}));
-      const prefillJson = await prefillResponse.json().catch(() => ({}));
-
-      if (!prefillResponse.ok) {
-        throw new Error(getApiErrorMessage(prefillJson, "AI product prefill failed"));
+      if (mode === "both") {
+        await Promise.all([runAiPrefill(sourceFile), runAiImageRedesign(sourceFile)]);
+      } else if (mode === "prefill") {
+        await runAiPrefill(sourceFile);
+      } else {
+        await runAiImageRedesign(sourceFile);
       }
 
-      const product = (prefillJson?.product ?? null) as AiProductPrefill | null;
-      if (!product) {
-        throw new Error("AI did not return product details");
+      if (mode === "both") {
+        showToast("AI image and product details prepared", "success");
+      } else if (mode === "prefill") {
+        showToast("AI product details prepared", "success");
+      } else {
+        showToast("AI website gallery image prepared", "success");
       }
-      applyAiPrefill(product);
-
-      if (imageResponse.ok) {
-        const imageBase64 = typeof imageJson?.imageBase64 === "string" ? imageJson.imageBase64 : "";
-        const mimeType = typeof imageJson?.mimeType === "string" ? imageJson.mimeType : "image/jpeg";
-        if (imageBase64) {
-          const aiBlob = decodeBase64Image(imageBase64, mimeType);
-          const galleryFile = await resizeAiProductGalleryImage(aiBlob);
-          const url = await uploadProductImage(galleryFile, "main");
-          setDraft((current) => ({ ...current, mainImageUrl: url, shopImageUrl: url }));
-          await persistImageFields({ mainImageUrl: url, shopImageUrl: url });
-        }
-      }
-
       setPendingMainImageFile(null);
-      showToast(
-        imageResponse.ok ? "AI image and product details prepared" : "AI product details prepared; image redesign skipped",
-        "success",
-      );
     } catch (err) {
       showToast(err instanceof Error ? err.message : "AI assist failed", "error");
     } finally {
       setAiBusy(false);
+      setAiAction(null);
     }
   }, [
-    applyAiPrefill,
-    decodeBase64Image,
     normalizeSourceImageForAi,
     pendingMainImageFile,
-    persistImageFields,
-    productApiBase,
-    resizeAiProductGalleryImage,
-    uploadProductImage,
+    runAiImageRedesign,
+    runAiPrefill,
   ]);
 
   const submitDraft = async () => {
@@ -1578,9 +1597,18 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
                         <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-slate-300">
                           <div className="font-medium text-emerald-100">{pendingMainImageFile.name}</div>
                           <div className="mt-1 text-slate-400">
-                            Use the AI button to rebuild this into a wide `1774 x 887 px` website gallery image and prefill
-                            product details from the uploaded artwork.
+                            Choose what AI should do with this uploaded artwork: prefill product details, redesign the
+                            main website gallery image, or do both together.
                           </div>
+                          {aiBusy && aiAction ? (
+                            <div className="mt-2 text-[11px] uppercase tracking-[0.18em] text-emerald-300">
+                              {aiAction === "prefill"
+                                ? "AI is prefilling product details"
+                                : aiAction === "redesign"
+                                  ? "AI is redesigning the website image"
+                                  : "AI is redesigning the image and prefilling details"}
+                            </div>
+                          ) : null}
                           <div className="mt-3 flex flex-wrap gap-2">
                             <button
                               type="button"
@@ -1592,11 +1620,27 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
                             </button>
                             <button
                               type="button"
+                              className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={uploadingKind !== null || aiBusy}
+                              onClick={() => void applyAiAssist("prefill")}
+                            >
+                              {aiBusy && aiAction === "prefill" ? "AI prefilling..." : "AI prefill details"}
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-100 hover:bg-cyan-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={uploadingKind !== null || aiBusy}
+                              onClick={() => void applyAiAssist("redesign")}
+                            >
+                              {aiBusy && aiAction === "redesign" ? "AI redesigning..." : "AI redesign image"}
+                            </button>
+                            <button
+                              type="button"
                               className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-black hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
                               disabled={uploadingKind !== null || aiBusy}
-                              onClick={() => void applyAiAssist()}
+                              onClick={() => void applyAiAssist("both")}
                             >
-                              {aiBusy ? "AI processing..." : "AI wide gallery & prefill"}
+                              {aiBusy && aiAction === "both" ? "AI processing both..." : "AI do both"}
                             </button>
                             <button
                               type="button"
