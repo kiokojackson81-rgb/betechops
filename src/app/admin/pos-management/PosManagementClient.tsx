@@ -580,15 +580,53 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
 
     const sourceWidth = sourceImage.naturalWidth || sourceImage.width;
     const sourceHeight = sourceImage.naturalHeight || sourceImage.height;
-    const targetAspect = PRODUCT_GALLERY_AI_WIDTH / PRODUCT_GALLERY_AI_HEIGHT;
-    const cropHeight = Math.min(sourceHeight, Math.round(sourceWidth / targetAspect));
-    const cropWidth = Math.round(cropHeight * targetAspect);
-    const cropX = Math.max(0, Math.round((sourceWidth - cropWidth) / 2));
-    const cropY = Math.max(0, Math.round((sourceHeight - cropHeight) / 2));
+    const containScale = Math.min(PRODUCT_GALLERY_AI_WIDTH / sourceWidth, PRODUCT_GALLERY_AI_HEIGHT / sourceHeight);
+    const containWidth = Math.round(sourceWidth * containScale);
+    const containHeight = Math.round(sourceHeight * containScale);
+    const containX = Math.round((PRODUCT_GALLERY_AI_WIDTH - containWidth) / 2);
+    const containY = Math.round((PRODUCT_GALLERY_AI_HEIGHT - containHeight) / 2);
+    const sideInset = Math.min(96, Math.max(24, Math.round(sourceWidth * 0.12)));
 
     context.fillStyle = "#f7f2ea";
     context.fillRect(0, 0, PRODUCT_GALLERY_AI_WIDTH, PRODUCT_GALLERY_AI_HEIGHT);
-    context.drawImage(sourceImage, cropX, cropY, cropWidth, cropHeight, 0, 0, PRODUCT_GALLERY_AI_WIDTH, PRODUCT_GALLERY_AI_HEIGHT);
+
+    if (containX > 0) {
+      context.save();
+      context.filter = "blur(18px)";
+      context.drawImage(sourceImage, 0, 0, sideInset, sourceHeight, 0, 0, containX, PRODUCT_GALLERY_AI_HEIGHT);
+      context.drawImage(
+        sourceImage,
+        Math.max(0, sourceWidth - sideInset),
+        0,
+        sideInset,
+        sourceHeight,
+        containX + containWidth,
+        0,
+        PRODUCT_GALLERY_AI_WIDTH - (containX + containWidth),
+        PRODUCT_GALLERY_AI_HEIGHT,
+      );
+      context.restore();
+    }
+
+    if (containY > 0) {
+      context.save();
+      context.filter = "blur(18px)";
+      context.drawImage(sourceImage, 0, 0, sourceWidth, sideInset, 0, 0, PRODUCT_GALLERY_AI_WIDTH, containY);
+      context.drawImage(
+        sourceImage,
+        0,
+        Math.max(0, sourceHeight - sideInset),
+        sourceWidth,
+        sideInset,
+        0,
+        containY + containHeight,
+        PRODUCT_GALLERY_AI_WIDTH,
+        PRODUCT_GALLERY_AI_HEIGHT - (containY + containHeight),
+      );
+      context.restore();
+    }
+
+    context.drawImage(sourceImage, containX, containY, containWidth, containHeight);
 
     const resizedBlob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob((result) => {
