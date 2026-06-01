@@ -62,6 +62,69 @@ function buildBreadcrumbTitle(product: ShopProduct) {
   return toDisplayCase(segments.slice(0, 2).join(", ") || normalizedName, product.brand);
 }
 
+const DESCRIPTION_SECTION_HEADINGS = [
+  "Specifications",
+  "Key Features",
+  "Benefits",
+  "Ideal For",
+  "Suitable For",
+  "Applications",
+  "What's Included",
+  "Includes",
+  "Warranty",
+] as const;
+
+function formatSpecificationLabel(value: string) {
+  return value
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function splitSpecificationContent(value: string) {
+  const matches = Array.from(value.matchAll(/([A-Z][A-Za-z0-9\/ ]{1,24}):\s*([^:]+?)(?=\s+[A-Z][A-Za-z0-9\/ ]{1,24}:|$)/g));
+  if (!matches.length) return [value.trim()];
+  return matches
+    .map((match) => `${formatSpecificationLabel(match[1])}: ${match[2].trim()}`)
+    .filter(Boolean);
+}
+
+function splitDescriptionIntoBullets(value: string) {
+  const normalized = value.replace(/\s+/g, " ").replace(/\bPrice\s*$/i, "").trim();
+  if (!normalized) return [];
+
+  const sectioned = DESCRIPTION_SECTION_HEADINGS.reduce((text, heading) => {
+    const pattern = new RegExp(`\\s*${heading}\\s*:?\\s*`, "gi");
+    return text.replace(pattern, `\n${heading}: `);
+  }, normalized);
+
+  return sectioned
+    .split("\n")
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+    .flatMap((segment) => {
+      const sentenceParts = segment
+        .split(/(?<=[.!?])\s+(?=[A-Z])/)
+        .map((part) => part.trim())
+        .filter(Boolean);
+
+      if (sentenceParts.length > 1) return sentenceParts;
+      if (/^[A-Z][A-Za-z ]{2,24}:\s*/.test(segment)) return splitSpecificationContent(segment);
+      return [segment];
+    });
+}
+
+function buildDetailBullets(product: ShopProduct) {
+  return Array.from(
+    new Set(
+      [product.fullDescription, ...product.specs]
+        .flatMap((value) => splitDescriptionIntoBullets(String(value || "")))
+        .map((value) => value.replace(/\s+/g, " ").trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
 function extractTikTokVideoId(value: string | null | undefined) {
   const normalized = String(value || "").trim();
   if (!normalized) return null;
@@ -124,6 +187,7 @@ export default async function ShopProductDetailPage({
   const galleryImages = product.galleryImages?.length ? product.galleryImages : [product.image];
   const visualTitle = buildVisualTitle(product);
   const breadcrumbTitle = buildBreadcrumbTitle(product);
+  const detailBullets = buildDetailBullets(product);
   const tiktokEmbedUrl = getTikTokEmbedUrl(product.tiktokVideoUrl);
   const supportItems = [
     {
@@ -158,7 +222,7 @@ export default async function ShopProductDetailPage({
       title: "Key specifications",
       content: (
         <ul className="grid gap-3 text-sm leading-6 text-slate-600">
-          {product.specs.map((spec) => (
+          {detailBullets.map((spec) => (
             <li key={spec} className="flex items-start gap-3">
               <BadgeCheck className="mt-1 h-4 w-4 shrink-0 text-[#7a0000]" />
               <span>{spec}</span>
