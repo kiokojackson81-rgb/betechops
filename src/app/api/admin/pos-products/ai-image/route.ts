@@ -3,6 +3,8 @@ import OpenAI, { toFile } from "openai";
 import { requireRoleOrBrendah } from "@/lib/api";
 import { isAcceptedImageFile } from "@/lib/images/uploadImageFormat";
 import {
+  PRODUCT_GALLERY_AI_EDIT_HEIGHT,
+  PRODUCT_GALLERY_AI_EDIT_WIDTH,
   PRODUCT_GALLERY_AI_HEIGHT,
   PRODUCT_GALLERY_AI_PROMPT,
   PRODUCT_GALLERY_AI_WIDTH,
@@ -39,7 +41,7 @@ export async function POST(req: Request) {
       model: "gpt-image-1",
       image: inputFile,
       prompt: PRODUCT_GALLERY_AI_PROMPT,
-      size: "1536x1024",
+      size: `${PRODUCT_GALLERY_AI_EDIT_WIDTH}x${PRODUCT_GALLERY_AI_EDIT_HEIGHT}`,
       quality: "high" as any,
       input_fidelity: "high" as any,
       output_format: "png",

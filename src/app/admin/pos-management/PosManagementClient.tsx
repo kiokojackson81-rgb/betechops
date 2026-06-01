@@ -6,6 +6,8 @@ import { findSimilarProducts } from "@/lib/posProductSimilarity";
 import { showToast } from "@/lib/ui/toast";
 import { getAcceptedImageUploadHint, getAcceptedImageUploadValue } from "@/lib/images/uploadImageFormat";
 import {
+  PRODUCT_GALLERY_AI_EDIT_HEIGHT,
+  PRODUCT_GALLERY_AI_EDIT_WIDTH,
   PRODUCT_GALLERY_AI_HEIGHT,
   PRODUCT_GALLERY_AI_MAX_SOURCE_EDGE,
   PRODUCT_GALLERY_AI_SOURCE_TYPES,
@@ -517,11 +519,38 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
     const longestEdge = Math.max(sourceWidth, sourceHeight);
     const scale = longestEdge > PRODUCT_GALLERY_AI_MAX_SOURCE_EDGE ? PRODUCT_GALLERY_AI_MAX_SOURCE_EDGE / longestEdge : 1;
     const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(sourceWidth * scale));
-    canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+    canvas.width = PRODUCT_GALLERY_AI_EDIT_WIDTH;
+    canvas.height = PRODUCT_GALLERY_AI_EDIT_HEIGHT;
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Browser image conversion is unavailable");
-    context.drawImage(sourceImage, 0, 0, canvas.width, canvas.height);
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+
+    const scaledWidth = Math.max(1, Math.round(sourceWidth * scale));
+    const scaledHeight = Math.max(1, Math.round(sourceHeight * scale));
+    const safePadding = 44;
+    const safeWidth = PRODUCT_GALLERY_AI_EDIT_WIDTH - safePadding * 2;
+    const safeHeight = Math.round(safeWidth / (PRODUCT_GALLERY_AI_WIDTH / PRODUCT_GALLERY_AI_HEIGHT));
+    const containScale = Math.min(safeWidth / scaledWidth, safeHeight / scaledHeight);
+    const containWidth = Math.round(scaledWidth * containScale);
+    const containHeight = Math.round(scaledHeight * containScale);
+    const containX = Math.round((PRODUCT_GALLERY_AI_EDIT_WIDTH - containWidth) / 2);
+    const containY = Math.round((PRODUCT_GALLERY_AI_EDIT_HEIGHT - containHeight) / 2);
+
+    const coverScale = Math.max(PRODUCT_GALLERY_AI_EDIT_WIDTH / scaledWidth, PRODUCT_GALLERY_AI_EDIT_HEIGHT / scaledHeight);
+    const coverWidth = Math.round(scaledWidth * coverScale);
+    const coverHeight = Math.round(scaledHeight * coverScale);
+    const coverX = Math.round((PRODUCT_GALLERY_AI_EDIT_WIDTH - coverWidth) / 2);
+    const coverY = Math.round((PRODUCT_GALLERY_AI_EDIT_HEIGHT - coverHeight) / 2);
+
+    context.fillStyle = "#f7f2ea";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.filter = "blur(26px) brightness(1.02)";
+    context.drawImage(sourceImage, coverX, coverY, coverWidth, coverHeight);
+    context.filter = "none";
+    context.fillStyle = "rgba(255,255,255,0.22)";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(sourceImage, containX, containY, containWidth, containHeight);
 
     const normalizedBlob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob((result) => {
@@ -551,26 +580,15 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
 
     const sourceWidth = sourceImage.naturalWidth || sourceImage.width;
     const sourceHeight = sourceImage.naturalHeight || sourceImage.height;
-    const coverScale = Math.max(PRODUCT_GALLERY_AI_WIDTH / sourceWidth, PRODUCT_GALLERY_AI_HEIGHT / sourceHeight);
-    const coverWidth = Math.round(sourceWidth * coverScale);
-    const coverHeight = Math.round(sourceHeight * coverScale);
-    const coverX = Math.round((PRODUCT_GALLERY_AI_WIDTH - coverWidth) / 2);
-    const coverY = Math.round((PRODUCT_GALLERY_AI_HEIGHT - coverHeight) / 2);
+    const targetAspect = PRODUCT_GALLERY_AI_WIDTH / PRODUCT_GALLERY_AI_HEIGHT;
+    const cropHeight = Math.min(sourceHeight, Math.round(sourceWidth / targetAspect));
+    const cropWidth = Math.round(cropHeight * targetAspect);
+    const cropX = Math.max(0, Math.round((sourceWidth - cropWidth) / 2));
+    const cropY = Math.max(0, Math.round((sourceHeight - cropHeight) / 2));
 
-    context.filter = "blur(28px) brightness(1.03)";
-    context.drawImage(sourceImage, coverX, coverY, coverWidth, coverHeight);
-    context.filter = "none";
-    context.fillStyle = "rgba(255,255,255,0.16)";
+    context.fillStyle = "#f7f2ea";
     context.fillRect(0, 0, PRODUCT_GALLERY_AI_WIDTH, PRODUCT_GALLERY_AI_HEIGHT);
-
-    // Fit the full generated artwork inside the target canvas so text and branding stay intact.
-    const containScale = Math.min(PRODUCT_GALLERY_AI_WIDTH / sourceWidth, PRODUCT_GALLERY_AI_HEIGHT / sourceHeight);
-    const containWidth = Math.round(sourceWidth * containScale);
-    const containHeight = Math.round(sourceHeight * containScale);
-    const containX = Math.round((PRODUCT_GALLERY_AI_WIDTH - containWidth) / 2);
-    const containY = Math.round((PRODUCT_GALLERY_AI_HEIGHT - containHeight) / 2);
-
-    context.drawImage(sourceImage, containX, containY, containWidth, containHeight);
+    context.drawImage(sourceImage, cropX, cropY, cropWidth, cropHeight, 0, 0, PRODUCT_GALLERY_AI_WIDTH, PRODUCT_GALLERY_AI_HEIGHT);
 
     const resizedBlob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob((result) => {
