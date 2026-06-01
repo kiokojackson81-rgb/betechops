@@ -182,6 +182,103 @@ function compactUnique(values: Array<string | null | undefined>) {
   );
 }
 
+async function queryOpsCatalogueProducts(whereClause = "", params: unknown[] = []) {
+  const capabilities = await getProductTableCapabilities(prisma);
+  const available = capabilities.available;
+
+  if (capabilities.schemaMode === "modern") {
+    return prisma.$queryRawUnsafe<OpsCatalogueProduct[]>(
+      `
+      SELECT
+        "id",
+        "sku",
+        "name",
+        COALESCE("category", 'Accessories') AS "category",
+        COALESCE("sellingPrice", 0) AS "sellingPrice",
+        "defaultWarranty",
+        COALESCE("minStockLevel", 0) AS "minStockLevel",
+        COALESCE("stockQuantity", 0) AS "stockQuantity",
+        COALESCE("isActive", true) AS "isActive",
+        ${available.has("brand") ? `"brand"` : `NULL::text`} AS "brand",
+        ${available.has("shortDescription") ? `"shortDescription"` : `NULL::text`} AS "shortDescription",
+        ${available.has("description") ? `"description"` : `NULL::text`} AS "description",
+        ${available.has("specifications") ? `"specifications"` : `NULL::jsonb`} AS "specifications",
+        ${available.has("warrantyPeriod") ? `"warrantyPeriod"` : `NULL::text`} AS "warrantyPeriod",
+        ${available.has("warrantyNotes") ? `"warrantyNotes"` : `NULL::text`} AS "warrantyNotes",
+        ${available.has("mainImageUrl") ? `"mainImageUrl"` : `NULL::text`} AS "mainImageUrl",
+        ${available.has("galleryImageUrls") ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
+        ${available.has("brandImageUrl") ? `"brandImageUrl"` : `NULL::text`} AS "brandImageUrl",
+        ${available.has("tiktokVideoUrl") ? `"tiktokVideoUrl"` : `NULL::text`} AS "tiktokVideoUrl",
+        ${available.has("ecommerceVisible") ? `COALESCE("ecommerceVisible", false)` : `NULL::boolean`} AS "ecommerceVisible",
+        ${available.has("isFeatured") ? `COALESCE("isFeatured", false)` : `NULL::boolean`} AS "isFeatured",
+        ${available.has("status") ? `"status"` : `NULL::text`} AS "status",
+        ${available.has("availabilityType") ? `"availabilityType"` : `NULL::text`} AS "availabilityType",
+        ${available.has("pickupDelayDays") ? `COALESCE("pickupDelayDays", 0)` : `NULL::int`} AS "pickupDelayDays",
+        ${available.has("showInShop") ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
+        ${available.has("shopCategory") ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
+        ${available.has("shopSubcategory") ? `"shopSubcategory"` : `NULL::text`} AS "shopSubcategory",
+        ${available.has("shopShortDescription") ? `"shopShortDescription"` : `NULL::text`} AS "shopShortDescription",
+        ${available.has("shopWarranty") ? `"shopWarranty"` : `NULL::text`} AS "shopWarranty",
+        ${available.has("shopSpecs") ? `"shopSpecs"` : `NULL::text`} AS "shopSpecs",
+        ${available.has("shopImageUrl") ? `"shopImageUrl"` : `NULL::text`} AS "shopImageUrl",
+        ${available.has("shopBrand") ? `"shopBrand"` : `NULL::text`} AS "shopBrand"
+      FROM "Product"
+      WHERE COALESCE("isActive", true) = true
+      ${whereClause}
+      ORDER BY "name" ASC
+    `,
+      ...params,
+    );
+  }
+
+  if (available.has("key") && available.has("sellPrice")) {
+    return prisma.$queryRawUnsafe<OpsCatalogueProduct[]>(
+      `
+      SELECT
+        "id",
+        COALESCE("key", "id") AS "sku",
+        "name",
+        COALESCE("unit", 'Accessories') AS "category",
+        COALESCE("sellPrice", 0) AS "sellingPrice",
+        NULL::text AS "defaultWarranty",
+        0 AS "minStockLevel",
+        0 AS "stockQuantity",
+        COALESCE("active", true) AS "isActive",
+        ${available.has("brand") ? `"brand"` : `NULL::text`} AS "brand",
+        ${available.has("shortDescription") ? `"shortDescription"` : `NULL::text`} AS "shortDescription",
+        ${available.has("description") ? `"description"` : `NULL::text`} AS "description",
+        ${available.has("specifications") ? `"specifications"` : `NULL::jsonb`} AS "specifications",
+        ${available.has("warrantyPeriod") ? `"warrantyPeriod"` : `NULL::text`} AS "warrantyPeriod",
+        ${available.has("warrantyNotes") ? `"warrantyNotes"` : `NULL::text`} AS "warrantyNotes",
+        ${available.has("mainImageUrl") ? `"mainImageUrl"` : `NULL::text`} AS "mainImageUrl",
+        ${available.has("galleryImageUrls") ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
+        ${available.has("brandImageUrl") ? `"brandImageUrl"` : `NULL::text`} AS "brandImageUrl",
+        ${available.has("tiktokVideoUrl") ? `"tiktokVideoUrl"` : `NULL::text`} AS "tiktokVideoUrl",
+        ${available.has("ecommerceVisible") ? `COALESCE("ecommerceVisible", false)` : `NULL::boolean`} AS "ecommerceVisible",
+        ${available.has("isFeatured") ? `COALESCE("isFeatured", false)` : `NULL::boolean`} AS "isFeatured",
+        ${available.has("status") ? `"status"` : `NULL::text`} AS "status",
+        ${available.has("availabilityType") ? `"availabilityType"` : `NULL::text`} AS "availabilityType",
+        ${available.has("pickupDelayDays") ? `COALESCE("pickupDelayDays", 0)` : `NULL::int`} AS "pickupDelayDays",
+        ${available.has("showInShop") ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
+        ${available.has("shopCategory") ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
+        ${available.has("shopSubcategory") ? `"shopSubcategory"` : `NULL::text`} AS "shopSubcategory",
+        ${available.has("shopShortDescription") ? `"shopShortDescription"` : `NULL::text`} AS "shopShortDescription",
+        ${available.has("shopWarranty") ? `"shopWarranty"` : `NULL::text`} AS "shopWarranty",
+        ${available.has("shopSpecs") ? `"shopSpecs"` : `NULL::text`} AS "shopSpecs",
+        ${available.has("shopImageUrl") ? `"shopImageUrl"` : `NULL::text`} AS "shopImageUrl",
+        ${available.has("shopBrand") ? `"shopBrand"` : `NULL::text`} AS "shopBrand"
+      FROM "Product"
+      WHERE COALESCE("active", true) = true
+      ${whereClause}
+      ORDER BY "name" ASC
+    `,
+      ...params,
+    );
+  }
+
+  throw new Error(`Unsupported Product table shape for read-only shop sync. Columns: ${Array.from(available).join(", ")}`);
+}
+
 function normalizeOptionalText(value: string | null | undefined) {
   const normalized = String(value || "").trim();
   return normalized || null;
@@ -576,93 +673,7 @@ export function filterShopProducts(
 }
 
 export async function getOpsCatalogueProductsReadOnly() {
-  const capabilities = await getProductTableCapabilities(prisma);
-  const available = capabilities.available;
-
-  let products: OpsCatalogueProduct[] = [];
-
-  if (capabilities.schemaMode === "modern") {
-    products = await prisma.$queryRawUnsafe<OpsCatalogueProduct[]>(`
-      SELECT
-        "id",
-        "sku",
-        "name",
-        COALESCE("category", 'Accessories') AS "category",
-        COALESCE("sellingPrice", 0) AS "sellingPrice",
-        "defaultWarranty",
-        COALESCE("minStockLevel", 0) AS "minStockLevel",
-        COALESCE("stockQuantity", 0) AS "stockQuantity",
-        COALESCE("isActive", true) AS "isActive",
-        ${available.has("brand") ? `"brand"` : `NULL::text`} AS "brand",
-        ${available.has("shortDescription") ? `"shortDescription"` : `NULL::text`} AS "shortDescription",
-        ${available.has("description") ? `"description"` : `NULL::text`} AS "description",
-        ${available.has("specifications") ? `"specifications"` : `NULL::jsonb`} AS "specifications",
-        ${available.has("warrantyPeriod") ? `"warrantyPeriod"` : `NULL::text`} AS "warrantyPeriod",
-        ${available.has("warrantyNotes") ? `"warrantyNotes"` : `NULL::text`} AS "warrantyNotes",
-        ${available.has("mainImageUrl") ? `"mainImageUrl"` : `NULL::text`} AS "mainImageUrl",
-        ${available.has("galleryImageUrls") ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
-        ${available.has("brandImageUrl") ? `"brandImageUrl"` : `NULL::text`} AS "brandImageUrl",
-        ${available.has("tiktokVideoUrl") ? `"tiktokVideoUrl"` : `NULL::text`} AS "tiktokVideoUrl",
-        ${available.has("ecommerceVisible") ? `COALESCE("ecommerceVisible", false)` : `NULL::boolean`} AS "ecommerceVisible",
-        ${available.has("isFeatured") ? `COALESCE("isFeatured", false)` : `NULL::boolean`} AS "isFeatured",
-        ${available.has("status") ? `"status"` : `NULL::text`} AS "status",
-        ${available.has("availabilityType") ? `"availabilityType"` : `NULL::text`} AS "availabilityType",
-        ${available.has("pickupDelayDays") ? `COALESCE("pickupDelayDays", 0)` : `NULL::int`} AS "pickupDelayDays",
-        ${available.has("showInShop") ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
-        ${available.has("shopCategory") ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
-        ${available.has("shopSubcategory") ? `"shopSubcategory"` : `NULL::text`} AS "shopSubcategory",
-        ${available.has("shopShortDescription") ? `"shopShortDescription"` : `NULL::text`} AS "shopShortDescription",
-        ${available.has("shopWarranty") ? `"shopWarranty"` : `NULL::text`} AS "shopWarranty",
-        ${available.has("shopSpecs") ? `"shopSpecs"` : `NULL::text`} AS "shopSpecs",
-        ${available.has("shopImageUrl") ? `"shopImageUrl"` : `NULL::text`} AS "shopImageUrl",
-        ${available.has("shopBrand") ? `"shopBrand"` : `NULL::text`} AS "shopBrand"
-      FROM "Product"
-      WHERE COALESCE("isActive", true) = true
-      ORDER BY "name" ASC
-    `);
-  } else if (available.has("key") && available.has("sellPrice")) {
-    products = await prisma.$queryRawUnsafe<OpsCatalogueProduct[]>(`
-      SELECT
-        "id",
-        COALESCE("key", "id") AS "sku",
-        "name",
-        COALESCE("unit", 'Accessories') AS "category",
-        COALESCE("sellPrice", 0) AS "sellingPrice",
-        NULL::text AS "defaultWarranty",
-        0 AS "minStockLevel",
-        0 AS "stockQuantity",
-        COALESCE("active", true) AS "isActive",
-        ${available.has("brand") ? `"brand"` : `NULL::text`} AS "brand",
-        ${available.has("shortDescription") ? `"shortDescription"` : `NULL::text`} AS "shortDescription",
-        ${available.has("description") ? `"description"` : `NULL::text`} AS "description",
-        ${available.has("specifications") ? `"specifications"` : `NULL::jsonb`} AS "specifications",
-        ${available.has("warrantyPeriod") ? `"warrantyPeriod"` : `NULL::text`} AS "warrantyPeriod",
-        ${available.has("warrantyNotes") ? `"warrantyNotes"` : `NULL::text`} AS "warrantyNotes",
-        ${available.has("mainImageUrl") ? `"mainImageUrl"` : `NULL::text`} AS "mainImageUrl",
-        ${available.has("galleryImageUrls") ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
-        ${available.has("brandImageUrl") ? `"brandImageUrl"` : `NULL::text`} AS "brandImageUrl",
-        ${available.has("tiktokVideoUrl") ? `"tiktokVideoUrl"` : `NULL::text`} AS "tiktokVideoUrl",
-        ${available.has("ecommerceVisible") ? `COALESCE("ecommerceVisible", false)` : `NULL::boolean`} AS "ecommerceVisible",
-        ${available.has("isFeatured") ? `COALESCE("isFeatured", false)` : `NULL::boolean`} AS "isFeatured",
-        ${available.has("status") ? `"status"` : `NULL::text`} AS "status",
-        ${available.has("availabilityType") ? `"availabilityType"` : `NULL::text`} AS "availabilityType",
-        ${available.has("pickupDelayDays") ? `COALESCE("pickupDelayDays", 0)` : `NULL::int`} AS "pickupDelayDays",
-        ${available.has("showInShop") ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
-        ${available.has("shopCategory") ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
-        ${available.has("shopSubcategory") ? `"shopSubcategory"` : `NULL::text`} AS "shopSubcategory",
-        ${available.has("shopShortDescription") ? `"shopShortDescription"` : `NULL::text`} AS "shopShortDescription",
-        ${available.has("shopWarranty") ? `"shopWarranty"` : `NULL::text`} AS "shopWarranty",
-        ${available.has("shopSpecs") ? `"shopSpecs"` : `NULL::text`} AS "shopSpecs",
-        ${available.has("shopImageUrl") ? `"shopImageUrl"` : `NULL::text`} AS "shopImageUrl",
-        ${available.has("shopBrand") ? `"shopBrand"` : `NULL::text`} AS "shopBrand"
-      FROM "Product"
-      WHERE COALESCE("active", true) = true
-      ORDER BY "name" ASC
-    `);
-  } else {
-    throw new Error(`Unsupported Product table shape for read-only shop sync. Columns: ${Array.from(available).join(", ")}`);
-  }
-
+  const products = await queryOpsCatalogueProducts();
   return products.map(mapOpsProduct).filter((entry): entry is ShopProductMappingPreview => Boolean(entry));
 }
 
@@ -670,4 +681,13 @@ export async function getOpsCatalogueProductsReadOnlyMapped() {
   return (await getOpsCatalogueProductsReadOnly())
     .map((entry) => entry.product)
     .filter((entry): entry is ShopProduct => Boolean(entry));
+}
+
+export async function getOpsCatalogueProductMappedById(opsProductId: string) {
+  const normalizedId = String(opsProductId || "").trim();
+  if (!normalizedId) return null;
+
+  const products = await queryOpsCatalogueProducts(`AND "id" = $1`, [normalizedId]);
+  const product = products[0];
+  return product ? mapOpsProductToShopProduct(product) : null;
 }

@@ -3,7 +3,7 @@ import {
   buildQuoteRequestDraft,
   isShopOpsApiEnabled,
 } from "@/app/shop/integrationPlan";
-import { filterShopProducts, getOpsCatalogueProductsReadOnlyMapped } from "@/app/shop/shopProductMapper";
+import { filterShopProducts, getOpsCatalogueProductMappedById, getOpsCatalogueProductsReadOnlyMapped } from "@/app/shop/shopProductMapper";
 
 export type ShopOrderInput = {
   items: Array<{
@@ -102,11 +102,13 @@ export async function getShopProductBySlugOrOpsProductId(slug: string, opsProduc
 
   if (typeof window === "undefined") {
     const products = await getServerShopProducts();
-    return (
-      products.find((product) => product.slug === slug) ??
-      (normalizedOpsProductId ? products.find((product) => product.opsProductId === normalizedOpsProductId) : null) ??
-      null
-    );
+    const bySlug = products.find((product) => product.slug === slug) ?? null;
+    if (bySlug || !normalizedOpsProductId) return bySlug;
+
+    const byOpsProductId = products.find((product) => product.opsProductId === normalizedOpsProductId) ?? null;
+    if (byOpsProductId) return byOpsProductId;
+
+    return getOpsCatalogueProductMappedById(normalizedOpsProductId);
   }
 
   const productBySlug = await getShopProductBySlug(slug);
