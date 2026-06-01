@@ -5,6 +5,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { findSimilarProducts } from "@/lib/posProductSimilarity";
 import { showToast } from "@/lib/ui/toast";
 import { getAcceptedImageUploadHint, getAcceptedImageUploadValue } from "@/lib/images/uploadImageFormat";
+import {
+  PRODUCT_GALLERY_AI_HEIGHT,
+  PRODUCT_GALLERY_AI_SOURCE_TYPES,
+  PRODUCT_GALLERY_AI_WIDTH,
+} from "@/lib/images/productGalleryAi";
 import { getShopSubcategoryOptions, SHOP_CATEGORY_DEFINITIONS, SHOP_CATEGORY_OPTIONS, resolveShopSubcategory } from "@/app/shop/shopCatalogConfig";
 
 type PosProduct = {
@@ -318,6 +323,7 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
   const [saving, setSaving] = useState(false);
   const [uploadingKind, setUploadingKind] = useState<"main" | "gallery" | "brand" | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
+  const [pendingMainImageFile, setPendingMainImageFile] = useState<File | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [approvalBusyId, setApprovalBusyId] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState<"activate" | "archive" | "delete" | null>(null);
@@ -462,6 +468,113 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
     }
   }, [draft.id, draft.name, draft.sku, productApiBase]);
 
+  const decodeBase64Image = useCallback((imageBase64: string, mimeType: string) => {
+    const binary = window.atob(imageBase64);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    return new Blob([bytes], { type: mimeType });
+  }, []);
+
+  const loadImageElement = useCallback((blob: Blob) => {
+    return new Promise<HTMLImageElement>((resolve, reject) => {
+      const objectUrl = URL.createObjectURL(blob);
+      const image = new Image();
+      image.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve(image);
+      };
+      image.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error("Failed to load image"));
+      };
+      image.src = objectUrl;
+    });
+  }, []);
+
+  const normalizeSourceImageForAi = useCallback(async (file: File) => {
+    if (PRODUCT_GALLERY_AI_SOURCE_TYPES.has(file.type)) {
+      return file;
+    }
+
+    if (!file.type.startsWith("image/") || file.type === "image/svg+xml") {
+      throw new Error("AI redesign currently supports JPG, PNG, or WebP source images");
+    }
+
+    const sourceImage = await loadImageElement(file);
+    const canvas = document.createElement("canvas");
+    canvas.width = sourceImage.naturalWidth || sourceImage.width;
+    canvas.height = sourceImage.naturalHeight || sourceImage.height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Browser image conversion is unavailable");
+    context.drawImage(sourceImage, 0, 0, canvas.width, canvas.height);
+
+    const normalizedBlob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((result) => {
+        if (!result) {
+          reject(new Error("Failed to convert image for AI redesign"));
+          return;
+        }
+        resolve(result);
+      }, "image/jpeg", 0.95);
+    });
+
+    const normalizedName = file.name.replace(/\.[^.]+$/, "") || "product-image";
+    return new File([normalizedBlob], `${normalizedName}.jpg`, { type: "image/jpeg" });
+  }, [loadImageElement]);
+
+  const resizeAiProductGalleryImage = useCallback(async (blob: Blob) => {
+    const sourceImage = await loadImageElement(blob);
+    const canvas = document.createElement("canvas");
+    canvas.width = PRODUCT_GALLERY_AI_WIDTH;
+    canvas.height = PRODUCT_GALLERY_AI_HEIGHT;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Browser canvas is unavailable");
+
+    const sourceWidth = sourceImage.naturalWidth || sourceImage.width;
+    const sourceHeight = sourceImage.naturalHeight || sourceImage.height;
+    const sourceAspect = sourceWidth / sourceHeight;
+    const targetAspect = PRODUCT_GALLERY_AI_WIDTH / PRODUCT_GALLERY_AI_HEIGHT;
+
+    let cropWidth = sourceWidth;
+    let cropHeight = sourceHeight;
+    let cropX = 0;
+    let cropY = 0;
+
+    if (sourceAspect > targetAspect) {
+      cropWidth = Math.round(sourceHeight * targetAspect);
+      cropX = Math.max(0, Math.round((sourceWidth - cropWidth) / 2));
+    } else if (sourceAspect < targetAspect) {
+      cropHeight = Math.round(sourceWidth / targetAspect);
+      cropY = Math.max(0, Math.round((sourceHeight - cropHeight) / 2));
+    }
+
+    context.drawImage(
+      sourceImage,
+      cropX,
+      cropY,
+      cropWidth,
+      cropHeight,
+      0,
+      0,
+      PRODUCT_GALLERY_AI_WIDTH,
+      PRODUCT_GALLERY_AI_HEIGHT,
+    );
+
+    const resizedBlob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((result) => {
+        if (!result) {
+          reject(new Error("Failed to build the website gallery image"));
+          return;
+        }
+        resolve(result);
+      }, "image/jpeg", 0.95);
+    });
+
+    return new File([resizedBlob], "website-gallery-wide.jpg", { type: "image/jpeg" });
+  }, [loadImageElement]);
+
   const openCreateEditor = useCallback(() => {
     setDraft(createDraftDefaults(mode));
     setEditorOpen(true);
@@ -550,6 +663,70 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
     },
     [capabilities.brandImageUrl, capabilities.galleryImageUrls, capabilities.mainImageUrl, capabilities.shopImageUrl, draft.id, loadData, productApiBase, query],
   );
+
+  const applyAiMainImage = useCallback(async () => {
+    if (!pendingMainImageFile) {
+      showToast("Choose an image first", "error");
+      return;
+    }
+
+    setAiBusy(true);
+    try {
+      const sourceFile = await normalizeSourceImageForAi(pendingMainImageFile);
+      const form = new FormData();
+      form.append("file", sourceFile);
+
+      const response = await fetch(`${productApiBase}/ai-image`, {
+        method: "POST",
+        body: form,
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(getApiErrorMessage(json, "AI image redesign failed"));
+
+      const imageBase64 = typeof json?.imageBase64 === "string" ? json.imageBase64 : "";
+      const mimeType = typeof json?.mimeType === "string" ? json.mimeType : "image/jpeg";
+      if (!imageBase64) {
+        throw new Error("AI image redesign returned no image");
+      }
+
+      const aiBlob = decodeBase64Image(imageBase64, mimeType);
+      const galleryFile = await resizeAiProductGalleryImage(aiBlob);
+      const url = await uploadProductImage(galleryFile, "main");
+      setDraft((current) => ({ ...current, mainImageUrl: url, shopImageUrl: url }));
+      await persistImageFields({ mainImageUrl: url, shopImageUrl: url });
+      setPendingMainImageFile(null);
+      showToast("AI website gallery image saved", "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "AI image redesign failed", "error");
+    } finally {
+      setAiBusy(false);
+    }
+  }, [
+    decodeBase64Image,
+    normalizeSourceImageForAi,
+    pendingMainImageFile,
+    persistImageFields,
+    productApiBase,
+    resizeAiProductGalleryImage,
+    uploadProductImage,
+  ]);
+
+  const uploadPendingMainImage = useCallback(async () => {
+    if (!pendingMainImageFile) {
+      showToast("Choose an image first", "error");
+      return;
+    }
+
+    try {
+      const url = await uploadProductImage(pendingMainImageFile, "main");
+      setDraft((current) => ({ ...current, mainImageUrl: url, shopImageUrl: url }));
+      await persistImageFields({ mainImageUrl: url, shopImageUrl: url });
+      setPendingMainImageFile(null);
+      showToast("Main image uploaded", "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to upload main image", "error");
+    }
+  }, [pendingMainImageFile, persistImageFields, uploadProductImage]);
 
   const submitDraft = async () => {
     if (!draft.name.trim()) return showToast("Product name is required", "error");
@@ -1312,21 +1489,46 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
                         type="file"
                         accept={imageUploadAccept}
                         disabled={!(capabilities.mainImageUrl || capabilities.shopImageUrl) || uploadingKind !== null}
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          try {
-                            const url = await uploadProductImage(file, "main");
-                            setDraft((s) => ({ ...s, mainImageUrl: url, shopImageUrl: url }));
-                            await persistImageFields({ mainImageUrl: url, shopImageUrl: url });
-                            showToast("Main image uploaded", "success");
-                          } catch (err) {
-                            showToast(err instanceof Error ? err.message : "Failed to upload main image", "error");
-                          } finally {
-                            e.currentTarget.value = "";
-                          }
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] ?? null;
+                          setPendingMainImageFile(file);
+                          e.currentTarget.value = "";
                         }}
                       />
+                      {pendingMainImageFile ? (
+                        <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-slate-300">
+                          <div className="font-medium text-emerald-100">{pendingMainImageFile.name}</div>
+                          <div className="mt-1 text-slate-400">
+                            Use the AI button to rebuild this into a wide `1774 x 887 px` website gallery image while preserving the original text and branding.
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-100 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={uploadingKind !== null || aiBusy}
+                              onClick={() => void uploadPendingMainImage()}
+                            >
+                              {uploadingKind === "main" ? "Uploading..." : "Upload original"}
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-black hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={uploadingKind !== null || aiBusy}
+                              onClick={() => void applyAiMainImage()}
+                            >
+                              {aiBusy ? "AI redesigning..." : "AI wide gallery & save"}
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/5"
+                              disabled={uploadingKind !== null || aiBusy}
+                              onClick={() => setPendingMainImageFile(null)}
+                            >
+                              Clear
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
                       <button
                         type="button"
                         className="mt-2 text-xs text-slate-400 hover:text-white"
