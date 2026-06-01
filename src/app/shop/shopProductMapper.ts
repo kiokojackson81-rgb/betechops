@@ -429,6 +429,7 @@ export function isSolarShopEligibleProduct(input: {
   const name = String(input.name || "").trim();
   const price = Number(input.price);
   const haystacks = [name, String(input.category || ""), ...(input.tags || []), ...(input.specs || [])];
+  const explicitlyVisibleOnline = Boolean(input.showInShop ?? input.ecommerceVisible);
 
   const rejectionReasons: string[] = [];
 
@@ -444,7 +445,7 @@ export function isSolarShopEligibleProduct(input: {
     rejectionReasons.push("rejected: inactive status");
   }
 
-  if (hasAnyKeyword(haystacks, NON_SOLAR_BLOCK_KEYWORDS) || !hasAnyKeyword(haystacks, SOLAR_ALLOW_KEYWORDS)) {
+  if (!explicitlyVisibleOnline && (hasAnyKeyword(haystacks, NON_SOLAR_BLOCK_KEYWORDS) || !hasAnyKeyword(haystacks, SOLAR_ALLOW_KEYWORDS))) {
     rejectionReasons.push("rejected: non-solar keyword/category");
   }
 
