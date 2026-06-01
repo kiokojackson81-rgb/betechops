@@ -131,6 +131,16 @@ type ProductDraft = {
   shopBrand: string;
 };
 
+type AiProductPrefill = {
+  name: string;
+  brand: string;
+  sellingPrice: number | null;
+  warrantyPeriod: string;
+  shortDescription: string;
+  description: string;
+  specifications: string[];
+};
+
 type PosManagementClientProps = {
   mode?: "admin" | "product-desk";
 };
@@ -668,53 +678,6 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
     [capabilities.brandImageUrl, capabilities.galleryImageUrls, capabilities.mainImageUrl, capabilities.shopImageUrl, draft.id, loadData, productApiBase, query],
   );
 
-  const applyAiMainImage = useCallback(async () => {
-    if (!pendingMainImageFile) {
-      showToast("Choose an image first", "error");
-      return;
-    }
-
-    setAiBusy(true);
-    try {
-      const sourceFile = await normalizeSourceImageForAi(pendingMainImageFile);
-      const form = new FormData();
-      form.append("file", sourceFile);
-
-      const response = await fetch(`${productApiBase}/ai-image`, {
-        method: "POST",
-        body: form,
-      });
-      const json = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(getApiErrorMessage(json, "AI image redesign failed"));
-
-      const imageBase64 = typeof json?.imageBase64 === "string" ? json.imageBase64 : "";
-      const mimeType = typeof json?.mimeType === "string" ? json.mimeType : "image/jpeg";
-      if (!imageBase64) {
-        throw new Error("AI image redesign returned no image");
-      }
-
-      const aiBlob = decodeBase64Image(imageBase64, mimeType);
-      const galleryFile = await resizeAiProductGalleryImage(aiBlob);
-      const url = await uploadProductImage(galleryFile, "main");
-      setDraft((current) => ({ ...current, mainImageUrl: url, shopImageUrl: url }));
-      await persistImageFields({ mainImageUrl: url, shopImageUrl: url });
-      setPendingMainImageFile(null);
-      showToast("AI website gallery image saved", "success");
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "AI image redesign failed", "error");
-    } finally {
-      setAiBusy(false);
-    }
-  }, [
-    decodeBase64Image,
-    normalizeSourceImageForAi,
-    pendingMainImageFile,
-    persistImageFields,
-    productApiBase,
-    resizeAiProductGalleryImage,
-    uploadProductImage,
-  ]);
-
   const uploadPendingMainImage = useCallback(async () => {
     if (!pendingMainImageFile) {
       showToast("Choose an image first", "error");
@@ -731,6 +694,108 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
       showToast(err instanceof Error ? err.message : "Failed to upload main image", "error");
     }
   }, [pendingMainImageFile, persistImageFields, uploadProductImage]);
+
+  const applyAiPrefill = useCallback((product: AiProductPrefill) => {
+    setDraft((current) => {
+      const nextBrand = product.brand.trim();
+      const nextWarranty = product.warrantyPeriod.trim();
+      const nextShortDescription = product.shortDescription.trim();
+      const nextDescription = product.description.trim();
+      const nextSpecifications = Array.isArray(product.specifications)
+        ? product.specifications.map((item) => item.trim()).filter(Boolean).join("\n")
+        : "";
+      const nextSellingPrice =
+        typeof product.sellingPrice === "number" && Number.isFinite(product.sellingPrice) && product.sellingPrice > 0
+          ? String(Math.round(product.sellingPrice))
+          : current.sellingPrice;
+
+      return {
+        ...current,
+        name: product.name.trim() || current.name,
+        brand: nextBrand || current.brand,
+        shopBrand: nextBrand || current.shopBrand,
+        sellingPrice: nextSellingPrice,
+        warrantyPeriod: nextWarranty || current.warrantyPeriod,
+        shopWarranty: nextWarranty || current.shopWarranty,
+        shortDescription: nextShortDescription || current.shortDescription,
+        shopShortDescription: nextShortDescription || current.shopShortDescription,
+        description: nextDescription || current.description,
+        specifications: nextSpecifications || current.specifications,
+        shopSpecs: nextSpecifications || current.shopSpecs,
+      };
+    });
+  }, []);
+
+  const applyAiAssist = useCallback(async () => {
+    if (!pendingMainImageFile) {
+      showToast("Choose an image first", "error");
+      return;
+    }
+
+    setAiBusy(true);
+    try {
+      const sourceFile = await normalizeSourceImageForAi(pendingMainImageFile);
+      const imageForm = new FormData();
+      imageForm.append("file", sourceFile);
+      const prefillForm = new FormData();
+      prefillForm.append("file", sourceFile);
+
+      const [imageResponse, prefillResponse] = await Promise.all([
+        fetch(`${productApiBase}/ai-image`, {
+          method: "POST",
+          body: imageForm,
+        }),
+        fetch(`${productApiBase}/ai-prefill`, {
+          method: "POST",
+          body: prefillForm,
+        }),
+      ]);
+
+      const imageJson = await imageResponse.json().catch(() => ({}));
+      const prefillJson = await prefillResponse.json().catch(() => ({}));
+
+      if (!prefillResponse.ok) {
+        throw new Error(getApiErrorMessage(prefillJson, "AI product prefill failed"));
+      }
+
+      const product = (prefillJson?.product ?? null) as AiProductPrefill | null;
+      if (!product) {
+        throw new Error("AI did not return product details");
+      }
+      applyAiPrefill(product);
+
+      if (imageResponse.ok) {
+        const imageBase64 = typeof imageJson?.imageBase64 === "string" ? imageJson.imageBase64 : "";
+        const mimeType = typeof imageJson?.mimeType === "string" ? imageJson.mimeType : "image/jpeg";
+        if (imageBase64) {
+          const aiBlob = decodeBase64Image(imageBase64, mimeType);
+          const galleryFile = await resizeAiProductGalleryImage(aiBlob);
+          const url = await uploadProductImage(galleryFile, "main");
+          setDraft((current) => ({ ...current, mainImageUrl: url, shopImageUrl: url }));
+          await persistImageFields({ mainImageUrl: url, shopImageUrl: url });
+        }
+      }
+
+      setPendingMainImageFile(null);
+      showToast(
+        imageResponse.ok ? "AI image and product details prepared" : "AI product details prepared; image redesign skipped",
+        "success",
+      );
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "AI assist failed", "error");
+    } finally {
+      setAiBusy(false);
+    }
+  }, [
+    applyAiPrefill,
+    decodeBase64Image,
+    normalizeSourceImageForAi,
+    pendingMainImageFile,
+    persistImageFields,
+    productApiBase,
+    resizeAiProductGalleryImage,
+    uploadProductImage,
+  ]);
 
   const submitDraft = async () => {
     if (!draft.name.trim()) return showToast("Product name is required", "error");
@@ -1503,7 +1568,8 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
                         <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-slate-300">
                           <div className="font-medium text-emerald-100">{pendingMainImageFile.name}</div>
                           <div className="mt-1 text-slate-400">
-                            Use the AI button to rebuild this into a wide `1774 x 887 px` website gallery image while preserving the original text and branding.
+                            Use the AI button to rebuild this into a wide `1774 x 887 px` website gallery image and prefill
+                            product details from the uploaded artwork.
                           </div>
                           <div className="mt-3 flex flex-wrap gap-2">
                             <button
@@ -1518,9 +1584,9 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
                               type="button"
                               className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-black hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
                               disabled={uploadingKind !== null || aiBusy}
-                              onClick={() => void applyAiMainImage()}
+                              onClick={() => void applyAiAssist()}
                             >
-                              {aiBusy ? "AI redesigning..." : "AI wide gallery & save"}
+                              {aiBusy ? "AI processing..." : "AI wide gallery & prefill"}
                             </button>
                             <button
                               type="button"

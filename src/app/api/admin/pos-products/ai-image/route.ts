@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     });
 
     const response = await client.images.edit({
-      model: "gpt-image-2" as any,
+      model: "gpt-image-1",
       image: inputFile,
       prompt: PRODUCT_GALLERY_AI_PROMPT,
       size: "1776x896" as any,
