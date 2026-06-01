@@ -11,12 +11,6 @@ Keep all original wording, logos, prices, specifications, icons, badges, contact
 
 Reframe the design into a clean wide product image layout similar to a website catalog banner. The image should fill the frame well with minimal empty margins. Arrange the content so the main product is large, centered, sharp, and professional, while all text sections remain balanced and fully visible.
 
-Preserve the entire source artwork from edge to edge. No text may be cut off, hidden, truncated, or pushed outside the frame. If the original design is tall or square, reduce and reposition the composition so everything remains visible inside the wide canvas.
-
-Do not add blurred side panels, thick outer borders, floating framed cards, or large empty white gutters. The artwork itself should span the banner naturally. Keep all important wording, logos, prices, specifications, icons, badges, and contact details inside a centered 2:1 safe area so the final website banner can use the full width cleanly.
-
-Prioritize zero cropping over edge-to-edge fill. It is better to preserve the full artwork with subtle edge extension than to cut off any text, logo, price, icon, contact detail, or product edge.
-
 Requirements:
 
 - Output size: 1774 x 887 px
