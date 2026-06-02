@@ -110,14 +110,14 @@ export default function ShopProductGallery({ images, productName, visualType, vi
   function renderActiveMedia(expanded: boolean) {
     const isVideo = activeItem.type === "video";
     const frameHeight = expanded
-      ? "h-[82vh]"
+      ? "h-[88vh]"
       : activeOrientation === "portrait"
         ? "h-[16rem] sm:h-[19rem] lg:h-[22rem] xl:h-[24rem]"
         : activeOrientation === "square"
           ? "h-[15rem] sm:h-[18rem] lg:h-[20rem] xl:h-[22rem]"
           : "h-[13.5rem] sm:h-[16rem] lg:h-[18rem] xl:h-[20rem]";
     const imageShellWidth = expanded
-      ? "max-w-[92vw]"
+      ? "max-w-[96vw]"
       : activeOrientation === "portrait"
         ? "max-w-[18rem] sm:max-w-[21rem] lg:max-w-[23rem] xl:max-w-[25rem]"
         : activeOrientation === "square"
@@ -159,13 +159,13 @@ export default function ShopProductGallery({ images, productName, visualType, vi
           <>
             <div className="absolute inset-0 bg-[linear-gradient(180deg,#fffaf3_0%,#fffefe_100%)]" />
             <div className={`relative z-10 w-full ${imageShellWidth} overflow-hidden rounded-[24px] bg-white shadow-[0_16px_34px_rgba(15,23,42,0.08)]`}>
-              <div className="relative h-full min-h-[13.5rem] w-full max-h-[82vh]">
+              <div className="relative h-full min-h-[13.5rem] w-full max-h-[88vh]">
                 <Image
                   src={activeItem.src}
                   alt={productName}
                   fill
                   sizes={expanded ? "92vw" : "(max-width: 640px) 95vw, (max-width: 1024px) 70vw, 50vw"}
-                  className="object-contain p-1.5 sm:p-2"
+                  className="object-contain"
                   priority
                   onLoad={(event) => handleImageLoad(activeItem.src, event as unknown as SyntheticEvent<HTMLImageElement>)}
                 />
@@ -327,7 +327,7 @@ export default function ShopProductGallery({ images, productName, visualType, vi
           ) : null}
 
           <div
-            className="flex h-full items-center justify-center px-4 pb-24 pt-20 sm:px-6"
+            className="flex h-full items-center justify-center px-2 pb-20 pt-16 sm:px-4"
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
           >
