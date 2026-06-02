@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState, type SyntheticEvent, type TouchEvent } from "react";
 import { ChevronLeft, ChevronRight, Expand, PlayCircle, X } from "lucide-react";
 import ShopProductVisual from "@/app/shop/_components/ShopProductVisual";
@@ -158,13 +159,17 @@ export default function ShopProductGallery({ images, productName, visualType, vi
           <>
             <div className="absolute inset-0 bg-[linear-gradient(180deg,#fffaf3_0%,#fffefe_100%)]" />
             <div className={`relative z-10 w-full ${imageShellWidth} overflow-hidden rounded-[24px] bg-white shadow-[0_16px_34px_rgba(15,23,42,0.08)]`}>
-              <img
-                src={activeItem.src}
-                alt={productName}
-                className="h-full max-h-[82vh] w-full object-contain p-1.5 sm:p-2"
-                loading="eager"
-                onLoad={(event) => handleImageLoad(activeItem.src, event)}
-              />
+              <div className="relative h-full min-h-[13.5rem] w-full max-h-[82vh]">
+                <Image
+                  src={activeItem.src}
+                  alt={productName}
+                  fill
+                  sizes={expanded ? "92vw" : "(max-width: 640px) 95vw, (max-width: 1024px) 70vw, 50vw"}
+                  className="object-contain p-1.5 sm:p-2"
+                  priority
+                  onLoad={(event) => handleImageLoad(activeItem.src, event as unknown as SyntheticEvent<HTMLImageElement>)}
+                />
+              </div>
             </div>
           </>
         ) : (
@@ -262,7 +267,14 @@ export default function ShopProductGallery({ images, productName, visualType, vi
                       </div>
                     ) : item.src ? (
                       <div className="relative h-full w-full overflow-hidden rounded-[16px] bg-white">
-                        <img src={item.src} alt={`${productName} thumbnail ${index + 1}`} className="h-full w-full object-contain" onLoad={(event) => handleImageLoad(item.src, event)} />
+                        <Image
+                          src={item.src}
+                          alt={`${productName} thumbnail ${index + 1}`}
+                          fill
+                          sizes="64px"
+                          className="object-contain"
+                          onLoad={(event) => handleImageLoad(item.src, event as unknown as SyntheticEvent<HTMLImageElement>)}
+                        />
                       </div>
                     ) : (
                       <div className="h-full w-full rounded-[16px] bg-white p-1">

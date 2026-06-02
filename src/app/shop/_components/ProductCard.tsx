@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { MessageCircle } from "lucide-react";
 import type { ShopProduct } from "@/app/shop/shopData";
@@ -35,7 +36,13 @@ export default function ProductCard({ product }: ProductCardProps) {
       <div className="relative h-32 overflow-hidden border-b border-[#7a0000]/8 bg-[linear-gradient(180deg,#fbf5eb_0%,#ffffff_100%)] sm:h-44 xl:h-48">
         <div className="absolute inset-0 p-2.5 sm:p-3">
           {product.image ? (
-            <img src={product.image} alt={product.name} className="h-full w-full object-contain transition duration-500 group-hover:scale-[1.03]" />
+            <Image
+              src={product.image}
+              alt={product.name}
+              fill
+              sizes="(max-width: 640px) 180px, (max-width: 1280px) 240px, 320px"
+              className="object-contain transition duration-500 group-hover:scale-[1.03]"
+            />
           ) : (
             <ShopProductVisual visualType={product.visualType} productName={product.name} compact className="h-full w-full" />
           )}
