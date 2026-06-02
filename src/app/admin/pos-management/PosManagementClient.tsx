@@ -688,6 +688,7 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
       const nextWarranty = product.warrantyPeriod.trim();
       const nextShortDescription = product.shortDescription.trim();
       const nextDescription = product.description.trim();
+      const nextRichDescription = nextShortDescription || nextDescription;
       const nextSpecifications = Array.isArray(product.specifications)
         ? product.specifications.map((item) => item.trim()).filter(Boolean).join("\n")
         : "";
@@ -711,9 +712,9 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
         sellingPrice: nextSellingPrice,
         warrantyPeriod: nextWarranty || current.warrantyPeriod,
         shopWarranty: nextWarranty || current.shopWarranty,
-        shortDescription: nextShortDescription || current.shortDescription,
-        shopShortDescription: nextShortDescription || current.shopShortDescription,
-        description: nextDescription || current.description,
+        shortDescription: nextRichDescription || current.shortDescription,
+        shopShortDescription: nextRichDescription || current.shopShortDescription,
+        description: nextDescription || nextRichDescription || current.description,
         specifications: nextSpecifications || current.specifications,
         shopSpecs: nextSpecifications || current.shopSpecs,
         shopCategory: nextShopTaxonomy.shopCategory || current.shopCategory,
