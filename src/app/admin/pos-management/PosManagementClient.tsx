@@ -276,6 +276,45 @@ function parseStringArray(value: unknown) {
   return [];
 }
 
+function createDraftFromProduct(product: PosProduct): ProductDraft {
+  return {
+    id: product.id,
+    sku: product.sku,
+    name: product.name,
+    category: product.category,
+    sellingPrice: String(product.sellingPrice ?? ""),
+    lastBuyingPrice: product.lastBuyingPrice == null ? "" : String(product.lastBuyingPrice),
+    variableCost: Boolean(product.variableCost),
+    isActive: Boolean(product.isActive),
+    commissionEnabled: Boolean(product.commissionEnabled),
+    commissionAmount: product.commissionAmount == null ? "" : String(product.commissionAmount),
+    commissionRequiresApproval: Boolean(product.commissionRequiresApproval),
+    brand: product.brand ?? product.shopBrand ?? "",
+    shortDescription: product.shortDescription ?? product.shopShortDescription ?? "",
+    description: product.description ?? "",
+    specifications: Array.isArray(product.specifications) ? product.specifications.join("\n") : String(product.specifications ?? product.shopSpecs ?? ""),
+    warrantyPeriod: product.warrantyPeriod ?? product.shopWarranty ?? "",
+    warrantyNotes: product.warrantyNotes ?? "",
+    mainImageUrl: product.mainImageUrl ?? product.shopImageUrl ?? "",
+    galleryImageUrls: parseStringArray(product.galleryImageUrls),
+    brandImageUrl: product.brandImageUrl ?? "",
+    tiktokVideoUrl: product.tiktokVideoUrl ?? "",
+    ecommerceVisible: Boolean(product.ecommerceVisible ?? product.showInShop),
+    isFeatured: Boolean(product.isFeatured),
+    status: String(product.status || (product.isActive ? "ACTIVE" : "INACTIVE")).toUpperCase() === "INACTIVE" ? "INACTIVE" : "ACTIVE",
+    availabilityType: normalizeAvailabilityType(product.availabilityType),
+    pickupDelayDays: normalizeAvailabilityType(product.availabilityType) === "WAREHOUSE" ? 1 : 0,
+    showInShop: Boolean(product.showInShop),
+    shopCategory: product.shopCategory ?? "",
+    shopSubcategory: product.shopSubcategory ?? "",
+    shopShortDescription: product.shopShortDescription ?? "",
+    shopWarranty: product.shopWarranty ?? "",
+    shopSpecs: product.shopSpecs ?? "",
+    shopImageUrl: product.shopImageUrl ?? "",
+    shopBrand: product.shopBrand ?? "",
+  };
+}
+
 function slugifyShopProductName(value: string) {
   return value
     .trim()
@@ -880,42 +919,7 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
   };
 
   const startEdit = (product: PosProduct) => {
-    setDraft({
-      id: product.id,
-      sku: product.sku,
-      name: product.name,
-      category: product.category,
-      sellingPrice: String(product.sellingPrice ?? ""),
-      lastBuyingPrice: product.lastBuyingPrice == null ? "" : String(product.lastBuyingPrice),
-      variableCost: Boolean(product.variableCost),
-      isActive: Boolean(product.isActive),
-      commissionEnabled: Boolean(product.commissionEnabled),
-      commissionAmount: product.commissionAmount == null ? "" : String(product.commissionAmount),
-      commissionRequiresApproval: Boolean(product.commissionRequiresApproval),
-      brand: product.brand ?? product.shopBrand ?? "",
-      shortDescription: product.shortDescription ?? product.shopShortDescription ?? "",
-      description: product.description ?? "",
-      specifications: Array.isArray(product.specifications) ? product.specifications.join("\n") : String(product.specifications ?? product.shopSpecs ?? ""),
-      warrantyPeriod: product.warrantyPeriod ?? product.shopWarranty ?? "",
-      warrantyNotes: product.warrantyNotes ?? "",
-      mainImageUrl: product.mainImageUrl ?? product.shopImageUrl ?? "",
-      galleryImageUrls: parseStringArray(product.galleryImageUrls),
-      brandImageUrl: product.brandImageUrl ?? "",
-      tiktokVideoUrl: product.tiktokVideoUrl ?? "",
-      ecommerceVisible: Boolean(product.ecommerceVisible ?? product.showInShop),
-      isFeatured: Boolean(product.isFeatured),
-      status: String(product.status || (product.isActive ? "ACTIVE" : "INACTIVE")).toUpperCase() === "INACTIVE" ? "INACTIVE" : "ACTIVE",
-      availabilityType: normalizeAvailabilityType(product.availabilityType),
-      pickupDelayDays: normalizeAvailabilityType(product.availabilityType) === "WAREHOUSE" ? 1 : 0,
-      showInShop: Boolean(product.showInShop),
-      shopCategory: product.shopCategory ?? "",
-      shopSubcategory: product.shopSubcategory ?? "",
-      shopShortDescription: product.shopShortDescription ?? "",
-      shopWarranty: product.shopWarranty ?? "",
-      shopSpecs: product.shopSpecs ?? "",
-      shopImageUrl: product.shopImageUrl ?? "",
-      shopBrand: product.shopBrand ?? "",
-    });
+    setDraft(createDraftFromProduct(product));
     setEditorOpen(true);
     formSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     showToast(`Editing ${product.name}`, "success");
@@ -923,40 +927,8 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
 
   const startCommissionEdit = (product: PosProduct) => {
     setDraft({
-      id: product.id,
-      sku: product.sku,
-      name: product.name,
-      category: product.category,
-      sellingPrice: String(product.sellingPrice ?? ""),
-      lastBuyingPrice: product.lastBuyingPrice == null ? "" : String(product.lastBuyingPrice),
-      variableCost: Boolean(product.variableCost),
-      isActive: Boolean(product.isActive),
+      ...createDraftFromProduct(product),
       commissionEnabled: true,
-      commissionAmount: product.commissionAmount == null ? "" : String(product.commissionAmount),
-      commissionRequiresApproval: Boolean(product.commissionRequiresApproval),
-      brand: product.brand ?? product.shopBrand ?? "",
-      shortDescription: product.shortDescription ?? product.shopShortDescription ?? "",
-      description: product.description ?? "",
-      specifications: Array.isArray(product.specifications) ? product.specifications.join("\n") : String(product.specifications ?? product.shopSpecs ?? ""),
-      warrantyPeriod: product.warrantyPeriod ?? product.shopWarranty ?? "",
-      warrantyNotes: product.warrantyNotes ?? "",
-      mainImageUrl: product.mainImageUrl ?? product.shopImageUrl ?? "",
-      galleryImageUrls: parseStringArray(product.galleryImageUrls),
-      brandImageUrl: product.brandImageUrl ?? "",
-      tiktokVideoUrl: product.tiktokVideoUrl ?? "",
-      ecommerceVisible: Boolean(product.ecommerceVisible ?? product.showInShop),
-      isFeatured: Boolean(product.isFeatured),
-      status: String(product.status || (product.isActive ? "ACTIVE" : "INACTIVE")).toUpperCase() === "INACTIVE" ? "INACTIVE" : "ACTIVE",
-      availabilityType: normalizeAvailabilityType(product.availabilityType),
-      pickupDelayDays: normalizeAvailabilityType(product.availabilityType) === "WAREHOUSE" ? 1 : 0,
-      showInShop: Boolean(product.showInShop),
-      shopCategory: product.shopCategory ?? "",
-      shopSubcategory: product.shopSubcategory ?? "",
-      shopShortDescription: product.shopShortDescription ?? "",
-      shopWarranty: product.shopWarranty ?? "",
-      shopSpecs: product.shopSpecs ?? "",
-      shopImageUrl: product.shopImageUrl ?? "",
-      shopBrand: product.shopBrand ?? "",
     });
     setEditorOpen(true);
     formSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1289,8 +1261,17 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
                               {item.sku} · Selling {formatMoney(item.sellingPrice)}
                             </div>
                           </div>
-                          <div className="rounded-full border border-amber-400/30 px-2 py-1 text-xs font-semibold text-amber-100">
-                            {Math.round(score * 100)}% similar
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              className="rounded-full border border-emerald-400/30 px-3 py-1 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/10"
+                              onClick={() => startEdit(item)}
+                            >
+                              Use
+                            </button>
+                            <div className="rounded-full border border-amber-400/30 px-2 py-1 text-xs font-semibold text-amber-100">
+                              {Math.round(score * 100)}% similar
+                            </div>
                           </div>
                         </div>
                       ))}
