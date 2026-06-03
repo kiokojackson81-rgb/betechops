@@ -423,15 +423,15 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     console.warn('[pod] failed to re-check receipt to clear lock', e);
   }
 
-  const actorId = guard?.user?.id ?? null;
+  const auditActorId = actorId || null;
   const orderId = receipt.orderId;
   const previousOrder = receipt.order;
   const orderPaidAfter = Math.max(Number(receipt.order?.totalAmount ?? 0), 0);
-  if (actorId) {
+  if (auditActorId) {
     try {
       await prisma.actionLog.create({
         data: {
-          actorId,
+          actorId: auditActorId,
           entity: 'Receipt',
           entityId: receiptId,
           action: 'POD_DELIVERED',
