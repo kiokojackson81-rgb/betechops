@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 import { buildReceiptKey } from "@/lib/receiptKey";
 import { Prisma } from "@prisma/client";
+import { adjustProfitForPodDeliveryFee, getPodDeliveryFee } from "@/lib/podDeliveryFee";
 
 type PaymentBucket = { totalSales: number; count: number };
 
@@ -18,6 +19,7 @@ type ReceiptSummaryRecord = {
   buyingTotal?: number;
   supportBuyingTotal?: number;
   profit?: number;
+  deliveryFee?: number;
 };
 
 export type ProfitReceiptContributor = {
@@ -983,6 +985,7 @@ export async function computeAdminReceiptSummary({
       // otherwise fall back to item-level costs computed below.
       buyingTotal: Number((receipt as any)?.buyingTotal ?? (receipt.data as any)?.buyingTotal ?? 0),
       supportBuyingTotal: supportBuyingTotal,
+      deliveryFee: getPodDeliveryFee(receipt.data),
       profit: (() => {
         const agentSaleCommission = Number((receipt.data as any)?.agentSale?.commissionAmount ?? 0) || 0;
         const p = (receipt as any).profit ?? (receipt.data as any)?.profit;
@@ -1125,6 +1128,7 @@ export async function computeAdminReceiptSummary({
     const supportBuying = Number(receipt.supportBuyingTotal ?? 0);
     const aggregateCostRaw = Number(receipt.buyingTotal ?? 0);
     const aggregateCost = supportBuying > 0 ? supportBuying : aggregateCostRaw;
+    const deliveryFee = Number(receipt.deliveryFee ?? 0);
     const costFromItems = items.reduce(
       (sum, it) => sum + (Number(it?.buyingPrice ?? 0) * (Number(it?.quantity ?? 1) || 1)),
       0,
@@ -1145,12 +1149,12 @@ export async function computeAdminReceiptSummary({
     if (hasAggregateCost || allItemsPriced) {
       const buyingSum = hasAggregateCost ? aggregateCost : costFromItems;
       totalCost += buyingSum;
-      receiptProfit = sell - buyingSum;
+      receiptProfit = adjustProfitForPodDeliveryFee(sell - buyingSum, deliveryFee);
       totalProfitPriced += receiptProfit;
       addProfitContributor(receipt, buyingSum, receiptProfit);
     } else if (explicitProfit !== undefined) {
       // Use explicit profit; do not mark as awaitingPricing.
-      receiptProfit = explicitProfit;
+      receiptProfit = adjustProfitForPodDeliveryFee(explicitProfit, deliveryFee);
       totalProfitPriced += receiptProfit;
       addProfitContributor(receipt, aggregateCost > 0 ? aggregateCost : costFromItems, receiptProfit);
     }

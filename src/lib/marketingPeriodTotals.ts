@@ -4,6 +4,7 @@ import { canonicalReceiptNumber, buildReceiptKey as buildDatedReceiptKey } from 
 import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import { COMMISSION_LADDER } from "@/lib/commissionCommon";
+import { loadPodDeliveryFeeMap } from "@/lib/podDeliveryFee";
 
 type PrismaClientOrTx = PrismaClient | Prisma.TransactionClient;
 
@@ -174,6 +175,16 @@ export async function summarizeMarketingReportsForPeriod(opts: {
     perReceipts.set(normalized, { sales: 0, profit: 0, items: 0, mpesa: 0, cash: 0 });
     return true;
   };
+  const podDeliveryFeeMap = await loadPodDeliveryFeeMap(
+    client,
+    [
+      ...marketingEntries.flatMap((entry) => [
+        ...(entry.receipts ?? []).map((receipt) => receipt.receiptNumber ?? receipt.id),
+        ...(entry.sales ?? []).map((sale) => (sale as any).receiptNumber ?? null),
+      ]),
+      ...reports.flatMap((report) => (report.sales ?? []).map((sale) => sale.receiptNumber ?? null)),
+    ],
+  );
 
   marketingEntries.forEach((entry) => {
     const entryReceiptCanonicals = new Set<string>();
@@ -195,6 +206,7 @@ export async function summarizeMarketingReportsForPeriod(opts: {
         }
 
         const selling = toNumber(receipt.sellingTotal);
+        const deliveryFee = podDeliveryFeeMap.get(canonical) ?? 0;
         totals.totalSales += selling;
         const stats = perReceipts.get(canonicalKey)!;
         stats.sales += selling;
@@ -205,7 +217,7 @@ export async function summarizeMarketingReportsForPeriod(opts: {
         const allItemsPriced = items.length > 0 && items.every((it) => toNumber((it as any).buyingPrice) > 0);
         if (hasAggregateCost || allItemsPriced) {
           const costToUse = hasAggregateCost ? aggregateCost : fallbackCost;
-          const profitForReceipt = selling - costToUse;
+          const profitForReceipt = selling - costToUse - deliveryFee;
           totals.totalProfit += profitForReceipt;
           stats.profit += profitForReceipt;
         }
@@ -237,6 +249,7 @@ export async function summarizeMarketingReportsForPeriod(opts: {
         entrySeen.add(receiptIdBase);
 
         const canonical = canonicalReceiptNumber(receiptIdBase) ?? receiptIdBase;
+        const deliveryFee = podDeliveryFeeMap.get(canonical) ?? 0;
         // If this entry already has a receipt row for the same canonical receipt id,
         // do not double-count the sale row.
         const saleCanonical = canonicalReceiptNumber((sale as any).receiptNumber);
@@ -250,14 +263,14 @@ export async function summarizeMarketingReportsForPeriod(opts: {
 
         totals.totalSales += selling;
         if (buying > 0) {
-          totals.totalProfit += selling - buying;
+          totals.totalProfit += selling - buying - deliveryFee;
         }
         totals.totalItems += itemsCount;
         totals.totalReceipts += 1;
 
         const stats = perReceipts.get(receiptKey)!;
         stats.sales += selling;
-        if (buying > 0) stats.profit += selling - buying;
+        if (buying > 0) stats.profit += selling - buying - deliveryFee;
         stats.items += itemsCount;
 
         if (method === "CASH") {

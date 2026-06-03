@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import type { TradingPeriod } from "@/lib/tradingPeriod";
 import { normalizePaymentMethod } from "@/lib/receiptKey";
 import { canonicalReceiptNumber, buildReceiptKey as buildDatedReceiptKey } from "@/lib/receipts/utils";
+import { loadPodDeliveryFeeMap } from "@/lib/podDeliveryFee";
 
 export type SupportPeriodAggregates = {
   totalSales: number;
@@ -114,9 +115,17 @@ export async function getSupportPeriodAggregates(opts: { userId: string; period:
     changedBatteries: 0,
     paymentStats: { totalSalesMpesa: 0, totalSalesCash: 0, countMpesaReceipts: 0, countCashReceipts: 0 },
   };
+  const podDeliveryFeeMap = await loadPodDeliveryFeeMap(
+    prisma,
+    [
+      ...Array.from(allReceiptCanonicals),
+      ...Array.from(saleReceiptCanonicals),
+    ],
+  );
 
   // Map keyed by canonical receiptKey to avoid double-counting within support
   const seen = new Map<string, { id: string; sales: number; profit: number; items: number; mpesa: number; cash: number }>();
+  const deliveryFeeAppliedKeys = new Set<string>();
 
   for (const entry of entries) {
     aggregates.newBatteries += (entry as any).newBatteries ?? 0;
@@ -135,8 +144,10 @@ export async function getSupportPeriodAggregates(opts: { userId: string; period:
       const buying = Number(r.buyingTotal ?? 0);
       const itemsCount = Array.isArray(r.items) ? r.items.length : 0;
       const method = normalizePaymentMethod(r.paymentMethod);
+      const deliveryFee = canonical ? podDeliveryFeeMap.get(canonical) ?? 0 : 0;
+      const feeForKey = deliveryFeeAppliedKeys.has(key) ? 0 : deliveryFee;
       const recognizedProfit =
-        canonical && receiptsWithRecognizedSales.has(canonical) ? 0 : selling - buying;
+        canonical && receiptsWithRecognizedSales.has(canonical) ? 0 : selling - buying - feeForKey;
 
       const existing = seen.get(key);
       if (existing) {
@@ -150,6 +161,7 @@ export async function getSupportPeriodAggregates(opts: { userId: string; period:
           existing.mpesa += selling;
         }
       } else {
+        if (feeForKey > 0) deliveryFeeAppliedKeys.add(key);
         seen.set(key, {
           id: r.id,
           sales: selling,
@@ -183,9 +195,11 @@ export async function getSupportPeriodAggregates(opts: { userId: string; period:
         const selling = Number((sale as any).sellingPrice ?? 0);
         const buying = Number((sale as any).buyingPrice ?? 0);
         const itemsCount = Math.max(1, Math.trunc(Number((sale as any).itemsCount ?? 1)));
+        const deliveryFee = saleCanonical ? podDeliveryFeeMap.get(saleCanonical) ?? 0 : 0;
+        const feeForKey = deliveryFeeAppliedKeys.has(key) ? 0 : deliveryFee;
         const salesValue =
           saleCanonical && receiptExistenceByCanonical.has(saleCanonical) ? 0 : selling;
-        const profitValue = buying > 0 ? selling - buying : 0;
+        const profitValue = buying > 0 ? selling - buying - feeForKey : 0;
 
         const existing = seen.get(key);
         if (existing) {
@@ -195,6 +209,7 @@ export async function getSupportPeriodAggregates(opts: { userId: string; period:
           if (method === "CASH") existing.cash += salesValue;
           else existing.mpesa += salesValue;
         } else {
+          if (feeForKey > 0) deliveryFeeAppliedKeys.add(key);
           seen.set(key, {
             id: String((sale as any).id ?? key),
             sales: salesValue,

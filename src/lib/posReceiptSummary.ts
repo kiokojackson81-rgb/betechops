@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { buildReceiptKey, normalizePaymentMethod, normalizeReceiptNumber } from "@/lib/receiptKey";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 import { buildReceiptKey as buildDatedReceiptKey } from "@/lib/receipts/utils";
+import { adjustProfitForPodDeliveryFee, getPodDeliveryFee } from "@/lib/podDeliveryFee";
 
 type OrderItemCandidate = {
   quantity?: number | null;
@@ -74,10 +75,10 @@ const extractProfit = (row: PosReceiptRow, sales: number) => {
     toNumber(totals.sellingTotal) - toNumber(totals.buyingTotal) ||
     toNumber(data.sellingTotal) - toNumber(data.buyingTotal);
 
-  if (candidate !== 0) return candidate;
+  if (candidate !== 0) return adjustProfitForPodDeliveryFee(candidate, getPodDeliveryFee(row.data));
   const buying = toNumber(totals.buyingTotal) || toNumber(data.buyingTotal);
   if (buying > 0) {
-    return sales - buying;
+    return adjustProfitForPodDeliveryFee(sales - buying, getPodDeliveryFee(row.data));
   }
   return 0;
 };
@@ -402,6 +403,7 @@ export async function summarizePosReceiptsForPeriod(period: {
   const computeProfitFromCosts = (row: PosReceiptRow) => {
     const selling = extractSales(row);
     const agentSaleCommission = Number((row?.data as any)?.agentSale?.commissionAmount ?? 0) || 0;
+    const deliveryFee = getPodDeliveryFee(row.data);
     const orderRef = String(row?.order?.orderNumber ?? "");
     const receiptNumber = String(row?.receiptNumber ?? "");
     const keyCandidates = [
@@ -451,9 +453,11 @@ export async function summarizePosReceiptsForPeriod(period: {
 
     if (hasAggregateCost || allItemsPriced) {
       const buyingSum = hasAggregateCost ? aggregateCost : costFromItems;
-      return selling - buyingSum - agentSaleCommission;
+      return adjustProfitForPodDeliveryFee(selling - buyingSum - agentSaleCommission, deliveryFee);
     }
-    if (explicitProfit !== undefined) return explicitProfit - agentSaleCommission;
+    if (explicitProfit !== undefined) {
+      return adjustProfitForPodDeliveryFee(explicitProfit - agentSaleCommission, deliveryFee);
+    }
     return 0;
   };
 

@@ -92,6 +92,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   let finalReason: string | null = null;
   let evidenceUrl: string | null = null;
   let evidenceFileName: string | null = null;
+  let deliveryFee: number | null = null;
   try {
     const body = (await req.json()) ?? {};
     if (body && typeof body.status === 'string') {
@@ -115,6 +116,12 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     if (body && typeof body.evidenceFileName === 'string' && body.evidenceFileName.trim().length > 0) {
       evidenceFileName = body.evidenceFileName.trim();
     }
+    if (body && typeof body.deliveryFee !== 'undefined') {
+      const parsedFee = Number(body.deliveryFee);
+      if (Number.isFinite(parsedFee)) {
+        deliveryFee = Math.max(0, Math.round(parsedFee));
+      }
+    }
   } catch {
     // no body / invalid json – default to 'delivered'
   }
@@ -130,6 +137,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     if (finalReason) updatedPodDeliveryBase.deliveredReason = finalReason;
     if (evidenceUrl) updatedPodDeliveryBase.evidenceUrl = evidenceUrl;
     if (evidenceFileName) updatedPodDeliveryBase.evidenceFileName = evidenceFileName;
+    if (deliveryFee !== null) updatedPodDeliveryBase.deliveryFee = deliveryFee;
   } else {
     updatedPodDeliveryBase.status = 'delivery_failed';
     updatedPodDeliveryBase.failedAt = new Date().toISOString();
@@ -137,6 +145,7 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     if (finalReason) updatedPodDeliveryBase.failedReason = finalReason;
     if (evidenceUrl) updatedPodDeliveryBase.evidenceUrl = evidenceUrl;
     if (evidenceFileName) updatedPodDeliveryBase.evidenceFileName = evidenceFileName;
+    if (deliveryFee !== null) updatedPodDeliveryBase.deliveryFee = deliveryFee;
   }
 
   try {

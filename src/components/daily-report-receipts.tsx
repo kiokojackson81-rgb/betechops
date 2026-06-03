@@ -18,6 +18,7 @@ type DailyReportReceiptRow = {
   podDeliveryStatus?: string | null;
   podDeliveryNote?: string | null;
   podEvidenceUrl?: string | null;
+  podDeliveryFee?: number | null;
   detailUrl?: string | null;
 };
 
@@ -132,9 +133,15 @@ export default function DailyReportReceiptsPanel({
   const [podActionReason, setPodActionReason] = useState("");
   const [podEvidenceUrl, setPodEvidenceUrl] = useState("");
   const [podEvidenceFileName, setPodEvidenceFileName] = useState("");
+  const [podDeliveryFee, setPodDeliveryFee] = useState("");
   const [podUploading, setPodUploading] = useState(false);
   const [podSaving, setPodSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [feeReceipt, setFeeReceipt] = useState<DailyReportReceiptRow | null>(null);
+  const [feeAmount, setFeeAmount] = useState("");
+  const [feeNote, setFeeNote] = useState("");
+  const [feeSaving, setFeeSaving] = useState(false);
+  const [feeError, setFeeError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const onSummaryRef = useRef(onSummary);
   const lastRequestKeyRef = useRef<string | null>(null);
@@ -285,6 +292,7 @@ export default function DailyReportReceiptsPanel({
     setPodActionReason("");
     setPodEvidenceUrl(receipt.podEvidenceUrl ?? "");
     setPodEvidenceFileName("");
+    setPodDeliveryFee(receipt.podDeliveryFee != null ? String(receipt.podDeliveryFee) : "");
     setActionError(null);
   };
 
@@ -332,6 +340,7 @@ export default function DailyReportReceiptsPanel({
           reason: podActionReason.trim() || undefined,
           evidenceUrl: podEvidenceUrl.trim() || undefined,
           evidenceFileName: podEvidenceFileName.trim() || undefined,
+          deliveryFee: podDeliveryFee.trim() === "" ? undefined : Number(podDeliveryFee),
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -344,6 +353,51 @@ export default function DailyReportReceiptsPanel({
       setActionError(err instanceof Error ? err.message : "Failed to update POD delivery");
     } finally {
       setPodSaving(false);
+    }
+  };
+
+  const openFeeAction = (receipt: DailyReportReceiptRow) => {
+    setFeeReceipt(receipt);
+    setFeeAmount(receipt.podDeliveryFee != null ? String(receipt.podDeliveryFee) : "");
+    setFeeNote("");
+    setFeeError(null);
+  };
+
+  const closeFeeAction = () => {
+    if (feeSaving) return;
+    setFeeReceipt(null);
+    setFeeError(null);
+  };
+
+  const submitDeliveryFee = async () => {
+    if (!feeReceipt) return;
+    const parsed = Number(feeAmount);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      setFeeError("Enter a valid delivery fee amount.");
+      return;
+    }
+    setFeeSaving(true);
+    setFeeError(null);
+    try {
+      const response = await fetch(`/api/receipts/${feeReceipt.id}/pod-delivery-fee`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          amount: parsed,
+          note: feeNote.trim() || undefined,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to save delivery fee");
+      }
+      setFeeReceipt(null);
+      setReloadKey((current) => current + 1);
+    } catch (err) {
+      setFeeError(err instanceof Error ? err.message : "Failed to save delivery fee");
+    } finally {
+      setFeeSaving(false);
     }
   };
 
@@ -468,6 +522,9 @@ export default function DailyReportReceiptsPanel({
                   {receipt.podDeliveryNote ? (
                     <p className="mt-1 text-[12px] text-yellow-200">{receipt.podDeliveryNote}</p>
                   ) : null}
+                  {receipt.isPodDelivery && receipt.podDeliveryFee != null ? (
+                    <p className="mt-1 text-[12px] text-emerald-200">Delivery fee: {formatKES(receipt.podDeliveryFee)}</p>
+                  ) : null}
                   {receipt.podEvidenceUrl ? (
                     <a href={receipt.podEvidenceUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[12px] text-emerald-300 underline">
                       View POD evidence
@@ -484,6 +541,15 @@ export default function DailyReportReceiptsPanel({
                         className="rounded-full border border-yellow-400/30 bg-yellow-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-yellow-100 hover:bg-yellow-500/20"
                       >
                         Mark POD delivered
+                      </button>
+                    ) : null}
+                    {receipt.isPodDelivery && receipt.source === "pos" ? (
+                      <button
+                        type="button"
+                        onClick={() => openFeeAction(receipt)}
+                        className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-100 hover:bg-emerald-500/20"
+                      >
+                        {receipt.podDeliveryFee != null ? "Edit delivery fee" : "Add delivery fee"}
                       </button>
                     ) : null}
                     {receipt.detailUrl ? (
@@ -547,6 +613,18 @@ export default function DailyReportReceiptsPanel({
                   className="mt-1 block w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
                 />
               </label>
+              <label className="block text-xs uppercase tracking-wide text-slate-400">
+                Delivery fee
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={podDeliveryFee}
+                  onChange={(event) => setPodDeliveryFee(event.target.value)}
+                  className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                  placeholder="Optional delivery fee in KES"
+                />
+              </label>
               {podUploading ? <p className="text-xs text-slate-400">Uploading evidence...</p> : null}
               {podEvidenceUrl ? (
                 <a href={podEvidenceUrl} target="_blank" rel="noreferrer" className="inline-block text-sm text-emerald-300 underline">
@@ -571,6 +649,65 @@ export default function DailyReportReceiptsPanel({
                 className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:opacity-60"
               >
                 {podSaving ? "Saving..." : "Save POD update"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {feeReceipt ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-950 p-6 shadow-2xl shadow-black/60">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">POD delivery fee</p>
+                <h3 className="mt-1 text-xl font-semibold text-white">{feeReceipt.orderRef ?? feeReceipt.receiptNumber ?? feeReceipt.id}</h3>
+                <p className="mt-2 text-sm text-slate-400">Save the delivery charge so POD profit is reduced by the correct amount.</p>
+              </div>
+              <button type="button" onClick={closeFeeAction} className="rounded-full border border-white/10 px-3 py-1 text-sm text-slate-300 hover:bg-white/10">
+                Close
+              </button>
+            </div>
+            <div className="mt-5 space-y-4">
+              <label className="block text-xs uppercase tracking-wide text-slate-400">
+                Delivery fee amount
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={feeAmount}
+                  onChange={(event) => setFeeAmount(event.target.value)}
+                  className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                  placeholder="KES 0"
+                />
+              </label>
+              <label className="block text-xs uppercase tracking-wide text-slate-400">
+                Note
+                <textarea
+                  value={feeNote}
+                  onChange={(event) => setFeeNote(event.target.value)}
+                  rows={3}
+                  className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                  placeholder="Optional fee note"
+                />
+              </label>
+              {feeError ? <div className="rounded-xl border border-rose-600/60 bg-rose-900/30 px-4 py-2 text-sm text-rose-200">{feeError}</div> : null}
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeFeeAction}
+                disabled={feeSaving}
+                className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void submitDeliveryFee()}
+                disabled={feeSaving}
+                className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:opacity-60"
+              >
+                {feeSaving ? "Saving..." : "Save delivery fee"}
               </button>
             </div>
           </div>

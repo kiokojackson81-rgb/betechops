@@ -20,6 +20,7 @@ import {
   getProfitReceiptContributorsForAdminFilters,
   type ProfitReceiptContributor,
 } from "@/lib/adminReceiptsSummary";
+import { adjustProfitForPodDeliveryFee, getPodDeliveryFee, loadPodDeliveryFeeMap } from "@/lib/podDeliveryFee";
 
 const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" | null => {
   if (typeof value !== "string") return null;
@@ -487,6 +488,7 @@ export async function GET(req: NextRequest) {
   const mapPosRow = (r: any) => {
     const podDeliveryData = (r.data as any)?.podDelivery;
     const agentSaleCommission = Number((r.data as any)?.agentSale?.commissionAmount ?? 0) || 0;
+    const podDeliveryFee = getPodDeliveryFee(r.data);
     const total = Number((r.totals as any)?.total ?? (r.order as any)?.totalAmount ?? 0) || 0;
     const canonicalReceipt =
       canonicalReceiptNumber((r.order as any)?.orderNumber ?? "") || canonicalReceiptNumber(r.receiptNumber ?? "");
@@ -519,7 +521,10 @@ export async function GET(req: NextRequest) {
           : null;
     const resolvedBuyingTotal = contributor?.buyingTotal ?? buyingTotal;
     const baseProfit = contributor?.profit ?? explicitProfit ?? (resolvedBuyingTotal > 0 ? total - resolvedBuyingTotal : null);
-    const profit = typeof baseProfit === "number" ? baseProfit - agentSaleCommission : baseProfit;
+    const profit =
+      typeof baseProfit === "number"
+        ? adjustProfitForPodDeliveryFee(baseProfit - agentSaleCommission, podDeliveryFee)
+        : baseProfit;
     return {
       id: r.id,
       source: "pos" as const,
@@ -542,11 +547,14 @@ export async function GET(req: NextRequest) {
       podDeliveryStatus: podDeliveryData?.status ?? null,
       podDeliveryNote: podDeliveryData?.note ?? null,
       podEvidenceUrl: podDeliveryData?.evidenceUrl ?? null,
+      podDeliveryFee: podDeliveryFee > 0 ? podDeliveryFee : null,
     };
   };
 
   const mapMarketingRow = (receipt: any) => {
     const total = Number(receipt.sellingTotal ?? 0);
+    const canonical = canonicalReceiptNumber(receipt.receiptNumber ?? receipt.receiptKey ?? undefined);
+    const deliveryFee = canonical ? podDeliveryFeeMap.get(canonical) ?? 0 : 0;
     const contributor = getProfitContributorForRow({
       id: receipt.id,
       source: "marketing",
@@ -558,7 +566,7 @@ export async function GET(req: NextRequest) {
       : 0;
     const storedBuyingTotal = Number(receipt.buyingTotal ?? (receipt.data as any)?.buyingTotal ?? 0);
     const buyingTotal = contributor?.buyingTotal ?? (storedBuyingTotal > 0 ? storedBuyingTotal : itemBuyingTotal);
-    const profit = contributor?.profit ?? (buyingTotal > 0 ? total - buyingTotal : null);
+    const profit = contributor?.profit ?? (buyingTotal > 0 ? total - buyingTotal - deliveryFee : null);
     return {
       id: `marketing-${receipt.id}`,
       source: "marketing" as const,
@@ -589,6 +597,8 @@ export async function GET(req: NextRequest) {
 
   const mapSupportRow = (receipt: any) => {
     const total = Number(receipt.sellingTotal ?? 0);
+    const canonical = canonicalReceiptNumber(receipt.receiptNumber ?? receipt.receiptKey ?? undefined);
+    const deliveryFee = canonical ? podDeliveryFeeMap.get(canonical) ?? 0 : 0;
     const contributor = getProfitContributorForRow({
       id: receipt.id,
       source: "support",
@@ -600,7 +610,7 @@ export async function GET(req: NextRequest) {
       : 0;
     const storedBuyingTotal = Number(receipt.buyingTotal ?? (receipt.data as any)?.buyingTotal ?? 0);
     const buyingTotal = contributor?.buyingTotal ?? (storedBuyingTotal > 0 ? storedBuyingTotal : itemBuyingTotal);
-    const profit = contributor?.profit ?? (buyingTotal > 0 ? total - buyingTotal : null);
+    const profit = contributor?.profit ?? (buyingTotal > 0 ? total - buyingTotal - deliveryFee : null);
     return {
       id: `support-${receipt.id}`,
       source: "support" as const,
@@ -765,6 +775,14 @@ export async function GET(req: NextRequest) {
         },
       })
     : [];
+
+  const podDeliveryFeeMap = await loadPodDeliveryFeeMap(
+    prisma,
+    [
+      ...marketingReceipts.map((receipt: any) => receipt.receiptNumber ?? receipt.receiptKey ?? null),
+      ...supportReceipts.map((receipt: any) => receipt.receiptNumber ?? receipt.receiptKey ?? null),
+    ],
+  );
 
   const combined = [
     ...filteredPosReceipts.map(mapPosRow),
