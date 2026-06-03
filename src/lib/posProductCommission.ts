@@ -76,13 +76,21 @@ export async function getReleasedPosProductCommissionTotalsByOrderItemIds(
   orderItemIds: string[],
   client: PrismaClientOrTx = prisma,
 ) {
+  return getPosProductCommissionTotalsByOrderItemIds(orderItemIds, { releasedOnly: true }, client);
+}
+
+export async function getPosProductCommissionTotalsByOrderItemIds(
+  orderItemIds: string[],
+  options: { releasedOnly?: boolean } = {},
+  client: PrismaClientOrTx = prisma,
+) {
   if (!orderItemIds.length) return new Map<string, number>();
 
   const rows = await client.commissionEarning.findMany({
     where: {
       orderItemId: { in: orderItemIds },
-      status: { in: [...RELEASED_POS_COMMISSION_STATUSES] },
       basis: "product_flat",
+      ...(options.releasedOnly ? { status: { in: [...RELEASED_POS_COMMISSION_STATUSES] } } : {}),
     },
     select: {
       orderItemId: true,

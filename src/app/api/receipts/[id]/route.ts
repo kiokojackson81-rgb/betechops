@@ -3,7 +3,10 @@ import { PaymentMethod } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/api";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
-import { getReleasedPosProductCommissionTotalsByOrderItemIds } from "@/lib/posProductCommission";
+import {
+  getPosProductCommissionTotalsByOrderItemIds,
+  getReleasedPosProductCommissionTotalsByOrderItemIds,
+} from "@/lib/posProductCommission";
 import { isDeliveryFeePayloadItem } from "@/lib/supportPricing";
 import {
   cleanupMarketingReceipts,
@@ -73,7 +76,12 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
   let supportItems: Array<{ id: string; buyingPrice: number | null; productName?: string | null }> = [];
   let supportReceiptSummary: { id: string; buyingTotal?: number | null } | null = null;
   const orderItemIds = (receipt.order?.items ?? []).map((item) => item.id);
+  const totalPosCommissionByOrderItemId = await getPosProductCommissionTotalsByOrderItemIds(orderItemIds);
   const posCommissionByOrderItemId = await getReleasedPosProductCommissionTotalsByOrderItemIds(orderItemIds);
+  const totalItemPosCommission = Array.from(totalPosCommissionByOrderItemId.values()).reduce(
+    (sum, amount) => sum + Number(amount ?? 0),
+    0,
+  );
   const earnedPosCommissionTotal = Array.from(posCommissionByOrderItemId.values()).reduce(
     (sum, amount) => sum + Number(amount ?? 0),
     0,
@@ -83,7 +91,7 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
       ? (receipt.data as Record<string, unknown>)?.manualPosCommissionAmount ?? 0
       : 0,
   );
-  const posCommissionTotal = earnedPosCommissionTotal + (Number.isFinite(manualPosCommission) ? manualPosCommission : 0);
+  const posCommissionTotal = totalItemPosCommission + (Number.isFinite(manualPosCommission) ? manualPosCommission : 0);
   try {
     if (receipt?.order?.orderNumber) {
       const candidates = new Set<string>();
@@ -201,6 +209,17 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
       const docType = body?.docType ? String(body.docType).toUpperCase() : String(existing.docType);
       const layawayDeposit = Number(existing.order?.layawayPlan?.deposit ?? existing.order?.paidAmount ?? 0);
       const paidAmount = docType === "LAYAWAY" ? layawayDeposit : total;
+      const existingData =
+        existing.data && typeof existing.data === "object" && !Array.isArray(existing.data)
+          ? (existing.data as Record<string, unknown>)
+          : {};
+      const existingPodDelivery =
+        existingData.podDelivery && typeof existingData.podDelivery === "object" && !Array.isArray(existingData.podDelivery)
+          ? (existingData.podDelivery as Record<string, unknown>)
+          : null;
+      const isPodDelivery =
+        String(body?.customerType ?? existingData.customerType ?? "").toLowerCase() === "pod" ||
+        Boolean(existingPodDelivery);
 
       // refresh products + items
       // Delete dependent CommissionEarning rows first to avoid foreign-key violations
@@ -233,6 +252,10 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
         quantity: number;
         costPrice: number;
         unitPrice: number;
+        productId: string;
+        commissionEnabled: boolean;
+        commissionAmount: number;
+        commissionRequiresApproval: boolean;
       }> = [];
       for (const it of items) {
         const title = String(it.title || it.product || it.productName || "Item").slice(0, 255);
@@ -297,6 +320,10 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
             quantity,
             unitPrice,
             costPrice,
+            productId: product.id,
+            commissionEnabled: Boolean((product as any).commissionEnabled),
+            commissionAmount: Number((product as any).commissionAmount ?? 0),
+            commissionRequiresApproval: Boolean((product as any).commissionRequiresApproval),
           });
         } catch (orderItemErr) {
           console.error('[receipts] failed to create orderItem (patch)', {
@@ -399,11 +426,10 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
         },
       });
 
-      // Refresh commission earnings on edit (gross-based placeholder)
+      // Refresh commission earnings on edit, including per-product POS commissions.
       if (createdOrderItems.length) {
         await tx.commissionEarning.deleteMany({ where: { orderItem: { orderId: existing.orderId } } });
-        await tx.commissionEarning.createMany({
-          data: createdOrderItems.map((it) => ({
+        const grossEarnings = createdOrderItems.map((it) => ({
             staffId: attendantId || existing.order?.attendantId || null,
             orderItemId: it.id,
             basis: "gross",
@@ -411,8 +437,45 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
             amount: Number(it.sellingPrice || 0) * Number(it.quantity || 1),
             status: docType === "LAYAWAY" ? "PENDING" : "PENDING",
             calcDetail: { reason: "receipt_edit_seed" },
-          })),
-        });
+          }));
+        await tx.commissionEarning.createMany({ data: grossEarnings });
+
+        const posProductEarnings = createdOrderItems
+          .map((orderItem, index) => {
+            const sourceItem = createdItems[index];
+            const amount = Number(sourceItem?.commissionAmount || 0) * Number(orderItem.quantity || 1);
+            if (!sourceItem?.commissionEnabled || amount <= 0) return null;
+            const requiresAdminApproval = isPodDelivery || Boolean(sourceItem.commissionRequiresApproval);
+            const status =
+              requiresAdminApproval
+                ? "PENDING_APPROVAL"
+                : docType === "LAYAWAY"
+                  ? "PENDING"
+                  : "RELEASED";
+            return {
+              staffId: attendantId || existing.order?.attendantId || null,
+              orderItemId: orderItem.id,
+              basis: "product_flat",
+              qty: orderItem.quantity,
+              amount,
+              status,
+              calcDetail: {
+                reason: "pos_product_commission",
+                productId: sourceItem.productId,
+                productName: sourceItem.title,
+                orderNumber: existing.order?.orderNumber ?? null,
+                receiptId: existing.id,
+                requiresApproval: requiresAdminApproval,
+                unitCommission: Number(sourceItem.commissionAmount || 0),
+                customerType: body?.customerType ?? existingData.customerType ?? null,
+              },
+            };
+          })
+          .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+
+        if (posProductEarnings.length) {
+          await tx.commissionEarning.createMany({ data: posProductEarnings });
+        }
       }
 
       try {
