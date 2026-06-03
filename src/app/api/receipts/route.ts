@@ -193,7 +193,7 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // Optional filter: customerType=pod to show POD receipts only, with optional status filter
+  // Optional filter: customerType=pod to show POD receipts only, customerType=normal to exclude POD receipts.
   const customerType = url.searchParams.get('customerType') || undefined;
   const podStatus = url.searchParams.get('status') || undefined; // expected values: 'pending'|'delivered'|'delivery_failed'
     if (customerType === 'pod') {
@@ -203,6 +203,8 @@ export async function GET(req: NextRequest) {
       // any receipt that has podDelivery metadata
       and.push({ data: { path: ['podDelivery'], not: Prisma.JsonNull } });
     }
+  } else if (customerType === 'normal') {
+    and.push({ OR: [{ data: { path: ['podDelivery'], equals: Prisma.JsonNull } }, { data: { path: ['podDelivery'], equals: null } }] });
   } else {
     // Do not exclude POD-pending receipts from the list API — the admin
     // UI wants to display POD receipts in the listing. Aggregation and

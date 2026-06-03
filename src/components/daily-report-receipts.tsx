@@ -21,7 +21,7 @@ type DailyReportReceiptRow = {
   detailUrl?: string | null;
 };
 
-type PodFilterValue = "all" | "settled" | "pod_pending" | "pod_delivered" | "pod_failed";
+type PodFilterValue = "all" | "normal_only" | "settled" | "pod_pending" | "pod_delivered" | "pod_failed";
 
 type Props = {
   // start and end should be date strings (YYYY-MM-DD) or ISO date strings
@@ -178,7 +178,9 @@ export default function DailyReportReceiptsPanel({
         const settledOnly = podFilter === "settled";
         if (onlyPos) params.set("onlyPos", "1");
         if (paidOnly || settledOnly) params.set("paidOnly", "1");
-        if (podFilter === "pod_pending") {
+        if (podFilter === "normal_only") {
+          params.set("customerType", "normal");
+        } else if (podFilter === "pod_pending") {
           params.set("customerType", "pod");
           params.set("status", "pending");
         } else if (podFilter === "pod_delivered") {
@@ -403,6 +405,7 @@ export default function DailyReportReceiptsPanel({
           <div className="flex flex-wrap gap-2">
             {[
               { key: "all", label: onlyPos ? "All POS receipts" : "All receipts" },
+              { key: "normal_only", label: "Normal only" },
               { key: "settled", label: "Settled receipts" },
               { key: "pod_pending", label: "POD pending" },
               { key: "pod_delivered", label: "POD delivered" },
