@@ -204,7 +204,7 @@ export async function GET(req: NextRequest) {
       and.push({ data: { path: ['podDelivery'], not: Prisma.JsonNull } });
     }
   } else if (customerType === 'normal') {
-    and.push({ OR: [{ data: { path: ['podDelivery'], equals: Prisma.JsonNull } }, { data: { path: ['podDelivery'], equals: null } }] });
+    and.push({ data: { path: ['podDelivery'], equals: Prisma.JsonNull } });
   } else {
     // Do not exclude POD-pending receipts from the list API — the admin
     // UI wants to display POD receipts in the listing. Aggregation and
