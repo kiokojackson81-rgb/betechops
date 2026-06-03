@@ -539,6 +539,7 @@ export async function GET(req: NextRequest) {
       isPodDelivery: Boolean(podDeliveryData?.status),
       podDeliveryStatus: podDeliveryData?.status ?? null,
       podDeliveryNote: podDeliveryData?.note ?? null,
+      podEvidenceUrl: podDeliveryData?.evidenceUrl ?? null,
     };
   };
 

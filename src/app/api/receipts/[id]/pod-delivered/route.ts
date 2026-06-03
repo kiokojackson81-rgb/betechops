@@ -58,6 +58,21 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   const baseData =
     typeof receipt.data === 'object' && receipt.data ? { ...(receipt.data as Record<string, unknown>) } : {};
   const podDelivery = typeof baseData.podDelivery === 'object' ? (baseData.podDelivery as Record<string, any>) : null;
+  const actorRole = String(guard?.user?.role ?? '').toUpperCase();
+  const actorId = String(guard?.user?.id ?? '').trim();
+  const creatorIds = new Set(
+    [
+      receipt.issuedById,
+      receipt.order?.attendantId,
+      typeof baseData.attendantId === 'string' ? baseData.attendantId : null,
+    ]
+      .map((value) => String(value ?? '').trim())
+      .filter(Boolean),
+  );
+  const canManageAnyReceipt = actorRole === 'ADMIN' || actorRole === 'SUPERVISOR';
+  if (!canManageAnyReceipt && (!actorId || !creatorIds.has(actorId))) {
+    return NextResponse.json({ error: 'Only the creator of this POD receipt can finalize delivery' }, { status: 403 });
+  }
   if (!podDelivery?.status) {
     return NextResponse.json({ error: 'Receipt is not marked for POD delivery' }, { status: 400 });
   }
@@ -75,6 +90,8 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   // allow caller to select outcome. default to delivered.
   let desiredStatus = 'delivered';
   let finalReason: string | null = null;
+  let evidenceUrl: string | null = null;
+  let evidenceFileName: string | null = null;
   try {
     const body = (await req.json()) ?? {};
     if (body && typeof body.status === 'string') {
@@ -92,6 +109,12 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     if (body && typeof body.reason === 'string' && body.reason.trim().length > 0) {
       finalReason = body.reason.trim();
     }
+    if (body && typeof body.evidenceUrl === 'string' && body.evidenceUrl.trim().length > 0) {
+      evidenceUrl = body.evidenceUrl.trim();
+    }
+    if (body && typeof body.evidenceFileName === 'string' && body.evidenceFileName.trim().length > 0) {
+      evidenceFileName = body.evidenceFileName.trim();
+    }
   } catch {
     // no body / invalid json – default to 'delivered'
   }
@@ -105,11 +128,15 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     updatedPodDeliveryBase.deliveredAt = new Date().toISOString();
     updatedPodDeliveryBase.deliveredById = guard?.user?.id ?? null;
     if (finalReason) updatedPodDeliveryBase.deliveredReason = finalReason;
+    if (evidenceUrl) updatedPodDeliveryBase.evidenceUrl = evidenceUrl;
+    if (evidenceFileName) updatedPodDeliveryBase.evidenceFileName = evidenceFileName;
   } else {
     updatedPodDeliveryBase.status = 'delivery_failed';
     updatedPodDeliveryBase.failedAt = new Date().toISOString();
     updatedPodDeliveryBase.failedById = guard?.user?.id ?? null;
     if (finalReason) updatedPodDeliveryBase.failedReason = finalReason;
+    if (evidenceUrl) updatedPodDeliveryBase.evidenceUrl = evidenceUrl;
+    if (evidenceFileName) updatedPodDeliveryBase.evidenceFileName = evidenceFileName;
   }
 
   try {

@@ -6,6 +6,7 @@ type DailyReportReceiptRow = {
   id: string;
   source?: "pos" | "marketing" | "support";
   orderRef?: string | null;
+  receiptNumber?: string | null;
   docType?: string | null;
   customerName?: string | null;
   attendantName?: string | null;
@@ -16,8 +17,11 @@ type DailyReportReceiptRow = {
   isPodDelivery?: boolean;
   podDeliveryStatus?: string | null;
   podDeliveryNote?: string | null;
+  podEvidenceUrl?: string | null;
   detailUrl?: string | null;
 };
+
+type PodFilterValue = "all" | "settled" | "pod_pending" | "pod_delivered" | "pod_failed";
 
 type Props = {
   // start and end should be date strings (YYYY-MM-DD) or ISO date strings
@@ -32,6 +36,8 @@ type Props = {
   title?: string;
   subtitle?: string;
   emptyMessage?: string;
+  showPodFilters?: boolean;
+  initialPodFilter?: PodFilterValue;
   onSummary?: (s: { totalSales: number; count: number }) => void;
 };
 
@@ -108,6 +114,8 @@ export default function DailyReportReceiptsPanel({
   title,
   subtitle,
   emptyMessage,
+  showPodFilters = false,
+  initialPodFilter = "all",
   onSummary,
 }: Props) {
   const [receipts, setReceipts] = useState<DailyReportReceiptRow[]>([]);
@@ -117,11 +125,25 @@ export default function DailyReportReceiptsPanel({
   const [lastFetchStatus, setLastFetchStatus] = useState<number | null>(null);
   const [lastFetchCount, setLastFetchCount] = useState<number | null>(null);
   const [localAttendantId, setLocalAttendantId] = useState<string | null | undefined>(attendantId);
+  const [podFilter, setPodFilter] = useState<PodFilterValue>(initialPodFilter);
+  const [podActionReceipt, setPodActionReceipt] = useState<DailyReportReceiptRow | null>(null);
+  const [podActionStatus, setPodActionStatus] = useState<"delivered" | "delivery_failed">("delivered");
+  const [podActionReason, setPodActionReason] = useState("");
+  const [podEvidenceUrl, setPodEvidenceUrl] = useState("");
+  const [podEvidenceFileName, setPodEvidenceFileName] = useState("");
+  const [podUploading, setPodUploading] = useState(false);
+  const [podSaving, setPodSaving] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   // sync localAttendantId when the prop changes
   useEffect(() => {
     setLocalAttendantId(attendantId);
   }, [attendantId]);
+
+  useEffect(() => {
+    setPodFilter(initialPodFilter);
+  }, [initialPodFilter]);
 
   useEffect(() => {
     let cancelled = false;
@@ -153,8 +175,19 @@ export default function DailyReportReceiptsPanel({
         if (endIso) params.set("end", endIso);
         if (q) params.set("q", q);
         params.set("scope", "mine");
+        const settledOnly = podFilter === "settled";
         if (onlyPos) params.set("onlyPos", "1");
-        if (paidOnly) params.set("paidOnly", "1");
+        if (paidOnly || settledOnly) params.set("paidOnly", "1");
+        if (podFilter === "pod_pending") {
+          params.set("customerType", "pod");
+          params.set("status", "pending");
+        } else if (podFilter === "pod_delivered") {
+          params.set("customerType", "pod");
+          params.set("status", "delivered");
+        } else if (podFilter === "pod_failed") {
+          params.set("customerType", "pod");
+          params.set("status", "delivery_failed");
+        }
         if (typeof includeLedger === "boolean") params.set("includeLedger", includeLedger ? "true" : "false");
         const aid = localAttendantId ?? attendantId;
         if (aid) params.set("attendantId", aid);
@@ -171,9 +204,6 @@ export default function DailyReportReceiptsPanel({
           signal: controller.signal,
           credentials: "same-origin",
         });
-        // debug info to help trace why an attendant may not see receipts
-        // (will appear in the browser console)
-        // eslint-disable-next-line no-console
         console.debug("[DailyReportReceipts] fetch", { attendantId, url, status: res.status });
         setLastFetchUrl(url);
         setLastFetchStatus(res.status);
@@ -200,7 +230,7 @@ export default function DailyReportReceiptsPanel({
       cancelled = true;
       controller.abort();
     };
-  }, [start, end, q, localAttendantId, onlyPos, paidOnly, includeLedger]);
+  }, [attendantId, includeLedger, localAttendantId, onSummary, onlyPos, paidOnly, podFilter, q, reloadKey, start, end]);
 
   // If we don't have an attendantId prop, try fetching the session to determine the logged-in user id
   useEffect(() => {
@@ -213,7 +243,7 @@ export default function DailyReportReceiptsPanel({
         if (!res.ok) return;
         const data = await res.json().catch(() => null);
         if (!cancelled && data?.user?.id) setLocalAttendantId(data.user.id);
-      } catch (e) {
+      } catch {
         // ignore
       }
     };
@@ -233,6 +263,74 @@ export default function DailyReportReceiptsPanel({
     if (onSummary) onSummary(summary);
   }, [onSummary, summary]);
 
+  const openPodAction = (receipt: DailyReportReceiptRow) => {
+    setPodActionReceipt(receipt);
+    setPodActionStatus("delivered");
+    setPodActionReason("");
+    setPodEvidenceUrl(receipt.podEvidenceUrl ?? "");
+    setPodEvidenceFileName("");
+    setActionError(null);
+  };
+
+  const closePodAction = () => {
+    if (podUploading || podSaving) return;
+    setPodActionReceipt(null);
+    setActionError(null);
+  };
+
+  const uploadEvidence = async (file: File) => {
+    setPodUploading(true);
+    setActionError(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const response = await fetch("/api/receipts/pod-evidence-upload", {
+        method: "POST",
+        body: form,
+        credentials: "same-origin",
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to upload evidence");
+      }
+      setPodEvidenceUrl(typeof payload?.url === "string" ? payload.url : "");
+      setPodEvidenceFileName(file.name);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to upload evidence");
+    } finally {
+      setPodUploading(false);
+    }
+  };
+
+  const submitPodAction = async () => {
+    if (!podActionReceipt) return;
+    setPodSaving(true);
+    setActionError(null);
+    try {
+      const response = await fetch(`/api/receipts/${podActionReceipt.id}/pod-delivered`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          status: podActionStatus,
+          reason: podActionReason.trim() || undefined,
+          evidenceUrl: podEvidenceUrl.trim() || undefined,
+          evidenceFileName: podEvidenceFileName.trim() || undefined,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to update POD delivery");
+      }
+      setPodActionReceipt(null);
+      setReloadKey((current) => current + 1);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to update POD delivery");
+    } finally {
+      setPodSaving(false);
+    }
+  };
+
   const displayDate = (() => {
     if (start && end) {
       try {
@@ -249,7 +347,7 @@ export default function DailyReportReceiptsPanel({
         return `${s.toLocaleDateString(locale, { timeZone: kenyaTimeZone })} - ${e.toLocaleDateString(locale, {
           timeZone: kenyaTimeZone,
         })}`;
-      } catch (e) {
+      } catch {
         return "Selected range";
       }
     }
@@ -301,6 +399,30 @@ export default function DailyReportReceiptsPanel({
       )}
 
       <div className="mt-5 space-y-3">
+        {showPodFilters && (
+          <div className="flex flex-wrap gap-2">
+            {[
+              { key: "all", label: onlyPos ? "All POS receipts" : "All receipts" },
+              { key: "settled", label: "Settled receipts" },
+              { key: "pod_pending", label: "POD pending" },
+              { key: "pod_delivered", label: "POD delivered" },
+              { key: "pod_failed", label: "POD failed" },
+            ].map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => setPodFilter(option.key as PodFilterValue)}
+                className={`rounded-full border px-4 py-1 text-[11px] font-semibold uppercase tracking-wide transition ${
+                  podFilter === option.key
+                    ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
+                    : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        )}
         {loading && <p className="text-xs text-slate-400">Loading receipts…</p>}
         {error && <div className="rounded-xl border border-rose-600/60 bg-rose-900/30 px-4 py-2 text-sm text-rose-200">{error}</div>}
 
@@ -313,28 +435,130 @@ export default function DailyReportReceiptsPanel({
             {receipts.map((receipt) => (
               <div
                 key={receipt.id}
-                className="flex items-center justify-between rounded-3xl border border-white/5 bg-slate-900/60 px-6 py-4 shadow-md"
+                className="flex flex-col gap-3 rounded-3xl border border-white/5 bg-slate-900/60 px-6 py-4 shadow-md sm:flex-row sm:items-center sm:justify-between"
               >
                 <div>
-                      <p className="text-lg font-semibold text-white">{receipt.orderRef ?? receipt.docType ?? receipt.id}</p>
-                      <p className="mt-1 text-[12px] text-slate-400">{receipt.attendantName ?? "Attendant unknown"} · {formatDateTime(receipt.createdAt)}</p>
-                      <p className="mt-1 text-[12px] text-slate-500">{receipt.customerName ?? "-"} · {receipt.docType ?? "Receipt"}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-lg font-semibold text-white">{receipt.orderRef ?? receipt.receiptNumber ?? receipt.docType ?? receipt.id}</p>
+                    {receipt.isPodDelivery ? (
+                      <span className="rounded-full border border-yellow-400/30 bg-yellow-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-yellow-200">
+                        POD {String(receipt.podDeliveryStatus ?? "pending").replace(/_/g, " ")}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-1 text-[12px] text-slate-400">{receipt.attendantName ?? "Attendant unknown"} · {formatDateTime(receipt.createdAt)}</p>
+                  <p className="mt-1 text-[12px] text-slate-500">{receipt.customerName ?? "-"} · {receipt.docType ?? "Receipt"}</p>
+                  {receipt.podDeliveryNote ? (
+                    <p className="mt-1 text-[12px] text-yellow-200">{receipt.podDeliveryNote}</p>
+                  ) : null}
+                  {receipt.podEvidenceUrl ? (
+                    <a href={receipt.podEvidenceUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[12px] text-emerald-300 underline">
+                      View POD evidence
+                    </a>
+                  ) : null}
                 </div>
-                <div className="text-right">
+                <div className="text-left sm:text-right">
                   <p className="text-lg font-semibold text-emerald-300">{formatKES(receipt.total)}</p>
-                  {receipt.detailUrl ? (
-                    <a href={receipt.detailUrl} target="_blank" rel="noopener noreferrer" className="inline-block mt-2 text-xs uppercase text-emerald-300 hover:text-emerald-200">View details</a>
-                  ) : receipt.source === "pos" && receipt.id ? (
-                    <a href={`/receipts/print/${receipt.id}`} target="_blank" rel="noopener noreferrer" className="inline-block mt-2 text-xs uppercase text-emerald-300 hover:text-emerald-200">View details</a>
-                  ) : (
-                    <span className="text-xs text-slate-500">Unavailable</span>
-                  )}
+                  <div className="mt-2 flex flex-wrap gap-2 sm:justify-end">
+                    {receipt.isPodDelivery && String(receipt.podDeliveryStatus ?? "").toLowerCase() === "pending" && receipt.source === "pos" ? (
+                      <button
+                        type="button"
+                        onClick={() => openPodAction(receipt)}
+                        className="rounded-full border border-yellow-400/30 bg-yellow-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-yellow-100 hover:bg-yellow-500/20"
+                      >
+                        Mark POD delivered
+                      </button>
+                    ) : null}
+                    {receipt.detailUrl ? (
+                      <a href={receipt.detailUrl} target="_blank" rel="noopener noreferrer" className="inline-block text-xs uppercase text-emerald-300 hover:text-emerald-200">View details</a>
+                    ) : receipt.source === "pos" && receipt.id ? (
+                      <a href={`/receipts/print/${receipt.id}`} target="_blank" rel="noopener noreferrer" className="inline-block text-xs uppercase text-emerald-300 hover:text-emerald-200">View details</a>
+                    ) : (
+                      <span className="text-xs text-slate-500">Unavailable</span>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+      {podActionReceipt ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-slate-950 p-6 shadow-2xl shadow-black/60">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">POD update</p>
+                <h3 className="mt-1 text-xl font-semibold text-white">{podActionReceipt.orderRef ?? podActionReceipt.receiptNumber ?? podActionReceipt.id}</h3>
+                <p className="mt-2 text-sm text-slate-400">Record the delivery outcome and attach proof if available.</p>
+              </div>
+              <button type="button" onClick={closePodAction} className="rounded-full border border-white/10 px-3 py-1 text-sm text-slate-300 hover:bg-white/10">
+                Close
+              </button>
+            </div>
+            <div className="mt-5 space-y-4">
+              <label className="block text-xs uppercase tracking-wide text-slate-400">
+                Outcome
+                <select
+                  value={podActionStatus}
+                  onChange={(event) => setPodActionStatus(event.target.value as "delivered" | "delivery_failed")}
+                  className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                >
+                  <option value="delivered">Delivered</option>
+                  <option value="delivery_failed">Delivery failed</option>
+                </select>
+              </label>
+              <label className="block text-xs uppercase tracking-wide text-slate-400">
+                Reason or note
+                <textarea
+                  value={podActionReason}
+                  onChange={(event) => setPodActionReason(event.target.value)}
+                  rows={3}
+                  className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                  placeholder="Optional delivery note"
+                />
+              </label>
+              <label className="block text-xs uppercase tracking-wide text-slate-400">
+                Attach evidence
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) void uploadEvidence(file);
+                  }}
+                  className="mt-1 block w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
+                />
+              </label>
+              {podUploading ? <p className="text-xs text-slate-400">Uploading evidence...</p> : null}
+              {podEvidenceUrl ? (
+                <a href={podEvidenceUrl} target="_blank" rel="noreferrer" className="inline-block text-sm text-emerald-300 underline">
+                  {podEvidenceFileName || "View uploaded evidence"}
+                </a>
+              ) : null}
+              {actionError ? <div className="rounded-xl border border-rose-600/60 bg-rose-900/30 px-4 py-2 text-sm text-rose-200">{actionError}</div> : null}
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closePodAction}
+                disabled={podUploading || podSaving}
+                className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void submitPodAction()}
+                disabled={podUploading || podSaving}
+                className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:opacity-60"
+              >
+                {podSaving ? "Saving..." : "Save POD update"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

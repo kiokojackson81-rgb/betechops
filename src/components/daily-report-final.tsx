@@ -973,8 +973,9 @@ export default function DailyReportFinal() {
                 q={debouncedSearch}
                 attendantId={attendantId}
                 onlyPos={isBrendahView}
-                paidOnly={isBrendahView}
+                paidOnly={false}
                 includeLedger={!isBrendahView}
+                showPodFilters
                 hideHeader
                 onSummary={(s) => setReceiptsSummary({ count: s.count, totalSales: s.totalSales })}
               />

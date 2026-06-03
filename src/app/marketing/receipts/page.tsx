@@ -1,22 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Card from "@/app/_components/Card";
+import DailyReportReceiptsPanel from "@/components/daily-report-receipts";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 
 type ReceiptRangeKey = "today" | "yesterday" | "this-week" | "period" | "custom";
-
-type MarketingReceiptRow = {
-  id: string;
-  orderRef?: string | null;
-  receiptNumber?: string | null;
-  docType?: string | null;
-  createdAt: string;
-  customerName?: string | null;
-  attendantName?: string | null;
-  total?: number | null;
-};
 
 type MarketingReceiptSummary = {
   totalSales: number;
@@ -34,25 +24,6 @@ const formatKES = (value?: number | null) =>
   `KES ${Number(value ?? 0).toLocaleString("en-KE", {
     maximumFractionDigits: 0,
   })}`;
-
-const formatDateTime = (value?: string | null) => {
-  if (!value) return "-";
-  return new Date(value).toLocaleString("en-KE", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-};
-
-const dateInputPattern = /^\d{4}-\d{2}-\d{2}$/;
-
-const toNairobiStartParam = (value?: string) =>
-  value && dateInputPattern.test(value) ? `${value}T00:00:00+03:00` : null;
-
-const toNairobiEndParam = (value?: string) =>
-  value && dateInputPattern.test(value) ? `${value}T23:59:59.999+03:00` : null;
 
 const getWeekBounds = (reference: Date) => {
   const day = reference.getDay();
@@ -91,122 +62,10 @@ export default function MarketingReceiptsPage() {
     query: "",
   });
   const [rangeKey, setRangeKey] = useState<ReceiptRangeKey>("today");
-  const [receipts, setReceipts] = useState<MarketingReceiptRow[]>([]);
   const [summary, setSummary] = useState<MarketingReceiptSummary>({
     totalSales: 0,
     receiptsCount: 0,
   });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setFilters((prev) => ({ ...prev, start: defaultDate, end: defaultDate }));
-    setRangeKey("today");
-  }, [defaultDate]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const controller = new AbortController();
-
-    const fetchReceipts = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const params = new URLSearchParams();
-        params.set("includeItems", "false");
-        params.set("size", "80");
-        params.set("onlyPos", "1");
-        params.set("paidOnly", "1");
-        params.set("scope", "mine");
-        const startIso = toNairobiStartParam(filters.start);
-        const endIso = toNairobiEndParam(filters.end);
-        if (startIso) params.set("start", startIso);
-        if (endIso) params.set("end", endIso);
-        if (filters.query.trim()) {
-          params.set("q", filters.query.trim());
-        }
-        const summaryParams = new URLSearchParams();
-        summaryParams.set("scope", "mine");
-        summaryParams.set("salesOnly", "true");
-        if (startIso) summaryParams.set("start", startIso);
-        if (endIso) summaryParams.set("end", endIso);
-        if (filters.query.trim()) {
-          summaryParams.set("q", filters.query.trim());
-        }
-
-        const [res, summaryRes] = await Promise.all([
-          fetch(`/api/receipts?${params.toString()}`, {
-            cache: "no-store",
-            signal: controller.signal,
-          }),
-          fetch(`/api/admin/receipts/summary?${summaryParams.toString()}`, {
-            cache: "no-store",
-            signal: controller.signal,
-          }),
-        ]);
-
-        const data = await res.json().catch(() => ({}));
-        const summaryData = await summaryRes.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data?.error || "Failed to load receipts");
-        if (!summaryRes.ok) {
-          throw new Error(summaryData?.error || "Failed to load receipts summary");
-        }
-        if (!cancelled) {
-          setSummary({
-            totalSales: Number(summaryData?.totalSales ?? 0),
-            receiptsCount: Number(summaryData?.receiptsCount ?? 0),
-          });
-          const firstPage = Array.isArray(data?.receipts) ? data.receipts : [];
-          const totalPages = Math.max(1, Number(data?.paging?.totalPages ?? 1));
-
-          if (totalPages <= 1) {
-            setReceipts(firstPage);
-            return;
-          }
-
-          const pageRequests: Promise<Response>[] = [];
-          for (let page = 2; page <= totalPages; page += 1) {
-            const pageParams = new URLSearchParams(params);
-            pageParams.set("page", String(page));
-            pageRequests.push(
-              fetch(`/api/receipts?${pageParams.toString()}`, {
-                cache: "no-store",
-                signal: controller.signal,
-              }),
-            );
-          }
-
-          const pageResponses = await Promise.all(pageRequests);
-          const pagePayloads = await Promise.all(
-            pageResponses.map(async (response) => {
-              const payload = await response.json().catch(() => ({}));
-              if (!response.ok) {
-                throw new Error(payload?.error || "Failed to load receipts");
-              }
-              return Array.isArray(payload?.receipts) ? payload.receipts : [];
-            }),
-          );
-
-          setReceipts([firstPage, ...pagePayloads].flat());
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setSummary({ totalSales: 0, receiptsCount: 0 });
-          setError(err instanceof Error ? err.message : "Unable to load receipts");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
-    fetchReceipts();
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [filters]);
 
   const rangeLabel = (() => {
     if (rangeKey === "today") return "Today";
@@ -270,7 +129,7 @@ export default function MarketingReceiptsPage() {
           <div>
             <h1 className="text-3xl font-semibold">Receipts history</h1>
             <p className="text-sm text-slate-300">
-              Browse your settled POS receipts and open the shared receipt detail page to print, send, or change payment method.
+              Browse your receipts, filter POD work, and record delivery evidence from the same history screen.
             </p>
           </div>
           <Link
@@ -287,7 +146,7 @@ export default function MarketingReceiptsPage() {
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts list</p>
               <h2 className="text-lg font-semibold text-slate-100">My POS receipts</h2>
               <p className="text-sm text-slate-400">
-                Filter your settled POS receipts by date or search term. Only your logged-in sales are shown here.
+                Filter your own receipts by date, search term, or POD status. Pending PODs can be marked delivered with proof here.
               </p>
             </div>
             <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
@@ -351,7 +210,7 @@ export default function MarketingReceiptsPage() {
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
               <p className="text-[11px] uppercase tracking-wide text-slate-400">Receipts</p>
               <p className="text-2xl font-semibold text-emerald-300">{summary.receiptsCount}</p>
-              <p className="text-xs text-slate-400">Your settled POS receipts in the selected window</p>
+              <p className="text-xs text-slate-400">Your receipts in the selected window</p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
               <p className="text-[11px] uppercase tracking-wide text-slate-400">Total sales</p>
@@ -360,50 +219,23 @@ export default function MarketingReceiptsPage() {
             </div>
           </div>
 
-          <div className="space-y-2">
-            {loading && (
-              <p className="text-sm text-slate-400">Loading receipts.</p>
-            )}
-            {error && <p className="text-sm text-rose-300">{error}</p>}
-            {!loading && !receipts.length && !error && (
-              <p className="text-sm text-slate-400">No receipts found for this range.</p>
-            )}
-            {receipts.map((receipt) => (
-              <div
-                key={receipt.id}
-                className="flex items-center justify-between rounded-2xl border border-white/5 bg-slate-950/60 px-4 py-3"
-              >
-                <div>
-                  <p className="text-sm font-semibold text-white">
-                    {receipt.orderRef ?? receipt.receiptNumber ?? receipt.id}
-                  </p>
-                  <p className="text-[11px] text-slate-400">
-                    {receipt.attendantName ?? "Attendant unknown"} · {formatDateTime(receipt.createdAt)}
-                  </p>
-                  <p className="text-[11px] text-slate-500">
-                    {receipt.customerName ?? "-"} · {receipt.docType ?? "Receipt"}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-semibold text-emerald-300">
-                    {formatKES(receipt.total)}
-                  </p>
-                  {receipt.id ? (
-                    <Link
-                      href={`/receipts/${receipt.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-emerald-300 hover:text-emerald-200"
-                    >
-                      View receipt
-                    </Link>
-                  ) : (
-                    <span className="text-xs text-slate-500">Unavailable</span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+          <DailyReportReceiptsPanel
+            start={filters.start}
+            end={filters.end}
+            q={filters.query}
+            attendantId={undefined}
+            onlyPos
+            hideHeader
+            showPodFilters
+            initialPodFilter="all"
+            emptyMessage="No receipts found for this range."
+            onSummary={(panelSummary) =>
+              setSummary({
+                totalSales: panelSummary.totalSales,
+                receiptsCount: panelSummary.count,
+              })
+            }
+          />
         </Card>
       </main>
     </div>
