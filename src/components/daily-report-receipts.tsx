@@ -124,7 +124,8 @@ export default function DailyReportReceiptsPanel({
   const [lastFetchUrl, setLastFetchUrl] = useState<string | null>(null);
   const [lastFetchStatus, setLastFetchStatus] = useState<number | null>(null);
   const [lastFetchCount, setLastFetchCount] = useState<number | null>(null);
-  const [localAttendantId, setLocalAttendantId] = useState<string | null | undefined>(attendantId);
+  const [sessionAttendantId, setSessionAttendantId] = useState<string | null>(null);
+  const [debouncedQuery, setDebouncedQuery] = useState(() => q?.trim() ?? "");
   const [podFilter, setPodFilter] = useState<PodFilterValue>(initialPodFilter);
   const [podActionReceipt, setPodActionReceipt] = useState<DailyReportReceiptRow | null>(null);
   const [podActionStatus, setPodActionStatus] = useState<"delivered" | "delivery_failed">("delivered");
@@ -136,25 +137,31 @@ export default function DailyReportReceiptsPanel({
   const [actionError, setActionError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const onSummaryRef = useRef(onSummary);
+  const lastRequestKeyRef = useRef<string | null>(null);
+  const lastRequestAtRef = useRef(0);
 
   useEffect(() => {
     onSummaryRef.current = onSummary;
   }, [onSummary]);
 
-  // sync localAttendantId when the prop changes
   useEffect(() => {
-    setLocalAttendantId(attendantId);
-  }, [attendantId]);
+    const timer = window.setTimeout(() => {
+      setDebouncedQuery(q?.trim() ?? "");
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [q]);
 
   useEffect(() => {
     setPodFilter(initialPodFilter);
   }, [initialPodFilter]);
 
+  const resolvedAttendantId = attendantId ?? sessionAttendantId ?? null;
+
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
 
-    if (!localAttendantId) {
+    if (!resolvedAttendantId) {
       // no attendantId yet — abort early. Ensure parent summary is reset so
       // the summary cards reflect zero until we resolve the session.
       setReceipts([]);
@@ -178,7 +185,7 @@ export default function DailyReportReceiptsPanel({
         const endIso = toEndOfDayIso(end ?? undefined);
         if (startIso) params.set("start", startIso);
         if (endIso) params.set("end", endIso);
-        if (q) params.set("q", q);
+        if (debouncedQuery) params.set("q", debouncedQuery);
         params.set("scope", "mine");
         const settledOnly = podFilter === "settled";
         if (onlyPos) params.set("onlyPos", "1");
@@ -196,8 +203,7 @@ export default function DailyReportReceiptsPanel({
           params.set("status", "delivery_failed");
         }
         if (typeof includeLedger === "boolean") params.set("includeLedger", includeLedger ? "true" : "false");
-        const aid = localAttendantId ?? attendantId;
-        if (aid) params.set("attendantId", aid);
+        params.set("attendantId", resolvedAttendantId);
         let url = `/api/receipts?${params.toString()}`;
         // If the developer adds `?useMockReceipts=1` to the URL, use a
         // local mock endpoint to verify UI/summary behavior without needing
@@ -205,6 +211,13 @@ export default function DailyReportReceiptsPanel({
         if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("useMockReceipts") === "1") {
           url = "/api/debug/receipts-mock";
         }
+        const requestKey = `${reloadKey}:${url}`;
+        const now = Date.now();
+        if (lastRequestKeyRef.current === requestKey && now - lastRequestAtRef.current < 1500) {
+          return;
+        }
+        lastRequestKeyRef.current = requestKey;
+        lastRequestAtRef.current = now;
         // include credentials to ensure session cookie is sent
         const res = await fetch(url, {
           cache: "no-store",
@@ -237,19 +250,19 @@ export default function DailyReportReceiptsPanel({
       cancelled = true;
       controller.abort();
     };
-  }, [attendantId, includeLedger, localAttendantId, onlyPos, paidOnly, podFilter, q, reloadKey, start, end]);
+  }, [attendantId, debouncedQuery, includeLedger, onlyPos, paidOnly, podFilter, reloadKey, resolvedAttendantId, start, end]);
 
   // If we don't have an attendantId prop, try fetching the session to determine the logged-in user id
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
-    if (localAttendantId) return () => controller.abort();
+    if (attendantId || sessionAttendantId) return () => controller.abort();
     const fetchSession = async () => {
       try {
         const res = await fetch(`/api/debug/session`, { cache: "no-store", credentials: "same-origin", signal: controller.signal });
         if (!res.ok) return;
         const data = await res.json().catch(() => null);
-        if (!cancelled && data?.user?.id) setLocalAttendantId(data.user.id);
+        if (!cancelled && data?.user?.id) setSessionAttendantId(data.user.id);
       } catch {
         // ignore
       }
@@ -259,16 +272,12 @@ export default function DailyReportReceiptsPanel({
       cancelled = true;
       controller.abort();
     };
-  }, [localAttendantId]);
+  }, [attendantId, sessionAttendantId]);
 
   const summary = useMemo(() => {
     const totalSales = receipts.reduce((sum, receipt) => sum + Number(receipt.total ?? 0), 0);
     return { totalSales, count: receipts.length };
   }, [receipts]);
-
-  useEffect(() => {
-    onSummaryRef.current?.(summary);
-  }, [summary]);
 
   const openPodAction = (receipt: DailyReportReceiptRow) => {
     setPodActionReceipt(receipt);
@@ -396,7 +405,7 @@ export default function DailyReportReceiptsPanel({
             <div className="mt-4 rounded-lg border border-yellow-500/40 bg-yellow-900/10 p-3 text-sm text-yellow-200">
               <div className="mb-1 text-xs text-yellow-300">Debug: Receipts fetch</div>
               <div>AttendantId (prop): <span className="font-mono">{String(attendantId)}</span></div>
-              <div>AttendantId (resolved): <span className="font-mono">{String(localAttendantId ?? "-")}</span></div>
+              <div>AttendantId (resolved): <span className="font-mono">{String(resolvedAttendantId ?? "-")}</span></div>
               <div>Last status: <span className="font-mono">{String(lastFetchStatus ?? "-")}</span></div>
               <div>Last count: <span className="font-mono">{String(lastFetchCount ?? "-")}</span></div>
               <div className="truncate">Last URL: <span className="font-mono">{String(lastFetchUrl ?? "-")}</span></div>

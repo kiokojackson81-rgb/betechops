@@ -519,12 +519,11 @@ export default function DailyReportFinal() {
         const data = await res.json().catch(() => null);
         if (!data) return null;
         if (isBrendahView) {
-          const savedReceiptsSummary = await fetchSavedReceiptsSummary(signal).catch(() => null);
           const summarySales = Number(
-            savedReceiptsSummary?.totalSales ?? data.aggregates?.totalSales ?? 0,
+            serverQuickStats?.totalSales ?? data.aggregates?.totalSales ?? 0,
           );
           const summaryReceipts = Number(
-            savedReceiptsSummary?.totalReceipts ?? data.aggregates?.totalReceipts ?? 0,
+            serverQuickStats?.totalReceipts ?? data.aggregates?.totalReceipts ?? 0,
           );
           setServerQuickStats((prev) => ({
             totalSales: summarySales,
@@ -562,7 +561,7 @@ export default function DailyReportFinal() {
       impersonationReady,
       isBrendahView,
       selectedPeriodKey,
-      fetchSavedReceiptsSummary,
+      serverQuickStats,
     ],
   );
 
