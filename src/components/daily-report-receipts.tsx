@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type DailyReportReceiptRow = {
   id: string;
@@ -135,6 +135,11 @@ export default function DailyReportReceiptsPanel({
   const [podSaving, setPodSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const onSummaryRef = useRef(onSummary);
+
+  useEffect(() => {
+    onSummaryRef.current = onSummary;
+  }, [onSummary]);
 
   // sync localAttendantId when the prop changes
   useEffect(() => {
@@ -158,7 +163,7 @@ export default function DailyReportReceiptsPanel({
       setLastFetchUrl(null);
       setLastFetchStatus(null);
       setLastFetchCount(0);
-      if (onSummary) onSummary({ totalSales: 0, count: 0 });
+      onSummaryRef.current?.({ totalSales: 0, count: 0 });
       return () => controller.abort();
     }
 
@@ -216,7 +221,7 @@ export default function DailyReportReceiptsPanel({
           setReceipts(arr);
           setLastFetchCount(arr.length);
           const totalSales = arr.reduce((s: number, r: DailyReportReceiptRow) => s + Number(r.total ?? 0), 0);
-          if (onSummary) onSummary({ totalSales, count: arr.length });
+          onSummaryRef.current?.({ totalSales, count: arr.length });
         }
       } catch (err) {
         if (!cancelled) {
@@ -232,7 +237,7 @@ export default function DailyReportReceiptsPanel({
       cancelled = true;
       controller.abort();
     };
-  }, [attendantId, includeLedger, localAttendantId, onSummary, onlyPos, paidOnly, podFilter, q, reloadKey, start, end]);
+  }, [attendantId, includeLedger, localAttendantId, onlyPos, paidOnly, podFilter, q, reloadKey, start, end]);
 
   // If we don't have an attendantId prop, try fetching the session to determine the logged-in user id
   useEffect(() => {
@@ -262,8 +267,8 @@ export default function DailyReportReceiptsPanel({
   }, [receipts]);
 
   useEffect(() => {
-    if (onSummary) onSummary(summary);
-  }, [onSummary, summary]);
+    onSummaryRef.current?.(summary);
+  }, [summary]);
 
   const openPodAction = (receipt: DailyReportReceiptRow) => {
     setPodActionReceipt(receipt);
