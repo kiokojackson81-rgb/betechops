@@ -47,6 +47,9 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
                 select: {
                   id: true,
                   name: true,
+                  commissionEnabled: true,
+                  commissionAmount: true,
+                  commissionRequiresApproval: true,
                 },
               },
             },
@@ -75,23 +78,60 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
 
   let supportItems: Array<{ id: string; buyingPrice: number | null; productName?: string | null }> = [];
   let supportReceiptSummary: { id: string; buyingTotal?: number | null } | null = null;
+  const receiptData =
+    receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
+      ? (receipt.data as Record<string, unknown>)
+      : {};
+  const podDeliveryData =
+    receiptData.podDelivery && typeof receiptData.podDelivery === "object" && !Array.isArray(receiptData.podDelivery)
+      ? (receiptData.podDelivery as Record<string, unknown>)
+      : null;
+  const isPodDelivery =
+    String(receiptData.customerType ?? "").toLowerCase() === "pod" || Boolean(podDeliveryData);
+  const isLayaway = String(receipt.docType ?? "").toUpperCase() === "LAYAWAY";
+  const isLayawayComplete =
+    !isLayaway ||
+    Boolean(receipt.order?.layawayPlan?.isComplete) ||
+    Number(receipt.order?.paidAmount ?? 0) >= Number(receipt.order?.totalAmount ?? 0);
   const orderItemIds = (receipt.order?.items ?? []).map((item) => item.id);
   const totalPosCommissionByOrderItemId = await getPosProductCommissionTotalsByOrderItemIds(orderItemIds);
   const posCommissionByOrderItemId = await getReleasedPosProductCommissionTotalsByOrderItemIds(orderItemIds);
-  const totalItemPosCommission = Array.from(totalPosCommissionByOrderItemId.values()).reduce(
-    (sum, amount) => sum + Number(amount ?? 0),
-    0,
-  );
-  const earnedPosCommissionTotal = Array.from(posCommissionByOrderItemId.values()).reduce(
-    (sum, amount) => sum + Number(amount ?? 0),
-    0,
+  const inferredPosCommission = (receipt.order?.items ?? []).reduce(
+    (acc, item) => {
+      const existingTotal = Number(totalPosCommissionByOrderItemId.get(item.id) ?? 0);
+      const existingReleased = Number(posCommissionByOrderItemId.get(item.id) ?? 0);
+      if (existingTotal > 0 || !item.product?.commissionEnabled) {
+        acc.total += existingTotal;
+        acc.earned += existingReleased;
+        return acc;
+      }
+
+      const unitCommission = Number(item.product?.commissionAmount ?? 0);
+      const amount = unitCommission > 0 ? unitCommission * Number(item.quantity ?? 1) : 0;
+      if (amount <= 0) {
+        acc.total += existingTotal;
+        acc.earned += existingReleased;
+        return acc;
+      }
+
+      const canTreatAsEarned =
+        !Boolean(item.product?.commissionRequiresApproval) &&
+        !isPodDelivery &&
+        (!isLayaway || isLayawayComplete);
+
+      acc.total += amount;
+      acc.earned += canTreatAsEarned ? amount : existingReleased;
+      return acc;
+    },
+    { total: 0, earned: 0 },
   );
   const manualPosCommission = Number(
     receipt?.data && typeof receipt.data === "object"
       ? (receipt.data as Record<string, unknown>)?.manualPosCommissionAmount ?? 0
       : 0,
   );
-  const posCommissionTotal = totalItemPosCommission + (Number.isFinite(manualPosCommission) ? manualPosCommission : 0);
+  const earnedPosCommissionTotal = inferredPosCommission.earned;
+  const posCommissionTotal = inferredPosCommission.total + (Number.isFinite(manualPosCommission) ? manualPosCommission : 0);
   try {
     if (receipt?.order?.orderNumber) {
       const candidates = new Set<string>();
