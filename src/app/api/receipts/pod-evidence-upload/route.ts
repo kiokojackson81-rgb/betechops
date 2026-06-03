@@ -19,7 +19,7 @@ export async function POST(req: Request) {
   }
 
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "-");
-  const actorId = String((auth.session.user as { id?: string } | undefined)?.id ?? "unknown").trim() || "unknown";
+  const actorId = String((auth.session?.user as { id?: string } | undefined)?.id ?? "unknown").trim() || "unknown";
   const pathname = `receipts/pod-evidence/${actorId}/${Date.now()}-${safeName}`;
   const arrayBuffer = await file.arrayBuffer();
   const blob = await put(pathname, Buffer.from(arrayBuffer), {
