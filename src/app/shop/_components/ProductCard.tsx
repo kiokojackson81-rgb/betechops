@@ -9,6 +9,7 @@ import ShopProductVisual from "@/app/shop/_components/ShopProductVisual";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import { formatCurrency } from "@/app/shop/_components/shopStyles";
 import { getProductAvailabilityBadge } from "@/app/shop/shopAvailability";
+import { getShopProductHref } from "@/app/shop/storefrontPaths";
 
 const WHATSAPP_PHONE = "254722151083";
 
@@ -58,7 +59,7 @@ export default function ProductCard({ product }: ProductCardProps) {
       </div>
 
       <div className="flex flex-1 flex-col p-3.5 sm:p-4">
-        <Link href={`/shop/product/${product.slug}`} className="block">
+        <Link href={getShopProductHref(product.slug)} className="block">
           <h3 className="line-clamp-2 min-h-[2.3rem] text-[13px] font-bold leading-[1.15rem] tracking-[-0.01em] text-slate-950 transition group-hover:text-[#7a0000] sm:min-h-[2.55rem] sm:text-[13px] sm:leading-[1.2rem]">
             {product.name}
           </h3>

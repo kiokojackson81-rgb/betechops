@@ -11,7 +11,7 @@ export function getShopCategoryHref(slug: string) {
 }
 
 export function getShopProductHref(slug: string) {
-  return `/shop/product/${slug}`;
+  return `/${slug}`;
 }
 
 export function getShopRequestQuoteHref(product?: string) {
