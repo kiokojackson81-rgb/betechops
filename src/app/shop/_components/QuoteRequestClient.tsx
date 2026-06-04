@@ -7,6 +7,7 @@ import { createQuoteRequest } from "@/app/shop/shopSubmitApi";
 import { trackQuoteSubmitted } from "@/app/shop/shopAnalytics";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { saveMockQuote } from "@/app/shop/shopStorage";
+import { getShopQuoteSuccessHref, SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
 
 type QuoteRequestClientProps = {
   preferredProduct?: string;
@@ -83,7 +84,7 @@ export default function QuoteRequestClient({ preferredProduct = "" }: QuoteReque
             location: savedQuote.location,
             preferredProducts: savedQuote.preferredProducts,
           });
-          router.push(`/shop/quote-success?ref=${encodeURIComponent(savedQuote.quoteRef)}`);
+          router.push(getShopQuoteSuccessHref(savedQuote.quoteRef));
         } catch (submissionError) {
           setError(submissionError instanceof Error ? submissionError.message : "Unable to send the quote request.");
         } finally {
@@ -205,7 +206,7 @@ export default function QuoteRequestClient({ preferredProduct = "" }: QuoteReque
         <button type="submit" disabled={submitting} className={shopStyles.primaryButton}>
           {submitting ? "Sending..." : "Submit Quote Request"}
         </button>
-        <Link href="/shop" className={shopStyles.secondaryButton}>
+        <Link href={SHOP_HOME_HREF} className={shopStyles.secondaryButton}>
           Back to Shop
         </Link>
       </div>

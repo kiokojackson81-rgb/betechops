@@ -2,6 +2,7 @@
 
 import ShopStatePanel from "@/app/shop/_components/ShopStatePanel";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
+import { SHOP_HOME_HREF, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
 
 export default function ShopError() {
   return (
@@ -12,9 +13,9 @@ export default function ShopError() {
             eyebrow="Shop error"
             title="We could not load this Betech Solar page."
             copy="Please try again, continue shopping, or request a solar quote if you need help from the team."
-            primaryHref="/shop"
+            primaryHref={SHOP_HOME_HREF}
             primaryLabel="Back to Shop"
-            secondaryHref="/shop/request-quote"
+            secondaryHref={SHOP_REQUEST_QUOTE_HREF}
             secondaryLabel="Request Quote"
           />
         </div>

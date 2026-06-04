@@ -8,6 +8,7 @@ import ShopSupportStrip from "@/app/shop/_components/ShopSupportStrip";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks } from "@/app/shop/shopData";
+import { SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
 
 export const metadata: Metadata = buildShopMetadata({
   title: "Request a Solar System Quote",
@@ -26,7 +27,7 @@ export default async function ShopRequestQuotePage({
       <ShopHeader navLinks={shopNavLinks} />
       <section className="py-8 sm:py-10">
         <div className={shopStyles.shell}>
-          <ShopBreadcrumbs items={[{ label: "Shop", href: "/shop" }, { label: "Request Quote" }]} />
+          <ShopBreadcrumbs items={[{ label: "Shop", href: SHOP_HOME_HREF }, { label: "Request Quote" }]} />
           <div className="mt-5">
             <div className={shopStyles.sectionEyebrow}>Request a Solar System Quote</div>
             <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Request a Solar System Quote</h1>

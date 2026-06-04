@@ -13,6 +13,7 @@ import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import type { ShopProduct } from "@/app/shop/shopData";
 import { formatCurrency, shopStyles } from "@/app/shop/_components/shopStyles";
 import { getProductAvailabilityMessage } from "@/app/shop/shopAvailability";
+import { getShopProductHref, SHOP_CHECKOUT_HREF, SHOP_HOME_HREF, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
 
 type CartClientProps = {
   products: ShopProduct[];
@@ -48,9 +49,9 @@ export default function CartClient({ products }: CartClientProps) {
           eyebrow="Your cart is empty"
           title="Start with genuine Betech Solar products."
           copy="Add panels, inverters, batteries, pumps, heaters, or full kits to continue with checkout."
-          primaryHref="/shop"
+          primaryHref={SHOP_HOME_HREF}
           primaryLabel="Continue Shopping"
-          secondaryHref="/shop/request-quote"
+          secondaryHref={SHOP_REQUEST_QUOTE_HREF}
           secondaryLabel="Request a Solar System Quote"
         />
       </div>
@@ -150,7 +151,7 @@ export default function CartClient({ products }: CartClientProps) {
                 <div className="text-[10px] font-black uppercase tracking-[0.16em] text-[#7a0000]">Recommended solar accessories</div>
                 <h2 className="mt-1 text-lg font-black text-slate-950">Customers also viewed</h2>
               </div>
-              <Link href="/shop" className="text-sm font-bold text-[#7a0000]">
+              <Link href={SHOP_HOME_HREF} className="text-sm font-bold text-[#7a0000]">
                 View more
               </Link>
             </div>
@@ -158,7 +159,7 @@ export default function CartClient({ products }: CartClientProps) {
               {recommendedProducts.map((product) => (
                 <Link
                   key={product.id}
-                  href={`/shop/product/${product.slug}`}
+                  href={getShopProductHref(product.slug)}
                   className="flex items-center gap-3 rounded-[14px] border border-[#7a0000]/8 bg-[#fcfaf7] p-2.5 transition hover:border-[#7a0000]/20"
                 >
                   <div className="h-14 w-14 shrink-0 rounded-[12px] bg-[#f6eee2] p-2">
@@ -201,7 +202,7 @@ export default function CartClient({ products }: CartClientProps) {
           {availabilityNotice}
         </div>
         <div className="mt-4 grid gap-2.5">
-          <Link href="/shop/checkout" className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(122,0,0,0.16)] transition hover:bg-[#610000]">
+          <Link href={SHOP_CHECKOUT_HREF} className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(122,0,0,0.16)] transition hover:bg-[#610000]">
             Proceed to Checkout
           </Link>
           <TrackedWhatsAppLink
@@ -214,14 +215,14 @@ export default function CartClient({ products }: CartClientProps) {
             <MessageCircle className="h-4 w-4" />
             WhatsApp Checkout
           </TrackedWhatsAppLink>
-          <Link href="/shop" className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] border border-[#7a0000]/16 bg-white px-4 py-2.5 text-sm font-bold text-slate-950 shadow-[0_10px_22px_rgba(15,23,42,0.04)] transition">
+          <Link href={SHOP_HOME_HREF} className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] border border-[#7a0000]/16 bg-white px-4 py-2.5 text-sm font-bold text-slate-950 shadow-[0_10px_22px_rgba(15,23,42,0.04)] transition">
             Continue Shopping
           </Link>
         </div>
         <div className="mt-4 rounded-[16px] border border-[#7a0000]/10 bg-white p-3.5">
           <div className="text-sm font-black uppercase tracking-[0.16em] text-[#7a0000]">Not sure what you need?</div>
           <p className="mt-1.5 text-sm leading-6 text-slate-600">Request a solar quote and our team will help size your system before the order is confirmed.</p>
-          <Link href="/shop/request-quote" className="mt-3 inline-flex text-sm font-bold text-[#7a0000]">
+          <Link href={SHOP_REQUEST_QUOTE_HREF} className="mt-3 inline-flex text-sm font-bold text-[#7a0000]">
             Request a Solar System Quote
           </Link>
         </div>

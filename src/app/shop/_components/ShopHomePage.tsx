@@ -13,6 +13,7 @@ import ShopSupportStrip from "@/app/shop/_components/ShopSupportStrip";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { buildShopCategories, deliveryPaymentSteps, shopNavLinks, type ShopProduct } from "@/app/shop/shopData";
 import { getShopProducts } from "@/app/shop/shopApi";
+import { getShopCategoryHref, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
 import { getShopImageOverrides } from "@/lib/shopImageOverrides";
 
 type ShopHomePageProps = {
@@ -100,7 +101,7 @@ export default async function ShopHomePage({
           id="best-selling-solar-kits"
           title="Best Selling Solar Kits"
           subtitle="Ready-built kits for home backup and biashara power."
-          href="/shop/category/solar-full-kits"
+          href={getShopCategoryHref("solar-full-kits")}
           products={kitProducts}
         />
       ) : null}
@@ -110,7 +111,7 @@ export default async function ShopHomePage({
           id="solar-panels"
           title="Solar Panels"
           subtitle="High-output mono panels for rooftops and clean daytime generation."
-          href="/shop/category/solar-panels"
+          href={getShopCategoryHref("solar-panels")}
           products={panelProducts}
         />
       ) : null}
@@ -120,7 +121,7 @@ export default async function ShopHomePage({
           id="solar-inverters"
           title="Inverters"
           subtitle="Hybrid inverter options for starter and stronger backup setups."
-          href="/shop/category/solar-inverters"
+          href={getShopCategoryHref("solar-inverters")}
           products={inverterProducts}
         />
       ) : null}
@@ -130,7 +131,7 @@ export default async function ShopHomePage({
           id="solar-batteries"
           title="Batteries"
           subtitle="Gel and lithium storage for dependable reserve power."
-          href="/shop/category/solar-batteries"
+          href={getShopCategoryHref("solar-batteries")}
           products={batteryProducts}
         />
       ) : null}
@@ -140,7 +141,7 @@ export default async function ShopHomePage({
           id="solar-water-pumps"
           title="Water Pumps & Lights"
           subtitle="Outdoor solar solutions for irrigation and compound lighting."
-          href="/shop/category/solar-water-pumps"
+          href={getShopCategoryHref("solar-water-pumps")}
           products={outdoorProducts}
         />
       ) : null}
@@ -199,10 +200,10 @@ export default async function ShopHomePage({
                 </p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-                <Link href="/shop/request-quote" className={`${shopStyles.goldButton} min-h-[2.9rem] w-full`}>
+                <Link href={SHOP_REQUEST_QUOTE_HREF} className={`${shopStyles.goldButton} min-h-[2.9rem] w-full`}>
                   Request Free Quote
                 </Link>
-                <Link href="/shop/category/solar-full-kits" className={`${shopStyles.secondaryButton} min-h-[2.9rem] w-full bg-white/92`}>
+                <Link href={getShopCategoryHref("solar-full-kits")} className={`${shopStyles.secondaryButton} min-h-[2.9rem] w-full bg-white/92`}>
                   Browse Full Kits
                 </Link>
               </div>

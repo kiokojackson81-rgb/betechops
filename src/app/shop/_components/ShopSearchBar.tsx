@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronRight, Search } from "lucide-react";
+import { SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
 
 type ShopSearchBarProps = {
   compact?: boolean;
@@ -105,13 +106,13 @@ export default function ShopSearchBar({ compact = false }: ShopSearchBarProps) {
     const params = new URLSearchParams();
     if (trimmed) params.set("q", trimmed);
     setOpen(false);
-    router.push(`/shop${params.toString() ? `?${params.toString()}` : ""}#shop-catalogue`);
+    router.push(`${SHOP_HOME_HREF}${params.toString() ? `?${params.toString()}` : ""}#shop-catalogue`);
   };
 
   return (
     <div ref={wrapperRef} className="relative w-full">
       <form
-        action="/shop"
+        action="/"
         onSubmit={(event) => {
           event.preventDefault();
           goToSearchResults(query);

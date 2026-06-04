@@ -16,6 +16,7 @@ import { getShopProductBySlug, getShopProductBySlugOrOpsProductId, getShopProduc
 import { buildProductJsonLd, buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks, type ShopProduct } from "@/app/shop/shopData";
 import { getProductAvailabilityBadge, getProductAvailabilityMessage, getProductCheckoutAvailabilityMessage } from "@/app/shop/shopAvailability";
+import { getShopCategoryHref, SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
 
 function normalizeProductText(value: string) {
   return value
@@ -243,7 +244,7 @@ export default async function ShopProductDetailPage({
           <ShopBreadcrumbs
             items={[
               { label: "Shop", href: "/shop" },
-              { label: product.category, href: `/shop/category/${encodeURIComponent(product.category.toLowerCase().replace(/\s+/g, "-"))}` },
+              { label: product.category, href: getShopCategoryHref(encodeURIComponent(product.category.toLowerCase().replace(/\s+/g, "-"))) },
               { label: breadcrumbTitle },
             ]}
           />
@@ -358,7 +359,7 @@ export default async function ShopProductDetailPage({
                   <div className={shopStyles.sectionEyebrow}>Related products</div>
                   <h2 className="mt-4 text-3xl font-black tracking-tight text-slate-950">More from {product.category}</h2>
                 </div>
-                <Link href="/shop" className={shopStyles.secondaryButton}>
+                <Link href={SHOP_HOME_HREF} className={shopStyles.secondaryButton}>
                   Continue Shopping
                 </Link>
               </div>

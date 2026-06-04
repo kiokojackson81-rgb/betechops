@@ -5,6 +5,7 @@ import Link from "next/link";
 import AddToCartButton from "@/app/shop/_components/AddToCartButton";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import { formatCurrency } from "@/app/shop/_components/shopStyles";
+import { getShopRequestQuoteHref } from "@/app/shop/storefrontPaths";
 
 type ShopMobileStickyBarProps = {
   productId: string;
@@ -16,7 +17,7 @@ export default function ShopMobileStickyBar({ productId, productName, price }: S
   const whatsappHref = `https://wa.me/254722151083?text=${encodeURIComponent(
     `Hello Betech Solar, I want to order ${productName} at ${formatCurrency(price)}.`,
   )}`;
-  const quoteHref = `/shop/request-quote?product=${encodeURIComponent(productName)}`;
+  const quoteHref = getShopRequestQuoteHref(productName);
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-50 border-t border-[#7a0000]/10 bg-white/95 px-3 pb-[calc(env(safe-area-inset-bottom)+0.8rem)] pt-2.5 shadow-[0_-18px_40px_rgba(15,23,42,0.12)] backdrop-blur lg:hidden">

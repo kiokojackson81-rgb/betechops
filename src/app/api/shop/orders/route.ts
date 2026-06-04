@@ -9,6 +9,7 @@ import {
   websiteOrderCreateSchema,
 } from "@/lib/websiteOrders";
 import { getShopProducts } from "@/app/shop/shopApi";
+import { getShopOrderSuccessHref } from "@/app/shop/storefrontPaths";
 
 export const dynamic = "force-dynamic";
 
@@ -103,7 +104,7 @@ export async function POST(request: Request) {
     source: "website",
     orderRef: created.orderRef,
     status: created.status,
-    successUrl: `/shop/order-success?ref=${encodeURIComponent(created.orderRef)}`,
+    successUrl: getShopOrderSuccessHref(created.orderRef),
     order: serializeWebsiteOrder(created),
   });
 }

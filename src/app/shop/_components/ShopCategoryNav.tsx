@@ -1,13 +1,14 @@
 import Link from "next/link";
 import type { ShopCategory } from "@/app/shop/shopData";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
+import { getShopCategoryHref, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
 
 type ShopCategoryNavProps = {
   categories: ShopCategory[];
 };
 
 function getCategoryHref(slug: string) {
-  return slug === "request-quote" ? "/shop/request-quote" : `/shop/category/${slug}`;
+  return slug === "request-quote" ? SHOP_REQUEST_QUOTE_HREF : getShopCategoryHref(slug);
 }
 
 export default function ShopCategoryNav({ categories }: ShopCategoryNavProps) {

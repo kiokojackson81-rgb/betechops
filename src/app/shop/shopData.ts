@@ -1,4 +1,5 @@
 import { SHOP_CATEGORY_DEFINITIONS } from "@/app/shop/shopCatalogConfig";
+import { getShopCategoryHref, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
 
 export type ShopCategory = {
   slug: string;
@@ -56,12 +57,12 @@ export type ShopProductSection = {
 };
 
 export const shopNavLinks = [
-  { label: "Solar Full Kits", href: "/shop/category/solar-full-kits" },
-  { label: "Solar Panels", href: "/shop/category/solar-panels" },
-  { label: "Batteries", href: "/shop/category/solar-batteries" },
-  { label: "Inverters", href: "/shop/category/solar-inverters" },
-  { label: "Pumps", href: "/shop/category/solar-water-pumps" },
-  { label: "Request Quote", href: "/shop/request-quote" },
+  { label: "Solar Full Kits", href: getShopCategoryHref("solar-full-kits") },
+  { label: "Solar Panels", href: getShopCategoryHref("solar-panels") },
+  { label: "Batteries", href: getShopCategoryHref("solar-batteries") },
+  { label: "Inverters", href: getShopCategoryHref("solar-inverters") },
+  { label: "Pumps", href: getShopCategoryHref("solar-water-pumps") },
+  { label: "Request Quote", href: SHOP_REQUEST_QUOTE_HREF },
 ];
 
 export function buildShopCategories(imageOverrides: Record<string, string> = {}): ShopCategory[] {

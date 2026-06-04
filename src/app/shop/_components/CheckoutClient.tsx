@@ -18,6 +18,7 @@ import {
   saveShopCustomerProfile,
 } from "@/app/shop/shopStorage";
 import { getProductAvailabilityMessage } from "@/app/shop/shopAvailability";
+import { getShopOrderSuccessHref, SHOP_CART_HREF, SHOP_HOME_HREF, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
 
 type CheckoutClientProps = {
   products: ShopProduct[];
@@ -119,10 +120,10 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
           Add solar products to continue with checkout, or request a quote if you need help choosing the right system.
         </p>
         <div className="mt-4 flex flex-col gap-2.5 sm:flex-row">
-          <Link href="/shop" className={shopStyles.primaryButton}>
+          <Link href={SHOP_HOME_HREF} className={shopStyles.primaryButton}>
             Continue Shopping
           </Link>
-          <Link href="/shop/request-quote" className={shopStyles.secondaryButton}>
+          <Link href={SHOP_REQUEST_QUOTE_HREF} className={shopStyles.secondaryButton}>
             Request Quote
           </Link>
         </div>
@@ -208,7 +209,7 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
             });
 
             clearCartAfterOrder();
-            router.push(orderResponse.successUrl || `/shop/order-success?ref=${encodeURIComponent(savedOrder.orderRef)}`);
+            router.push(orderResponse.successUrl || getShopOrderSuccessHref(savedOrder.orderRef));
           } catch (submissionError) {
             setError(submissionError instanceof Error ? submissionError.message : "Unable to create the order request.");
           } finally {
@@ -305,7 +306,7 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
           <button type="submit" disabled={submitting} className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(122,0,0,0.16)] transition hover:bg-[#610000]">
             {submitting ? "Submitting Website Order..." : "Place Order Request"}
           </button>
-          <Link href="/shop/cart" className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] border border-[#7a0000]/16 bg-white px-4 py-2.5 text-sm font-bold text-slate-950 shadow-[0_10px_22px_rgba(15,23,42,0.04)] transition">
+          <Link href={SHOP_CART_HREF} className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] border border-[#7a0000]/16 bg-white px-4 py-2.5 text-sm font-bold text-slate-950 shadow-[0_10px_22px_rgba(15,23,42,0.04)] transition">
             Back to Cart
           </Link>
         </div>

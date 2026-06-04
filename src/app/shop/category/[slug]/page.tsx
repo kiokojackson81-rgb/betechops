@@ -18,6 +18,7 @@ import {
 import { getShopProducts } from "@/app/shop/shopApi";
 import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks, type ShopProduct } from "@/app/shop/shopData";
+import { getShopCategoryHref, getShopRequestQuoteHref } from "@/app/shop/storefrontPaths";
 
 type CategoryPageProps = {
   params: Promise<{ slug: string }>;
@@ -116,7 +117,7 @@ function getFilterHref(categorySlug: string, filters: ListingFilters, patch: Par
   });
 
   const queryString = query.toString();
-  return `/shop/category/${categorySlug}${queryString ? `?${queryString}` : ""}`;
+  return `${getShopCategoryHref(categorySlug)}${queryString ? `?${queryString}` : ""}`;
 }
 
 function getBrandOptions(products: ShopProduct[]) {
@@ -430,7 +431,7 @@ export default async function ShopCategoryPage({ params, searchParams }: Categor
                 <div className="mt-2.5 -mx-1 flex flex-nowrap items-center gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
                   <span className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000]">Related</span>
                   <Link
-                    href={`/shop/category/${category.value}`}
+                    href={getShopCategoryHref(category.value)}
                     className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
                       !activeSubcategory ? "border-[#7a0000] bg-[#7a0000] text-white" : "border-[#7a0000]/10 bg-[#fcfaf7] text-slate-700 hover:text-[#7a0000]"
                     }`}
@@ -457,7 +458,7 @@ export default async function ShopCategoryPage({ params, searchParams }: Categor
                     {activeChips.map((chip) => (
                       <ActiveFilterChip key={chip.label} label={chip.label} href={chip.href} />
                     ))}
-                    <Link href={`/shop/category/${category.value}`} className="inline-flex min-h-[1.85rem] items-center text-[11px] font-bold text-slate-500 hover:text-[#7a0000]">
+                    <Link href={getShopCategoryHref(category.value)} className="inline-flex min-h-[1.85rem] items-center text-[11px] font-bold text-slate-500 hover:text-[#7a0000]">
                       Clear all
                     </Link>
                   </div>
@@ -476,9 +477,9 @@ export default async function ShopCategoryPage({ params, searchParams }: Categor
                     eyebrow="No matching products"
                     title="Adjust your filters."
                     copy="No products match this filter set yet. Try another subcategory or clear the selected filters to keep browsing the Betech Solar catalogue."
-                    primaryHref={`/shop/category/${category.value}`}
+                    primaryHref={getShopCategoryHref(category.value)}
                     primaryLabel={`View all ${category.label}`}
-                    secondaryHref={`/shop/request-quote?product=${encodeURIComponent(activeSubcategory?.label || category.label)}`}
+                    secondaryHref={getShopRequestQuoteHref(activeSubcategory?.label || category.label)}
                     secondaryLabel="Request Quote"
                   />
                 </div>

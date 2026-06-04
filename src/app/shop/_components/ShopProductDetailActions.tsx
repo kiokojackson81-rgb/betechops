@@ -6,6 +6,7 @@ import AddToCartButton from "@/app/shop/_components/AddToCartButton";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import { formatCurrency } from "@/app/shop/_components/shopStyles";
 import type { ShopProduct } from "@/app/shop/shopData";
+import { getShopRequestQuoteHref } from "@/app/shop/storefrontPaths";
 
 type ShopProductDetailActionsProps = {
   product: ShopProduct;
@@ -15,7 +16,7 @@ export default function ShopProductDetailActions({ product }: ShopProductDetailA
   const whatsappHref = `https://wa.me/254722151083?text=${encodeURIComponent(
     `Hello Betech Solar, I want to order ${product.name} at ${formatCurrency(product.price)}.`,
   )}`;
-  const quoteHref = `/shop/request-quote?product=${encodeURIComponent(product.name)}`;
+  const quoteHref = getShopRequestQuoteHref(product.name);
 
   return (
     <div className="grid gap-3">

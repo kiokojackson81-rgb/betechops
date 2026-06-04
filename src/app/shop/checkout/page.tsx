@@ -9,6 +9,7 @@ import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { getShopProducts } from "@/app/shop/shopApi";
 import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks } from "@/app/shop/shopData";
+import { SHOP_CART_HREF, SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
 
 export const metadata: Metadata = buildShopMetadata({
   title: "Checkout",
@@ -23,7 +24,7 @@ export default async function ShopCheckoutPage() {
       <ShopHeader navLinks={shopNavLinks} />
       <section className="py-5 sm:py-6">
         <div className={shopStyles.shell}>
-          <ShopBreadcrumbs items={[{ label: "Shop", href: "/shop" }, { label: "Cart", href: "/shop/cart" }, { label: "Checkout" }]} />
+          <ShopBreadcrumbs items={[{ label: "Shop", href: SHOP_HOME_HREF }, { label: "Cart", href: SHOP_CART_HREF }, { label: "Checkout" }]} />
           <div className="mt-3">
             <div className={shopStyles.sectionEyebrow}>Checkout</div>
             <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-[2rem]">Checkout for Betech Solar Online Store</h1>

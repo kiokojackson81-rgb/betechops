@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FileText, MessageCircle, ShoppingCart } from "lucide-react";
 import { getShopCartCount, useShopCartItems } from "@/app/shop/cartStore";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
+import { SHOP_CART_HREF, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
 
 const whatsappHref =
   "https://wa.me/254722151083?text=Hello%20Betech%20Solar%2C%20I%20need%20help%20choosing%20the%20right%20solar%20products.";
@@ -26,14 +27,14 @@ export default function ShopMobileDock() {
           WhatsApp
         </TrackedWhatsAppLink>
         <Link
-          href="/shop/cart"
+          href={SHOP_CART_HREF}
           className="inline-flex min-h-[3rem] items-center justify-center gap-1.5 rounded-2xl bg-[#7a0000] px-2.5 py-3 text-[13px] font-bold text-white shadow-[0_16px_30px_rgba(122,0,0,0.18)]"
         >
           <ShoppingCart className="h-4 w-4" />
           {cartCount > 0 ? `Cart (${cartCount})` : "Cart"}
         </Link>
         <Link
-          href="/shop/request-quote"
+          href={SHOP_REQUEST_QUOTE_HREF}
           className="inline-flex min-h-[3rem] items-center justify-center gap-1.5 rounded-2xl border border-[#7a0000]/12 bg-[#fff7ea] px-2.5 py-3 text-[13px] font-bold text-[#7a0000]"
         >
           <FileText className="h-4 w-4" />

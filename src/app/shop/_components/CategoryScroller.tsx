@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import type { ShopCategory } from "@/app/shop/shopData";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
+import { getShopCategoryHref, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
 
 const iconMap = {
   "solar-panels": SunMedium,
@@ -45,7 +46,7 @@ type CategoryScrollerProps = {
 };
 
 export default function CategoryScroller({ categories }: CategoryScrollerProps) {
-  const getCategoryHref = (slug: string) => (slug === "request-quote" ? "/shop/request-quote" : `/shop/category/${slug}`);
+  const getCategoryHref = (slug: string) => (slug === "request-quote" ? SHOP_REQUEST_QUOTE_HREF : getShopCategoryHref(slug));
   const isRemoteImage = (value: string) => /^https?:\/\//i.test(value);
 
   return (

@@ -4,6 +4,7 @@ import { ArrowRight, Headphones, MapPin, MessageCircle, ShieldCheck, Truck } fro
 import type { ShopCategory } from "@/app/shop/shopData";
 import { getShopCategoryDefinition } from "@/app/shop/shopCatalogConfig";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
+import { getShopCategoryHref, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
 
 type ShopHeroProps = {
   categories: ShopCategory[];
@@ -11,7 +12,7 @@ type ShopHeroProps = {
 };
 
 function getCategoryHref(slug: string) {
-  return slug === "request-quote" ? "/shop/request-quote" : `/shop/category/${slug}`;
+  return slug === "request-quote" ? SHOP_REQUEST_QUOTE_HREF : getShopCategoryHref(slug);
 }
 
 const helpCards = [
@@ -19,7 +20,7 @@ const helpCards = [
     title: "Need help choosing solar?",
     copy: "Request a quote and our team will size the right panels, inverter, battery and accessories for you.",
     icon: ShieldCheck,
-    href: "/shop/request-quote",
+    href: SHOP_REQUEST_QUOTE_HREF,
   },
   {
     title: "WhatsApp support",
@@ -31,13 +32,13 @@ const helpCards = [
     title: "Nairobi CBD shop",
     copy: "Visit our Nairobi CBD shop for pickup, guidance and product confirmation.",
     icon: MapPin,
-    href: "/shop/request-quote",
+    href: SHOP_REQUEST_QUOTE_HREF,
   },
   {
     title: "Delivery countrywide",
     copy: "We deliver solar panels, batteries, inverters, pumps and kits across Kenya.",
     icon: Truck,
-    href: "/shop/request-quote",
+    href: SHOP_REQUEST_QUOTE_HREF,
   },
 ];
 
@@ -70,7 +71,7 @@ export default function ShopHero({ categories, heroImageUrl = "/agents/hero-gene
                         {getShopCategoryDefinition(category.slug)?.subcategories.map((subcategory) => (
                           <Link
                             key={subcategory.value}
-                            href={`/shop/category/${category.slug}?sub=${subcategory.value}`}
+                            href={`${getShopCategoryHref(category.slug)}?sub=${subcategory.value}`}
                             className="rounded-2xl px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-[#fff7ea] hover:text-[#7a0000]"
                           >
                             {subcategory.label}
@@ -101,7 +102,7 @@ export default function ShopHero({ categories, heroImageUrl = "/agents/hero-gene
                     Shop Products
                     <ArrowRight className="h-4 w-4" />
                   </Link>
-                  <Link href="/shop/request-quote" className={`${shopStyles.secondaryButton} min-h-[2.9rem] w-full bg-white/92`}>
+                  <Link href={SHOP_REQUEST_QUOTE_HREF} className={`${shopStyles.secondaryButton} min-h-[2.9rem] w-full bg-white/92`}>
                     Request Free Quote
                     <Headphones className="h-4 w-4" />
                   </Link>

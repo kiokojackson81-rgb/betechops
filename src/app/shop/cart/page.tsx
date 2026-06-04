@@ -9,6 +9,7 @@ import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { getShopProducts } from "@/app/shop/shopApi";
 import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks } from "@/app/shop/shopData";
+import { SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
 
 export const metadata: Metadata = buildShopMetadata({
   title: "Your Cart",
@@ -23,7 +24,7 @@ export default async function ShopCartPage() {
       <ShopHeader navLinks={shopNavLinks} />
       <section className="py-5 sm:py-6">
         <div className={shopStyles.shell}>
-          <ShopBreadcrumbs items={[{ label: "Shop", href: "/shop" }, { label: "Cart" }]} />
+          <ShopBreadcrumbs items={[{ label: "Shop", href: SHOP_HOME_HREF }, { label: "Cart" }]} />
           <div className="mt-3">
             <div className={shopStyles.sectionEyebrow}>Cart</div>
             <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-[2rem]">Your Betech Solar cart</h1>

@@ -9,6 +9,7 @@ import ShopSearchBar from "@/app/shop/_components/ShopSearchBar";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import { getShopCartCount, useShopCartItems } from "@/app/shop/cartStore";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
+import { SHOP_ACCOUNT_HREF, SHOP_CART_HREF, SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
 
 type ShopHeaderProps = {
   navLinks: { label: string; href: string }[];
@@ -33,7 +34,7 @@ export default function ShopHeader({ navLinks }: ShopHeaderProps) {
             {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
 
-          <Link href="/shop" className="flex min-w-0 flex-1 items-center gap-2.5">
+          <Link href={SHOP_HOME_HREF} className="flex min-w-0 flex-1 items-center gap-2.5">
             <div className="overflow-hidden rounded-2xl border border-[#7a0000]/10 bg-white px-2 py-1 shadow-[0_16px_30px_rgba(122,0,0,0.12)]">
               <Image src="/agents/betech-logo-crop.png" alt="Betech Solar" width={86} height={64} className="h-9 w-auto object-contain sm:h-10" />
             </div>
@@ -45,7 +46,7 @@ export default function ShopHeader({ navLinks }: ShopHeaderProps) {
 
           <div className="flex shrink-0 items-center gap-1.5">
             <Link
-              href="/shop/cart"
+              href={SHOP_CART_HREF}
               aria-label="Open cart"
               className="relative inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[#7a0000]/10 bg-white text-slate-700 shadow-[0_10px_20px_rgba(15,23,42,0.05)]"
             >
@@ -57,7 +58,7 @@ export default function ShopHeader({ navLinks }: ShopHeaderProps) {
               ) : null}
             </Link>
             <Link
-              href="/shop/account"
+              href={SHOP_ACCOUNT_HREF}
               aria-label="Open account"
               className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[#7a0000]/10 bg-white text-slate-700 shadow-[0_10px_20px_rgba(15,23,42,0.05)]"
             >
@@ -88,7 +89,7 @@ export default function ShopHeader({ navLinks }: ShopHeaderProps) {
         ) : null}
 
         <div className="hidden items-center gap-3 lg:flex xl:gap-4">
-          <Link href="/shop" className="flex shrink-0 items-center gap-3">
+          <Link href={SHOP_HOME_HREF} className="flex shrink-0 items-center gap-3">
             <div className="overflow-hidden rounded-2xl border border-[#7a0000]/10 bg-white px-2.5 py-1 shadow-[0_16px_30px_rgba(122,0,0,0.12)]">
               <Image src="/agents/betech-logo-crop.png" alt="Betech Solar" width={112} height={84} className="h-12 w-auto object-contain" />
             </div>
@@ -115,14 +116,14 @@ export default function ShopHeader({ navLinks }: ShopHeaderProps) {
               <span className="xl:hidden">Support</span>
             </TrackedWhatsAppLink>
             <Link
-              href="/shop/account"
+              href={SHOP_ACCOUNT_HREF}
               className="inline-flex items-center gap-2 rounded-2xl border border-[#7a0000]/10 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 shadow-[0_10px_20px_rgba(15,23,42,0.05)] xl:px-3.5"
             >
               <User2 className="h-4 w-4" />
               <span className="hidden xl:inline">Account</span>
             </Link>
             <Link
-              href="/shop/cart"
+              href={SHOP_CART_HREF}
               className="inline-flex items-center gap-2 rounded-2xl bg-[#7a0000] px-3 py-2.5 text-sm font-semibold text-white shadow-[0_14px_24px_rgba(122,0,0,0.16)] xl:px-3.5"
             >
               <ShoppingCart className="h-4 w-4" />

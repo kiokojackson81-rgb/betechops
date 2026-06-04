@@ -7,6 +7,7 @@ import ShopSupportStrip from "@/app/shop/_components/ShopSupportStrip";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import { formatCurrency, shopStyles } from "@/app/shop/_components/shopStyles";
 import { getLastMockOrder, type MockOrderRecord } from "@/app/shop/shopStorage";
+import { SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
 
 type OrderSuccessClientProps = {
   orderRef?: string;
@@ -208,7 +209,7 @@ export default function OrderSuccessClient({ orderRef }: OrderSuccessClientProps
             <PhoneCall className="h-4 w-4" />
             Call Betech Solar
           </Link>
-          <Link href="/shop" className={`${shopStyles.secondaryButton} bg-white/92`}>
+          <Link href={SHOP_HOME_HREF} className={`${shopStyles.secondaryButton} bg-white/92`}>
             Continue Shopping
           </Link>
         </div>

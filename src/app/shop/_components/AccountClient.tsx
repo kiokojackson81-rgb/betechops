@@ -11,6 +11,7 @@ import {
   type MockQuoteRecord,
 } from "@/app/shop/shopStorage";
 import { formatCurrency, shopStyles } from "@/app/shop/_components/shopStyles";
+import { SHOP_CHECKOUT_HREF } from "@/app/shop/storefrontPaths";
 
 export default function AccountClient() {
   const [loaded, setLoaded] = useState(false);
@@ -111,7 +112,7 @@ export default function AccountClient() {
           >
             Save Profile
           </button>
-          <Link href="/shop/checkout" className={shopStyles.secondaryButton}>
+          <Link href={SHOP_CHECKOUT_HREF} className={shopStyles.secondaryButton}>
             Use at Checkout
           </Link>
           {saved ? <div className="text-sm font-semibold text-[#0f9d58]">Profile saved on this device.</div> : null}

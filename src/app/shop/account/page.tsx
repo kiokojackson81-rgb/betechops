@@ -8,6 +8,7 @@ import ShopSupportStrip from "@/app/shop/_components/ShopSupportStrip";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks } from "@/app/shop/shopData";
+import { SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
 
 export const metadata: Metadata = buildShopMetadata({
   title: "Customer Account",
@@ -20,7 +21,7 @@ export default function ShopAccountPage() {
       <ShopHeader navLinks={shopNavLinks} />
       <section className="py-5 sm:py-6">
         <div className={shopStyles.shell}>
-          <ShopBreadcrumbs items={[{ label: "Shop", href: "/shop" }, { label: "Account" }]} />
+          <ShopBreadcrumbs items={[{ label: "Shop", href: SHOP_HOME_HREF }, { label: "Account" }]} />
           <div className="mt-3">
             <div className={shopStyles.sectionEyebrow}>Account</div>
             <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-[2rem]">Betech Solar customer account</h1>
