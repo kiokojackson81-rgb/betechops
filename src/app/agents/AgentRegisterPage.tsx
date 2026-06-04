@@ -60,8 +60,8 @@ export default async function AgentRegisterPage({ useRootPaths = false }: AgentR
       <div className="mx-auto max-w-7xl">
         <div className="mb-5 flex items-center justify-between sm:mb-6">
           <Link href={agentPath("/", useRootPaths)} className="flex items-center gap-3">
-            <div className="overflow-hidden rounded-2xl border border-[#7a0000]/10 bg-white shadow-[0_14px_28px_rgba(122,0,0,0.10)]">
-              <Image src="/agents/betech-logo-crop.png" alt="Betech Solar Solutions" width={56} height={56} className="h-12 w-12 object-contain" />
+            <div className="overflow-hidden rounded-2xl border border-[#7a0000]/10 bg-white px-2 py-1 shadow-[0_14px_28px_rgba(122,0,0,0.10)]">
+              <Image src="/agents/betech-logo-crop.png" alt="Betech Solar Solutions" width={112} height={84} className="h-12 w-auto object-contain" />
             </div>
             <div className="hidden leading-tight sm:block">
               <div className="text-sm font-black uppercase tracking-[0.18em] text-[#7a0000]">Betech Agents Program</div>

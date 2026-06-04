@@ -34,8 +34,8 @@ export default function ShopHeader({ navLinks }: ShopHeaderProps) {
           </button>
 
           <Link href="/shop" className="flex min-w-0 flex-1 items-center gap-2.5">
-            <div className="overflow-hidden rounded-2xl border border-[#7a0000]/10 bg-white shadow-[0_16px_30px_rgba(122,0,0,0.12)]">
-              <Image src="/agents/betech-logo-crop.png" alt="Betech Solar" width={38} height={38} className="h-9 w-9 object-contain sm:h-10 sm:w-10" />
+            <div className="overflow-hidden rounded-2xl border border-[#7a0000]/10 bg-white px-2 py-1 shadow-[0_16px_30px_rgba(122,0,0,0.12)]">
+              <Image src="/agents/betech-logo-crop.png" alt="Betech Solar" width={86} height={64} className="h-9 w-auto object-contain sm:h-10" />
             </div>
             <div className="min-w-0">
               <div className="truncate text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000] sm:text-sm">Betech Solar</div>
@@ -89,8 +89,8 @@ export default function ShopHeader({ navLinks }: ShopHeaderProps) {
 
         <div className="hidden items-center gap-3 lg:flex xl:gap-4">
           <Link href="/shop" className="flex shrink-0 items-center gap-3">
-            <div className="overflow-hidden rounded-2xl border border-[#7a0000]/10 bg-white shadow-[0_16px_30px_rgba(122,0,0,0.12)]">
-              <Image src="/agents/betech-logo-crop.png" alt="Betech Solar" width={48} height={48} className="h-12 w-12 object-contain" />
+            <div className="overflow-hidden rounded-2xl border border-[#7a0000]/10 bg-white px-2.5 py-1 shadow-[0_16px_30px_rgba(122,0,0,0.12)]">
+              <Image src="/agents/betech-logo-crop.png" alt="Betech Solar" width={112} height={84} className="h-12 w-auto object-contain" />
             </div>
             <div>
               <div className="text-[10px] font-black uppercase tracking-[0.22em] text-[#7a0000]">Betech Solar</div>

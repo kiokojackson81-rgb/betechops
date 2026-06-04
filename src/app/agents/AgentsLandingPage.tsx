@@ -536,8 +536,8 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
       <header className="sticky top-0 z-40 border-b border-[#7a0000]/10 bg-white/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2.5 sm:px-6 lg:px-8">
           <Link href={agentPath("/", useRootPaths)} className="flex items-center gap-3">
-            <div className="overflow-hidden rounded-2xl border border-[#7a0000]/10 bg-white shadow-[0_16px_30px_rgba(122,0,0,0.12)]">
-              <Image src="/agents/betech-logo-crop.png" alt="Betech Solar Solutions" width={58} height={58} className="h-12 w-12 object-contain" />
+            <div className="overflow-hidden rounded-2xl border border-[#7a0000]/10 bg-white px-2 py-1 shadow-[0_16px_30px_rgba(122,0,0,0.12)]">
+              <Image src="/agents/betech-logo-crop.png" alt="Betech Solar Solutions" width={112} height={84} className="h-12 w-auto object-contain" />
             </div>
             <div className="hidden leading-tight sm:block">
               <div className="text-sm font-black uppercase tracking-[0.18em] text-[#7a0000]">Betech Solar</div>

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
@@ -84,8 +85,8 @@ export default function AgentPortalShell({
       <div className="mx-auto grid min-h-screen max-w-[1500px] lg:grid-cols-[300px_minmax(0,1fr)]">
         <aside className="hidden border-r border-[#d9c6ba] bg-[linear-gradient(180deg,#2f0b0b_0%,#5c0909_52%,#2f0b0b_100%)] px-6 py-8 text-white lg:flex lg:flex-col">
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#f1b81d] text-lg font-black text-[#5c0909]">
-              BS
+            <div className="overflow-hidden rounded-2xl bg-white px-2 py-1 shadow-[0_16px_28px_rgba(0,0,0,0.18)]">
+              <Image src="/agents/betech-logo-crop.png" alt="Betech Solar Solutions" width={112} height={84} className="h-10 w-auto object-contain" />
             </div>
             <div>
               <div className="text-sm font-semibold uppercase tracking-[0.28em] text-[#f3d674]">Betech Agents</div>
