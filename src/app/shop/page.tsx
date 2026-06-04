@@ -20,6 +20,12 @@ import { getShopImageOverrides } from "@/lib/shopImageOverrides";
 export const metadata: Metadata = buildShopMetadata();
 export const dynamic = "force-dynamic";
 
+type ShopPageProps = {
+  searchParams?: Promise<{
+    q?: string;
+  }>;
+};
+
 // Route planning for future isolated ecommerce expansion:
 // - /shop/product/[slug]
 // - /shop/category/[slug]
@@ -40,8 +46,11 @@ function getProductsForCategories(products: ShopProduct[], categorySlugs: string
   return products.filter((product) => allowed.has(slugify(product.category))).slice(0, limit);
 }
 
-export default async function ShopPage() {
-  const [products, imageOverrides] = await Promise.all([getShopProducts(), getShopImageOverrides()]);
+export default async function ShopPage({ searchParams }: ShopPageProps) {
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const rawQuery = String(resolvedSearchParams?.q ?? "").trim();
+  const searchQuery = rawQuery.length > 0 ? rawQuery : undefined;
+  const [products, imageOverrides] = await Promise.all([getShopProducts({ q: searchQuery }), getShopImageOverrides()]);
   const categories = buildShopCategories(imageOverrides.categoryImages);
   const kitProducts = getProductsForCategories(products, ["solar-full-kits"]);
   const panelProducts = getProductsForCategories(products, ["solar-panels"]);
@@ -88,13 +97,17 @@ export default async function ShopPage() {
       {products.length ? (
         <ProductSection
           id="shop-catalogue"
-          title="Live Shop Catalogue"
-          subtitle="Real products currently published from POS Management for storefront testing."
+          title={searchQuery ? `Search results for "${searchQuery}"` : "Live Shop Catalogue"}
+          subtitle={
+            searchQuery
+              ? `Showing ${products.length} product${products.length === 1 ? "" : "s"} matching your search.`
+              : "Real products currently published from POS Management for storefront testing."
+          }
           products={products}
         />
       ) : null}
 
-      {kitProducts.length ? (
+      {!searchQuery && kitProducts.length ? (
         <ProductSection
           id="best-selling-solar-kits"
           title="Best Selling Solar Kits"
@@ -104,7 +117,7 @@ export default async function ShopPage() {
         />
       ) : null}
 
-      {panelProducts.length ? (
+      {!searchQuery && panelProducts.length ? (
         <ProductSection
           id="solar-panels"
           title="Solar Panels"
@@ -114,7 +127,7 @@ export default async function ShopPage() {
         />
       ) : null}
 
-      {inverterProducts.length ? (
+      {!searchQuery && inverterProducts.length ? (
         <ProductSection
           id="solar-inverters"
           title="Inverters"
@@ -124,7 +137,7 @@ export default async function ShopPage() {
         />
       ) : null}
 
-      {batteryProducts.length ? (
+      {!searchQuery && batteryProducts.length ? (
         <ProductSection
           id="solar-batteries"
           title="Batteries"
@@ -134,7 +147,7 @@ export default async function ShopPage() {
         />
       ) : null}
 
-      {outdoorProducts.length ? (
+      {!searchQuery && outdoorProducts.length ? (
         <ProductSection
           id="solar-water-pumps"
           title="Water Pumps & Lights"
@@ -142,6 +155,22 @@ export default async function ShopPage() {
           href="/shop/category/solar-water-pumps"
           products={outdoorProducts}
         />
+      ) : null}
+
+      {searchQuery && !products.length ? (
+        <section id="shop-catalogue" className="py-3.5 sm:py-4">
+          <div className={shopStyles.shell}>
+            <div className={`${shopStyles.lightCard} p-6 text-center sm:p-8`}>
+              <div className={shopStyles.sectionEyebrow}>No matches</div>
+              <h2 className="mt-3 text-xl font-black tracking-tight text-slate-950 sm:text-2xl">
+                No products found for &quot;{searchQuery}&quot;
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Try a simpler search like inverter, battery, panel, pump, or full kit.
+              </p>
+            </div>
+          </div>
+        </section>
       ) : null}
 
       <section className="py-4 sm:py-6">
