@@ -1,11 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, SlidersHorizontal } from "lucide-react";
+import { ChevronRight, Search } from "lucide-react";
 
 type ShopSearchBarProps = {
   compact?: boolean;
+};
+
+type ShopSuggestion = {
+  id: string;
+  name: string;
+  category: string;
 };
 
 export default function ShopSearchBar({ compact = false }: ShopSearchBarProps) {
@@ -13,50 +19,179 @@ export default function ShopSearchBar({ compact = false }: ShopSearchBarProps) {
   const searchParams = useSearchParams();
   const initialQuery = useMemo(() => searchParams.get("q") ?? "", [searchParams]);
   const [query, setQuery] = useState(initialQuery);
+  const [suggestions, setSuggestions] = useState<ShopSuggestion[]>([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setQuery(initialQuery);
+  }, [initialQuery]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!wrapperRef.current) return;
+      if (!wrapperRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, []);
+
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      setSuggestions([]);
+      setLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setLoading(true);
+      try {
+        const response = await fetch(`/api/shop/products?q=${encodeURIComponent(trimmed)}`, {
+          signal: controller.signal,
+          cache: "no-store",
+        });
+        if (!response.ok) {
+          setSuggestions([]);
+          return;
+        }
+
+        const payload = (await response.json()) as {
+          products?: Array<{ id: string; name: string; category: string }>;
+        };
+
+        const nextSuggestions = Array.from(
+          new Map(
+            (payload.products ?? [])
+              .slice(0, 6)
+              .map((product) => [
+                product.name.trim().toLowerCase(),
+                {
+                  id: product.id,
+                  name: product.name,
+                  category: product.category,
+                },
+              ]),
+          ).values(),
+        );
+
+        setSuggestions(nextSuggestions);
+      } catch (error) {
+        if ((error as Error).name !== "AbortError") {
+          setSuggestions([]);
+        }
+      } finally {
+        setLoading(false);
+      }
+    }, 180);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [query]);
 
   const inputId = compact ? "shop-search-compact" : "shop-search";
+  const trimmedQuery = query.trim();
+  const showDropdown = open && trimmedQuery.length > 0;
 
-  const submitSearch = () => {
-    const trimmed = query.trim();
+  const goToSearchResults = (value: string) => {
+    const trimmed = value.trim();
     const params = new URLSearchParams();
     if (trimmed) params.set("q", trimmed);
-    const href = `/shop${params.toString() ? `?${params.toString()}` : ""}#shop-catalogue`;
-    router.push(href);
+    setOpen(false);
+    router.push(`/shop${params.toString() ? `?${params.toString()}` : ""}#shop-catalogue`);
   };
 
   return (
-    <form
-      action="/shop"
-      onSubmit={(event) => {
-        event.preventDefault();
-        submitSearch();
-      }}
-      className={`flex w-full items-center gap-2 rounded-full border border-[#7a0000]/12 bg-white px-3 shadow-[0_12px_24px_rgba(15,23,42,0.05)] ${
-        compact ? "min-h-[2.95rem]" : "min-h-[3.15rem]"
-      }`}
-    >
-      <label htmlFor={inputId} className="sr-only">
-        Search solar products
-      </label>
-      <Search className="h-4 w-4 shrink-0 text-[#7a0000]" />
-      <input
-        id={inputId}
-        name="q"
-        type="search"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder="Search solar kits, inverters, batteries, pumps..."
-        className="h-full w-full border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
-      />
-      <button
-        type="submit"
-        aria-label="Search solar products"
-        className={`inline-flex shrink-0 items-center justify-center rounded-full border border-[#7a0000]/10 bg-[#fff7ea] text-[#7a0000] ${
-          compact ? "h-9 w-9" : "h-10 w-10"
+    <div ref={wrapperRef} className="relative w-full">
+      <form
+        action="/shop"
+        onSubmit={(event) => {
+          event.preventDefault();
+          goToSearchResults(query);
+        }}
+        className={`flex w-full items-center gap-2 rounded-full border border-[#7a0000]/12 bg-white px-3 shadow-[0_12px_24px_rgba(15,23,42,0.05)] ${
+          compact ? "min-h-[2.95rem]" : "min-h-[3.15rem]"
         }`}
       >
-        <SlidersHorizontal className="h-4 w-4" />
-      </button>
-    </form>
+        <label htmlFor={inputId} className="sr-only">
+          Search solar products
+        </label>
+        <Search className="h-4 w-4 shrink-0 text-[#7a0000]" />
+        <input
+          id={inputId}
+          name="q"
+          type="search"
+          autoComplete="off"
+          value={query}
+          onFocus={() => {
+            if (query.trim()) setOpen(true);
+          }}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setOpen(true);
+          }}
+          placeholder="Search solar kits, inverters, batteries, pumps..."
+          className="h-full w-full border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+        />
+        <button
+          type="submit"
+          aria-label="Search solar products"
+          className={`inline-flex shrink-0 items-center justify-center rounded-full bg-[#f59e0b] font-bold text-white shadow-[0_10px_20px_rgba(245,158,11,0.22)] ${
+            compact ? "h-9 px-3 text-xs" : "h-10 px-4 text-sm"
+          }`}
+        >
+          Search
+        </button>
+      </form>
+
+      {showDropdown ? (
+        <div className="absolute left-0 right-0 top-[calc(100%+0.55rem)] z-50 overflow-hidden rounded-[26px] border border-[#7a0000]/10 bg-white shadow-[0_24px_50px_rgba(15,23,42,0.14)]">
+          <button
+            type="button"
+            onClick={() => goToSearchResults(query)}
+            className="flex w-full items-center justify-between gap-3 border-b border-slate-200/80 px-4 py-3 text-left transition hover:bg-[#fcfaf7] sm:px-5"
+          >
+            <div className="min-w-0">
+              <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">Search</div>
+              <div className="truncate text-base font-semibold text-slate-900">{trimmedQuery}</div>
+            </div>
+            <span className="inline-flex items-center rounded-full bg-[#f59e0b] px-3 py-1 text-sm font-bold text-white">
+              Search
+            </span>
+          </button>
+
+          {suggestions.map((suggestion) => (
+            <button
+              key={suggestion.id}
+              type="button"
+              onClick={() => {
+                setQuery(suggestion.name);
+                goToSearchResults(suggestion.name);
+              }}
+              className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-[#fcfaf7] sm:px-5"
+            >
+              <div className="min-w-0">
+                <div className="truncate text-base font-semibold text-slate-900">{suggestion.name}</div>
+                <div className="truncate text-xs text-slate-500">{suggestion.category}</div>
+              </div>
+              <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+            </button>
+          ))}
+
+          {!loading && suggestions.length === 0 ? (
+            <div className="px-4 py-3 text-sm text-slate-500 sm:px-5">No matching products yet. Click search to view full results.</div>
+          ) : null}
+
+          {loading ? <div className="px-4 py-3 text-sm text-slate-500 sm:px-5">Loading suggestions...</div> : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
