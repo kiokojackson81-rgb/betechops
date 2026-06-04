@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Headphones, Menu, ShoppingCart, User2, X } from "lucide-react";
@@ -14,6 +14,20 @@ import { SHOP_ACCOUNT_HREF, SHOP_CART_HREF, SHOP_HOME_HREF } from "@/app/shop/st
 type ShopHeaderProps = {
   navLinks: { label: string; href: string }[];
 };
+
+function SearchBarFallback({ compact = false }: { compact?: boolean }) {
+  return (
+    <div
+      className={`flex w-full items-center gap-2 rounded-full border border-[#7a0000]/12 bg-white px-3 shadow-[0_12px_24px_rgba(15,23,42,0.05)] ${
+        compact ? "min-h-[2.95rem]" : "min-h-[3.15rem]"
+      }`}
+    >
+      <div className="h-4 w-4 shrink-0 rounded-full bg-[#7a0000]/10" />
+      <div className="h-4 flex-1 rounded-full bg-slate-200/70" />
+      <div className={`shrink-0 rounded-full bg-[#f59e0b] ${compact ? "h-9 w-20" : "h-10 w-24"}`} />
+    </div>
+  );
+}
 
 export default function ShopHeader({ navLinks }: ShopHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -68,7 +82,9 @@ export default function ShopHeader({ navLinks }: ShopHeaderProps) {
         </div>
 
         <div className="mt-2 lg:hidden">
-          <ShopSearchBar compact />
+          <Suspense fallback={<SearchBarFallback compact />}>
+            <ShopSearchBar compact />
+          </Suspense>
         </div>
 
         {menuOpen ? (
@@ -100,7 +116,9 @@ export default function ShopHeader({ navLinks }: ShopHeaderProps) {
           </Link>
 
           <div className="min-w-0 flex-1">
-            <ShopSearchBar />
+            <Suspense fallback={<SearchBarFallback />}>
+              <ShopSearchBar />
+            </Suspense>
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
