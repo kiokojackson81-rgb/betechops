@@ -267,6 +267,8 @@ export async function GET(req: Request) {
   const limit = Math.min(200, Math.max(1, Number(searchParams.get("limit") || "100")));
   const capabilities = await getProductTableCapabilities(prisma);
   const qPattern = `%${q.replace(/[%_]/g, "\\$&")}%`;
+  const qLower = q.toLowerCase();
+  const qStartsPattern = `${q.replace(/[%_]/g, "\\$&")}%`;
 
   const items = capabilities.schemaMode === "modern"
     ? await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
@@ -316,14 +318,25 @@ export async function GET(req: Request) {
               OR COALESCE("category", '') ILIKE $3
             )
           ORDER BY
+            CASE
+              WHEN $2::text = '' THEN 0
+              WHEN LOWER("name") = $4 THEN 0
+              WHEN LOWER(COALESCE("sku", '')) = $4 THEN 1
+              WHEN LOWER("name") LIKE LOWER($5) THEN 2
+              WHEN LOWER(COALESCE("sku", '')) LIKE LOWER($5) THEN 3
+              WHEN LOWER(COALESCE("category", '')) LIKE LOWER($5) THEN 4
+              ELSE 5
+            END,
             COALESCE("isActive", true) DESC,
             ${capabilities.available.has("createdAt") ? `"createdAt" DESC,` : ""}
             "name" ASC
-          LIMIT $4
+          LIMIT $6
         `,
         includeInactive,
         q,
         qPattern,
+        qLower,
+        qStartsPattern,
         limit,
       )
     : await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
@@ -373,14 +386,25 @@ export async function GET(req: Request) {
               OR COALESCE("unit", '') ILIKE $3
             )
           ORDER BY
+            CASE
+              WHEN $2::text = '' THEN 0
+              WHEN LOWER("name") = $4 THEN 0
+              WHEN LOWER(COALESCE("key", '')) = $4 THEN 1
+              WHEN LOWER("name") LIKE LOWER($5) THEN 2
+              WHEN LOWER(COALESCE("key", '')) LIKE LOWER($5) THEN 3
+              WHEN LOWER(COALESCE("unit", '')) LIKE LOWER($5) THEN 4
+              ELSE 5
+            END,
             COALESCE("active", true) DESC,
             ${capabilities.available.has("createdAt") ? `"createdAt" DESC,` : ""}
             "name" ASC
-          LIMIT $4
+          LIMIT $6
         `,
         includeInactive,
         q,
         qPattern,
+        qLower,
+        qStartsPattern,
         limit,
       );
 

@@ -380,6 +380,7 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
   const [bulkBusy, setBulkBusy] = useState<"activate" | "archive" | "delete" | null>(null);
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
   const [query, setQuery] = useState("");
+  const [activeQuery, setActiveQuery] = useState("");
   const [catalogView, setCatalogView] = useState<"all" | "online" | "featured" | "warehouse" | "inactive">("all");
   const [showInactive, setShowInactive] = useState(false);
   const [buyingPriceFilter, setBuyingPriceFilter] = useState<"all" | "missing" | "set">("all");
@@ -388,11 +389,12 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
   const [editorOpen, setEditorOpen] = useState(false);
   const formSectionRef = useRef<HTMLElement | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
+  const catalogueTableRef = useRef<HTMLDivElement | null>(null);
   const productApiBase = "/api/admin/pos-products";
   const imageUploadAccept = getAcceptedImageUploadValue();
   const imageUploadFormats = getAcceptedImageUploadHint();
 
-  const loadData = useCallback(async (productQuery = query) => {
+  const loadData = useCallback(async (productQuery = activeQuery) => {
     setLoading(true);
     try {
       const requests = [
@@ -421,18 +423,16 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
     } finally {
       setLoading(false);
     }
-  }, [isProductDeskMode, productApiBase, query, showInactive]);
+  }, [activeQuery, isProductDeskMode, productApiBase, showInactive]);
 
   useEffect(() => {
-    void loadData("");
-  }, [loadData]);
+    void loadData(activeQuery);
+  }, [activeQuery, loadData]);
 
   useEffect(() => {
-    const handle = setTimeout(() => {
-      void loadData(query);
-    }, 250);
-    return () => clearTimeout(handle);
-  }, [query, loadData]);
+    if (!activeQuery) return;
+    catalogueTableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [activeQuery]);
 
   useEffect(() => {
     if (!draft.id) return;
@@ -1092,6 +1092,10 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
     : "rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40";
   const compactTitleClass = isProductDeskMode ? "text-xl font-semibold text-white" : "text-2xl font-semibold text-white";
   const compactCellClass = isProductDeskMode ? "px-3 py-2.5" : "px-4 py-3";
+  const runCatalogueSearch = useCallback(() => {
+    const nextQuery = query.trim();
+    setActiveQuery(nextQuery);
+  }, [query]);
 
   return (
     <div className={shellSpacingClass}>
@@ -1886,12 +1890,26 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
               </p>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-3">
-              <input
-                className={`w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 ${isProductDeskMode ? "xl:min-w-[22rem]" : "max-w-sm"}`}
-                placeholder="Search name, SKU, or category"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
+              <form
+                className={`flex w-full items-center gap-2 ${isProductDeskMode ? "xl:max-w-[34rem]" : "max-w-[32rem]"}`}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  runCatalogueSearch();
+                }}
+              >
+                <input
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
+                  placeholder="Search product name, SKU, or category"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+                <button
+                  type="submit"
+                  className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-emerald-500/20 hover:brightness-95"
+                >
+                  Search
+                </button>
+              </form>
             {!isProductDeskMode ? <select
               className="rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
               value={buyingPriceFilter}
@@ -1987,8 +2005,8 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
           </div>
         </div>}
 
-        <div className={`mt-4 overflow-x-auto rounded-2xl border border-slate-800 ${isProductDeskMode ? "bg-slate-950/30" : ""}`}>
-          <table className="min-w-full divide-y divide-slate-800 text-sm">
+          <div ref={catalogueTableRef} className={`mt-4 overflow-x-auto rounded-2xl border border-slate-800 ${isProductDeskMode ? "bg-slate-950/30" : ""}`}>
+            <table className="min-w-full divide-y divide-slate-800 text-sm">
             <thead className="bg-slate-950/70 text-left text-xs uppercase tracking-wide text-slate-400">
               <tr>
                 {canUseBulkActions ? <th className={compactCellClass}>
