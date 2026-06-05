@@ -1,12 +1,24 @@
+import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
 import AgentsLandingPage from "@/app/agents/AgentsLandingPage";
+import HomePageClient from "@/app/HomePageClient";
 import ShopHomePage from "@/app/shop/_components/ShopHomePage";
 import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { isAgentsHost } from "@/lib/agents/host";
 import { isOpsHost } from "@/lib/runtimeUrls";
 
-export const metadata = buildShopMetadata();
+export async function generateMetadata(): Promise<Metadata> {
+  const host = (await headers()).get("host");
+
+  if (isOpsHost(host)) {
+    return {
+      title: "BetechOps Operations",
+      description: "Real-time operations dashboards, support portals, and workflows for the BetechOps team.",
+    };
+  }
+
+  return buildShopMetadata();
+}
 
 type RootPageProps = {
   searchParams?: Promise<{
@@ -20,7 +32,7 @@ export default async function Home({ searchParams }: RootPageProps) {
     return <AgentsLandingPage useRootPaths />;
   }
   if (isOpsHost(host)) {
-    redirect("/admin");
+    return <HomePageClient />;
   }
 
   return <ShopHomePage searchParams={searchParams} analyticsPage="/" />;
