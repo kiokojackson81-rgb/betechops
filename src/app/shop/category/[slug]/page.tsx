@@ -282,6 +282,32 @@ export default async function ShopCategoryPage({ params, searchParams }: Categor
               <ChevronDown className="h-4 w-4 text-slate-500" />
             </summary>
             <div className="mt-3 grid gap-3">
+              <div id="mobile-category-sort">
+                <FilterSection title="Sort">
+                  <form method="GET" className="grid gap-2 rounded-xl border border-[#7a0000]/10 bg-[#fcfaf7] p-2.5">
+                    <input type="hidden" name="sub" value={filters.sub || ""} />
+                    <input type="hidden" name="brand" value={filters.brand || ""} />
+                    <input type="hidden" name="price" value={filters.price || ""} />
+                    <input type="hidden" name="stock" value={filters.stock || ""} />
+                    <input type="hidden" name="warranty" value={filters.warranty || ""} />
+                    <select
+                      name="sort"
+                      defaultValue={filters.sort || "featured"}
+                      className="rounded-xl border border-[#7a0000]/10 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none"
+                    >
+                      {SORT_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button type="submit" className="rounded-xl bg-[#7a0000] px-3 py-2 text-sm font-bold text-white">
+                      Apply sort
+                    </button>
+                  </form>
+                </FilterSection>
+              </div>
+              <div id="mobile-category-filter-section">
               <FilterSection title="Category">
                 <CheckboxLink href={getFilterHref(category.value, filters, { sub: "" })} label={category.label} active={!activeSubcategory} />
                 {category.subcategories.map((subcategory) => (
@@ -294,6 +320,7 @@ export default async function ShopCategoryPage({ params, searchParams }: Categor
                   />
                 ))}
               </FilterSection>
+              </div>
               {brandOptions.length ? (
                 <FilterSection title="Brand">
                   {brandOptions.map((brand) => (
@@ -402,7 +429,7 @@ export default async function ShopCategoryPage({ params, searchParams }: Categor
                     <div className="mt-0.5 text-xs font-semibold text-slate-500">{filteredProducts.length} products found</div>
                   </div>
 
-                  <form id="mobile-category-sort" className="hidden flex-wrap items-center gap-2 rounded-md border border-[#7a0000]/10 bg-[#fcfaf7] px-2.5 py-2 sm:flex-nowrap sm:py-1.5 lg:flex">
+                  <form id="desktop-category-sort" className="hidden flex-wrap items-center gap-2 rounded-md border border-[#7a0000]/10 bg-[#fcfaf7] px-2.5 py-2 sm:flex-nowrap sm:py-1.5 lg:flex">
                     <label htmlFor="sort" className="text-xs font-semibold text-slate-500">
                       Sort by
                     </label>
@@ -490,7 +517,7 @@ export default async function ShopCategoryPage({ params, searchParams }: Categor
         </div>
       </section>
       <ShopFooter />
-      <ShopMobileCatalogueActions filterTargetId="mobile-category-filters" sortTargetId="mobile-category-sort" />
+      <ShopMobileCatalogueActions filterTargetId="mobile-category-filter-section" sortTargetId="mobile-category-sort" />
       <FloatingWhatsApp hideOnMobile />
     </div>
   );

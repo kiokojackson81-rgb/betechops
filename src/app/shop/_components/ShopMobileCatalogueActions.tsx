@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback } from "react";
 import { ArrowUpDown, MessageCircle, SlidersHorizontal } from "lucide-react";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 
@@ -15,24 +16,42 @@ export default function ShopMobileCatalogueActions({
   filterTargetId,
   sortTargetId,
 }: ShopMobileCatalogueActionsProps) {
+  const openTarget = useCallback((targetId: string) => {
+    const target = document.getElementById(targetId);
+    if (!target) return;
+
+    const details = target.closest("details");
+    if (details instanceof HTMLDetailsElement) {
+      details.open = true;
+      window.setTimeout(() => {
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 30);
+      return;
+    }
+
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
   return (
     <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+0.85rem)] left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 lg:hidden">
-      <div className="flex items-center gap-1 rounded-full bg-[#1f1f1f] px-2 py-2 text-white shadow-[0_20px_42px_rgba(15,23,42,0.28)]">
-        <a
-          href={`#${sortTargetId}`}
+      <div className="flex items-center gap-1 rounded-full border border-[#7a0000]/14 bg-[linear-gradient(135deg,#7a0000_0%,#561010_100%)] px-2 py-2 text-white shadow-[0_20px_42px_rgba(122,0,0,0.26)]">
+        <button
+          type="button"
+          onClick={() => openTarget(sortTargetId)}
           className="inline-flex min-h-[2.7rem] items-center gap-2 rounded-full px-3.5 text-sm font-bold text-white"
         >
           <ArrowUpDown className="h-4 w-4" />
           Sort
-        </a>
+        </button>
         <span className="h-6 w-px bg-white/18" />
-        <a
-          href={`#${filterTargetId}`}
+        <button
+          type="button"
+          onClick={() => openTarget(filterTargetId)}
           className="inline-flex min-h-[2.7rem] items-center gap-2 rounded-full px-3.5 text-sm font-bold text-white"
         >
           <SlidersHorizontal className="h-4 w-4" />
           Filter
-        </a>
+        </button>
       </div>
 
       <TrackedWhatsAppLink
