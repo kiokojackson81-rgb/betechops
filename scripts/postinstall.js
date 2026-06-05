@@ -22,8 +22,8 @@ function runResultWithEnv(cmd, args, envOverrides) {
   return res.status || 0;
 }
 
-function isVercelProduction() {
-  return process.env.VERCEL === '1' && process.env.VERCEL_ENV === 'production';
+function isVercelDeployment() {
+  return process.env.VERCEL === '1';
 }
 
 function sleep(ms) {
@@ -54,7 +54,7 @@ async function tryChromiumDownload() {
     // 0) Ensure production DB is migrated before building on Vercel.
     // Vercel may be configured to run `next build` directly, bypassing scripts/vercel-build.js.
     // Running migrations here ensures the Prisma client and Server Components don't crash on schema drift.
-    if (isVercelProduction()) {
+    if (isVercelDeployment()) {
       // Prisma migrate should prefer a non-pooler/direct connection (e.g., Neon "direct" URL).
       // If DIRECT_URL is provided, temporarily run migrations against it by overriding DATABASE_URL.
       const directUrl = (process.env.DIRECT_URL || '').trim();

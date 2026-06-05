@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { getAllowedAuthOrigins, isAllowedAuthOrigin } from "@/lib/runtimeUrls";
 import { resolveFirebasePhoneUser } from "@/lib/firebasePhoneAuth";
+import { Prisma } from "@prisma/client";
 
 type ExtendedToken = {
   email?: string;
@@ -20,6 +21,10 @@ type ExtendedToken = {
 };
 
 const REQUIRED_DOMAIN = "@betech.co.ke";
+
+function isMissingColumnError(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022";
+}
 
 export const authOptions = {
   adapter: PrismaAdapter(prisma),
@@ -143,6 +148,30 @@ export const authOptions = {
         }
       } catch (err) {
         console.error("nextAuth: safe user lookup failed:", err);
+        if (isMissingColumnError(err)) {
+          try {
+            const fallback = await prisma.user.findFirst({
+              where: token.sub ? { id: token.sub } : { email: token.email },
+              select: {
+                id: true,
+                email: true,
+                role: true,
+                isActive: true,
+                agentProfile: { select: { id: true, status: true } },
+              },
+            });
+            if (fallback) {
+              token.role = fallback.role ?? token.role;
+              token.email = fallback.email ?? token.email;
+              token.sub = fallback.id ?? token.sub;
+              token.isActive = fallback.isActive ?? token.isActive ?? true;
+              token.isAgent = Boolean(fallback.agentProfile);
+              token.agentStatus = fallback.agentProfile?.status ?? null;
+            }
+          } catch (retryErr) {
+            console.error("nextAuth: fallback user lookup failed:", retryErr);
+          }
+        }
       }
       // Attempt to enrich token with `attendantCategory` using a raw query
       // that casts the DB enum to text. This avoids Prisma enum parsing
