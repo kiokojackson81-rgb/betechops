@@ -1,5 +1,5 @@
-import { getApp, getApps, initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
+import { getAuth, type Auth } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? "",
@@ -11,5 +11,21 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID ?? "",
 };
 
-export const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-export const auth = getAuth(app);
+function assertFirebaseClientConfig() {
+  if (!firebaseConfig.apiKey || !firebaseConfig.authDomain || !firebaseConfig.projectId || !firebaseConfig.appId) {
+    throw new Error("Firebase client env variables are not fully configured.");
+  }
+}
+
+export function getFirebaseClientApp(): FirebaseApp {
+  if (typeof window === "undefined") {
+    throw new Error("Firebase client app can only initialize in the browser.");
+  }
+
+  assertFirebaseClientConfig();
+  return getApps().length ? getApp() : initializeApp(firebaseConfig);
+}
+
+export function getFirebaseClientAuth(): Auth {
+  return getAuth(getFirebaseClientApp());
+}

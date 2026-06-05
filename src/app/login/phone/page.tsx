@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { signIn } from "next-auth/react";
 import { ConfirmationResult, RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { getFirebaseClientAuth } from "@/lib/firebase";
 import { normalizeKenyanPhone } from "@/lib/phone";
 
 declare global {
@@ -48,7 +48,7 @@ export default function PhoneLoginPage() {
       return window.recaptchaVerifier;
     }
 
-    const verifier = new RecaptchaVerifier(auth, "firebase-phone-recaptcha", {
+    const verifier = new RecaptchaVerifier(getFirebaseClientAuth(), "firebase-phone-recaptcha", {
       size: "invisible",
     });
     window.recaptchaVerifier = verifier;
@@ -69,7 +69,7 @@ export default function PhoneLoginPage() {
       }
 
       const verifier = getRecaptchaVerifier();
-      const result = await signInWithPhoneNumber(auth, normalizedPhone, verifier);
+      const result = await signInWithPhoneNumber(getFirebaseClientAuth(), normalizedPhone, verifier);
       setConfirmation(result);
       setMessage(`We sent a one-time code to ${normalizedPhone}.`);
       setCooldown(45);
