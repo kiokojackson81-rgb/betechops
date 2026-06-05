@@ -30,13 +30,13 @@ const helpCards = [
   },
   {
     title: "Nairobi CBD shop",
-    copy: "Visit our Nairobi CBD shop for pickup, guidance and product confirmation.",
+    copy: "Visit our Nairobi CBD shop for pickup, product guidance, and order confirmation.",
     icon: MapPin,
     href: SHOP_REQUEST_QUOTE_HREF,
   },
   {
-    title: "Delivery countrywide",
-    copy: "We deliver solar panels, batteries, inverters, pumps and kits across Kenya.",
+    title: "Delivery and installation countrywide",
+    copy: "We deliver and install solar systems countrywide across Kenya, with support for homes, businesses, farms, and institutions.",
     icon: Truck,
     href: SHOP_REQUEST_QUOTE_HREF,
   },
@@ -107,7 +107,7 @@ export default function ShopHero({ categories, heroImageUrl = "/agents/hero-gene
                     <Headphones className="h-4 w-4" />
                   </Link>
                 </div>
-                <div className="mt-3 text-[12px] leading-5 text-white/72 sm:text-sm">We deliver solar panels, batteries, inverters, pumps and kits across Kenya.</div>
+                <div className="mt-3 text-[12px] leading-5 text-white/72 sm:text-sm">We deliver and install solar systems anywhere in Kenya, with support for both small orders and complete system setups.</div>
               </div>
 
               <div className="overflow-hidden rounded-[22px] border border-white/10 bg-white/8 shadow-[0_18px_40px_rgba(0,0,0,0.18)] backdrop-blur sm:rounded-[24px]">

@@ -40,6 +40,7 @@ export default async function ShopHomePage({
   const rawQuery = String(resolvedSearchParams?.q ?? "").trim();
   const searchQuery = rawQuery.length > 0 ? rawQuery : undefined;
   const [products, imageOverrides] = await Promise.all([getShopProducts({ q: searchQuery }), getShopImageOverrides()]);
+  const popularProducts = searchQuery ? products : products.slice(0, 8);
   const categories = buildShopCategories(imageOverrides.categoryImages);
   const kitProducts = getProductsForCategories(products, ["solar-full-kits"]);
   const panelProducts = getProductsForCategories(products, ["solar-panels"]);
@@ -86,22 +87,23 @@ export default async function ShopHomePage({
       {products.length ? (
         <ProductSection
           id="shop-catalogue"
-          title={searchQuery ? `Search results for "${searchQuery}"` : "Live Shop Catalogue"}
+          title={searchQuery ? `Search results for "${searchQuery}"` : "Our Most Popular Products"}
           subtitle={
             searchQuery
               ? `Showing ${products.length} product${products.length === 1 ? "" : "s"} matching your search.`
-              : "Real products currently published from POS Management for storefront testing."
+              : "Popular customer picks across recent interest, enquiries, and demand in our solar catalogue."
           }
-          products={products}
+          products={popularProducts}
         />
       ) : null}
 
       {!searchQuery && kitProducts.length ? (
         <ProductSection
           id="best-selling-solar-kits"
-          title="Best Selling Solar Kits"
-          subtitle="Ready-built kits for home backup and biashara power."
+          title="Solar Full Kits"
+          subtitle="Popular complete kit options for home backup, biashara power, and everyday essentials."
           href={getShopCategoryHref("solar-full-kits")}
+          linkLabel="See all products"
           products={kitProducts}
         />
       ) : null}
@@ -110,8 +112,9 @@ export default async function ShopHomePage({
         <ProductSection
           id="solar-panels"
           title="Solar Panels"
-          subtitle="High-output mono panels for rooftops and clean daytime generation."
+          subtitle="Popular panel options for rooftops, system upgrades, and reliable daytime generation."
           href={getShopCategoryHref("solar-panels")}
+          linkLabel="See all products"
           products={panelProducts}
         />
       ) : null}
@@ -120,8 +123,9 @@ export default async function ShopHomePage({
         <ProductSection
           id="solar-inverters"
           title="Inverters"
-          subtitle="Hybrid inverter options for starter and stronger backup setups."
+          subtitle="Trending inverter options for backup power, hybrid setups, and daily home use."
           href={getShopCategoryHref("solar-inverters")}
+          linkLabel="See all products"
           products={inverterProducts}
         />
       ) : null}
@@ -130,8 +134,9 @@ export default async function ShopHomePage({
         <ProductSection
           id="solar-batteries"
           title="Batteries"
-          subtitle="Gel and lithium storage for dependable reserve power."
+          subtitle="Popular battery options for dependable storage, backup power, and system expansion."
           href={getShopCategoryHref("solar-batteries")}
+          linkLabel="See all products"
           products={batteryProducts}
         />
       ) : null}
@@ -139,9 +144,10 @@ export default async function ShopHomePage({
       {!searchQuery && outdoorProducts.length ? (
         <ProductSection
           id="solar-water-pumps"
-          title="Water Pumps & Lights"
-          subtitle="Outdoor solar solutions for irrigation and compound lighting."
+          title="Water Pumps, Lights & Outdoor Solar"
+          subtitle="Popular outdoor solar solutions for pumping, security lighting, heating, and compound use."
           href={getShopCategoryHref("solar-water-pumps")}
+          linkLabel="See all products"
           products={outdoorProducts}
         />
       ) : null}
@@ -169,7 +175,7 @@ export default async function ShopHomePage({
               <div className={shopStyles.sectionEyebrow}>Delivery and payment</div>
               <h2 className="mt-3 text-xl font-black tracking-tight text-slate-950 sm:text-2xl">How delivery and payment works</h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                We deliver solar panels, batteries, inverters, pumps and kits across Kenya. Orders are confirmed by our team after stock, delivery, and payment review.
+                We deliver and install solar systems across Kenya. Orders are confirmed by our team after stock checks, delivery planning, and payment review.
               </p>
               <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
                 {deliveryPaymentSteps.map((step) => (
