@@ -1,4 +1,5 @@
 export const SHOP_HOME_HREF = "/";
+export const SHOP_ALL_PRODUCTS_HREF = "/all-products";
 export const SHOP_ACCOUNT_HREF = "/account";
 export const SHOP_CART_HREF = "/cart";
 export const SHOP_CHECKOUT_HREF = "/checkout";

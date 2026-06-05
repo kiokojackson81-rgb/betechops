@@ -4,7 +4,7 @@ import { ArrowRight, Headphones, MapPin, MessageCircle, ShieldCheck, Truck } fro
 import type { ShopCategory } from "@/app/shop/shopData";
 import { getShopCategoryDefinition } from "@/app/shop/shopCatalogConfig";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
-import { getShopCategoryHref, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
+import { getShopCategoryHref, SHOP_ALL_PRODUCTS_HREF, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
 
 type ShopHeroProps = {
   categories: ShopCategory[];
@@ -98,7 +98,7 @@ export default function ShopHero({ categories, heroImageUrl = "/agents/hero-gene
                   Genuine solar products with warranty support, Nairobi pickup and countrywide delivery.
                 </p>
                 <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
-                  <Link href="#featured-deals" className={`${shopStyles.goldButton} min-h-[2.9rem] w-full`}>
+                  <Link href={SHOP_ALL_PRODUCTS_HREF} className={`${shopStyles.goldButton} min-h-[2.9rem] w-full`}>
                     Shop Products
                     <ArrowRight className="h-4 w-4" />
                   </Link>
