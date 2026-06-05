@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { ChevronDown, Filter, SlidersHorizontal, X } from "lucide-react";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
+import ShopMobileCatalogueActions from "@/app/shop/_components/ShopMobileCatalogueActions";
 import ProductCard from "@/app/shop/_components/ProductCard";
 import ShopBreadcrumbs from "@/app/shop/_components/ShopBreadcrumbs";
 import ShopFooter from "@/app/shop/_components/ShopFooter";
@@ -260,7 +261,7 @@ export default async function ShopCategoryPage({ params, searchParams }: Categor
   ].filter(Boolean) as Array<{ label: string; href: string }>;
 
   return (
-    <div className={shopStyles.page}>
+    <div className={`${shopStyles.page} pb-28 lg:pb-0`}>
       <ShopHeader navLinks={shopNavLinks} />
       <section className="py-2.5 sm:py-4">
         <div className={shopStyles.shell}>
@@ -272,7 +273,7 @@ export default async function ShopCategoryPage({ params, searchParams }: Categor
             ]}
           />
 
-          <details className="mt-2 rounded-[14px] border border-[#7a0000]/10 bg-white px-3 py-2.5 shadow-[0_6px_16px_rgba(15,23,42,0.04)] lg:hidden">
+          <details id="mobile-category-filters" className="mt-2 rounded-[14px] border border-[#7a0000]/10 bg-white px-3 py-2.5 shadow-[0_6px_16px_rgba(15,23,42,0.04)] lg:hidden">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold text-slate-900">
               <span className="inline-flex items-center gap-2">
                 <Filter className="h-4 w-4 text-[#7a0000]" />
@@ -401,7 +402,7 @@ export default async function ShopCategoryPage({ params, searchParams }: Categor
                     <div className="mt-0.5 text-xs font-semibold text-slate-500">{filteredProducts.length} products found</div>
                   </div>
 
-                  <form className="flex flex-wrap items-center gap-2 rounded-md border border-[#7a0000]/10 bg-[#fcfaf7] px-2.5 py-2 sm:flex-nowrap sm:py-1.5">
+                  <form id="mobile-category-sort" className="hidden flex-wrap items-center gap-2 rounded-md border border-[#7a0000]/10 bg-[#fcfaf7] px-2.5 py-2 sm:flex-nowrap sm:py-1.5 lg:flex">
                     <label htmlFor="sort" className="text-xs font-semibold text-slate-500">
                       Sort by
                     </label>
@@ -489,7 +490,8 @@ export default async function ShopCategoryPage({ params, searchParams }: Categor
         </div>
       </section>
       <ShopFooter />
-      <FloatingWhatsApp />
+      <ShopMobileCatalogueActions filterTargetId="mobile-category-filters" sortTargetId="mobile-category-sort" />
+      <FloatingWhatsApp hideOnMobile />
     </div>
   );
 }
