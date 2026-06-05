@@ -1,4 +1,5 @@
 {
+  "buildCommand": "node scripts/vercel-build.js",
   "crons": [
     {
       "path": "/api/admin/catalog/counters/recompute",
