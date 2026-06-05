@@ -4,21 +4,62 @@ function run(cmd) {
   execSync(cmd, { stdio: "inherit" });
 }
 
+function runWithEnv(cmd, envOverrides) {
+  execSync(cmd, { stdio: "inherit", env: { ...process.env, ...envOverrides } });
+}
+
+function isVercel() {
+  return process.env.VERCEL === "1";
+}
+
 function isVercelProduction() {
-  return process.env.VERCEL === "1" && process.env.VERCEL_ENV === "production";
+  return isVercel() && process.env.VERCEL_ENV === "production";
+}
+
+function resolveKnownRolledBackMigrations(envOverrides) {
+  const knownSafeRollbacks = [
+    "20260305_marketplace_email_intelligence",
+    "20260605103000_add_firebase_phone_identity",
+  ];
+
+  for (const migrationId of knownSafeRollbacks) {
+    try {
+      console.log(`[vercel-build] attempting migrate resolve for ${migrationId}`);
+      runWithEnv(`npx prisma migrate resolve --rolled-back ${migrationId}`, envOverrides);
+    } catch (error) {
+      console.warn(`[vercel-build] migrate resolve skipped for ${migrationId}`);
+    }
+  }
+}
+
+function runPrismaMigrateDeploy() {
+  const directUrl = (process.env.DIRECT_URL || "").trim();
+  const envOverrides = directUrl ? { DATABASE_URL: directUrl } : {};
+
+  if (!directUrl) {
+    console.warn("[vercel-build] DIRECT_URL is not set. Prisma migrations may use the pooler and fail advisory locks.");
+  }
+
+  try {
+    runWithEnv("npx prisma migrate deploy", envOverrides);
+    return;
+  } catch (error) {
+    console.warn("[vercel-build] prisma migrate deploy failed on first attempt; trying migrate resolve for known failed migrations");
+  }
+
+  resolveKnownRolledBackMigrations(envOverrides);
+  runWithEnv("npx prisma migrate deploy", envOverrides);
 }
 
 try {
   console.log("[vercel-build] checking repository for unresolved merge markers");
   run("node scripts/precommit-check.js --all");
 
-  if (process.env.VERCEL === "1") {
-    console.log(`[vercel-build] vercel (${process.env.VERCEL_ENV ?? "unknown"}): running prisma migrate deploy`);
-    run("npx prisma migrate deploy");
-  } else if (isVercelProduction()) {
-    // Backward compatibility (should not happen): keep this branch in case Vercel flags change.
-    console.log("[vercel-build] production deploy: running prisma migrate deploy");
-    run("npx prisma migrate deploy");
+  if (isVercelProduction()) {
+    console.log(`[vercel-build] vercel (${process.env.VERCEL_ENV ?? "unknown"}): running prisma migrate deploy with direct connection when available`);
+    runPrismaMigrateDeploy();
+  } else if (isVercel()) {
+    console.log(`[vercel-build] vercel (${process.env.VERCEL_ENV ?? "unknown"}): skipping prisma migrate deploy outside production`);
   } else {
     console.log("[vercel-build] not vercel: skipping prisma migrate deploy");
   }
