@@ -116,29 +116,31 @@ export default async function ShopHomePage({
     <div className={`${shopStyles.page} pb-40 sm:pb-28`}>
       <ShopAnalyticsTracker kind="shop_view" payload={{ page: analyticsPage, brand: "Betech Solar Solutions" }} />
       <ShopHeader navLinks={shopNavLinks} />
-      <ShopCategoryNav categories={categories} />
-      <ShopHero categories={categories} heroImageUrl={imageOverrides.heroBannerUrl ?? undefined} />
-      <CategoryScroller categories={categories} />
+      {!searchQuery ? <ShopCategoryNav categories={categories} /> : null}
+      {!searchQuery ? <ShopHero categories={categories} heroImageUrl={imageOverrides.heroBannerUrl ?? undefined} /> : null}
+      {!searchQuery ? <CategoryScroller categories={categories} /> : null}
 
-      <section className="py-2.5 sm:py-3">
-        <div className={shopStyles.shell}>
-          <div className={`${shopStyles.lightCard} overflow-hidden px-3 py-3 sm:px-4`}>
-            <div className="grid gap-2 grid-cols-2 md:grid-cols-5">
-              {topTrustItems.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <div key={item.title} className="flex items-center gap-2 rounded-2xl bg-[#fcfaf7] px-3 py-2.5">
-                    <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#fff3d8] text-[#7a0000]">
-                      <Icon className="h-3.5 w-3.5" />
-                    </span>
-                    <div className="text-[11px] font-bold leading-4 text-slate-700 sm:text-sm">{item.title}</div>
-                  </div>
-                );
-              })}
+      {!searchQuery ? (
+        <section className="py-2.5 sm:py-3">
+          <div className={shopStyles.shell}>
+            <div className={`${shopStyles.lightCard} overflow-hidden px-3 py-3 sm:px-4`}>
+              <div className="grid gap-2 grid-cols-2 md:grid-cols-5">
+                {topTrustItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <div key={item.title} className="flex items-center gap-2 rounded-2xl bg-[#fcfaf7] px-3 py-2.5">
+                      <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#fff3d8] text-[#7a0000]">
+                        <Icon className="h-3.5 w-3.5" />
+                      </span>
+                      <div className="text-[11px] font-bold leading-4 text-slate-700 sm:text-sm">{item.title}</div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
 
       {products.length ? (
         <ProductSection
@@ -224,131 +226,88 @@ export default async function ShopHomePage({
         </section>
       ) : null}
 
-      <section className="py-4 sm:py-6">
-        <div className={shopStyles.shell}>
-          <div className="grid gap-3">
-            <div className={`${shopStyles.lightCard} p-4 sm:p-5 lg:p-6`}>
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                <div>
-                  <div className={shopStyles.sectionEyebrow}>Delivery & Payment Policy</div>
-                  <h2 className="mt-3 text-xl font-black tracking-tight text-slate-950 sm:text-2xl">Clear delivery, payment, and transport guidance for every Betech Solar order</h2>
-                  <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                    We deliver and install solar systems countrywide across Kenya. The exact payment and dispatch process depends on whether you are collecting in Nairobi, using courier dispatch, or requesting pay on delivery where coverage is available.
-                  </p>
-                </div>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <TrackedWhatsAppLink
-                    href="https://wa.me/254722151083?text=Hello%20Betech%20Solar%2C%20I%20need%20help%20choosing%20a%20delivery%20option."
-                    className={shopStyles.whatsappButton}
-                    label="Delivery policy WhatsApp"
-                    context="delivery_policy"
-                    ariaLabel="Chat with Betech Solar on WhatsApp"
-                  >
-                    Chat on WhatsApp
-                  </TrackedWhatsAppLink>
-                  <Link href="https://maps.app.goo.gl/BKWo6DqgYmyJQCWF8" target="_blank" rel="noreferrer" className={shopStyles.goldButton}>
-                    Get Directions
-                  </Link>
-                  <Link href="#delivery-options" className={shopStyles.secondaryButton}>
-                    Choose Delivery Option
-                  </Link>
+      {!searchQuery ? (
+        <section className="py-4 sm:py-6">
+          <div className={shopStyles.shell}>
+            <div className="grid gap-3">
+              <div className={`${shopStyles.lightCard} p-4 sm:p-5 lg:p-6`}>
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <div className={shopStyles.sectionEyebrow}>Delivery & Payment Policy</div>
+                    <h2 className="mt-3 text-xl font-black tracking-tight text-slate-950 sm:text-2xl">Clear delivery, payment, and transport guidance for every Betech Solar order</h2>
+                    <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                      We deliver and install solar systems countrywide across Kenya. The exact payment and dispatch process depends on whether you are collecting in Nairobi, using courier dispatch, or requesting pay on delivery where coverage is available.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <TrackedWhatsAppLink
+                      href="https://wa.me/254722151083?text=Hello%20Betech%20Solar%2C%20I%20need%20help%20choosing%20a%20delivery%20option."
+                      className={shopStyles.whatsappButton}
+                      label="Delivery policy WhatsApp"
+                      context="delivery_policy"
+                      ariaLabel="Chat with Betech Solar on WhatsApp"
+                    >
+                      Chat on WhatsApp
+                    </TrackedWhatsAppLink>
+                    <Link href="https://maps.app.goo.gl/BKWo6DqgYmyJQCWF8" target="_blank" rel="noreferrer" className={shopStyles.goldButton}>
+                      Get Directions
+                    </Link>
+                    <Link href="#delivery-options" className={shopStyles.secondaryButton}>
+                      Choose Delivery Option
+                    </Link>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="grid gap-3 xl:grid-cols-[1.02fr_0.98fr]">
-              <div className={`${shopStyles.lightCard} p-4 sm:p-5`}>
-                <div className={shopStyles.sectionEyebrow}>Payment Options</div>
-                <div className="mt-4 grid gap-3">
-                  {paymentOptions.map((option) => (
-                    <div key={option.title} className="rounded-[18px] border border-[#7a0000]/10 bg-[#fcfaf7] p-3.5 sm:rounded-[20px]">
-                      <div className="flex items-start gap-3">
-                        <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#fff3d8] text-[#7a0000]">
-                          <CreditCard className="h-4 w-4" />
-                        </span>
-                        <div>
-                          <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000] sm:text-sm">{option.title}</div>
-                          <p className="mt-1.5 text-[13px] leading-5 text-slate-600 sm:text-sm sm:leading-6">{option.copy}</p>
+              <div className="grid gap-3 xl:grid-cols-[1.02fr_0.98fr]">
+                <div className={`${shopStyles.lightCard} p-4 sm:p-5`}>
+                  <div className={shopStyles.sectionEyebrow}>Payment Options</div>
+                  <div className="mt-4 grid gap-3">
+                    {paymentOptions.map((option) => (
+                      <div key={option.title} className="rounded-[18px] border border-[#7a0000]/10 bg-[#fcfaf7] p-3.5 sm:rounded-[20px]">
+                        <div className="flex items-start gap-3">
+                          <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#fff3d8] text-[#7a0000]">
+                            <CreditCard className="h-4 w-4" />
+                          </span>
+                          <div>
+                            <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000] sm:text-sm">{option.title}</div>
+                            <p className="mt-1.5 text-[13px] leading-5 text-slate-600 sm:text-sm sm:leading-6">{option.copy}</p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div id="delivery-options" className={`${shopStyles.softCard} p-4 sm:p-5`}>
-                <div className={shopStyles.sectionEyebrow}>Delivery Options</div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  {deliveryOptions.map((option) => {
-                    const Icon = option.icon;
-                    return (
-                      <div key={option.title} className="rounded-[18px] border border-[#7a0000]/10 bg-white p-3.5 shadow-[0_10px_22px_rgba(15,23,42,0.04)]">
-                        <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[#fff3d8] text-[#7a0000]">
-                          <Icon className="h-4 w-4" />
-                        </span>
-                        <div className="mt-3 text-sm font-black text-slate-950">{option.title}</div>
-                        <p className="mt-1.5 text-[13px] leading-5 text-slate-600 sm:text-sm sm:leading-6">{option.copy}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            <div className="grid gap-3 xl:grid-cols-[0.98fr_1.02fr]">
-              <div className={`${shopStyles.lightCard} p-4 sm:p-5`}>
-                <div className={shopStyles.sectionEyebrow}>Transport Fee Policy</div>
-                <p className="mt-3 text-sm leading-6 text-slate-600">
-                  Transport fees vary depending on customer location and the courier used. Once the item and courier are confirmed, we communicate the actual transport cost before dispatch is completed.
-                </p>
-                <div className="mt-4 grid gap-2.5">
-                  {transportSteps.map((step, index) => (
-                    <div key={step} className="flex items-start gap-3 rounded-[18px] border border-[#7a0000]/8 bg-[#fcfaf7] px-3.5 py-3">
-                      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#7a0000] text-xs font-black text-white">
-                        {index + 1}
-                      </span>
-                      <p className="text-[13px] leading-5 text-slate-600 sm:text-sm sm:leading-6">{step}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid gap-3">
-                <div className={`${shopStyles.softCard} p-4 sm:p-5`}>
-                  <div className={shopStyles.sectionEyebrow}>Shop Location</div>
-                  <div className="mt-3 text-base font-black leading-7 text-slate-950">
-                    Betech Solar Solutions
-                    <br />
-                    Pramukh Plaza, 3rd Floor, Shop No. 3
-                    <br />
-                    Junction of Munyu Road & Sheikh Karume Road
-                    <br />
-                    Nairobi CBD
+                    ))}
                   </div>
+                </div>
+
+                <div id="delivery-options" className={`${shopStyles.softCard} p-4 sm:p-5`}>
+                  <div className={shopStyles.sectionEyebrow}>Delivery Options</div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-[18px] border border-[#7a0000]/10 bg-white px-3.5 py-3">
-                      <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000]">Call / WhatsApp</div>
-                      <div className="mt-1.5 text-sm font-semibold leading-6 text-slate-700">0722 151 083 / 0703 241 917</div>
-                    </div>
-                    <div className="rounded-[18px] border border-[#7a0000]/10 bg-white px-3.5 py-3">
-                      <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000]">Operating Hours</div>
-                      <div className="mt-1.5 text-sm leading-6 text-slate-700">
-                        Mon-Fri: 9:00 AM - 5:00 PM
-                        <br />
-                        Sat: 9:00 AM - 3:00 PM
-                        <br />
-                        Sun & Public Holidays: Closed
-                      </div>
-                    </div>
+                    {deliveryOptions.map((option) => {
+                      const Icon = option.icon;
+                      return (
+                        <div key={option.title} className="rounded-[18px] border border-[#7a0000]/10 bg-white p-3.5 shadow-[0_10px_22px_rgba(15,23,42,0.04)]">
+                          <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[#fff3d8] text-[#7a0000]">
+                            <Icon className="h-4 w-4" />
+                          </span>
+                          <div className="mt-3 text-sm font-black text-slate-950">{option.title}</div>
+                          <p className="mt-1.5 text-[13px] leading-5 text-slate-600 sm:text-sm sm:leading-6">{option.copy}</p>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
+              </div>
 
+              <div className="grid gap-3 xl:grid-cols-[0.98fr_1.02fr]">
                 <div className={`${shopStyles.lightCard} p-4 sm:p-5`}>
-                  <div className={shopStyles.sectionEyebrow}>Directions from RNG Plaza</div>
+                  <div className={shopStyles.sectionEyebrow}>Transport Fee Policy</div>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">
+                    Transport fees vary depending on customer location and the courier used. Once the item and courier are confirmed, we communicate the actual transport cost before dispatch is completed.
+                  </p>
                   <div className="mt-4 grid gap-2.5">
-                    {directionSteps.map((step, index) => (
+                    {transportSteps.map((step, index) => (
                       <div key={step} className="flex items-start gap-3 rounded-[18px] border border-[#7a0000]/8 bg-[#fcfaf7] px-3.5 py-3">
-                        <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#fff3d8] text-xs font-black text-[#7a0000]">
+                        <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#7a0000] text-xs font-black text-white">
                           {index + 1}
                         </span>
                         <p className="text-[13px] leading-5 text-slate-600 sm:text-sm sm:leading-6">{step}</p>
@@ -356,13 +315,58 @@ export default async function ShopHomePage({
                     ))}
                   </div>
                 </div>
-              </div>
-            </div>
 
-            <ShopSupportStrip />
+                <div className="grid gap-3">
+                  <div className={`${shopStyles.softCard} p-4 sm:p-5`}>
+                    <div className={shopStyles.sectionEyebrow}>Shop Location</div>
+                    <div className="mt-3 text-base font-black leading-7 text-slate-950">
+                      Betech Solar Solutions
+                      <br />
+                      Pramukh Plaza, 3rd Floor, Shop No. 3
+                      <br />
+                      Junction of Munyu Road & Sheikh Karume Road
+                      <br />
+                      Nairobi CBD
+                    </div>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-[18px] border border-[#7a0000]/10 bg-white px-3.5 py-3">
+                        <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000]">Call / WhatsApp</div>
+                        <div className="mt-1.5 text-sm font-semibold leading-6 text-slate-700">0722 151 083 / 0703 241 917</div>
+                      </div>
+                      <div className="rounded-[18px] border border-[#7a0000]/10 bg-white px-3.5 py-3">
+                        <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000]">Operating Hours</div>
+                        <div className="mt-1.5 text-sm leading-6 text-slate-700">
+                          Mon-Fri: 9:00 AM - 5:00 PM
+                          <br />
+                          Sat: 9:00 AM - 3:00 PM
+                          <br />
+                          Sun & Public Holidays: Closed
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className={`${shopStyles.lightCard} p-4 sm:p-5`}>
+                    <div className={shopStyles.sectionEyebrow}>Directions from RNG Plaza</div>
+                    <div className="mt-4 grid gap-2.5">
+                      {directionSteps.map((step, index) => (
+                        <div key={step} className="flex items-start gap-3 rounded-[18px] border border-[#7a0000]/8 bg-[#fcfaf7] px-3.5 py-3">
+                          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#fff3d8] text-xs font-black text-[#7a0000]">
+                            {index + 1}
+                          </span>
+                          <p className="text-[13px] leading-5 text-slate-600 sm:text-sm sm:leading-6">{step}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <ShopSupportStrip />
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
 
       <section id="quote" className="pb-4 pt-1.5 sm:pb-5">
         <div className={shopStyles.shell}>
