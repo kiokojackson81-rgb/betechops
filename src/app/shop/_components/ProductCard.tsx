@@ -48,7 +48,7 @@ export default function ProductCard({ product }: ProductCardProps) {
             <ShopProductVisual visualType={product.visualType} productName={product.name} compact className="h-full w-full" />
           )}
         </div>
-        <div className="absolute left-2.5 top-2.5 inline-flex max-w-[70%] truncate rounded-full bg-[#fff3d8] px-2 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-[#7a0000] sm:left-3 sm:top-3 sm:px-2.5">
+        <div className="absolute left-2.5 top-2.5 hidden max-w-[70%] truncate rounded-full bg-[#fff3d8] px-2 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-[#7a0000] sm:inline-flex sm:left-3 sm:top-3 sm:px-2.5">
           {product.brand}
         </div>
         {discountPercent ? (
