@@ -9,11 +9,17 @@ datasource db {
 
 model User {
   id                                   String                          @id @default(cuid())
-  email                                String                          @unique
+  email                                String?                         @unique
+  phone                                String?                         @unique
   name                                 String?
+  county                               String?
+  town                                 String?
   image                                String?
   role                                 Role                            @default(ATTENDANT)
   isActive                             Boolean                         @default(true)
+  phoneVerifiedAt                      DateTime?
+  emailVerifiedAt                      DateTime?
+  lastLoginMethod                      String?
   createdAt                            DateTime                        @default(now())
   updatedAt                            DateTime                        @updatedAt
   attendantCategory                    AttendantCategory?
@@ -63,10 +69,12 @@ model User {
   managedShops                         Shop[]                          @relation("ManagedBy")
   agentProfile                         AgentProfile?
   agentSales                           AgentSale[]                     @relation("AgentSaleAgent")
+  customerAgentSales                   AgentSale[]                     @relation("AgentSaleCustomer")
   agentCommissions                     AgentCommission[]               @relation("AgentCommissionAgent")
   agentPayouts                         AgentPayout[]                   @relation("AgentPayoutAgent")
   agentActivityLogs                    AgentActivityLog[]              @relation("AgentActivityAgent")
   ownedAgentLeads                      AgentLeadOwnership[]            @relation("AgentLeadOwnershipAgent")
+  customerLeadOwnerships               AgentLeadOwnership[]            @relation("AgentLeadOwnershipCustomer")
   primaryDuplicateReviews              AgentDuplicateReview[]          @relation("AgentDuplicatePrimaryAgent")
   secondaryDuplicateReviews            AgentDuplicateReview[]          @relation("AgentDuplicateAgent")
   resolvedDuplicateReviews             AgentDuplicateReview[]          @relation("AgentDuplicateResolvedBy")
@@ -75,11 +83,13 @@ model User {
   agentAuditActions                    AgentAuditLog[]                 @relation("AgentAuditActor")
   agentAuditTargets                    AgentAuditLog[]                 @relation("AgentAuditTargetAgent")
   agentSaleTimelineActions             AgentSaleTimeline[]             @relation("AgentSaleTimelineActor")
+  customerWebsiteOrders                WebsiteOrder[]                  @relation("customerWebsiteOrders")
 }
 
 model AgentSale {
   id                      String                 @id @default(cuid())
   agentId                 String
+  customerUserId          String?
   customerName            String
   customerPhone           String
   customerLocation        String
@@ -106,6 +116,7 @@ model AgentSale {
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt
   agent                   User                   @relation("AgentSaleAgent", fields: [agentId], references: [id], onDelete: Cascade)
+  customerUser            User?                  @relation("AgentSaleCustomer", fields: [customerUserId], references: [id], onDelete: SetNull)
   receipt                 Receipt?               @relation(fields: [receiptId], references: [id], onDelete: SetNull)
   leadOwnerships          AgentLeadOwnership[]   @relation("AgentLeadOwnershipFirstSale")
   primaryDuplicateReviews AgentDuplicateReview[] @relation("AgentDuplicatePrimarySale")
@@ -118,6 +129,7 @@ model AgentSale {
   @@index([status, createdAt])
   @@index([paymentType, createdAt])
   @@index([receiptId])
+  @@index([customerUserId])
   @@index([customerPhone, createdAt])
   @@index([customerName, createdAt])
 }
@@ -197,6 +209,7 @@ model AgentActivityLog {
 model AgentLeadOwnership {
   id               String    @id @default(cuid())
   normalizedPhone  String
+  customerUserId   String?
   customerName     String?
   customerCounty   String?
   customerLocation String?
@@ -210,9 +223,11 @@ model AgentLeadOwnership {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   agent            User      @relation("AgentLeadOwnershipAgent", fields: [agentId], references: [id], onDelete: Cascade)
+  customerUser     User?     @relation("AgentLeadOwnershipCustomer", fields: [customerUserId], references: [id], onDelete: SetNull)
   firstSale        AgentSale @relation("AgentLeadOwnershipFirstSale", fields: [firstSaleId], references: [id], onDelete: Cascade)
 
   @@index([normalizedPhone, ownedUntil])
+  @@index([customerUserId])
   @@index([agentId, status])
   @@index([firstSaleId])
 }
@@ -1411,6 +1426,7 @@ model Receipt {
 model WebsiteOrder {
   id               String             @id @default(cuid())
   orderRef         String             @unique
+  customerUserId   String?
   customerName     String
   customerPhone    String
   customerLocation String
@@ -1432,11 +1448,13 @@ model WebsiteOrder {
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
   confirmedBy      User?              @relation("websiteOrderConfirmedBy", fields: [confirmedById], references: [id])
+  customerUser     User?              @relation("customerWebsiteOrders", fields: [customerUserId], references: [id], onDelete: SetNull)
   receipt          Receipt?           @relation(fields: [receiptId], references: [id], onDelete: SetNull)
   items            WebsiteOrderItem[]
 
   @@index([status, createdAt])
   @@index([orderType, createdAt])
+  @@index([customerUserId, createdAt])
 }
 
 model WebsiteOrderItem {

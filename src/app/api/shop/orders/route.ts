@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
 import {
   buildWebsiteOrderRef,
   deriveWebsiteOrderType,
@@ -29,6 +30,8 @@ async function buildUniqueOrderRef() {
 }
 
 export async function POST(request: Request) {
+  const session = await auth().catch(() => null);
+  const sessionUserId = (session?.user as { id?: string } | undefined)?.id ?? null;
   const body = await request.json().catch(() => null);
   const parsed = websiteOrderCreateSchema.safeParse(body);
 
@@ -68,6 +71,7 @@ export async function POST(request: Request) {
     data: {
       id: buildEntityId(),
       orderRef,
+      customerUserId: sessionUserId,
       customerName: data.customerName.trim(),
       customerPhone: data.customerPhone.trim(),
       customerLocation: data.customerLocation.trim(),

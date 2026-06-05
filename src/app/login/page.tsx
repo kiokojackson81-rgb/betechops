@@ -1,14 +1,20 @@
 export const dynamic = "force-dynamic";
 import React, { Suspense } from "react";
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import AgentLoginPage from "@/app/agents/AgentLoginPage";
 import CredentialLoginForm from "@/components/CredentialLoginForm";
 import { isAgentsHost } from "@/lib/agents/host";
+import { isOpsHost } from "@/lib/runtimeUrls";
 
 export default async function LoginPage() {
   const host = (await headers()).get("host");
   if (isAgentsHost(host)) {
     return <AgentLoginPage useRootPaths />;
+  }
+
+  if (!isOpsHost(host)) {
+    redirect("/login/phone");
   }
 
   return (

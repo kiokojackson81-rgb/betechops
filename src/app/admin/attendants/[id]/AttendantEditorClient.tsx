@@ -7,7 +7,7 @@ import getLandingPage from "@/lib/getLandingPage";
 type Attendant = {
   id: string;
   name: string | null;
-  email: string;
+  email: string | null;
   attendantCategory: string | null;
   categoryLabel?: string;
   isActive: boolean;
@@ -83,7 +83,7 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
     <div className="p-6">
       <h2 className="text-xl font-semibold mb-2">Edit attendant</h2>
       <div className="mb-4">Name: <strong>{attendant.name || "-"}</strong></div>
-      <div className="mb-4">Email: <strong>{attendant.email}</strong></div>
+      <div className="mb-4">Email: <strong>{attendant.email || "-"}</strong></div>
       <div className="mb-4">Category: <strong>{attendant.categoryLabel ?? (attendant.attendantCategory ?? "Unassigned")}</strong></div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">

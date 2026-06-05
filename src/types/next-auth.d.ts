@@ -1,7 +1,13 @@
 declare module "next-auth" {
   interface User {
-    // role added by our session callback: 'ADMIN' | 'ATTENDANT'
+    id?: string;
     role?: string;
+    phone?: string | null;
+    attendantCategory?: string | null;
+    isActive?: boolean;
+    isAgent?: boolean;
+    agentStatus?: string | null;
+    lastLoginMethod?: string | null;
   }
 
   interface Session {

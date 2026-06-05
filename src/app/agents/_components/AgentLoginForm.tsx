@@ -83,6 +83,13 @@ export default function AgentLoginForm({ useRootPaths = false }: AgentLoginFormP
         <div className="mt-2">6% commission on completed sales. Track customer orders, referrals, and M-Pesa withdrawals in one place.</div>
       </div>
 
+      <Link
+        href={`/login/phone?callbackUrl=${encodeURIComponent(callbackUrl)}`}
+        className="flex h-14 w-full items-center justify-center rounded-2xl border border-[#7a0000]/12 bg-[#fffaf4] px-4 text-base font-bold text-[#7a0000] shadow-[0_12px_24px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5"
+      >
+        Sign in with phone OTP
+      </Link>
+
       <button
         type="submit"
         disabled={busy}

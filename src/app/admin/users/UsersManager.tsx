@@ -7,7 +7,7 @@ import { showToast } from "@/lib/ui/toast";
 type UserLite = {
   id: string;
   name: string | null;
-  email: string;
+  email: string | null;
   role: string;
   attendantCategory: string;
   isActive: boolean;
@@ -114,7 +114,7 @@ export default function UsersManager({ initial }: { initial: UserLite[] }) {
                   <td className="px-4 py-3">
                     <div className="font-medium text-white">{row.name || "-"}</div>
                   </td>
-                  <td className="px-4 py-3 text-slate-300">{row.email}</td>
+                  <td className="px-4 py-3 text-slate-300">{row.email || "-"}</td>
                   <td className="px-4 py-3">{row.role}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-col gap-2">

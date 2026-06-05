@@ -53,7 +53,7 @@ type TimelineRow = {
   actor: {
     id: string;
     name: string | null;
-    email: string;
+    email: string | null;
   } | null;
 };
 
@@ -66,7 +66,7 @@ type AuditRow = {
   actor: {
     id: string;
     name: string | null;
-    email: string;
+    email: string | null;
   } | null;
 };
 
@@ -94,12 +94,12 @@ type DuplicateReviewRow = {
   primaryAgent: {
     id: string;
     name: string | null;
-    email: string;
+    email: string | null;
   };
   duplicateAgent: {
     id: string;
     name: string | null;
-    email: string;
+    email: string | null;
   };
 };
 
@@ -118,7 +118,7 @@ type OwnershipRow = {
   agent: {
     id: string;
     name: string | null;
-    email: string;
+    email: string | null;
   };
   firstSale: {
     id: string;

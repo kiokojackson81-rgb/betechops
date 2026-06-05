@@ -1,4 +1,45 @@
+const KENYAN_MOBILE_REGEX = /^\+2547\d{8}$/;
+
+export function normalizeKenyanPhone(input?: string) {
+  if (!input) return "";
+  let s = String(input).trim();
+  s = s.replace(/[^+0-9]/g, "");
+
+  if (/^0(7\d{8})$/.test(s)) {
+    return `+254${s.slice(1)}`;
+  }
+
+  if (/^(7\d{8})$/.test(s)) {
+    return `+254${s}`;
+  }
+
+  if (/^254(7\d{8})$/.test(s)) {
+    return `+${s}`;
+  }
+
+  if (KENYAN_MOBILE_REGEX.test(s)) {
+    return s;
+  }
+
+  return "";
+}
+
+export function isValidKenyanPhone(input?: string) {
+  return KENYAN_MOBILE_REGEX.test(normalizeKenyanPhone(input));
+}
+
+export function getKenyanPhoneVariants(input?: string) {
+  const normalized = normalizeKenyanPhone(input);
+  if (!normalized) return [];
+  const local = `0${normalized.slice(4)}`;
+  const short = normalized.slice(4);
+  const digits = normalized.slice(1);
+  return Array.from(new Set([normalized, local, short, digits]));
+}
+
 export function normalizePhone(input?: string) {
+  const kenyan = normalizeKenyanPhone(input);
+  if (kenyan) return kenyan;
   if (!input) return "";
   let s = String(input).trim();
   // remove spaces, dashes, parentheses
