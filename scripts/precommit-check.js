@@ -13,6 +13,7 @@ const IGNORED_DIRS = new Set([
   '.git',
   '.next',
   '.cache',
+  '.pnpm-store',
   '.vercel',
   'node_modules',
   '.worker-dist',
@@ -51,26 +52,18 @@ function hasConflictMarkers(text) {
   return re.test(text);
 }
 
-function walkFiles(rootDir) {
-  const out = [];
-  const stack = [rootDir];
-  while (stack.length) {
-    const current = stack.pop();
-    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
-      if (IGNORED_DIRS.has(entry.name)) continue;
-      const fullPath = path.join(current, entry.name);
-      if (entry.isDirectory()) {
-        stack.push(fullPath);
-        continue;
-      }
-      if (entry.isFile()) out.push(fullPath);
-    }
-  }
-  return out;
-}
-
 function listWorkingTreeFiles(rootDir) {
-  return walkFiles(rootDir).map((file) => path.relative(rootDir, file));
+  const tracked = run('git', ['ls-files', '--cached', '--others', '--exclude-standard'], { cwd: rootDir });
+  if (!tracked.ok) return [];
+
+  return tracked.out
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .filter((file) => {
+      const parts = file.split(/[\\/]+/);
+      return !parts.some((part) => IGNORED_DIRS.has(part));
+    });
 }
 
 function readWorkingTree(file, rootDir) {
