@@ -1,7 +1,7 @@
 const AT_SANDBOX_BASE = "https://api.sandbox.africastalking.com/version1";
 const AT_PRODUCTION_BASE = "https://api.africastalking.com/version1";
 
-function getAfricaTalkingConfig() {
+export function getAfricaTalkingConfig() {
   const username = String(process.env.AFRICASTALKING_USERNAME || "").trim();
   const apiKey = String(process.env.AFRICASTALKING_API_KEY || "").trim();
   if (!username || !apiKey) {
@@ -19,6 +19,7 @@ function getAfricaTalkingConfig() {
 export async function sendOtpSms(phone: string, code: string) {
   const { username, apiKey, baseUrl, environment } = getAfricaTalkingConfig();
   const message = `Betech verification code: ${code}. Valid for 5 minutes.`;
+  const requestUrl = `${baseUrl}/messaging`;
 
   const requestPayload = {
     username,
@@ -29,13 +30,15 @@ export async function sendOtpSms(phone: string, code: string) {
   console.info("[africastalking] preparing OTP SMS request", {
     username,
     environment,
-    baseUrl,
+    hasApiKey: Boolean(apiKey),
+    apiKeyLength: apiKey.length,
+    requestUrl,
     requestPayload,
   });
 
   const body = new URLSearchParams(requestPayload);
 
-  const response = await fetch(`${baseUrl}/messaging`, {
+  const response = await fetch(requestUrl, {
     method: "POST",
     headers: {
       apiKey,
@@ -46,37 +49,61 @@ export async function sendOtpSms(phone: string, code: string) {
     cache: "no-store",
   });
 
-  const payload = await response.json().catch(() => null);
+  const rawBody = await response.text();
+  let payload: unknown = null;
+  try {
+    payload = rawBody ? JSON.parse(rawBody) : null;
+  } catch {
+    payload = rawBody || null;
+  }
+
   console.info("[africastalking] OTP SMS response received", {
     username,
     environment,
+    hasApiKey: Boolean(apiKey),
+    apiKeyLength: apiKey.length,
+    requestUrl,
     status: response.status,
     ok: response.ok,
+    rawBody,
     payload,
   });
 
   if (!response.ok) {
+    const payloadObject = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : null;
     const detail =
-      payload?.SMSMessageData?.Message ||
-      payload?.errorMessage ||
-      payload?.message ||
+      (payloadObject?.SMSMessageData as { Message?: string } | undefined)?.Message ||
+      (payloadObject?.errorMessage as string | undefined) ||
+      (payloadObject?.message as string | undefined) ||
       `SMS provider error (${response.status})`;
     console.error("[africastalking] OTP SMS request failed", {
       username,
       environment,
+      hasApiKey: Boolean(apiKey),
+      apiKeyLength: apiKey.length,
+      requestUrl,
       status: response.status,
+      rawBody,
       payload,
       detail,
     });
     throw new Error(detail);
   }
 
-  const recipients = payload?.SMSMessageData?.Recipients;
+  const recipients =
+    payload && typeof payload === "object"
+      ? ((payload as { SMSMessageData?: { Recipients?: unknown } }).SMSMessageData?.Recipients as unknown)
+      : undefined;
+
   if (Array.isArray(recipients) && recipients[0]?.status && recipients[0].status !== "Success") {
     console.error("[africastalking] OTP SMS rejected by provider", {
       username,
       environment,
+      hasApiKey: Boolean(apiKey),
+      apiKeyLength: apiKey.length,
+      requestUrl,
       recipients,
+      rawBody,
       payload,
     });
     throw new Error(recipients[0]?.status || "Failed to send OTP SMS.");
