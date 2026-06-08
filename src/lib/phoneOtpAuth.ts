@@ -71,24 +71,41 @@ export async function createOtpCode(phoneInput: string) {
   const code = generateOtpCode();
   const expiresAt = new Date(Date.now() + OTP_TTL_MS);
 
-  await prisma.$transaction([
-    prisma.otpCode.updateMany({
-      where: {
-        phone: normalizedPhone,
-        used: false,
-      },
-      data: {
-        used: true,
-      },
-    }),
-    prisma.otpCode.create({
-      data: {
-        phone: normalizedPhone,
-        codeHash: hashOtpCode(normalizedPhone, code),
-        expiresAt,
-      },
-    }),
-  ]);
+  try {
+    const codeHash = hashOtpCode(normalizedPhone, code);
+    const [retired, created] = await prisma.$transaction([
+      prisma.otpCode.updateMany({
+        where: {
+          phone: normalizedPhone,
+          used: false,
+        },
+        data: {
+          used: true,
+        },
+      }),
+      prisma.otpCode.create({
+        data: {
+          phone: normalizedPhone,
+          codeHash,
+          expiresAt,
+        },
+      }),
+    ]);
+
+    console.info("[otp] OTP save success", {
+      phone: normalizedPhone,
+      expiresAt: expiresAt.toISOString(),
+      retiredCount: retired.count,
+      otpId: created.id,
+    });
+  } catch (error) {
+    console.error("[otp] OTP save failure", {
+      phone: normalizedPhone,
+      expiresAt: expiresAt.toISOString(),
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 
   return { normalizedPhone, code, expiresAt };
 }
@@ -334,4 +351,3 @@ export function readVerifiedPhoneToken(token: string) {
 
   return payload;
 }
-

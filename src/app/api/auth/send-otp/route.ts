@@ -32,18 +32,31 @@ function getClientKey(req: NextRequest, phone: string) {
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const phone = normalizeKenyanPhone(String(body?.phone || "").trim());
+  console.info("[send-otp] incoming request", {
+    phone,
+    hasBody: Boolean(body),
+  });
 
   if (!phone) {
+    console.warn("[send-otp] rejected invalid phone");
     return NextResponse.json({ ok: false, error: "Phone number is required." }, { status: 400 });
   }
 
   if (!allowRequest(getClientKey(req, phone))) {
+    console.warn("[send-otp] rate limited", { phone });
     return NextResponse.json({ ok: false, error: "Too many OTP requests. Please wait before trying again." }, { status: 429 });
   }
 
   try {
     const { normalizedPhone, code } = await createOtpCode(phone);
+    console.info("[send-otp] OTP persisted", {
+      phone: normalizedPhone,
+      code,
+    });
     await sendOtpSms(normalizedPhone, code);
+    console.info("[send-otp] OTP SMS sent successfully", {
+      phone: normalizedPhone,
+    });
 
     return NextResponse.json({
       ok: true,
@@ -51,6 +64,10 @@ export async function POST(req: NextRequest) {
       message: `We sent a verification code to ${normalizedPhone}.`,
     });
   } catch (error) {
+    console.error("[send-otp] failed", {
+      phone,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return NextResponse.json(
       {
         ok: false,
