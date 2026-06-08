@@ -87,6 +87,19 @@ model User {
   customerWebsiteOrders                WebsiteOrder[]                  @relation("customerWebsiteOrders")
 }
 
+model OtpCode {
+  id        String   @id @default(cuid())
+  phone     String
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([phone, createdAt])
+  @@index([phone, used, expiresAt])
+}
+
 model AgentSale {
   id                      String                 @id @default(cuid())
   agentId                 String

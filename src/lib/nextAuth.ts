@@ -5,7 +5,7 @@ import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { getAllowedAuthOrigins, isAllowedAuthOrigin } from "@/lib/runtimeUrls";
-import { resolveFirebasePhoneUser } from "@/lib/firebasePhoneAuth";
+import { readVerifiedPhoneToken } from "@/lib/phoneOtpAuth";
 import { Prisma } from "@prisma/client";
 
 type ExtendedToken = {
@@ -78,27 +78,42 @@ export const authOptions = {
       },
     }),
     CredentialsProvider({
-      id: "firebase-phone",
-      name: "Firebase Phone OTP",
+      id: "phone-otp",
+      name: "Phone OTP",
       credentials: {
-        idToken: { label: "Firebase ID Token", type: "text" },
+        verificationToken: { label: "Phone verification token", type: "text" },
       },
       async authorize(credentials) {
-        const idToken = String(credentials?.idToken || "").trim();
-        if (!idToken) return null;
+        const verificationToken = String(credentials?.verificationToken || "").trim();
+        if (!verificationToken) return null;
 
-        const resolved = await resolveFirebasePhoneUser(idToken);
+        const payload = readVerifiedPhoneToken(verificationToken);
+        const resolved = await prisma.user.findUnique({
+          where: { id: payload.userId },
+          include: {
+            agentProfile: {
+              select: {
+                id: true,
+                status: true,
+                phone: true,
+                email: true,
+              },
+            },
+          },
+        });
+        if (!resolved || !resolved.isActive) return null;
+
         return {
-          id: resolved.user.id,
-          email: resolved.user.email ?? undefined,
-          name: resolved.user.name,
-          role: resolved.user.role,
-          attendantCategory: resolved.user.attendantCategory ?? undefined,
-          isActive: resolved.user.isActive,
-          isAgent: Boolean(resolved.user.agentProfile),
-          agentStatus: resolved.user.agentProfile?.status ?? null,
-          phone: resolved.user.phone ?? undefined,
-          lastLoginMethod: resolved.user.lastLoginMethod ?? "firebase_phone",
+          id: resolved.id,
+          email: resolved.email ?? undefined,
+          name: resolved.name,
+          role: resolved.role,
+          attendantCategory: resolved.attendantCategory ?? undefined,
+          isActive: resolved.isActive,
+          isAgent: Boolean(resolved.agentProfile),
+          agentStatus: resolved.agentProfile?.status ?? null,
+          phone: resolved.phone ?? undefined,
+          lastLoginMethod: resolved.lastLoginMethod ?? "africastalking_otp",
         };
       },
     }),

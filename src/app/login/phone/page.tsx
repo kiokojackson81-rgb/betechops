@@ -1,27 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
-import { ConfirmationResult, RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
-import { getFirebaseClientAuth } from "@/lib/firebase";
 import { normalizeKenyanPhone } from "@/lib/phone";
-
-declare global {
-  interface Window {
-    recaptchaVerifier?: RecaptchaVerifier;
-  }
-}
 
 export default function PhoneLoginPage() {
   const [phoneInput, setPhoneInput] = useState("");
+  const [normalizedPhone, setNormalizedPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [callbackUrl, setCallbackUrl] = useState("/account");
-  const [confirmation, setConfirmation] = useState<ConfirmationResult | null>(null);
+  const [otpSent, setOtpSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
-  const recaptchaReadyRef = useRef(false);
 
   useEffect(() => {
     if (!cooldown) return;
@@ -34,28 +26,6 @@ export default function PhoneLoginPage() {
     setCallbackUrl(params.get("callbackUrl") || "/account");
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
-        delete window.recaptchaVerifier;
-      }
-    };
-  }, []);
-
-  function getRecaptchaVerifier() {
-    if (window.recaptchaVerifier) {
-      return window.recaptchaVerifier;
-    }
-
-    const verifier = new RecaptchaVerifier(getFirebaseClientAuth(), "firebase-phone-recaptcha", {
-      size: "invisible",
-    });
-    window.recaptchaVerifier = verifier;
-    recaptchaReadyRef.current = true;
-    return verifier;
-  }
-
   async function handleSendOtp(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -63,23 +33,27 @@ export default function PhoneLoginPage() {
     setMessage(null);
 
     try {
-      const normalizedPhone = normalizeKenyanPhone(phoneInput);
-      if (!normalizedPhone) {
+      const phone = normalizeKenyanPhone(phoneInput);
+      if (!phone) {
         throw new Error("Enter a valid Kenyan phone number like 0712345678.");
       }
 
-      const verifier = getRecaptchaVerifier();
-      const result = await signInWithPhoneNumber(getFirebaseClientAuth(), normalizedPhone, verifier);
-      setConfirmation(result);
-      setMessage(`We sent a one-time code to ${normalizedPhone}.`);
+      const response = await fetch("/api/auth/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error || "Unable to send OTP.");
+      }
+
+      setNormalizedPhone(payload.phone || phone);
+      setOtpSent(true);
+      setMessage(payload.message || `We sent a verification code to ${phone}.`);
       setCooldown(45);
     } catch (sendError) {
       setError(sendError instanceof Error ? sendError.message : "Unable to send OTP.");
-      if (window.recaptchaVerifier && recaptchaReadyRef.current) {
-        window.recaptchaVerifier.clear();
-        delete window.recaptchaVerifier;
-        recaptchaReadyRef.current = false;
-      }
     } finally {
       setBusy(false);
     }
@@ -87,33 +61,28 @@ export default function PhoneLoginPage() {
 
   async function handleVerifyOtp(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!confirmation) return;
     setBusy(true);
     setError(null);
 
     try {
-      const result = await confirmation.confirm(otp.trim());
-      const idToken = await result.user.getIdToken();
-      const verifyResponse = await fetch("/api/auth/firebase-phone", {
+      const response = await fetch("/api/auth/verify-otp", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ idToken }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: normalizedPhone || phoneInput, code: otp }),
       });
-      const payload = await verifyResponse.json().catch(() => null);
+      const payload = await response.json().catch(() => null);
 
-      if (!verifyResponse.ok || !payload?.ok) {
-        throw new Error(payload?.error || "Phone verification failed.");
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error || "OTP verification failed.");
       }
 
       const target = payload.requiresProfileCompletion
         ? `/account/complete-profile?next=${encodeURIComponent(payload.redirectTo || callbackUrl)}`
         : payload.redirectTo || callbackUrl;
 
-      const signInResult = await signIn("firebase-phone", {
+      const signInResult = await signIn("phone-otp", {
         redirect: false,
-        idToken,
+        verificationToken: payload.verificationToken,
         callbackUrl: target,
       });
 
@@ -133,7 +102,7 @@ export default function PhoneLoginPage() {
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(242,178,15,0.16),transparent_24%),linear-gradient(180deg,#fffdf8_0%,#fff3e5_100%)] px-4 py-8 text-slate-950 sm:px-6">
       <div className="mx-auto max-w-md">
         <div className="rounded-[2rem] border border-[#7a0000]/10 bg-white p-6 shadow-[0_28px_70px_rgba(122,0,0,0.10)] sm:p-7">
-          <div className="text-xs font-black uppercase tracking-[0.24em] text-[#7a0000]">Firebase phone OTP</div>
+          <div className="text-xs font-black uppercase tracking-[0.24em] text-[#7a0000]">Phone OTP</div>
           <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Sign in with your phone number</h1>
           <p className="mt-3 text-sm leading-6 text-slate-600">
             Enter your Kenyan mobile number. We will send an SMS code, verify it, and then connect your Betech customer or agent account to one shared identity.
@@ -142,7 +111,7 @@ export default function PhoneLoginPage() {
           {error ? <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
           {message ? <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{message}</div> : null}
 
-          {!confirmation ? (
+          {!otpSent ? (
             <form onSubmit={handleSendOtp} className="mt-6 space-y-4">
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-slate-700">Phone number</span>
@@ -193,7 +162,7 @@ export default function PhoneLoginPage() {
               <button
                 type="button"
                 onClick={() => {
-                  setConfirmation(null);
+                  setOtpSent(false);
                   setOtp("");
                   setMessage(null);
                   setError(null);
@@ -204,8 +173,6 @@ export default function PhoneLoginPage() {
               </button>
             </form>
           )}
-
-          <div id="firebase-phone-recaptcha" className="mt-4" />
         </div>
       </div>
     </div>
