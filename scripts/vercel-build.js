@@ -34,10 +34,17 @@ function resolveKnownRolledBackMigrations(envOverrides) {
 
 function runPrismaMigrateDeploy() {
   const directUrl = (process.env.DIRECT_URL || "").trim();
-  const envOverrides = directUrl ? { DATABASE_URL: directUrl } : {};
+  const databaseUrl = (process.env.DATABASE_URL || "").trim();
+  const effectiveDirectUrl = directUrl || databaseUrl;
+  const envOverrides = effectiveDirectUrl
+    ? {
+        DATABASE_URL: effectiveDirectUrl,
+        DIRECT_URL: effectiveDirectUrl,
+      }
+    : {};
 
   if (!directUrl) {
-    console.warn("[vercel-build] DIRECT_URL is not set. Prisma migrations may use the pooler and fail advisory locks.");
+    console.warn("[vercel-build] DIRECT_URL is not set. Falling back to DATABASE_URL for Prisma CLI. Set DIRECT_URL to a direct non-pooler connection for reliable migrations.");
   }
 
   try {
