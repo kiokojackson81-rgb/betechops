@@ -6,8 +6,26 @@ import ReceiptToolbar from "./ReceiptToolbar";
 
 export const dynamic = "force-dynamic";
 
-export default async function Page({ params }: { params: { id: string } }) {
-  const { id } = params;
+export default async function Page({ params }: { params: { id: string } | Promise<{ id: string }> }) {
+  let resolvedParams: { id: string } | null =
+    params && typeof (params as Promise<{ id: string }>).then === "function"
+      ? null
+      : (params as { id: string });
+  if (!resolvedParams && params && typeof (params as Promise<{ id: string }>).then === "function") {
+    try {
+      resolvedParams = await params;
+    } catch (error) {
+      console.error("[receipts print page] failed to resolve params", { error });
+      resolvedParams = { id: "" };
+    }
+  }
+
+  const id = resolvedParams?.id;
+  if (!id) {
+    console.error("[receipts print page] missing params.id", { params: resolvedParams ?? params ?? null });
+    return <div>Invalid receipt identifier</div>;
+  }
+
   const receipt = await prisma.receipt.findUnique({
     where: { id },
     include: {
