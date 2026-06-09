@@ -8,6 +8,14 @@ function runWithEnv(cmd, envOverrides) {
   execSync(cmd, { stdio: "inherit", env: { ...process.env, ...envOverrides } });
 }
 
+function getErrorText(error) {
+  const parts = [];
+  if (error?.stdout) parts.push(String(error.stdout));
+  if (error?.stderr) parts.push(String(error.stderr));
+  if (error?.message) parts.push(String(error.message));
+  return parts.join("\n");
+}
+
 function isVercel() {
   return process.env.VERCEL === "1";
 }
@@ -44,7 +52,8 @@ function runPrismaMigrateDeploy() {
     : {};
 
   if (!directUrl) {
-    console.warn("[vercel-build] DIRECT_URL is not set. Falling back to DATABASE_URL for Prisma CLI. Set DIRECT_URL to a direct non-pooler connection for reliable migrations.");
+    console.warn("[vercel-build] DIRECT_URL is not set. Skipping prisma migrate deploy to avoid Neon advisory-lock failures on pooled connections. Set DIRECT_URL to a direct non-pooler connection and run migrations separately.");
+    return;
   }
 
   try {
@@ -55,7 +64,16 @@ function runPrismaMigrateDeploy() {
   }
 
   resolveKnownRolledBackMigrations(envOverrides);
-  runWithEnv("npx prisma migrate deploy", envOverrides);
+  try {
+    runWithEnv("npx prisma migrate deploy", envOverrides);
+  } catch (error) {
+    const details = getErrorText(error);
+    if (details.includes("P1002") || details.includes("pg_advisory_lock")) {
+      console.warn("[vercel-build] prisma migrate deploy hit advisory-lock timeout. Continuing build so deployment is not blocked. Re-run migrations later using DIRECT_URL.");
+      return;
+    }
+    throw error;
+  }
 }
 
 try {
