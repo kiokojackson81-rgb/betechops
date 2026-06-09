@@ -19,6 +19,7 @@ import { getShopProducts } from "@/app/shop/shopApi";
 import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks, type ShopProduct } from "@/app/shop/shopData";
 import { SHOP_ALL_PRODUCTS_HREF, SHOP_HOME_HREF, getShopRequestQuoteHref } from "@/app/shop/storefrontPaths";
+import { prisma } from "@/lib/prisma";
 
 type AllProductsPageProps = {
   searchParams?: Promise<{
@@ -76,7 +77,72 @@ function filterByPrice(price: number, bucket?: string) {
   }
 }
 
-function sortProducts(products: ShopProduct[], sort?: string) {
+function normalizeProductKey(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+async function getPopularityByProduct(products: ShopProduct[]) {
+  const byOpsProductId = new Map<string, number>();
+  const byName = new Map<string, number>();
+  const opsProductIds = Array.from(
+    new Set(
+      products
+        .map((product) => String(product.opsProductId || "").trim())
+        .filter(Boolean),
+    ),
+  );
+
+  if (opsProductIds.length) {
+    const [posOrderItems, websiteOrderItems] = await Promise.all([
+      prisma.orderItem
+        .groupBy({
+          by: ["productId"],
+          where: { productId: { in: opsProductIds } },
+          _sum: { quantity: true },
+        })
+        .catch(() => []),
+      prisma.websiteOrderItem
+        .groupBy({
+          by: ["productId"],
+          where: { productId: { in: opsProductIds } },
+          _sum: { quantity: true },
+        })
+        .catch(() => []),
+    ]);
+
+    for (const row of posOrderItems) {
+      byOpsProductId.set(row.productId, Number(row._sum.quantity ?? 0));
+    }
+
+    for (const row of websiteOrderItems) {
+      if (!row.productId) continue;
+      byOpsProductId.set(row.productId, Number(byOpsProductId.get(row.productId) ?? 0) + Number(row._sum.quantity ?? 0));
+    }
+  }
+
+  const agentSales = await prisma.agentSale
+    .groupBy({
+      by: ["productName"],
+      _sum: { quantity: true },
+    })
+    .catch(() => [] as Array<{ productName: string; _sum: { quantity: number | null } }>);
+
+  for (const row of agentSales) {
+    const key = normalizeProductKey(String(row.productName || ""));
+    if (!key) continue;
+    byName.set(key, Number(byName.get(key) ?? 0) + Number(row._sum.quantity ?? 0));
+  }
+
+  return new Map(
+    products.map((product) => {
+      const opsScore = product.opsProductId ? Number(byOpsProductId.get(product.opsProductId) ?? 0) : 0;
+      const nameScore = Number(byName.get(normalizeProductKey(product.name)) ?? 0);
+      return [product.id, opsScore + nameScore];
+    }),
+  );
+}
+
+function sortProducts(products: ShopProduct[], popularityByProduct: Map<string, number>, sort?: string) {
   const items = [...products];
 
   switch (sort) {
@@ -86,9 +152,11 @@ function sortProducts(products: ShopProduct[], sort?: string) {
       return items.sort((a, b) => a.name.localeCompare(b.name));
     default:
       return items.sort((a, b) => {
+        const popularityDelta = Number(popularityByProduct.get(b.id) ?? 0) - Number(popularityByProduct.get(a.id) ?? 0);
+        if (popularityDelta !== 0) return popularityDelta;
         const aDiscount = (a.oldPrice || a.price) - a.price;
         const bDiscount = (b.oldPrice || b.price) - b.price;
-        return bDiscount - aDiscount;
+        return bDiscount - aDiscount || a.name.localeCompare(b.name);
       });
   }
 }
@@ -228,6 +296,7 @@ export default async function AllProductsPage({ searchParams }: AllProductsPageP
 
   const brandOptions = getBrandOptions(categoryScopedProducts);
   const warrantyOptions = getWarrantyOptions(categoryScopedProducts);
+  const popularityByProduct = await getPopularityByProduct(categoryScopedProducts);
 
   const filteredProducts = sortProducts(
     categoryScopedProducts.filter((product) => {
@@ -237,6 +306,7 @@ export default async function AllProductsPage({ searchParams }: AllProductsPageP
       if (filters.warranty && product.warranty !== filters.warranty) return false;
       return true;
     }),
+    popularityByProduct,
     filters.sort,
   );
 
