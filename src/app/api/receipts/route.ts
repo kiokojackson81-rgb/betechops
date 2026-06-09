@@ -32,8 +32,6 @@ const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" | null => {
 
 export const dynamic = "force-dynamic";
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 const IMMEDIATE_THRESHOLD = Number(process.env.IMMEDIATE_COMMISSION_THRESHOLD || 500000);
 
 export async function GET(req: NextRequest) {
@@ -1722,51 +1720,36 @@ export async function POST(req: NextRequest) {
       return { orderRef: orderUpsert.orderNumber, receiptId: receipt.id };
     });
 
-    let verifiedReceipt:
-      | {
-          id: string;
-          orderId: string;
-          receiptNumber: string | null;
-        }
-      | null = null;
-    for (const delayMs of [0, 150, 350, 700]) {
-      if (delayMs > 0) {
-        await sleep(delayMs);
-      }
-      verifiedReceipt = await prisma.receipt.findUnique({
+    prisma.receipt
+      .findUnique({
         where: { id: result.receiptId },
         select: { id: true, orderId: true, receiptNumber: true },
+      })
+      .then((verifiedReceipt) => {
+        if (!verifiedReceipt) {
+          console.warn("[receipts] post-save verification miss", {
+            requestId,
+            receiptId: result.receiptId,
+            orderRef: result.orderRef,
+            serial: serial ?? null,
+          });
+          return;
+        }
+        console.info("[receipts] post-save verification passed", {
+          requestId,
+          receiptId: verifiedReceipt.id,
+          orderId: verifiedReceipt.orderId,
+          receiptNumber: verifiedReceipt.receiptNumber ?? null,
+          orderRef: result.orderRef,
+        });
+      })
+      .catch((verifyErr) => {
+        console.warn("[receipts] post-save verification failed", {
+          requestId,
+          receiptId: result.receiptId,
+          error: verifyErr instanceof Error ? verifyErr.message : String(verifyErr),
+        });
       });
-      if (verifiedReceipt) break;
-    }
-
-    if (!verifiedReceipt) {
-      console.error("[receipts] save verification failed after transaction commit", {
-        requestId,
-        receiptId: result.receiptId,
-        orderRef: result.orderRef,
-        serial: serial ?? null,
-        host:
-          req.headers.get("x-forwarded-host") ??
-          req.headers.get("host") ??
-          req.headers.get("x-vercel-forwarded-host") ??
-          null,
-      });
-      return NextResponse.json(
-        {
-          error: "Receipt was created but could not be verified yet. Please retry opening it from receipt history.",
-        },
-        { status: 500 }
-      );
-    }
-
-    console.info("[receipts] save verification passed", {
-      requestId,
-      receiptId: verifiedReceipt.id,
-      orderId: verifiedReceipt.orderId,
-      receiptNumber: verifiedReceipt.receiptNumber ?? null,
-      orderRef: result.orderRef,
-    });
 
     // Recompute support commission ledger after committing the transaction
     if (attendantId) {

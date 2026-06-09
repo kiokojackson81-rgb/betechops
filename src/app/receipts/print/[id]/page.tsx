@@ -3,12 +3,21 @@ import renderReceiptTemplate from "@/app/templates/receiptTemplate";
 import { getBranding } from "@/lib/branding";
 import { buildReceiptSnapshot } from "@/app/receipts/buildSnapshot";
 import ReceiptToolbar from "./ReceiptToolbar";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export default async function Page({ params }: { params: { id: string } | Promise<{ id: string }> }) {
+export default async function Page({
+  params,
+  searchParams,
+}: {
+  params: { id: string } | Promise<{ id: string }>;
+  searchParams?:
+    | { [key: string]: string | string[] | undefined }
+    | Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   let resolvedParams: { id: string } | null =
     params && typeof (params as Promise<{ id: string }>).then === "function"
       ? null
@@ -27,6 +36,15 @@ export default async function Page({ params }: { params: { id: string } | Promis
     console.error("[receipts print page] missing params.id", { params: resolvedParams ?? params ?? null });
     return <div>Invalid receipt identifier</div>;
   }
+
+  const resolvedSearchParams =
+    searchParams && typeof (searchParams as Promise<{ [key: string]: string | string[] | undefined }>).then === "function"
+      ? await (searchParams as Promise<{ [key: string]: string | string[] | undefined }>)
+      : (searchParams as { [key: string]: string | string[] | undefined } | undefined);
+  const fallbackDraftRaw = resolvedSearchParams?.draft;
+  const fallbackDraft = Array.isArray(fallbackDraftRaw) ? fallbackDraftRaw[0] : fallbackDraftRaw;
+  const autoPrintRaw = resolvedSearchParams?.autoPrint;
+  const autoPrint = Array.isArray(autoPrintRaw) ? autoPrintRaw[0] : autoPrintRaw;
 
   let receipt: any = null;
   for (const delayMs of [0, 150, 350, 700]) {
@@ -50,6 +68,11 @@ export default async function Page({ params }: { params: { id: string } | Promis
   }
 
   if (!receipt) {
+    if (fallbackDraft) {
+      const params = new URLSearchParams({ draft: fallbackDraft });
+      if (autoPrint === "1") params.set("autoPrint", "1");
+      redirect(`/receipts/preview?${params.toString()}`);
+    }
     console.error("[receipts print page] receipt not found after retries", { id });
     return <div>Receipt not found</div>;
   }

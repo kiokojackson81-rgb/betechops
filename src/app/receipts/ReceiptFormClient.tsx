@@ -596,11 +596,24 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     }
   };
 
-  const openSavedReceiptWindow = (receiptId: string, autoPrint = false) => {
+  const openSavedReceiptWindow = (
+    receiptId: string,
+    draft: ReturnType<typeof buildDraft> | null,
+    autoPrint = false
+  ) => {
     try {
       const url = `/receipts/print/${encodeURIComponent(receiptId)}`;
       setLastPrintableUrl(url);
-      const target = autoPrint ? `${url}?autoPrint=1` : url;
+      const params = new URLSearchParams();
+      if (autoPrint) params.set("autoPrint", "1");
+      if (draft) {
+        const fallbackUrl = buildPreviewUrl(draft);
+        const draftParams = new URLSearchParams(fallbackUrl.split("?")[1] || "");
+        const fallbackDraft = draftParams.get("draft");
+        if (fallbackDraft) params.set("draft", fallbackDraft);
+      }
+      const query = params.toString();
+      const target = query ? `${url}?${query}` : url;
       const receiptWindow = window.open(target, "_blank");
       if (!receiptWindow) {
         throw new Error("Popup blocked");
@@ -610,37 +623,6 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       showToast(err instanceof Error ? err.message : "Failed to open saved receipt", "error");
       return false;
     }
-  };
-
-  const verifySavedReceipt = async (receiptId: string) => {
-    const encodedId = encodeURIComponent(receiptId);
-    for (const delayMs of [0, 150, 350, 700]) {
-      if (delayMs > 0) {
-        await new Promise((resolve) => window.setTimeout(resolve, delayMs));
-      }
-      try {
-        const res = await fetch(`/api/receipts/${encodedId}`, {
-          cache: "no-store",
-          credentials: "same-origin",
-        });
-        if (res.ok) return true;
-        if (res.status !== 404) {
-          console.error("[receipts][client] verification request failed", {
-            receiptId,
-            status: res.status,
-          });
-          return false;
-        }
-      } catch (error) {
-        console.error("[receipts][client] verification request crashed", {
-          receiptId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        return false;
-      }
-    }
-    console.error("[receipts][client] saved receipt missing after retries", { receiptId });
-    return false;
   };
 
   const togglePaymentMethodSelection = (method: "MPESA" | "CASH") => {
@@ -819,20 +801,22 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       }
 
       const receiptId = typeof data?.receiptId === "string" ? data.receiptId : "";
+      const draft = buildDraft(primaryPaymentMethod);
       if (!receiptId) {
-        return showToast("Receipt save response was missing a receipt ID", "error");
-      }
-
-      const verified = await verifySavedReceipt(receiptId);
-      if (!verified) {
-        return showToast("Receipt save could not be verified yet. Please check receipt history.", "error");
+        showToast("Saved receipt", "success");
+        onCreated?.(data);
+        const previewOpened = openPreviewWindow(draft, true);
+        if (previewOpened) {
+          resetForm();
+        }
+        return;
       }
 
       showToast("Saved receipt", "success");
       onCreated?.(data);
 
       // Open the persisted receipt route so printing/sending follows the normal POS receipt flow.
-      const receiptOpened = openSavedReceiptWindow(receiptId, true);
+      const receiptOpened = openSavedReceiptWindow(receiptId, draft, true);
       if (receiptOpened) {
         resetForm();
       }
