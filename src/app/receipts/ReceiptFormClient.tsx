@@ -596,6 +596,22 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     }
   };
 
+  const openSavedReceiptWindow = (receiptId: string, autoPrint = false) => {
+    try {
+      const url = `/receipts/print/${encodeURIComponent(receiptId)}`;
+      setLastPrintableUrl(url);
+      const target = autoPrint ? `${url}?autoPrint=1` : url;
+      const receiptWindow = window.open(target, "_blank");
+      if (!receiptWindow) {
+        throw new Error("Popup blocked");
+      }
+      return true;
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to open saved receipt", "error");
+      return false;
+    }
+  };
+
   const togglePaymentMethodSelection = (method: "MPESA" | "CASH") => {
     setSelectedPaymentMethods((prev) => {
       const isActive = prev[method];
@@ -774,9 +790,10 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       showToast("Saved receipt", "success");
       onCreated?.(data);
 
-      // Open preview and auto-print; if preview opens successfully reset form
-      const previewOpened = handlePreview(true);
-      if (previewOpened) {
+      // Open the persisted receipt route so printing/sending follows the normal POS receipt flow.
+      const receiptId = typeof data?.receiptId === "string" ? data.receiptId : "";
+      const receiptOpened = receiptId ? openSavedReceiptWindow(receiptId, true) : handlePreview(true);
+      if (receiptOpened) {
         resetForm();
       }
     } catch (err) {
