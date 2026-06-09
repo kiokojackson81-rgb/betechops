@@ -496,6 +496,24 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const showSplitPaymentInputs = selectedPaymentMethods.MPESA && selectedPaymentMethods.CASH;
   const numericCashPaid = toNumber(cashPaid);
   const numericMpesaPaid = toNumber(mpesaPaid);
+  const normalizedPaymentBreakdown = useMemo(() => {
+    if (!showSplitPaymentInputs) {
+      return {
+        cash: primaryPaymentMethod === "CASH" ? total : 0,
+        mpesa: primaryPaymentMethod === "MPESA" ? total : 0,
+      };
+    }
+
+    const safeCash = Math.max(0, Math.min(total, numericCashPaid));
+    const remainderAfterCash = Math.max(0, total - safeCash);
+    const safeMpesa = Math.max(0, Math.min(remainderAfterCash, numericMpesaPaid));
+    const shortfall = total - (safeCash + safeMpesa);
+
+    return {
+      cash: safeCash,
+      mpesa: Math.max(0, safeMpesa + shortfall),
+    };
+  }, [showSplitPaymentInputs, primaryPaymentMethod, total, numericCashPaid, numericMpesaPaid]);
 
   useEffect(() => {
     const cash = toNumber(cashPaid);
@@ -541,8 +559,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     customerType,
     deliveryStatus: customerType === "delivery" ? deliveryStatus : undefined,
     paymentBreakdown: {
-      cash: numericCashPaid,
-      mpesa: numericMpesaPaid,
+      cash: normalizedPaymentBreakdown.cash,
+      mpesa: normalizedPaymentBreakdown.mpesa,
     },
     paymentMethods: selectedPaymentMethods,
   });
@@ -681,10 +699,6 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       return showToast("Delivery marked as failed cannot be submitted", "error");
     }
     if (total <= 0) return showToast("Total must be greater than zero", "error");
-    if (showSplitPaymentInputs && Math.abs(numericCashPaid + numericMpesaPaid - total) > 0.1) {
-      return showToast("Cash + MPESA must equal the total", "error");
-    }
-
     const resolvedPaymentMethod = primaryPaymentMethod as "MPESA" | "CASH";
     const normalizedItems = items.map((it) => ({
       title: it.title.trim(),
@@ -732,8 +746,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         globalWarranty: globalWarranty || undefined,
         deposit: docType === "LAYAWAY" ? deposit : undefined,
         paymentBreakdown: {
-          cash: numericCashPaid,
-          mpesa: numericMpesaPaid,
+          cash: normalizedPaymentBreakdown.cash,
+          mpesa: normalizedPaymentBreakdown.mpesa,
         },
         metadata: websiteOrderId
           ? {

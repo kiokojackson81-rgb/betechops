@@ -1,4 +1,4 @@
-const KENYAN_MOBILE_REGEX = /^\+254(7|1)\d{8}$/;
+const KENYAN_MOBILE_REGEX = /^\+254(?:7|1)\d{8}$/;
 
 export function normalizeKenyanPhone(input?: string) {
   if (!input) return "";
@@ -49,7 +49,7 @@ export function normalizePhone(input?: string) {
     return "+254" + s.slice(1);
   }
   // if starts with Kenyan mobile prefix and 9 digits -> add +254
-  if (/^[71][0-9]{8}$/.test(s)) {
+  if (/^(?:7|1)[0-9]{8}$/.test(s)) {
     return "+254" + s;
   }
   // if starts with 254 and then 9 digits

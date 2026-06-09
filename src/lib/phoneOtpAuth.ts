@@ -65,7 +65,7 @@ export function generateOtpCode() {
 export async function createOtpCode(phoneInput: string) {
   const normalizedPhone = normalizeKenyanPhone(phoneInput);
   if (!normalizedPhone) {
-    throw new Error("Enter a valid Kenyan phone number like 0712345678.");
+    throw new Error("Enter a valid Kenyan phone number like 0712345678 or 0101234567.");
   }
 
   const code = generateOtpCode();
@@ -265,7 +265,7 @@ async function resolveVerifiedPhoneUser(normalizedPhone: string): Promise<PhoneA
 export async function verifyOtpCode(phoneInput: string, codeInput: string) {
   const normalizedPhone = normalizeKenyanPhone(phoneInput);
   if (!normalizedPhone) {
-    throw new Error("Enter a valid Kenyan phone number like 0712345678.");
+    throw new Error("Enter a valid Kenyan phone number like 0712345678 or 0101234567.");
   }
 
   const code = String(codeInput || "").trim();

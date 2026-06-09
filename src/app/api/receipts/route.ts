@@ -972,7 +972,8 @@ export async function POST(req: NextRequest) {
       // ensure products exist for items (prefer selected catalog products, otherwise create lightweight manual records)
       const createdItems: any[] = [];
       for (const it of items) {
-        const title = String(it.title || it.product || it.name || "Item").slice(0, 255);
+        const fullTitle = String(it.title || it.product || it.name || "Item").trim() || "Item";
+        const title = fullTitle.slice(0, 255);
         const selectedProductId = typeof it.productId === "string" ? it.productId.trim() : "";
         let product = selectedProductId
           ? await tx.product.findUnique({ where: { id: selectedProductId } })
@@ -1007,6 +1008,7 @@ export async function POST(req: NextRequest) {
           serial: itemSerial,
           warranty: itemWarranty,
           title,
+          fullTitle,
           costPrice: unitBuyingPrice,
           variableCost,
           commissionEnabled,
@@ -1346,7 +1348,7 @@ export async function POST(req: NextRequest) {
             });
 
             const supportReceiptItems = createdItems.map((it) => ({
-              productName: String(it.title || "Item").trim(),
+              productName: String(it.fullTitle || it.title || "Item").trim(),
               buyingPrice: it.variableCost
                 ? null
                 : Math.max(0, Math.round(Number(it.costPrice || 0) * Number(it.quantity || 1))),
@@ -1447,7 +1449,7 @@ export async function POST(req: NextRequest) {
           const normalizedSerial = canonicalReceiptNumber(serial);
           const receiptSellingTotal = Math.round(Number(total) || 0);
           const receiptItemsPayload = createdItems.map((it) => ({
-            productName: String(it.title || "Item").trim(),
+            productName: String(it.fullTitle || it.title || "Item").trim(),
             buyingPrice: it.variableCost
               ? 0
               : Math.max(0, Math.round(Number(it.costPrice || 0) * Number(it.quantity || 1))),
