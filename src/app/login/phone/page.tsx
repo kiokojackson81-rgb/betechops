@@ -35,7 +35,7 @@ export default function PhoneLoginPage() {
     try {
       const phone = normalizeKenyanPhone(phoneInput);
       if (!phone) {
-        throw new Error("Enter a valid Kenyan phone number like 0712345678.");
+        throw new Error("Enter a valid Kenyan phone number like 0712345678 or 0101234567.");
       }
 
       const response = await fetch("/api/auth/send-otp", {
@@ -119,12 +119,12 @@ export default function PhoneLoginPage() {
                   type="tel"
                   required
                   autoComplete="tel"
-                  placeholder="0712345678"
+                  placeholder="0712345678 or 0101234567"
                   value={phoneInput}
                   onChange={(event) => setPhoneInput(event.target.value)}
                   className="w-full rounded-2xl border border-[#ead8c4] bg-[#fffdf9] px-4 py-3 text-base text-slate-900 outline-none transition focus:border-[#7a0000]/35 focus:ring-2 focus:ring-[#f2b20f]/30"
                 />
-                <span className="mt-2 block text-xs text-slate-500">We currently support Kenyan mobile numbers in the +2547XXXXXXXX format.</span>
+                <span className="mt-2 block text-xs text-slate-500">We support Kenyan mobile numbers in formats like 0712345678, 0101234567, 2547XXXXXXXX, 2541XXXXXXXX, and +254...</span>
               </label>
 
               <button
