@@ -612,6 +612,37 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     }
   };
 
+  const verifySavedReceipt = async (receiptId: string) => {
+    const encodedId = encodeURIComponent(receiptId);
+    for (const delayMs of [0, 150, 350, 700]) {
+      if (delayMs > 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+      }
+      try {
+        const res = await fetch(`/api/receipts/${encodedId}`, {
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        if (res.ok) return true;
+        if (res.status !== 404) {
+          console.error("[receipts][client] verification request failed", {
+            receiptId,
+            status: res.status,
+          });
+          return false;
+        }
+      } catch (error) {
+        console.error("[receipts][client] verification request crashed", {
+          receiptId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return false;
+      }
+    }
+    console.error("[receipts][client] saved receipt missing after retries", { receiptId });
+    return false;
+  };
+
   const togglePaymentMethodSelection = (method: "MPESA" | "CASH") => {
     setSelectedPaymentMethods((prev) => {
       const isActive = prev[method];
@@ -787,12 +818,21 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         return showToast(data?.error || "Failed to save receipt", "error");
       }
 
+      const receiptId = typeof data?.receiptId === "string" ? data.receiptId : "";
+      if (!receiptId) {
+        return showToast("Receipt save response was missing a receipt ID", "error");
+      }
+
+      const verified = await verifySavedReceipt(receiptId);
+      if (!verified) {
+        return showToast("Receipt save could not be verified yet. Please check receipt history.", "error");
+      }
+
       showToast("Saved receipt", "success");
       onCreated?.(data);
 
       // Open the persisted receipt route so printing/sending follows the normal POS receipt flow.
-      const receiptId = typeof data?.receiptId === "string" ? data.receiptId : "";
-      const receiptOpened = receiptId ? openSavedReceiptWindow(receiptId, true) : handlePreview(true);
+      const receiptOpened = openSavedReceiptWindow(receiptId, true);
       if (receiptOpened) {
         resetForm();
       }

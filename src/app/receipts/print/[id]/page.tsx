@@ -6,6 +6,8 @@ import ReceiptToolbar from "./ReceiptToolbar";
 
 export const dynamic = "force-dynamic";
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export default async function Page({ params }: { params: { id: string } | Promise<{ id: string }> }) {
   let resolvedParams: { id: string } | null =
     params && typeof (params as Promise<{ id: string }>).then === "function"
@@ -26,21 +28,29 @@ export default async function Page({ params }: { params: { id: string } | Promis
     return <div>Invalid receipt identifier</div>;
   }
 
-  const receipt = await prisma.receipt.findUnique({
-    where: { id },
-    include: {
-      order: {
-        include: {
-          items: { include: { product: { select: { id: true, name: true } } } },
-          attendant: { select: { id: true, name: true } },
-          layawayPlan: { include: { payments: true } },
+  let receipt: any = null;
+  for (const delayMs of [0, 150, 350, 700]) {
+    if (delayMs > 0) {
+      await sleep(delayMs);
+    }
+    receipt = await prisma.receipt.findUnique({
+      where: { id },
+      include: {
+        order: {
+          include: {
+            items: { include: { product: { select: { id: true, name: true } } } },
+            attendant: { select: { id: true, name: true } },
+            layawayPlan: { include: { payments: true } },
+          },
         },
+        issuedBy: { select: { id: true, name: true, email: true } },
       },
-      issuedBy: { select: { id: true, name: true, email: true } },
-    },
-  });
+    });
+    if (receipt) break;
+  }
 
   if (!receipt) {
+    console.error("[receipts print page] receipt not found after retries", { id });
     return <div>Receipt not found</div>;
   }
 
