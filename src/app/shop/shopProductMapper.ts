@@ -73,6 +73,7 @@ export type ShopProductMappingWarning = {
 export type ShopProductRejectionReason =
   | "rejected: non-solar keyword/category"
   | "rejected: invalid price"
+  | "rejected: missing product image"
   | "rejected: missing required display name"
   | "rejected: inactive status";
 
@@ -422,6 +423,7 @@ export function isSolarShopEligibleProduct(input: {
   tags?: string[] | null;
   specs?: string[] | null;
   price?: number | null;
+  hasImage?: boolean | null;
   showInShop?: boolean | null;
   ecommerceVisible?: boolean | null;
   status?: string | null;
@@ -439,6 +441,10 @@ export function isSolarShopEligibleProduct(input: {
 
   if (!Number.isFinite(price) || price <= 0) {
     rejectionReasons.push("rejected: invalid price");
+  }
+
+  if (!input.hasImage) {
+    rejectionReasons.push("rejected: missing product image");
   }
 
   if (String(input.status || "ACTIVE").trim().toUpperCase() !== "ACTIVE") {
@@ -477,7 +483,7 @@ function buildMappingWarnings(
     warnings.push({ field: "brand", message: "Brand was not found explicitly in the ops catalogue name and fell back to Betech Solar." });
   }
   if (!(normalizeOptionalText(product.mainImageUrl) || normalizeOptionalText(product.shopImageUrl))) {
-    warnings.push({ field: "image", message: "No product image mapping was available, so a clean placeholder will be used." });
+    warnings.push({ field: "image", message: "No product image mapping was available, so the product is excluded from the customer-facing catalogue." });
   }
   if (
     !(
@@ -559,6 +565,7 @@ function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview 
     pickupDelayDays,
   });
   const warnings = buildMappingWarnings(product, category, price, brand, specs, warranty, categoryWarning);
+  const hasImage = Boolean(normalizeOptionalText(product.mainImageUrl) || normalizeOptionalText(product.shopImageUrl));
   const ecommerceVisible =
     typeof product.ecommerceVisible === "boolean"
       ? product.ecommerceVisible
@@ -576,6 +583,7 @@ function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview 
     ].filter(Boolean),
     specs,
     price,
+    hasImage,
     showInShop: product.showInShop,
     ecommerceVisible,
     status,
