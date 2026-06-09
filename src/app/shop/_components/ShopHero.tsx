@@ -99,7 +99,7 @@ export default function ShopHero({ categories, heroImageUrl = "/agents/hero-gene
                 </p>
                 <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
                   <Link href={SHOP_ALL_PRODUCTS_HREF} className={`${shopStyles.goldButton} min-h-[2.9rem] w-full`}>
-                    Shop Products
+                    See All Products
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                   <Link href={SHOP_REQUEST_QUOTE_HREF} className={`${shopStyles.secondaryButton} min-h-[2.9rem] w-full bg-white/92`}>
