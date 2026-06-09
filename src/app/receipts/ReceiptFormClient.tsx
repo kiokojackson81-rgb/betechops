@@ -629,50 +629,68 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     const query = receiptSerial.trim();
     if (!query) return "";
 
-    try {
-      const params = new URLSearchParams();
-      params.set("q", query);
-      params.set("onlyPos", "1");
-      params.set("page", "1");
-      params.set("size", "10");
-      const res = await fetch(`/api/receipts?${params.toString()}`, {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      if (!res.ok) {
-        console.error("[receipts][client] receipt lookup failed", {
-          receiptSerial: query,
-          status: res.status,
+    const attempts: Array<{ useGlobalScope: boolean }> = [{ useGlobalScope: true }, { useGlobalScope: false }];
+
+    for (const attempt of attempts) {
+      try {
+        const params = new URLSearchParams();
+        params.set("q", query);
+        params.set("onlyPos", "1");
+        params.set("page", "1");
+        params.set("size", "10");
+        if (staffId) {
+          params.set("attendantId", staffId);
+        }
+        if (attempt.useGlobalScope) {
+          params.set("scope", "global");
+        }
+        const res = await fetch(`/api/receipts?${params.toString()}`, {
+          cache: "no-store",
+          credentials: "same-origin",
         });
-        return "";
-      }
-      const data = await res.json().catch(() => ({}));
-      const rows = Array.isArray(data?.receipts) ? data.receipts : [];
-      const exact = rows.find((row: any) => {
-        const orderRef = typeof row?.orderRef === "string" ? row.orderRef.trim() : "";
-        const receiptNumber = typeof row?.receiptNumber === "string" ? row.receiptNumber.trim() : "";
-        return orderRef === query || receiptNumber === query;
-      });
-      const resolvedId = typeof exact?.id === "string" ? exact.id : "";
-      if (resolvedId) {
-        console.info("[receipts][client] resolved missing receiptId via lookup", {
-          receiptSerial: query,
-          receiptId: resolvedId,
+        if (!res.ok) {
+          console.error("[receipts][client] receipt lookup failed", {
+            receiptSerial: query,
+            status: res.status,
+            staffId,
+            scope: attempt.useGlobalScope ? "global" : "mine",
+          });
+          continue;
+        }
+        const data = await res.json().catch(() => ({}));
+        const rows = Array.isArray(data?.receipts) ? data.receipts : [];
+        const exact = rows.find((row: any) => {
+          const orderRef = typeof row?.orderRef === "string" ? row.orderRef.trim() : "";
+          const receiptNumber = typeof row?.receiptNumber === "string" ? row.receiptNumber.trim() : "";
+          return orderRef === query || receiptNumber === query;
         });
-      } else {
+        const resolvedId = typeof exact?.id === "string" ? exact.id : "";
+        if (resolvedId) {
+          console.info("[receipts][client] resolved missing receiptId via lookup", {
+            receiptSerial: query,
+            receiptId: resolvedId,
+            staffId,
+            scope: attempt.useGlobalScope ? "global" : "mine",
+          });
+          return resolvedId;
+        }
         console.warn("[receipts][client] receipt lookup found no exact serial match", {
           receiptSerial: query,
           returnedRows: rows.length,
+          staffId,
+          scope: attempt.useGlobalScope ? "global" : "mine",
+        });
+      } catch (error) {
+        console.error("[receipts][client] receipt lookup crashed", {
+          receiptSerial: query,
+          staffId,
+          scope: attempt.useGlobalScope ? "global" : "mine",
+          error: error instanceof Error ? error.message : String(error),
         });
       }
-      return resolvedId;
-    } catch (error) {
-      console.error("[receipts][client] receipt lookup crashed", {
-        receiptSerial: query,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return "";
     }
+
+    return "";
   };
 
   const togglePaymentMethodSelection = (method: "MPESA" | "CASH") => {
