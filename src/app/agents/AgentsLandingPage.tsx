@@ -82,13 +82,6 @@ const agentProducts = [
   { name: "Starmax 100W Full Kit", price: 13000, image: "/agents/products/starmax-100w-full-kit.jpeg", category: "Starter Kit" },
 ];
 
-const featuredCatalogueCategories = [
-  "solar-full-kits",
-  "solar-batteries",
-  "solar-inverters",
-  "solar-water-pumps",
-] as const;
-
 const benefits = [
   {
     title: "Trusted Brand",
@@ -449,9 +442,7 @@ export default async function AgentsLandingPage({ useRootPaths = false }: Agents
   const shopProducts = await getShopProducts();
   const popularityByProduct = await getPopularityByProduct(shopProducts);
   const popularProducts = sortAgentProducts(shopProducts, popularityByProduct, "featured").slice(0, 10);
-  const categoryShowcase = SHOP_CATEGORY_DEFINITIONS.filter((category) =>
-    featuredCatalogueCategories.includes(category.value as (typeof featuredCatalogueCategories)[number]),
-  ).map((category) => {
+  const categoryShowcase = SHOP_CATEGORY_DEFINITIONS.map((category) => {
     const categoryProducts = sortAgentProducts(
       shopProducts.filter(
         (product) => String(product.category || "").trim().toLowerCase() === category.label.toLowerCase(),
@@ -459,10 +450,14 @@ export default async function AgentsLandingPage({ useRootPaths = false }: Agents
       popularityByProduct,
       "featured",
     );
-    const topCommission = categoryProducts.reduce(
-      (maxValue, product) => Math.max(maxValue, getAgentCommissionValue(product)),
-      0,
+    const highestPricedProduct = categoryProducts.reduce<typeof categoryProducts[number] | null>(
+      (selected, product) => {
+        if (!selected) return product;
+        return Number(product.price ?? 0) > Number(selected.price ?? 0) ? product : selected;
+      },
+      null,
     );
+    const topCommission = highestPricedProduct ? getAgentPotentialCommissionValue(highestPricedProduct) : 0;
     const commissionReadyCount = categoryProducts.filter((product) => getAgentCommissionValue(product) > 0).length;
     return {
       ...category,
@@ -470,9 +465,9 @@ export default async function AgentsLandingPage({ useRootPaths = false }: Agents
       count: categoryProducts.length,
       commissionReadyCount,
       topCommission,
-      topProducts: categoryProducts.slice(0, 3),
+      highestPricedProductName: highestPricedProduct?.name ?? null,
     };
-  });
+  }).filter((category) => category.count > 0);
 
   return (
     <div className="scroll-smooth bg-[#fcfaf7] text-slate-950">
@@ -1045,13 +1040,7 @@ export default async function AgentsLandingPage({ useRootPaths = false }: Agents
                       <div className="rounded-2xl border border-[#f2b20f]/20 bg-[#fff8e8] px-3 py-3">
                         <div className="text-[10px] font-black uppercase tracking-[0.14em] text-[#7a0000]">Top commission</div>
                         <div className="mt-1 text-lg font-black text-slate-950">
-                          {formatCurrency(
-                            category.topCommission > 0
-                              ? category.topCommission
-                              : category.topProducts[0]
-                                ? getAgentPotentialCommissionValue(category.topProducts[0])
-                                : 0,
-                          )}
+                          {formatCurrency(category.topCommission)}
                         </div>
                       </div>
                     </div>
@@ -1063,27 +1052,6 @@ export default async function AgentsLandingPage({ useRootPaths = false }: Agents
                       <div className="mt-1 text-xl font-black text-slate-950">{category.commissionReadyCount}</div>
                     </div>
 
-                    <div className="mt-4">
-                      <div className="text-[10px] font-black uppercase tracking-[0.14em] text-[#7a0000]">
-                        Most popular in this category
-                      </div>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {category.topProducts.length ? (
-                          category.topProducts.map((product) => (
-                            <span
-                              key={product.id}
-                              className="rounded-full border border-[#7a0000]/10 bg-[#fffaf2] px-3 py-1 text-xs font-semibold text-slate-700"
-                            >
-                              {product.name}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-500">
-                            Products syncing from the live catalogue
-                          </span>
-                        )}
-                      </div>
-                    </div>
                   </div>
                 </Link>
               ))}
