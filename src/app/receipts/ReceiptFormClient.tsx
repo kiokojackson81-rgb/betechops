@@ -70,7 +70,7 @@ const isBlankReceiptRow = (row: ItemRow) =>
 
 
 type ReceiptFormProps = {
-  onCreated?: (receipt: any) => void;
+  onCreated?: (receipt: any, context?: { staffId: string | null; serial: string; receiptId: string | null }) => void;
   showHero?: boolean;
 };
 
@@ -629,7 +629,12 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     const query = receiptSerial.trim();
     if (!query) return "";
 
-    const attempts: Array<{ useGlobalScope: boolean }> = [{ useGlobalScope: true }, { useGlobalScope: false }];
+    const attempts: Array<{ useGlobalScope: boolean; attendantFilter?: string | null }> = [
+      { useGlobalScope: true, attendantFilter: staffId },
+      { useGlobalScope: true, attendantFilter: null },
+      { useGlobalScope: false, attendantFilter: staffId },
+      { useGlobalScope: false, attendantFilter: null },
+    ];
 
     for (const attempt of attempts) {
       try {
@@ -638,8 +643,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         params.set("onlyPos", "1");
         params.set("page", "1");
         params.set("size", "10");
-        if (staffId) {
-          params.set("attendantId", staffId);
+        if (attempt.attendantFilter) {
+          params.set("attendantId", attempt.attendantFilter);
         }
         if (attempt.useGlobalScope) {
           params.set("scope", "global");
@@ -652,7 +657,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           console.error("[receipts][client] receipt lookup failed", {
             receiptSerial: query,
             status: res.status,
-            staffId,
+            staffId: attempt.attendantFilter ?? null,
             scope: attempt.useGlobalScope ? "global" : "mine",
           });
           continue;
@@ -669,7 +674,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           console.info("[receipts][client] resolved missing receiptId via lookup", {
             receiptSerial: query,
             receiptId: resolvedId,
-            staffId,
+            staffId: attempt.attendantFilter ?? null,
             scope: attempt.useGlobalScope ? "global" : "mine",
           });
           return resolvedId;
@@ -677,13 +682,13 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         console.warn("[receipts][client] receipt lookup found no exact serial match", {
           receiptSerial: query,
           returnedRows: rows.length,
-          staffId,
+          staffId: attempt.attendantFilter ?? null,
           scope: attempt.useGlobalScope ? "global" : "mine",
         });
       } catch (error) {
         console.error("[receipts][client] receipt lookup crashed", {
           receiptSerial: query,
-          staffId,
+          staffId: attempt.attendantFilter ?? null,
           scope: attempt.useGlobalScope ? "global" : "mine",
           error: error instanceof Error ? error.message : String(error),
         });
@@ -874,14 +879,17 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         receiptId = await lookupSavedReceiptId(serial);
       }
 
-      showToast("Saved receipt", "success");
-      onCreated?.(data);
+      if (!receiptId) {
+        showToast("Receipt was created but could not be verified yet. Please retry opening it from receipt history.", "error");
+        onCreated?.(data, { staffId, serial, receiptId: null });
+        return;
+      }
 
       // Open the persisted receipt route so printing/sending follows the normal POS receipt flow.
-      const receiptOpened = receiptId
-        ? openSavedReceiptWindow(receiptId, draft, true)
-        : openPreviewWindow(draft, true);
+      const receiptOpened = openSavedReceiptWindow(receiptId, draft, true);
       if (receiptOpened) {
+        showToast("Saved receipt", "success");
+        onCreated?.({ ...data, receiptId }, { staffId, serial, receiptId });
         resetForm();
       }
     } catch (err) {

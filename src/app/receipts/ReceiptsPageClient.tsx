@@ -64,7 +64,17 @@ export default function ReceiptsPageClient({
     }
   };
 
-  const handleCreated = () => {
+  const handleCreated = (
+    _receipt?: any,
+    context?: { staffId: string | null; serial: string; receiptId: string | null }
+  ) => {
+    if (context?.staffId) {
+      setAttendantId(context.staffId);
+      setHistorySearch(context.serial);
+      setView("list");
+      setTimeout(() => scrollIntoView(listRef), 100);
+      return;
+    }
     setView("create");
     setTimeout(() => scrollIntoView(formRef), 100);
   };

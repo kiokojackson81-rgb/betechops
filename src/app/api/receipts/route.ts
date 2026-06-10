@@ -1634,47 +1634,91 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // Optionally release immediately if threshold met (skip for POD receipts)
+      // Optionally release immediately if threshold met (skip for POD receipts).
+      // This must never block receipt persistence: if commission release bookkeeping fails,
+      // keep the receipt and log the failure for follow-up repair.
       if (!isPodDelivery && Number(total) >= IMMEDIATE_THRESHOLD && attendantId) {
-        const { period, tiers } = await getOrCreateCommissionPeriod(new Date());
-        const totalsAgg = await tx.order.aggregate({
-          where: { attendantId, createdAt: { gte: period.startDate, lte: period.endDate }, status: "COMPLETED" },
-          _sum: { totalAmount: true, paidAmount: true },
-        });
-        const totalSales = Number(totalsAgg._sum.totalAmount ?? 0);
-        const totalProfit = totalSales; // fallback; real profit calc omitted here
-        const salesCommission = computeSalesCommissionFromTiers(totalSales, totalProfit, tiers as any);
-        await tx.commissionRecord.update({
-          where: { id: provisional.id },
-          data: { amount: String(salesCommission), status: "RELEASED", releasedAt: new Date(), periodId: period.id },
-        });
-        // Upsert attendant balance to reflect immediate release
-        if (attendantId && tx.balance) {
-          try {
-            await tx.balance.upsert({ where: { userId: attendantId }, create: { userId: attendantId, available: Number(salesCommission), pending: 0 }, update: { available: { increment: Number(salesCommission) } as any } });
-          } catch (e) {
-            // ignore balance upsert in partial mocks
+        try {
+          console.info("[receipts] immediate threshold branch start", {
+            orderNumber: orderUpsert.orderNumber,
+            receiptId: receipt?.id ?? null,
+            attendantId,
+            total,
+            threshold: IMMEDIATE_THRESHOLD,
+          });
+          const { period, tiers } = await getOrCreateCommissionPeriod(new Date());
+          const totalsAgg = await tx.order.aggregate({
+            where: { attendantId, createdAt: { gte: period.startDate, lte: period.endDate }, status: "COMPLETED" },
+            _sum: { totalAmount: true, paidAmount: true },
+          });
+          const totalSales = Number(totalsAgg._sum.totalAmount ?? 0);
+          const totalProfit = totalSales; // fallback; real profit calc omitted here
+          const salesCommission = computeSalesCommissionFromTiers(totalSales, totalProfit, tiers as any);
+          console.info("[receipts] immediate threshold commission computed", {
+            orderNumber: orderUpsert.orderNumber,
+            receiptId: receipt?.id ?? null,
+            attendantId,
+            totalSales,
+            totalProfit,
+            salesCommission,
+            periodId: period.id,
+          });
+          await tx.commissionRecord.update({
+            where: { id: provisional.id },
+            data: { amount: String(salesCommission), status: "RELEASED", releasedAt: new Date(), periodId: period.id },
+          });
+          // Upsert attendant balance to reflect immediate release
+          if (attendantId && tx.balance) {
+            try {
+              await tx.balance.upsert({
+                where: { userId: attendantId },
+                create: { userId: attendantId, available: Number(salesCommission), pending: 0 },
+                update: { available: { increment: Number(salesCommission) } as any },
+              });
+            } catch (e) {
+              console.error("[receipts] failed to upsert balance during immediate threshold release", {
+                attendantId,
+                salesCommission,
+                error: e instanceof Error ? e.message : String(e),
+              });
+            }
           }
-        }
 
-        // Create a CommissionLedger entry for audit (best-effort)
-        if (tx.commissionLedger) {
-          try {
-            await tx.commissionLedger.create({
-              data: {
-                userId: attendantId,
+          // Create a CommissionLedger entry for audit (best-effort)
+          if (tx.commissionLedger) {
+            try {
+              await tx.commissionLedger.create({
+                data: {
+                  userId: attendantId,
+                  periodStart: period.startDate,
+                  periodEnd: period.endDate,
+                  grossCommission: Number(salesCommission),
+                  penalties: 0,
+                  netCommission: Number(salesCommission),
+                  commissionTotal: Number(salesCommission),
+                  detail: { reason: "Immediate release on threshold" },
+                },
+              });
+            } catch (e) {
+              console.error("[receipts] failed to create CommissionLedger entry during immediate threshold release", {
+                attendantId,
                 periodStart: period.startDate,
                 periodEnd: period.endDate,
-                grossCommission: Number(salesCommission),
-                penalties: 0,
-                netCommission: Number(salesCommission),
-                commissionTotal: Number(salesCommission),
-                detail: { reason: "Immediate release on threshold" },
-              },
-            });
-          } catch (e) {
-            console.error("Failed to create CommissionLedger entry", e);
+                salesCommission,
+                error: e instanceof Error ? e.message : String(e),
+              });
+            }
           }
+        } catch (thresholdErr) {
+          console.error("[receipts] immediate threshold release failed but receipt will still be saved", {
+            orderNumber: orderUpsert.orderNumber,
+            receiptId: receipt?.id ?? null,
+            attendantId,
+            total,
+            threshold: IMMEDIATE_THRESHOLD,
+            error: thresholdErr instanceof Error ? thresholdErr.message : String(thresholdErr),
+            stack: thresholdErr instanceof Error ? thresholdErr.stack : undefined,
+          });
         }
       }
 
