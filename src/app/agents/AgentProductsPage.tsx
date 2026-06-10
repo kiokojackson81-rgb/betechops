@@ -24,6 +24,7 @@ import {
 } from "@/app/shop/shopCatalogConfig";
 import { getShopProducts } from "@/app/shop/shopApi";
 import { agentPath } from "@/lib/agents/host";
+import { requireAgentSession } from "@/lib/agents/auth";
 
 type AgentProductsPageProps = {
   searchParams?: Promise<{
@@ -120,6 +121,7 @@ export default async function AgentProductsPage({
   useRootPaths = false,
 }: AgentProductsPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const agentSession = await requireAgentSession();
   const filters: AgentListingFilters = {
     category: resolvedSearchParams?.category || "",
     sub: resolvedSearchParams?.sub || "",
@@ -131,6 +133,9 @@ export default async function AgentProductsPage({
   };
 
   const registerHref = agentPath("/register", useRootPaths);
+  const loginHref = agentPath("/login", useRootPaths);
+  const dashboardHref = agentPath("/dashboard", useRootPaths);
+  const commissionHref = agentPath("/withdrawals", useRootPaths);
   const activeCategory = getShopCategoryDefinition(filters.category || "");
   const activeSubcategory = activeCategory ? getShopSubcategoryDefinition(activeCategory.value, filters.sub || "") : null;
   const products = await getShopProducts({
@@ -206,6 +211,27 @@ export default async function AgentProductsPage({
               <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 sm:text-[15px]">
                 This agent catalogue reflects the same live products from betech.co.ke, but surfaces your earning opportunity on every product so you can pitch with confidence.
               </p>
+              <div className="mt-4 flex flex-wrap gap-2.5">
+                {agentSession ? (
+                  <>
+                    <Link href={dashboardHref} className={shopStyles.secondaryButton}>
+                      Dashboard
+                    </Link>
+                    <Link href={commissionHref} className={shopStyles.primaryButton}>
+                      Your commission
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <Link href={loginHref} className={shopStyles.secondaryButton}>
+                      Log in
+                    </Link>
+                    <Link href={registerHref} className={shopStyles.primaryButton}>
+                      Start earning
+                    </Link>
+                  </>
+                )}
+              </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-[20px] border border-[#7a0000]/10 bg-[#fffaf2] px-4 py-3">

@@ -20,6 +20,7 @@ import { getShopProductBySlug, getShopProductBySlugOrOpsProductId, getShopProduc
 import { buildProductJsonLd, buildShopMetadata } from "@/app/shop/shopMetadata";
 import type { ShopProduct } from "@/app/shop/shopData";
 import { agentPath, isAgentsHost } from "@/lib/agents/host";
+import { requireAgentSession } from "@/lib/agents/auth";
 
 function normalizeProductText(value: string) {
   return value
@@ -169,6 +170,7 @@ export default async function AgentProductDetailPage({
 }) {
   const host = (await headers()).get("host");
   const useRootPaths = isAgentsHost(host);
+  const agentSession = await requireAgentSession();
   const { slug } = await params;
   const resolvedSearchParams = await Promise.resolve(searchParams ?? {});
   const product = await getShopProductBySlugOrOpsProductId(slug, resolvedSearchParams.opsProductId);
@@ -200,6 +202,10 @@ export default async function AgentProductDetailPage({
   const requiresApproval = productCommissionRequiresApproval(product);
   const commissionPercent =
     product.price > 0 && displayCommissionAmount > 0 ? Math.round((displayCommissionAmount / product.price) * 100) : 0;
+  const loginHref = agentPath("/login", useRootPaths);
+  const registerHref = agentPath("/register", useRootPaths);
+  const dashboardHref = agentPath("/dashboard", useRootPaths);
+  const commissionHref = agentPath("/withdrawals", useRootPaths);
   const supportItems = [
     {
       icon: <CircleDollarSign className="h-4 w-4" />,
@@ -235,18 +241,37 @@ export default async function AgentProductDetailPage({
     <div className={shopStyles.page}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }} />
       <header className="sticky top-0 z-40 border-b border-[#7a0000]/10 bg-white/90 backdrop-blur-xl">
-          <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
-            <div>
-              <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">Agent Product View</div>
-              <div className="text-lg font-black text-slate-950">Betech Agent Catalogue</div>
-            </div>
-            <div className="flex flex-wrap gap-2">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+          <div>
+            <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">Agent Product View</div>
+            <div className="text-lg font-black text-slate-950">Betech Agent Catalogue</div>
+          </div>
+          <div className="flex flex-wrap gap-2">
             <Link href={agentPath("/", useRootPaths)} className={shopStyles.secondaryButton}>
               Agent Home
             </Link>
-            <Link href={getAgentProductsHref(useRootPaths)} className={shopStyles.primaryButton}>
+            <Link href={getAgentProductsHref(useRootPaths)} className={shopStyles.secondaryButton}>
               All Products
             </Link>
+            {agentSession ? (
+              <>
+                <Link href={dashboardHref} className={shopStyles.secondaryButton}>
+                  Dashboard
+                </Link>
+                <Link href={commissionHref} className={shopStyles.primaryButton}>
+                  Your commission
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link href={loginHref} className={shopStyles.secondaryButton}>
+                  Log in
+                </Link>
+                <Link href={registerHref} className={shopStyles.primaryButton}>
+                  Start earning
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -340,8 +365,8 @@ export default async function AgentProductDetailPage({
                     </div>
                     <AgentProductDetailActions
                       product={product}
-                      loginHref={agentPath("/login", useRootPaths)}
-                      registerHref={agentPath("/register", useRootPaths)}
+                      loginHref={loginHref}
+                      registerHref={registerHref}
                     />
                   </div>
 
