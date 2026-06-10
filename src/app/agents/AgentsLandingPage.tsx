@@ -21,7 +21,12 @@ import {
 } from "lucide-react";
 import AgentCatalogueProductCard from "@/app/agents/_components/AgentCatalogueProductCard";
 import AgentMobileProductCarousel from "@/app/agents/_components/AgentMobileProductCarousel";
-import { getAgentCommissionValue, getPopularityByProduct, sortAgentProducts } from "@/app/agents/agentCatalogue";
+import {
+  getAgentCommissionValue,
+  getAgentPotentialCommissionValue,
+  getPopularityByProduct,
+  sortAgentProducts,
+} from "@/app/agents/agentCatalogue";
 import AgentWhatsAppFloat from "@/app/agents/_components/AgentWhatsAppFloat";
 import AnimatedCount from "@/app/agents/_components/AnimatedCount";
 import { SHOP_CATEGORY_DEFINITIONS } from "@/app/shop/shopCatalogConfig";
@@ -1040,7 +1045,13 @@ export default async function AgentsLandingPage({ useRootPaths = false }: Agents
                       <div className="rounded-2xl border border-[#f2b20f]/20 bg-[#fff8e8] px-3 py-3">
                         <div className="text-[10px] font-black uppercase tracking-[0.14em] text-[#7a0000]">Top commission</div>
                         <div className="mt-1 text-lg font-black text-slate-950">
-                          {category.topCommission > 0 ? formatCurrency(category.topCommission) : "Pending"}
+                          {formatCurrency(
+                            category.topCommission > 0
+                              ? category.topCommission
+                              : category.topProducts[0]
+                                ? getAgentPotentialCommissionValue(category.topProducts[0])
+                                : 0,
+                          )}
                         </div>
                       </div>
                     </div>

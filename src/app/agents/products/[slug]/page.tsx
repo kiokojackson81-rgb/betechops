@@ -6,7 +6,11 @@ import { BadgeCheck, CircleDollarSign, CreditCard, Headphones, MapPin, Truck } f
 import AgentCatalogueProductCard from "@/app/agents/_components/AgentCatalogueProductCard";
 import AgentProductDetailActions from "@/app/agents/_components/AgentProductDetailActions";
 import AgentWhatsAppFloat from "@/app/agents/_components/AgentWhatsAppFloat";
-import { getAgentCommissionValue, productCommissionRequiresApproval } from "@/app/agents/agentCatalogue";
+import {
+  getAgentCommissionValue,
+  getAgentPotentialCommissionValue,
+  productCommissionRequiresApproval,
+} from "@/app/agents/agentCatalogue";
 import { getAgentCategoryHref, getAgentProductsHref } from "@/app/agents/storefrontPaths";
 import ShopBreadcrumbs from "@/app/shop/_components/ShopBreadcrumbs";
 import ShopProductGallery from "@/app/shop/_components/ShopProductGallery";
@@ -192,9 +196,10 @@ export default async function AgentProductDetailPage({
     quote_only: "Request quote",
   } as const;
   const commissionAmount = getAgentCommissionValue(product);
+  const displayCommissionAmount = getAgentPotentialCommissionValue(product);
   const requiresApproval = productCommissionRequiresApproval(product);
   const commissionPercent =
-    product.price > 0 && commissionAmount > 0 ? Math.round((commissionAmount / product.price) * 100) : 0;
+    product.price > 0 && displayCommissionAmount > 0 ? Math.round((displayCommissionAmount / product.price) * 100) : 0;
   const supportItems = [
     {
       icon: <CircleDollarSign className="h-4 w-4" />,
@@ -202,7 +207,7 @@ export default async function AgentProductDetailPage({
       copy:
         commissionAmount > 0
           ? `Refer this product and track up to ${formatCurrency(commissionAmount)} from the confirmed sale price.`
-          : "This product is in the live catalogue, but commission is still pending setup or approval.",
+          : `Estimated potential commission is ${formatCurrency(displayCommissionAmount)} based on 6% of the visible sale price.`,
     },
     {
       icon: <Truck className="h-4 w-4" />,
@@ -314,12 +319,12 @@ export default async function AgentProductDetailPage({
                       <div>
                         <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#0f9d58]">Your commission on this product</div>
                         <div className="mt-2 text-3xl font-black text-slate-950">
-                          {commissionAmount > 0 ? formatCurrency(commissionAmount) : "Pending"}
+                          {formatCurrency(displayCommissionAmount)}
                         </div>
                         <div className="mt-1 text-sm leading-6 text-slate-600">
                           {commissionAmount > 0
                             ? `${commissionPercent}% of the visible sale price.`
-                            : "Commission will appear here once enabled for this product."}
+                            : `Potential commission estimate at 6% of price.`}
                         </div>
                       </div>
                       <div className="rounded-2xl border border-[#7a0000]/10 bg-white px-4 py-3">

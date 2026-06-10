@@ -3,7 +3,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, BadgeCheck, CircleDollarSign, MessageCircle } from "lucide-react";
-import { getAgentCommissionValue, productCommissionRequiresApproval } from "@/app/agents/agentCatalogueShared";
+import {
+  getAgentCommissionValue,
+  getAgentPotentialCommissionValue,
+  productCommissionRequiresApproval,
+} from "@/app/agents/agentCatalogueShared";
 import type { ShopProduct } from "@/app/shop/shopData";
 import { formatCurrency } from "@/app/shop/_components/shopStyles";
 import { getAgentProductHref } from "@/app/agents/storefrontPaths";
@@ -28,6 +32,7 @@ export default function AgentCatalogueProductCard({
       ? Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100)
       : null;
   const commissionAmount = getAgentCommissionValue(product);
+  const displayCommissionAmount = getAgentPotentialCommissionValue(product);
   const requiresApproval = productCommissionRequiresApproval(product);
   const whatsappHref = `https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent(
     `Hello Betech Solar, I want to refer ${product.name} and need agent support.`,
@@ -76,7 +81,7 @@ export default function AgentCatalogueProductCard({
               Commission
             </div>
             <div className="mt-1 text-lg font-black text-slate-950">
-              {commissionAmount > 0 ? formatCurrency(commissionAmount) : "Pending"}
+              {formatCurrency(displayCommissionAmount)}
             </div>
           </div>
         </div>

@@ -1,7 +1,15 @@
 import type { ShopProduct } from "@/app/shop/shopData";
-import { getAgentCommissionValue, productCommissionRequiresApproval } from "@/app/agents/agentCatalogueShared";
+import {
+  getAgentCommissionValue,
+  getAgentPotentialCommissionValue,
+  productCommissionRequiresApproval,
+} from "@/app/agents/agentCatalogueShared";
 import { prisma } from "@/lib/prisma";
-export { getAgentCommissionValue, productCommissionRequiresApproval } from "@/app/agents/agentCatalogueShared";
+export {
+  getAgentCommissionValue,
+  getAgentPotentialCommissionValue,
+  productCommissionRequiresApproval,
+} from "@/app/agents/agentCatalogueShared";
 
 export const AGENT_SORT_OPTIONS = [
   { value: "featured", label: "Most popular" },
