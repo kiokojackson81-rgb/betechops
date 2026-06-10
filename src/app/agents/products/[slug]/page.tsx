@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BadgeCheck, CircleDollarSign, CreditCard, Headphones, MapPin, Truck } from "lucide-react";
@@ -14,7 +15,7 @@ import { getProductAvailabilityBadge, getProductAvailabilityMessage, getProductC
 import { getShopProductBySlug, getShopProductBySlugOrOpsProductId, getShopProducts } from "@/app/shop/shopApi";
 import { buildProductJsonLd, buildShopMetadata } from "@/app/shop/shopMetadata";
 import type { ShopProduct } from "@/app/shop/shopData";
-import { agentPath } from "@/lib/agents/host";
+import { agentPath, isAgentsHost } from "@/lib/agents/host";
 
 function normalizeProductText(value: string) {
   return value
@@ -162,6 +163,8 @@ export default async function AgentProductDetailPage({
   params: Promise<{ slug: string }>;
   searchParams?: Promise<{ opsProductId?: string }> | { opsProductId?: string };
 }) {
+  const host = (await headers()).get("host");
+  const useRootPaths = isAgentsHost(host);
   const { slug } = await params;
   const resolvedSearchParams = await Promise.resolve(searchParams ?? {});
   const product = await getShopProductBySlugOrOpsProductId(slug, resolvedSearchParams.opsProductId);
@@ -227,16 +230,16 @@ export default async function AgentProductDetailPage({
     <div className={shopStyles.page}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }} />
       <header className="sticky top-0 z-40 border-b border-[#7a0000]/10 bg-white/90 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
-          <div>
-            <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">Agent Product View</div>
-            <div className="text-lg font-black text-slate-950">Betech Agent Catalogue</div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Link href={agentPath("/")} className={shopStyles.secondaryButton}>
+          <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+            <div>
+              <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">Agent Product View</div>
+              <div className="text-lg font-black text-slate-950">Betech Agent Catalogue</div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+            <Link href={agentPath("/", useRootPaths)} className={shopStyles.secondaryButton}>
               Agent Home
             </Link>
-            <Link href={getAgentProductsHref()} className={shopStyles.primaryButton}>
+            <Link href={getAgentProductsHref(useRootPaths)} className={shopStyles.primaryButton}>
               All Products
             </Link>
           </div>
@@ -247,9 +250,9 @@ export default async function AgentProductDetailPage({
         <div className={shopStyles.shell}>
           <ShopBreadcrumbs
             items={[
-              { label: "Agents", href: agentPath("/") },
-              { label: "Products", href: getAgentProductsHref() },
-              { label: product.category, href: getAgentCategoryHref(encodeURIComponent(product.category.toLowerCase().replace(/\s+/g, "-"))) },
+              { label: "Agents", href: agentPath("/", useRootPaths) },
+              { label: "Products", href: getAgentProductsHref(useRootPaths) },
+              { label: product.category, href: getAgentCategoryHref(encodeURIComponent(product.category.toLowerCase().replace(/\s+/g, "-")), useRootPaths) },
               { label: breadcrumbTitle },
             ]}
           />
@@ -332,8 +335,8 @@ export default async function AgentProductDetailPage({
                     </div>
                     <AgentProductDetailActions
                       product={product}
-                      loginHref={agentPath("/login")}
-                      registerHref={agentPath("/register")}
+                      loginHref={agentPath("/login", useRootPaths)}
+                      registerHref={agentPath("/register", useRootPaths)}
                     />
                   </div>
 
@@ -394,7 +397,7 @@ export default async function AgentProductDetailPage({
                   <div className={shopStyles.sectionEyebrow}>Related agent products</div>
                   <h2 className="mt-4 text-3xl font-black tracking-tight text-slate-950">More from {product.category}</h2>
                 </div>
-                <Link href={getAgentProductsHref()} className={shopStyles.secondaryButton}>
+                <Link href={getAgentProductsHref(useRootPaths)} className={shopStyles.secondaryButton}>
                   Continue in agent catalogue
                 </Link>
               </div>
@@ -403,8 +406,9 @@ export default async function AgentProductDetailPage({
                   <AgentCatalogueProductCard
                     key={item.id}
                     product={item}
-                    primaryHref={agentPath("/login")}
+                    primaryHref={agentPath("/login", useRootPaths)}
                     primaryLabel="Open dashboard"
+                    useRootPaths={useRootPaths}
                   />
                 ))}
               </div>
