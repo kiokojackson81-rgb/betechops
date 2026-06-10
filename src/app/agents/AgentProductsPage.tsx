@@ -211,7 +211,9 @@ export default async function AgentProductsPage({
               <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 sm:text-[15px]">
                 This agent catalogue reflects the same live products from betech.co.ke, but surfaces your earning opportunity on every product so you can pitch with confidence.
               </p>
-              <div className="mt-4 flex flex-wrap gap-2.5">
+            </div>
+            <div className="flex flex-col gap-3 lg:items-end">
+              <div className="flex flex-wrap gap-2.5 lg:justify-end">
                 {agentSession ? (
                   <>
                     <Link href={dashboardHref} className={shopStyles.secondaryButton}>
@@ -232,8 +234,7 @@ export default async function AgentProductsPage({
                   </>
                 )}
               </div>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-[20px] border border-[#7a0000]/10 bg-[#fffaf2] px-4 py-3">
                 <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000]">Products shown</div>
                 <div className="mt-1 text-2xl font-black text-slate-950">{filteredProducts.length}</div>
@@ -242,6 +243,7 @@ export default async function AgentProductsPage({
                 <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000]">With commission visible</div>
                 <div className="mt-1 text-2xl font-black text-slate-950">{commissionEnabledCount}</div>
               </div>
+            </div>
             </div>
           </div>
         </div>
