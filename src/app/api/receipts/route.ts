@@ -21,6 +21,7 @@ import {
   type ProfitReceiptContributor,
 } from "@/lib/adminReceiptsSummary";
 import { adjustProfitForPodDeliveryFee, getPodDeliveryFee, loadPodDeliveryFeeMap } from "@/lib/podDeliveryFee";
+import { waitForReceiptById } from "@/lib/receiptReadAfterWrite";
 
 const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" | null => {
   if (typeof value !== "string") return null;
@@ -1687,13 +1688,26 @@ export async function POST(req: NextRequest) {
           // Create a CommissionLedger entry for audit (best-effort)
           if (tx.commissionLedger) {
             try {
-              await tx.commissionLedger.create({
-                data: {
+              await tx.commissionLedger.upsert({
+                where: {
+                  userId_periodStart_periodEnd: {
+                    userId: attendantId,
+                    periodStart: period.startDate,
+                    periodEnd: period.endDate,
+                  },
+                },
+                create: {
                   userId: attendantId,
                   periodStart: period.startDate,
                   periodEnd: period.endDate,
                   grossCommission: Number(salesCommission),
                   penalties: 0,
+                  netCommission: Number(salesCommission),
+                  commissionTotal: Number(salesCommission),
+                  detail: { reason: "Immediate release on threshold" },
+                },
+                update: {
+                  grossCommission: Number(salesCommission),
                   netCommission: Number(salesCommission),
                   commissionTotal: Number(salesCommission),
                   detail: { reason: "Immediate release on threshold" },
@@ -1764,11 +1778,16 @@ export async function POST(req: NextRequest) {
       return { orderRef: orderUpsert.orderNumber, receiptId: receipt.id };
     });
 
-    prisma.receipt
-      .findUnique({
-        where: { id: result.receiptId },
-        select: { id: true, orderId: true, receiptNumber: true },
-      })
+    waitForReceiptById<{
+      id: string;
+      orderId: string;
+      receiptNumber: string | null;
+    }>({
+      receiptId: result.receiptId,
+      orderRef: result.orderRef,
+      loggerPrefix: "[receipts] post-save verification",
+      select: { id: true, orderId: true, receiptNumber: true },
+    })
       .then((verifiedReceipt) => {
         if (!verifiedReceipt) {
           console.warn("[receipts] post-save verification miss", {
@@ -1794,6 +1813,13 @@ export async function POST(req: NextRequest) {
           error: verifyErr instanceof Error ? verifyErr.message : String(verifyErr),
         });
       });
+
+    await waitForReceiptById({
+      receiptId: result.receiptId,
+      orderRef: result.orderRef,
+      loggerPrefix: "[receipts] pre-send readiness",
+      select: { id: true },
+    });
 
     // Recompute support commission ledger after committing the transaction
     if (attendantId) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentMethod } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { waitForReceiptById } from "@/lib/receiptReadAfterWrite";
 import { requireRole } from "@/lib/api";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 import {
@@ -35,8 +36,9 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
 
   const actorId = (guard.session?.user as any)?.id ?? null;
   const { id } = await resolveParams(context);
-  const receipt = await prisma.receipt.findUnique({
-    where: { id },
+  const receipt = await waitForReceiptById({
+    receiptId: id,
+    loggerPrefix: "[receipts][GET by id]",
     include: {
       order: {
         include: {

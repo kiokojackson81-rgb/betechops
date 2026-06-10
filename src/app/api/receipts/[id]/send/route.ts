@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sendReceiptChannels } from '@/workers/receiptSender';
 import { auth } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
 import { randomUUID } from 'crypto';
+import { waitForReceiptById } from '@/lib/receiptReadAfterWrite';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -71,7 +71,11 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   try {
     // Log: load receipt from DB
     console.info(`[receiptSend][rid=${requestId}] DB:loading ${receiptId}`);
-    const receipt = await prisma.receipt.findUnique({ where: { id: receiptId } });
+    const receipt = await waitForReceiptById({
+      receiptId,
+      loggerPrefix: `[receiptSend][rid=${requestId}]`,
+      select: { id: true },
+    });
     if (!receipt) {
       console.error(`[receiptSend][rid=${requestId}] DB:missing receipt ${receiptId}`);
       return NextResponse.json({ error: 'Receipt not found' }, { status: 404 });
@@ -85,7 +89,13 @@ export async function POST(req: NextRequest, context: ParamsContext) {
 
     // After worker returned, inspect receipt metadata for pdf/chatrace info
     try {
-      const fresh = await prisma.receipt.findUnique({ where: { id: receiptId } });
+      const fresh = await waitForReceiptById<{
+        data?: unknown;
+      }>({
+        receiptId,
+        loggerPrefix: `[receiptSend][rid=${requestId}] post-send`,
+        select: { data: true },
+      });
       const chatrace = fresh?.data && typeof fresh.data === 'object' ? (fresh.data as any).chatrace : undefined;
       const pdfUrl = chatrace?.pdfUrl ?? (fresh?.data && typeof fresh.data === 'object' ? (fresh.data as any).pdfUrl : undefined);
       const pdfLen = typeof pdfUrl === 'string' ? pdfUrl.length : 0;

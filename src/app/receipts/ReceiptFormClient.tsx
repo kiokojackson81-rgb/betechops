@@ -698,6 +698,30 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     return "";
   };
 
+  const verifySavedReceiptReady = async (receiptId: string) => {
+    const attemptsMs = [0, 300, 700, 1500, 2500, 4000];
+    for (const delayMs of attemptsMs) {
+      if (delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+      try {
+        const res = await fetch(`/api/receipts/${encodeURIComponent(receiptId)}`, {
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        if (res.ok) {
+          return true;
+        }
+      } catch (error) {
+        console.warn("[receipts][client] saved receipt readiness probe failed", {
+          receiptId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    return false;
+  };
+
   const togglePaymentMethodSelection = (method: "MPESA" | "CASH") => {
     setSelectedPaymentMethods((prev) => {
       const isActive = prev[method];
@@ -882,6 +906,13 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       if (!receiptId) {
         showToast("Receipt was created but could not be verified yet. Please retry opening it from receipt history.", "error");
         onCreated?.(data, { staffId, serial, receiptId: null });
+        return;
+      }
+
+      const receiptReady = await verifySavedReceiptReady(receiptId);
+      if (!receiptReady) {
+        showToast("Receipt was saved but is still syncing. Please open it from receipt history in a few seconds.", "error");
+        onCreated?.({ ...data, receiptId }, { staffId, serial, receiptId });
         return;
       }
 

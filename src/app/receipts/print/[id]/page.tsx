@@ -1,13 +1,11 @@
-import { prisma } from "@/lib/prisma";
 import renderReceiptTemplate from "@/app/templates/receiptTemplate";
 import { getBranding } from "@/lib/branding";
 import { buildReceiptSnapshot } from "@/app/receipts/buildSnapshot";
 import ReceiptToolbar from "./ReceiptToolbar";
 import { redirect } from "next/navigation";
+import { waitForReceiptById } from "@/lib/receiptReadAfterWrite";
 
 export const dynamic = "force-dynamic";
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export default async function Page({
   params,
@@ -46,26 +44,20 @@ export default async function Page({
   const autoPrintRaw = resolvedSearchParams?.autoPrint;
   const autoPrint = Array.isArray(autoPrintRaw) ? autoPrintRaw[0] : autoPrintRaw;
 
-  let receipt: any = null;
-  for (const delayMs of [0, 150, 350, 700]) {
-    if (delayMs > 0) {
-      await sleep(delayMs);
-    }
-    receipt = await prisma.receipt.findUnique({
-      where: { id },
-      include: {
-        order: {
-          include: {
-            items: { include: { product: { select: { id: true, name: true } } } },
-            attendant: { select: { id: true, name: true } },
-            layawayPlan: { include: { payments: true } },
-          },
+  const receipt = await waitForReceiptById({
+    receiptId: id,
+    loggerPrefix: "[receipts print page]",
+    include: {
+      order: {
+        include: {
+          items: { include: { product: { select: { id: true, name: true } } } },
+          attendant: { select: { id: true, name: true } },
+          layawayPlan: { include: { payments: true } },
         },
-        issuedBy: { select: { id: true, name: true, email: true } },
       },
-    });
-    if (receipt) break;
-  }
+      issuedBy: { select: { id: true, name: true, email: true } },
+    },
+  });
 
   if (!receipt) {
     if (fallbackDraft) {
