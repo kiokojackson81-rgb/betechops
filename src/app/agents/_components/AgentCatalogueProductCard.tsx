@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, BadgeCheck, CircleDollarSign, MessageCircle } from "lucide-react";
-import { getAgentCommissionValue, productCommissionRequiresApproval } from "@/app/agents/agentCatalogue";
+import { getAgentCommissionValue, productCommissionRequiresApproval } from "@/app/agents/agentCatalogueShared";
 import type { ShopProduct } from "@/app/shop/shopData";
 import { formatCurrency } from "@/app/shop/_components/shopStyles";
 import { getAgentProductHref } from "@/app/agents/storefrontPaths";

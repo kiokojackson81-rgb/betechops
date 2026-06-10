@@ -1,11 +1,7 @@
 import type { ShopProduct } from "@/app/shop/shopData";
+import { getAgentCommissionValue, productCommissionRequiresApproval } from "@/app/agents/agentCatalogueShared";
 import { prisma } from "@/lib/prisma";
-
-type AgentCommissionProduct = ShopProduct & {
-  commissionEnabled?: boolean | null;
-  commissionAmount?: number | null;
-  commissionRequiresApproval?: boolean | null;
-};
+export { getAgentCommissionValue, productCommissionRequiresApproval } from "@/app/agents/agentCatalogueShared";
 
 export const AGENT_SORT_OPTIONS = [
   { value: "featured", label: "Most popular" },
@@ -54,16 +50,6 @@ export function filterByPrice(price: number, bucket?: string) {
     default:
       return true;
   }
-}
-
-export function getAgentCommissionValue(product: ShopProduct) {
-  const commissionProduct = product as AgentCommissionProduct;
-  return commissionProduct.commissionEnabled ? Number(commissionProduct.commissionAmount ?? 0) : 0;
-}
-
-export function productCommissionRequiresApproval(product: ShopProduct) {
-  const commissionProduct = product as AgentCommissionProduct;
-  return Boolean(commissionProduct.commissionRequiresApproval);
 }
 
 export async function getPopularityByProduct(products: ShopProduct[]) {
