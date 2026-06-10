@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, BadgeCheck, CircleDollarSign, MessageCircle } from "lucide-react";
+import { getAgentCommissionValue, productCommissionRequiresApproval } from "@/app/agents/agentCatalogue";
 import type { ShopProduct } from "@/app/shop/shopData";
 import { formatCurrency } from "@/app/shop/_components/shopStyles";
 import { getAgentProductHref } from "@/app/agents/storefrontPaths";
@@ -26,7 +27,8 @@ export default function AgentCatalogueProductCard({
     product.oldPrice && product.oldPrice > product.price
       ? Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100)
       : null;
-  const commissionAmount = product.commissionEnabled ? Number(product.commissionAmount ?? 0) : 0;
+  const commissionAmount = getAgentCommissionValue(product);
+  const requiresApproval = productCommissionRequiresApproval(product);
   const whatsappHref = `https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent(
     `Hello Betech Solar, I want to refer ${product.name} and need agent support.`,
   )}`;
@@ -89,7 +91,7 @@ export default function AgentCatalogueProductCard({
                   ? "Request quote"
                   : "Pre-order"}
           </span>
-          {product.commissionRequiresApproval ? (
+          {requiresApproval ? (
             <span className="inline-flex rounded-full border border-[#7a0000]/10 bg-[#fcfaf7] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#7a0000]">
               Approval check
             </span>

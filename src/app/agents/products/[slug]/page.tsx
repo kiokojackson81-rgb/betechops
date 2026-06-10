@@ -5,8 +5,8 @@ import { BadgeCheck, CircleDollarSign, CreditCard, Headphones, MapPin, Truck } f
 import AgentCatalogueProductCard from "@/app/agents/_components/AgentCatalogueProductCard";
 import AgentProductDetailActions from "@/app/agents/_components/AgentProductDetailActions";
 import AgentWhatsAppFloat from "@/app/agents/_components/AgentWhatsAppFloat";
-import { getAgentCommissionValue } from "@/app/agents/agentCatalogue";
-import { getAgentCategoryHref, getAgentProductHref, getAgentProductsHref } from "@/app/agents/storefrontPaths";
+import { getAgentCommissionValue, productCommissionRequiresApproval } from "@/app/agents/agentCatalogue";
+import { getAgentCategoryHref, getAgentProductsHref } from "@/app/agents/storefrontPaths";
 import ShopBreadcrumbs from "@/app/shop/_components/ShopBreadcrumbs";
 import ShopProductGallery from "@/app/shop/_components/ShopProductGallery";
 import { formatCurrency, shopStyles } from "@/app/shop/_components/shopStyles";
@@ -189,6 +189,7 @@ export default async function AgentProductDetailPage({
     quote_only: "Request quote",
   } as const;
   const commissionAmount = getAgentCommissionValue(product);
+  const requiresApproval = productCommissionRequiresApproval(product);
   const commissionPercent =
     product.price > 0 && commissionAmount > 0 ? Math.round((commissionAmount / product.price) * 100) : 0;
   const supportItems = [
@@ -210,7 +211,7 @@ export default async function AgentProductDetailPage({
       icon: <CreditCard className="h-4 w-4" />,
       title: "Commission unlock rule",
       copy:
-        product.commissionRequiresApproval
+        requiresApproval
           ? "This referral may require approval before payout is released."
           : "Commission unlocks after the order is successfully completed and payment is confirmed.",
     },
@@ -321,7 +322,7 @@ export default async function AgentProductDetailPage({
                       <div className="rounded-2xl border border-[#7a0000]/10 bg-white px-4 py-3">
                         <div className="text-[10px] font-black uppercase tracking-[0.14em] text-[#7a0000]">Payout status</div>
                         <div className="mt-1 text-sm font-bold text-slate-950">
-                          {product.commissionRequiresApproval ? "Needs approval check" : "Ready after completed sale"}
+                          {requiresApproval ? "Needs approval check" : "Ready after completed sale"}
                         </div>
                       </div>
                     </div>

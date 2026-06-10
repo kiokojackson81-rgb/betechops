@@ -1,6 +1,12 @@
 import type { ShopProduct } from "@/app/shop/shopData";
 import { prisma } from "@/lib/prisma";
 
+type AgentCommissionProduct = ShopProduct & {
+  commissionEnabled?: boolean | null;
+  commissionAmount?: number | null;
+  commissionRequiresApproval?: boolean | null;
+};
+
 export const AGENT_SORT_OPTIONS = [
   { value: "featured", label: "Most popular" },
   { value: "name", label: "Latest" },
@@ -51,7 +57,13 @@ export function filterByPrice(price: number, bucket?: string) {
 }
 
 export function getAgentCommissionValue(product: ShopProduct) {
-  return product.commissionEnabled ? Number(product.commissionAmount ?? 0) : 0;
+  const commissionProduct = product as AgentCommissionProduct;
+  return commissionProduct.commissionEnabled ? Number(commissionProduct.commissionAmount ?? 0) : 0;
+}
+
+export function productCommissionRequiresApproval(product: ShopProduct) {
+  const commissionProduct = product as AgentCommissionProduct;
+  return Boolean(commissionProduct.commissionRequiresApproval);
 }
 
 export async function getPopularityByProduct(products: ShopProduct[]) {
@@ -149,4 +161,3 @@ export function getBrandOptions(products: ShopProduct[]) {
 export function getWarrantyOptions(products: ShopProduct[]) {
   return Array.from(new Set(products.map((product) => product.warranty).filter(Boolean))).slice(0, 8);
 }
-
