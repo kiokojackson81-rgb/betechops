@@ -19,9 +19,13 @@ import {
   Truck,
   Users,
 } from "lucide-react";
+import AgentCatalogueProductCard from "@/app/agents/_components/AgentCatalogueProductCard";
 import AgentMobileProductCarousel from "@/app/agents/_components/AgentMobileProductCarousel";
+import { getAgentCommissionValue, getPopularityByProduct, sortAgentProducts } from "@/app/agents/agentCatalogue";
 import AgentWhatsAppFloat from "@/app/agents/_components/AgentWhatsAppFloat";
 import AnimatedCount from "@/app/agents/_components/AnimatedCount";
+import { SHOP_CATEGORY_DEFINITIONS } from "@/app/shop/shopCatalogConfig";
+import { getShopProducts } from "@/app/shop/shopApi";
 import { agentPath } from "@/lib/agents/host";
 
 const steps = [
@@ -72,6 +76,13 @@ const agentProducts = [
   { name: "Starmax 150W Full Kit", price: 19999, image: "/agents/products/starmax-150w-full-kit.jpeg", category: "Starter Kit" },
   { name: "Starmax 100W Full Kit", price: 13000, image: "/agents/products/starmax-100w-full-kit.jpeg", category: "Starter Kit" },
 ];
+
+const featuredCatalogueCategories = [
+  "solar-full-kits",
+  "solar-batteries",
+  "solar-inverters",
+  "solar-water-pumps",
+] as const;
 
 const benefits = [
   {
@@ -234,18 +245,6 @@ const customerTrust = [
 ];
 
 const kenyaReach = ["Nairobi", "Kisumu", "Nakuru", "Eldoret", "Kitui", "Mombasa", "Machakos", "Nyeri"];
-
-const brands = [
-  { name: "SolarMax", style: "solarmax" },
-  { name: "SRNE", style: "srne" },
-  { name: "MUST", style: "must" },
-  { name: "Felicity Solar", style: "felicity" },
-  { name: "ALLTOP ELECTRONICS", style: "alltop" },
-  { name: "Deye", style: "deye" },
-  { name: "Growatt", style: "growatt" },
-  { name: "Jinko Solar", style: "jinko" },
-  { name: "JA Solar", style: "ja" },
-];
 
 const testimonials = [
   {
@@ -438,69 +437,37 @@ function ProductCommissionSection({
   );
 }
 
-function BrandWordmark({ style, name }: { style: string; name: string }) {
-  if (style === "solarmax") {
-    return (
-      <div className="flex items-center gap-3">
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#e53935] text-sm font-black text-white">◎</span>
-        <span className="text-[2rem] font-semibold tracking-tight text-slate-700">SolarMax</span>
-      </div>
-    );
-  }
-  if (style === "srne") {
-    return (
-      <div className="flex items-center gap-3">
-        <span className="relative h-8 w-8 overflow-hidden rounded-full bg-[#ff8f1f]">
-          <span className="absolute inset-y-0 left-1/2 w-[0.35rem] -translate-x-1/2 rotate-45 bg-white" />
-        </span>
-        <span className="text-[2.1rem] font-black tracking-tight text-slate-800">SRNE</span>
-      </div>
-    );
-  }
-  if (style === "must") {
-    return <span className="text-[2.4rem] font-black uppercase tracking-tight text-[#f2352c]">MUST</span>;
-  }
-  if (style === "felicity") {
-    return (
-      <div className="flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f28c28] text-xl font-black text-white">F</span>
-        <span className="text-[1.9rem] tracking-tight text-slate-500">
-          <span className="font-semibold text-slate-600">Felicity</span>
-          <span className="ml-1 text-slate-400">solar</span>
-        </span>
-      </div>
-    );
-  }
-  if (style === "alltop") {
-    return (
-      <div className="flex flex-col items-start leading-none">
-        <span className="border-t-[0.35rem] border-[#e6362d] pt-1 text-[1.65rem] font-black uppercase tracking-tight text-[#e6362d]">ALLTOP</span>
-        <span className="text-[0.95rem] font-semibold uppercase tracking-[0.12em] text-slate-600">Electronics</span>
-      </div>
-    );
-  }
-  if (style === "deye") {
-    return <span className="text-[2.25rem] font-black tracking-tight text-[#1f6fd1]">Deye</span>;
-  }
-  if (style === "growatt") {
-    return <span className="text-[2.15rem] font-semibold tracking-tight text-[#73b63f]">Growatt</span>;
-  }
-  if (style === "jinko") {
-    return (
-      <span className="text-[2.15rem] italic tracking-tight text-[#45a930]">
-        <span className="font-semibold">Jinko</span> <span className="text-[1.3rem]">Solar</span>
-      </span>
-    );
-  }
-  if (style === "ja") {
-    return <span className="text-[2.1rem] font-semibold tracking-tight text-[#2b5fb8]">JA SOLAR</span>;
-  }
-  return <span className="text-[2rem] font-semibold text-slate-700">{name}</span>;
-}
-
-export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandingPageProps) {
+export default async function AgentsLandingPage({ useRootPaths = false }: AgentsLandingPageProps) {
   const registerHref = agentPath("/register", useRootPaths);
   const loginHref = agentPath("/login", useRootPaths);
+  const productsHref = agentPath("/products", useRootPaths);
+  const shopProducts = await getShopProducts();
+  const popularityByProduct = await getPopularityByProduct(shopProducts);
+  const popularProducts = sortAgentProducts(shopProducts, popularityByProduct, "featured").slice(0, 10);
+  const categoryShowcase = SHOP_CATEGORY_DEFINITIONS.filter((category) =>
+    featuredCatalogueCategories.includes(category.value as (typeof featuredCatalogueCategories)[number]),
+  ).map((category) => {
+    const categoryProducts = sortAgentProducts(
+      shopProducts.filter(
+        (product) => String(product.category || "").trim().toLowerCase() === category.label.toLowerCase(),
+      ),
+      popularityByProduct,
+      "featured",
+    );
+    const topCommission = categoryProducts.reduce(
+      (maxValue, product) => Math.max(maxValue, getAgentCommissionValue(product)),
+      0,
+    );
+    const commissionReadyCount = categoryProducts.filter((product) => getAgentCommissionValue(product) > 0).length;
+    return {
+      ...category,
+      href: `${productsHref}?category=${encodeURIComponent(category.value)}`,
+      count: categoryProducts.length,
+      commissionReadyCount,
+      topCommission,
+      topProducts: categoryProducts.slice(0, 3),
+    };
+  });
 
   return (
     <div className="scroll-smooth bg-[#fcfaf7] text-slate-950">
@@ -1030,38 +997,121 @@ export default function AgentsLandingPage({ useRootPaths = false }: AgentsLandin
 
         <section id="products" className="bg-[#fffaf3] py-14 sm:py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            {sectionTitle("Trusted Solar Brands We Deal With", "We deal with reliable solar products trusted by homes, farms, and businesses across Kenya.")}
-            <div className="mt-8 flex flex-wrap justify-center gap-3">
-              {["Solar Kits", "Batteries", "Inverters", "Water Pumps", "Accessories"].map((label, index) => (
-                <div
-                  key={label}
-                  className={`rounded-full px-4 py-2 text-sm font-bold shadow-[0_10px_24px_rgba(15,23,42,0.04)] ${index % 2 === 0 ? "bg-[#fff3d8] text-[#7a0000]" : "bg-white text-slate-700 border border-[#7a0000]/10"}`}
+            {sectionTitle(
+              "Live Betech Catalogue For Agents",
+              "Use the same live categories and products shown on betech.co.ke, but now with visible commission so agents can see what they stand to earn before referring.",
+            )}
+            <div className="mt-8 grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+              {categoryShowcase.map((category) => (
+                <Link
+                  key={category.value}
+                  href={category.href}
+                  className="group overflow-hidden rounded-[30px] border border-[#7a0000]/10 bg-white shadow-[0_20px_50px_rgba(15,23,42,0.06)] transition hover:-translate-y-1.5 hover:shadow-[0_28px_60px_rgba(122,0,0,0.12)]"
                 >
-                  {label}
-                </div>
+                  <div className="relative h-44 overflow-hidden border-b border-[#7a0000]/10 bg-[linear-gradient(135deg,#fff4df_0%,#ffffff_100%)]">
+                    <Image
+                      src={category.image}
+                      alt={category.label}
+                      fill
+                      sizes="(max-width: 1279px) 50vw, 25vw"
+                      className="object-cover transition duration-500 group-hover:scale-[1.04]"
+                    />
+                    <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.02)_0%,rgba(122,0,0,0.16)_100%)]" />
+                    <div className="absolute left-4 top-4 inline-flex rounded-full bg-[#fff3d8] px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000]">
+                      Same as betech.co.ke
+                    </div>
+                  </div>
+                  <div className="p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-xl font-black tracking-tight text-slate-950">{category.label}</div>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">{category.blurb}</p>
+                      </div>
+                      <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#7a0000] text-white shadow-[0_16px_30px_rgba(122,0,0,0.18)]">
+                        <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                      </span>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      <div className="rounded-2xl border border-[#7a0000]/10 bg-[#fcfaf7] px-3 py-3">
+                        <div className="text-[10px] font-black uppercase tracking-[0.14em] text-[#7a0000]">Products</div>
+                        <div className="mt-1 text-2xl font-black text-slate-950">{category.count}</div>
+                      </div>
+                      <div className="rounded-2xl border border-[#f2b20f]/20 bg-[#fff8e8] px-3 py-3">
+                        <div className="text-[10px] font-black uppercase tracking-[0.14em] text-[#7a0000]">Top commission</div>
+                        <div className="mt-1 text-lg font-black text-slate-950">
+                          {category.topCommission > 0 ? formatCurrency(category.topCommission) : "Pending"}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-[22px] border border-[#0f9d58]/12 bg-[linear-gradient(180deg,#effcf4_0%,#ffffff_100%)] px-4 py-3">
+                      <div className="text-[10px] font-black uppercase tracking-[0.14em] text-[#0f9d58]">
+                        Commission-ready products
+                      </div>
+                      <div className="mt-1 text-xl font-black text-slate-950">{category.commissionReadyCount}</div>
+                    </div>
+
+                    <div className="mt-4">
+                      <div className="text-[10px] font-black uppercase tracking-[0.14em] text-[#7a0000]">
+                        Most popular in this category
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {category.topProducts.length ? (
+                          category.topProducts.map((product) => (
+                            <span
+                              key={product.id}
+                              className="rounded-full border border-[#7a0000]/10 bg-[#fffaf2] px-3 py-1 text-xs font-semibold text-slate-700"
+                            >
+                              {product.name}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-500">
+                            Products syncing from the live catalogue
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </Link>
               ))}
             </div>
-            <div className="mt-14 rounded-[34px] border border-[#7a0000]/10 bg-white p-6 shadow-[0_20px_50px_rgba(15,23,42,0.06)]">
-              <div className="grid gap-x-8 gap-y-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-              {brands.map((brand) => (
-                <div
-                  key={brand.name}
-                  className="flex min-h-[5.5rem] items-center justify-center rounded-[20px] border border-[#7a0000]/6 bg-[#fcfaf7] px-4 py-3 text-center transition duration-300 hover:-translate-y-1"
+            <div className="mt-12 rounded-[34px] border border-[#7a0000]/10 bg-white p-6 shadow-[0_20px_50px_rgba(15,23,42,0.06)]">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <div className="text-sm font-black uppercase tracking-[0.18em] text-[#7a0000]">Our most popular products</div>
+                  <div className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
+                    Same live products, now transparent on agent earnings
+                  </div>
+                  <p className="mt-2 max-w-3xl text-[15px] leading-[1.6] text-slate-600">
+                    These products are ranked from the same live Betech catalogue using real purchase activity from POS receipts, website orders, and agent sales.
+                  </p>
+                </div>
+                <Link
+                  href={productsHref}
+                  className="inline-flex min-h-[3rem] items-center justify-center rounded-2xl bg-[#7a0000] px-5 py-3 text-sm font-bold text-white shadow-[0_16px_34px_rgba(122,0,0,0.18)] transition hover:-translate-y-0.5"
                 >
-                  <BrandWordmark style={brand.style} name={brand.name} />
-                </div>
-              ))}
-                <div className="flex min-h-[5.5rem] items-center justify-center gap-3 rounded-[20px] px-4 py-3 text-center">
-                  <span className="text-[1.9rem] font-medium tracking-tight text-slate-700">and many more...</span>
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#f2b20f] text-lg font-black text-white">···</span>
-                </div>
+                  Browse full agent catalogue
+                </Link>
+              </div>
+              <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                {popularProducts.map((product) => (
+                  <AgentCatalogueProductCard
+                    key={product.id}
+                    product={product}
+                    primaryHref={registerHref}
+                    primaryLabel="Start earning"
+                    useRootPaths={useRootPaths}
+                  />
+                ))}
               </div>
             </div>
             {sectionCtaStrip({
-              title: "See a product you can sell?",
-              copy: "Every completed referral can turn into real M-Pesa income. Start now and begin unlocking commission from trusted solar products.",
-              primaryHref: registerHref,
-              primaryLabel: "Start Referring Today",
+              title: "Ready to sell from the full Betech catalogue?",
+              copy: "Open the live agent catalogue, filter by category, price, stock, and warranty, then refer products with a clear view of the commission on offer.",
+              primaryHref: productsHref,
+              primaryLabel: "Open Agent Catalogue",
               secondaryHref: "https://chat.whatsapp.com/K6TBwpEpCKP29sIks5KosZ",
               secondaryLabel: "Join Agent WhatsApp Group",
             })}
