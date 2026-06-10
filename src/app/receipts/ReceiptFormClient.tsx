@@ -76,6 +76,7 @@ type ReceiptFormProps = {
 
 export default function ReceiptFormClient({ onCreated, showHero = true }: ReceiptFormProps) {  
   const [staffMembers, setStaffMembers] = useState<Array<{ id: string; name: string; email?: string | null }>>([]);
+  const [defaultStaffId, setDefaultStaffId] = useState<string | null>(null);
   const [staffId, setStaffId] = useState<string | null>(null);
   const [docType, setDocType] = useState<string>("RECEIPT");
   const [serial, setSerial] = useState<string>(() => generateReceiptSerial());
@@ -116,6 +117,33 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [duplicateCatalogPool, setDuplicateCatalogPool] = useState<CatalogProduct[]>([]);
   const [websiteOrderId, setWebsiteOrderId] = useState<string | null>(null);
   const [websiteOrderRef, setWebsiteOrderRef] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/session", {
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        const json = await res.json().catch(() => null);
+        const sessionUserId =
+          typeof json?.user?.id === "string" && json.user.id.trim()
+            ? json.user.id.trim()
+            : null;
+        if (!cancelled) {
+          setDefaultStaffId(sessionUserId);
+        }
+      } catch {
+        if (!cancelled) {
+          setDefaultStaffId(null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -162,6 +190,14 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!defaultStaffId || staffId || staffMembers.length === 0) return;
+    const matched = staffMembers.find((member) => member.id === defaultStaffId);
+    if (matched) {
+      setStaffId(matched.id);
+    }
+  }, [defaultStaffId, staffId, staffMembers]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -810,7 +846,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     setCatalogOpen(false);
     setCatalogQuery("");
     setCatalogResults([]);
-    setStaffId(null);
+    setStaffId(defaultStaffId);
   };
 
   const handleSave = async () => {
