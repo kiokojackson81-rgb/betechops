@@ -62,7 +62,7 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
   if (!dashboard) redirect(agentPath("/register", useRootPaths));
   const shopProducts = await getShopProducts();
   const popularitySignals = await getPopularitySignalsByProduct(shopProducts);
-  const opportunityProducts = sortAgentProductsBySignals(shopProducts, popularitySignals, "featured").slice(0, 8);
+  const opportunityProducts = sortAgentProductsBySignals(shopProducts, popularitySignals, "featured").slice(0, 5);
   const status = String(dashboard.profile.status || "").toLowerCase();
   const totalCommissionEarnedSoFar =
     Number(dashboard.salesSummary.earnedCommission || 0) + Number(dashboard.salesSummary.paidCommission || 0);
