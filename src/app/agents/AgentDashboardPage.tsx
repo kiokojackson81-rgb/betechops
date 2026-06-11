@@ -62,7 +62,7 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
   if (!dashboard) redirect(agentPath("/register", useRootPaths));
   const shopProducts = await getShopProducts();
   const popularitySignals = await getPopularitySignalsByProduct(shopProducts);
-  const opportunityProducts = sortAgentProductsBySignals(shopProducts, popularitySignals, "featured").slice(0, 5);
+  const opportunityProducts = sortAgentProductsBySignals(shopProducts, popularitySignals, "featured").slice(0, 10);
   const status = String(dashboard.profile.status || "").toLowerCase();
   const totalCommissionEarnedSoFar =
     Number(dashboard.salesSummary.earnedCommission || 0) + Number(dashboard.salesSummary.paidCommission || 0);
@@ -120,45 +120,74 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
         paidCommission: dashboard.salesSummary.paidCommission,
       }}
     >
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+            @keyframes agentOpportunityFlow {
+              0% { transform: translateY(0); }
+              100% { transform: translateY(-50%); }
+            }
+          `,
+        }}
+      />
       <div className="space-y-6">
         <section className="grid items-start gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-          <div className="self-start rounded-[30px] bg-[linear-gradient(135deg,#7a0000_0%,#3c0909_100%)] p-7 text-white shadow-[0_20px_60px_rgba(64,10,10,0.28)]">
-            <div className="inline-flex rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#f5d88f]">
-              Welcome back 👋
+          <div className="space-y-6 self-start">
+            <div className="rounded-[30px] bg-[linear-gradient(135deg,#7a0000_0%,#3c0909_100%)] p-7 text-white shadow-[0_20px_60px_rgba(64,10,10,0.28)]">
+              <div className="inline-flex rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#f5d88f]">
+                Welcome back 👋
+              </div>
+              <h2 className="mt-4 text-3xl font-black tracking-tight">Grow Your Solar Business With Betech</h2>
+              <p className="mt-3 max-w-2xl text-sm text-white/78">
+                Refer customers, submit orders, and earn up to 6% commission on successful solar sales across Kenya.
+              </p>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <Link
+                  href={agentPath("/sales/new", useRootPaths)}
+                  className="rounded-2xl bg-[#f1b81d] px-5 py-3 text-sm font-semibold text-[#4d0808] transition hover:brightness-95"
+                >
+                  🟢 Submit Customer Order
+                </Link>
+                <Link
+                  href={agentPath("/sales", useRootPaths)}
+                  className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+                >
+                  📦 My Sales
+                </Link>
+                <Link
+                  href={agentPath("/profile/payment-method", useRootPaths)}
+                  className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+                >
+                  💰 Withdraw Setup
+                </Link>
+                <Link
+                  href={agentPath("/withdrawals", useRootPaths)}
+                  className="rounded-2xl border border-[#f1b81d]/50 bg-[#f1b81d]/12 px-5 py-3 text-sm font-semibold text-[#fff3cf] transition hover:bg-[#f1b81d]/18"
+                >
+                  💸 Request Withdrawal
+                </Link>
+              </div>
             </div>
-            <h2 className="mt-4 text-3xl font-black tracking-tight">Grow Your Solar Business With Betech</h2>
-            <p className="mt-3 max-w-2xl text-sm text-white/78">
-              Refer customers, submit orders, and earn up to 6% commission on successful solar sales across Kenya.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Link
-                href={agentPath("/sales/new", useRootPaths)}
-                className="rounded-2xl bg-[#f1b81d] px-5 py-3 text-sm font-semibold text-[#4d0808] transition hover:brightness-95"
-              >
-                🟢 Submit Customer Order
-              </Link>
-              <Link
-                href={agentPath("/sales", useRootPaths)}
-                className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
-              >
-                📦 My Sales
-              </Link>
-              <Link
-                href={agentPath("/profile/payment-method", useRootPaths)}
-                className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
-              >
-                💰 Withdraw Setup
-              </Link>
-              <Link
-                href={agentPath("/withdrawals", useRootPaths)}
-                className="rounded-2xl border border-[#f1b81d]/50 bg-[#f1b81d]/12 px-5 py-3 text-sm font-semibold text-[#fff3cf] transition hover:bg-[#f1b81d]/18"
-              >
-                💸 Request Withdrawal
-              </Link>
-            </div>
+
+            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {statCards.map((item) => {
+                const value = dashboardSummary[item.key];
+                return (
+                  <article
+                    key={item.label}
+                    className={`rounded-[26px] border border-[#e4d4cb] p-5 shadow-[0_12px_40px_rgba(64,32,18,0.06)] ${item.tone}`}
+                  >
+                    <div className="text-xs font-semibold uppercase tracking-[0.2em]">{item.label}</div>
+                    <div className="mt-3 text-3xl font-black tracking-tight text-[#210505]">
+                      {"money" in item && item.money ? money(Number(value || 0)) : String(value)}
+                    </div>
+                  </article>
+                );
+              })}
+            </section>
           </div>
 
-          <div className="grid self-start gap-4 md:grid-cols-3 xl:grid-cols-1">
+          <div className="self-start">
             <div className="rounded-[28px] border border-[#e4d4cb] bg-white p-5 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
               <div className="flex items-center gap-3 text-[#7a0000]">
                 <Wallet className="h-5 w-5" />
@@ -167,15 +196,20 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
               <div className="mt-2 text-xs leading-5 text-slate-500">
                 Live catalogue products ranked by popularity and latest completed purchase activity.
               </div>
-              <div className="mt-4 max-h-[470px] overflow-y-auto rounded-[24px] border border-[#f1dfb0] bg-[linear-gradient(180deg,#fffaf0_0%,#fffdf9_100%)]">
-                <div className="divide-y divide-[#f1e5da]">
-                  {opportunityProducts.map((product) => {
+              <div className="mt-4 h-[520px] overflow-hidden rounded-[24px] border border-[#f1dfb0] bg-[linear-gradient(180deg,#fffaf0_0%,#fffdf9_100%)]">
+                <div
+                  className="divide-y divide-[#f1e5da]"
+                  style={{
+                    animation: "agentOpportunityFlow 22s linear infinite",
+                  }}
+                >
+                  {[...opportunityProducts, ...opportunityProducts].map((product, index) => {
                     const commission = getAgentPotentialCommissionValue(product);
                     return (
                       <Link
-                        key={product.id}
+                        key={`${product.id}-${index}`}
                         href={getAgentProductHref(product.slug, useRootPaths)}
-                        className="flex items-center gap-3 px-3 py-3 transition hover:bg-white/70"
+                        className="flex min-h-[104px] items-center gap-3 px-3 py-3 transition hover:bg-white/70"
                       >
                         <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-[#ead9cd] bg-white p-2">
                           <Image src={product.image} alt={product.name} width={64} height={64} className="h-full w-full object-contain" />
@@ -196,22 +230,6 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
               >
                 Open live catalogue <ArrowRight className="h-4 w-4" />
               </Link>
-            </div>
-            <div className="rounded-[28px] border border-[#e4d4cb] bg-white p-5 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
-              <div className="flex items-center gap-3 text-[#7a0000]">
-                <CircleDollarSign className="h-5 w-5" />
-                <div className="text-sm font-semibold uppercase tracking-[0.18em]">Ready To Withdraw</div>
-              </div>
-              <div className="mt-3 text-3xl font-black tracking-tight text-[#210505]">{money(dashboard.salesSummary.earnedCommission)}</div>
-              <p className="mt-2 text-sm text-slate-600">Completed and fully paid customer orders appear here.</p>
-            </div>
-            <div className="rounded-[28px] border border-[#e4d4cb] bg-white p-5 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
-              <div className="flex items-center gap-3 text-[#7a0000]">
-                <CreditCard className="h-5 w-5" />
-                <div className="text-sm font-semibold uppercase tracking-[0.18em]">Withdrawal Method</div>
-              </div>
-              <div className="mt-3 text-xl font-black tracking-tight text-[#210505]">{dashboard.profile.phone || "Add M-Pesa number"}</div>
-              <p className="mt-2 text-sm text-slate-600">Your commissions will be sent to this M-Pesa number.</p>
             </div>
           </div>
         </section>
@@ -235,23 +253,6 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
               Submit Customer Order
             </Link>
           </div>
-        </section>
-
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {statCards.map((item) => {
-            const value = dashboardSummary[item.key];
-            return (
-              <article
-                key={item.label}
-                className={`rounded-[26px] border border-[#e4d4cb] p-5 shadow-[0_12px_40px_rgba(64,32,18,0.06)] ${item.tone}`}
-              >
-                <div className="text-xs font-semibold uppercase tracking-[0.2em]">{item.label}</div>
-                <div className="mt-3 text-3xl font-black tracking-tight text-[#210505]">
-                  {"money" in item && item.money ? money(Number(value || 0)) : String(value)}
-                </div>
-              </article>
-            );
-          })}
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
