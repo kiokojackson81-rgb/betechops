@@ -203,6 +203,10 @@ export default function AgentPortalShell({
                 <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">{description}</p>
               </div>
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                <div className="hidden rounded-2xl border border-[#f1b81d]/30 bg-[#fff6df] px-4 py-3 text-right md:block">
+                  <div className="text-[11px] font-black uppercase tracking-[0.12em] text-[#7a0000]">Available to withdraw</div>
+                  <div className="mt-1 text-lg font-black text-[#210505]">{money(stats.earnedCommission)}</div>
+                </div>
                 <div className="hidden rounded-2xl border border-[#d9c6ba] bg-white px-4 py-3 text-right md:block">
                   <div className="text-sm font-semibold text-[#210505]">{agent.displayName}</div>
                   <div className="text-xs uppercase tracking-[0.1em] text-slate-500">
@@ -230,6 +234,10 @@ export default function AgentPortalShell({
                   </div>
                 </div>
                 <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
+                  <div className="rounded-2xl bg-[#fff6df] px-3 py-3">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Withdrawable</div>
+                    <div className="mt-1 font-semibold text-[#210505]">{money(stats.earnedCommission)}</div>
+                  </div>
                   <div className="rounded-2xl bg-[#fffaf5] px-3 py-3">
                     <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Potential</div>
                     <div className="mt-1 font-semibold text-[#210505]">{money(stats.potentialCommission)}</div>
