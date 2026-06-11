@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   CreditCard,
+  Search,
   Store,
   Truck,
   Wallet,
+  X,
 } from "lucide-react";
 import { agentPath } from "@/lib/agents/host";
 import { getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
@@ -20,19 +22,6 @@ type AgentSaleFormProps = {
     unpaidCommission: number;
   };
 };
-
-const productOptions = [
-  "SRNE 5KW Kit",
-  "SRNE 3KW Kit",
-  "200AH Battery",
-  "150AH Battery",
-  "100AH Battery",
-  "585W Panel",
-  "550W Panel",
-  "Water Pump",
-  "Inverter",
-  "Solar Accessories",
-] as const;
 
 const paymentOptions = [
   {
@@ -92,9 +81,28 @@ const initialForm = {
   mpesaReference: "",
 };
 
+type ProductSuggestion = {
+  id: string;
+  name: string;
+  sku: string | null;
+  category: string | null;
+  sellingPrice: number | null;
+  defaultWarranty: string | null;
+  commissionEnabled: boolean | null;
+  commissionAmount: number | null;
+};
+
 function currency(value: string | number) {
   const amount = Number(value || 0);
   return `Ksh ${amount.toLocaleString("en-KE", { maximumFractionDigits: 2 })}`;
+}
+
+function commissionForProduct(product: ProductSuggestion | null, totalAmount: number) {
+  if (!product) return Math.round(totalAmount * 0.06 * 100) / 100;
+  if (product.commissionEnabled && Number(product.commissionAmount ?? 0) > 0) {
+    return Number(product.commissionAmount ?? 0);
+  }
+  return Math.round(totalAmount * 0.06 * 100) / 100;
 }
 
 function inputClassName() {
@@ -121,10 +129,15 @@ export default function AgentSaleForm({ useRootPaths = false, stats }: AgentSale
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<ProductSuggestion[]>([]);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [suggestionsBusy, setSuggestionsBusy] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<ProductSuggestion | null>(null);
+  const deferredProductQuery = useDeferredValue(form.productName.trim());
 
   const availableTowns = useMemo(() => getTownsForCounty(form.customerCounty), [form.customerCounty]);
   const numericTotal = Number(form.totalAmount || 0);
-  const potentialCommission = Math.round(numericTotal * 0.06 * 100) / 100;
+  const potentialCommission = commissionForProduct(selectedProduct, numericTotal);
   const earnedCommission = Number(stats?.earnedCommission ?? 0);
   const unpaidCommission = Number(stats?.unpaidCommission ?? 0);
   const selectedPayment = paymentOptions.find((option) => option.value === form.paymentOption) ?? paymentOptions[0];
@@ -149,8 +162,65 @@ export default function AgentSaleForm({ useRootPaths = false, stats }: AgentSale
     }
   }, [shouldShowPaymentFields]);
 
+  useEffect(() => {
+    if (selectedProduct && form.productName.trim().toLowerCase() !== selectedProduct.name.trim().toLowerCase()) {
+      setSelectedProduct(null);
+    }
+  }, [form.productName, selectedProduct]);
+
+  useEffect(() => {
+    const query = deferredProductQuery;
+    if (query.length < 2) {
+      setSuggestions([]);
+      setSuggestionsBusy(false);
+      return;
+    }
+
+    let cancelled = false;
+    setSuggestionsBusy(true);
+
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/products?search=${encodeURIComponent(query)}&activeOnly=1&limit=8`, {
+          cache: "no-store",
+        });
+        const payload = await response.json().catch(() => []);
+        if (cancelled) return;
+        const nextSuggestions = Array.isArray(payload) ? payload : [];
+        setSuggestions(nextSuggestions);
+        setSuggestionsOpen(true);
+      } catch {
+        if (!cancelled) setSuggestions([]);
+      } finally {
+        if (!cancelled) setSuggestionsBusy(false);
+      }
+    }, 220);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [deferredProductQuery]);
+
   function update<K extends keyof typeof initialForm>(key: K, value: (typeof initialForm)[K]) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function selectProduct(product: ProductSuggestion) {
+    setSelectedProduct(product);
+    setSuggestionsOpen(false);
+    setSuggestions([]);
+    setForm((current) => ({
+      ...current,
+      productName: product.name,
+      unitPrice: product.sellingPrice != null ? String(Number(product.sellingPrice)) : current.unitPrice,
+    }));
+  }
+
+  function clearSelectedProduct() {
+    setSelectedProduct(null);
+    setSuggestions([]);
+    setSuggestionsOpen(false);
   }
 
   function updateCounty(value: string) {
@@ -186,6 +256,7 @@ export default function AgentSaleForm({ useRootPaths = false, stats }: AgentSale
         customerCounty: form.customerCounty,
         customerLocation: form.customerLocation,
         productName: form.productName,
+        productCategory: selectedProduct?.category || "",
         quantity: Number(form.quantity || 0),
         unitPrice: Number(form.unitPrice || 0),
         totalAmount: Number(form.totalAmount || 0),
@@ -315,19 +386,85 @@ export default function AgentSaleForm({ useRootPaths = false, stats }: AgentSale
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="space-y-2 sm:col-span-2">
               <span className="text-sm font-semibold text-slate-700">Product Name</span>
-              <input
-                required
-                list="agent-product-options"
-                value={form.productName}
-                onChange={(event) => update("productName", event.target.value)}
-                className={inputClassName()}
-                placeholder="e.g. 5KW solar kit"
-              />
-              <datalist id="agent-product-options">
-                {productOptions.map((option) => (
-                  <option key={option} value={option} />
-                ))}
-              </datalist>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                <input
+                  required
+                  value={form.productName}
+                  onFocus={() => {
+                    if (suggestions.length) setSuggestionsOpen(true);
+                  }}
+                  onChange={(event) => {
+                    update("productName", event.target.value);
+                    setSuggestionsOpen(true);
+                  }}
+                  className={`${inputClassName()} pl-12 pr-11`}
+                  placeholder="Type product name e.g. 200W Full Kit"
+                />
+                {form.productName ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      update("productName", "");
+                      clearSelectedProduct();
+                    }}
+                    className="absolute right-3 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                    aria-label="Clear product search"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                ) : null}
+                {suggestionsOpen && (suggestionsBusy || suggestions.length > 0) ? (
+                  <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 overflow-hidden rounded-[22px] border border-[#ead9ce] bg-white shadow-[0_20px_48px_rgba(72,36,19,0.14)]">
+                    {suggestionsBusy ? (
+                      <div className="px-4 py-3 text-sm text-slate-500">Searching catalogue products...</div>
+                    ) : (
+                      <div className="max-h-80 overflow-y-auto py-2">
+                        {suggestions.map((product) => {
+                          const unitPrice = Number(product.sellingPrice ?? 0);
+                          const suggestionCommission = commissionForProduct(product, unitPrice);
+                          return (
+                            <button
+                              key={product.id}
+                              type="button"
+                              onClick={() => selectProduct(product)}
+                              className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left transition hover:bg-[#fff8ef]"
+                            >
+                              <div className="min-w-0">
+                                <div className="line-clamp-2 text-sm font-bold text-slate-950">{product.name}</div>
+                                <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-slate-500">
+                                  {product.category ? <span>{product.category}</span> : null}
+                                  {product.sku ? <span>SKU: {product.sku}</span> : null}
+                                  {product.defaultWarranty ? <span>{product.defaultWarranty}</span> : null}
+                                </div>
+                              </div>
+                              <div className="shrink-0 text-right">
+                                <div className="text-sm font-black text-slate-950">{currency(unitPrice)}</div>
+                                <div className="mt-1 text-xs font-semibold text-[#7a0000]">
+                                  Commission {currency(suggestionCommission)}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+              <div className="text-xs text-slate-500">
+                Start typing to match a live Betech catalogue product and auto-fill linked price and commission.
+              </div>
+              {selectedProduct ? (
+                <div className="rounded-[20px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm">
+                  <div className="font-bold text-emerald-900">{selectedProduct.name}</div>
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-emerald-800/80">
+                    {selectedProduct.category ? <span>Category: {selectedProduct.category}</span> : null}
+                    <span>Linked price: {currency(selectedProduct.sellingPrice ?? 0)}</span>
+                    <span>Matched commission: {currency(commissionForProduct(selectedProduct, Number(selectedProduct.sellingPrice ?? 0)))}</span>
+                  </div>
+                </div>
+              ) : null}
             </label>
             <label className="space-y-2">
               <span className="text-sm font-semibold text-slate-700">Quantity</span>
