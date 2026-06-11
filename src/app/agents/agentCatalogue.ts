@@ -41,6 +41,11 @@ export type AgentListingFilters = {
   sort?: string;
 };
 
+export type AgentProductRankSignal = {
+  score: number;
+  latestAt: number;
+};
+
 function normalizeProductKey(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
@@ -121,6 +126,94 @@ export async function getPopularityByProduct(products: ShopProduct[]) {
   );
 }
 
+export async function getPopularitySignalsByProduct(products: ShopProduct[]) {
+  const byOpsProductId = new Map<string, AgentProductRankSignal>();
+  const byName = new Map<string, AgentProductRankSignal>();
+  const opsProductIds = Array.from(
+    new Set(
+      products
+        .map((product) => String(product.opsProductId || "").trim())
+        .filter(Boolean),
+    ),
+  );
+
+  if (opsProductIds.length) {
+    const [posOrderItems, websiteOrderItems] = await Promise.all([
+      prisma.orderItem
+        .findMany({
+          where: { productId: { in: opsProductIds } },
+          select: {
+            productId: true,
+            quantity: true,
+            order: { select: { createdAt: true } },
+          },
+        })
+        .catch(() => []),
+      prisma.websiteOrderItem
+        .findMany({
+          where: { productId: { in: opsProductIds } },
+          select: {
+            productId: true,
+            quantity: true,
+            websiteOrder: { select: { createdAt: true } },
+          },
+        })
+        .catch(() => []),
+    ]);
+
+    for (const row of posOrderItems) {
+      const existing = byOpsProductId.get(row.productId) ?? { score: 0, latestAt: 0 };
+      byOpsProductId.set(row.productId, {
+        score: existing.score + Number(row.quantity ?? 0),
+        latestAt: Math.max(existing.latestAt, new Date(row.order.createdAt).getTime()),
+      });
+    }
+
+    for (const row of websiteOrderItems) {
+      if (!row.productId) continue;
+      const existing = byOpsProductId.get(row.productId) ?? { score: 0, latestAt: 0 };
+      byOpsProductId.set(row.productId, {
+        score: existing.score + Number(row.quantity ?? 0),
+        latestAt: Math.max(existing.latestAt, new Date(row.websiteOrder.createdAt).getTime()),
+      });
+    }
+  }
+
+  const agentSales = await prisma.agentSale
+    .findMany({
+      select: {
+        productName: true,
+        quantity: true,
+        createdAt: true,
+      },
+    })
+    .catch(() => [] as Array<{ productName: string; quantity: number; createdAt: Date }>);
+
+  for (const row of agentSales) {
+    const key = normalizeProductKey(String(row.productName || ""));
+    if (!key) continue;
+    const existing = byName.get(key) ?? { score: 0, latestAt: 0 };
+    byName.set(key, {
+      score: existing.score + Number(row.quantity ?? 0),
+      latestAt: Math.max(existing.latestAt, new Date(row.createdAt).getTime()),
+    });
+  }
+
+  return new Map(
+    products.map((product) => {
+      const opsSignal = product.opsProductId ? byOpsProductId.get(product.opsProductId) : null;
+      const nameSignal = byName.get(normalizeProductKey(product.name)) ?? null;
+      return [
+        product.id,
+        {
+          score: Number(opsSignal?.score ?? 0) + Number(nameSignal?.score ?? 0),
+          latestAt: Math.max(Number(opsSignal?.latestAt ?? 0), Number(nameSignal?.latestAt ?? 0)),
+        },
+      ] as const;
+    }),
+  );
+}
+
 export function sortAgentProducts(products: ShopProduct[], popularityByProduct: Map<string, number>, sort?: string) {
   const items = [...products];
 
@@ -144,6 +237,45 @@ export function sortAgentProducts(products: ShopProduct[], popularityByProduct: 
         const aDiscount = (a.oldPrice || a.price) - a.price;
         const bDiscount = (b.oldPrice || b.price) - b.price;
         return bDiscount - aDiscount || a.name.localeCompare(b.name);
+      });
+  }
+}
+
+export function sortAgentProductsBySignals(
+  products: ShopProduct[],
+  popularitySignals: Map<string, AgentProductRankSignal>,
+  sort?: string,
+) {
+  const items = [...products];
+
+  switch (sort) {
+    case "price-low":
+      return items.sort((a, b) => a.price - b.price);
+    case "name":
+      return items.sort((a, b) => {
+        const left = popularitySignals.get(a.id) ?? { score: 0, latestAt: 0 };
+        const right = popularitySignals.get(b.id) ?? { score: 0, latestAt: 0 };
+        return right.latestAt - left.latestAt || a.name.localeCompare(b.name);
+      });
+    case "commission-high":
+      return items.sort((a, b) => {
+        const commissionDelta = getAgentCommissionValue(b) - getAgentCommissionValue(a);
+        if (commissionDelta !== 0) return commissionDelta;
+        const left = popularitySignals.get(a.id) ?? { score: 0, latestAt: 0 };
+        const right = popularitySignals.get(b.id) ?? { score: 0, latestAt: 0 };
+        return right.score - left.score || right.latestAt - left.latestAt;
+      });
+    default:
+      return items.sort((a, b) => {
+        const left = popularitySignals.get(a.id) ?? { score: 0, latestAt: 0 };
+        const right = popularitySignals.get(b.id) ?? { score: 0, latestAt: 0 };
+        return (
+          right.score - left.score ||
+          right.latestAt - left.latestAt ||
+          getAgentCommissionValue(b) - getAgentCommissionValue(a) ||
+          ((b.oldPrice || b.price) - b.price) - ((a.oldPrice || a.price) - a.price) ||
+          a.name.localeCompare(b.name)
+        );
       });
   }
 }

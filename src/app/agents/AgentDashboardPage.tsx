@@ -3,6 +3,13 @@ import Image from "next/image";
 import { redirect } from "next/navigation";
 import { ArrowRight, CircleDollarSign, ClipboardList, CreditCard, PlusCircle, UserRound, Wallet } from "lucide-react";
 import AgentPortalShell from "@/app/agents/_components/AgentPortalShell";
+import {
+  getAgentPotentialCommissionValue,
+  getPopularitySignalsByProduct,
+  sortAgentProductsBySignals,
+} from "@/app/agents/agentCatalogue";
+import { getAgentProductHref, getAgentProductsHref } from "@/app/agents/storefrontPaths";
+import { getShopProducts } from "@/app/shop/shopApi";
 import { requireAgentSession } from "@/lib/agents/auth";
 import { agentPath } from "@/lib/agents/host";
 import { getAgentDashboardData } from "@/lib/agents/service";
@@ -23,29 +30,6 @@ const statCards = [
   { key: "earnedCommission", label: "Ready To Withdraw", tone: "bg-[#fceeee] text-[#7a0000]", money: true },
   { key: "paidCommission", label: "Withdrawn Earnings", tone: "bg-[#edf9f0] text-[#136233]", money: true },
 ] as const;
-
-const opportunityProducts = [
-  {
-    name: "SRNE 20KW Solar System",
-    price: 950000,
-    image: "/agents/product-solar-kit-generated.png",
-  },
-  {
-    name: "8KW Lithium Battery Kit",
-    price: 350000,
-    image: "/agents/product-battery-generated.png",
-  },
-  {
-    name: "Hybrid Inverter Package",
-    price: 55000,
-    image: "/agents/product-inverter-generated.png",
-  },
-  {
-    name: "Solar Water Pump",
-    price: 25000,
-    image: "/agents/product-water-pump-generated.png",
-  },
-];
 
 function getSaleCommissionHeadline(sale: { status: string; commissionStatus: string }) {
   const saleStatus = String(sale.status || "").toLowerCase();
@@ -76,6 +60,9 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
 
   const dashboard = await getAgentDashboardData(agentSession.userId);
   if (!dashboard) redirect(agentPath("/register", useRootPaths));
+  const shopProducts = await getShopProducts();
+  const popularitySignals = await getPopularitySignalsByProduct(shopProducts);
+  const opportunityProducts = sortAgentProductsBySignals(shopProducts, popularitySignals, "featured").slice(0, 8);
   const status = String(dashboard.profile.status || "").toLowerCase();
   const totalCommissionEarnedSoFar =
     Number(dashboard.salesSummary.earnedCommission || 0) + Number(dashboard.salesSummary.paidCommission || 0);
@@ -187,6 +174,9 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
                 <Wallet className="h-5 w-5" />
                 <div className="text-sm font-semibold uppercase tracking-[0.18em]">Opportunity</div>
               </div>
+              <div className="mt-2 text-xs leading-5 text-slate-500">
+                Live catalogue products ranked by popularity and latest completed purchase activity.
+              </div>
               <div className="mt-4 overflow-hidden rounded-[24px] border border-[#f1dfb0] bg-[linear-gradient(180deg,#fffaf0_0%,#fffdf9_100%)]">
                 <div
                   className="divide-y divide-[#f1e5da]"
@@ -195,22 +185,32 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
                   }}
                 >
                   {[...opportunityProducts, ...opportunityProducts].map((product, index) => {
-                    const commission = Math.round(product.price * 0.06);
+                    const commission = getAgentPotentialCommissionValue(product);
                     return (
-                      <div key={`${product.name}-${index}`} className="flex items-center gap-3 px-3 py-3">
+                      <Link
+                        key={`${product.id}-${index}`}
+                        href={getAgentProductHref(product.slug, useRootPaths)}
+                        className="flex items-center gap-3 px-3 py-3 transition hover:bg-white/70"
+                      >
                         <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-[#ead9cd] bg-white p-2">
                           <Image src={product.image} alt={product.name} width={64} height={64} className="h-full w-full object-contain" />
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-sm font-bold text-[#210505]">{product.name}</div>
-                          <div className="mt-1 text-xs text-slate-500">Earn up to</div>
+                          <div className="mt-1 text-xs text-slate-500">Potential commission</div>
                           <div className="text-lg font-black tracking-tight text-[#7a0000]">{money(commission)}</div>
                         </div>
-                      </div>
+                      </Link>
                     );
                   })}
                 </div>
               </div>
+              <Link
+                href={getAgentProductsHref(useRootPaths)}
+                className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-[#7a0000] hover:text-[#5d0000]"
+              >
+                Open live catalogue <ArrowRight className="h-4 w-4" />
+              </Link>
             </div>
             <div className="rounded-[28px] border border-[#e4d4cb] bg-white p-5 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
               <div className="flex items-center gap-3 text-[#7a0000]">
