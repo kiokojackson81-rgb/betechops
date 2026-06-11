@@ -46,6 +46,9 @@ export type ShopProduct = {
   whatsappMessage: string;
   source: "mock" | "ops";
   opsProductId: string | null;
+  commissionEnabled?: boolean;
+  commissionAmount?: number | null;
+  commissionRequiresApproval?: boolean;
 };
 
 export type ShopProductSection = {

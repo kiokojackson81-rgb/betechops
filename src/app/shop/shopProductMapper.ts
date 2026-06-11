@@ -47,6 +47,9 @@ type OpsCatalogueProduct = {
   shopSpecs?: string | null;
   shopImageUrl?: string | null;
   shopBrand?: string | null;
+  commissionEnabled?: boolean | null;
+  commissionAmount?: number | null;
+  commissionRequiresApproval?: boolean | null;
 };
 
 type ShopCategoryDefinition = {
@@ -222,7 +225,10 @@ async function queryOpsCatalogueProducts(whereClause = "", params: unknown[] = [
         ${available.has("shopWarranty") ? `"shopWarranty"` : `NULL::text`} AS "shopWarranty",
         ${available.has("shopSpecs") ? `"shopSpecs"` : `NULL::text`} AS "shopSpecs",
         ${available.has("shopImageUrl") ? `"shopImageUrl"` : `NULL::text`} AS "shopImageUrl",
-        ${available.has("shopBrand") ? `"shopBrand"` : `NULL::text`} AS "shopBrand"
+        ${available.has("shopBrand") ? `"shopBrand"` : `NULL::text`} AS "shopBrand",
+        ${available.has("commissionEnabled") ? `COALESCE("commissionEnabled", false)` : `NULL::boolean`} AS "commissionEnabled",
+        ${available.has("commissionAmount") ? `"commissionAmount"` : `NULL::numeric`} AS "commissionAmount",
+        ${available.has("commissionRequiresApproval") ? `COALESCE("commissionRequiresApproval", false)` : `NULL::boolean`} AS "commissionRequiresApproval"
       FROM "Product"
       WHERE COALESCE("isActive", true) = true
       ${whereClause}
@@ -267,7 +273,10 @@ async function queryOpsCatalogueProducts(whereClause = "", params: unknown[] = [
         ${available.has("shopWarranty") ? `"shopWarranty"` : `NULL::text`} AS "shopWarranty",
         ${available.has("shopSpecs") ? `"shopSpecs"` : `NULL::text`} AS "shopSpecs",
         ${available.has("shopImageUrl") ? `"shopImageUrl"` : `NULL::text`} AS "shopImageUrl",
-        ${available.has("shopBrand") ? `"shopBrand"` : `NULL::text`} AS "shopBrand"
+        ${available.has("shopBrand") ? `"shopBrand"` : `NULL::text`} AS "shopBrand",
+        ${available.has("commissionEnabled") ? `COALESCE("commissionEnabled", false)` : `NULL::boolean`} AS "commissionEnabled",
+        ${available.has("commissionAmount") ? `"commissionAmount"` : `NULL::numeric`} AS "commissionAmount",
+        ${available.has("commissionRequiresApproval") ? `COALESCE("commissionRequiresApproval", false)` : `NULL::boolean`} AS "commissionRequiresApproval"
       FROM "Product"
       WHERE COALESCE("active", true) = true
       ${whereClause}
@@ -619,6 +628,9 @@ function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview 
         whatsappMessage: `Hello Betech Solar, I want more details about ${fallbackName}.`,
         source: "ops",
         opsProductId: product.id,
+        commissionEnabled: Boolean(product.commissionEnabled),
+        commissionAmount: product.commissionAmount == null ? null : Number(product.commissionAmount),
+        commissionRequiresApproval: Boolean(product.commissionRequiresApproval),
       }
     : null;
 

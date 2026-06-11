@@ -23,6 +23,7 @@ export function isAgentRoutePath(path: string | null | undefined) {
   const normalizedPath = normalizePath(path ?? "/");
   return (
     normalizedPath === "/" ||
+    normalizedPath === "/products" ||
     normalizedPath === "/login" ||
     normalizedPath === "/register" ||
     normalizedPath === "/dashboard" ||
