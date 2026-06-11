@@ -120,16 +120,6 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
         paidCommission: dashboard.salesSummary.paidCommission,
       }}
     >
-      <style
-        dangerouslySetInnerHTML={{
-          __html: `
-            @keyframes agentOpportunityFlow {
-              0% { transform: translateY(0); }
-              100% { transform: translateY(-50%); }
-            }
-          `,
-        }}
-      />
       <div className="space-y-6">
         <section className="grid items-start gap-6 xl:grid-cols-[1.15fr_0.85fr]">
           <div className="self-start rounded-[30px] bg-[linear-gradient(135deg,#7a0000_0%,#3c0909_100%)] p-7 text-white shadow-[0_20px_60px_rgba(64,10,10,0.28)]">
@@ -177,18 +167,13 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
               <div className="mt-2 text-xs leading-5 text-slate-500">
                 Live catalogue products ranked by popularity and latest completed purchase activity.
               </div>
-              <div className="mt-4 overflow-hidden rounded-[24px] border border-[#f1dfb0] bg-[linear-gradient(180deg,#fffaf0_0%,#fffdf9_100%)]">
-                <div
-                  className="divide-y divide-[#f1e5da]"
-                  style={{
-                    animation: "agentOpportunityFlow 18s linear infinite",
-                  }}
-                >
-                  {[...opportunityProducts, ...opportunityProducts].map((product, index) => {
+              <div className="mt-4 max-h-[470px] overflow-y-auto rounded-[24px] border border-[#f1dfb0] bg-[linear-gradient(180deg,#fffaf0_0%,#fffdf9_100%)]">
+                <div className="divide-y divide-[#f1e5da]">
+                  {opportunityProducts.map((product) => {
                     const commission = getAgentPotentialCommissionValue(product);
                     return (
                       <Link
-                        key={`${product.id}-${index}`}
+                        key={product.id}
                         href={getAgentProductHref(product.slug, useRootPaths)}
                         className="flex items-center gap-3 px-3 py-3 transition hover:bg-white/70"
                       >
