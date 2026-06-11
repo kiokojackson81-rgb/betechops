@@ -179,10 +179,7 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
               </div>
               <div className="mt-4 h-[520px] overflow-hidden rounded-[24px] border border-[#f1dfb0] bg-[linear-gradient(180deg,#fffaf0_0%,#fffdf9_100%)]">
                 <div
-                  className="divide-y divide-[#f1e5da]"
-                  style={{
-                    animation: "agentOpportunityFlow 22s linear infinite",
-                  }}
+                  className="will-change-transform divide-y divide-[#f1e5da] [animation:agentOpportunityFlow_12s_linear_infinite]"
                 >
                   {[...opportunityProducts, ...opportunityProducts].map((product, index) => {
                     const commission = getAgentPotentialCommissionValue(product);
