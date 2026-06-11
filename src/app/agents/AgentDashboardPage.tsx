@@ -131,8 +131,8 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
         }}
       />
       <div className="space-y-6">
-        <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-          <div className="rounded-[30px] bg-[linear-gradient(135deg,#7a0000_0%,#3c0909_100%)] p-7 text-white shadow-[0_20px_60px_rgba(64,10,10,0.28)]">
+        <section className="grid items-start gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+          <div className="self-start rounded-[30px] bg-[linear-gradient(135deg,#7a0000_0%,#3c0909_100%)] p-7 text-white shadow-[0_20px_60px_rgba(64,10,10,0.28)]">
             <div className="inline-flex rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#f5d88f]">
               Welcome back 👋
             </div>
@@ -168,7 +168,7 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-1">
+          <div className="grid self-start gap-4 md:grid-cols-3 xl:grid-cols-1">
             <div className="rounded-[28px] border border-[#e4d4cb] bg-white p-5 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
               <div className="flex items-center gap-3 text-[#7a0000]">
                 <Wallet className="h-5 w-5" />
