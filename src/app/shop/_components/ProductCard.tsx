@@ -59,7 +59,7 @@ export default function ProductCard({ product }: ProductCardProps) {
       </div>
 
       <div className="flex flex-1 flex-col p-2.5 sm:p-4">
-        <Link href={getShopProductHref(product.slug)} className="block">
+        <Link href={getShopProductHref(product.slug, product.opsProductId)} className="block">
           <h3 className="line-clamp-2 min-h-[2.2rem] text-[13px] font-bold leading-[1.1rem] tracking-[-0.01em] text-slate-950 transition group-hover:text-[#7a0000] sm:min-h-[2.55rem] sm:text-[13px] sm:leading-[1.2rem]">
             {product.name}
           </h3>

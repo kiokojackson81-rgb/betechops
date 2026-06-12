@@ -102,24 +102,29 @@ export async function getShopProductBySlugOrOpsProductId(slug: string, opsProduc
 
   if (typeof window === "undefined") {
     const products = await getServerShopProducts();
+    if (normalizedOpsProductId) {
+      const byOpsProductId = products.find((product) => product.opsProductId === normalizedOpsProductId) ?? null;
+      if (byOpsProductId) return byOpsProductId;
+
+      const fallbackByOpsProductId = await getOpsCatalogueProductMappedById(normalizedOpsProductId);
+      if (fallbackByOpsProductId) return fallbackByOpsProductId;
+    }
+
     const bySlug = products.find((product) => product.slug === slug) ?? null;
-    if (bySlug || !normalizedOpsProductId) return bySlug;
+    if (bySlug) return bySlug;
 
-    const byOpsProductId = products.find((product) => product.opsProductId === normalizedOpsProductId) ?? null;
-    if (byOpsProductId) return byOpsProductId;
-
-    return getOpsCatalogueProductMappedById(normalizedOpsProductId);
+    return null;
   }
 
-  const productBySlug = await getShopProductBySlug(slug);
-  if (productBySlug || !normalizedOpsProductId) return productBySlug;
-
-  const response = await fetchJson<{ products: ShopProduct[] }>(getApiUrl(`/api/shop/products`)).catch(() => null);
-  if (response?.products) {
-    return response.products.find((product) => product.opsProductId === normalizedOpsProductId) ?? null;
+  if (normalizedOpsProductId) {
+    const response = await fetchJson<{ products: ShopProduct[] }>(getApiUrl(`/api/shop/products`)).catch(() => null);
+    if (response?.products) {
+      const byOpsProductId = response.products.find((product) => product.opsProductId === normalizedOpsProductId) ?? null;
+      if (byOpsProductId) return byOpsProductId;
+    }
   }
 
-  return null;
+  return getShopProductBySlug(slug);
 }
 
 export async function createShopOrder(input: ShopOrderInput) {

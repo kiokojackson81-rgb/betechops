@@ -40,7 +40,7 @@ export default function AgentCatalogueProductCard({
 
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-[22px] border border-[#7a0000]/10 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.06)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_52px_rgba(122,0,0,0.12)]">
-      <Link href={getAgentProductHref(product.slug, useRootPaths)} className="relative block h-40 overflow-hidden border-b border-[#7a0000]/8 bg-[linear-gradient(180deg,#fff6e8_0%,#ffffff_100%)] sm:h-48">
+      <Link href={getAgentProductHref(product.slug, useRootPaths, product.opsProductId)} className="relative block h-40 overflow-hidden border-b border-[#7a0000]/8 bg-[linear-gradient(180deg,#fff6e8_0%,#ffffff_100%)] sm:h-48">
         <div className="absolute inset-0 p-3">
           <Image
             src={product.image}
@@ -61,7 +61,7 @@ export default function AgentCatalogueProductCard({
       </Link>
 
       <div className="flex flex-1 flex-col p-4">
-        <Link href={getAgentProductHref(product.slug, useRootPaths)} className="block">
+        <Link href={getAgentProductHref(product.slug, useRootPaths, product.opsProductId)} className="block">
           <h3 className="line-clamp-2 text-[1rem] font-black tracking-[-0.02em] text-slate-950 transition group-hover:text-[#7a0000]">
             {product.name}
           </h3>

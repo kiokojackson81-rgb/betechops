@@ -11,8 +11,11 @@ export function getShopCategoryHref(slug: string) {
   return `/category/${slug}`;
 }
 
-export function getShopProductHref(slug: string) {
-  return `/${slug}`;
+export function getShopProductHref(slug: string, opsProductId?: string | null) {
+  const href = `/${slug}`;
+  const normalizedOpsProductId = String(opsProductId || "").trim();
+  if (!normalizedOpsProductId) return href;
+  return `${href}?opsProductId=${encodeURIComponent(normalizedOpsProductId)}`;
 }
 
 export function getShopRequestQuoteHref(product?: string) {

@@ -92,7 +92,7 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
           items: orderItems.map((item) => {
             const productId = String(item.product?.id ?? "").trim();
             const mapped = productId ? mappedProductById.get(productId) ?? null : null;
-            const shopHref = mapped?.slug ? `${SHOP_BASE_URL}${getShopProductHref(mapped.slug)}` : null;
+            const shopHref = mapped?.slug ? `${SHOP_BASE_URL}${getShopProductHref(mapped.slug, mapped.opsProductId)}` : null;
             const adminEditHref = productId ? `/admin/pos-management?editProduct=${encodeURIComponent(productId)}` : null;
 
             return {

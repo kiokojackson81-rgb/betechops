@@ -186,7 +186,7 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
                     return (
                       <Link
                         key={`${product.id}-${index}`}
-                        href={getAgentProductHref(product.slug, useRootPaths)}
+                        href={getAgentProductHref(product.slug, useRootPaths, product.opsProductId)}
                         className="flex min-h-[104px] items-center gap-3 px-3 py-3 transition hover:bg-white/70"
                       >
                         <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-[#ead9cd] bg-white p-2">

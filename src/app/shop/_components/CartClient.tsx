@@ -159,7 +159,7 @@ export default function CartClient({ products }: CartClientProps) {
               {recommendedProducts.map((product) => (
                 <Link
                   key={product.id}
-                  href={getShopProductHref(product.slug)}
+                  href={getShopProductHref(product.slug, product.opsProductId)}
                   className="flex items-center gap-3 rounded-[14px] border border-[#7a0000]/8 bg-[#fcfaf7] p-2.5 transition hover:border-[#7a0000]/20"
                 >
                   <div className="h-14 w-14 shrink-0 rounded-[12px] bg-[#f6eee2] p-2">
