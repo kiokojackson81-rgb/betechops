@@ -15,7 +15,7 @@ import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { buildShopCategories, shopNavLinks, type ShopProduct } from "@/app/shop/shopData";
 import { getShopProducts } from "@/app/shop/shopApi";
 import { getShopCategoryHref, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
-import { prisma } from "@/lib/prisma";
+import { compareProductsByPopularity, getPopularitySignalsForProducts, type ProductPopularitySignal } from "@/lib/productPopularity";
 import { getShopImageOverrides } from "@/lib/shopImageOverrides";
 
 type ShopHomePageProps = {
@@ -29,117 +29,13 @@ function slugify(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
-function normalizeProductKey(value: string) {
-  return value.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-type ProductRankSignal = {
-  score: number;
-  latestAt: number;
-};
-
-async function getPopularitySignals(products: ShopProduct[]) {
-  const byOpsProductId = new Map<string, ProductRankSignal>();
-  const byName = new Map<string, ProductRankSignal>();
-  const opsProductIds = Array.from(
-    new Set(
-      products
-        .map((product) => String(product.opsProductId || "").trim())
-        .filter(Boolean),
-    ),
-  );
-
-  if (opsProductIds.length) {
-    const [posOrderItems, websiteOrderItems] = await Promise.all([
-      prisma.orderItem
-        .findMany({
-          where: { productId: { in: opsProductIds } },
-          select: {
-            productId: true,
-            quantity: true,
-            order: { select: { createdAt: true } },
-          },
-        })
-        .catch(() => []),
-      prisma.websiteOrderItem
-        .findMany({
-          where: { productId: { in: opsProductIds } },
-          select: {
-            productId: true,
-            quantity: true,
-            websiteOrder: { select: { createdAt: true } },
-          },
-        })
-        .catch(() => []),
-    ]);
-
-    for (const row of posOrderItems) {
-      const existing = byOpsProductId.get(row.productId) ?? { score: 0, latestAt: 0 };
-      byOpsProductId.set(row.productId, {
-        score: existing.score + Number(row.quantity ?? 0),
-        latestAt: Math.max(existing.latestAt, new Date(row.order.createdAt).getTime()),
-      });
-    }
-
-    for (const row of websiteOrderItems) {
-      if (!row.productId) continue;
-      const existing = byOpsProductId.get(row.productId) ?? { score: 0, latestAt: 0 };
-      byOpsProductId.set(row.productId, {
-        score: existing.score + Number(row.quantity ?? 0),
-        latestAt: Math.max(existing.latestAt, new Date(row.websiteOrder.createdAt).getTime()),
-      });
-    }
-  }
-
-  const agentSales = await prisma.agentSale
-    .findMany({
-      select: {
-        productName: true,
-        quantity: true,
-        createdAt: true,
-      },
-    })
-    .catch(() => [] as Array<{ productName: string; quantity: number; createdAt: Date }>);
-
-  for (const row of agentSales) {
-    const key = normalizeProductKey(String(row.productName || ""));
-    if (!key) continue;
-    const existing = byName.get(key) ?? { score: 0, latestAt: 0 };
-    byName.set(key, {
-      score: existing.score + Number(row.quantity ?? 0),
-      latestAt: Math.max(existing.latestAt, new Date(row.createdAt).getTime()),
-    });
-  }
-
-  return new Map(
-    products.map((product) => {
-      const opsSignal = product.opsProductId ? byOpsProductId.get(product.opsProductId) : null;
-      const nameSignal = byName.get(normalizeProductKey(product.name)) ?? null;
-      return [
-        product.id,
-        {
-          score: Number(opsSignal?.score ?? 0) + Number(nameSignal?.score ?? 0),
-          latestAt: Math.max(Number(opsSignal?.latestAt ?? 0), Number(nameSignal?.latestAt ?? 0)),
-        },
-      ] as const;
-    }),
-  );
-}
-
-function sortProductsForHomepage(products: ShopProduct[], popularitySignals: Map<string, ProductRankSignal>) {
+function sortProductsForHomepage(products: ShopProduct[], popularitySignals: Map<string, ProductPopularitySignal>) {
   return [...products].sort((a, b) => {
-    const left = popularitySignals.get(a.id) ?? { score: 0, latestAt: 0 };
-    const right = popularitySignals.get(b.id) ?? { score: 0, latestAt: 0 };
-    return (
-      right.score - left.score ||
-      right.latestAt - left.latestAt ||
-      ((b.oldPrice || b.price) - b.price) - ((a.oldPrice || a.price) - a.price) ||
-      a.name.localeCompare(b.name)
-    );
+    return compareProductsByPopularity(a, b, popularitySignals);
   });
 }
 
-function getProductsForCategories(products: ShopProduct[], categorySlugs: string[], popularitySignals: Map<string, ProductRankSignal>, limit = 4) {
+function getProductsForCategories(products: ShopProduct[], categorySlugs: string[], popularitySignals: Map<string, ProductPopularitySignal>, limit = 4) {
   const allowed = new Set(categorySlugs);
   return sortProductsForHomepage(
     products.filter((product) => allowed.has(slugify(product.category))),
@@ -155,7 +51,7 @@ export default async function ShopHomePage({
   const rawQuery = String(resolvedSearchParams?.q ?? "").trim();
   const searchQuery = rawQuery.length > 0 ? rawQuery : undefined;
   const [products, imageOverrides] = await Promise.all([getShopProducts({ q: searchQuery }), getShopImageOverrides()]);
-  const popularitySignals = searchQuery ? new Map<string, ProductRankSignal>() : await getPopularitySignals(products);
+  const popularitySignals = searchQuery ? new Map<string, ProductPopularitySignal>() : await getPopularitySignalsForProducts(products);
   const popularProducts = searchQuery ? products : sortProductsForHomepage(products, popularitySignals).slice(0, 8);
   const categories = buildShopCategories(imageOverrides.categoryImages);
   const kitProducts = getProductsForCategories(products, ["solar-full-kits"], popularitySignals);

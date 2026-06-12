@@ -5,12 +5,34 @@ import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-export default async function PosManagementPage() {
+type PosManagementPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>> | Record<string, string | string[] | undefined>;
+};
+
+async function resolveSearchParams(
+  searchParams?: Promise<Record<string, string | string[] | undefined>> | Record<string, string | string[] | undefined>,
+) {
+  if (!searchParams) return {};
+  if (typeof (searchParams as Promise<Record<string, string | string[] | undefined>>).then === "function") {
+    return await (searchParams as Promise<Record<string, string | string[] | undefined>>);
+  }
+  return searchParams;
+}
+
+export default async function PosManagementPage({ searchParams }: PosManagementPageProps) {
   const session = await auth();
+  const resolvedSearchParams = await resolveSearchParams(searchParams);
   const role = String((session?.user as { role?: string } | undefined)?.role ?? "").toUpperCase();
   const email = String((session?.user as { email?: string } | undefined)?.email ?? "").trim().toLowerCase();
   const isBrendah = email === "brendah@betech.co.ke";
   const hasFullAccess = role === "ADMIN" || role === "SUPERVISOR";
+  const editProductParam = resolvedSearchParams.editProduct;
+  const initialEditProductId =
+    typeof editProductParam === "string"
+      ? editProductParam.trim()
+      : Array.isArray(editProductParam)
+        ? String(editProductParam[0] ?? "").trim()
+        : "";
 
   if (!hasFullAccess && !isBrendah) {
     return redirect("/not-authorized");
@@ -43,7 +65,10 @@ export default async function PosManagementPage() {
           </div>
         </div>
       </section>
-      <PosManagementClient mode={isBrendah ? "product-desk" : "admin"} />
+      <PosManagementClient
+        mode={isBrendah ? "product-desk" : "admin"}
+        initialEditProductId={initialEditProductId || null}
+      />
     </main>
   );
 }

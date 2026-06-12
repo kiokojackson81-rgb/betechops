@@ -24,8 +24,8 @@ import AgentMobileProductCarousel from "@/app/agents/_components/AgentMobileProd
 import {
   getAgentCommissionValue,
   getAgentPotentialCommissionValue,
-  getPopularityByProduct,
-  sortAgentProducts,
+  getPopularitySignalsByProduct,
+  sortAgentProductsBySignals,
 } from "@/app/agents/agentCatalogue";
 import AgentWhatsAppFloat from "@/app/agents/_components/AgentWhatsAppFloat";
 import AnimatedCount from "@/app/agents/_components/AnimatedCount";
@@ -440,14 +440,14 @@ export default async function AgentsLandingPage({ useRootPaths = false }: Agents
   const loginHref = agentPath("/login", useRootPaths);
   const productsHref = agentPath("/products", useRootPaths);
   const shopProducts = await getShopProducts();
-  const popularityByProduct = await getPopularityByProduct(shopProducts);
-  const popularProducts = sortAgentProducts(shopProducts, popularityByProduct, "featured").slice(0, 10);
+  const popularitySignals = await getPopularitySignalsByProduct(shopProducts);
+  const popularProducts = sortAgentProductsBySignals(shopProducts, popularitySignals, "featured").slice(0, 10);
   const categoryShowcase = SHOP_CATEGORY_DEFINITIONS.map((category) => {
-    const categoryProducts = sortAgentProducts(
+    const categoryProducts = sortAgentProductsBySignals(
       shopProducts.filter(
         (product) => String(product.category || "").trim().toLowerCase() === category.label.toLowerCase(),
       ),
-      popularityByProduct,
+      popularitySignals,
       "featured",
     );
     const highestPricedProduct = categoryProducts.reduce<typeof categoryProducts[number] | null>(

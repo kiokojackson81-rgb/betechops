@@ -10,9 +10,9 @@ import {
   filterByPrice,
   getAgentCommissionValue,
   getBrandOptions,
-  getPopularityByProduct,
+  getPopularitySignalsByProduct,
   getWarrantyOptions,
-  sortAgentProducts,
+  sortAgentProductsBySignals,
 } from "@/app/agents/agentCatalogue";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
 import ShopMobileCatalogueActions from "@/app/shop/_components/ShopMobileCatalogueActions";
@@ -169,9 +169,9 @@ export default async function AgentProductsPage({
 
   const brandOptions = getBrandOptions(categoryScopedProducts);
   const warrantyOptions = getWarrantyOptions(categoryScopedProducts);
-  const popularityByProduct = await getPopularityByProduct(categoryScopedProducts);
+  const popularitySignals = await getPopularitySignalsByProduct(categoryScopedProducts);
 
-  const filteredProducts = sortAgentProducts(
+  const filteredProducts = sortAgentProductsBySignals(
     categoryScopedProducts.filter((product) => {
       if (filters.brand && product.brand !== filters.brand) return false;
       if (!filterByPrice(product.price, filters.price)) return false;
@@ -179,7 +179,7 @@ export default async function AgentProductsPage({
       if (filters.warranty && product.warranty !== filters.warranty) return false;
       return true;
     }),
-    popularityByProduct,
+    popularitySignals,
     filters.sort,
   );
 

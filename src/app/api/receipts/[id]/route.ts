@@ -15,8 +15,11 @@ import {
   recalcMarketingEntry,
   recalcSupportEntry,
 } from "@/lib/marketingReceiptCleanup";
+import { getShopProductHref } from "@/app/shop/storefrontPaths";
+import { getOpsCatalogueProductMappedById } from "@/app/shop/shopProductMapper";
 
 export const dynamic = "force-dynamic";
+const SHOP_BASE_URL = "https://www.betech.co.ke";
 
 type ParamsContext = { params: { id: string } } | { params: Promise<{ id: string }> };
 
@@ -64,6 +67,48 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
     },
   });
   if (!receipt) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const orderItems = Array.isArray(receipt.order?.items) ? receipt.order.items : [];
+  const productIds: string[] = Array.from(
+    new Set(
+      orderItems
+        .map((item) => String(item.product?.id ?? "").trim())
+        .filter(Boolean),
+    ),
+  );
+  const mappedProducts = await Promise.all(
+    productIds.map(async (productId) => {
+      const mapped = await getOpsCatalogueProductMappedById(productId);
+      return [productId, mapped] as const;
+    }),
+  );
+  const mappedProductById = new Map(mappedProducts);
+
+  const receiptWithLinks = {
+    ...receipt,
+    order: receipt.order
+      ? {
+          ...receipt.order,
+          items: orderItems.map((item) => {
+            const productId = String(item.product?.id ?? "").trim();
+            const mapped = productId ? mappedProductById.get(productId) ?? null : null;
+            const shopHref = mapped?.slug ? `${SHOP_BASE_URL}${getShopProductHref(mapped.slug)}` : null;
+            const adminEditHref = productId ? `/admin/pos-management?editProduct=${encodeURIComponent(productId)}` : null;
+
+            return {
+              ...item,
+              product: item.product
+                ? {
+                    ...item.product,
+                    shopHref,
+                    adminEditHref,
+                  }
+                : null,
+            };
+          }),
+        }
+      : receipt.order,
+  };
 
   const dataAttendantId =
     receipt.data && typeof receipt.data === "object"
@@ -195,7 +240,7 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
     // best-effort; ignore support lookup failures
   }
   return NextResponse.json({
-    receipt,
+    receipt: receiptWithLinks,
     supportItems,
     supportReceiptSummary,
     posCommissionTotal,

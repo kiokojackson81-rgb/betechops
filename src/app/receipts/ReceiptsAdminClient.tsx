@@ -80,7 +80,12 @@ type ItemWithCost = {
   sellingPrice: number;
   serial?: string | null;
   warranty?: string | null;
-  product?: { name?: string | null } | null;
+  product?: {
+    id?: string | null;
+    name?: string | null;
+    shopHref?: string | null;
+    adminEditHref?: string | null;
+  } | null;
   buyingPrice: number | null;
   displayName: string;
 };
@@ -2190,7 +2195,30 @@ export default function ReceiptsAdminClient({
                           className="flex items-center justify-between rounded-xl border border-white/5 px-3 py-2 text-sm"
                         >
                           <div>
-                            <p className="font-semibold text-white">{item.displayName || "Item"}</p>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {item.product?.shopHref ? (
+                                <Link
+                                  href={item.product.shopHref}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="font-semibold text-white underline-offset-4 hover:text-emerald-200 hover:underline"
+                                >
+                                  {item.displayName || "Item"}
+                                </Link>
+                              ) : (
+                                <p className="font-semibold text-white">{item.displayName || "Item"}</p>
+                              )}
+                              {item.product?.adminEditHref && (
+                                <Link
+                                  href={item.product.adminEditHref}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="rounded-lg border border-cyan-400/30 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-cyan-200 hover:bg-cyan-400/10"
+                                >
+                                  Edit
+                                </Link>
+                              )}
+                            </div>
                             <p className="text-xs text-slate-400 flex flex-wrap gap-2">
                               <span>Qty {quantity.toLocaleString()}</span>
                               <span>Selling {formatCurrency(sellingPrice)}</span>

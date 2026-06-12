@@ -4,7 +4,13 @@ import {
   getAgentPotentialCommissionValue,
   productCommissionRequiresApproval,
 } from "@/app/agents/agentCatalogueShared";
-import { prisma } from "@/lib/prisma";
+import {
+  compareProductsByLatest,
+  compareProductsByPopularity,
+  getPopularityCountsFromSignals,
+  getPopularitySignalsForProducts,
+  type ProductPopularitySignal,
+} from "@/lib/productPopularity";
 export {
   getAgentCommissionValue,
   getAgentPotentialCommissionValue,
@@ -41,14 +47,7 @@ export type AgentListingFilters = {
   sort?: string;
 };
 
-export type AgentProductRankSignal = {
-  score: number;
-  latestAt: number;
-};
-
-function normalizeProductKey(value: string) {
-  return value.trim().toLowerCase().replace(/\s+/g, " ");
-}
+export type AgentProductRankSignal = ProductPopularitySignal;
 
 export function filterByPrice(price: number, bucket?: string) {
   switch (bucket) {
@@ -66,171 +65,40 @@ export function filterByPrice(price: number, bucket?: string) {
 }
 
 export async function getPopularityByProduct(products: ShopProduct[]) {
-  const byOpsProductId = new Map<string, number>();
-  const byName = new Map<string, number>();
-  const opsProductIds = Array.from(
-    new Set(
-      products
-        .map((product) => String(product.opsProductId || "").trim())
-        .filter(Boolean),
-    ),
-  );
-
-  if (opsProductIds.length) {
-    const [posOrderItems, websiteOrderItems] = await Promise.all([
-      prisma.orderItem
-        .groupBy({
-          by: ["productId"],
-          where: { productId: { in: opsProductIds } },
-          _sum: { quantity: true },
-        })
-        .catch(() => []),
-      prisma.websiteOrderItem
-        .groupBy({
-          by: ["productId"],
-          where: { productId: { in: opsProductIds } },
-          _sum: { quantity: true },
-        })
-        .catch(() => []),
-    ]);
-
-    for (const row of posOrderItems) {
-      byOpsProductId.set(row.productId, Number(row._sum.quantity ?? 0));
-    }
-
-    for (const row of websiteOrderItems) {
-      if (!row.productId) continue;
-      byOpsProductId.set(row.productId, Number(byOpsProductId.get(row.productId) ?? 0) + Number(row._sum.quantity ?? 0));
-    }
-  }
-
-  const agentSales = await prisma.agentSale
-    .groupBy({
-      by: ["productName"],
-      _sum: { quantity: true },
-    })
-    .catch(() => [] as Array<{ productName: string; _sum: { quantity: number | null } }>);
-
-  for (const row of agentSales) {
-    const key = normalizeProductKey(String(row.productName || ""));
-    if (!key) continue;
-    byName.set(key, Number(byName.get(key) ?? 0) + Number(row._sum.quantity ?? 0));
-  }
-
-  return new Map(
-    products.map((product) => {
-      const opsScore = product.opsProductId ? Number(byOpsProductId.get(product.opsProductId) ?? 0) : 0;
-      const nameScore = Number(byName.get(normalizeProductKey(product.name)) ?? 0);
-      return [product.id, opsScore + nameScore];
-    }),
-  );
+  const signals = await getPopularitySignalsForProducts(products);
+  return getPopularityCountsFromSignals(signals);
 }
 
 export async function getPopularitySignalsByProduct(products: ShopProduct[]) {
-  const byOpsProductId = new Map<string, AgentProductRankSignal>();
-  const byName = new Map<string, AgentProductRankSignal>();
-  const opsProductIds = Array.from(
-    new Set(
-      products
-        .map((product) => String(product.opsProductId || "").trim())
-        .filter(Boolean),
-    ),
-  );
-
-  if (opsProductIds.length) {
-    const [posOrderItems, websiteOrderItems] = await Promise.all([
-      prisma.orderItem
-        .findMany({
-          where: { productId: { in: opsProductIds } },
-          select: {
-            productId: true,
-            quantity: true,
-            order: { select: { createdAt: true } },
-          },
-        })
-        .catch(() => []),
-      prisma.websiteOrderItem
-        .findMany({
-          where: { productId: { in: opsProductIds } },
-          select: {
-            productId: true,
-            quantity: true,
-            websiteOrder: { select: { createdAt: true } },
-          },
-        })
-        .catch(() => []),
-    ]);
-
-    for (const row of posOrderItems) {
-      const existing = byOpsProductId.get(row.productId) ?? { score: 0, latestAt: 0 };
-      byOpsProductId.set(row.productId, {
-        score: existing.score + Number(row.quantity ?? 0),
-        latestAt: Math.max(existing.latestAt, new Date(row.order.createdAt).getTime()),
-      });
-    }
-
-    for (const row of websiteOrderItems) {
-      if (!row.productId) continue;
-      const existing = byOpsProductId.get(row.productId) ?? { score: 0, latestAt: 0 };
-      byOpsProductId.set(row.productId, {
-        score: existing.score + Number(row.quantity ?? 0),
-        latestAt: Math.max(existing.latestAt, new Date(row.websiteOrder.createdAt).getTime()),
-      });
-    }
-  }
-
-  const agentSales = await prisma.agentSale
-    .findMany({
-      select: {
-        productName: true,
-        quantity: true,
-        createdAt: true,
-      },
-    })
-    .catch(() => [] as Array<{ productName: string; quantity: number; createdAt: Date }>);
-
-  for (const row of agentSales) {
-    const key = normalizeProductKey(String(row.productName || ""));
-    if (!key) continue;
-    const existing = byName.get(key) ?? { score: 0, latestAt: 0 };
-    byName.set(key, {
-      score: existing.score + Number(row.quantity ?? 0),
-      latestAt: Math.max(existing.latestAt, new Date(row.createdAt).getTime()),
-    });
-  }
-
-  return new Map(
-    products.map((product) => {
-      const opsSignal = product.opsProductId ? byOpsProductId.get(product.opsProductId) : null;
-      const nameSignal = byName.get(normalizeProductKey(product.name)) ?? null;
-      return [
-        product.id,
-        {
-          score: Number(opsSignal?.score ?? 0) + Number(nameSignal?.score ?? 0),
-          latestAt: Math.max(Number(opsSignal?.latestAt ?? 0), Number(nameSignal?.latestAt ?? 0)),
-        },
-      ] as const;
-    }),
-  );
+  return getPopularitySignalsForProducts(products);
 }
 
 export function sortAgentProducts(products: ShopProduct[], popularityByProduct: Map<string, number>, sort?: string) {
   const items = [...products];
+  const popularitySignals = new Map(
+    products.map((product) => [
+      product.id,
+      {
+        score: Number(popularityByProduct.get(product.id) ?? 0),
+        latestAt: 0,
+      },
+    ]),
+  );
 
   switch (sort) {
     case "price-low":
       return items.sort((a, b) => a.price - b.price);
     case "name":
-      return items.sort((a, b) => a.name.localeCompare(b.name));
+      return items.sort((a, b) => compareProductsByLatest(a, b, popularitySignals));
     case "commission-high":
       return items.sort((a, b) => {
         const commissionDelta = getAgentCommissionValue(b) - getAgentCommissionValue(a);
         if (commissionDelta !== 0) return commissionDelta;
-        return (popularityByProduct.get(b.id) ?? 0) - (popularityByProduct.get(a.id) ?? 0);
+        return compareProductsByPopularity(a, b, popularitySignals);
       });
     default:
       return items.sort((a, b) => {
-        const popularityDelta = Number(popularityByProduct.get(b.id) ?? 0) - Number(popularityByProduct.get(a.id) ?? 0);
+        const popularityDelta = compareProductsByPopularity(a, b, popularitySignals);
         if (popularityDelta !== 0) return popularityDelta;
         const commissionDelta = getAgentCommissionValue(b) - getAgentCommissionValue(a);
         if (commissionDelta !== 0) return commissionDelta;
@@ -252,30 +120,16 @@ export function sortAgentProductsBySignals(
     case "price-low":
       return items.sort((a, b) => a.price - b.price);
     case "name":
-      return items.sort((a, b) => {
-        const left = popularitySignals.get(a.id) ?? { score: 0, latestAt: 0 };
-        const right = popularitySignals.get(b.id) ?? { score: 0, latestAt: 0 };
-        return right.latestAt - left.latestAt || a.name.localeCompare(b.name);
-      });
+      return items.sort((a, b) => compareProductsByLatest(a, b, popularitySignals));
     case "commission-high":
       return items.sort((a, b) => {
         const commissionDelta = getAgentCommissionValue(b) - getAgentCommissionValue(a);
         if (commissionDelta !== 0) return commissionDelta;
-        const left = popularitySignals.get(a.id) ?? { score: 0, latestAt: 0 };
-        const right = popularitySignals.get(b.id) ?? { score: 0, latestAt: 0 };
-        return right.score - left.score || right.latestAt - left.latestAt;
+        return compareProductsByPopularity(a, b, popularitySignals);
       });
     default:
       return items.sort((a, b) => {
-        const left = popularitySignals.get(a.id) ?? { score: 0, latestAt: 0 };
-        const right = popularitySignals.get(b.id) ?? { score: 0, latestAt: 0 };
-        return (
-          right.score - left.score ||
-          right.latestAt - left.latestAt ||
-          getAgentCommissionValue(b) - getAgentCommissionValue(a) ||
-          ((b.oldPrice || b.price) - b.price) - ((a.oldPrice || a.price) - a.price) ||
-          a.name.localeCompare(b.name)
-        );
+        return compareProductsByPopularity(a, b, popularitySignals) || getAgentCommissionValue(b) - getAgentCommissionValue(a);
       });
   }
 }

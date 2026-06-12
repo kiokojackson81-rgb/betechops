@@ -143,6 +143,7 @@ type AiProductPrefill = {
 
 type PosManagementClientProps = {
   mode?: "admin" | "product-desk";
+  initialEditProductId?: string | null;
 };
 
 const emptyDraft: ProductDraft = {
@@ -356,7 +357,7 @@ function getApiErrorMessage(json: unknown, fallback: string) {
   return fallback;
 }
 
-export default function PosManagementClient({ mode = "admin" }: PosManagementClientProps) {
+export default function PosManagementClient({ mode = "admin", initialEditProductId = null }: PosManagementClientProps) {
   const isProductDeskMode = mode === "product-desk";
   const canManagePricing = !isProductDeskMode;
   const canManageCommissions = !isProductDeskMode;
@@ -387,6 +388,7 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
   const [commissionFilter, setCommissionFilter] = useState<"all" | "enabled" | "disabled">("all");
   const [warrantyFilter, setWarrantyFilter] = useState<"all" | "with" | "without">("all");
   const [editorOpen, setEditorOpen] = useState(false);
+  const initialEditHandledRef = useRef(false);
   const formSectionRef = useRef<HTMLElement | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   const catalogueTableRef = useRef<HTMLDivElement | null>(null);
@@ -478,6 +480,16 @@ export default function PosManagementClient({ mode = "admin" }: PosManagementCli
     const inactive = products.filter((product) => !product.isActive).length;
     return { total, online, featured, warehouse, inactive };
   }, [products]);
+
+  useEffect(() => {
+    if (initialEditHandledRef.current) return;
+    const targetId = String(initialEditProductId ?? "").trim();
+    if (!targetId || loading || !products.length) return;
+    const matched = products.find((product) => product.id === targetId);
+    if (!matched) return;
+    initialEditHandledRef.current = true;
+    startEdit(matched);
+  }, [initialEditProductId, loading, products]);
 
   const duplicateMatches = useMemo(
     () =>
