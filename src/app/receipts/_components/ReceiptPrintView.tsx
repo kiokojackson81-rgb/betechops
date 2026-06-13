@@ -70,11 +70,19 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
     LAYAWAY: "Layaway No.",
   };
   const numberLabel = numberLabelMap[docTypeRaw] || "Receipt No.";
+  const normalizedAttendantName =
+    typeof data?.attendantName === "string" ? data.attendantName.trim() : "";
+  const normalizedOrderAttendantName =
+    typeof data?.attendant?.name === "string" ? data.attendant.name.trim() : "";
+  const normalizedIssuedByName =
+    typeof data?.issuedByName === "string" ? data.issuedByName.trim() : "";
+  const normalizedIssuedByObjectName =
+    typeof data?.issuedBy?.name === "string" ? data.issuedBy.name.trim() : "";
   const servedBy =
-    data?.attendantName ||
-    data?.issuedByName ||
-    data?.issuedBy?.name ||
-    data?.attendant?.name ||
+    normalizedAttendantName ||
+    normalizedOrderAttendantName ||
+    normalizedIssuedByName ||
+    normalizedIssuedByObjectName ||
     "____";
   const paymentMethodRaw = (data?.paymentMethod || "").toString().toUpperCase();
   const paymentLabel = paymentMethodRaw === "CASH" ? "Cash" : "MPESA";

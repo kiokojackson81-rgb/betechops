@@ -3,6 +3,12 @@ export function buildReceiptSnapshot(receipt: any) {
   const data = receipt.data;
   const dataIsObject = data !== null && typeof data === 'object' && !Array.isArray(data);
   const dataAny = dataIsObject ? (data as any) : undefined;
+  const dataAttendantName =
+    typeof dataAny?.attendantName === 'string' ? dataAny.attendantName.trim() : '';
+  const orderAttendantName =
+    typeof order?.attendant?.name === 'string' ? order.attendant.name.trim() : '';
+  const issuedByName =
+    typeof receipt.issuedBy?.name === 'string' ? receipt.issuedBy.name.trim() : '';
 
   // Prefer order.items (joined via Prisma). If not present, fall back to
   // items stored inside `receipt.data.items` (used by some flows).
@@ -52,8 +58,8 @@ export function buildReceiptSnapshot(receipt: any) {
     showDiscount: Boolean((receipt.showDiscount ?? (dataIsObject ? (dataAny?.showDiscount as boolean | undefined) : undefined)) || Number(receipt.discount ?? 0) > 0),
     generatedAt: receipt.generatedAt ? receipt.generatedAt.toISOString() : new Date().toISOString(),
     customerName: order.customerName || '',
-    attendantName: receipt.issuedBy?.name || order?.attendant?.name || '',
-    issuedByName: receipt.issuedBy?.name || '',
+    attendantName: orderAttendantName || dataAttendantName || issuedByName || '',
+    issuedByName,
     paymentMethod:
       (dataIsObject ? (dataAny?.paymentMethod as string | undefined) : undefined) ||
       (receipt as any).paymentMethod ||
