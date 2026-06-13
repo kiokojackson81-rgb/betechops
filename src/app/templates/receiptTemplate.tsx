@@ -373,7 +373,7 @@ export default function renderReceiptTemplate(
         .page {
           width: calc(148mm - 4mm);
           height: auto;
-          min-height: auto;
+          min-height: calc(210mm - 4mm);
           max-height: none;
           margin: 0;
           padding: 3mm 3.5mm 2.5mm;
@@ -382,12 +382,16 @@ export default function renderReceiptTemplate(
           overflow: visible;
         }
         .receipt-body {
+          display: flex;
+          flex-direction: column;
+          flex: 1 1 auto;
           min-height: 0;
           height: auto;
           overflow: visible;
         }
         .receipt-bottom {
-          margin-top: 5px;
+          margin-top: auto;
+          padding-top: 5px;
         }
         header,
         .signature,
