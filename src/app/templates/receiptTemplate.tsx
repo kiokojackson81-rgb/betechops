@@ -57,6 +57,7 @@ export default function renderReceiptTemplate(
         .join('');
   const phoneNumber = snapshot.phone || snapshot.customerPhone || order?.customerPhone || '';
   const allowMarketingFooter = (items.length || 0) <= 5;
+  const isCompactReceipt = (items.length || 0) <= 5 && !notes && !itemWarrantyEntries;
 
   const toNumberOrNull = (value: unknown): number | null => {
     if (value === null || value === undefined) return null;
@@ -175,6 +176,9 @@ export default function renderReceiptTemplate(
           box-shadow: 0 14px 28px rgba(15, 23, 42, 0.12);
           display: flex;
           flex-direction: column;
+        }
+        .page.page--compact {
+          height: calc(210mm - 4mm);
         }
         .receipt-body {
           display: flex;
@@ -381,6 +385,9 @@ export default function renderReceiptTemplate(
           border: none;
           overflow: visible;
         }
+        .page.page--compact {
+          height: calc(210mm - 4mm);
+        }
         .receipt-body {
           display: flex;
           flex-direction: column;
@@ -428,7 +435,7 @@ export default function renderReceiptTemplate(
       </style>
   </head>
   <body>
-    <div class="page">
+    <div class="page${isCompactReceipt ? ' page--compact' : ''}">
       <header>
         ${headerHtml}
       </header>

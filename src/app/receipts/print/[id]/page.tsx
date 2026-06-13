@@ -84,9 +84,11 @@ export default async function Page({
   // Render the template HTML directly into the page so it behaves like the printable route.
   return (
     <div className="receipt-preview-host bg-slate-200">
-      <div className="mx-auto w-full max-w-[148mm] px-4 pt-4">
-        <ReceiptToolbar receiptId={id} />
-      </div>
+      {autoPrint !== "1" ? (
+        <div className="mx-auto w-full max-w-[148mm] px-4 pt-4">
+          <ReceiptToolbar receiptId={id} />
+        </div>
+      ) : null}
       <div dangerouslySetInnerHTML={{ __html: printableHtml }} />
     </div>
   );
