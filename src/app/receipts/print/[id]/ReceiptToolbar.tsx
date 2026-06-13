@@ -32,7 +32,7 @@ export default function ReceiptToolbar({ receiptId }: ReceiptToolbarProps) {
   };
 
   return (
-    <div style={toolbarStyle}>
+    <div className="no-print" style={toolbarStyle}>
       <button type="button" style={buttonStyle} onClick={() => window.print()}>
         Print
       </button>

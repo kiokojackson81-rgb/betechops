@@ -77,12 +77,17 @@ export default async function Page({
     { ...(snapshot as any), branding },
     { hideStamp: false, hideItemWarrantySummary: true }
   );
+  const printableHtml = html
+    .replace(/<!doctype[^>]*>/gi, "")
+    .replace(/<\/?(html|head|body)[^>]*>/gi, "");
 
   // Render the template HTML directly into the page so it behaves like the printable route.
   return (
-    <div>
-      <ReceiptToolbar receiptId={id} />
-      <div dangerouslySetInnerHTML={{ __html: html }} />
+    <div className="receipt-preview-host bg-slate-200">
+      <div className="mx-auto w-full max-w-[148mm] px-4 pt-4">
+        <ReceiptToolbar receiptId={id} />
+      </div>
+      <div dangerouslySetInnerHTML={{ __html: printableHtml }} />
     </div>
   );
 }
