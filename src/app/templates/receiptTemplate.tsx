@@ -372,22 +372,22 @@ export default function renderReceiptTemplate(
         body { overflow: visible; }
         .page {
           width: calc(148mm - 4mm);
-          height: calc(210mm - 4mm);
-          min-height: calc(210mm - 4mm);
-          max-height: calc(210mm - 4mm);
+          height: auto;
+          min-height: auto;
+          max-height: none;
           margin: 0;
           padding: 3mm 3.5mm 2.5mm;
           box-shadow: none;
           border: none;
-          overflow: hidden;
+          overflow: visible;
         }
         .receipt-body {
           min-height: 0;
-          height: 100%;
-          overflow: hidden;
+          height: auto;
+          overflow: visible;
         }
         .receipt-bottom {
-          margin-top: auto;
+          margin-top: 5px;
         }
         header,
         .signature,
