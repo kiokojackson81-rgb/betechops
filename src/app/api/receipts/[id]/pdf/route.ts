@@ -30,11 +30,12 @@ export async function GET(_req: NextRequest, context: ParamsContext) {
   try {
     const search = req.nextUrl.searchParams;
     const asDownload = search.get('download') === '1';
-    // Always generate a fresh PDF for explicit download so users get the latest
-    // polished layout, even when older stored files exist.
-    const forceFresh = search.get('fresh') === '1' || asDownload;
+    // Render fresh by default so inline PDF viewing and downloaded PDFs match
+    // the current print-preview layout. Cached stored PDFs are only used when
+    // explicitly requested for diagnostics.
+    const allowCached = search.get('cached') === '1';
 
-    const files = forceFresh
+    const files = !allowCached
       ? []
       : await prisma.receiptFile.findMany({
           where: { receiptId, contentType: 'application/pdf', url: { not: '' } },
