@@ -6,6 +6,21 @@ export type ProductPopularitySignal = {
   latestAt: number;
 };
 
+function getIsoTimestamp(value?: string | null) {
+  if (!value) return 0;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getNewestProductTimestamp(product: ShopProduct, signals: Map<string, ProductPopularitySignal>) {
+  const signal = signals.get(product.id) ?? { score: 0, latestAt: 0 };
+  return Math.max(
+    getIsoTimestamp(product.updatedAt),
+    getIsoTimestamp(product.createdAt),
+    Number(signal.latestAt ?? 0),
+  );
+}
+
 function normalizeProductKey(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
@@ -128,5 +143,10 @@ export function compareProductsByLatest(
 ) {
   const left = signals.get(a.id) ?? { score: 0, latestAt: 0 };
   const right = signals.get(b.id) ?? { score: 0, latestAt: 0 };
-  return right.latestAt - left.latestAt || right.score - left.score || a.name.localeCompare(b.name);
+  return (
+    getNewestProductTimestamp(b, signals) - getNewestProductTimestamp(a, signals) ||
+    right.score - left.score ||
+    b.price - a.price ||
+    a.name.localeCompare(b.name)
+  );
 }

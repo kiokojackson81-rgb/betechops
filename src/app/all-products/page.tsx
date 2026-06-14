@@ -63,8 +63,9 @@ const STOCK_OPTIONS = [
 
 const SORT_OPTIONS = [
   { value: "featured", label: "Most popular" },
-  { value: "name", label: "Latest" },
-  { value: "price-low", label: "Price low-high" },
+  { value: "latest", label: "Latest" },
+  { value: "price-low", label: "Price: Low to High" },
+  { value: "price-high", label: "Price: High to Low" },
 ] as const;
 
 function filterByPrice(price: number, bucket?: string) {
@@ -88,6 +89,9 @@ function sortProducts(products: ShopProduct[], popularitySignals: Map<string, Pr
   switch (sort) {
     case "price-low":
       return items.sort((a, b) => a.price - b.price);
+    case "price-high":
+      return items.sort((a, b) => b.price - a.price);
+    case "latest":
     case "name":
       return items.sort((a, b) => compareProductsByLatest(a, b, popularitySignals));
     default:

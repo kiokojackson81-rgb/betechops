@@ -19,8 +19,9 @@ export {
 
 export const AGENT_SORT_OPTIONS = [
   { value: "featured", label: "Most popular" },
-  { value: "name", label: "Latest" },
-  { value: "price-low", label: "Price low-high" },
+  { value: "latest", label: "Latest" },
+  { value: "price-low", label: "Price: Low to High" },
+  { value: "price-high", label: "Price: High to Low" },
   { value: "commission-high", label: "Highest commission" },
 ] as const;
 
@@ -88,6 +89,9 @@ export function sortAgentProducts(products: ShopProduct[], popularityByProduct: 
   switch (sort) {
     case "price-low":
       return items.sort((a, b) => a.price - b.price);
+    case "price-high":
+      return items.sort((a, b) => b.price - a.price);
+    case "latest":
     case "name":
       return items.sort((a, b) => compareProductsByLatest(a, b, popularitySignals));
     case "commission-high":
@@ -119,6 +123,9 @@ export function sortAgentProductsBySignals(
   switch (sort) {
     case "price-low":
       return items.sort((a, b) => a.price - b.price);
+    case "price-high":
+      return items.sort((a, b) => b.price - a.price);
+    case "latest":
     case "name":
       return items.sort((a, b) => compareProductsByLatest(a, b, popularitySignals));
     case "commission-high":

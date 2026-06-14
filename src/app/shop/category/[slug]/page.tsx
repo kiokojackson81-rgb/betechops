@@ -20,6 +20,12 @@ import { getShopProducts } from "@/app/shop/shopApi";
 import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks, type ShopProduct } from "@/app/shop/shopData";
 import { getShopCategoryHref, getShopRequestQuoteHref } from "@/app/shop/storefrontPaths";
+import {
+  compareProductsByLatest,
+  compareProductsByPopularity,
+  getPopularitySignalsForProducts,
+  type ProductPopularitySignal,
+} from "@/lib/productPopularity";
 
 type CategoryPageProps = {
   params: Promise<{ slug: string }>;
@@ -57,8 +63,9 @@ const STOCK_OPTIONS = [
 
 const SORT_OPTIONS = [
   { value: "featured", label: "Popularity" },
-  { value: "name", label: "Latest" },
-  { value: "price-low", label: "Price low-high" },
+  { value: "latest", label: "Latest" },
+  { value: "price-low", label: "Price: Low to High" },
+  { value: "price-high", label: "Price: High to Low" },
 ] as const;
 
 function buildCategoryDescription(category: ShopCategoryDefinition, subcategoryLabel?: string | null) {
@@ -84,20 +91,23 @@ function filterByPrice(price: number, bucket?: string) {
   }
 }
 
-function sortProducts(products: ShopProduct[], sort?: string) {
+function sortProducts(
+  products: ShopProduct[],
+  popularitySignals: Map<string, ProductPopularitySignal>,
+  sort?: string,
+) {
   const items = [...products];
 
   switch (sort) {
     case "price-low":
       return items.sort((a, b) => a.price - b.price);
+    case "price-high":
+      return items.sort((a, b) => b.price - a.price);
+    case "latest":
     case "name":
-      return items.sort((a, b) => a.name.localeCompare(b.name));
+      return items.sort((a, b) => compareProductsByLatest(a, b, popularitySignals));
     default:
-      return items.sort((a, b) => {
-        const aDiscount = (a.oldPrice || a.price) - a.price;
-        const bDiscount = (b.oldPrice || b.price) - b.price;
-        return bDiscount - aDiscount;
-      });
+      return items.sort((a, b) => compareProductsByPopularity(a, b, popularitySignals));
   }
 }
 
@@ -240,6 +250,7 @@ export default async function ShopCategoryPage({ params, searchParams }: Categor
 
   const brandOptions = getBrandOptions(categoryProducts);
   const warrantyOptions = getWarrantyOptions(categoryProducts);
+  const popularitySignals = await getPopularitySignalsForProducts(categoryProducts);
 
   const filteredProducts = sortProducts(
     categoryProducts.filter((product) => {
@@ -249,6 +260,7 @@ export default async function ShopCategoryPage({ params, searchParams }: Categor
       if (filters.warranty && product.warranty !== filters.warranty) return false;
       return true;
     }),
+    popularitySignals,
     filters.sort,
   );
 

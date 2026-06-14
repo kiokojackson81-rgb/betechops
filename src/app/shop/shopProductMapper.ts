@@ -19,6 +19,8 @@ type OpsCatalogueProduct = {
   sku: string;
   name: string;
   category: string;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
   sellingPrice: number;
   defaultWarranty: string | null;
   minStockLevel: number;
@@ -198,6 +200,8 @@ async function queryOpsCatalogueProducts(whereClause = "", params: unknown[] = [
         "sku",
         "name",
         COALESCE("category", 'Accessories') AS "category",
+        ${available.has("createdAt") ? `"createdAt"` : `NULL::timestamp`} AS "createdAt",
+        ${available.has("updatedAt") ? `"updatedAt"` : `NULL::timestamp`} AS "updatedAt",
         COALESCE("sellingPrice", 0) AS "sellingPrice",
         "defaultWarranty",
         COALESCE("minStockLevel", 0) AS "minStockLevel",
@@ -246,6 +250,8 @@ async function queryOpsCatalogueProducts(whereClause = "", params: unknown[] = [
         COALESCE("key", "id") AS "sku",
         "name",
         COALESCE("unit", 'Accessories') AS "category",
+        ${available.has("createdAt") ? `"createdAt"` : `NULL::timestamp`} AS "createdAt",
+        ${available.has("updatedAt") ? `"updatedAt"` : `NULL::timestamp`} AS "updatedAt",
         COALESCE("sellPrice", 0) AS "sellingPrice",
         NULL::text AS "defaultWarranty",
         0 AS "minStockLevel",
@@ -628,6 +634,8 @@ function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview 
         whatsappMessage: `Hello Betech Solar, I want more details about ${fallbackName}.`,
         source: "ops",
         opsProductId: product.id,
+        createdAt: product.createdAt ? new Date(product.createdAt).toISOString() : null,
+        updatedAt: product.updatedAt ? new Date(product.updatedAt).toISOString() : null,
         commissionEnabled: Boolean(product.commissionEnabled),
         commissionAmount: product.commissionAmount == null ? null : Number(product.commissionAmount),
         commissionRequiresApproval: Boolean(product.commissionRequiresApproval),

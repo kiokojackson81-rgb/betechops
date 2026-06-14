@@ -46,6 +46,8 @@ export type ShopProduct = {
   whatsappMessage: string;
   source: "mock" | "ops";
   opsProductId: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
   commissionEnabled?: boolean;
   commissionAmount?: number | null;
   commissionRequiresApproval?: boolean;
