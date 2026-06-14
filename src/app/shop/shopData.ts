@@ -448,7 +448,7 @@ export const footerGroups = [
       { label: "Betech Solar Online Store", href: "/shop" },
       { label: "agents.betech.co.ke", href: "https://agents.betech.co.ke" },
       { label: "ops.betech.co.ke", href: "https://ops.betech.co.ke" },
-      { label: "Visit our Nairobi CBD shop", href: "#support" },
+      { label: "Click for Shop Direction", href: "https://www.tiktok.com/@betechsolarsolutionske/video/7546869303308569861" },
     ],
   },
 ];

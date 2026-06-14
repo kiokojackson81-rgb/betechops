@@ -41,7 +41,7 @@ export default function ShopFooter() {
 
           <div className="mt-6 flex flex-col gap-3 border-t border-white/10 pt-5 text-sm text-white/62 sm:flex-row sm:items-center sm:justify-between">
             <div>Delivered countrywide. Talk to our solar team on WhatsApp.</div>
-            <div>Visit our Nairobi CBD shop at Pramukh Plaza.</div>
+            <div>Shop Location : Pramukh Plaza, Third Floor, Shop No. 3 at Junction of Munyu Road and Sheikh Karume, Nairobi CBD</div>
           </div>
         </div>
       </div>

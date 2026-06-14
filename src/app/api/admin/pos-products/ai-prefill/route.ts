@@ -8,6 +8,46 @@ export const runtime = "nodejs";
 
 const client = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 
+const PRODUCT_DESCRIPTION_FORMAT_STANDARD = `
+Use this exact customer-facing product description structure for both shortDescription and description:
+
+<div class="product-specs">
+<h3>KEY SPECIFICATIONS</h3>
+<p>Looking for a reliable and efficient solar solution?</p>
+<p>The [PRODUCT NAME] is designed for [MAIN USE CASES].</p>
+<ul>
+<li>✅ Power: [VALUE]</li>
+<li>✅ Voltage: [VALUE]</li>
+<li>✅ Capacity: [VALUE]</li>
+<li>✅ Output: [VALUE]</li>
+<li>✅ Warranty: [VALUE]</li>
+</ul>
+<h4>WHAT IT CAN DO</h4>
+<ul>
+<li>✅ Benefit 1</li>
+<li>✅ Benefit 2</li>
+<li>✅ Benefit 3</li>
+<li>✅ Benefit 4</li>
+</ul>
+<h4>IDEAL FOR</h4>
+<ul>
+<li>✅ Homes</li>
+<li>✅ Businesses</li>
+<li>✅ Farms</li>
+<li>✅ Institutions</li>
+</ul>
+</div>
+
+Rules:
+- Keep the description clean, professional, and easy to scan on mobile.
+- Use checkmark bullet points only as shown above.
+- Display one specification per line.
+- Do not include prices, hashtags, marketing slogans, transport promises, contact details, or emojis other than ✅.
+- Only include facts visible on the image or reliably inferable from visible specifications.
+- If a specification is not visible, omit that line instead of guessing.
+- Tailor the intro, What It Can Do, and Ideal For sections to the actual product.
+`.trim();
+
 function normalizeOptionalString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -81,7 +121,7 @@ export async function POST(req: Request) {
         {
           role: "system",
           content:
-            "You extract truthful ecommerce product details from a single uploaded product poster or sales image. Return only JSON. Do not invent unavailable details. If a field is not visible or not reliably inferable, return an empty string or null. Copy exact visible numbers, capacities, quantities, brands, model names, panel counts, battery sizes, inverter sizes, warranty periods, and inclusion claims from the image. Never upgrade, substitute, round, or rewrite a visible figure into a different one. For example, if the image says 5KW do not output 8KW; if it says 4 panels do not output 10 panels. Write for African buyers and practical Kenyan use cases. If a price is visible, return the numeric amount only with no currency symbols or commas. Warranty should be the clearest visible warranty period. Specifications should be short factual bullet-style strings. The main customer-facing description must be rich and properly structured, not a one-line summary. Format it cleanly with short paragraphs, section labels, bullet-style lines, and emphasis markers like **bold** where useful. When the image is a full system package or contains enough details, write a long-form customer-facing description with sections supported by the image, such as: Price, System Components, Key Features, Warranty, What This System Can Power, Ideal For, and Package Benefits. Only mention installation, transportation, included accessories, or nationwide service if the image explicitly says they are included.",
+            `You extract truthful ecommerce product details from a single uploaded product poster or sales image. Return only JSON. Do not invent unavailable details. If a field is not visible or not reliably inferable, return an empty string or null. Copy exact visible numbers, capacities, quantities, brands, model names, panel counts, battery sizes, inverter sizes, warranty periods, and inclusion claims from the image. Never upgrade, substitute, round, or rewrite a visible figure into a different one. For example, if the image says 5KW do not output 8KW; if it says 4 panels do not output 10 panels. Write for African buyers and practical Kenyan use cases. If a price is visible, return the numeric amount only with no currency symbols or commas. Warranty should be the clearest visible warranty period. Specifications should be short factual bullet-style strings. The main customer-facing description must follow the required structure exactly.\n\n${PRODUCT_DESCRIPTION_FORMAT_STANDARD}`,
         },
         {
           role: "user",
@@ -89,7 +129,7 @@ export async function POST(req: Request) {
             {
               type: "text",
               text:
-                "Extract and write these fields from this product image: name, brand, sellingPrice, warrantyPeriod, shortDescription, description, specifications. Read the poster carefully and use the exact visible details only. The shortDescription field is the main storefront description, so do not make it short. Put the full rich formatted product write-up there. It should be detailed, well formatted, and ready for customers to read, using paragraphs, section labels, bullet-style lines, and **bold** emphasis where helpful. Do not guess or substitute similar system details. The description field should also contain the same or slightly expanded rich description as a backup. For solar systems and bundled packages, write a proper long-form product description similar to a catalogue entry. Start with a short opening overview paragraph, then include clear sections when visible from the image: Price, System Components, Key Features, Warranty, What This System Can Power, Ideal For, and Package Benefits. Under those sections, include concise bullet-style lines in plain text. Be convincing but truthful. Describe what the system can power in realistic home, office, farm, or business use based only on the visible wattage, battery, inverter, panel count, or written claims. Only mention transport, installation, all-inclusive accessories, or nationwide coverage if the image explicitly confirms them. Put core technical points into the specifications array as concise factual entries.",
+                `Extract and write these fields from this product image: name, brand, sellingPrice, warrantyPeriod, shortDescription, description, specifications. Read the poster carefully and use the exact visible details only. The shortDescription field is the main storefront description, so do not make it short. The description field should contain the same structure, or a slightly fuller version of the same structure, as backup. Follow this format standard exactly for both description fields:\n\n${PRODUCT_DESCRIPTION_FORMAT_STANDARD}\n\nUse the actual visible product name in the intro. Write the main use cases from the poster content. Use only visible or safely inferable technical facts. Put concise factual entries into the specifications array as backup structured data.`,
             },
             {
               type: "image_url",
