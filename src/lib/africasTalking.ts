@@ -1,6 +1,13 @@
 const AT_SANDBOX_BASE = "https://api.sandbox.africastalking.com/version1";
 const AT_PRODUCTION_BASE = "https://api.africastalking.com/version1";
 
+type AfricaTalkingPayload = {
+  username: string;
+  to: string;
+  message: string;
+  from?: string;
+};
+
 export function getAfricaTalkingConfig() {
   const username = String(process.env.AFRICASTALKING_USERNAME || "").trim();
   const apiKey = String(process.env.AFRICASTALKING_API_KEY || "").trim();
@@ -10,42 +17,60 @@ export function getAfricaTalkingConfig() {
       process.env.AFRICASTALKING_SENDER ||
       "",
   ).trim();
+  const environment = username === "sandbox" ? "sandbox" : "production";
+
   if (!username || !apiKey) {
     throw new Error("Africa's Talking credentials are not configured.");
+  }
+
+  if (!senderId) {
+    console.warn("[africastalking] sender ID is missing", {
+      username,
+      environment,
+    });
+  }
+
+  if (environment === "production" && !senderId) {
+    throw new Error("Africa's Talking sender ID is required in production.");
   }
 
   return {
     username,
     apiKey,
     senderId,
-    environment: username === "sandbox" ? "sandbox" : "production",
-    baseUrl: username === "sandbox" ? AT_SANDBOX_BASE : AT_PRODUCTION_BASE,
+    environment,
+    baseUrl: environment === "sandbox" ? AT_SANDBOX_BASE : AT_PRODUCTION_BASE,
   };
 }
 
-export async function sendOtpSms(phone: string, code: string) {
+export async function sendTransactionalSms(phone: string, message: string) {
   const { username, apiKey, senderId, baseUrl, environment } = getAfricaTalkingConfig();
-  const message = `Betech verification code: ${code}. Valid for 5 minutes.`;
   const requestUrl = `${baseUrl}/messaging`;
 
-  const requestPayload = {
+  const requestPayload: AfricaTalkingPayload = {
     username,
     to: phone,
     message,
     ...(senderId ? { from: senderId } : {}),
   };
 
-  console.info("[africastalking] preparing OTP SMS request", {
+  console.log("AT SMS", {
+    username,
+    senderId,
+    phone,
+    messageLength: message.length,
+  });
+
+  console.info("[africastalking] preparing transactional SMS request", {
     username,
     environment,
     senderId: senderId || null,
-    hasApiKey: Boolean(apiKey),
-    apiKeyLength: apiKey.length,
     requestUrl,
     requestPayload,
   });
 
   const body = new URLSearchParams(requestPayload);
+  const serializedPayload = body.toString();
 
   const response = await fetch(requestUrl, {
     method: "POST",
@@ -54,7 +79,7 @@ export async function sendOtpSms(phone: string, code: string) {
       Accept: "application/json",
       "Content-Type": "application/x-www-form-urlencoded",
     },
-    body: body.toString(),
+    body: serializedPayload,
     cache: "no-store",
   });
 
@@ -66,17 +91,22 @@ export async function sendOtpSms(phone: string, code: string) {
     payload = rawBody || null;
   }
 
-  console.info("[africastalking] OTP SMS response received", {
+  const recipients =
+    payload && typeof payload === "object"
+      ? ((payload as { SMSMessageData?: { Recipients?: unknown } }).SMSMessageData?.Recipients as unknown)
+      : undefined;
+
+  console.info("[africastalking] transactional SMS response received", {
     username,
     environment,
     senderId: senderId || null,
-    hasApiKey: Boolean(apiKey),
-    apiKeyLength: apiKey.length,
+    serializedPayload,
     requestUrl,
     status: response.status,
     ok: response.ok,
     rawBody,
     payload,
+    recipients,
   });
 
   if (!response.ok) {
@@ -86,12 +116,11 @@ export async function sendOtpSms(phone: string, code: string) {
       (payloadObject?.errorMessage as string | undefined) ||
       (payloadObject?.message as string | undefined) ||
       `SMS provider error (${response.status})`;
-    console.error("[africastalking] OTP SMS request failed", {
+    console.error("[africastalking] transactional SMS request failed", {
       username,
       environment,
       senderId: senderId || null,
-      hasApiKey: Boolean(apiKey),
-      apiKeyLength: apiKey.length,
+      serializedPayload,
       requestUrl,
       status: response.status,
       rawBody,
@@ -101,18 +130,12 @@ export async function sendOtpSms(phone: string, code: string) {
     throw new Error(detail);
   }
 
-  const recipients =
-    payload && typeof payload === "object"
-      ? ((payload as { SMSMessageData?: { Recipients?: unknown } }).SMSMessageData?.Recipients as unknown)
-      : undefined;
-
   if (Array.isArray(recipients) && recipients[0]?.status && recipients[0].status !== "Success") {
-    console.error("[africastalking] OTP SMS rejected by provider", {
+    console.error("[africastalking] transactional SMS rejected by provider", {
       username,
       environment,
       senderId: senderId || null,
-      hasApiKey: Boolean(apiKey),
-      apiKeyLength: apiKey.length,
+      serializedPayload,
       requestUrl,
       recipients,
       rawBody,
@@ -122,4 +145,9 @@ export async function sendOtpSms(phone: string, code: string) {
   }
 
   return payload;
+}
+
+export async function sendOtpSms(phone: string, code: string) {
+  const message = `Betech verification code: ${code}. Valid for 5 minutes.`;
+  return sendTransactionalSms(phone, message);
 }

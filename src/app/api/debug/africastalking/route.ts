@@ -10,9 +10,6 @@ export async function GET() {
       username: config.username,
       senderId: config.senderId || null,
       hasApiKey: Boolean(config.apiKey),
-      apiKeyLength: config.apiKey.length,
-      environment: config.environment,
-      requestUrl: `${config.baseUrl}/messaging`,
     });
   } catch (error) {
     return NextResponse.json(
