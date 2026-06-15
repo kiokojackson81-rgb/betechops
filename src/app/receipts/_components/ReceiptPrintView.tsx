@@ -133,8 +133,11 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
   const borderClass = mode === "print" ? "" : "border";
 
   return (
-    <div className={`${sizeClass} ${borderClass} rounded-md bg-white px-4 py-3 text-sm text-black mx-auto`}>
-      <div className="mb-3 border-b pb-2 text-center">
+    <div
+      className={`${sizeClass} ${borderClass} mx-auto flex min-h-[calc(210mm-4mm)] flex-col rounded-md bg-white p-2 text-sm text-black`}
+      style={{ minHeight: "calc(210mm - 4mm)" }}
+    >
+      <div className="mb-2 border-b pb-2 text-center">
         <h2 className="text-[10px] tracking-[0.35em] uppercase">{docHeading}</h2>
         <h1 className="mt-1 text-2xl font-extrabold">BETECH SOLAR SOLUTIONS</h1>
         <p className="mt-1 text-xs">Dealers in: Solar Solutions, Solar Products, e.t.c</p>
@@ -142,7 +145,7 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
         <p className="text-[11px]">Email: info@betech.co.ke - Website: www.betech.co.ke</p>
       </div>
 
-      <div className="flex justify-between text-xs mb-2">
+      <div className="mb-2 flex justify-between text-xs">
         <div>
           <span className="font-semibold">Date:</span> {date.toLocaleString()}
         </div>
@@ -154,7 +157,7 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
          </div>
       </div>
 
-      <div className="text-xs mb-4 space-y-1">
+      <div className="mb-3 text-xs space-y-1">
         <div>
           <span className="font-semibold">M/S:</span>
           <span className="ml-1">{name || "________________"}</span>
@@ -211,7 +214,7 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
         </tbody>
       </table>
 
-      <div className="mt-4 text-sm space-y-1">
+      <div className="mt-3 text-sm space-y-1">
         <div className="flex justify-end gap-4">
           <div className="text-right">
             Subtotal: KES {formatKsh(data?.totals?.subtotal ?? data?.subtotal ?? 0)}
@@ -242,7 +245,7 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
         )}
       </div>
 
-      <div className="mt-4 text-xs">
+      <div className="mt-3 text-xs">
         <p>
           Payment method: <span className="font-semibold">{paymentLabel}</span>
         </p>
@@ -267,7 +270,7 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
       </div>
 
       {showFooter && (
-        <div className="mt-4 border-t pt-3 text-center text-xs">
+        <div className="mt-auto border-t pt-3 text-center text-xs">
           <p>Thank you for shopping with Betech Solar Solutions. You were served by {servedBy}.</p>
           <p>Goods once sold cannot be refunded.</p>
           <div className="mt-4 flex items-center justify-center gap-2">

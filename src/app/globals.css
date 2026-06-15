@@ -264,14 +264,21 @@ input[type="checkbox"] {
 }
 
 /* Print helpers: hide interactive controls and optimize receipts for printing */
+@page {
+  size: A5 portrait;
+  margin: 2mm;
+}
 @page receipt-a5 { size: A5 portrait; margin: 2mm; }
 @page receipt-a4 { size: A4 portrait; margin: 10mm; }
 @page receipt-roll80 { size: 80mm 200mm; margin: 4mm; }
 
 .receipt-sheet {
-  width: 100%;
+  width: 148mm;
   max-width: 148mm;
-  margin: 0 auto;
+  min-height: calc(210mm - 4mm);
+  margin: 0;
+  padding: 2mm;
+  box-sizing: border-box;
 }
 .receipt-sheet--a4 { max-width: 210mm; }
 .receipt-sheet--roll80 { max-width: 80mm; }
@@ -298,20 +305,25 @@ input[type="checkbox"] {
   /* Center the receipt and ensure it occupies the printable area minus the
      declared @page margin (10mm). Using calc(100% - 20mm) keeps left/right
      margins symmetric across different browsers/printers. */
-  .receipt-print-area { display: flex; justify-content: center; align-items: flex-start; }
+  .receipt-print-area {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
   .receipt-sheet {
-    width: calc(148mm - 4mm);
-    max-width: calc(100% - 4mm);
+    width: 148mm;
+    max-width: 148mm;
+    min-height: calc(210mm - 4mm) !important;
     box-sizing: border-box;
-    padding: 0;
-    margin: 0 auto !important;
+    padding: 2mm !important;
+    margin: 0 !important;
     page: receipt-a5;
-    min-height: auto;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
     -webkit-column-break-inside: avoid !important;
     overflow: hidden !important;
-    max-height: calc(210mm - 4mm) !important;
   }
   .receipt-sheet--a4 { width: calc(210mm - 20mm); max-width: calc(100% - 20mm); min-height: auto; page: receipt-a4; }
   .receipt-sheet--roll80 { width: calc(80mm - 8mm); max-width: calc(100% - 8mm); min-height: auto; page: receipt-roll80; }
