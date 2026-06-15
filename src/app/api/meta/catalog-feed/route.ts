@@ -10,6 +10,7 @@ const CSV_HEADERS = [
   "title",
   "description",
   "availability",
+  "quantity_to_sell_on_facebook",
   "condition",
   "price",
   "link",
@@ -44,13 +45,14 @@ function productsToCatalogCsv(products: CatalogFeedProduct[]) {
   const rows = products.map((product) => {
     const link = `${FEED_URL_BASE}/products/${slugifyProductName(product.name)}`;
     const imageLink = product.mainImageUrl || product.shopImageUrl || "";
-    const availability = product.stockQuantity > 0 ? "in stock" : "out of stock";
+    const availability = "in stock";
 
     return [
       product.id,
       product.name,
       product.description ?? "",
       availability,
+      100,
       "new",
       `${Number(product.sellingPrice).toFixed(2)} KES`,
       link,
