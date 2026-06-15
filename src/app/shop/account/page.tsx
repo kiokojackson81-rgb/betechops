@@ -44,15 +44,15 @@ export default async function ShopAccountPage() {
             </div>
           ) : (
             <div className="mt-4 rounded-[1.8rem] border border-[#7a0000]/10 bg-white px-5 py-5 shadow-[0_16px_36px_rgba(15,23,42,0.05)]">
-              <div className="text-base font-black text-slate-950">Use your verified phone number across Betech</div>
+              <div className="text-base font-black text-slate-950">Sign in with your email or verified phone number</div>
               <div className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                Sign in with phone OTP to connect your account, future website orders, and any agent referrals to one shared Betech identity.
+                Start with the email address or mobile number on your account. We will detect it first, then finish sign in with one secure SMS OTP flow.
               </div>
               <Link
                 href="/login/phone?callbackUrl=/account"
                 className="mt-4 inline-flex items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#7a0000_0%,#991010_100%)] px-5 py-3 text-sm font-bold text-white shadow-[0_18px_36px_rgba(122,0,0,0.18)] transition hover:-translate-y-0.5"
               >
-                Sign in with phone OTP
+                Sign in to your account
               </Link>
             </div>
           )}

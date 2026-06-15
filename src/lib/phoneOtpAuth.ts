@@ -206,6 +206,79 @@ async function resolveUserByPhone(normalizedPhone: string) {
   return agentProfile?.user ?? null;
 }
 
+export async function findPhoneAuthUserByPhone(phoneInput: string) {
+  const normalizedPhone = normalizeKenyanPhone(phoneInput);
+  if (!normalizedPhone) return null;
+
+  const user = await resolveUserByPhone(normalizedPhone);
+  if (!user) return null;
+
+  return {
+    normalizedPhone,
+    user,
+  };
+}
+
+export async function findPhoneAuthUserByEmail(emailInput: string) {
+  const email = String(emailInput || "").trim().toLowerCase();
+  if (!email) return null;
+
+  const directUser = await prisma.user.findUnique({
+    where: { email },
+    include: {
+      agentProfile: {
+        select: {
+          id: true,
+          status: true,
+          phone: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  if (directUser) {
+    const normalizedPhone = normalizeKenyanPhone(directUser.phone || directUser.agentProfile?.phone || "");
+    return {
+      email,
+      normalizedPhone,
+      user: directUser,
+    };
+  }
+
+  const agentProfile = await prisma.agentProfile.findFirst({
+    where: {
+      email: {
+        equals: email,
+        mode: "insensitive",
+      },
+    },
+    include: {
+      user: {
+        include: {
+          agentProfile: {
+            select: {
+              id: true,
+              status: true,
+              phone: true,
+              email: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!agentProfile?.user) return null;
+
+  const normalizedPhone = normalizeKenyanPhone(agentProfile.user.phone || agentProfile.phone || "");
+  return {
+    email,
+    normalizedPhone,
+    user: agentProfile.user,
+  };
+}
+
 async function resolveVerifiedPhoneUser(normalizedPhone: string): Promise<PhoneAuthResult> {
   let user = await resolveUserByPhone(normalizedPhone);
 
