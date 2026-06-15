@@ -32,6 +32,8 @@ type AllProductsPageProps = {
     sub?: string;
     brand?: string;
     price?: string;
+    minPrice?: string;
+    maxPrice?: string;
     stock?: string;
     warranty?: string;
     sort?: string;
@@ -43,6 +45,8 @@ type ListingFilters = {
   sub?: string;
   brand?: string;
   price?: string;
+  minPrice?: string;
+  maxPrice?: string;
   stock?: string;
   warranty?: string;
   sort?: string;
@@ -83,6 +87,47 @@ function filterByPrice(price: number, bucket?: string) {
   }
 }
 
+function normalizePriceRange(minPrice?: string, maxPrice?: string) {
+  const parsedMin = Number(minPrice);
+  const parsedMax = Number(maxPrice);
+  const hasMin = Number.isFinite(parsedMin) && parsedMin >= 0;
+  const hasMax = Number.isFinite(parsedMax) && parsedMax >= 0;
+
+  if (hasMin && hasMax) {
+    return {
+      min: Math.min(parsedMin, parsedMax),
+      max: Math.max(parsedMin, parsedMax),
+    };
+  }
+
+  return {
+    min: hasMin ? parsedMin : undefined,
+    max: hasMax ? parsedMax : undefined,
+  };
+}
+
+function filterByManualPrice(price: number, minPrice?: number, maxPrice?: number) {
+  if (typeof minPrice === "number" && price < minPrice) return false;
+  if (typeof maxPrice === "number" && price > maxPrice) return false;
+  return true;
+}
+
+function formatPriceInput(value?: string) {
+  if (!value) return "";
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? String(parsed) : "";
+}
+
+function formatPriceRangeLabel(minPrice?: number, maxPrice?: number) {
+  const money = (value: number) => `Ksh ${new Intl.NumberFormat("en-KE", { maximumFractionDigits: 0 }).format(value)}`;
+  if (typeof minPrice === "number" && typeof maxPrice === "number") {
+    return `${money(minPrice)} - ${money(maxPrice)}`;
+  }
+  if (typeof minPrice === "number") return `From ${money(minPrice)}`;
+  if (typeof maxPrice === "number") return `Up to ${money(maxPrice)}`;
+  return "";
+}
+
 function sortProducts(products: ShopProduct[], popularitySignals: Map<string, ProductPopularitySignal>, sort?: string) {
   const items = [...products];
 
@@ -106,6 +151,8 @@ function getFilterHref(filters: ListingFilters, patch: Partial<ListingFilters>) 
     sub: filters.sub || "",
     brand: filters.brand || "",
     price: filters.price || "",
+    minPrice: filters.minPrice || "",
+    maxPrice: filters.maxPrice || "",
     stock: filters.stock || "",
     warranty: filters.warranty || "",
     sort: filters.sort || "",
@@ -204,10 +251,13 @@ export default async function AllProductsPage({ searchParams }: AllProductsPageP
     sub: resolvedSearchParams?.sub || "",
     brand: resolvedSearchParams?.brand || "",
     price: resolvedSearchParams?.price || "",
+    minPrice: resolvedSearchParams?.minPrice || "",
+    maxPrice: resolvedSearchParams?.maxPrice || "",
     stock: resolvedSearchParams?.stock || "",
     warranty: resolvedSearchParams?.warranty || "",
     sort: resolvedSearchParams?.sort || "featured",
   };
+  const manualPriceRange = normalizePriceRange(filters.minPrice, filters.maxPrice);
 
   const activeCategory = getShopCategoryDefinition(filters.category || "");
   const activeSubcategory = activeCategory ? getShopSubcategoryDefinition(activeCategory.value, filters.sub || "") : null;
@@ -240,6 +290,7 @@ export default async function AllProductsPage({ searchParams }: AllProductsPageP
     categoryScopedProducts.filter((product) => {
       if (filters.brand && product.brand !== filters.brand) return false;
       if (!filterByPrice(product.price, filters.price)) return false;
+      if (!filterByManualPrice(product.price, manualPriceRange.min, manualPriceRange.max)) return false;
       if (filters.stock && product.stockStatus !== filters.stock) return false;
       if (filters.warranty && product.warranty !== filters.warranty) return false;
       return true;
@@ -256,6 +307,12 @@ export default async function AllProductsPage({ searchParams }: AllProductsPageP
       ? {
           label: PRICE_OPTIONS.find((option) => option.value === filters.price)?.label || filters.price,
           href: getFilterHref(filters, { price: "" }),
+        }
+      : null,
+    manualPriceRange.min !== undefined || manualPriceRange.max !== undefined
+      ? {
+          label: formatPriceRangeLabel(manualPriceRange.min, manualPriceRange.max),
+          href: getFilterHref(filters, { minPrice: "", maxPrice: "" }),
         }
       : null,
     filters.stock
@@ -297,6 +354,8 @@ export default async function AllProductsPage({ searchParams }: AllProductsPageP
                     <input type="hidden" name="sub" value={filters.sub || ""} />
                     <input type="hidden" name="brand" value={filters.brand || ""} />
                     <input type="hidden" name="price" value={filters.price || ""} />
+                    <input type="hidden" name="minPrice" value={filters.minPrice || ""} />
+                    <input type="hidden" name="maxPrice" value={filters.maxPrice || ""} />
                     <input type="hidden" name="stock" value={filters.stock || ""} />
                     <input type="hidden" name="warranty" value={filters.warranty || ""} />
                     <select
@@ -359,6 +418,36 @@ export default async function AllProductsPage({ searchParams }: AllProductsPageP
                     active={filters.price === option.value}
                   />
                 ))}
+                <form method="GET" action={SHOP_ALL_PRODUCTS_HREF} className="mt-2 grid gap-2 rounded-xl border border-[#7a0000]/10 bg-[#fcfaf7] p-2.5">
+                  <input type="hidden" name="category" value={filters.category || ""} />
+                  <input type="hidden" name="sub" value={filters.sub || ""} />
+                  <input type="hidden" name="brand" value={filters.brand || ""} />
+                  <input type="hidden" name="price" value={filters.price || ""} />
+                  <input type="hidden" name="stock" value={filters.stock || ""} />
+                  <input type="hidden" name="warranty" value={filters.warranty || ""} />
+                  <input type="hidden" name="sort" value={filters.sort || "featured"} />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="number"
+                      name="minPrice"
+                      min="0"
+                      defaultValue={formatPriceInput(filters.minPrice)}
+                      placeholder="Min Ksh"
+                      className="rounded-xl border border-[#7a0000]/10 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none"
+                    />
+                    <input
+                      type="number"
+                      name="maxPrice"
+                      min="0"
+                      defaultValue={formatPriceInput(filters.maxPrice)}
+                      placeholder="Max Ksh"
+                      className="rounded-xl border border-[#7a0000]/10 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none"
+                    />
+                  </div>
+                  <button type="submit" className="rounded-xl bg-[#7a0000] px-3 py-2 text-sm font-bold text-white">
+                    Apply range
+                  </button>
+                </form>
               </FilterSection>
               <FilterSection title="Stock">
                 {STOCK_OPTIONS.map((option) => (
@@ -426,6 +515,36 @@ export default async function AllProductsPage({ searchParams }: AllProductsPageP
                         active={filters.price === option.value}
                       />
                     ))}
+                    <form method="GET" action={SHOP_ALL_PRODUCTS_HREF} className="mt-2 grid gap-2 rounded-xl border border-[#7a0000]/10 bg-[#fcfaf7] p-2.5">
+                      <input type="hidden" name="category" value={filters.category || ""} />
+                      <input type="hidden" name="sub" value={filters.sub || ""} />
+                      <input type="hidden" name="brand" value={filters.brand || ""} />
+                      <input type="hidden" name="price" value={filters.price || ""} />
+                      <input type="hidden" name="stock" value={filters.stock || ""} />
+                      <input type="hidden" name="warranty" value={filters.warranty || ""} />
+                      <input type="hidden" name="sort" value={filters.sort || "featured"} />
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="number"
+                          name="minPrice"
+                          min="0"
+                          defaultValue={formatPriceInput(filters.minPrice)}
+                          placeholder="Min Ksh"
+                          className="rounded-xl border border-[#7a0000]/10 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none"
+                        />
+                        <input
+                          type="number"
+                          name="maxPrice"
+                          min="0"
+                          defaultValue={formatPriceInput(filters.maxPrice)}
+                          placeholder="Max Ksh"
+                          className="rounded-xl border border-[#7a0000]/10 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none"
+                        />
+                      </div>
+                      <button type="submit" className="rounded-xl bg-[#7a0000] px-3 py-2 text-sm font-bold text-white">
+                        Apply range
+                      </button>
+                    </form>
                   </FilterSection>
 
                   <FilterSection title="Stock">
@@ -474,6 +593,8 @@ export default async function AllProductsPage({ searchParams }: AllProductsPageP
                     <input type="hidden" name="sub" value={filters.sub || ""} />
                     <input type="hidden" name="brand" value={filters.brand || ""} />
                     <input type="hidden" name="price" value={filters.price || ""} />
+                    <input type="hidden" name="minPrice" value={filters.minPrice || ""} />
+                    <input type="hidden" name="maxPrice" value={filters.maxPrice || ""} />
                     <input type="hidden" name="stock" value={filters.stock || ""} />
                     <input type="hidden" name="warranty" value={filters.warranty || ""} />
                     <select

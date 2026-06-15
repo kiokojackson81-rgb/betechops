@@ -43,6 +43,8 @@ export type AgentListingFilters = {
   sub?: string;
   brand?: string;
   price?: string;
+  minPrice?: string;
+  maxPrice?: string;
   stock?: string;
   warranty?: string;
   sort?: string;
@@ -63,6 +65,31 @@ export function filterByPrice(price: number, bucket?: string) {
     default:
       return true;
   }
+}
+
+export function normalizePriceRange(minPrice?: string, maxPrice?: string) {
+  const parsedMin = Number(minPrice);
+  const parsedMax = Number(maxPrice);
+  const hasMin = Number.isFinite(parsedMin) && parsedMin >= 0;
+  const hasMax = Number.isFinite(parsedMax) && parsedMax >= 0;
+
+  if (hasMin && hasMax) {
+    return {
+      min: Math.min(parsedMin, parsedMax),
+      max: Math.max(parsedMin, parsedMax),
+    };
+  }
+
+  return {
+    min: hasMin ? parsedMin : undefined,
+    max: hasMax ? parsedMax : undefined,
+  };
+}
+
+export function filterByManualPrice(price: number, minPrice?: number, maxPrice?: number) {
+  if (typeof minPrice === "number" && price < minPrice) return false;
+  if (typeof maxPrice === "number" && price > maxPrice) return false;
+  return true;
 }
 
 export async function getPopularityByProduct(products: ShopProduct[]) {

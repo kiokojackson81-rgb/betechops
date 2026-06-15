@@ -8,6 +8,7 @@ export async function GET() {
     const config = getAfricaTalkingConfig();
     return NextResponse.json({
       username: config.username,
+      senderId: config.senderId || null,
       hasApiKey: Boolean(config.apiKey),
       apiKeyLength: config.apiKey.length,
       environment: config.environment,

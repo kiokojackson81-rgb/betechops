@@ -4,6 +4,12 @@ const AT_PRODUCTION_BASE = "https://api.africastalking.com/version1";
 export function getAfricaTalkingConfig() {
   const username = String(process.env.AFRICASTALKING_USERNAME || "").trim();
   const apiKey = String(process.env.AFRICASTALKING_API_KEY || "").trim();
+  const senderId = String(
+    process.env.AFRICASTALKING_SENDER_ID ||
+      process.env.AFRICASTALKING_FROM ||
+      process.env.AFRICASTALKING_SENDER ||
+      "",
+  ).trim();
   if (!username || !apiKey) {
     throw new Error("Africa's Talking credentials are not configured.");
   }
@@ -11,13 +17,14 @@ export function getAfricaTalkingConfig() {
   return {
     username,
     apiKey,
+    senderId,
     environment: username === "sandbox" ? "sandbox" : "production",
     baseUrl: username === "sandbox" ? AT_SANDBOX_BASE : AT_PRODUCTION_BASE,
   };
 }
 
 export async function sendOtpSms(phone: string, code: string) {
-  const { username, apiKey, baseUrl, environment } = getAfricaTalkingConfig();
+  const { username, apiKey, senderId, baseUrl, environment } = getAfricaTalkingConfig();
   const message = `Betech verification code: ${code}. Valid for 5 minutes.`;
   const requestUrl = `${baseUrl}/messaging`;
 
@@ -25,11 +32,13 @@ export async function sendOtpSms(phone: string, code: string) {
     username,
     to: phone,
     message,
+    ...(senderId ? { from: senderId } : {}),
   };
 
   console.info("[africastalking] preparing OTP SMS request", {
     username,
     environment,
+    senderId: senderId || null,
     hasApiKey: Boolean(apiKey),
     apiKeyLength: apiKey.length,
     requestUrl,
@@ -60,6 +69,7 @@ export async function sendOtpSms(phone: string, code: string) {
   console.info("[africastalking] OTP SMS response received", {
     username,
     environment,
+    senderId: senderId || null,
     hasApiKey: Boolean(apiKey),
     apiKeyLength: apiKey.length,
     requestUrl,
@@ -79,6 +89,7 @@ export async function sendOtpSms(phone: string, code: string) {
     console.error("[africastalking] OTP SMS request failed", {
       username,
       environment,
+      senderId: senderId || null,
       hasApiKey: Boolean(apiKey),
       apiKeyLength: apiKey.length,
       requestUrl,
@@ -99,6 +110,7 @@ export async function sendOtpSms(phone: string, code: string) {
     console.error("[africastalking] OTP SMS rejected by provider", {
       username,
       environment,
+      senderId: senderId || null,
       hasApiKey: Boolean(apiKey),
       apiKeyLength: apiKey.length,
       requestUrl,

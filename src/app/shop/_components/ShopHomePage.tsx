@@ -162,7 +162,7 @@ export default async function ShopHomePage({
               ? `Showing ${products.length} product${products.length === 1 ? "" : "s"} matching your search.`
               : "Popular customer picks across recent interest, enquiries, and demand in our solar catalogue."
           }
-          href={!searchQuery ? "/all-products" : undefined}
+          href={!searchQuery ? "https://www.betech.co.ke/all-products" : undefined}
           linkLabel={!searchQuery ? "See all products" : undefined}
           products={popularProducts}
         />

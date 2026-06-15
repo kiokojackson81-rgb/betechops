@@ -7,11 +7,13 @@ import {
   AGENT_SORT_OPTIONS,
   AGENT_STOCK_OPTIONS,
   type AgentListingFilters,
+  filterByManualPrice,
   filterByPrice,
   getAgentCommissionValue,
   getBrandOptions,
   getPopularitySignalsByProduct,
   getWarrantyOptions,
+  normalizePriceRange,
   sortAgentProductsBySignals,
 } from "@/app/agents/agentCatalogue";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
@@ -40,6 +42,8 @@ type AgentProductsPageProps = {
     sub?: string;
     brand?: string;
     price?: string;
+    minPrice?: string;
+    maxPrice?: string;
     stock?: string;
     warranty?: string;
     sort?: string;
@@ -54,6 +58,8 @@ function getProductsHref(filters: AgentListingFilters, useRootPaths: boolean, pa
     sub: filters.sub || "",
     brand: filters.brand || "",
     price: filters.price || "",
+    minPrice: filters.minPrice || "",
+    maxPrice: filters.maxPrice || "",
     stock: filters.stock || "",
     warranty: filters.warranty || "",
     sort: filters.sort || "",
@@ -73,6 +79,22 @@ function getProductsHref(filters: AgentListingFilters, useRootPaths: boolean, pa
   const base = agentPath("/products", useRootPaths);
   const queryString = query.toString();
   return `${base}${queryString ? `?${queryString}` : ""}`;
+}
+
+function formatPriceInput(value?: string) {
+  if (!value) return "";
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? String(parsed) : "";
+}
+
+function formatPriceRangeLabel(minPrice?: number, maxPrice?: number) {
+  const money = (value: number) => `Ksh ${new Intl.NumberFormat("en-KE", { maximumFractionDigits: 0 }).format(value)}`;
+  if (typeof minPrice === "number" && typeof maxPrice === "number") {
+    return `${money(minPrice)} - ${money(maxPrice)}`;
+  }
+  if (typeof minPrice === "number") return `From ${money(minPrice)}`;
+  if (typeof maxPrice === "number") return `Up to ${money(maxPrice)}`;
+  return "";
 }
 
 function FilterSection({ title, children }: { title: string; children: ReactNode }) {
@@ -135,10 +157,13 @@ export default async function AgentProductsPage({
     sub: resolvedSearchParams?.sub || "",
     brand: resolvedSearchParams?.brand || "",
     price: resolvedSearchParams?.price || "",
+    minPrice: resolvedSearchParams?.minPrice || "",
+    maxPrice: resolvedSearchParams?.maxPrice || "",
     stock: resolvedSearchParams?.stock || "",
     warranty: resolvedSearchParams?.warranty || "",
     sort: resolvedSearchParams?.sort || "featured",
   };
+  const manualPriceRange = normalizePriceRange(filters.minPrice, filters.maxPrice);
 
   const registerHref = agentPath("/register", useRootPaths);
   const loginHref = agentPath("/login", useRootPaths);
@@ -175,6 +200,7 @@ export default async function AgentProductsPage({
     categoryScopedProducts.filter((product) => {
       if (filters.brand && product.brand !== filters.brand) return false;
       if (!filterByPrice(product.price, filters.price)) return false;
+      if (!filterByManualPrice(product.price, manualPriceRange.min, manualPriceRange.max)) return false;
       if (filters.stock && product.stockStatus !== filters.stock) return false;
       if (filters.warranty && product.warranty !== filters.warranty) return false;
       return true;
@@ -191,6 +217,12 @@ export default async function AgentProductsPage({
       ? {
           label: AGENT_PRICE_OPTIONS.find((option) => option.value === filters.price)?.label || filters.price,
           href: getProductsHref(filters, useRootPaths, { price: "" }),
+        }
+      : null,
+    manualPriceRange.min !== undefined || manualPriceRange.max !== undefined
+      ? {
+          label: formatPriceRangeLabel(manualPriceRange.min, manualPriceRange.max),
+          href: getProductsHref(filters, useRootPaths, { minPrice: "", maxPrice: "" }),
         }
       : null,
     filters.stock
@@ -331,6 +363,36 @@ export default async function AgentProductsPage({
                       active={filters.price === option.value}
                     />
                   ))}
+                  <form method="GET" action={agentPath("/products", useRootPaths)} className="mt-2 grid gap-2 rounded-xl border border-[#7a0000]/10 bg-[#fcfaf7] p-2.5">
+                    <input type="hidden" name="category" value={filters.category || ""} />
+                    <input type="hidden" name="sub" value={filters.sub || ""} />
+                    <input type="hidden" name="brand" value={filters.brand || ""} />
+                    <input type="hidden" name="price" value={filters.price || ""} />
+                    <input type="hidden" name="stock" value={filters.stock || ""} />
+                    <input type="hidden" name="warranty" value={filters.warranty || ""} />
+                    <input type="hidden" name="sort" value={filters.sort || "featured"} />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="number"
+                        name="minPrice"
+                        min="0"
+                        defaultValue={formatPriceInput(filters.minPrice)}
+                        placeholder="Min Ksh"
+                        className="rounded-xl border border-[#7a0000]/10 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none"
+                      />
+                      <input
+                        type="number"
+                        name="maxPrice"
+                        min="0"
+                        defaultValue={formatPriceInput(filters.maxPrice)}
+                        placeholder="Max Ksh"
+                        className="rounded-xl border border-[#7a0000]/10 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none"
+                      />
+                    </div>
+                    <button type="submit" className="rounded-xl bg-[#7a0000] px-3 py-2 text-sm font-bold text-white">
+                      Apply range
+                    </button>
+                  </form>
                 </FilterSection>
 
                 <FilterSection title="Stock">
@@ -409,6 +471,36 @@ export default async function AgentProductsPage({
                         active={filters.price === option.value}
                       />
                     ))}
+                    <form method="GET" action={agentPath("/products", useRootPaths)} className="mt-2 grid gap-2 rounded-xl border border-[#7a0000]/10 bg-[#fcfaf7] p-2.5">
+                      <input type="hidden" name="category" value={filters.category || ""} />
+                      <input type="hidden" name="sub" value={filters.sub || ""} />
+                      <input type="hidden" name="brand" value={filters.brand || ""} />
+                      <input type="hidden" name="price" value={filters.price || ""} />
+                      <input type="hidden" name="stock" value={filters.stock || ""} />
+                      <input type="hidden" name="warranty" value={filters.warranty || ""} />
+                      <input type="hidden" name="sort" value={filters.sort || "featured"} />
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="number"
+                          name="minPrice"
+                          min="0"
+                          defaultValue={formatPriceInput(filters.minPrice)}
+                          placeholder="Min Ksh"
+                          className="rounded-xl border border-[#7a0000]/10 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none"
+                        />
+                        <input
+                          type="number"
+                          name="maxPrice"
+                          min="0"
+                          defaultValue={formatPriceInput(filters.maxPrice)}
+                          placeholder="Max Ksh"
+                          className="rounded-xl border border-[#7a0000]/10 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none"
+                        />
+                      </div>
+                      <button type="submit" className="rounded-xl bg-[#7a0000] px-3 py-2 text-sm font-bold text-white">
+                        Apply range
+                      </button>
+                    </form>
                   </FilterSection>
 
                   <FilterSection title="Stock">

@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { Role, type User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { isAgentLeadOwnershipTableAvailable } from "@/lib/agentLeadOwnershipTable";
 import { getKenyanPhoneVariants, normalizeKenyanPhone } from "@/lib/phone";
 
 type PhoneAuthUserRecord = Pick<
@@ -124,16 +125,7 @@ async function syncVerifiedIdentityLinks(userId: string, normalizedPhone: string
   const variants = getKenyanPhoneVariants(normalizedPhone);
   if (!variants.length) return;
 
-  await prisma.$transaction([
-    prisma.agentLeadOwnership.updateMany({
-      where: {
-        customerUserId: null,
-        normalizedPhone,
-      },
-      data: {
-        customerUserId: userId,
-      },
-    }),
+  const updates = [
     prisma.agentSale.updateMany({
       where: {
         customerUserId: null,
@@ -152,7 +144,23 @@ async function syncVerifiedIdentityLinks(userId: string, normalizedPhone: string
         customerUserId: userId,
       },
     }),
-  ]);
+  ];
+
+  if (await isAgentLeadOwnershipTableAvailable()) {
+    updates.unshift(
+      prisma.agentLeadOwnership.updateMany({
+        where: {
+          customerUserId: null,
+          normalizedPhone,
+        },
+        data: {
+          customerUserId: userId,
+        },
+      }),
+    );
+  }
+
+  await prisma.$transaction(updates);
 }
 
 async function resolveUserByPhone(normalizedPhone: string) {
