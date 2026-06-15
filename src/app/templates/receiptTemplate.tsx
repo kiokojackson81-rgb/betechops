@@ -19,7 +19,7 @@ export default function renderReceiptTemplate(
   // Only render an <img> header when we have a header image. Otherwise leave
   // the header empty so the printed receipt shows just the page content.
   const headerHtml = headerImg
-    ? `<img src="${headerImg}" alt="branding" style="width:100%;border-radius:6px;margin-bottom:8px;object-fit:cover;" />`
+    ? `<img src="${headerImg}" alt="branding" style="display:block;width:100%;max-height:34mm;object-fit:contain;object-position:top center;margin:0;" />`
     : '';
   const order = snapshot.order || {};
   const items = snapshot.items || order.items || [];
@@ -170,15 +170,12 @@ export default function renderReceiptTemplate(
           width: calc(148mm - 4mm);
           min-height: calc(210mm - 4mm);
           margin: 0 auto;
-          padding: 4mm 4.5mm 3.5mm;
+          padding: 2.5mm 3.5mm 3mm;
           background: #fff;
           border: 1px solid #d1d5db;
           box-shadow: 0 14px 28px rgba(15, 23, 42, 0.12);
           display: flex;
           flex-direction: column;
-        }
-        .page.page--compact {
-          height: calc(210mm - 4mm);
         }
         .receipt-body {
           display: flex;
@@ -187,13 +184,20 @@ export default function renderReceiptTemplate(
           min-height: 0;
         }
         .receipt-bottom {
-          margin-top: auto;
+          margin-top: 10px;
         }
         header {
           text-align: center;
-          margin-bottom: 10px;
-          padding-bottom: 8px;
+          margin-bottom: 8px;
+          padding-bottom: 6px;
           border-bottom: 1px solid #e5e7eb;
+        }
+        header img {
+          display: block;
+          width: 100%;
+          max-height: 34mm;
+          object-fit: contain;
+          object-position: top center;
         }
         .meta {
           display: grid;
@@ -380,13 +384,10 @@ export default function renderReceiptTemplate(
           min-height: calc(210mm - 4mm);
           max-height: none;
           margin: 0;
-          padding: 3mm 3.5mm 2.5mm;
+          padding: 2mm 3mm 2.5mm;
           box-shadow: none;
           border: none;
           overflow: visible;
-        }
-        .page.page--compact {
-          height: calc(210mm - 4mm);
         }
         .receipt-body {
           display: flex;
@@ -397,8 +398,12 @@ export default function renderReceiptTemplate(
           overflow: visible;
         }
         .receipt-bottom {
-          margin-top: auto;
+          margin-top: 8px;
           padding-top: 5px;
+        }
+        header {
+          margin-bottom: 6px;
+          padding-bottom: 5px;
         }
         header,
         .signature,

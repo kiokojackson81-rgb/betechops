@@ -133,12 +133,12 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
   const borderClass = mode === "print" ? "" : "border";
 
   return (
-    <div className={`${sizeClass} ${borderClass} rounded-md p-6 text-sm bg-white text-black mx-auto`}>
-      <div className="text-center mb-4">
-        <h2 className="text-xs tracking-[0.35em] uppercase">{docHeading}</h2>
-        <h1 className="text-2xl font-extrabold mt-2">BETECH SOLAR SOLUTIONS</h1>
-        <p className="text-xs mt-1">Dealers in: Solar Solutions, Solar Products, e.t.c</p>
-        <p className="text-[11px] mt-1">Tel: 0722 151 083 / 0703 241 917 - Pramukh Plaza 3rd Floor Shop No. 3 Nairobi CBD</p>
+    <div className={`${sizeClass} ${borderClass} rounded-md bg-white px-4 py-3 text-sm text-black mx-auto`}>
+      <div className="mb-3 border-b pb-2 text-center">
+        <h2 className="text-[10px] tracking-[0.35em] uppercase">{docHeading}</h2>
+        <h1 className="mt-1 text-2xl font-extrabold">BETECH SOLAR SOLUTIONS</h1>
+        <p className="mt-1 text-xs">Dealers in: Solar Solutions, Solar Products, e.t.c</p>
+        <p className="mt-1 text-[11px]">Tel: 0722 151 083 / 0703 241 917 - Pramukh Plaza 3rd Floor Shop No. 3 Nairobi CBD</p>
         <p className="text-[11px]">Email: info@betech.co.ke - Website: www.betech.co.ke</p>
       </div>
 
@@ -267,10 +267,10 @@ export default function ReceiptPrintView({ data, mode = "editor" }: Props) {
       </div>
 
       {showFooter && (
-        <div className="mt-8 text-center text-xs">
+        <div className="mt-4 border-t pt-3 text-center text-xs">
           <p>Thank you for shopping with Betech Solar Solutions. You were served by {servedBy}.</p>
           <p>Goods once sold cannot be refunded.</p>
-          <div className="mt-6 flex justify-center items-center gap-2">
+          <div className="mt-4 flex items-center justify-center gap-2">
             <span>Official Stamp:</span>
             <span className="inline-block border-b w-48" />
           </div>
