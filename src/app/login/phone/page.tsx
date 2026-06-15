@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSession } from "next-auth/react";
 import { signIn } from "next-auth/react";
 import { normalizeKenyanPhone } from "@/lib/phone";
 
@@ -23,6 +24,7 @@ type IdentifyResponse = {
 };
 
 export default function PhoneLoginPage() {
+  const { status } = useSession();
   const [identifier, setIdentifier] = useState("");
   const [phoneInput, setPhoneInput] = useState("");
   const [normalizedPhone, setNormalizedPhone] = useState("");
@@ -50,6 +52,15 @@ export default function PhoneLoginPage() {
     const params = new URLSearchParams(window.location.search);
     setCallbackUrl(params.get("callbackUrl") || "/account");
   }, []);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    window.location.replace(callbackUrl || "/account");
+  }, [callbackUrl, status]);
+
+  if (status === "authenticated") {
+    return null;
+  }
 
   async function handleIdentify(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
