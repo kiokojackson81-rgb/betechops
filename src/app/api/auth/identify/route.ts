@@ -22,41 +22,25 @@ export async function POST(request: Request) {
 
     if (looksLikeEmail(identifier)) {
       const result = await findPhoneAuthUserByEmail(identifier);
-
-      if (!result?.user) {
-        return NextResponse.json(
-          { ok: false, error: "We could not find an account with that email. Try your phone number instead." },
-          { status: 404 },
-        );
-      }
-
-      if (!result.user.isActive) {
+      if (result?.user && !result.user.isActive) {
         return NextResponse.json({ ok: false, error: "This account is inactive. Please contact Betech support." }, { status: 403 });
-      }
-
-      if (!result.normalizedPhone) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: "This email account does not have a phone number yet. Sign in with your phone number or contact Betech support.",
-          },
-          { status: 400 },
-        );
       }
 
       return NextResponse.json({
         ok: true,
         method: "email",
         identifierType: "email",
-        identifier: result.email,
-        normalizedPhone: result.normalizedPhone,
-        maskedPhone: maskPhone(result.normalizedPhone),
-        account: {
-          name: result.user.name,
-          email: result.user.email,
-          phone: result.user.phone,
-        },
-        message: `We found your account. Continue with SMS OTP to ${maskPhone(result.normalizedPhone)}.`,
+        identifier: result?.email || identifier.trim().toLowerCase(),
+        account: result?.user
+          ? {
+              name: result.user.name,
+              email: result.user.email,
+              phone: result.user.phone,
+            }
+          : null,
+        message: result?.user
+          ? `We found your account. Continue with an email OTP sent to ${result.email}.`
+          : `Continue with an email OTP sent to ${identifier.trim().toLowerCase()}. We will connect or create your customer account after verification.`,
       });
     }
 

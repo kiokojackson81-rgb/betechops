@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { normalizeKenyanPhone } from "@/lib/phone";
-import { createVerifiedPhoneToken, verifyOtpCode } from "@/lib/phoneOtpAuth";
+import { createVerifiedAuthToken, verifyOtpCodeForChannel } from "@/lib/phoneOtpAuth";
 
 export const dynamic = "force-dynamic";
 
@@ -20,34 +20,51 @@ function allowRequest(key: string) {
   return true;
 }
 
-function getClientKey(req: NextRequest, phone: string) {
+function looksLikeEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function normalizeEmail(value: string) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function getClientKey(req: NextRequest, channel: "phone" | "email", identifier: string) {
   const ip =
     String(req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "global")
       .split(",")[0]
       .trim() || "global";
-  return `verify-otp:${ip}:${phone}`;
+  return `verify-otp:${ip}:${channel}:${identifier}`;
 }
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
-  const phone = normalizeKenyanPhone(String(body?.phone || "").trim());
+  const identifierType = body?.identifierType === "email" ? "email" : "phone";
+  const rawIdentifier = String(body?.identifier || body?.phone || body?.email || "").trim();
+  const email = identifierType === "email" || looksLikeEmail(rawIdentifier) ? normalizeEmail(rawIdentifier) : "";
+  const phone = identifierType === "phone" ? normalizeKenyanPhone(rawIdentifier) : null;
   const code = String(body?.code || "").trim();
 
-  if (!phone || !code) {
-    return NextResponse.json({ ok: false, error: "Phone number and OTP are required." }, { status: 400 });
+  if (!code || (identifierType === "phone" && !phone) || (identifierType === "email" && !email)) {
+    return NextResponse.json(
+      { ok: false, error: identifierType === "email" ? "Email address and OTP are required." : "Phone number and OTP are required." },
+      { status: 400 },
+    );
   }
 
-  if (!allowRequest(getClientKey(req, phone))) {
+  const rateLimitIdentifier = identifierType === "email" ? email : phone;
+  if (!rateLimitIdentifier || !allowRequest(getClientKey(req, identifierType, rateLimitIdentifier))) {
     return NextResponse.json({ ok: false, error: "Too many verification attempts. Please wait and try again." }, { status: 429 });
   }
 
   try {
-    const resolved = await verifyOtpCode(phone, code);
-    const verificationToken = createVerifiedPhoneToken(resolved);
+    const resolved = await verifyOtpCodeForChannel(identifierType, rateLimitIdentifier, code);
+    const verificationToken = createVerifiedAuthToken(resolved);
 
     return NextResponse.json({
       ok: true,
       verificationToken,
+      identifierType: resolved.channel,
+      identifier: resolved.identifier,
       redirectTo: resolved.redirectTo,
       requiresProfileCompletion: resolved.requiresProfileCompletion,
       user: {

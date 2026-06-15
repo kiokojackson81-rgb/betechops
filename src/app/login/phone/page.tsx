@@ -26,6 +26,7 @@ type IdentifyResponse = {
 export default function PhoneLoginPage() {
   const { status } = useSession();
   const [identifier, setIdentifier] = useState("");
+  const [resolvedIdentifier, setResolvedIdentifier] = useState("");
   const [phoneInput, setPhoneInput] = useState("");
   const [normalizedPhone, setNormalizedPhone] = useState("");
   const [maskedPhone, setMaskedPhone] = useState("");
@@ -41,6 +42,7 @@ export default function PhoneLoginPage() {
 
   const canResend = cooldown <= 0;
   const resolvedPhonePreview = useMemo(() => normalizedPhone || normalizeKenyanPhone(phoneInput), [normalizedPhone, phoneInput]);
+  const normalizedEmailPreview = useMemo(() => resolvedIdentifier.trim().toLowerCase(), [resolvedIdentifier]);
 
   useEffect(() => {
     if (!cooldown) return;
@@ -76,14 +78,15 @@ export default function PhoneLoginPage() {
       });
       const payload = (await response.json().catch(() => null)) as IdentifyResponse | null;
 
-      if (!response.ok || !payload?.ok || !payload.normalizedPhone) {
+      if (!response.ok || !payload?.ok || !payload.identifierType || !payload.identifier) {
         throw new Error(payload?.error || "Unable to identify your account.");
       }
 
       setIdentifierType(payload.identifierType || null);
-      setNormalizedPhone(payload.normalizedPhone);
-      setMaskedPhone(payload.maskedPhone || payload.normalizedPhone);
-      setPhoneInput(payload.normalizedPhone);
+      setResolvedIdentifier(payload.identifier);
+      setNormalizedPhone(payload.normalizedPhone || "");
+      setMaskedPhone(payload.maskedPhone || payload.normalizedPhone || "");
+      setPhoneInput(payload.normalizedPhone || "");
       setAccount(payload.account || null);
       setMessage(payload.message || null);
       setStep("verify");
@@ -97,6 +100,28 @@ export default function PhoneLoginPage() {
   }
 
   async function sendOtp() {
+    if (identifierType === "email") {
+      const email = normalizedEmailPreview;
+      if (!email) {
+        throw new Error("Enter a valid email address.");
+      }
+
+      const response = await fetch("/api/auth/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifierType: "email", identifier: email }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error || "Unable to send OTP.");
+      }
+
+      setResolvedIdentifier(payload.identifier || payload.email || email);
+      setMessage(payload.message || `We sent a verification code to ${email}.`);
+      setCooldown(45);
+      return;
+    }
+
     const phone = normalizeKenyanPhone(phoneInput || normalizedPhone);
     if (!phone) {
       throw new Error("Enter a valid Kenyan phone number like 0712345678 or 0101234567.");
@@ -105,7 +130,7 @@ export default function PhoneLoginPage() {
     const response = await fetch("/api/auth/send-otp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone }),
+      body: JSON.stringify({ identifierType: "phone", identifier: phone }),
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload?.ok) {
@@ -140,15 +165,33 @@ export default function PhoneLoginPage() {
     setError(null);
 
     try {
-      const phone = normalizeKenyanPhone(phoneInput || normalizedPhone);
-      if (!phone) {
-        throw new Error("Enter a valid Kenyan phone number like 0712345678 or 0101234567.");
+      let requestBody: Record<string, string>;
+      if (identifierType === "email") {
+        const email = normalizedEmailPreview;
+        if (!email) {
+          throw new Error("Enter a valid email address.");
+        }
+        requestBody = {
+          identifierType: "email",
+          identifier: email,
+          code: otp,
+        };
+      } else {
+        const phone = normalizeKenyanPhone(phoneInput || normalizedPhone);
+        if (!phone) {
+          throw new Error("Enter a valid Kenyan phone number like 0712345678 or 0101234567.");
+        }
+        requestBody = {
+          identifierType: "phone",
+          identifier: phone,
+          code: otp,
+        };
       }
 
       const response = await fetch("/api/auth/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, code: otp }),
+        body: JSON.stringify(requestBody),
       });
       const payload = await response.json().catch(() => null);
 
@@ -181,6 +224,7 @@ export default function PhoneLoginPage() {
   function resetFlow() {
     setStep("identify");
     setIdentifier("");
+    setResolvedIdentifier("");
     setPhoneInput("");
     setNormalizedPhone("");
     setMaskedPhone("");
@@ -198,12 +242,14 @@ export default function PhoneLoginPage() {
         <div className="rounded-[2rem] border border-[#7a0000]/10 bg-white p-6 shadow-[0_28px_70px_rgba(122,0,0,0.10)] sm:p-7">
           <div className="text-xs font-black uppercase tracking-[0.24em] text-[#7a0000]">Customer login</div>
           <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950">
-            {step === "identify" ? "Sign in with email or phone" : "Verify with SMS OTP"}
+            {step === "identify" ? "Sign in with email or phone" : identifierType === "email" ? "Verify with email OTP" : "Verify with SMS OTP"}
           </h1>
           <p className="mt-3 text-sm leading-6 text-slate-600">
             {step === "identify"
-              ? "Start with the email address or Kenyan mobile number on your Betech account. We will detect the account first, then continue with one secure SMS OTP flow."
-              : "Confirm the phone number for this account, request an OTP by SMS, then enter the code to complete sign in."}
+              ? "Start with the email address or Kenyan mobile number on your Betech account. We will detect the account first, then continue with one secure OTP flow."
+              : identifierType === "email"
+                ? "Confirm the email for this account, request an OTP by email, then enter the code to complete sign in."
+                : "Confirm the phone number for this account, request an OTP by SMS, then enter the code to complete sign in."}
           </p>
 
           {error ? <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
@@ -237,35 +283,50 @@ export default function PhoneLoginPage() {
             <div className="mt-6 space-y-5">
               <div className="rounded-[1.6rem] border border-[#ead8c4] bg-[#fffaf4] px-4 py-4">
                 <div className="text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">
-                  {account ? "Account found" : "Continue with phone"}
+                  {account ? "Account found" : identifierType === "email" ? "Continue with email" : "Continue with phone"}
                 </div>
                 <div className="mt-2 text-sm text-slate-600">
                   {identifierType === "email"
-                    ? `We matched ${identifier.trim().toLowerCase()} to this phone number.`
+                    ? `We matched ${normalizedEmailPreview} to this account.`
                     : "Use this phone number to receive your OTP."}
                 </div>
                 <div className="mt-3 text-base font-semibold text-slate-900">{account?.name || "Betech customer"}</div>
-                <div className="mt-1 text-sm text-slate-600">{account?.email || maskedPhone || resolvedPhonePreview}</div>
+                <div className="mt-1 text-sm text-slate-600">
+                  {identifierType === "email" ? account?.email || normalizedEmailPreview : account?.email || maskedPhone || resolvedPhonePreview}
+                </div>
               </div>
 
               <form onSubmit={handleSendOtp} className="space-y-4">
-                <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-slate-700">Phone number</span>
-                  <input
-                    type="tel"
-                    required
-                    autoComplete="tel"
-                    placeholder="0712345678 or 0101234567"
-                    value={phoneInput}
-                    onChange={(event) => setPhoneInput(event.target.value)}
-                    className="w-full rounded-2xl border border-[#ead8c4] bg-[#fffdf9] px-4 py-3 text-base text-slate-900 outline-none transition focus:border-[#7a0000]/35 focus:ring-2 focus:ring-[#f2b20f]/30"
-                  />
-                  <span className="mt-2 block text-xs text-slate-500">
-                    {identifierType === "email"
-                      ? "This should match the phone number linked to the email account you entered."
-                      : "We support Kenyan mobile numbers in formats like 0712345678, 0101234567, 2547XXXXXXXX, 2541XXXXXXXX, and +254..."}
-                  </span>
-                </label>
+                {identifierType === "email" ? (
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-slate-700">Email address</span>
+                    <input
+                      type="email"
+                      required
+                      autoComplete="email"
+                      value={normalizedEmailPreview}
+                      readOnly
+                      className="w-full rounded-2xl border border-[#ead8c4] bg-[#f8f4ec] px-4 py-3 text-base text-slate-900 outline-none"
+                    />
+                    <span className="mt-2 block text-xs text-slate-500">We will send a one-time verification code to this email address.</span>
+                  </label>
+                ) : (
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-slate-700">Phone number</span>
+                    <input
+                      type="tel"
+                      required
+                      autoComplete="tel"
+                      placeholder="0712345678 or 0101234567"
+                      value={phoneInput}
+                      onChange={(event) => setPhoneInput(event.target.value)}
+                      className="w-full rounded-2xl border border-[#ead8c4] bg-[#fffdf9] px-4 py-3 text-base text-slate-900 outline-none transition focus:border-[#7a0000]/35 focus:ring-2 focus:ring-[#f2b20f]/30"
+                    />
+                    <span className="mt-2 block text-xs text-slate-500">
+                      We support Kenyan mobile numbers in formats like 0712345678, 0101234567, 2547XXXXXXXX, 2541XXXXXXXX, and +254...
+                    </span>
+                  </label>
+                )}
 
                 <div className="flex gap-3">
                   <button
@@ -273,7 +334,7 @@ export default function PhoneLoginPage() {
                     disabled={busy || !canResend}
                     className="inline-flex flex-1 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#7a0000_0%,#991010_100%)] px-5 py-3 text-sm font-bold text-white shadow-[0_18px_36px_rgba(122,0,0,0.18)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {busy ? "Sending code..." : canResend ? "Send OTP" : `Resend in ${cooldown}s`}
+                    {busy ? "Sending code..." : canResend ? `Send ${identifierType === "email" ? "email" : "SMS"} OTP` : `Resend in ${cooldown}s`}
                   </button>
                   <button
                     type="button"
@@ -302,7 +363,7 @@ export default function PhoneLoginPage() {
 
                 <button
                   type="submit"
-                  disabled={busy || !resolvedPhonePreview}
+                  disabled={busy || (identifierType === "email" ? !normalizedEmailPreview : !resolvedPhonePreview)}
                   className="inline-flex w-full items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#7a0000_0%,#991010_100%)] px-5 py-3 text-sm font-bold text-white shadow-[0_18px_36px_rgba(122,0,0,0.18)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {busy ? "Verifying..." : "Verify OTP and sign in"}

@@ -4,7 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { isAgentLeadOwnershipTableAvailable } from "@/lib/agentLeadOwnershipTable";
 import { getKenyanPhoneVariants, normalizeKenyanPhone } from "@/lib/phone";
 
-type PhoneAuthUserRecord = Pick<
+export type AuthOtpChannel = "phone" | "email";
+
+type OtpAuthUserRecord = Pick<
   User,
   "id" | "email" | "phone" | "name" | "role" | "attendantCategory" | "isActive" | "phoneVerifiedAt" | "emailVerifiedAt" | "lastLoginMethod" | "county" | "town"
 > & {
@@ -16,16 +18,18 @@ type PhoneAuthUserRecord = Pick<
   } | null;
 };
 
-export type PhoneAuthResult = {
-  user: PhoneAuthUserRecord;
+export type OtpAuthResult = {
+  user: OtpAuthUserRecord;
   redirectTo: string;
   requiresProfileCompletion: boolean;
-  normalizedPhone: string;
+  channel: AuthOtpChannel;
+  identifier: string;
 };
 
-type VerifiedPhoneTokenPayload = {
+type VerifiedAuthTokenPayload = {
   userId: string;
-  phone: string;
+  channel: AuthOtpChannel;
+  identifier: string;
   redirectTo: string;
   requiresProfileCompletion: boolean;
   exp: number;
@@ -63,21 +67,46 @@ export function generateOtpCode() {
   return String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
 }
 
-export async function createOtpCode(phoneInput: string) {
-  const normalizedPhone = normalizeKenyanPhone(phoneInput);
-  if (!normalizedPhone) {
-    throw new Error("Enter a valid Kenyan phone number like 0712345678 or 0101234567.");
+function normalizeEmailIdentifier(input?: string) {
+  const email = String(input || "").trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : "";
+}
+
+function normalizeOtpIdentifier(channel: AuthOtpChannel, rawIdentifier: string) {
+  if (channel === "phone") {
+    const normalizedPhone = normalizeKenyanPhone(rawIdentifier);
+    if (!normalizedPhone) {
+      throw new Error("Enter a valid Kenyan phone number like 0712345678 or 0101234567.");
+    }
+    return {
+      normalizedIdentifier: normalizedPhone,
+      storageKey: `phone:${normalizedPhone}`,
+    };
   }
+
+  const normalizedEmail = normalizeEmailIdentifier(rawIdentifier);
+  if (!normalizedEmail) {
+    throw new Error("Enter a valid email address.");
+  }
+
+  return {
+    normalizedIdentifier: normalizedEmail,
+    storageKey: `email:${normalizedEmail}`,
+  };
+}
+
+export async function createOtpCodeForChannel(channel: AuthOtpChannel, rawIdentifier: string) {
+  const { normalizedIdentifier, storageKey } = normalizeOtpIdentifier(channel, rawIdentifier);
 
   const code = generateOtpCode();
   const expiresAt = new Date(Date.now() + OTP_TTL_MS);
 
   try {
-    const codeHash = hashOtpCode(normalizedPhone, code);
+    const codeHash = hashOtpCode(storageKey, code);
     const [retired, created] = await prisma.$transaction([
       prisma.otpCode.updateMany({
         where: {
-          phone: normalizedPhone,
+          phone: storageKey,
           used: false,
         },
         data: {
@@ -86,7 +115,7 @@ export async function createOtpCode(phoneInput: string) {
       }),
       prisma.otpCode.create({
         data: {
-          phone: normalizedPhone,
+          phone: storageKey,
           codeHash,
           expiresAt,
         },
@@ -94,30 +123,41 @@ export async function createOtpCode(phoneInput: string) {
     ]);
 
     console.info("[otp] OTP save success", {
-      phone: normalizedPhone,
+      channel,
+      identifier: normalizedIdentifier,
       expiresAt: expiresAt.toISOString(),
       retiredCount: retired.count,
       otpId: created.id,
     });
   } catch (error) {
     console.error("[otp] OTP save failure", {
-      phone: normalizedPhone,
+      channel,
+      identifier: normalizedIdentifier,
       expiresAt: expiresAt.toISOString(),
       error: error instanceof Error ? error.message : String(error),
     });
     throw error;
   }
 
-  return { normalizedPhone, code, expiresAt };
+  return { normalizedIdentifier, storageKey, code, expiresAt };
 }
 
-function getPreferredRedirect(user: PhoneAuthUserRecord) {
+export async function createOtpCode(phoneInput: string) {
+  const result = await createOtpCodeForChannel("phone", phoneInput);
+  return {
+    normalizedPhone: result.normalizedIdentifier,
+    code: result.code,
+    expiresAt: result.expiresAt,
+  };
+}
+
+function getPreferredRedirect(user: OtpAuthUserRecord) {
   if (user.role === Role.ADMIN) return "/admin";
   if (user.agentProfile) return "/agents/dashboard";
   return "/account";
 }
 
-function requiresProfileCompletion(user: PhoneAuthUserRecord) {
+function requiresProfileCompletion(user: OtpAuthUserRecord) {
   return !String(user.name || "").trim() || !String(user.email || "").trim();
 }
 
@@ -206,25 +246,9 @@ async function resolveUserByPhone(normalizedPhone: string) {
   return agentProfile?.user ?? null;
 }
 
-export async function findPhoneAuthUserByPhone(phoneInput: string) {
-  const normalizedPhone = normalizeKenyanPhone(phoneInput);
-  if (!normalizedPhone) return null;
-
-  const user = await resolveUserByPhone(normalizedPhone);
-  if (!user) return null;
-
-  return {
-    normalizedPhone,
-    user,
-  };
-}
-
-export async function findPhoneAuthUserByEmail(emailInput: string) {
-  const email = String(emailInput || "").trim().toLowerCase();
-  if (!email) return null;
-
+async function resolveUserByEmail(normalizedEmail: string) {
   const directUser = await prisma.user.findUnique({
-    where: { email },
+    where: { email: normalizedEmail },
     include: {
       agentProfile: {
         select: {
@@ -237,19 +261,12 @@ export async function findPhoneAuthUserByEmail(emailInput: string) {
     },
   });
 
-  if (directUser) {
-    const normalizedPhone = normalizeKenyanPhone(directUser.phone || directUser.agentProfile?.phone || "");
-    return {
-      email,
-      normalizedPhone,
-      user: directUser,
-    };
-  }
+  if (directUser) return directUser;
 
   const agentProfile = await prisma.agentProfile.findFirst({
     where: {
       email: {
-        equals: email,
+        equals: normalizedEmail,
         mode: "insensitive",
       },
     },
@@ -269,17 +286,36 @@ export async function findPhoneAuthUserByEmail(emailInput: string) {
     },
   });
 
-  if (!agentProfile?.user) return null;
+  return agentProfile?.user ?? null;
+}
 
-  const normalizedPhone = normalizeKenyanPhone(agentProfile.user.phone || agentProfile.phone || "");
+export async function findPhoneAuthUserByPhone(phoneInput: string) {
+  const normalizedPhone = normalizeKenyanPhone(phoneInput);
+  if (!normalizedPhone) return null;
+
+  const user = await resolveUserByPhone(normalizedPhone);
+  if (!user) return null;
+
   return {
-    email,
     normalizedPhone,
-    user: agentProfile.user,
+    user,
   };
 }
 
-async function resolveVerifiedPhoneUser(normalizedPhone: string): Promise<PhoneAuthResult> {
+export async function findPhoneAuthUserByEmail(emailInput: string) {
+  const email = normalizeEmailIdentifier(emailInput);
+  if (!email) return null;
+  const user = await resolveUserByEmail(email);
+  if (!user) return null;
+  const normalizedPhone = normalizeKenyanPhone(user.phone || user.agentProfile?.phone || "");
+  return {
+    email,
+    normalizedPhone,
+    user,
+  };
+}
+
+async function resolveVerifiedPhoneUser(normalizedPhone: string): Promise<OtpAuthResult> {
   let user = await resolveUserByPhone(normalizedPhone);
 
   if (!user) {
@@ -339,24 +375,84 @@ async function resolveVerifiedPhoneUser(normalizedPhone: string): Promise<PhoneA
     user,
     redirectTo: getPreferredRedirect(user),
     requiresProfileCompletion: requiresProfileCompletion(user),
-    normalizedPhone,
+    channel: "phone",
+    identifier: normalizedPhone,
   };
 }
 
-export async function verifyOtpCode(phoneInput: string, codeInput: string) {
-  const normalizedPhone = normalizeKenyanPhone(phoneInput);
-  if (!normalizedPhone) {
-    throw new Error("Enter a valid Kenyan phone number like 0712345678 or 0101234567.");
+async function resolveVerifiedEmailUser(normalizedEmail: string): Promise<OtpAuthResult> {
+  let user = await resolveUserByEmail(normalizedEmail);
+
+  if (!user) {
+    user = await prisma.user.create({
+      data: {
+        email: normalizedEmail,
+        emailVerifiedAt: new Date(),
+        lastLoginMethod: "email_otp",
+        role: Role.ATTENDANT,
+      },
+      include: {
+        agentProfile: {
+          select: {
+            id: true,
+            status: true,
+            phone: true,
+            email: true,
+          },
+        },
+      },
+    });
+  } else {
+    if (!user.isActive) {
+      throw new Error("This account is inactive. Please contact Betech support.");
+    }
+
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        email: normalizedEmail,
+        emailVerifiedAt: new Date(),
+        lastLoginMethod: "email_otp",
+        agentProfile: user.agentProfile
+          ? {
+              update: {
+                email: normalizedEmail,
+              },
+            }
+          : undefined,
+      },
+      include: {
+        agentProfile: {
+          select: {
+            id: true,
+            status: true,
+            phone: true,
+            email: true,
+          },
+        },
+      },
+    });
   }
 
+  return {
+    user,
+    redirectTo: getPreferredRedirect(user),
+    requiresProfileCompletion: requiresProfileCompletion(user),
+    channel: "email",
+    identifier: normalizedEmail,
+  };
+}
+
+export async function verifyOtpCodeForChannel(channel: AuthOtpChannel, rawIdentifier: string, codeInput: string) {
+  const { normalizedIdentifier, storageKey } = normalizeOtpIdentifier(channel, rawIdentifier);
   const code = String(codeInput || "").trim();
   if (!/^\d{6}$/.test(code)) {
-    throw new Error("Enter the 6-digit OTP we sent by SMS.");
+    throw new Error("Enter the 6-digit OTP we sent.");
   }
 
   const otpRecord = await prisma.otpCode.findFirst({
     where: {
-      phone: normalizedPhone,
+      phone: storageKey,
       used: false,
     },
     orderBy: {
@@ -374,7 +470,7 @@ export async function verifyOtpCode(phoneInput: string, codeInput: string) {
     throw new Error("This OTP has expired. Please request a new code.");
   }
 
-  const codeHash = hashOtpCode(normalizedPhone, code);
+  const codeHash = hashOtpCode(storageKey, code);
   const matches = crypto.timingSafeEqual(Buffer.from(codeHash), Buffer.from(otpRecord.codeHash));
 
   if (!matches) {
@@ -394,13 +490,22 @@ export async function verifyOtpCode(phoneInput: string, codeInput: string) {
     data: { used: true },
   });
 
-  return resolveVerifiedPhoneUser(normalizedPhone);
+  if (channel === "email") {
+    return resolveVerifiedEmailUser(normalizedIdentifier);
+  }
+
+  return resolveVerifiedPhoneUser(normalizedIdentifier);
 }
 
-export function createVerifiedPhoneToken(result: PhoneAuthResult) {
-  const payload: VerifiedPhoneTokenPayload = {
+export async function verifyOtpCode(phoneInput: string, codeInput: string) {
+  return verifyOtpCodeForChannel("phone", phoneInput, codeInput);
+}
+
+export function createVerifiedAuthToken(result: OtpAuthResult) {
+  const payload: VerifiedAuthTokenPayload = {
     userId: result.user.id,
-    phone: result.normalizedPhone,
+    channel: result.channel,
+    identifier: result.identifier,
     redirectTo: result.redirectTo,
     requiresProfileCompletion: result.requiresProfileCompletion,
     exp: Date.now() + VERIFIED_TOKEN_TTL_MS,
@@ -411,24 +516,32 @@ export function createVerifiedPhoneToken(result: PhoneAuthResult) {
   return `${encoded}.${signature}`;
 }
 
-export function readVerifiedPhoneToken(token: string) {
+export function createVerifiedPhoneToken(result: OtpAuthResult) {
+  return createVerifiedAuthToken(result);
+}
+
+export function readVerifiedAuthToken(token: string) {
   const [encoded, signature] = String(token || "").split(".");
   if (!encoded || !signature) {
-    throw new Error("Missing phone verification token.");
+    throw new Error("Missing verification token.");
   }
 
   const expectedSignature = hmacHex(encoded, getVerifiedTokenSecret());
   if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) {
-    throw new Error("Invalid phone verification token.");
+    throw new Error("Invalid verification token.");
   }
 
-  const payload = JSON.parse(base64UrlDecode(encoded)) as VerifiedPhoneTokenPayload;
-  if (!payload?.userId || !payload?.phone || !payload?.exp) {
-    throw new Error("Invalid phone verification token.");
+  const payload = JSON.parse(base64UrlDecode(encoded)) as VerifiedAuthTokenPayload;
+  if (!payload?.userId || !payload?.identifier || !payload?.channel || !payload?.exp) {
+    throw new Error("Invalid verification token.");
   }
   if (payload.exp < Date.now()) {
-    throw new Error("Phone verification token expired.");
+    throw new Error("Verification token expired.");
   }
 
   return payload;
+}
+
+export function readVerifiedPhoneToken(token: string) {
+  return readVerifiedAuthToken(token);
 }

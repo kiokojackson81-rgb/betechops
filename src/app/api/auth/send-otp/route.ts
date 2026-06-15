@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sendOtpSms } from "@/lib/africasTalking";
-import { createOtpCode } from "@/lib/phoneOtpAuth";
+import { sendOtpVerificationEmail } from "@/lib/email";
+import { createOtpCodeForChannel } from "@/lib/phoneOtpAuth";
 import { normalizeKenyanPhone } from "@/lib/phone";
 
 export const dynamic = "force-dynamic";
@@ -21,51 +22,92 @@ function allowRequest(key: string) {
   return true;
 }
 
-function getClientKey(req: NextRequest, phone: string) {
+function looksLikeEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function normalizeEmail(value: string) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function getClientKey(req: NextRequest, channel: "phone" | "email", identifier: string) {
   const ip =
     String(req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "global")
       .split(",")[0]
       .trim() || "global";
-  return `send-otp:${ip}:${phone}`;
+  return `send-otp:${ip}:${channel}:${identifier}`;
 }
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
-  const phone = normalizeKenyanPhone(String(body?.phone || "").trim());
+  const identifierType = body?.identifierType === "email" ? "email" : "phone";
+  const rawIdentifier = String(body?.identifier || body?.phone || body?.email || "").trim();
+  const normalizedEmail = identifierType === "email" || looksLikeEmail(rawIdentifier) ? normalizeEmail(rawIdentifier) : "";
+  const phone = identifierType === "phone" ? normalizeKenyanPhone(rawIdentifier) : null;
   console.info("[send-otp] incoming request", {
-    phone,
+    identifierType,
+    identifier: identifierType === "email" ? normalizedEmail : phone,
     hasBody: Boolean(body),
   });
 
-  if (!phone) {
+  if (identifierType === "email") {
+    if (!normalizedEmail || !looksLikeEmail(normalizedEmail)) {
+      console.warn("[send-otp] rejected invalid email");
+      return NextResponse.json({ ok: false, error: "Email address is required." }, { status: 400 });
+    }
+  } else if (!phone) {
     console.warn("[send-otp] rejected invalid phone");
     return NextResponse.json({ ok: false, error: "Phone number is required." }, { status: 400 });
   }
 
-  if (!allowRequest(getClientKey(req, phone))) {
-    console.warn("[send-otp] rate limited", { phone });
+  const rateLimitIdentifier = identifierType === "email" ? normalizedEmail : phone;
+  if (!rateLimitIdentifier || !allowRequest(getClientKey(req, identifierType, rateLimitIdentifier))) {
+    console.warn("[send-otp] rate limited", { identifierType, identifier: rateLimitIdentifier });
     return NextResponse.json({ ok: false, error: "Too many OTP requests. Please wait before trying again." }, { status: 429 });
   }
 
   try {
-    const { normalizedPhone, code } = await createOtpCode(phone);
+    const otpPayload = await createOtpCodeForChannel(identifierType, rawIdentifier);
     console.info("[send-otp] OTP persisted", {
-      phone: normalizedPhone,
-      code,
+      channel: identifierType,
+      identifier: otpPayload.normalizedIdentifier,
+      code: otpPayload.code,
     });
-    await sendOtpSms(normalizedPhone, code);
+
+    if (identifierType === "email") {
+      await sendOtpVerificationEmail({
+        to: otpPayload.normalizedIdentifier,
+        code: otpPayload.code,
+      });
+      console.info("[send-otp] OTP email sent successfully", {
+        email: otpPayload.normalizedIdentifier,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        identifierType: "email",
+        identifier: otpPayload.normalizedIdentifier,
+        email: otpPayload.normalizedIdentifier,
+        message: `We sent a verification code to ${otpPayload.normalizedIdentifier}.`,
+      });
+    }
+
+    await sendOtpSms(otpPayload.normalizedIdentifier, otpPayload.code);
     console.info("[send-otp] OTP SMS sent successfully", {
-      phone: normalizedPhone,
+      phone: otpPayload.normalizedIdentifier,
     });
 
     return NextResponse.json({
       ok: true,
-      phone: normalizedPhone,
-      message: `We sent a verification code to ${normalizedPhone}.`,
+      identifierType: "phone",
+      identifier: otpPayload.normalizedIdentifier,
+      phone: otpPayload.normalizedIdentifier,
+      message: `We sent a verification code to ${otpPayload.normalizedIdentifier}.`,
     });
   } catch (error) {
     console.error("[send-otp] failed", {
-      phone,
+      identifierType,
+      identifier: rateLimitIdentifier,
       error: error instanceof Error ? error.message : String(error),
     });
     return NextResponse.json(
