@@ -2,7 +2,6 @@ import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { waitForReceiptById } from '@/lib/receiptReadAfterWrite';
 import { Prisma } from '@prisma/client';
-import sgMail from '@sendgrid/mail';
 import Twilio from 'twilio';
 import { getActorId } from '@/lib/api';
 import { uploadBufferToS3 } from '@/lib/storage';
@@ -12,6 +11,7 @@ import { normalizePhone } from '@/lib/phone';
 import { launchChromiumBrowser } from '@/lib/pdf/chromium';
 import { uploadReceiptPdfToBlob } from '@/lib/blob/uploadReceiptPdf';
 import { getBranding } from '@/lib/branding';
+import { describeEmailError, sendReceiptEmail } from '@/lib/email';
 
 
 function getSiteUrl() {
@@ -1002,47 +1002,37 @@ export async function sendReceiptChannels(
     logStep(requestId, 'CHARTRACE', 'skipped');
   }
 
-  // Email via SendGrid
+  // Email via SMTP
   try {
     const toEmail = (receipt.order as any)?.customerEmail || (receipt.data as any)?.customerEmail;
-    const rawSendgridKey = process.env.SENDGRID_API_KEY || process.env.SENDGRID_KEY || '';
-    const sendgridEnv = process.env.SENDGRID_API_KEY
-      ? 'SENDGRID_API_KEY'
-      : process.env.SENDGRID_KEY
-      ? 'SENDGRID_KEY'
-      : 'none';
-    const maskedKey = rawSendgridKey ? `***${rawSendgridKey.slice(-4)}` : 'none';
-    console.info('[receiptSender] SendGrid config', { sendgridEnv, key: maskedKey });
-    const hasValidSendgrid = rawSendgridKey.startsWith('SG.') && Boolean(process.env.SENDGRID_FROM);
 
     if (wantEmail && toEmail) {
-      if (!hasValidSendgrid) {
-        console.warn('[receiptSender] sendgrid_missing_env');
-        channelStatus.email = 'skipped';
-        logStep(requestId, 'EMAIL', 'skipped', { reason: 'missing_sendgrid' });
-      } else {
-        try {
-          sgMail.setApiKey(rawSendgridKey);
-          const attachmentBuffer = pdfCustomerBuffer ?? Buffer.from('');
-          const msg: any = {
-            to: toEmail,
-            from: process.env.SENDGRID_FROM,
-            subject: `Your receipt ${receipt.order?.orderNumber ?? receipt.id}`,
-            text: `Please find your receipt attached.`,
-            attachments: attachmentBuffer.length
-              ? [{ content: attachmentBuffer.toString('base64'), filename: `receipt-${receipt.id}.pdf`, type: 'application/pdf', disposition: 'attachment' }]
-              : [],
-            html: `<p>Please find your receipt attached.</p>${pdfUrlCustomer ? `<p><a href="${pdfUrlCustomer}">Download receipt (link)</a></p>` : ''}`,
-          };
-          await sgMail.send(msg);
-          sent.push('email');
-          channelStatus.email = 'sent';
-          logStep(requestId, 'EMAIL', 'ok', { to: toEmail });
-        } catch (emailErr) {
-          channelStatus.email = 'failed';
-          errors.push({ channel: 'email', error: emailErr instanceof Error ? emailErr.message : String(emailErr) });
-          logStep(requestId, 'EMAIL', 'failed', { error: emailErr instanceof Error ? emailErr.message : String(emailErr) });
-        }
+      try {
+        const attachmentBuffer = pdfCustomerBuffer ?? Buffer.from('');
+        await sendReceiptEmail({
+          to: toEmail,
+          receiptNumber: receipt.order?.orderNumber ?? receipt.id,
+          receiptLink: pdfUrlCustomer || `${getSiteUrl().replace(/\/$/, '')}/receipts/${receipt.id}`,
+          customerName: (receipt.order as any)?.customerName || (receipt.data as any)?.customerName || null,
+          attachments: attachmentBuffer.length
+            ? [
+                {
+                  filename: `receipt-${receipt.id}.pdf`,
+                  content: attachmentBuffer,
+                  contentType: 'application/pdf',
+                  disposition: 'attachment',
+                },
+              ]
+            : undefined,
+        });
+        sent.push('email');
+        channelStatus.email = 'sent';
+        logStep(requestId, 'EMAIL', 'ok', { to: toEmail });
+      } catch (emailErr) {
+        const safeError = describeEmailError(emailErr);
+        channelStatus.email = 'failed';
+        errors.push({ channel: 'email', error: safeError });
+        logStep(requestId, 'EMAIL', 'failed', { error: safeError });
       }
     } else {
       channelStatus.email = wantEmail ? 'missing-recipient' : 'not-requested';
@@ -1050,9 +1040,10 @@ export async function sendReceiptChannels(
       logStep(requestId, 'EMAIL', reason);
     }
   } catch (e) {
+    const safeError = describeEmailError(e);
     channelStatus.email = 'failed';
-    errors.push({ channel: 'email', error: String(e) });
-    logStep(requestId, 'EMAIL', 'failed', { error: String(e) });
+    errors.push({ channel: 'email', error: safeError });
+    logStep(requestId, 'EMAIL', 'failed', { error: safeError });
   }
 
   // WhatsApp (customer) must be delivered via Chatrace only. Do not call
