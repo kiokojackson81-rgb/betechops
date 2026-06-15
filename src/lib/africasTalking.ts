@@ -8,6 +8,8 @@ type AfricaTalkingPayload = {
   from?: string;
 };
 
+const AT_SUCCESS_STATUS_CODES = new Set([100, 101, 102]);
+
 export function getAfricaTalkingConfig() {
   const username = String(process.env.AFRICASTALKING_USERNAME || "").trim();
   const apiKey = String(process.env.AFRICASTALKING_API_KEY || "").trim();
@@ -95,6 +97,10 @@ export async function sendTransactionalSms(phone: string, message: string) {
     payload && typeof payload === "object"
       ? ((payload as { SMSMessageData?: { Recipients?: unknown } }).SMSMessageData?.Recipients as unknown)
       : undefined;
+  const providerMessage =
+    payload && typeof payload === "object"
+      ? ((payload as { SMSMessageData?: { Message?: unknown } }).SMSMessageData?.Message as string | undefined)
+      : undefined;
 
   console.info("[africastalking] transactional SMS response received", {
     username,
@@ -130,7 +136,8 @@ export async function sendTransactionalSms(phone: string, message: string) {
     throw new Error(detail);
   }
 
-  if (Array.isArray(recipients) && recipients[0]?.status && recipients[0].status !== "Success") {
+  if (!Array.isArray(recipients) || recipients.length === 0) {
+    const detail = providerMessage || "SMS provider returned no recipients.";
     console.error("[africastalking] transactional SMS rejected by provider", {
       username,
       environment,
@@ -140,8 +147,39 @@ export async function sendTransactionalSms(phone: string, message: string) {
       recipients,
       rawBody,
       payload,
+      detail,
     });
-    throw new Error(recipients[0]?.status || "Failed to send OTP SMS.");
+    throw new Error(detail);
+  }
+
+  const failedRecipient = recipients.find((recipient) => {
+    if (!recipient || typeof recipient !== "object") {
+      return true;
+    }
+
+    const statusCode = (recipient as { statusCode?: unknown }).statusCode;
+    return typeof statusCode !== "number" || !AT_SUCCESS_STATUS_CODES.has(statusCode);
+  }) as
+    | { status?: string; statusCode?: number; number?: string; messageId?: string }
+    | undefined;
+
+  if (failedRecipient) {
+    const detail =
+      failedRecipient.status ||
+      providerMessage ||
+      `SMS provider rejected recipient${failedRecipient.number ? ` ${failedRecipient.number}` : ""}.`;
+    console.error("[africastalking] transactional SMS rejected by provider", {
+      username,
+      environment,
+      senderId: senderId || null,
+      serializedPayload,
+      requestUrl,
+      recipients,
+      rawBody,
+      payload,
+      detail,
+    });
+    throw new Error(detail);
   }
 
   return payload;
