@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { getToken } from "next-auth/jwt";
 import { updateSafeCustomerProfile } from "@/lib/customerProfile";
 import { prisma } from "@/lib/prisma";
 import { normalizeKenyanPhone } from "@/lib/phone";
@@ -8,8 +8,11 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth();
-    const userId = (session?.user as { id?: string } | undefined)?.id;
+    const token = await getToken({
+      req,
+      secret: process.env.NEXTAUTH_SECRET || process.env.SECRET || "",
+    });
+    const userId = typeof token?.sub === "string" ? token.sub : null;
 
     if (!userId) {
       return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
