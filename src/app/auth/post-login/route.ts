@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { agentPath, isAgentRoutePath, isAgentsHost } from '@/lib/agents/host';
 import getLandingPage from '@/lib/getLandingPage';
+import { isOpsHost } from '@/lib/runtimeUrls';
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -24,7 +25,11 @@ export async function GET(req: Request) {
   const role = user?.role ?? '';
   const category = user?.attendantCategory ?? null;
   const isAgent = Boolean(user?.isAgent);
-  let target = isAgent ? agentPath("/dashboard", useRootAgentPaths) : getLandingPage(category, role);
+  let target = isAgentsHost(host)
+    ? (isAgent ? agentPath("/dashboard", useRootAgentPaths) : "/")
+    : isOpsHost(host)
+      ? getLandingPage(category, role)
+      : "/account";
 
   if (rawCallback) {
     let decoded = rawCallback;

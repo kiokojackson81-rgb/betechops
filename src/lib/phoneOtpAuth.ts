@@ -151,7 +151,15 @@ export async function createOtpCode(phoneInput: string) {
   };
 }
 
-function getPreferredRedirect(user: OtpAuthUserRecord) {
+function normalizePreferredRedirect(value?: string | null) {
+  const redirect = String(value || "").trim();
+  if (!redirect.startsWith("/")) return "";
+  return redirect;
+}
+
+function getPreferredRedirect(user: OtpAuthUserRecord, preferredRedirect?: string | null) {
+  const normalizedPreferredRedirect = normalizePreferredRedirect(preferredRedirect);
+  if (normalizedPreferredRedirect) return normalizedPreferredRedirect;
   if (user.role === Role.ADMIN) return "/admin";
   if (user.agentProfile) return "/agents/dashboard";
   return "/account";
@@ -315,7 +323,7 @@ export async function findPhoneAuthUserByEmail(emailInput: string) {
   };
 }
 
-async function resolveVerifiedPhoneUser(normalizedPhone: string): Promise<OtpAuthResult> {
+async function resolveVerifiedPhoneUser(normalizedPhone: string, preferredRedirect?: string | null): Promise<OtpAuthResult> {
   let user = await resolveUserByPhone(normalizedPhone);
 
   if (!user) {
@@ -373,14 +381,14 @@ async function resolveVerifiedPhoneUser(normalizedPhone: string): Promise<OtpAut
 
   return {
     user,
-    redirectTo: getPreferredRedirect(user),
+    redirectTo: getPreferredRedirect(user, preferredRedirect),
     requiresProfileCompletion: requiresProfileCompletion(user),
     channel: "phone",
     identifier: normalizedPhone,
   };
 }
 
-async function resolveVerifiedEmailUser(normalizedEmail: string): Promise<OtpAuthResult> {
+async function resolveVerifiedEmailUser(normalizedEmail: string, preferredRedirect?: string | null): Promise<OtpAuthResult> {
   let user = await resolveUserByEmail(normalizedEmail);
 
   if (!user) {
@@ -436,14 +444,19 @@ async function resolveVerifiedEmailUser(normalizedEmail: string): Promise<OtpAut
 
   return {
     user,
-    redirectTo: getPreferredRedirect(user),
+    redirectTo: getPreferredRedirect(user, preferredRedirect),
     requiresProfileCompletion: requiresProfileCompletion(user),
     channel: "email",
     identifier: normalizedEmail,
   };
 }
 
-export async function verifyOtpCodeForChannel(channel: AuthOtpChannel, rawIdentifier: string, codeInput: string) {
+export async function verifyOtpCodeForChannel(
+  channel: AuthOtpChannel,
+  rawIdentifier: string,
+  codeInput: string,
+  preferredRedirect?: string | null,
+) {
   const { normalizedIdentifier, storageKey } = normalizeOtpIdentifier(channel, rawIdentifier);
   const code = String(codeInput || "").trim();
   if (!/^\d{6}$/.test(code)) {
@@ -491,14 +504,14 @@ export async function verifyOtpCodeForChannel(channel: AuthOtpChannel, rawIdenti
   });
 
   if (channel === "email") {
-    return resolveVerifiedEmailUser(normalizedIdentifier);
+    return resolveVerifiedEmailUser(normalizedIdentifier, preferredRedirect);
   }
 
-  return resolveVerifiedPhoneUser(normalizedIdentifier);
+  return resolveVerifiedPhoneUser(normalizedIdentifier, preferredRedirect);
 }
 
-export async function verifyOtpCode(phoneInput: string, codeInput: string) {
-  return verifyOtpCodeForChannel("phone", phoneInput, codeInput);
+export async function verifyOtpCode(phoneInput: string, codeInput: string, preferredRedirect?: string | null) {
+  return verifyOtpCodeForChannel("phone", phoneInput, codeInput, preferredRedirect);
 }
 
 export function createVerifiedAuthToken(result: OtpAuthResult) {

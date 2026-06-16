@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { createVerifiedAuthToken, verifyOtpCodeForChannel } from "@/lib/phoneOtpAuth";
+import { isAgentsHost } from "@/lib/agents/host";
+import { isOpsHost } from "@/lib/runtimeUrls";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +38,16 @@ function getClientKey(req: NextRequest, channel: "phone" | "email", identifier: 
   return `verify-otp:${ip}:${channel}:${identifier}`;
 }
 
+function getPreferredRedirect(req: NextRequest, rawCallbackUrl: string) {
+  const callbackUrl = String(rawCallbackUrl || "").trim();
+  if (callbackUrl.startsWith("/")) return callbackUrl;
+
+  const host = req.headers.get("host");
+  if (isAgentsHost(host)) return "/dashboard";
+  if (isOpsHost(host)) return "/auth/post-login";
+  return "/account";
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const identifierType = body?.identifierType === "email" ? "email" : "phone";
@@ -43,6 +55,7 @@ export async function POST(req: NextRequest) {
   const email = identifierType === "email" || looksLikeEmail(rawIdentifier) ? normalizeEmail(rawIdentifier) : "";
   const phone = identifierType === "phone" ? normalizeKenyanPhone(rawIdentifier) : null;
   const code = String(body?.code || "").trim();
+  const preferredRedirect = getPreferredRedirect(req, String(body?.callbackUrl || ""));
 
   if (!code || (identifierType === "phone" && !phone) || (identifierType === "email" && !email)) {
     return NextResponse.json(
@@ -57,7 +70,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const resolved = await verifyOtpCodeForChannel(identifierType, rateLimitIdentifier, code);
+    const resolved = await verifyOtpCodeForChannel(identifierType, rateLimitIdentifier, code, preferredRedirect);
     const verificationToken = createVerifiedAuthToken(resolved);
 
     return NextResponse.json({

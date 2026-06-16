@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveFirebasePhoneUser } from "@/lib/firebasePhoneAuth";
+import { isAgentsHost } from "@/lib/agents/host";
+import { isOpsHost } from "@/lib/runtimeUrls";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +29,16 @@ function getClientKey(req: NextRequest) {
   return `firebase-phone:${ip}`;
 }
 
+function getPreferredRedirect(req: NextRequest, rawCallbackUrl: string) {
+  const callbackUrl = String(rawCallbackUrl || "").trim();
+  if (callbackUrl.startsWith("/")) return callbackUrl;
+
+  const host = req.headers.get("host");
+  if (isAgentsHost(host)) return "/dashboard";
+  if (isOpsHost(host)) return "/auth/post-login";
+  return "/account";
+}
+
 export async function POST(req: NextRequest) {
   if (!allowRequest(getClientKey(req))) {
     return NextResponse.json({ ok: false, error: "Too many verification attempts. Please wait and try again." }, { status: 429 });
@@ -34,13 +46,14 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => null);
   const idToken = String(body?.idToken || "").trim();
+  const preferredRedirect = getPreferredRedirect(req, String(body?.callbackUrl || ""));
 
   if (!idToken) {
     return NextResponse.json({ ok: false, error: "Missing Firebase ID token." }, { status: 400 });
   }
 
   try {
-    const resolved = await resolveFirebasePhoneUser(idToken);
+    const resolved = await resolveFirebasePhoneUser(idToken, preferredRedirect);
     return NextResponse.json({
       ok: true,
       user: {

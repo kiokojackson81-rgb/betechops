@@ -178,6 +178,7 @@ export default function PhoneLoginPage() {
           identifierType: "email",
           identifier: email,
           code: otp,
+          callbackUrl,
         };
       } else {
         const phone = normalizeKenyanPhone(phoneInput || normalizedPhone);
@@ -188,6 +189,7 @@ export default function PhoneLoginPage() {
           identifierType: "phone",
           identifier: phone,
           code: otp,
+          callbackUrl,
         };
       }
 

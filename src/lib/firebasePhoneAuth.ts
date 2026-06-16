@@ -23,7 +23,15 @@ export type FirebasePhoneAuthResult = {
   normalizedPhone: string;
 };
 
-function getPreferredRedirect(user: FirebasePhoneUserRecord) {
+function normalizePreferredRedirect(value?: string | null) {
+  const redirect = String(value || "").trim();
+  if (!redirect.startsWith("/")) return "";
+  return redirect;
+}
+
+function getPreferredRedirect(user: FirebasePhoneUserRecord, preferredRedirect?: string | null) {
+  const normalizedPreferredRedirect = normalizePreferredRedirect(preferredRedirect);
+  if (normalizedPreferredRedirect) return normalizedPreferredRedirect;
   if (user.role === Role.ADMIN) {
     return "/admin";
   }
@@ -121,7 +129,7 @@ async function resolveUserByPhone(normalizedPhone: string) {
   return agentProfile?.user ?? null;
 }
 
-export async function resolveFirebasePhoneUser(idToken: string): Promise<FirebasePhoneAuthResult> {
+export async function resolveFirebasePhoneUser(idToken: string, preferredRedirect?: string | null): Promise<FirebasePhoneAuthResult> {
   const decoded = await adminAuth.verifyIdToken(idToken, true);
   const normalizedPhone = normalizeKenyanPhone(decoded.phone_number);
 
@@ -186,7 +194,7 @@ export async function resolveFirebasePhoneUser(idToken: string): Promise<Firebas
 
   return {
     user,
-    redirectTo: getPreferredRedirect(user),
+    redirectTo: getPreferredRedirect(user, preferredRedirect),
     requiresProfileCompletion: requiresProfileCompletion(user),
     normalizedPhone,
   };
