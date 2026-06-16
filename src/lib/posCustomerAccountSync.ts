@@ -386,3 +386,51 @@ export async function syncPosReceiptToCustomerAccount(receiptId: string) {
     emailConflict: customerResolution?.emailConflict ?? false,
   };
 }
+
+export async function backfillPosReceiptsForCustomerAccount(args: {
+  phoneVariants?: string[];
+  normalizedEmail?: string;
+  limit?: number;
+}) {
+  const phoneVariants = Array.from(
+    new Set((args.phoneVariants || []).map((value) => String(value || "").trim()).filter(Boolean)),
+  );
+  const normalizedEmail = normalizeCustomerEmail(args.normalizedEmail);
+  const limit = Math.max(1, Math.min(50, Number(args.limit || 12)));
+
+  if (!phoneVariants.length && !normalizedEmail) {
+    return { receiptIds: [] as string[], synced: 0 };
+  }
+
+  const receipts = await prisma.receipt.findMany({
+    where: {
+      order: {
+        OR: [
+          ...(phoneVariants.length ? [{ customerPhone: { in: phoneVariants } }] : []),
+          ...(normalizedEmail ? [{ customerEmail: normalizedEmail }] : []),
+        ],
+      },
+    },
+    orderBy: [{ generatedAt: "desc" }, { createdAt: "desc" }],
+    take: limit,
+    select: { id: true },
+  });
+
+  let synced = 0;
+  for (const receipt of receipts) {
+    try {
+      const result = await syncPosReceiptToCustomerAccount(receipt.id);
+      if (result?.websiteOrderId) synced += 1;
+    } catch (error) {
+      console.error("[pos account backfill] failed to sync receipt", {
+        receiptId: receipt.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return {
+    receiptIds: receipts.map((receipt) => receipt.id),
+    synced,
+  };
+}

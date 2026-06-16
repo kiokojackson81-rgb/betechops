@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
 import { generateReceiptSerial, normalizeReceiptSerial } from "@/lib/receipts/serial";
 
 export const AGENT_COMMISSION_RATE = 6;
@@ -1711,6 +1712,18 @@ export async function updateAgentSaleStatus(
     throw error;
   }
 
+  if (result.receiptId) {
+    try {
+      await syncPosReceiptToCustomerAccount(result.receiptId);
+    } catch (error) {
+      console.error("[agent sales] failed to sync receipt to customer account after status update", {
+        saleId: result.id,
+        receiptId: result.receiptId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   const commissionBySaleId = await fetchSalesCommissions([result.id]);
   return presentAgentSale(result, getCommissionForSale(result.id, commissionBySaleId));
 }
@@ -1820,6 +1833,16 @@ export async function linkAgentSaleReceipt(
       receiptNumber: sale.receiptNumber || lookup.receiptNumber || lookup.order?.orderNumber || null,
     } as Prisma.InputJsonValue,
   });
+
+  try {
+    await syncPosReceiptToCustomerAccount(lookup.id);
+  } catch (error) {
+    console.error("[agent sales] failed to sync linked receipt to customer account", {
+      saleId: sale.id,
+      receiptId: lookup.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 
   const commissionBySaleId = await fetchSalesCommissions([sale.id]);
   return presentAgentSale(sale, getCommissionForSale(sale.id, commissionBySaleId));

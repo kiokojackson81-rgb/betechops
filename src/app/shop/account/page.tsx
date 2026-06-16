@@ -11,6 +11,7 @@ import { shopNavLinks } from "@/app/shop/shopData";
 import { auth } from "@/lib/auth";
 import { findSafeCustomerProfileByUserId } from "@/lib/customerProfile";
 import { getKenyanPhoneVariants, normalizeKenyanPhone } from "@/lib/phone";
+import { backfillPosReceiptsForCustomerAccount } from "@/lib/posCustomerAccountSync";
 import { prisma } from "@/lib/prisma";
 
 export const metadata: Metadata = buildShopMetadata({
@@ -30,6 +31,24 @@ export default async function ShopAccountPage() {
   const normalizedPhone = normalizeKenyanPhone(dbUser?.phone || user.phone || "");
   const phoneVariants = getKenyanPhoneVariants(normalizedPhone);
   const normalizedEmail = String(dbUser?.email || user.email || "").trim().toLowerCase();
+
+  await backfillPosReceiptsForCustomerAccount({
+    phoneVariants,
+    normalizedEmail,
+    limit: 20,
+  });
+
+  if (phoneVariants.length) {
+    await prisma.websiteOrder.updateMany({
+      where: {
+        customerPhone: { in: phoneVariants },
+        customerUserId: { not: user.id },
+      },
+      data: {
+        customerUserId: user.id,
+      },
+    });
+  }
 
   const recentOrders = await prisma.websiteOrder.findMany({
     where: {
@@ -59,18 +78,6 @@ export default async function ShopAccountPage() {
       },
     },
   });
-
-  if (phoneVariants.length) {
-    await prisma.websiteOrder.updateMany({
-      where: {
-        customerPhone: { in: phoneVariants },
-        customerUserId: { not: user.id },
-      },
-      data: {
-        customerUserId: user.id,
-      },
-    });
-  }
 
   const account = dbUser || {
     id: user.id,
