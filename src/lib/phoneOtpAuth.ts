@@ -196,19 +196,13 @@ async function syncVerifiedIdentityLinks(userId: string, normalizedPhone: string
 
   const updates = [
     prisma.agentSale.updateMany({
-      where: {
-        customerUserId: null,
-        customerPhone: { in: variants },
-      },
+      where: { customerPhone: { in: variants } },
       data: {
         customerUserId: userId,
       },
     }),
     prisma.websiteOrder.updateMany({
-      where: {
-        customerUserId: null,
-        customerPhone: { in: variants },
-      },
+      where: { customerPhone: { in: variants } },
       data: {
         customerUserId: userId,
       },
@@ -218,10 +212,7 @@ async function syncVerifiedIdentityLinks(userId: string, normalizedPhone: string
   if (await isAgentLeadOwnershipTableAvailable()) {
     updates.unshift(
       prisma.agentLeadOwnership.updateMany({
-        where: {
-          customerUserId: null,
-          normalizedPhone,
-        },
+        where: { normalizedPhone },
         data: {
           customerUserId: userId,
         },

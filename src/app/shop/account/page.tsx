@@ -10,6 +10,7 @@ import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks } from "@/app/shop/shopData";
 import { auth } from "@/lib/auth";
 import { findSafeCustomerProfileByUserId } from "@/lib/customerProfile";
+import { getKenyanPhoneVariants, normalizeKenyanPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 
 export const metadata: Metadata = buildShopMetadata({
@@ -25,28 +26,51 @@ export default async function ShopAccountPage() {
     redirect("/login/phone?callbackUrl=/account");
   }
 
-  const [dbUser, recentOrders] = await Promise.all([
-    findSafeCustomerProfileByUserId(user.id),
-    prisma.websiteOrder.findMany({
-      where: { customerUserId: user.id },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-      select: {
-        id: true,
-        orderRef: true,
-        status: true,
-        total: true,
-        createdAt: true,
-        deliveryMethod: true,
-        customerLocation: true,
-        _count: {
-          select: {
-            items: true,
-          },
+  const dbUser = await findSafeCustomerProfileByUserId(user.id);
+  const normalizedPhone = normalizeKenyanPhone(dbUser?.phone || user.phone || "");
+  const phoneVariants = getKenyanPhoneVariants(normalizedPhone);
+  const normalizedEmail = String(dbUser?.email || user.email || "").trim().toLowerCase();
+
+  const recentOrders = await prisma.websiteOrder.findMany({
+    where: {
+      OR: [
+        { customerUserId: user.id },
+        ...(phoneVariants.length ? [{ customerPhone: { in: phoneVariants } }] : []),
+        ...(normalizedEmail ? [{ customerEmail: normalizedEmail }] : []),
+      ],
+    },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    select: {
+      id: true,
+      orderRef: true,
+      status: true,
+      total: true,
+      createdAt: true,
+      deliveryMethod: true,
+      customerLocation: true,
+      customerPhone: true,
+      customerEmail: true,
+      customerUserId: true,
+      _count: {
+        select: {
+          items: true,
         },
       },
-    }),
-  ]);
+    },
+  });
+
+  if (phoneVariants.length) {
+    await prisma.websiteOrder.updateMany({
+      where: {
+        customerPhone: { in: phoneVariants },
+        customerUserId: { not: user.id },
+      },
+      data: {
+        customerUserId: user.id,
+      },
+    });
+  }
 
   const account = dbUser || {
     id: user.id,
