@@ -20,9 +20,9 @@ export const metadata: Metadata = buildShopMetadata({
 
 export default async function ShopAccountPage() {
   const session = await auth();
-  const user = session?.user as { name?: string | null; phone?: string | null; email?: string | null } | undefined;
+  const user = session?.user as { id?: string | null; name?: string | null; phone?: string | null; email?: string | null } | undefined;
 
-  if (!user?.phone) {
+  if (!user?.id) {
     redirect("/login/phone?callbackUrl=/account");
   }
 
@@ -42,7 +42,7 @@ export default async function ShopAccountPage() {
           <div className="mt-4 rounded-[1.8rem] border border-[#f2b20f]/20 bg-[linear-gradient(180deg,#fff7e7_0%,#fffdf9_100%)] px-5 py-4 text-sm text-slate-700 shadow-[0_16px_36px_rgba(15,23,42,0.05)]">
             <div className="text-xs font-black uppercase tracking-[0.22em] text-[#7a0000]">Verified account</div>
             <div className="mt-2 text-base font-semibold text-slate-900">
-              {user.name || "Betech customer"} · {user.phone}
+              {user.name || "Betech customer"} · {user.phone || user.email || "Signed in"}
             </div>
             <div className="mt-1 text-sm text-slate-600">{user.email || "No email saved yet."}</div>
             <div className="mt-4">

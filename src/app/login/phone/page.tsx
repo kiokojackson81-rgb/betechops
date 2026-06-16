@@ -34,6 +34,7 @@ export default function PhoneLoginPage() {
   const [account, setAccount] = useState<AccountPreview>(null);
   const [otp, setOtp] = useState("");
   const [callbackUrl, setCallbackUrl] = useState("/account");
+  const [postAuthRedirect, setPostAuthRedirect] = useState<string | null>(null);
   const [step, setStep] = useState<"identify" | "verify">("identify");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -57,8 +58,10 @@ export default function PhoneLoginPage() {
 
   useEffect(() => {
     if (status !== "authenticated") return;
-    window.location.replace(callbackUrl || "/account");
-  }, [callbackUrl, status]);
+    const target = postAuthRedirect || (step === "identify" ? callbackUrl || "/account" : null);
+    if (!target) return;
+    window.location.replace(target);
+  }, [callbackUrl, postAuthRedirect, status, step]);
 
   if (status === "authenticated") {
     return null;
@@ -202,6 +205,7 @@ export default function PhoneLoginPage() {
       const target = payload.requiresProfileCompletion
         ? `/account/complete-profile?next=${encodeURIComponent(payload.redirectTo || callbackUrl)}`
         : payload.redirectTo || callbackUrl;
+      setPostAuthRedirect(target);
 
       const signInResult = await signIn("phone-otp", {
         redirect: false,
@@ -230,6 +234,7 @@ export default function PhoneLoginPage() {
     setMaskedPhone("");
     setIdentifierType(null);
     setAccount(null);
+    setPostAuthRedirect(null);
     setOtp("");
     setMessage(null);
     setError(null);
