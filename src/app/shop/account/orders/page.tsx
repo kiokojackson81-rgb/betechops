@@ -158,8 +158,11 @@ export default async function ShopAccountOrdersPage() {
                               {formatOrderStatus(order.status)}
                             </div>
                             <div className="text-2xl font-black text-slate-950">{formatCurrency(order.total)}</div>
-                            <div className="flex flex-wrap gap-3">
-                              <Link href={`/account/orders/${encodeURIComponent(order.routeId)}`} className={shopStyles.secondaryButton}>
+                            <div className="flex flex-nowrap items-center gap-3 overflow-x-auto">
+                              <Link
+                                href={`/account/orders/${encodeURIComponent(order.routeId)}`}
+                                className={`${shopStyles.secondaryButton} whitespace-nowrap`}
+                              >
                                 View order details
                               </Link>
                               {order.receiptId ? (
@@ -167,7 +170,7 @@ export default async function ShopAccountOrdersPage() {
                                   href={`/api/receipts/${encodeURIComponent(order.receiptId)}/pdf?download=1`}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className={shopStyles.secondaryButton}
+                                  className={`${shopStyles.secondaryButton} whitespace-nowrap`}
                                 >
                                   Download receipt
                                 </a>

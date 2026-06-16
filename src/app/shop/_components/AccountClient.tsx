@@ -455,8 +455,11 @@ export default function AccountClient({ initialProfile, recentOrders }: AccountC
                       ) : (
                         <div className="mt-2 text-sm text-slate-500">{order.customerLocation}</div>
                       )}
-                      <div className="mt-3 flex flex-wrap gap-3">
-                        <Link href={`/account/orders/${encodeURIComponent(order.routeId)}`} className={shopStyles.secondaryButton}>
+                      <div className="mt-3 flex flex-nowrap items-center gap-3 overflow-x-auto">
+                        <Link
+                          href={`/account/orders/${encodeURIComponent(order.routeId)}`}
+                          className={`${shopStyles.secondaryButton} whitespace-nowrap`}
+                        >
                           View order details
                         </Link>
                         {order.receiptId ? (
@@ -464,7 +467,7 @@ export default function AccountClient({ initialProfile, recentOrders }: AccountC
                             href={`/api/receipts/${encodeURIComponent(order.receiptId)}/pdf?download=1`}
                             target="_blank"
                             rel="noreferrer"
-                            className={shopStyles.secondaryButton}
+                            className={`${shopStyles.secondaryButton} whitespace-nowrap`}
                           >
                             Download receipt
                           </a>
