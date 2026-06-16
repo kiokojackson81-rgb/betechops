@@ -555,7 +555,7 @@ export default function DailyReportReceiptsPanel({
                     {receipt.detailUrl ? (
                       <a href={receipt.detailUrl} target="_blank" rel="noopener noreferrer" className="inline-block text-xs uppercase text-emerald-300 hover:text-emerald-200">View details</a>
                     ) : receipt.source === "pos" && receipt.id ? (
-                      <a href={`/receipts/print/${receipt.id}`} target="_blank" rel="noopener noreferrer" className="inline-block text-xs uppercase text-emerald-300 hover:text-emerald-200">View details</a>
+                      <a href={`/receipts/${receipt.id}`} target="_blank" rel="noopener noreferrer" className="inline-block text-xs uppercase text-emerald-300 hover:text-emerald-200">View details</a>
                     ) : (
                       <span className="text-xs text-slate-500">Unavailable</span>
                     )}

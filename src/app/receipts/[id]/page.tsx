@@ -5,6 +5,7 @@ import { buildReceiptSnapshot } from "@/app/receipts/buildSnapshot";
 import renderReceiptHtml from "@/lib/receipts/renderReceiptHtml";
 import { auth } from "@/lib/auth";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
+import { waitForReceiptById } from "@/lib/receiptReadAfterWrite";
 
 export const dynamic = "force-dynamic";
 
@@ -42,17 +43,18 @@ export default async function Page({ params }: { params: any }) {
 
   let receipt: any = null;
   try {
-    receipt = await prisma.receipt.findUnique({
-      where: { id },
+    receipt = await waitForReceiptById({
+      receiptId: id,
+      loggerPrefix: "[receipts page]",
       include: {
         order: {
           include: {
             items: { include: { product: { select: { id: true, name: true } } } },
             layawayPlan: { include: { payments: true } },
-            attendant: { select: { name: true } },
+            attendant: { select: { id: true, name: true, email: true } },
           },
         },
-        issuedBy: true,
+        issuedBy: { select: { id: true, name: true, email: true } },
       },
     });
   } catch (err) {

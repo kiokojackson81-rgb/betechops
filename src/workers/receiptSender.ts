@@ -415,10 +415,10 @@ export async function sendReceiptChannels(
       order: {
         include: {
           items: { include: { product: { select: { name: true } } } },
-          attendant: true,
+          attendant: { select: { id: true, name: true, email: true } },
         },
       },
-      issuedBy: true,
+      issuedBy: { select: { id: true, name: true, email: true } },
     },
   });
   if (!receipt) throw new Error('Receipt not found');
