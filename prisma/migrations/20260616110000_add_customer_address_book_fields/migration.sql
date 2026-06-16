@@ -1,0 +1,4 @@
+ALTER TABLE "User"
+  ADD COLUMN IF NOT EXISTS "whatsappNumber" TEXT,
+  ADD COLUMN IF NOT EXISTS "estateLandmark" TEXT,
+  ADD COLUMN IF NOT EXISTS "locationNotes" TEXT;

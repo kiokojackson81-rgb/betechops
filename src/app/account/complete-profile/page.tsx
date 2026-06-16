@@ -30,8 +30,11 @@ export default async function CompleteProfilePage() {
       name: true,
       email: true,
       phone: true,
+      whatsappNumber: true,
       county: true,
       town: true,
+      estateLandmark: true,
+      locationNotes: true,
     },
   });
 
@@ -56,8 +59,11 @@ export default async function CompleteProfilePage() {
               initialName={dbUser?.name || ""}
               initialEmail={dbUser?.email || ""}
               initialPhone={dbUser?.phone || ""}
+              initialWhatsappNumber={dbUser?.whatsappNumber || ""}
               initialCounty={dbUser?.county || ""}
               initialTown={dbUser?.town || ""}
+              initialEstateLandmark={dbUser?.estateLandmark || ""}
+              initialLocationNotes={dbUser?.locationNotes || ""}
             />
           </div>
         </div>

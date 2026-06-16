@@ -17,18 +17,31 @@ import {
   saveMockOrder,
   saveShopCustomerProfile,
 } from "@/app/shop/shopStorage";
+import { getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
 import { getProductAvailabilityMessage } from "@/app/shop/shopAvailability";
 import { getShopOrderSuccessHref, SHOP_CART_HREF, SHOP_HOME_HREF, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
 
 type CheckoutClientProps = {
   products: ShopProduct[];
+  isSignedIn: boolean;
+  initialProfile: {
+    fullName: string;
+    phoneNumber: string;
+    whatsappNumber: string;
+    email: string;
+    county: string;
+    town: string;
+    estateLandmark: string;
+    locationNotes: string;
+  };
 };
 
 type CheckoutFieldErrors = {
   fullName?: string;
   phoneNumber?: string;
   whatsappNumber?: string;
-  countyTown?: string;
+  county?: string;
+  town?: string;
   deliveryMethod?: string;
   paymentPreference?: string;
   cart?: string;
@@ -36,7 +49,7 @@ type CheckoutFieldErrors = {
 
 const inputBaseClass = "min-h-[3rem] rounded-[16px] border bg-white px-4 outline-none transition";
 
-export default function CheckoutClient({ products }: CheckoutClientProps) {
+export default function CheckoutClient({ products, isSignedIn, initialProfile }: CheckoutClientProps) {
   const router = useRouter();
   const items = useShopCartItems();
   const detailedItems = useMemo(() => buildDetailedCart(items, products), [items, products]);
@@ -50,32 +63,38 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
   const [fieldErrors, setFieldErrors] = useState<CheckoutFieldErrors>({});
   const [hydrated, setHydrated] = useState(false);
   const [form, setForm] = useState({
-    fullName: "",
-    phoneNumber: "",
-    whatsappNumber: "",
-    email: "",
+    fullName: initialProfile.fullName,
+    phoneNumber: initialProfile.phoneNumber,
+    whatsappNumber: initialProfile.whatsappNumber,
+    email: initialProfile.email,
     deliveryMethod: "",
     paymentPreference: "",
-    countyTown: "",
-    estateLandmark: "",
-    locationNotes: "",
+    county: initialProfile.county,
+    town: initialProfile.town,
+    estateLandmark: initialProfile.estateLandmark,
+    locationNotes: initialProfile.locationNotes,
   });
+  const availableTowns = useMemo(() => getTownsForCounty(form.county), [form.county]);
 
   useEffect(() => {
     setHydrated(true);
     const profile = getShopCustomerProfile();
-    if (!profile) return;
+    const [storedCounty = "", storedTown = ""] = String(profile?.countyTown || "")
+      .split("/")
+      .map((value) => value.trim())
+      .filter(Boolean);
     setForm((current) => ({
       ...current,
-      fullName: profile.fullName || current.fullName,
-      phoneNumber: profile.phone || current.phoneNumber,
-      whatsappNumber: profile.whatsappNumber || profile.phone || current.whatsappNumber,
-      email: profile.email || current.email,
-      countyTown: profile.countyTown || current.countyTown,
-      estateLandmark: profile.estateLandmark || current.estateLandmark,
-      locationNotes: profile.locationNotes || current.locationNotes,
+      fullName: initialProfile.fullName || profile?.fullName || current.fullName,
+      phoneNumber: initialProfile.phoneNumber || profile?.phone || current.phoneNumber,
+      whatsappNumber: initialProfile.whatsappNumber || profile?.whatsappNumber || profile?.phone || current.whatsappNumber,
+      email: initialProfile.email || profile?.email || current.email,
+      county: initialProfile.county || storedCounty || current.county,
+      town: initialProfile.town || storedTown || current.town,
+      estateLandmark: initialProfile.estateLandmark || profile?.estateLandmark || current.estateLandmark,
+      locationNotes: initialProfile.locationNotes || profile?.locationNotes || current.locationNotes,
     }));
-  }, []);
+  }, [initialProfile]);
 
   useEffect(() => {
     if (!detailedItems.length) return;
@@ -94,7 +113,8 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
     if (!form.fullName.trim()) nextErrors.fullName = "Please enter the customer name for this Betech Solar order.";
     if (!form.phoneNumber.trim()) nextErrors.phoneNumber = "Please enter a phone number so our solar team can confirm the order.";
     if (!form.whatsappNumber.trim()) nextErrors.whatsappNumber = "Please enter a WhatsApp number for fast order follow-up.";
-    if (!form.countyTown.trim()) nextErrors.countyTown = "Please tell us the county or town for delivery or pickup planning.";
+    if (!form.county.trim()) nextErrors.county = "Please select the customer county.";
+    if (!form.town.trim()) nextErrors.town = "Please select the customer town.";
     if (!form.deliveryMethod.trim()) nextErrors.deliveryMethod = "Please choose how you want Betech Solar to deliver or prepare pickup.";
     if (!form.paymentPreference.trim()) nextErrors.paymentPreference = "Please choose your preferred payment arrangement.";
     if (!detailedItems.length) nextErrors.cart = "Your cart is empty. Add products before submitting this order.";
@@ -147,8 +167,25 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
           setError(null);
 
           try {
-            const locationSummary = [form.countyTown.trim(), form.estateLandmark.trim()].filter(Boolean).join(" - ");
-            // TODO: later create customer in existing ops customer base.
+            const countyTownLabel = [form.county.trim(), form.town.trim()].filter(Boolean).join(" / ");
+            const locationSummary = [form.town.trim(), form.county.trim(), form.estateLandmark.trim()].filter(Boolean).join(" - ");
+            if (isSignedIn) {
+              await fetch("/api/account/complete-profile", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  name: form.fullName.trim(),
+                  phone: form.phoneNumber.trim(),
+                  whatsappNumber: form.whatsappNumber.trim(),
+                  email: form.email.trim(),
+                  county: form.county.trim(),
+                  town: form.town.trim(),
+                  estateLandmark: form.estateLandmark.trim(),
+                  locationNotes: form.locationNotes.trim(),
+                }),
+              }).catch(() => null);
+            }
+
             const orderResponse = await createShopOrder({
               items: detailedItems.map((item) => ({
                 productId: item.product.id,
@@ -157,7 +194,7 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
               customerName: form.fullName,
               customerPhone: form.phoneNumber,
               customerEmail: form.email.trim() || undefined,
-              customerLocation: locationSummary || form.countyTown,
+              customerLocation: locationSummary || countyTownLabel,
               deliveryMethod: form.deliveryMethod,
               paymentMethod: form.paymentPreference,
               notes: [form.locationNotes.trim(), `WhatsApp: ${form.whatsappNumber.trim()}`, form.email.trim() ? `Email: ${form.email.trim()}` : ""]
@@ -170,7 +207,7 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
               phone: form.phoneNumber.trim(),
               whatsappNumber: form.whatsappNumber.trim(),
               email: form.email.trim() || undefined,
-              countyTown: form.countyTown.trim(),
+              countyTown: countyTownLabel,
               estateLandmark: form.estateLandmark.trim() || undefined,
               locationNotes: form.locationNotes.trim() || undefined,
             });
@@ -181,8 +218,8 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
               phone: form.phoneNumber.trim(),
               whatsappNumber: form.whatsappNumber.trim(),
               email: form.email.trim() || undefined,
-              location: locationSummary || form.countyTown.trim(),
-              countyTown: form.countyTown.trim(),
+              location: locationSummary || countyTownLabel,
+              countyTown: countyTownLabel,
               estateLandmark: form.estateLandmark.trim() || undefined,
               locationNotes: form.locationNotes.trim() || undefined,
               deliveryMethod: form.deliveryMethod,
@@ -266,12 +303,48 @@ export default function CheckoutClient({ products }: CheckoutClientProps) {
                 {fieldErrors.deliveryMethod ? <span className="text-xs font-semibold text-red-600">{fieldErrors.deliveryMethod}</span> : null}
               </label>
               <label className="grid gap-2 text-sm font-semibold text-slate-700">
-                County / town
-                <input value={form.countyTown} onChange={(event) => setForm((current) => ({ ...current, countyTown: event.target.value }))} className={resolveFieldClass(fieldErrors.countyTown)} />
-                {fieldErrors.countyTown ? <span className="text-xs font-semibold text-red-600">{fieldErrors.countyTown}</span> : null}
+                County
+                <select
+                  value={form.county}
+                  onChange={(event) => {
+                    const nextCounty = event.target.value;
+                    const nextTowns = getTownsForCounty(nextCounty);
+                    setForm((current) => ({
+                      ...current,
+                      county: nextCounty,
+                      town: nextTowns.some((town) => town === current.town) ? current.town : "",
+                    }));
+                  }}
+                  className={resolveFieldClass(fieldErrors.county)}
+                >
+                  <option value="">Select county</option>
+                  {kenyaCountyOptions.map((county) => (
+                    <option key={county} value={county}>
+                      {county}
+                    </option>
+                  ))}
+                </select>
+                {fieldErrors.county ? <span className="text-xs font-semibold text-red-600">{fieldErrors.county}</span> : null}
+              </label>
+              <label className="grid gap-2 text-sm font-semibold text-slate-700">
+                Town / city
+                <select
+                  value={form.town}
+                  onChange={(event) => setForm((current) => ({ ...current, town: event.target.value }))}
+                  disabled={!form.county}
+                  className={resolveFieldClass(fieldErrors.town)}
+                >
+                  <option value="">{form.county ? "Select town / city" : "Choose county first"}</option>
+                  {availableTowns.map((town) => (
+                    <option key={town} value={town}>
+                      {town}
+                    </option>
+                  ))}
+                </select>
+                {fieldErrors.town ? <span className="text-xs font-semibold text-red-600">{fieldErrors.town}</span> : null}
               </label>
               <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
-                Estate / landmark
+                Specific locality / estate / landmark
                 <input value={form.estateLandmark} onChange={(event) => setForm((current) => ({ ...current, estateLandmark: event.target.value }))} className={resolveFieldClass()} />
               </label>
               <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">

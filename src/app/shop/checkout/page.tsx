@@ -10,6 +10,8 @@ import { getShopProducts } from "@/app/shop/shopApi";
 import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks } from "@/app/shop/shopData";
 import { SHOP_CART_HREF, SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
 export const metadata: Metadata = buildShopMetadata({
   title: "Checkout",
@@ -17,7 +19,26 @@ export const metadata: Metadata = buildShopMetadata({
 });
 
 export default async function ShopCheckoutPage() {
-  const products = await getShopProducts();
+  const session = await auth().catch(() => null);
+  const sessionUserId = (session?.user as { id?: string } | undefined)?.id ?? null;
+  const [products, customerProfile] = await Promise.all([
+    getShopProducts(),
+    sessionUserId
+      ? prisma.user.findUnique({
+          where: { id: sessionUserId },
+          select: {
+            name: true,
+            phone: true,
+            whatsappNumber: true,
+            email: true,
+            county: true,
+            town: true,
+            estateLandmark: true,
+            locationNotes: true,
+          },
+        })
+      : Promise.resolve(null),
+  ]);
 
   return (
     <div className={shopStyles.page}>
@@ -33,7 +54,20 @@ export default async function ShopCheckoutPage() {
             </p>
           </div>
           <div className="mt-4">
-            <CheckoutClient products={products} />
+            <CheckoutClient
+              products={products}
+              isSignedIn={Boolean(sessionUserId)}
+              initialProfile={{
+                fullName: customerProfile?.name || "",
+                phoneNumber: customerProfile?.phone || "",
+                whatsappNumber: customerProfile?.whatsappNumber || customerProfile?.phone || "",
+                email: customerProfile?.email || "",
+                county: customerProfile?.county || "",
+                town: customerProfile?.town || "",
+                estateLandmark: customerProfile?.estateLandmark || "",
+                locationNotes: customerProfile?.locationNotes || "",
+              }}
+            />
           </div>
           <div className="mt-4">
             <ShopSupportStrip />

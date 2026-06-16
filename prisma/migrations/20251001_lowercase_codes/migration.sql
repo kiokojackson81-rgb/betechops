@@ -1,0 +1,1 @@
+-- Historical placeholder migration restored to match existing database history.

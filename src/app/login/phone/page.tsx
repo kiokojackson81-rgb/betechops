@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { signIn, useSession } from "next-auth/react";
+import { getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
 
 type AccountPreview = {
   name?: string | null;
@@ -52,11 +53,15 @@ export default function PhoneLoginPage() {
   const [profileName, setProfileName] = useState("");
   const [profileEmail, setProfileEmail] = useState("");
   const [profilePhone, setProfilePhone] = useState("");
+  const [profileWhatsappNumber, setProfileWhatsappNumber] = useState("");
   const [profileCounty, setProfileCounty] = useState("");
   const [profileTown, setProfileTown] = useState("");
+  const [profileEstateLandmark, setProfileEstateLandmark] = useState("");
+  const [profileLocationNotes, setProfileLocationNotes] = useState("");
 
   const normalizedEmailPreview = useMemo(() => resolvedIdentifier.trim().toLowerCase(), [resolvedIdentifier]);
   const canResend = cooldown <= 0;
+  const availableTowns = useMemo(() => getTownsForCounty(profileCounty), [profileCounty]);
 
   useEffect(() => {
     if (!cooldown) return;
@@ -85,6 +90,7 @@ export default function PhoneLoginPage() {
     setProfileName(payload?.name || "");
     setProfileEmail(payload?.email || emailFallback || "");
     setProfilePhone(payload?.phone || phoneFallback || "");
+    setProfileWhatsappNumber(payload?.phone || phoneFallback || "");
   }
 
   async function sendOtp(nextIdentifierType: "email" | "phone", nextIdentifier: string, nextPhone?: string) {
@@ -249,8 +255,11 @@ export default function PhoneLoginPage() {
           name: profileName,
           email: profileEmail,
           phone: profilePhone,
+          whatsappNumber: profileWhatsappNumber,
           county: profileCounty,
           town: profileTown,
+          estateLandmark: profileEstateLandmark,
+          locationNotes: profileLocationNotes,
         }),
       });
       const payload = await response.json().catch(() => null);
@@ -279,8 +288,11 @@ export default function PhoneLoginPage() {
     setProfileName("");
     setProfileEmail("");
     setProfilePhone("");
+    setProfileWhatsappNumber("");
     setProfileCounty("");
     setProfileTown("");
+    setProfileEstateLandmark("");
+    setProfileLocationNotes("");
     setMessage(null);
     setError(null);
     setCooldown(0);
@@ -423,27 +435,76 @@ export default function PhoneLoginPage() {
                 />
               </label>
 
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">WhatsApp number</span>
+                <input
+                  type="tel"
+                  value={profileWhatsappNumber}
+                  onChange={(event) => setProfileWhatsappNumber(event.target.value)}
+                  placeholder="0712345678 or 0101234567"
+                  className="w-full rounded-2xl border border-[#ead8c4] bg-[#fffdf9] px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#7a0000]/35 focus:ring-2 focus:ring-[#f2b20f]/30"
+                />
+              </label>
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block">
                   <span className="mb-2 block text-sm font-semibold text-slate-700">County</span>
-                  <input
-                    type="text"
+                  <select
                     value={profileCounty}
-                    onChange={(event) => setProfileCounty(event.target.value)}
+                    onChange={(event) => {
+                      const nextCounty = event.target.value;
+                      const nextTowns = getTownsForCounty(nextCounty);
+                      setProfileCounty(nextCounty);
+                      setProfileTown((current) => (nextTowns.some((town) => town === current) ? current : ""));
+                    }}
                     className="w-full rounded-2xl border border-[#ead8c4] bg-[#fffdf9] px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#7a0000]/35 focus:ring-2 focus:ring-[#f2b20f]/30"
-                  />
+                  >
+                    <option value="">Select county</option>
+                    {kenyaCountyOptions.map((county) => (
+                      <option key={county} value={county}>
+                        {county}
+                      </option>
+                    ))}
+                  </select>
                 </label>
 
                 <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-slate-700">Town / location</span>
-                  <input
-                    type="text"
+                  <span className="mb-2 block text-sm font-semibold text-slate-700">Town / city</span>
+                  <select
                     value={profileTown}
                     onChange={(event) => setProfileTown(event.target.value)}
+                    disabled={!profileCounty}
                     className="w-full rounded-2xl border border-[#ead8c4] bg-[#fffdf9] px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#7a0000]/35 focus:ring-2 focus:ring-[#f2b20f]/30"
-                  />
+                  >
+                    <option value="">{profileCounty ? "Select town / city" : "Choose county first"}</option>
+                    {availableTowns.map((town) => (
+                      <option key={town} value={town}>
+                        {town}
+                      </option>
+                    ))}
+                  </select>
                 </label>
               </div>
+
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">Specific locality / estate / landmark</span>
+                <input
+                  type="text"
+                  value={profileEstateLandmark}
+                  onChange={(event) => setProfileEstateLandmark(event.target.value)}
+                  className="w-full rounded-2xl border border-[#ead8c4] bg-[#fffdf9] px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#7a0000]/35 focus:ring-2 focus:ring-[#f2b20f]/30"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">Delivery notes</span>
+                <textarea
+                  rows={3}
+                  value={profileLocationNotes}
+                  onChange={(event) => setProfileLocationNotes(event.target.value)}
+                  className="w-full rounded-2xl border border-[#ead8c4] bg-[#fffdf9] px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#7a0000]/35 focus:ring-2 focus:ring-[#f2b20f]/30"
+                />
+              </label>
 
               <button
                 type="submit"

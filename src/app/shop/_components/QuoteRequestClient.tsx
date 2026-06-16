@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createQuoteRequest } from "@/app/shop/shopSubmitApi";
 import { trackQuoteSubmitted } from "@/app/shop/shopAnalytics";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { saveMockQuote } from "@/app/shop/shopStorage";
 import { getShopQuoteSuccessHref, SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
+import { getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
 
 type QuoteRequestClientProps = {
   preferredProduct?: string;
@@ -20,28 +21,34 @@ export default function QuoteRequestClient({ preferredProduct = "" }: QuoteReque
   const [fieldErrors, setFieldErrors] = useState<{
     name?: string;
     phone?: string;
-    location?: string;
+    county?: string;
+    town?: string;
     propertyType?: string;
   }>({});
   const [form, setForm] = useState({
     name: "",
     phone: "",
-    location: "",
+    county: "",
+    town: "",
+    specificLocation: "",
     propertyType: "",
     load: "",
     budgetRange: "",
     preferredProducts: preferredProduct,
     notes: "",
   });
+  const availableTowns = useMemo(() => getTownsForCounty(form.county), [form.county]);
   const inputBaseClass = "min-h-[3.4rem] rounded-2xl border bg-white px-4 outline-none transition";
   const resolveFieldClass = (fieldError?: string) =>
     `${inputBaseClass} ${fieldError ? "border-red-300 ring-2 ring-red-100" : "border-[#7a0000]/10 focus:border-[#7a0000]/30"}`;
+  const resolvedLocation = [form.town.trim(), form.county.trim(), form.specificLocation.trim()].filter(Boolean).join(" - ");
 
   function validateForm() {
-    const nextErrors: { name?: string; phone?: string; location?: string; propertyType?: string } = {};
+    const nextErrors: { name?: string; phone?: string; county?: string; town?: string; propertyType?: string } = {};
     if (!form.name.trim()) nextErrors.name = "Please enter your name so Betech Solar can prepare this quote.";
     if (!form.phone.trim()) nextErrors.phone = "Please enter a phone number so our solar sizing team can reach you.";
-    if (!form.location.trim()) nextErrors.location = "Please tell us where the system will be installed or delivered.";
+    if (!form.county.trim()) nextErrors.county = "Please select the county for this quote request.";
+    if (!form.town.trim()) nextErrors.town = "Please select the town or area for this quote request.";
     if (!form.propertyType.trim()) nextErrors.propertyType = "Please choose the property type for this quote.";
     setFieldErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -59,7 +66,7 @@ export default function QuoteRequestClient({ preferredProduct = "" }: QuoteReque
           await createQuoteRequest({
             name: form.name,
             phone: form.phone,
-            location: form.location,
+            location: resolvedLocation,
             propertyType: form.propertyType,
             load: form.load,
             budgetRange: form.budgetRange,
@@ -70,7 +77,7 @@ export default function QuoteRequestClient({ preferredProduct = "" }: QuoteReque
           const savedQuote = saveMockQuote({
             customerName: form.name.trim(),
             phone: form.phone.trim(),
-            location: form.location.trim(),
+            location: resolvedLocation,
             propertyType: form.propertyType,
             loadDescription: form.load.trim(),
             budgetRange: form.budgetRange,
@@ -126,17 +133,61 @@ export default function QuoteRequestClient({ preferredProduct = "" }: QuoteReque
           {fieldErrors.phone ? <span className="text-xs font-semibold text-red-600">{fieldErrors.phone}</span> : null}
         </label>
         <label className="grid gap-2 text-sm font-semibold text-slate-700">
-          Location
-          <input
-            value={form.location}
+          County
+          <select
+            value={form.county}
+            onChange={(event) => {
+              const nextCounty = event.target.value;
+              const nextTowns = getTownsForCounty(nextCounty);
+              setForm((current) => ({
+                ...current,
+                county: nextCounty,
+                town: nextTowns.some((town) => town === current.town) ? current.town : "",
+              }));
+              if (fieldErrors.county || fieldErrors.town) {
+                setFieldErrors((current) => ({ ...current, county: undefined, town: undefined }));
+              }
+            }}
+            className={resolveFieldClass(fieldErrors.county)}
+          >
+            <option value="">Select county</option>
+            {kenyaCountyOptions.map((county) => (
+              <option key={county} value={county}>
+                {county}
+              </option>
+            ))}
+          </select>
+          {fieldErrors.county ? <span className="text-xs font-semibold text-red-600">{fieldErrors.county}</span> : null}
+        </label>
+        <label className="grid gap-2 text-sm font-semibold text-slate-700">
+          Town / area
+          <select
+            value={form.town}
             onChange={(event) => {
               const value = event.target.value;
-              setForm((current) => ({ ...current, location: value }));
-              if (fieldErrors.location) setFieldErrors((current) => ({ ...current, location: undefined }));
+              setForm((current) => ({ ...current, town: value }));
+              if (fieldErrors.town) setFieldErrors((current) => ({ ...current, town: undefined }));
             }}
-            className={resolveFieldClass(fieldErrors.location)}
+            disabled={!form.county}
+            className={resolveFieldClass(fieldErrors.town)}
+          >
+            <option value="">{form.county ? "Select town / area" : "Choose county first"}</option>
+            {availableTowns.map((town) => (
+              <option key={town} value={town}>
+                {town}
+              </option>
+            ))}
+          </select>
+          {fieldErrors.town ? <span className="text-xs font-semibold text-red-600">{fieldErrors.town}</span> : null}
+        </label>
+        <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
+          Specific location / estate / landmark
+          <input
+            value={form.specificLocation}
+            onChange={(event) => setForm((current) => ({ ...current, specificLocation: event.target.value }))}
+            placeholder="Estate, building, road, centre, or nearby landmark"
+            className={resolveFieldClass()}
           />
-          {fieldErrors.location ? <span className="text-xs font-semibold text-red-600">{fieldErrors.location}</span> : null}
         </label>
         <label className="grid gap-2 text-sm font-semibold text-slate-700">
           Property type

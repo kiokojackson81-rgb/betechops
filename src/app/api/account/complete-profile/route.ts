@@ -17,8 +17,11 @@ export async function POST(req: NextRequest) {
   const name = String(body?.name || "").trim();
   const emailRaw = String(body?.email || "").trim().toLowerCase();
   const normalizedPhone = normalizeKenyanPhone(String(body?.phone || "").trim());
+  const normalizedWhatsapp = normalizeKenyanPhone(String(body?.whatsappNumber || "").trim());
   const county = String(body?.county || "").trim();
   const town = String(body?.town || "").trim();
+  const estateLandmark = String(body?.estateLandmark || "").trim();
+  const locationNotes = String(body?.locationNotes || "").trim();
 
   if (!name) {
     return NextResponse.json({ ok: false, error: "Name is required." }, { status: 400 });
@@ -42,6 +45,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Enter a valid Kenyan phone number." }, { status: 400 });
   }
 
+  if (body?.whatsappNumber && !normalizedWhatsapp) {
+    return NextResponse.json({ ok: false, error: "Enter a valid Kenyan WhatsApp number." }, { status: 400 });
+  }
+
   if (normalizedPhone) {
     const existingPhone = await prisma.user.findFirst({
       where: {
@@ -62,16 +69,22 @@ export async function POST(req: NextRequest) {
       name,
       email: emailRaw || null,
       phone: normalizedPhone || undefined,
+      whatsappNumber: normalizedWhatsapp || null,
       county: county || null,
       town: town || null,
+      estateLandmark: estateLandmark || null,
+      locationNotes: locationNotes || null,
     },
     select: {
       id: true,
       name: true,
       email: true,
       phone: true,
+      whatsappNumber: true,
       county: true,
       town: true,
+      estateLandmark: true,
+      locationNotes: true,
     },
   });
 

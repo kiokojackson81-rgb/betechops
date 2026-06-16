@@ -1,22 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
 
 type Props = {
   initialName: string;
   initialEmail: string;
   initialPhone: string;
+  initialWhatsappNumber: string;
   initialCounty: string;
   initialTown: string;
+  initialEstateLandmark: string;
+  initialLocationNotes: string;
 };
 
 export default function CompleteProfileForm({
   initialName,
   initialEmail,
   initialPhone,
+  initialWhatsappNumber,
   initialCounty,
   initialTown,
+  initialEstateLandmark,
+  initialLocationNotes,
 }: Props) {
   const router = useRouter();
   const params = useSearchParams();
@@ -24,10 +31,14 @@ export default function CompleteProfileForm({
   const [name, setName] = useState(initialName);
   const [email, setEmail] = useState(initialEmail);
   const [phone, setPhone] = useState(initialPhone);
+  const [whatsappNumber, setWhatsappNumber] = useState(initialWhatsappNumber);
   const [county, setCounty] = useState(initialCounty);
   const [town, setTown] = useState(initialTown);
+  const [estateLandmark, setEstateLandmark] = useState(initialEstateLandmark);
+  const [locationNotes, setLocationNotes] = useState(initialLocationNotes);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const townOptions = useMemo(() => getTownsForCounty(county), [county]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -39,7 +50,7 @@ export default function CompleteProfileForm({
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ name, email, phone, county, town }),
+      body: JSON.stringify({ name, email, phone, whatsappNumber, county, town, estateLandmark, locationNotes }),
     });
 
     const payload = await response.json().catch(() => null);
@@ -96,27 +107,76 @@ export default function CompleteProfileForm({
         />
       </label>
 
+      <label className="block">
+        <span className="mb-2 block text-sm font-semibold text-slate-700">WhatsApp number</span>
+        <input
+          type="tel"
+          value={whatsappNumber}
+          onChange={(event) => setWhatsappNumber(event.target.value)}
+          placeholder="0712345678 or 0101234567"
+          className="w-full rounded-2xl border border-[#ead8c4] bg-[#fffdf9] px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#7a0000]/35 focus:ring-2 focus:ring-[#f2b20f]/30"
+        />
+      </label>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block">
           <span className="mb-2 block text-sm font-semibold text-slate-700">County</span>
-          <input
-            type="text"
+          <select
             value={county}
-            onChange={(event) => setCounty(event.target.value)}
+            onChange={(event) => {
+              const nextCounty = event.target.value;
+              const nextTowns = getTownsForCounty(nextCounty);
+              setCounty(nextCounty);
+              setTown((current) => (nextTowns.some((townOption) => townOption === current) ? current : ""));
+            }}
             className="w-full rounded-2xl border border-[#ead8c4] bg-[#fffdf9] px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#7a0000]/35 focus:ring-2 focus:ring-[#f2b20f]/30"
-          />
+          >
+            <option value="">Select county</option>
+            {kenyaCountyOptions.map((countyOption) => (
+              <option key={countyOption} value={countyOption}>
+                {countyOption}
+              </option>
+            ))}
+          </select>
         </label>
 
         <label className="block">
-          <span className="mb-2 block text-sm font-semibold text-slate-700">Town</span>
-          <input
-            type="text"
+          <span className="mb-2 block text-sm font-semibold text-slate-700">Town / city</span>
+          <select
             value={town}
             onChange={(event) => setTown(event.target.value)}
+            disabled={!county}
             className="w-full rounded-2xl border border-[#ead8c4] bg-[#fffdf9] px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#7a0000]/35 focus:ring-2 focus:ring-[#f2b20f]/30"
-          />
+          >
+            <option value="">{county ? "Select town / city" : "Choose county first"}</option>
+            {townOptions.map((townOption) => (
+              <option key={townOption} value={townOption}>
+                {townOption}
+              </option>
+            ))}
+          </select>
         </label>
       </div>
+
+      <label className="block">
+        <span className="mb-2 block text-sm font-semibold text-slate-700">Specific locality / estate / landmark</span>
+        <input
+          type="text"
+          value={estateLandmark}
+          onChange={(event) => setEstateLandmark(event.target.value)}
+          className="w-full rounded-2xl border border-[#ead8c4] bg-[#fffdf9] px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#7a0000]/35 focus:ring-2 focus:ring-[#f2b20f]/30"
+        />
+      </label>
+
+      <label className="block">
+        <span className="mb-2 block text-sm font-semibold text-slate-700">Delivery notes</span>
+        <textarea
+          rows={3}
+          value={locationNotes}
+          onChange={(event) => setLocationNotes(event.target.value)}
+          className="w-full rounded-2xl border border-[#ead8c4] bg-[#fffdf9] px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#7a0000]/35 focus:ring-2 focus:ring-[#f2b20f]/30"
+        />
+      </label>
 
       <button
         type="submit"

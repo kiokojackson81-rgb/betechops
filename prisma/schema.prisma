@@ -12,9 +12,12 @@ model User {
   id                                   String                          @id @default(cuid())
   email                                String?                         @unique
   phone                                String?                         @unique
+  whatsappNumber                       String?
   name                                 String?
   county                               String?
   town                                 String?
+  estateLandmark                       String?
+  locationNotes                        String?
   image                                String?
   role                                 Role                            @default(ATTENDANT)
   isActive                             Boolean                         @default(true)
