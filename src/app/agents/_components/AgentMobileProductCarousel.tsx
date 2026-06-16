@@ -86,6 +86,7 @@ export default function AgentMobileProductCarousel({
 
                   <Link
                     href={registerHref}
+                    prefetch={false}
                     className="mt-4 inline-flex min-h-[3.45rem] w-full items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#0f9d58_0%,#0d884d_100%)] px-5 py-3 text-base font-bold text-white shadow-[0_16px_34px_rgba(15,157,88,0.24)] transition hover:-translate-y-0.5"
                   >
                     Refer This Product

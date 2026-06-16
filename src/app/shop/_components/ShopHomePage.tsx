@@ -14,7 +14,7 @@ import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { buildShopCategories, shopNavLinks, type ShopProduct } from "@/app/shop/shopData";
 import { getShopProducts } from "@/app/shop/shopApi";
-import { getShopCategoryHref, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
+import { getShopCategoryHref, SHOP_ALL_PRODUCTS_HREF, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
 import { compareProductsByPopularity, getPopularitySignalsForProducts, type ProductPopularitySignal } from "@/lib/productPopularity";
 import { getShopImageOverrides } from "@/lib/shopImageOverrides";
 
@@ -162,8 +162,9 @@ export default async function ShopHomePage({
               ? `Showing ${products.length} product${products.length === 1 ? "" : "s"} matching your search.`
               : "Popular customer picks across recent interest, enquiries, and demand in our solar catalogue."
           }
-          href={!searchQuery ? "https://www.betech.co.ke/all-products" : undefined}
+          href={!searchQuery ? SHOP_ALL_PRODUCTS_HREF : undefined}
           linkLabel={!searchQuery ? "See all products" : undefined}
+          prefetch={false}
           products={popularProducts}
         />
       ) : null}

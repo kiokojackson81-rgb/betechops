@@ -69,6 +69,7 @@ export default function ShopHeader({ navLinks }: ShopHeaderProps) {
             </Link>
             <Link
               href={SHOP_ACCOUNT_HREF}
+              prefetch={false}
               aria-label="Open account"
               className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[#7a0000]/10 bg-white text-slate-700 shadow-[0_10px_20px_rgba(15,23,42,0.05)]"
             >
@@ -127,6 +128,7 @@ export default function ShopHeader({ navLinks }: ShopHeaderProps) {
             </TrackedWhatsAppLink>
             <Link
               href={SHOP_ACCOUNT_HREF}
+              prefetch={false}
               className="inline-flex items-center gap-2 rounded-2xl border border-[#7a0000]/10 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 shadow-[0_10px_20px_rgba(15,23,42,0.05)] xl:px-3.5"
             >
               <User2 className="h-4 w-4" />

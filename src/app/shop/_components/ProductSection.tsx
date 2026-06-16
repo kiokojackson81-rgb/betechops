@@ -9,10 +9,19 @@ type ProductSectionProps = {
   subtitle: string;
   href?: string;
   linkLabel?: string;
+  prefetch?: boolean;
   products: ShopProduct[];
 };
 
-export default function ProductSection({ id, title, subtitle, href, linkLabel = "See all", products }: ProductSectionProps) {
+export default function ProductSection({
+  id,
+  title,
+  subtitle,
+  href,
+  linkLabel = "See all",
+  prefetch = true,
+  products,
+}: ProductSectionProps) {
   return (
     <section id={id} className="py-3.5 sm:py-4">
       <div className={shopStyles.shell}>
@@ -23,7 +32,7 @@ export default function ProductSection({ id, title, subtitle, href, linkLabel = 
               <p className="mt-0.5 text-xs leading-5 text-slate-600 sm:text-sm">{subtitle}</p>
             </div>
             {href ? (
-              <Link href={href} className="inline-flex items-center text-sm font-black text-[#7a0000] transition hover:text-[#560000]">
+              <Link href={href} prefetch={prefetch} className="inline-flex items-center text-sm font-black text-[#7a0000] transition hover:text-[#560000]">
                 {linkLabel}
               </Link>
             ) : null}

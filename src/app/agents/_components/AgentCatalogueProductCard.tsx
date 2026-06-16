@@ -40,7 +40,7 @@ export default function AgentCatalogueProductCard({
 
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-[22px] border border-[#7a0000]/10 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.06)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_52px_rgba(122,0,0,0.12)]">
-      <Link href={getAgentProductHref(product.slug, useRootPaths, product.opsProductId)} className="relative block h-40 overflow-hidden border-b border-[#7a0000]/8 bg-[linear-gradient(180deg,#fff6e8_0%,#ffffff_100%)] sm:h-48">
+      <Link href={getAgentProductHref(product.slug, useRootPaths, product.opsProductId)} prefetch={false} className="relative block h-40 overflow-hidden border-b border-[#7a0000]/8 bg-[linear-gradient(180deg,#fff6e8_0%,#ffffff_100%)] sm:h-48">
         <div className="absolute inset-0 p-3">
           <Image
             src={product.image}
@@ -61,7 +61,7 @@ export default function AgentCatalogueProductCard({
       </Link>
 
       <div className="flex flex-1 flex-col p-4">
-        <Link href={getAgentProductHref(product.slug, useRootPaths, product.opsProductId)} className="block">
+        <Link href={getAgentProductHref(product.slug, useRootPaths, product.opsProductId)} prefetch={false} className="block">
           <h3 className="line-clamp-2 text-[1rem] font-black tracking-[-0.02em] text-slate-950 transition group-hover:text-[#7a0000]">
             {product.name}
           </h3>
@@ -110,6 +110,7 @@ export default function AgentCatalogueProductCard({
         <div className="mt-auto grid grid-cols-[1fr_auto] gap-2 pt-4">
           <Link
             href={primaryHref}
+            prefetch={false}
             className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-2xl bg-[#7a0000] px-4 py-3 text-sm font-bold text-white shadow-[0_16px_34px_rgba(122,0,0,0.18)] transition hover:-translate-y-0.5"
           >
             {primaryLabel}

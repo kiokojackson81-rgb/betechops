@@ -1069,6 +1069,7 @@ export default async function AgentsLandingPage({ useRootPaths = false }: Agents
                 </div>
                 <Link
                   href={productsHref}
+                  prefetch={false}
                   className="inline-flex min-h-[3rem] items-center justify-center rounded-2xl bg-[#7a0000] px-5 py-3 text-sm font-bold text-white shadow-[0_16px_34px_rgba(122,0,0,0.18)] transition hover:-translate-y-0.5"
                 >
                   Browse full agent catalogue
