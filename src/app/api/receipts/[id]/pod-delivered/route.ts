@@ -9,6 +9,7 @@ import { getOrCreateCommissionPeriod, computeSalesCommissionFromTiers } from '@/
 import { getTradingPeriodFor } from '@/lib/tradingPeriod';
 import { recomputeSupportCommissionLedger } from '@/lib/supportCommission';
 import { canonicalReceiptNumber } from '@/lib/receiptGuard';
+import { syncPosReceiptToCustomerAccount } from '@/lib/posCustomerAccountSync';
 import { randomUUID } from 'crypto';
 
 export const runtime = 'nodejs';
@@ -504,6 +505,15 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     }
   } catch (e) {
     console.warn('[pod] failed to recompute support commission ledger', e);
+  }
+
+  try {
+    await syncPosReceiptToCustomerAccount(receiptId);
+  } catch (syncErr) {
+    console.error(`[pod][${requestId}] failed to sync POS receipt status to customer account`, {
+      receiptId,
+      error: syncErr instanceof Error ? syncErr.message : String(syncErr),
+    });
   }
 
   let sendResult: any = null;

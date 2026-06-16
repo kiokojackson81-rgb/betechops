@@ -51,6 +51,15 @@ function inferWebsiteOrderType(data: Record<string, unknown>, customerLocation: 
   return WebsiteOrderType.SHOP_PICKUP;
 }
 
+function readPodDeliveryState(data: Record<string, unknown>) {
+  const podDelivery =
+    data.podDelivery && typeof data.podDelivery === "object" && !Array.isArray(data.podDelivery)
+      ? (data.podDelivery as Record<string, unknown>)
+      : null;
+  const status = typeof podDelivery?.status === "string" ? podDelivery.status.trim().toLowerCase() : "";
+  return { podDelivery, status };
+}
+
 async function resolveExistingCustomerUsers(args: { normalizedPhone: string; normalizedEmail: string }) {
   const [phoneUser, emailUser] = await Promise.all([
     args.normalizedPhone
@@ -266,6 +275,7 @@ export async function syncPosReceiptToCustomerAccount(receiptId: string) {
 
   const customerLocation = buildCustomerLocation(metadata, data, customerUser);
   const orderType = inferWebsiteOrderType(data, customerLocation);
+  const { status: podDeliveryStatus } = readPodDeliveryState(data);
   const deliveryMethod =
     orderType === WebsiteOrderType.POD
       ? "POS Pay on Delivery"
@@ -304,7 +314,13 @@ export async function syncPosReceiptToCustomerAccount(receiptId: string) {
   const existingMetadata = readJsonObject(existing?.metadata);
   const nextSource = existing?.source === "WEBSITE" ? "WEBSITE" : "POS";
   const nextStatus =
-    existing?.source === "WEBSITE" ? existing.status : WebsiteOrderStatus.DELIVERED;
+    existing?.source === "WEBSITE"
+      ? existing.status
+      : orderType === WebsiteOrderType.POD
+        ? podDeliveryStatus === "delivered"
+          ? WebsiteOrderStatus.DELIVERED
+          : WebsiteOrderStatus.PROCESSING
+        : WebsiteOrderStatus.DELIVERED;
 
   const baseData = {
     orderRef: order.orderNumber,

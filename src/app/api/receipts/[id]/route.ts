@@ -18,6 +18,7 @@ import {
 import { getShopProductHref } from "@/app/shop/storefrontPaths";
 import { getOpsCatalogueProductMappedById } from "@/app/shop/shopProductMapper";
 import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
+import { WebsiteOrderStatus } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 const SHOP_BASE_URL = "https://www.betech.co.ke";
@@ -763,6 +764,18 @@ export async function DELETE(_req: NextRequest, context: ParamsContext) {
       if (!order) throw new Error('Associated order missing');
       const orderId = order.id;
 
+      const linkedWebsiteOrder = await tx.websiteOrder.findFirst({
+        where: {
+          OR: [{ receiptId: id }, { orderRef: order.orderNumber }],
+        },
+        select: {
+          id: true,
+          source: true,
+          status: true,
+          metadata: true,
+        },
+      });
+
       // Write an actionLog entry describing the deletion (before state)
       try {
         await tx.actionLog.create({
@@ -781,6 +794,26 @@ export async function DELETE(_req: NextRequest, context: ParamsContext) {
       if (order.orderNumber) {
         await cleanupMarketingReceipts(tx, order.orderNumber);
         await cleanupSupportReceipts(tx, order.orderNumber);
+      }
+
+      if (linkedWebsiteOrder && linkedWebsiteOrder.source === "POS") {
+        const existingMetadata =
+          linkedWebsiteOrder.metadata && typeof linkedWebsiteOrder.metadata === "object" && !Array.isArray(linkedWebsiteOrder.metadata)
+            ? (linkedWebsiteOrder.metadata as Record<string, unknown>)
+            : {};
+        await tx.websiteOrder.update({
+          where: { id: linkedWebsiteOrder.id },
+          data: {
+            status: WebsiteOrderStatus.CANCELLED,
+            receiptId: null,
+            cancelledAt: new Date(),
+            metadata: {
+              ...existingMetadata,
+              posReceiptDeletedAt: new Date().toISOString(),
+              posReceiptDeletedById: actorId,
+            },
+          },
+        });
       }
 
       const itemIds = (order.items || []).map((item) => item.id);
