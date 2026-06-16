@@ -39,8 +39,10 @@ export default function ShopSupportStrip() {
             <MapPin className="h-4 w-4" />
           </span>
           <div>
-            <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000] sm:text-xs">Nairobi CBD Pickup</div>
-            <div className="mt-0.5 text-sm leading-5 text-slate-600">Shop pickup is available from our Nairobi CBD shop.</div>
+            <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000] sm:text-xs">Shop Location</div>
+            <div className="mt-0.5 text-sm leading-5 text-slate-600">
+              Pramukh Plaza, Third Floor, Shop No. 3 at Junction of Munyu Road and Sheikh Karume, Nairobi CBD
+            </div>
           </div>
         </div>
         <div className="flex items-start gap-2.5 rounded-[14px] border border-[#7a0000]/8 bg-white/80 px-3 py-2.5">

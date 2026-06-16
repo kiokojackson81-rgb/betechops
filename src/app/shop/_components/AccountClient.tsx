@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
 import ShopAccountLogoutButton from "@/app/shop/_components/ShopAccountLogoutButton";
+import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import {
   getMockOrderHistory,
   getMockQuoteHistory,
@@ -407,9 +408,38 @@ export default function AccountClient({ initialProfile, recentOrders }: AccountC
                 <Phone className="h-4 w-4 text-[#7a0000]" />
                 Betech support help
               </div>
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                Keep your phone number and town updated here so installation planning, support calls, and delivery follow-up stay accurate.
-              </p>
+              <div className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+                <div>
+                  <span className="font-semibold text-slate-950">Phone:</span>{" "}
+                  <a href="tel:+254722151083" className="hover:text-[#7a0000]">
+                    +254 722 151 083
+                  </a>
+                </div>
+                <div>
+                  <span className="font-semibold text-slate-950">Alternative phone:</span>{" "}
+                  <a href="tel:+254703241917" className="hover:text-[#7a0000]">
+                    +254 703 241 917
+                  </a>
+                </div>
+                <div>
+                  <span className="font-semibold text-slate-950">Email:</span>{" "}
+                  <a href="mailto:info@betech.co.ke" className="hover:text-[#7a0000]">
+                    info@betech.co.ke
+                  </a>
+                </div>
+                <div>
+                  <span className="font-semibold text-slate-950">WhatsApp:</span>{" "}
+                  <TrackedWhatsAppLink
+                    href="https://wa.me/254722151083"
+                    className="font-semibold text-[#0f9d58] hover:text-[#0c7f47]"
+                    label="Account support WhatsApp"
+                    context="account_support_card"
+                    ariaLabel="Chat with Betech Solar on WhatsApp"
+                  >
+                    Click to WhatsApp
+                  </TrackedWhatsAppLink>
+                </div>
+              </div>
             </section>
           </div>
         </section>

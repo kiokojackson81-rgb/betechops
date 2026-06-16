@@ -152,9 +152,15 @@ export async function updateSafeCustomerProfile(userId: string, input: CustomerP
     data,
   });
 
-  const updated = await findSafeCustomerProfileByUserId(userId);
-  if (!updated) {
-    throw new Error("Updated user profile could not be loaded.");
-  }
-  return updated;
+  return {
+    id: userId,
+    name: typeof input.name === "undefined" ? null : input.name,
+    email: typeof input.email === "undefined" ? null : input.email,
+    phone: typeof input.phone === "undefined" ? null : input.phone,
+    whatsappNumber: columns.whatsappNumber ? (typeof input.whatsappNumber === "undefined" ? null : input.whatsappNumber) : null,
+    county: columns.county ? (typeof input.county === "undefined" ? null : input.county) : null,
+    town: columns.town ? (typeof input.town === "undefined" ? null : input.town) : null,
+    estateLandmark: columns.estateLandmark ? (typeof input.estateLandmark === "undefined" ? null : input.estateLandmark) : null,
+    locationNotes: columns.locationNotes ? (typeof input.locationNotes === "undefined" ? null : input.locationNotes) : null,
+  };
 }
