@@ -369,13 +369,35 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
                 {fieldErrors.paymentPreference ? <span className="text-xs font-semibold text-red-600">{fieldErrors.paymentPreference}</span> : null}
               </label>
             </div>
+            <div className="mt-5 grid gap-2.5 xl:hidden">
+              <button
+                type="submit"
+                disabled={submitting}
+                className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(122,0,0,0.16)] transition hover:bg-[#610000]"
+              >
+                {submitting ? "Submitting Website Order..." : "Place Order"}
+              </button>
+              <TrackedWhatsAppLink
+                href={summaryWhatsappHref}
+                className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[linear-gradient(135deg,#11b86a_0%,#0f9d58_55%,#0b7c44_100%)] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(15,157,88,0.22)] transition"
+                label="Checkout WhatsApp follow-up"
+                context="checkout_summary"
+                ariaLabel="Order via WhatsApp"
+              >
+                <MessageCircle className="h-4 w-4" />
+                Order via WhatsApp
+              </TrackedWhatsAppLink>
+              <Link href={SHOP_CART_HREF} className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] border border-[#7a0000]/16 bg-white px-4 py-2.5 text-sm font-bold text-slate-950 shadow-[0_10px_22px_rgba(15,23,42,0.04)] transition">
+                Back to Cart
+              </Link>
+            </div>
           </section>
         </div>
 
         {fieldErrors.cart ? <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{fieldErrors.cart}</div> : null}
         {error ? <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 
-        <div className="mt-5 flex flex-col gap-2.5 sm:flex-row">
+        <div className="mt-5 hidden flex-col gap-2.5 xl:flex xl:flex-row">
           <button type="submit" disabled={submitting} className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(122,0,0,0.16)] transition hover:bg-[#610000]">
             {submitting ? "Submitting Website Order..." : "Place Order Request"}
           </button>
@@ -416,7 +438,7 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
         <div className="mt-3 rounded-[16px] border border-amber-400/20 bg-amber-400/5 px-3 py-2.5 text-sm font-semibold leading-6 text-slate-700">
           {availabilityNotice}
         </div>
-        <div className="mt-4 grid gap-2.5">
+        <div className="mt-4 hidden gap-2.5 xl:grid">
           <button
             type="submit"
             form="shop-checkout-form"
