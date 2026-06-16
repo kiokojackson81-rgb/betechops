@@ -28,13 +28,19 @@ export default async function ShopAccountPage() {
   }
 
   const dbUser = await findSafeCustomerProfileByUserId(user.id);
-  const normalizedPhone = normalizeKenyanPhone(dbUser?.phone || user.phone || "");
-  const phoneVariants = getKenyanPhoneVariants(normalizedPhone);
-  const normalizedEmail = String(dbUser?.email || user.email || "").trim().toLowerCase();
+  const normalizedPhones = Array.from(
+    new Set([dbUser?.phone, user.phone].map((value) => normalizeKenyanPhone(value || "")).filter(Boolean)),
+  );
+  const phoneVariants = Array.from(
+    new Set(normalizedPhones.flatMap((value) => getKenyanPhoneVariants(value))),
+  );
+  const normalizedEmails = Array.from(
+    new Set([dbUser?.email, user.email].map((value) => String(value || "").trim().toLowerCase()).filter(Boolean)),
+  );
 
   await backfillPosReceiptsForCustomerAccount({
     phoneVariants,
-    normalizedEmail,
+    normalizedEmails,
     limit: 20,
   });
 
@@ -55,7 +61,7 @@ export default async function ShopAccountPage() {
       OR: [
         { customerUserId: user.id },
         ...(phoneVariants.length ? [{ customerPhone: { in: phoneVariants } }] : []),
-        ...(normalizedEmail ? [{ customerEmail: normalizedEmail }] : []),
+        ...(normalizedEmails.length ? [{ customerEmail: { in: normalizedEmails } }] : []),
       ],
     },
     orderBy: { createdAt: "desc" },

@@ -390,15 +390,22 @@ export async function syncPosReceiptToCustomerAccount(receiptId: string) {
 export async function backfillPosReceiptsForCustomerAccount(args: {
   phoneVariants?: string[];
   normalizedEmail?: string;
+  normalizedEmails?: string[];
   limit?: number;
 }) {
   const phoneVariants = Array.from(
     new Set((args.phoneVariants || []).map((value) => String(value || "").trim()).filter(Boolean)),
   );
-  const normalizedEmail = normalizeCustomerEmail(args.normalizedEmail);
+  const normalizedEmails = Array.from(
+    new Set(
+      [args.normalizedEmail, ...(args.normalizedEmails || [])]
+        .map((value) => normalizeCustomerEmail(value))
+        .filter(Boolean),
+    ),
+  );
   const limit = Math.max(1, Math.min(50, Number(args.limit || 12)));
 
-  if (!phoneVariants.length && !normalizedEmail) {
+  if (!phoneVariants.length && !normalizedEmails.length) {
     return { receiptIds: [] as string[], synced: 0 };
   }
 
@@ -407,7 +414,7 @@ export async function backfillPosReceiptsForCustomerAccount(args: {
       order: {
         OR: [
           ...(phoneVariants.length ? [{ customerPhone: { in: phoneVariants } }] : []),
-          ...(normalizedEmail ? [{ customerEmail: normalizedEmail }] : []),
+          ...(normalizedEmails.length ? [{ customerEmail: { in: normalizedEmails } }] : []),
         ],
       },
     },
