@@ -15,6 +15,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
+import ShopAccountLogoutButton from "@/app/shop/_components/ShopAccountLogoutButton";
 import {
   getMockOrderHistory,
   getMockQuoteHistory,
@@ -208,6 +209,10 @@ export default function AccountClient({ initialProfile, recentOrders }: AccountC
 
         <div className="mt-5 rounded-[18px] border border-[#7a0000]/10 bg-[#fcfaf7] p-4 text-sm text-slate-600">
           Checkout will reuse the saved name, phone, email, and town details shown here.
+        </div>
+
+        <div className="mt-5">
+          <ShopAccountLogoutButton />
         </div>
       </aside>
 

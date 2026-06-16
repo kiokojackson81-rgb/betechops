@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
 import AccountClient from "@/app/shop/_components/AccountClient";
-import ShopAccountLogoutButton from "@/app/shop/_components/ShopAccountLogoutButton";
 import ShopBreadcrumbs from "@/app/shop/_components/ShopBreadcrumbs";
 import ShopFooter from "@/app/shop/_components/ShopFooter";
 import ShopHeader from "@/app/shop/_components/ShopHeader";
@@ -82,9 +81,6 @@ export default async function ShopAccountPage() {
               {account.name || "Betech customer"} · {account.phone || account.email || "Signed in"}
             </div>
             <div className="mt-1 text-sm text-slate-600">{account.email || "No email saved yet."}</div>
-            <div className="mt-4">
-              <ShopAccountLogoutButton />
-            </div>
           </div>
           <div className="mt-4">
             <AccountClient
