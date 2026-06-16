@@ -38,9 +38,7 @@ export async function POST(request: Request) {
               phone: result.user.phone,
             }
           : null,
-        message: result?.user
-          ? `We found your account. Continue with an email OTP sent to ${result.email}.`
-          : `Continue with an email OTP sent to ${identifier.trim().toLowerCase()}. We will connect or create your customer account after verification.`,
+        message: `We are sending a verification code to ${result?.email || identifier.trim().toLowerCase()}.`,
       });
     }
 
@@ -68,9 +66,7 @@ export async function POST(request: Request) {
             phone: result.user.phone,
           }
         : null,
-      message: result?.user
-        ? `We found your account. Continue with SMS OTP to ${maskPhone(normalizedPhone)}.`
-        : `Continue with SMS OTP to ${maskPhone(normalizedPhone)}. We will connect or create your customer account after verification.`,
+      message: `We are sending a verification code to ${maskPhone(normalizedPhone)}.`,
     });
   } catch (error) {
     console.error("[auth/identify] failed:", error);

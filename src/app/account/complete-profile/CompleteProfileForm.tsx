@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 type Props = {
   initialName: string;
   initialEmail: string;
+  initialPhone: string;
   initialCounty: string;
   initialTown: string;
 };
@@ -13,6 +14,7 @@ type Props = {
 export default function CompleteProfileForm({
   initialName,
   initialEmail,
+  initialPhone,
   initialCounty,
   initialTown,
 }: Props) {
@@ -21,6 +23,7 @@ export default function CompleteProfileForm({
   const next = params?.get("next") || "/account";
   const [name, setName] = useState(initialName);
   const [email, setEmail] = useState(initialEmail);
+  const [phone, setPhone] = useState(initialPhone);
   const [county, setCounty] = useState(initialCounty);
   const [town, setTown] = useState(initialTown);
   const [busy, setBusy] = useState(false);
@@ -36,7 +39,7 @@ export default function CompleteProfileForm({
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ name, email, county, town }),
+      body: JSON.stringify({ name, email, phone, county, town }),
     });
 
     const payload = await response.json().catch(() => null);
@@ -82,6 +85,17 @@ export default function CompleteProfileForm({
         />
       </label>
 
+      <label className="block">
+        <span className="mb-2 block text-sm font-semibold text-slate-700">Phone number</span>
+        <input
+          type="tel"
+          value={phone}
+          onChange={(event) => setPhone(event.target.value)}
+          placeholder="0712345678 or 0101234567"
+          className="w-full rounded-2xl border border-[#ead8c4] bg-[#fffdf9] px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#7a0000]/35 focus:ring-2 focus:ring-[#f2b20f]/30"
+        />
+      </label>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block">
           <span className="mb-2 block text-sm font-semibold text-slate-700">County</span>
@@ -109,7 +123,7 @@ export default function CompleteProfileForm({
         disabled={busy}
         className="inline-flex w-full items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#7a0000_0%,#991010_100%)] px-5 py-3 text-sm font-bold text-white shadow-[0_18px_36px_rgba(122,0,0,0.18)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {busy ? "Saving profile..." : "Save and continue"}
+        {busy ? "Saving profile..." : "Submit and login"}
       </button>
     </form>
   );

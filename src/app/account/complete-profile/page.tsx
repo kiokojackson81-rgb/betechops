@@ -29,6 +29,7 @@ export default async function CompleteProfilePage() {
     select: {
       name: true,
       email: true,
+      phone: true,
       county: true,
       town: true,
     },
@@ -54,6 +55,7 @@ export default async function CompleteProfilePage() {
             <CompleteProfileForm
               initialName={dbUser?.name || ""}
               initialEmail={dbUser?.email || ""}
+              initialPhone={dbUser?.phone || ""}
               initialCounty={dbUser?.county || ""}
               initialTown={dbUser?.town || ""}
             />
