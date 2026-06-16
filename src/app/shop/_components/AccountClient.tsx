@@ -90,10 +90,14 @@ export default function AccountClient({ initialProfile, recentOrders }: AccountC
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState(() => buildFormProfile(initialProfile));
+  const [editingAddress, setEditingAddress] = useState(
+    () => !(initialProfile.county || initialProfile.town || initialProfile.estateLandmark || initialProfile.locationNotes),
+  );
   const availableTowns = useMemo(() => getTownsForCounty(form.county), [form.county]);
 
   useEffect(() => {
     setForm(buildFormProfile(initialProfile, getShopCustomerProfile()));
+    setEditingAddress(!(initialProfile.county || initialProfile.town || initialProfile.estateLandmark || initialProfile.locationNotes));
   }, [initialProfile]);
 
   useEffect(() => {
@@ -135,6 +139,7 @@ export default function AccountClient({ initialProfile, recentOrders }: AccountC
   }, [localOrders, recentOrders]);
 
   const addressLine = [form.town.trim(), form.county.trim()].filter(Boolean).join(", ");
+  const hasSavedAddress = Boolean(form.county.trim() || form.town.trim() || form.estateLandmark.trim() || form.locationNotes.trim());
 
   async function handleSave() {
     setSaving(true);
@@ -190,6 +195,9 @@ export default function AccountClient({ initialProfile, recentOrders }: AccountC
         estateLandmark: persistedProfile.estateLandmark.trim() || undefined,
         locationNotes: persistedProfile.locationNotes.trim() || undefined,
       });
+      if (persistedProfile.county.trim() || persistedProfile.town.trim() || persistedProfile.estateLandmark.trim() || persistedProfile.locationNotes.trim()) {
+        setEditingAddress(false);
+      }
       setNotice("Customer details saved successfully.");
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Could not save your customer details.");
@@ -337,39 +345,63 @@ export default function AccountClient({ initialProfile, recentOrders }: AccountC
                   ))}
                 </select>
               </label>
-              <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
-                Town / area
-                <select
-                  value={form.town}
-                  onChange={(event) => setForm((current) => ({ ...current, town: event.target.value }))}
-                  disabled={!form.county}
-                  className="min-h-[3rem] rounded-[16px] border border-[#7a0000]/10 bg-white px-4 outline-none transition focus:border-[#7a0000]/35"
-                >
-                  <option value="">{form.county ? "Select town / area" : "Choose county first"}</option>
-                  {availableTowns.map((town) => (
-                    <option key={town} value={town}>
-                      {town}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
-                Specific locality / estate / landmark
-                <input
-                  value={form.estateLandmark}
-                  onChange={(event) => setForm((current) => ({ ...current, estateLandmark: event.target.value }))}
-                  className="min-h-[3rem] rounded-[16px] border border-[#7a0000]/10 bg-white px-4 outline-none transition focus:border-[#7a0000]/35"
-                />
-              </label>
-              <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
-                Delivery notes
-                <textarea
-                  rows={3}
-                  value={form.locationNotes}
-                  onChange={(event) => setForm((current) => ({ ...current, locationNotes: event.target.value }))}
-                  className="rounded-[16px] border border-[#7a0000]/10 bg-white px-4 py-3 outline-none transition focus:border-[#7a0000]/35"
-                />
-              </label>
+              {hasSavedAddress && !editingAddress ? (
+                <div className="grid gap-3 sm:col-span-2">
+                  <div className="rounded-[18px] border border-[#0f9d58]/15 bg-[linear-gradient(180deg,#f6fff9_0%,#ffffff_100%)] p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-black uppercase tracking-[0.16em] text-[#0f9d58]">Saved address</div>
+                        <div className="mt-2 text-lg font-black text-slate-950">{addressLine || "Address saved"}</div>
+                        <div className="mt-2 text-sm text-slate-600">{form.estateLandmark.trim() || "No estate or landmark added yet."}</div>
+                        <div className="mt-1 text-sm text-slate-500">{form.locationNotes.trim() || "No extra delivery notes added yet."}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditingAddress(true)}
+                        className="rounded-[14px] border border-[#7a0000]/12 bg-white px-3 py-2 text-sm font-bold text-[#7a0000]"
+                      >
+                        Edit address
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
+                    Town / area
+                    <select
+                      value={form.town}
+                      onChange={(event) => setForm((current) => ({ ...current, town: event.target.value }))}
+                      disabled={!form.county}
+                      className="min-h-[3rem] rounded-[16px] border border-[#7a0000]/10 bg-white px-4 outline-none transition focus:border-[#7a0000]/35"
+                    >
+                      <option value="">{form.county ? "Select town / area" : "Choose county first"}</option>
+                      {availableTowns.map((town) => (
+                        <option key={town} value={town}>
+                          {town}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
+                    Specific locality / estate / landmark
+                    <input
+                      value={form.estateLandmark}
+                      onChange={(event) => setForm((current) => ({ ...current, estateLandmark: event.target.value }))}
+                      className="min-h-[3rem] rounded-[16px] border border-[#7a0000]/10 bg-white px-4 outline-none transition focus:border-[#7a0000]/35"
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
+                    Delivery notes
+                    <textarea
+                      rows={3}
+                      value={form.locationNotes}
+                      onChange={(event) => setForm((current) => ({ ...current, locationNotes: event.target.value }))}
+                      className="rounded-[16px] border border-[#7a0000]/10 bg-white px-4 py-3 outline-none transition focus:border-[#7a0000]/35"
+                    />
+                  </label>
+                </>
+              )}
             </div>
 
             <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
