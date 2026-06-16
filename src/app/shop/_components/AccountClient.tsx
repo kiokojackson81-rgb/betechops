@@ -172,17 +172,7 @@ export default function AccountClient({ initialProfile, recentOrders }: AccountC
   return (
     <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
       <aside className="rounded-[22px] border border-[#7a0000]/10 bg-white p-4 shadow-[0_18px_40px_rgba(15,23,42,0.06)] sm:p-5">
-        <div className="flex items-center gap-3">
-          <div className="flex h-14 w-14 items-center justify-center rounded-[18px] bg-[linear-gradient(135deg,#7a0000_0%,#b11414_100%)] text-white shadow-[0_18px_34px_rgba(122,0,0,0.18)]">
-            <UserRound className="h-7 w-7" />
-          </div>
-          <div className="min-w-0">
-            <div className="truncate text-lg font-black text-slate-950">{form.name || "Betech customer"}</div>
-            <div className="truncate text-sm text-slate-500">{form.email || form.phone || "Verified customer account"}</div>
-          </div>
-        </div>
-
-        <div className="mt-5 rounded-[18px] border border-[#f2b20f]/20 bg-[linear-gradient(180deg,#fff8ea_0%,#ffffff_100%)] p-4">
+        <div className="rounded-[18px] border border-[#f2b20f]/20 bg-[linear-gradient(180deg,#fff8ea_0%,#ffffff_100%)] p-4">
           <div className="flex items-center gap-2 text-sm font-black text-slate-950">
             <ShieldCheck className="h-4 w-4 text-[#0f9d58]" />
             Profile completion
