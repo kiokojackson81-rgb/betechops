@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { updateSafeCustomerProfile } from "@/lib/customerProfile";
+import { prisma } from "@/lib/prisma";
 import { normalizeKenyanPhone } from "@/lib/phone";
 
 export const dynamic = "force-dynamic";
@@ -63,29 +64,15 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const updated = await prisma.user.update({
-    where: { id: userId },
-    data: {
-      name,
-      email: emailRaw || null,
-      phone: normalizedPhone || undefined,
-      whatsappNumber: normalizedWhatsapp || null,
-      county: county || null,
-      town: town || null,
-      estateLandmark: estateLandmark || null,
-      locationNotes: locationNotes || null,
-    },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      phone: true,
-      whatsappNumber: true,
-      county: true,
-      town: true,
-      estateLandmark: true,
-      locationNotes: true,
-    },
+  const updated = await updateSafeCustomerProfile(userId, {
+    name,
+    email: emailRaw || null,
+    phone: normalizedPhone || null,
+    whatsappNumber: normalizedWhatsapp || null,
+    county: county || null,
+    town: town || null,
+    estateLandmark: estateLandmark || null,
+    locationNotes: locationNotes || null,
   });
 
   return NextResponse.json({ ok: true, user: updated });

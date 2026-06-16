@@ -11,7 +11,7 @@ import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks } from "@/app/shop/shopData";
 import { SHOP_CART_HREF, SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { findSafeCustomerProfileByUserId } from "@/lib/customerProfile";
 
 export const metadata: Metadata = buildShopMetadata({
   title: "Checkout",
@@ -24,19 +24,7 @@ export default async function ShopCheckoutPage() {
   const [products, customerProfile] = await Promise.all([
     getShopProducts(),
     sessionUserId
-      ? prisma.user.findUnique({
-          where: { id: sessionUserId },
-          select: {
-            name: true,
-            phone: true,
-            whatsappNumber: true,
-            email: true,
-            county: true,
-            town: true,
-            estateLandmark: true,
-            locationNotes: true,
-          },
-        })
+      ? findSafeCustomerProfileByUserId(sessionUserId)
       : Promise.resolve(null),
   ]);
 

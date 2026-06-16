@@ -12,6 +12,7 @@ import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks } from "@/app/shop/shopData";
 import { SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
 import { auth } from "@/lib/auth";
+import { findSafeCustomerProfileByUserId } from "@/lib/customerProfile";
 import { prisma } from "@/lib/prisma";
 
 export const metadata: Metadata = buildShopMetadata({
@@ -28,20 +29,7 @@ export default async function ShopAccountPage() {
   }
 
   const [dbUser, recentOrders] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: user.id },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        whatsappNumber: true,
-        county: true,
-        town: true,
-        estateLandmark: true,
-        locationNotes: true,
-      },
-    }),
+    findSafeCustomerProfileByUserId(user.id),
     prisma.websiteOrder.findMany({
       where: { customerUserId: user.id },
       orderBy: { createdAt: "desc" },

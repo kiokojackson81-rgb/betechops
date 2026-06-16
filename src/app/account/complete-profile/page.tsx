@@ -1,12 +1,12 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 import CompleteProfileForm from "@/app/account/complete-profile/CompleteProfileForm";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
 import ShopFooter from "@/app/shop/_components/ShopFooter";
 import ShopHeader from "@/app/shop/_components/ShopHeader";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { shopNavLinks } from "@/app/shop/shopData";
+import { findSafeCustomerProfileByUserId } from "@/lib/customerProfile";
 
 export const dynamic = "force-dynamic";
 
@@ -24,19 +24,7 @@ export default async function CompleteProfilePage() {
     redirect("/login/phone?callbackUrl=/account/complete-profile");
   }
 
-  const dbUser = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: {
-      name: true,
-      email: true,
-      phone: true,
-      whatsappNumber: true,
-      county: true,
-      town: true,
-      estateLandmark: true,
-      locationNotes: true,
-    },
-  });
+  const dbUser = await findSafeCustomerProfileByUserId(user.id);
 
   if (dbUser?.name && dbUser?.email) {
     redirect("/account");
