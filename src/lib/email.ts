@@ -93,6 +93,14 @@ function getRequiredEnv(name: string) {
   return String(value).trim();
 }
 
+function getOptionalEnv(name: string) {
+  const value = process.env[name];
+  if (!value || !String(value).trim()) {
+    return null;
+  }
+  return String(value).trim();
+}
+
 function getEmailConfig() {
   const host = getRequiredEnv("SMTP_HOST");
   const user = getRequiredEnv("SMTP_USER");
@@ -101,6 +109,8 @@ function getEmailConfig() {
   const fromName = getRequiredEnv("MAIL_FROM_NAME");
   const port = Number(process.env.SMTP_PORT || 587);
   const secure = process.env.SMTP_SECURE === "true";
+  const tlsServername = getOptionalEnv("SMTP_TLS_SERVERNAME");
+  const tlsRejectUnauthorized = process.env.SMTP_TLS_REJECT_UNAUTHORIZED !== "false";
 
   console.log("[email] config", {
     host: process.env.SMTP_HOST,
@@ -108,6 +118,8 @@ function getEmailConfig() {
     user: process.env.SMTP_USER,
     from: process.env.MAIL_FROM_EMAIL,
     hasPassword: Boolean(process.env.SMTP_PASSWORD),
+    tlsServername,
+    tlsRejectUnauthorized,
   });
 
   return {
@@ -118,6 +130,8 @@ function getEmailConfig() {
     password,
     fromEmail,
     fromName,
+    tlsServername,
+    tlsRejectUnauthorized,
   };
 }
 
@@ -150,6 +164,10 @@ async function getTransporter() {
         auth: {
           user: config.user,
           pass: config.password,
+        },
+        tls: {
+          servername: config.tlsServername || undefined,
+          rejectUnauthorized: config.tlsRejectUnauthorized,
         },
       });
     });
@@ -251,8 +269,11 @@ export function renderBetechEmailTemplate(input: BrandedTemplateInput) {
 
 export function describeEmailError(error: unknown) {
   if (error instanceof Error) {
-    const base = error.message || "Unknown email error";
-    return base.replace(/password[^,\s]*/gi, "password=[redacted]");
+    const base = (error.message || "Unknown email error").replace(/password[^,\s]*/gi, "password=[redacted]");
+    if (base.includes("Hostname/IP does not match certificate's altnames")) {
+      return `${base}. Configure SMTP_TLS_SERVERNAME to the certificate hostname from your mail provider, or update SMTP_HOST to the provider's official SMTP server.`;
+    }
+    return base;
   }
   return String(error || "Unknown email error");
 }
