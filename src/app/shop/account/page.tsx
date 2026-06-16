@@ -41,7 +41,7 @@ export default async function ShopAccountPage() {
   await backfillPosReceiptsForCustomerAccount({
     phoneVariants,
     normalizedEmails,
-    limit: 20,
+    limit: 100,
   });
 
   if (phoneVariants.length) {
@@ -69,6 +69,7 @@ export default async function ShopAccountPage() {
     select: {
       id: true,
       orderRef: true,
+      receiptId: true,
       status: true,
       total: true,
       createdAt: true,
@@ -84,6 +85,88 @@ export default async function ShopAccountPage() {
       },
     },
   });
+
+  const fallbackReceipts = await prisma.receipt.findMany({
+    where: {
+      order: {
+        OR: [
+          ...(phoneVariants.length ? [{ customerPhone: { in: phoneVariants } }] : []),
+          ...(normalizedEmails.length ? [{ customerEmail: { in: normalizedEmails } }] : []),
+        ],
+      },
+    },
+    orderBy: [{ generatedAt: "desc" }, { createdAt: "desc" }],
+    take: 20,
+    select: {
+      id: true,
+      receiptNumber: true,
+      generatedAt: true,
+      createdAt: true,
+      order: {
+        select: {
+          orderNumber: true,
+          totalAmount: true,
+          metadata: true,
+          items: {
+            select: {
+              id: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const recentOrderRows = [
+    ...recentOrders.map((order) => ({
+      id: order.id,
+      orderRef: order.orderRef,
+      status: order.status,
+      total: Number(order.total),
+      createdAt: order.createdAt.toISOString(),
+      deliveryMethod: order.deliveryMethod,
+      customerLocation: order.customerLocation,
+      itemsCount: order._count.items,
+      receiptId: order.receiptId,
+    })),
+    ...fallbackReceipts
+      .filter((receipt) => {
+        const orderRef = receipt.order?.orderNumber || receipt.receiptNumber || receipt.id;
+        return !recentOrders.some(
+          (order) => order.receiptId === receipt.id || order.orderRef === orderRef,
+        );
+      })
+      .map((receipt) => {
+        const metadata =
+          receipt.order?.metadata && typeof receipt.order.metadata === "object" && !Array.isArray(receipt.order.metadata)
+            ? (receipt.order.metadata as Record<string, unknown>)
+            : {};
+        const deliveryMethod =
+          typeof metadata.customerType === "string" && metadata.customerType === "pod"
+            ? "POS Pay on Delivery"
+            : metadata.deliveryAddress
+              ? "POS Delivery"
+              : "POS Walk-in";
+        const customerLocation =
+          typeof metadata.deliveryAddress === "string" && metadata.deliveryAddress.trim()
+            ? metadata.deliveryAddress.trim()
+            : "Betech POS customer";
+
+        return {
+          id: `receipt-${receipt.id}`,
+          orderRef: receipt.order?.orderNumber || receipt.receiptNumber || receipt.id,
+          status: "DELIVERED",
+          total: Number(receipt.order?.totalAmount || 0),
+          createdAt: (receipt.generatedAt || receipt.createdAt).toISOString(),
+          deliveryMethod,
+          customerLocation,
+          itemsCount: receipt.order?.items.length || 0,
+          receiptId: receipt.id,
+        };
+      }),
+  ]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 10);
 
   const account = dbUser || {
     id: user.id,
@@ -113,15 +196,15 @@ export default async function ShopAccountPage() {
               estateLandmark: account.estateLandmark || "",
               locationNotes: account.locationNotes || "",
             }}
-            recentOrders={recentOrders.map((order) => ({
+            recentOrders={recentOrderRows.map((order) => ({
               id: order.id,
               orderRef: order.orderRef,
               status: order.status,
-              total: Number(order.total),
-              createdAt: order.createdAt.toISOString(),
+              total: order.total,
+              createdAt: order.createdAt,
               deliveryMethod: order.deliveryMethod,
               customerLocation: order.customerLocation,
-              itemsCount: order._count.items,
+              itemsCount: order.itemsCount,
             }))}
           />
           <div className="mt-4">
