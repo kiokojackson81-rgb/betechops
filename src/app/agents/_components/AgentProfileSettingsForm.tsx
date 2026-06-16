@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
 
 type AgentProfileSettingsFormProps = {
   initialValues: {
@@ -22,6 +23,7 @@ export default function AgentProfileSettingsForm({ initialValues }: AgentProfile
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const townOptions = useMemo(() => getTownsForCounty(form.county), [form.county]);
 
   function update<K extends keyof typeof form>(key: K, value: string) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -128,19 +130,42 @@ export default function AgentProfileSettingsForm({ initialValues }: AgentProfile
       <div className="grid gap-4 md:grid-cols-3">
         <label className="space-y-2">
           <span className="text-sm font-medium text-slate-700">County</span>
-          <input
+          <select
             value={form.county}
-            onChange={(event) => update("county", event.target.value)}
+            onChange={(event) => {
+              const nextCounty = event.target.value;
+              const nextTowns = getTownsForCounty(nextCounty);
+              setForm((current) => ({
+                ...current,
+                county: nextCounty,
+                city: nextTowns.some((town) => town === current.city) ? current.city : "",
+              }));
+            }}
             className="w-full rounded-2xl border border-[#dcc8bd] bg-[#fffaf5] px-4 py-3 text-slate-900 outline-none transition focus:border-[#7a0000]/40"
-          />
+          >
+            <option value="">Select county</option>
+            {kenyaCountyOptions.map((county) => (
+              <option key={county} value={county}>
+                {county}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="space-y-2">
           <span className="text-sm font-medium text-slate-700">Town / City</span>
-          <input
+          <select
             value={form.city}
             onChange={(event) => update("city", event.target.value)}
+            disabled={!form.county}
             className="w-full rounded-2xl border border-[#dcc8bd] bg-[#fffaf5] px-4 py-3 text-slate-900 outline-none transition focus:border-[#7a0000]/40"
-          />
+          >
+            <option value="">{form.county ? "Select town / city" : "Choose county first"}</option>
+            {townOptions.map((town) => (
+              <option key={town} value={town}>
+                {town}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="space-y-2">
           <span className="text-sm font-medium text-slate-700">Country</span>
