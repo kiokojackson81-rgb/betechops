@@ -92,10 +92,21 @@ async function findOrCreateCustomerUser(input: {
   customerName: string;
   normalizedPhone: string;
   normalizedEmail: string;
-}) {
+}): Promise<{
+  user: Pick<User, "id" | "name" | "email" | "phone" | "county" | "town" | "estateLandmark" | "locationNotes">;
+  matchedBy: "phone" | "email" | "created";
+  emailConflict: boolean;
+}> {
   const { phoneUser, emailUser } = await resolveExistingCustomerUsers(input);
-  const existing =
-    phoneUser && emailUser && phoneUser.id === emailUser.id
+  const hasPhoneIdentity = Boolean(input.normalizedPhone);
+  const conflictingAccounts =
+    Boolean(phoneUser?.id) &&
+    Boolean(emailUser?.id) &&
+    phoneUser!.id !== emailUser!.id;
+
+  const existing = hasPhoneIdentity
+    ? phoneUser
+    : phoneUser && emailUser && phoneUser.id === emailUser.id
       ? phoneUser
       : phoneUser || emailUser;
 
@@ -107,12 +118,17 @@ async function findOrCreateCustomerUser(input: {
     if (input.normalizedPhone && !existing.phone && (!phoneUser || phoneUser.id === existing.id)) {
       updateData.phone = input.normalizedPhone;
     }
-    if (input.normalizedEmail && !existing.email && (!emailUser || emailUser.id === existing.id)) {
+    if (
+      input.normalizedEmail &&
+      !existing.email &&
+      (!emailUser || emailUser.id === existing.id) &&
+      !conflictingAccounts
+    ) {
       updateData.email = input.normalizedEmail;
     }
 
     if (Object.keys(updateData).length) {
-      return prisma.user.update({
+      const user = await prisma.user.update({
         where: { id: existing.id },
         data: updateData,
         select: {
@@ -126,12 +142,46 @@ async function findOrCreateCustomerUser(input: {
           locationNotes: true,
         },
       });
+      return {
+        user,
+        matchedBy: hasPhoneIdentity ? "phone" : emailUser?.id === existing.id ? "email" : "phone",
+        emailConflict: conflictingAccounts,
+      };
     }
 
-    return existing;
+    return {
+      user: existing,
+      matchedBy: hasPhoneIdentity ? "phone" : emailUser?.id === existing.id ? "email" : "phone",
+      emailConflict: conflictingAccounts,
+    };
   }
 
-  return prisma.user.create({
+  if (hasPhoneIdentity) {
+    const user = await prisma.user.create({
+      data: {
+        name: input.customerName || null,
+        phone: input.normalizedPhone || null,
+        email: input.normalizedEmail && !emailUser ? input.normalizedEmail : null,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        county: true,
+        town: true,
+        estateLandmark: true,
+        locationNotes: true,
+      },
+    });
+    return {
+      user,
+      matchedBy: "created",
+      emailConflict: Boolean(emailUser),
+    };
+  }
+
+  const user = await prisma.user.create({
     data: {
       name: input.customerName || null,
       phone: input.normalizedPhone || null,
@@ -148,6 +198,11 @@ async function findOrCreateCustomerUser(input: {
       locationNotes: true,
     },
   });
+  return {
+    user,
+    matchedBy: "created",
+    emailConflict: false,
+  };
 }
 
 export async function syncPosReceiptToCustomerAccount(receiptId: string) {
@@ -199,7 +254,7 @@ export async function syncPosReceiptToCustomerAccount(receiptId: string) {
   const normalizedEmail = normalizeCustomerEmail(order.customerEmail || String(data.customerEmail || ""));
   const customerName = pickFirstNonEmpty(order.customerName, String(data.customerName || ""));
 
-  const customerUser =
+  const customerResolution =
     normalizedPhone || normalizedEmail || customerName
       ? await findOrCreateCustomerUser({
           customerName,
@@ -207,6 +262,7 @@ export async function syncPosReceiptToCustomerAccount(receiptId: string) {
           normalizedEmail,
         })
       : null;
+  const customerUser = customerResolution?.user ?? null;
 
   const customerLocation = buildCustomerLocation(metadata, data, customerUser);
   const orderType = inferWebsiteOrderType(data, customerLocation);
@@ -275,6 +331,9 @@ export async function syncPosReceiptToCustomerAccount(receiptId: string) {
     metadata: {
       ...existingMetadata,
       ...lifecyclePatch,
+      posCustomerIdentitySource: customerResolution?.matchedBy ?? null,
+      posCustomerEmailConflict: customerResolution?.emailConflict ?? false,
+      posReceiptDeliveryEmail: normalizedEmail || order.customerEmail || null,
     },
   } satisfies Prisma.WebsiteOrderUncheckedCreateInput;
 
@@ -323,5 +382,7 @@ export async function syncPosReceiptToCustomerAccount(receiptId: string) {
     customerUserId: customerUser?.id ?? null,
     source: websiteOrder.source,
     status: websiteOrder.status,
+    matchedBy: customerResolution?.matchedBy ?? null,
+    emailConflict: customerResolution?.emailConflict ?? false,
   };
 }
