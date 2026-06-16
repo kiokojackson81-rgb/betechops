@@ -34,13 +34,6 @@ function formatOrderStatus(status: string) {
   return status.replace(/_/g, " ").toLowerCase().replace(/^\w/, (letter) => letter.toUpperCase());
 }
 
-const compactItemNameStyle = {
-  display: "-webkit-box",
-  WebkitBoxOrient: "vertical" as const,
-  WebkitLineClamp: 4,
-  overflow: "hidden",
-};
-
 export default async function ShopAccountOrdersPage() {
   const session = await auth();
   const user = session?.user as { id?: string | null; phone?: string | null; email?: string | null } | undefined;
@@ -133,32 +126,42 @@ export default async function ShopAccountOrdersPage() {
                             </div>
                             {order.itemPreview.length ? (
                               <div className="mt-3 overflow-hidden rounded-[16px] border border-[#7a0000]/10 bg-white">
-                                <div className="grid grid-cols-[minmax(0,1.4fr)_60px_110px_110px] gap-2 bg-[#fff7e7] px-3 py-2 text-[11px] font-black uppercase tracking-[0.12em] text-[#7a0000]">
-                                  <div>Item</div>
-                                  <div className="text-right">Qty</div>
-                                  <div className="text-right">Unit price</div>
-                                  <div className="text-right">Line total</div>
-                                </div>
                                 {order.itemPreview.map((item, index) => (
                                   <div
                                     key={`${order.routeId}-${item.productName}-${index}`}
-                                    className="grid grid-cols-[minmax(0,1.4fr)_60px_110px_110px] gap-2 border-t border-[#7a0000]/10 px-3 py-3 text-sm text-slate-700"
+                                    className={`${index ? "border-t border-[#7a0000]/10" : ""}`}
                                   >
-                                    <div>
-                                      <div
-                                        className="font-bold leading-7 text-slate-950 break-words"
-                                        style={compactItemNameStyle}
-                                        title={item.productName}
-                                      >
+                                    <div className="bg-[#fffdf8] px-3 py-3">
+                                      <div className="text-[11px] font-black uppercase tracking-[0.12em] text-[#7a0000]">
+                                        Item name
+                                      </div>
+                                      <div className="mt-1 break-words text-sm font-bold leading-6 text-slate-950" title={item.productName}>
                                         {item.productName}
                                       </div>
                                       <div className="mt-1 text-xs text-slate-500">
                                         {[item.sku, item.category].filter(Boolean).join(" • ") || order.customerLocation}
                                       </div>
                                     </div>
-                                    <div className="text-right">{item.quantity}</div>
-                                    <div className="text-right">{formatCurrency(item.unitPrice)}</div>
-                                    <div className="text-right font-black text-slate-950">{formatCurrency(item.total)}</div>
+                                    <div className="grid grid-cols-3 gap-3 border-t border-[#7a0000]/10 px-3 py-3 text-sm text-slate-700">
+                                      <div>
+                                        <div className="text-[11px] font-black uppercase tracking-[0.12em] text-[#7a0000]">
+                                          Quantity
+                                        </div>
+                                        <div className="mt-1 font-semibold text-slate-950">{item.quantity}</div>
+                                      </div>
+                                      <div className="text-right">
+                                        <div className="text-[11px] font-black uppercase tracking-[0.12em] text-[#7a0000]">
+                                          Unit price
+                                        </div>
+                                        <div className="mt-1 font-semibold text-slate-950">{formatCurrency(item.unitPrice)}</div>
+                                      </div>
+                                      <div className="text-right">
+                                        <div className="text-[11px] font-black uppercase tracking-[0.12em] text-[#7a0000]">
+                                          Total
+                                        </div>
+                                        <div className="mt-1 font-black text-slate-950">{formatCurrency(item.total)}</div>
+                                      </div>
+                                    </div>
                                   </div>
                                 ))}
                               </div>

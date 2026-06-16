@@ -34,13 +34,6 @@ function formatOrderStatus(status: string) {
   return status.replace(/_/g, " ").toLowerCase().replace(/^\w/, (letter) => letter.toUpperCase());
 }
 
-const compactItemNameStyle = {
-  display: "-webkit-box",
-  WebkitBoxOrient: "vertical" as const,
-  WebkitLineClamp: 4,
-  overflow: "hidden",
-};
-
 export default async function ShopAccountOrderDetailPage({
   params,
 }: {
@@ -137,32 +130,31 @@ export default async function ShopAccountOrderDetailPage({
                     Items purchased
                   </div>
                   <div className="mt-5 overflow-hidden rounded-[20px] border border-[#7a0000]/10">
-                    <div className="grid grid-cols-[minmax(0,1.6fr)_80px_120px_120px] gap-3 bg-[#fff7e7] px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-[#7a0000]">
-                      <div>Item</div>
-                      <div className="text-right">Qty</div>
-                      <div className="text-right">Unit price</div>
-                      <div className="text-right">Line total</div>
-                    </div>
-                    {order.items.map((item) => (
-                      <div
-                        key={item.id}
-                        className="grid grid-cols-[minmax(0,1.6fr)_80px_120px_120px] gap-3 border-t border-[#7a0000]/10 px-4 py-4 text-sm text-slate-700"
-                      >
-                        <div>
-                          <div
-                            className="font-bold leading-7 text-slate-950 break-words"
-                            style={compactItemNameStyle}
-                            title={item.productName}
-                          >
+                    {order.items.map((item, index) => (
+                      <div key={item.id} className={index ? "border-t border-[#7a0000]/10" : ""}>
+                        <div className="bg-[#fffdf8] px-4 py-4">
+                          <div className="text-[11px] font-black uppercase tracking-[0.12em] text-[#7a0000]">Item name</div>
+                          <div className="mt-1 break-words text-sm font-bold leading-6 text-slate-950" title={item.productName}>
                             {item.productName}
                           </div>
                           <div className="mt-1 text-xs text-slate-500">
                             {[item.sku, item.category].filter(Boolean).join(" • ") || "POS item"}
                           </div>
                         </div>
-                        <div className="text-right font-semibold">{item.quantity}</div>
-                        <div className="text-right font-semibold">{formatCurrency(item.unitPrice)}</div>
-                        <div className="text-right font-black text-slate-950">{formatCurrency(item.total)}</div>
+                        <div className="grid grid-cols-3 gap-3 border-t border-[#7a0000]/10 px-4 py-4 text-sm text-slate-700">
+                          <div>
+                            <div className="text-[11px] font-black uppercase tracking-[0.12em] text-[#7a0000]">Quantity</div>
+                            <div className="mt-1 font-semibold text-slate-950">{item.quantity}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-[11px] font-black uppercase tracking-[0.12em] text-[#7a0000]">Unit price</div>
+                            <div className="mt-1 font-semibold text-slate-950">{formatCurrency(item.unitPrice)}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-[11px] font-black uppercase tracking-[0.12em] text-[#7a0000]">Total</div>
+                            <div className="mt-1 font-black text-slate-950">{formatCurrency(item.total)}</div>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
