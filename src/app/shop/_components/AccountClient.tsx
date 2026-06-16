@@ -222,15 +222,19 @@ export default function AccountClient({ initialProfile, recentOrders }: AccountC
 
         <div className="mt-5 space-y-2">
           {[
-            { icon: UserRound, label: "Account overview" },
-            { icon: MapPin, label: "Address details" },
-            { icon: Package, label: "Recent orders" },
-            { icon: BellRing, label: "Quote follow-up" },
-          ].map(({ icon: Icon, label }) => (
-            <div key={label} className="flex items-center gap-3 rounded-[16px] border border-[#7a0000]/10 bg-[#fcfaf7] px-3 py-3 text-sm font-semibold text-slate-700">
+            { icon: UserRound, label: "Account overview", href: "#account-overview" },
+            { icon: MapPin, label: "Address details", href: "#address-details" },
+            { icon: Package, label: "Recent orders", href: "#recent-orders" },
+            { icon: BellRing, label: "Quote follow-up", href: "#quote-follow-up" },
+          ].map(({ icon: Icon, label, href }) => (
+            <a
+              key={label}
+              href={href}
+              className="flex items-center gap-3 rounded-[16px] border border-[#7a0000]/10 bg-[#fcfaf7] px-3 py-3 text-sm font-semibold text-slate-700 transition hover:border-[#7a0000]/25 hover:bg-white hover:text-[#7a0000]"
+            >
               <Icon className="h-4 w-4 text-[#7a0000]" />
               <span>{label}</span>
-            </div>
+            </a>
           ))}
         </div>
 
@@ -244,7 +248,7 @@ export default function AccountClient({ initialProfile, recentOrders }: AccountC
       </aside>
 
       <div className="grid gap-4">
-        <section className="grid gap-4 lg:grid-cols-3">
+        <section id="account-overview" className="grid gap-4 scroll-mt-28 lg:grid-cols-3">
           <div className={`${shopStyles.lightCard} p-5`}>
             <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-[#7a0000]">
               <UserRound className="h-4 w-4" />
@@ -256,7 +260,7 @@ export default function AccountClient({ initialProfile, recentOrders }: AccountC
             <div className="mt-1 text-sm text-slate-600">{form.whatsappNumber ? `WhatsApp: ${form.whatsappNumber}` : "No WhatsApp number saved yet."}</div>
           </div>
 
-          <div className={`${shopStyles.lightCard} p-5`}>
+          <div id="address-details" className={`${shopStyles.lightCard} scroll-mt-28 p-5`}>
             <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-[#7a0000]">
               <MapPin className="h-4 w-4" />
               Address book
@@ -418,7 +422,7 @@ export default function AccountClient({ initialProfile, recentOrders }: AccountC
           </div>
 
           <div className="grid gap-4">
-            <section className={`${shopStyles.lightCard} p-5`}>
+            <section id="recent-orders" className={`${shopStyles.lightCard} scroll-mt-28 p-5`}>
               <div className={shopStyles.sectionEyebrow}>Recent orders</div>
               <div className="mt-4 space-y-3">
                 {effectiveOrders.length ? (
@@ -446,7 +450,7 @@ export default function AccountClient({ initialProfile, recentOrders }: AccountC
               </div>
             </section>
 
-            <section className={`${shopStyles.lightCard} p-5`}>
+            <section id="quote-follow-up" className={`${shopStyles.lightCard} scroll-mt-28 p-5`}>
               <div className={shopStyles.sectionEyebrow}>Quote follow-up</div>
               <div className="mt-4 space-y-3">
                 {quotes.length ? (
@@ -486,6 +490,10 @@ export default function AccountClient({ initialProfile, recentOrders }: AccountC
                   <a href="mailto:info@betech.co.ke" className="hover:text-[#7a0000]">
                     info@betech.co.ke
                   </a>
+                </div>
+                <div>
+                  <span className="font-semibold text-slate-950">Shop Location:</span>{" "}
+                  <span>Pramukh Plaza, Third Floor, Shop No. 3 at Junction of Munyu Road and Sheikh Karume, Nairobi CBD</span>
                 </div>
                 <div>
                   <span className="font-semibold text-slate-950">WhatsApp:</span>{" "}
