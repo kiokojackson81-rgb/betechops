@@ -184,7 +184,8 @@ export default function renderReceiptTemplate(
           min-height: 0;
         }
         .receipt-bottom {
-          margin-top: 10px;
+          margin-top: auto;
+          padding-top: 10px;
         }
         header {
           text-align: center;
@@ -398,7 +399,7 @@ export default function renderReceiptTemplate(
           overflow: visible;
         }
         .receipt-bottom {
-          margin-top: 8px;
+          margin-top: auto;
           padding-top: 5px;
         }
         header {
