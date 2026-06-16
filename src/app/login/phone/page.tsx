@@ -62,6 +62,7 @@ export default function PhoneLoginPage() {
   const normalizedEmailPreview = useMemo(() => resolvedIdentifier.trim().toLowerCase(), [resolvedIdentifier]);
   const canResend = cooldown <= 0;
   const availableTowns = useMemo(() => getTownsForCounty(profileCounty), [profileCounty]);
+  const isCheckoutFlow = callbackUrl === "/checkout";
 
   useEffect(() => {
     if (!cooldown) return;
@@ -306,11 +307,19 @@ export default function PhoneLoginPage() {
         <div className="rounded-[2rem] border border-[#7a0000]/10 bg-white p-6 shadow-[0_28px_70px_rgba(122,0,0,0.10)] sm:p-7">
           <div className="text-xs font-black uppercase tracking-[0.24em] text-[#7a0000]">Customer login</div>
           <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950">
-            {step === "identify" ? "Sign in with email or phone" : identifierType === "email" ? "Verify with email OTP" : "Verify with SMS OTP"}
+            {step === "identify"
+              ? isCheckoutFlow
+                ? "Continue to checkout"
+                : "Sign in with email or phone"
+              : identifierType === "email"
+                ? "Verify with email OTP"
+                : "Verify with SMS OTP"}
           </h1>
           <p className="mt-3 text-sm leading-6 text-slate-600">
             {step === "identify"
-              ? "Enter your email address or Kenyan mobile number. We will immediately send you a one-time verification code."
+              ? isCheckoutFlow
+                ? "Enter your email address or Kenyan mobile number. We will send an OTP immediately, sign you in or create your account, then return you to checkout with any saved details prefilled."
+                : "Enter your email address or Kenyan mobile number. We will immediately send you a one-time verification code."
               : "Enter the code to complete sign in."}
           </p>
 

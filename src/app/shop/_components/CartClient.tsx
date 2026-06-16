@@ -13,7 +13,7 @@ import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import type { ShopProduct } from "@/app/shop/shopData";
 import { formatCurrency, shopStyles } from "@/app/shop/_components/shopStyles";
 import { getProductAvailabilityMessage } from "@/app/shop/shopAvailability";
-import { getShopProductHref, SHOP_CHECKOUT_HREF, SHOP_HOME_HREF, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
+import { getShopProductHref, SHOP_CHECKOUT_LOGIN_HREF, SHOP_HOME_HREF, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
 
 type CartClientProps = {
   products: ShopProduct[];
@@ -202,7 +202,7 @@ export default function CartClient({ products }: CartClientProps) {
           {availabilityNotice}
         </div>
         <div className="mt-4 grid gap-2.5">
-          <Link href={SHOP_CHECKOUT_HREF} className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(122,0,0,0.16)] transition hover:bg-[#610000]">
+          <Link href={SHOP_CHECKOUT_LOGIN_HREF} className="inline-flex min-h-[2.9rem] items-center justify-center gap-2 rounded-[14px] bg-[#7a0000] px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_28px_rgba(122,0,0,0.16)] transition hover:bg-[#610000]">
             Proceed to Checkout
           </Link>
           <TrackedWhatsAppLink
