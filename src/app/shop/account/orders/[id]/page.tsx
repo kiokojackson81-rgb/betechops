@@ -34,6 +34,13 @@ function formatOrderStatus(status: string) {
   return status.replace(/_/g, " ").toLowerCase().replace(/^\w/, (letter) => letter.toUpperCase());
 }
 
+const compactItemNameStyle = {
+  display: "-webkit-box",
+  WebkitBoxOrient: "vertical" as const,
+  WebkitLineClamp: 4,
+  overflow: "hidden",
+};
+
 export default async function ShopAccountOrderDetailPage({
   params,
 }: {
@@ -142,7 +149,13 @@ export default async function ShopAccountOrderDetailPage({
                         className="grid grid-cols-[minmax(0,1.6fr)_80px_120px_120px] gap-3 border-t border-[#7a0000]/10 px-4 py-4 text-sm text-slate-700"
                       >
                         <div>
-                          <div className="font-bold text-slate-950">{item.productName}</div>
+                          <div
+                            className="font-bold leading-7 text-slate-950 break-words"
+                            style={compactItemNameStyle}
+                            title={item.productName}
+                          >
+                            {item.productName}
+                          </div>
                           <div className="mt-1 text-xs text-slate-500">
                             {[item.sku, item.category].filter(Boolean).join(" • ") || "POS item"}
                           </div>

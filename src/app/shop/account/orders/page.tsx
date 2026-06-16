@@ -34,6 +34,13 @@ function formatOrderStatus(status: string) {
   return status.replace(/_/g, " ").toLowerCase().replace(/^\w/, (letter) => letter.toUpperCase());
 }
 
+const compactItemNameStyle = {
+  display: "-webkit-box",
+  WebkitBoxOrient: "vertical" as const,
+  WebkitLineClamp: 4,
+  overflow: "hidden",
+};
+
 export default async function ShopAccountOrdersPage() {
   const session = await auth();
   const user = session?.user as { id?: string | null; phone?: string | null; email?: string | null } | undefined;
@@ -138,7 +145,13 @@ export default async function ShopAccountOrdersPage() {
                                     className="grid grid-cols-[minmax(0,1.4fr)_60px_110px_110px] gap-2 border-t border-[#7a0000]/10 px-3 py-3 text-sm text-slate-700"
                                   >
                                     <div>
-                                      <div className="font-bold text-slate-950">{item.productName}</div>
+                                      <div
+                                        className="font-bold leading-7 text-slate-950 break-words"
+                                        style={compactItemNameStyle}
+                                        title={item.productName}
+                                      >
+                                        {item.productName}
+                                      </div>
                                       <div className="mt-1 text-xs text-slate-500">
                                         {[item.sku, item.category].filter(Boolean).join(" • ") || order.customerLocation}
                                       </div>
