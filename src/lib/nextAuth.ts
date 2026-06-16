@@ -22,6 +22,25 @@ type ExtendedToken = {
 
 const REQUIRED_DOMAIN = "@betech.co.ke";
 
+const nextAuthOtpUserSelect = {
+  id: true,
+  email: true,
+  name: true,
+  role: true,
+  attendantCategory: true,
+  isActive: true,
+  phone: true,
+  lastLoginMethod: true,
+  agentProfile: {
+    select: {
+      id: true,
+      status: true,
+      phone: true,
+      email: true,
+    },
+  },
+} as const;
+
 function isMissingColumnError(error: unknown) {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022";
 }
@@ -90,16 +109,7 @@ export const authOptions = {
         const payload = readVerifiedPhoneToken(verificationToken);
         const resolved = await prisma.user.findUnique({
           where: { id: payload.userId },
-          include: {
-            agentProfile: {
-              select: {
-                id: true,
-                status: true,
-                phone: true,
-                email: true,
-              },
-            },
-          },
+          select: nextAuthOtpUserSelect,
         });
         if (!resolved || !resolved.isActive) return null;
 

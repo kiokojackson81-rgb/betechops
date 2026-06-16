@@ -6,7 +6,7 @@ import { getKenyanPhoneVariants, normalizeKenyanPhone } from "@/lib/phone";
 
 type FirebasePhoneUserRecord = Pick<
   User,
-  "id" | "email" | "phone" | "name" | "role" | "attendantCategory" | "isActive" | "phoneVerifiedAt" | "emailVerifiedAt" | "lastLoginMethod" | "county" | "town"
+  "id" | "email" | "phone" | "name" | "role" | "attendantCategory" | "isActive" | "phoneVerifiedAt" | "emailVerifiedAt" | "lastLoginMethod"
 > & {
   agentProfile: {
     id: string;
@@ -15,6 +15,27 @@ type FirebasePhoneUserRecord = Pick<
     email: string | null;
   } | null;
 };
+
+const firebasePhoneUserSelect = {
+  id: true,
+  email: true,
+  phone: true,
+  name: true,
+  role: true,
+  attendantCategory: true,
+  isActive: true,
+  phoneVerifiedAt: true,
+  emailVerifiedAt: true,
+  lastLoginMethod: true,
+  agentProfile: {
+    select: {
+      id: true,
+      status: true,
+      phone: true,
+      email: true,
+    },
+  },
+} as const;
 
 export type FirebasePhoneAuthResult = {
   user: FirebasePhoneUserRecord;
@@ -90,16 +111,7 @@ async function syncVerifiedIdentityLinks(userId: string, normalizedPhone: string
 async function resolveUserByPhone(normalizedPhone: string) {
   const directUser = await prisma.user.findUnique({
     where: { phone: normalizedPhone },
-    include: {
-      agentProfile: {
-        select: {
-          id: true,
-          status: true,
-          phone: true,
-          email: true,
-        },
-      },
-    },
+    select: firebasePhoneUserSelect,
   });
 
   if (directUser) return directUser;
@@ -112,16 +124,7 @@ async function resolveUserByPhone(normalizedPhone: string) {
     },
     include: {
       user: {
-        include: {
-          agentProfile: {
-            select: {
-              id: true,
-              status: true,
-              phone: true,
-              email: true,
-            },
-          },
-        },
+        select: firebasePhoneUserSelect,
       },
     },
   });
@@ -147,16 +150,7 @@ export async function resolveFirebasePhoneUser(idToken: string, preferredRedirec
         lastLoginMethod: "firebase_phone",
         role: Role.ATTENDANT,
       },
-      include: {
-        agentProfile: {
-          select: {
-            id: true,
-            status: true,
-            phone: true,
-            email: true,
-          },
-        },
-      },
+      select: firebasePhoneUserSelect,
     });
   } else {
     if (!user.isActive) {
@@ -177,16 +171,7 @@ export async function resolveFirebasePhoneUser(idToken: string, preferredRedirec
             }
           : undefined,
       },
-      include: {
-        agentProfile: {
-          select: {
-            id: true,
-            status: true,
-            phone: true,
-            email: true,
-          },
-        },
-      },
+      select: firebasePhoneUserSelect,
     });
   }
 

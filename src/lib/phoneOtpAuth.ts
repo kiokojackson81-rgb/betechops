@@ -8,7 +8,7 @@ export type AuthOtpChannel = "phone" | "email";
 
 type OtpAuthUserRecord = Pick<
   User,
-  "id" | "email" | "phone" | "name" | "role" | "attendantCategory" | "isActive" | "phoneVerifiedAt" | "emailVerifiedAt" | "lastLoginMethod" | "county" | "town"
+  "id" | "email" | "phone" | "name" | "role" | "attendantCategory" | "isActive" | "phoneVerifiedAt" | "emailVerifiedAt" | "lastLoginMethod"
 > & {
   agentProfile: {
     id: string;
@@ -17,6 +17,27 @@ type OtpAuthUserRecord = Pick<
     email: string | null;
   } | null;
 };
+
+const otpAuthUserSelect = {
+  id: true,
+  email: true,
+  phone: true,
+  name: true,
+  role: true,
+  attendantCategory: true,
+  isActive: true,
+  phoneVerifiedAt: true,
+  emailVerifiedAt: true,
+  lastLoginMethod: true,
+  agentProfile: {
+    select: {
+      id: true,
+      status: true,
+      phone: true,
+      email: true,
+    },
+  },
+} as const;
 
 export type OtpAuthResult = {
   user: OtpAuthUserRecord;
@@ -214,16 +235,7 @@ async function syncVerifiedIdentityLinks(userId: string, normalizedPhone: string
 async function resolveUserByPhone(normalizedPhone: string) {
   const directUser = await prisma.user.findUnique({
     where: { phone: normalizedPhone },
-    include: {
-      agentProfile: {
-        select: {
-          id: true,
-          status: true,
-          phone: true,
-          email: true,
-        },
-      },
-    },
+    select: otpAuthUserSelect,
   });
 
   if (directUser) return directUser;
@@ -237,16 +249,7 @@ async function resolveUserByPhone(normalizedPhone: string) {
     },
     include: {
       user: {
-        include: {
-          agentProfile: {
-            select: {
-              id: true,
-              status: true,
-              phone: true,
-              email: true,
-            },
-          },
-        },
+        select: otpAuthUserSelect,
       },
     },
   });
@@ -257,16 +260,7 @@ async function resolveUserByPhone(normalizedPhone: string) {
 async function resolveUserByEmail(normalizedEmail: string) {
   const directUser = await prisma.user.findUnique({
     where: { email: normalizedEmail },
-    include: {
-      agentProfile: {
-        select: {
-          id: true,
-          status: true,
-          phone: true,
-          email: true,
-        },
-      },
-    },
+    select: otpAuthUserSelect,
   });
 
   if (directUser) return directUser;
@@ -280,16 +274,7 @@ async function resolveUserByEmail(normalizedEmail: string) {
     },
     include: {
       user: {
-        include: {
-          agentProfile: {
-            select: {
-              id: true,
-              status: true,
-              phone: true,
-              email: true,
-            },
-          },
-        },
+        select: otpAuthUserSelect,
       },
     },
   });
@@ -334,16 +319,7 @@ async function resolveVerifiedPhoneUser(normalizedPhone: string, preferredRedire
         lastLoginMethod: "africastalking_otp",
         role: Role.ATTENDANT,
       },
-      include: {
-        agentProfile: {
-          select: {
-            id: true,
-            status: true,
-            phone: true,
-            email: true,
-          },
-        },
-      },
+      select: otpAuthUserSelect,
     });
   } else {
     if (!user.isActive) {
@@ -364,16 +340,7 @@ async function resolveVerifiedPhoneUser(normalizedPhone: string, preferredRedire
             }
           : undefined,
       },
-      include: {
-        agentProfile: {
-          select: {
-            id: true,
-            status: true,
-            phone: true,
-            email: true,
-          },
-        },
-      },
+      select: otpAuthUserSelect,
     });
   }
 
@@ -399,16 +366,7 @@ async function resolveVerifiedEmailUser(normalizedEmail: string, preferredRedire
         lastLoginMethod: "email_otp",
         role: Role.ATTENDANT,
       },
-      include: {
-        agentProfile: {
-          select: {
-            id: true,
-            status: true,
-            phone: true,
-            email: true,
-          },
-        },
-      },
+      select: otpAuthUserSelect,
     });
   } else {
     if (!user.isActive) {
@@ -429,16 +387,7 @@ async function resolveVerifiedEmailUser(normalizedEmail: string, preferredRedire
             }
           : undefined,
       },
-      include: {
-        agentProfile: {
-          select: {
-            id: true,
-            status: true,
-            phone: true,
-            email: true,
-          },
-        },
-      },
+      select: otpAuthUserSelect,
     });
   }
 
