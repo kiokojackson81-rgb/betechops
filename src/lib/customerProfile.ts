@@ -79,43 +79,27 @@ export async function getUserProfileColumnMap(forceRefresh = false): Promise<Use
 
 export async function findSafeCustomerProfileByUserId(userId: string): Promise<SafeCustomerProfile | null> {
   const columns = await getUserProfileColumnMap();
-  const select: Record<string, boolean> = {
-    id: true,
-    name: true,
-    email: true,
-    phone: true,
-  };
-
-  for (const column of OPTIONAL_USER_PROFILE_COLUMNS) {
-    if (columns[column]) {
-      select[column] = true;
-    }
-  }
+  const selectedColumns = ["id", "name", "email", "phone", ...OPTIONAL_USER_PROFILE_COLUMNS.filter((column) => columns[column])] as string[];
+  const selectSql = selectedColumns.map((column) => `"${column}"`).join(", ");
 
   try {
-    return (await prisma.user.findUnique({
-      where: { id: userId },
-      select,
-    })) as SafeCustomerProfile | null;
+    const rows = await prisma.$queryRawUnsafe<Array<SafeCustomerProfile>>(
+      `SELECT ${selectSql} FROM "User" WHERE id = $1 LIMIT 1`,
+      userId,
+    );
+
+    return rows[0] ?? null;
   } catch (error) {
     const message = String((error as Error)?.message || "");
     if (message.includes("does not exist in the current database")) {
       const refreshedColumns = await getUserProfileColumnMap(true);
-      const fallbackSelect: Record<string, boolean> = {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-      };
-      for (const column of OPTIONAL_USER_PROFILE_COLUMNS) {
-        if (refreshedColumns[column]) {
-          fallbackSelect[column] = true;
-        }
-      }
-      return (await prisma.user.findUnique({
-        where: { id: userId },
-        select: fallbackSelect,
-      })) as SafeCustomerProfile | null;
+      const fallbackColumns = ["id", "name", "email", "phone", ...OPTIONAL_USER_PROFILE_COLUMNS.filter((column) => refreshedColumns[column])] as string[];
+      const fallbackSelectSql = fallbackColumns.map((column) => `"${column}"`).join(", ");
+      const rows = await prisma.$queryRawUnsafe<Array<SafeCustomerProfile>>(
+        `SELECT ${fallbackSelectSql} FROM "User" WHERE id = $1 LIMIT 1`,
+        userId,
+      );
+      return rows[0] ?? null;
     }
     throw error;
   }
@@ -123,34 +107,38 @@ export async function findSafeCustomerProfileByUserId(userId: string): Promise<S
 
 export async function updateSafeCustomerProfile(userId: string, input: CustomerProfileInput): Promise<SafeCustomerProfile> {
   const columns = await getUserProfileColumnMap();
-  const data: Record<string, string | null> = {
-    name: input.name ?? null,
-    email: input.email ?? null,
-  };
+  const updates: Array<[string, string | null]> = [
+    ["name", input.name ?? null],
+    ["email", input.email ?? null],
+  ];
 
   if (typeof input.phone !== "undefined") {
-    data.phone = input.phone;
+    updates.push(["phone", input.phone]);
   }
   if (columns.whatsappNumber && typeof input.whatsappNumber !== "undefined") {
-    data.whatsappNumber = input.whatsappNumber;
+    updates.push(["whatsappNumber", input.whatsappNumber]);
   }
   if (columns.county && typeof input.county !== "undefined") {
-    data.county = input.county;
+    updates.push(["county", input.county]);
   }
   if (columns.town && typeof input.town !== "undefined") {
-    data.town = input.town;
+    updates.push(["town", input.town]);
   }
   if (columns.estateLandmark && typeof input.estateLandmark !== "undefined") {
-    data.estateLandmark = input.estateLandmark;
+    updates.push(["estateLandmark", input.estateLandmark]);
   }
   if (columns.locationNotes && typeof input.locationNotes !== "undefined") {
-    data.locationNotes = input.locationNotes;
+    updates.push(["locationNotes", input.locationNotes]);
   }
 
-  await prisma.user.update({
-    where: { id: userId },
-    data,
-  });
+  const assignments = updates.map(([column], index) => `"${column}" = $${index + 2}`).join(", ");
+  const values = updates.map(([, value]) => value);
+
+  await prisma.$executeRawUnsafe(
+    `UPDATE "User" SET ${assignments}, "updatedAt" = NOW() WHERE id = $1`,
+    userId,
+    ...values,
+  );
 
   return {
     id: userId,
