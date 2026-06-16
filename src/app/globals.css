@@ -283,6 +283,18 @@ input[type="checkbox"] {
 .receipt-sheet--a4 { max-width: 210mm; }
 .receipt-sheet--roll80 { max-width: 80mm; }
 
+.receipt-preview-host {
+  min-height: 100vh;
+  padding: 1rem 0 2rem;
+  background: #e2e8f0;
+}
+
+.receipt-preview-host .page,
+.receipt-preview-host .receipt-sheet {
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
 @media print {
   .no-print { display: none !important; }
   /* Make printed text dark on white */
@@ -327,6 +339,11 @@ input[type="checkbox"] {
   }
   .receipt-sheet--a4 { width: calc(210mm - 20mm); max-width: calc(100% - 20mm); min-height: auto; page: receipt-a4; }
   .receipt-sheet--roll80 { width: calc(80mm - 8mm); max-width: calc(100% - 8mm); min-height: auto; page: receipt-roll80; }
+  .receipt-preview-host {
+    min-height: auto !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
   /* print-only area (visible only on print) */
   .print-only { display: block !important; }
   .receipt-screen { display: none !important; }

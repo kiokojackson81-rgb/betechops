@@ -2,6 +2,7 @@ import renderReceiptTemplate from "@/app/templates/receiptTemplate";
 import { getBranding } from "@/lib/branding";
 import { buildReceiptSnapshot } from "@/app/receipts/buildSnapshot";
 import ReceiptToolbar from "./ReceiptToolbar";
+import PrintOnLoad from "./PrintOnLoad";
 import { redirect } from "next/navigation";
 import { waitForReceiptById } from "@/lib/receiptReadAfterWrite";
 
@@ -84,6 +85,7 @@ export default async function Page({
   // Render the template HTML directly into the page so it behaves like the printable route.
   return (
     <div className="receipt-preview-host bg-slate-200">
+      <PrintOnLoad enabled={autoPrint === "1"} />
       {autoPrint !== "1" ? (
         <div className="mx-auto w-full max-w-[148mm] px-4 pt-4">
           <ReceiptToolbar receiptId={id} />
