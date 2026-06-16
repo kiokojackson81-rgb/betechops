@@ -390,12 +390,12 @@ export default function AccountClient({ initialProfile, recentOrders }: AccountC
               <div className="flex items-center justify-between gap-3">
                 <div className={shopStyles.sectionEyebrow}>Recent orders</div>
                 <Link href={SHOP_ACCOUNT_ORDERS_HREF} className={shopStyles.secondaryButton}>
-                  See orders
+                  View all orders
                 </Link>
               </div>
               <div className="mt-4 space-y-3">
                 {effectiveOrders.length ? (
-                  effectiveOrders.slice(0, 1).map((order) => (
+                  effectiveOrders.slice(0, 2).map((order) => (
                     <div key={order.id} className="rounded-[18px] border border-[#7a0000]/10 bg-[#fcfaf7] p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div>
