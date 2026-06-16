@@ -85,14 +85,13 @@ function toNumber(value: Prisma.Decimal | number | string | null | undefined) {
 
 function buildReceiptLocation(metadata: ReceiptMetadataRecord) {
   const deliveryAddress = typeof metadata.deliveryAddress === "string" ? metadata.deliveryAddress.trim() : "";
-  return deliveryAddress || "Betech POS customer";
+  return deliveryAddress || "Final receipt linked to your account.";
 }
 
 function buildReceiptDeliveryMethod(metadata: ReceiptMetadataRecord) {
-  const customerType = typeof metadata.customerType === "string" ? metadata.customerType.trim().toLowerCase() : "";
-  if (customerType === "pod") return "POS Pay on Delivery";
-  if (buildReceiptLocation(metadata) !== "Betech POS customer") return "POS Delivery";
-  return "POS Walk-in";
+  const deliveryAddress = typeof metadata.deliveryAddress === "string" ? metadata.deliveryAddress.trim() : "";
+  if (deliveryAddress) return "Complete order";
+  return "Complete order";
 }
 
 function buildSummaryFromWebsiteOrder(order: {
@@ -137,7 +136,7 @@ function buildSummaryFromReceipt(receipt: {
   return {
     routeId: `receipt-${receipt.id}`,
     orderRef: receipt.order?.orderNumber || receipt.receiptNumber || receipt.id,
-    status: "DELIVERED",
+    status: "COMPLETE",
     total: toNumber(receipt.order?.totalAmount),
     createdAt: (receipt.generatedAt || receipt.createdAt).toISOString(),
     deliveryMethod: buildReceiptDeliveryMethod(metadata),
@@ -318,7 +317,7 @@ export async function getCustomerAccountOrderDetail(args: {
     return {
       routeId: args.routeId,
       orderRef: receipt.order.orderNumber || receipt.receiptNumber || receipt.id,
-      status: "DELIVERED",
+      status: "COMPLETE",
       total: toNumber(receipt.order.totalAmount),
       subtotal: toNumber(receipt.order.totalAmount),
       createdAt: (receipt.generatedAt || receipt.createdAt).toISOString(),

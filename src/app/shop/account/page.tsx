@@ -10,9 +10,9 @@ import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks } from "@/app/shop/shopData";
 import { auth } from "@/lib/auth";
 import { findSafeCustomerProfileByUserId } from "@/lib/customerProfile";
-import { getKenyanPhoneVariants, normalizeKenyanPhone } from "@/lib/phone";
 import { backfillPosReceiptsForCustomerAccount } from "@/lib/posCustomerAccountSync";
 import { prisma } from "@/lib/prisma";
+import { buildCustomerAccountIdentity, listCustomerAccountOrders } from "@/lib/shopCustomerOrders";
 
 export const metadata: Metadata = buildShopMetadata({
   title: "Customer Account",
@@ -28,26 +28,25 @@ export default async function ShopAccountPage() {
   }
 
   const dbUser = await findSafeCustomerProfileByUserId(user.id);
-  const normalizedPhones = Array.from(
-    new Set([dbUser?.phone, user.phone].map((value) => normalizeKenyanPhone(value || "")).filter(Boolean)),
-  );
-  const phoneVariants = Array.from(
-    new Set(normalizedPhones.flatMap((value) => getKenyanPhoneVariants(value))),
-  );
-  const normalizedEmails = Array.from(
-    new Set([dbUser?.email, user.email].map((value) => String(value || "").trim().toLowerCase()).filter(Boolean)),
+  const identity = buildCustomerAccountIdentity(
+    {
+      id: user.id,
+      phone: user.phone || null,
+      email: user.email || null,
+    },
+    dbUser,
   );
 
   await backfillPosReceiptsForCustomerAccount({
-    phoneVariants,
-    normalizedEmails,
+    phoneVariants: identity.phoneVariants,
+    normalizedEmails: identity.normalizedEmails,
     limit: 100,
   });
 
-  if (phoneVariants.length) {
+  if (identity.phoneVariants.length) {
     await prisma.websiteOrder.updateMany({
       where: {
-        customerPhone: { in: phoneVariants },
+        customerPhone: { in: identity.phoneVariants },
         customerUserId: { not: user.id },
       },
       data: {
@@ -56,117 +55,12 @@ export default async function ShopAccountPage() {
     });
   }
 
-  const recentOrders = await prisma.websiteOrder.findMany({
-    where: {
-      OR: [
-        { customerUserId: user.id },
-        ...(phoneVariants.length ? [{ customerPhone: { in: phoneVariants } }] : []),
-        ...(normalizedEmails.length ? [{ customerEmail: { in: normalizedEmails } }] : []),
-      ],
-    },
-    orderBy: { createdAt: "desc" },
+  const recentOrders = await listCustomerAccountOrders({
+    userId: identity.userId,
+    phoneVariants: identity.phoneVariants,
+    normalizedEmails: identity.normalizedEmails,
     take: 10,
-    select: {
-      id: true,
-      orderRef: true,
-      receiptId: true,
-      status: true,
-      total: true,
-      createdAt: true,
-      deliveryMethod: true,
-      customerLocation: true,
-      customerPhone: true,
-      customerEmail: true,
-      customerUserId: true,
-      _count: {
-        select: {
-          items: true,
-        },
-      },
-    },
   });
-
-  const fallbackReceipts = await prisma.receipt.findMany({
-    where: {
-      order: {
-        OR: [
-          ...(phoneVariants.length ? [{ customerPhone: { in: phoneVariants } }] : []),
-          ...(normalizedEmails.length ? [{ customerEmail: { in: normalizedEmails } }] : []),
-        ],
-      },
-    },
-    orderBy: [{ generatedAt: "desc" }, { createdAt: "desc" }],
-    take: 20,
-    select: {
-      id: true,
-      receiptNumber: true,
-      generatedAt: true,
-      createdAt: true,
-      order: {
-        select: {
-          orderNumber: true,
-          totalAmount: true,
-          metadata: true,
-          items: {
-            select: {
-              id: true,
-            },
-          },
-        },
-      },
-    },
-  });
-
-  const recentOrderRows = [
-    ...recentOrders.map((order) => ({
-      id: order.id,
-      orderRef: order.orderRef,
-      status: order.status,
-      total: Number(order.total),
-      createdAt: order.createdAt.toISOString(),
-      deliveryMethod: order.deliveryMethod,
-      customerLocation: order.customerLocation,
-      itemsCount: order._count.items,
-      receiptId: order.receiptId,
-    })),
-    ...fallbackReceipts
-      .filter((receipt) => {
-        const orderRef = receipt.order?.orderNumber || receipt.receiptNumber || receipt.id;
-        return !recentOrders.some(
-          (order) => order.receiptId === receipt.id || order.orderRef === orderRef,
-        );
-      })
-      .map((receipt) => {
-        const metadata =
-          receipt.order?.metadata && typeof receipt.order.metadata === "object" && !Array.isArray(receipt.order.metadata)
-            ? (receipt.order.metadata as Record<string, unknown>)
-            : {};
-        const deliveryMethod =
-          typeof metadata.customerType === "string" && metadata.customerType === "pod"
-            ? "POS Pay on Delivery"
-            : metadata.deliveryAddress
-              ? "POS Delivery"
-              : "POS Walk-in";
-        const customerLocation =
-          typeof metadata.deliveryAddress === "string" && metadata.deliveryAddress.trim()
-            ? metadata.deliveryAddress.trim()
-            : "Betech POS customer";
-
-        return {
-          id: `receipt-${receipt.id}`,
-          orderRef: receipt.order?.orderNumber || receipt.receiptNumber || receipt.id,
-          status: "DELIVERED",
-          total: Number(receipt.order?.totalAmount || 0),
-          createdAt: (receipt.generatedAt || receipt.createdAt).toISOString(),
-          deliveryMethod,
-          customerLocation,
-          itemsCount: receipt.order?.items.length || 0,
-          receiptId: receipt.id,
-        };
-      }),
-  ]
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 10);
 
   const account = dbUser || {
     id: user.id,
@@ -196,9 +90,9 @@ export default async function ShopAccountPage() {
               estateLandmark: account.estateLandmark || "",
               locationNotes: account.locationNotes || "",
             }}
-            recentOrders={recentOrderRows.map((order) => ({
-              id: order.id,
-              routeId: order.id.startsWith("receipt-") ? order.id : `website-${order.id}`,
+            recentOrders={recentOrders.map((order) => ({
+              id: order.routeId,
+              routeId: order.routeId,
               orderRef: order.orderRef,
               status: order.status,
               total: order.total,

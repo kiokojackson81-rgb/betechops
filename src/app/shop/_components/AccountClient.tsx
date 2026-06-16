@@ -71,6 +71,7 @@ function buildFormProfile(
 }
 
 function formatOrderStatus(status: string) {
+  if (status === "COMPLETE") return "Complete";
   return status.replace(/_/g, " ").toLowerCase().replace(/^\w/, (letter) => letter.toUpperCase());
 }
 
