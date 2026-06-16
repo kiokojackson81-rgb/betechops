@@ -157,6 +157,7 @@ async function getTransporter() {
   if (!transporterPromise) {
     transporterPromise = Promise.resolve().then(() => {
       const config = getEmailConfig();
+      console.log("SMTP_HOST_RUNTIME", process.env.SMTP_HOST);
       return nodemailer.createTransport({
         host: config.host,
         port: config.port,
