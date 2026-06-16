@@ -46,6 +46,14 @@ type AccountClientProps = {
     customerLocation: string;
     itemsCount: number;
     receiptId?: string | null;
+    itemPreview: Array<{
+      productName: string;
+      quantity: number;
+      unitPrice: number;
+      total: number;
+      sku: string | null;
+      category: string | null;
+    }>;
   }>;
 };
 
@@ -137,6 +145,14 @@ export default function AccountClient({ initialProfile, recentOrders }: AccountC
       customerLocation: order.location,
       itemsCount: order.items.length,
       receiptId: null,
+      itemPreview: order.items.slice(0, 3).map((item) => ({
+        productName: item.productName,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        total: item.lineTotal,
+        sku: null,
+        category: null,
+      })),
     }));
   }, [localOrders, recentOrders]);
 
@@ -396,7 +412,7 @@ export default function AccountClient({ initialProfile, recentOrders }: AccountC
               </div>
               <div className="mt-4 space-y-3">
                 {effectiveOrders.length ? (
-                  effectiveOrders.slice(0, 2).map((order) => (
+                  effectiveOrders.slice(0, 1).map((order) => (
                     <div key={order.id} className="rounded-[18px] border border-[#7a0000]/10 bg-[#fcfaf7] p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div>
@@ -411,11 +427,48 @@ export default function AccountClient({ initialProfile, recentOrders }: AccountC
                         <span>{formatCurrency(order.total)}</span>
                         <span>{order.itemsCount} items</span>
                       </div>
-                      <div className="mt-2 text-sm text-slate-500">{order.customerLocation}</div>
-                      <div className="mt-3">
+                      {order.itemPreview.length ? (
+                        <div className="mt-3 overflow-hidden rounded-[16px] border border-[#7a0000]/10 bg-white">
+                          <div className="grid grid-cols-[minmax(0,1.4fr)_60px_110px_110px] gap-2 bg-[#fff7e7] px-3 py-2 text-[11px] font-black uppercase tracking-[0.12em] text-[#7a0000]">
+                            <div>Item</div>
+                            <div className="text-right">Qty</div>
+                            <div className="text-right">Unit price</div>
+                            <div className="text-right">Line total</div>
+                          </div>
+                          {order.itemPreview.map((item, index) => (
+                            <div
+                              key={`${order.id}-${item.productName}-${index}`}
+                              className="grid grid-cols-[minmax(0,1.4fr)_60px_110px_110px] gap-2 border-t border-[#7a0000]/10 px-3 py-3 text-sm text-slate-700"
+                            >
+                              <div>
+                                <div className="font-bold text-slate-950">{item.productName}</div>
+                                <div className="mt-1 text-xs text-slate-500">
+                                  {[item.sku, item.category].filter(Boolean).join(" • ") || order.customerLocation}
+                                </div>
+                              </div>
+                              <div className="text-right">{item.quantity}</div>
+                              <div className="text-right">{formatCurrency(item.unitPrice)}</div>
+                              <div className="text-right font-black text-slate-950">{formatCurrency(item.total)}</div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="mt-2 text-sm text-slate-500">{order.customerLocation}</div>
+                      )}
+                      <div className="mt-3 flex flex-wrap gap-3">
                         <Link href={`/account/orders/${encodeURIComponent(order.routeId)}`} className={shopStyles.secondaryButton}>
                           View order details
                         </Link>
+                        {order.receiptId ? (
+                          <a
+                            href={`/api/receipts/${encodeURIComponent(order.receiptId)}/pdf?download=1`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className={shopStyles.secondaryButton}
+                          >
+                            Download receipt
+                          </a>
+                        ) : null}
                       </div>
                     </div>
                   ))

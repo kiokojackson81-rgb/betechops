@@ -101,6 +101,7 @@ export default async function ShopAccountPage() {
               customerLocation: order.customerLocation,
               itemsCount: order.itemsCount,
               receiptId: order.receiptId,
+              itemPreview: order.itemPreview,
             }))}
           />
           <div className="mt-4">

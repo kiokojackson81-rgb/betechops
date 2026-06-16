@@ -34,6 +34,14 @@ export type CustomerAccountOrderSummary = {
   itemsCount: number;
   receiptId: string | null;
   source: "WEBSITE" | "POS";
+  itemPreview: Array<{
+    productName: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+    sku: string | null;
+    category: string | null;
+  }>;
 };
 
 export type CustomerAccountOrderDetail = {
@@ -105,6 +113,14 @@ function buildSummaryFromWebsiteOrder(order: {
   receiptId: string | null;
   source: string;
   _count: { items: number };
+  items: Array<{
+    productName: string;
+    quantity: number;
+    unitPrice: Prisma.Decimal | number;
+    total: Prisma.Decimal | number;
+    sku: string | null;
+    category: string | null;
+  }>;
 }): CustomerAccountOrderSummary {
   return {
     routeId: `website-${order.id}`,
@@ -117,6 +133,14 @@ function buildSummaryFromWebsiteOrder(order: {
     itemsCount: order._count.items,
     receiptId: order.receiptId,
     source: order.source === "POS" ? "POS" : "WEBSITE",
+    itemPreview: order.items.map((item) => ({
+      productName: item.productName,
+      quantity: item.quantity,
+      unitPrice: toNumber(item.unitPrice),
+      total: toNumber(item.total),
+      sku: item.sku,
+      category: item.category,
+    })),
   };
 }
 
@@ -129,7 +153,16 @@ function buildSummaryFromReceipt(receipt: {
     orderNumber: string;
     totalAmount: Prisma.Decimal | number;
     metadata: unknown;
-    items: Array<{ id: string }>;
+    items: Array<{
+      id: string;
+      quantity: number;
+      sellingPrice: Prisma.Decimal | number;
+      product: {
+        name: string | null;
+        sku: string | null;
+        category: string | null;
+      } | null;
+    }>;
   } | null;
 }): CustomerAccountOrderSummary {
   const metadata = readJsonObject(receipt.order?.metadata);
@@ -144,6 +177,15 @@ function buildSummaryFromReceipt(receipt: {
     itemsCount: receipt.order?.items.length || 0,
     receiptId: receipt.id,
     source: "POS",
+    itemPreview:
+      receipt.order?.items.map((item) => ({
+        productName: item.product?.name || "POS item",
+        quantity: item.quantity,
+        unitPrice: toNumber(item.sellingPrice),
+        total: toNumber(item.sellingPrice) * item.quantity,
+        sku: item.product?.sku || null,
+        category: item.product?.category || null,
+      })) || [],
   };
 }
 
@@ -200,6 +242,18 @@ export async function listCustomerAccountOrders(args: {
           items: true,
         },
       },
+      items: {
+        orderBy: { id: "asc" },
+        take: 3,
+        select: {
+          productName: true,
+          quantity: true,
+          unitPrice: true,
+          total: true,
+          sku: true,
+          category: true,
+        },
+      },
     },
   });
 
@@ -225,8 +279,19 @@ export async function listCustomerAccountOrders(args: {
           totalAmount: true,
           metadata: true,
           items: {
+            orderBy: { id: "asc" },
+            take: 3,
             select: {
               id: true,
+              quantity: true,
+              sellingPrice: true,
+              product: {
+                select: {
+                  name: true,
+                  sku: true,
+                  category: true,
+                },
+              },
             },
           },
         },

@@ -124,16 +124,55 @@ export default async function ShopAccountOrdersPage() {
                               <span>{order.deliveryMethod}</span>
                               <span>{order.itemsCount} items</span>
                             </div>
-                            <div className="mt-2 text-sm text-slate-500">{order.customerLocation}</div>
+                            {order.itemPreview.length ? (
+                              <div className="mt-3 overflow-hidden rounded-[16px] border border-[#7a0000]/10 bg-white">
+                                <div className="grid grid-cols-[minmax(0,1.4fr)_60px_110px_110px] gap-2 bg-[#fff7e7] px-3 py-2 text-[11px] font-black uppercase tracking-[0.12em] text-[#7a0000]">
+                                  <div>Item</div>
+                                  <div className="text-right">Qty</div>
+                                  <div className="text-right">Unit price</div>
+                                  <div className="text-right">Line total</div>
+                                </div>
+                                {order.itemPreview.map((item, index) => (
+                                  <div
+                                    key={`${order.routeId}-${item.productName}-${index}`}
+                                    className="grid grid-cols-[minmax(0,1.4fr)_60px_110px_110px] gap-2 border-t border-[#7a0000]/10 px-3 py-3 text-sm text-slate-700"
+                                  >
+                                    <div>
+                                      <div className="font-bold text-slate-950">{item.productName}</div>
+                                      <div className="mt-1 text-xs text-slate-500">
+                                        {[item.sku, item.category].filter(Boolean).join(" • ") || order.customerLocation}
+                                      </div>
+                                    </div>
+                                    <div className="text-right">{item.quantity}</div>
+                                    <div className="text-right">{formatCurrency(item.unitPrice)}</div>
+                                    <div className="text-right font-black text-slate-950">{formatCurrency(item.total)}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="mt-2 text-sm text-slate-500">{order.customerLocation}</div>
+                            )}
                           </div>
                           <div className="flex flex-col items-start gap-3 lg:items-end">
                             <div className="rounded-full bg-[#fff3d8] px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-[#7a0000]">
                               {formatOrderStatus(order.status)}
                             </div>
                             <div className="text-2xl font-black text-slate-950">{formatCurrency(order.total)}</div>
-                            <Link href={`/account/orders/${encodeURIComponent(order.routeId)}`} className={shopStyles.secondaryButton}>
-                              View order
-                            </Link>
+                            <div className="flex flex-wrap gap-3">
+                              <Link href={`/account/orders/${encodeURIComponent(order.routeId)}`} className={shopStyles.secondaryButton}>
+                                View order details
+                              </Link>
+                              {order.receiptId ? (
+                                <a
+                                  href={`/api/receipts/${encodeURIComponent(order.receiptId)}/pdf?download=1`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className={shopStyles.secondaryButton}
+                                >
+                                  Download receipt
+                                </a>
+                              ) : null}
+                            </div>
                           </div>
                         </div>
                       </div>
