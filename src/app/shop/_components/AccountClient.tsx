@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   BellRing,
   CheckCircle2,
@@ -18,6 +17,7 @@ import { getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets
 import ShopAccountLogoutButton from "@/app/shop/_components/ShopAccountLogoutButton";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import {
+  getShopCustomerProfile,
   getMockOrderHistory,
   getMockQuoteHistory,
   saveShopCustomerProfile,
@@ -50,6 +50,27 @@ type AccountClientProps = {
   }>;
 };
 
+function buildFormProfile(
+  initialProfile: AccountClientProps["initialProfile"],
+  storedProfile?: ReturnType<typeof getShopCustomerProfile> | null,
+) {
+  const [storedCounty = "", storedTown = ""] = String(storedProfile?.countyTown || "")
+    .split("/")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return {
+    name: initialProfile.name || storedProfile?.fullName || "",
+    phone: initialProfile.phone || storedProfile?.phone || "",
+    whatsappNumber: initialProfile.whatsappNumber || storedProfile?.whatsappNumber || storedProfile?.phone || "",
+    email: initialProfile.email || storedProfile?.email || "",
+    county: initialProfile.county || storedCounty || "",
+    town: initialProfile.town || storedTown || "",
+    estateLandmark: initialProfile.estateLandmark || storedProfile?.estateLandmark || "",
+    locationNotes: initialProfile.locationNotes || storedProfile?.locationNotes || "",
+  };
+}
+
 function formatOrderStatus(status: string) {
   return status.replace(/_/g, " ").toLowerCase().replace(/^\w/, (letter) => letter.toUpperCase());
 }
@@ -63,35 +84,16 @@ function formatDate(value: string) {
 }
 
 export default function AccountClient({ initialProfile, recentOrders }: AccountClientProps) {
-  const router = useRouter();
   const [quotes, setQuotes] = useState<MockQuoteRecord[]>([]);
   const [localOrders, setLocalOrders] = useState<MockOrderRecord[]>([]);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    name: initialProfile.name,
-    phone: initialProfile.phone,
-    whatsappNumber: initialProfile.whatsappNumber,
-    email: initialProfile.email,
-    county: initialProfile.county,
-    town: initialProfile.town,
-    estateLandmark: initialProfile.estateLandmark,
-    locationNotes: initialProfile.locationNotes,
-  });
+  const [form, setForm] = useState(() => buildFormProfile(initialProfile));
   const availableTowns = useMemo(() => getTownsForCounty(form.county), [form.county]);
 
   useEffect(() => {
-    setForm({
-      name: initialProfile.name,
-      phone: initialProfile.phone,
-      whatsappNumber: initialProfile.whatsappNumber,
-      email: initialProfile.email,
-      county: initialProfile.county,
-      town: initialProfile.town,
-      estateLandmark: initialProfile.estateLandmark,
-      locationNotes: initialProfile.locationNotes,
-    });
+    setForm(buildFormProfile(initialProfile, getShopCustomerProfile()));
   }, [initialProfile]);
 
   useEffect(() => {
@@ -155,14 +157,40 @@ export default function AccountClient({ initialProfile, recentOrders }: AccountC
         }),
       });
 
-      const data = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      const data = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        error?: string;
+        user?: Partial<AccountClientProps["initialProfile"]>;
+      } | null;
 
       if (!response.ok || !data?.ok) {
         throw new Error(data?.error || "We could not save your account profile right now.");
       }
 
+      const persistedProfile = {
+        ...form,
+        ...data.user,
+        name: form.name,
+        phone: form.phone,
+        whatsappNumber: form.whatsappNumber,
+        email: form.email,
+        county: form.county,
+        town: form.town,
+        estateLandmark: form.estateLandmark,
+        locationNotes: form.locationNotes,
+      };
+
+      setForm(persistedProfile);
+      saveShopCustomerProfile({
+        fullName: persistedProfile.name.trim(),
+        phone: persistedProfile.phone.trim(),
+        whatsappNumber: persistedProfile.whatsappNumber.trim() || persistedProfile.phone.trim() || undefined,
+        email: persistedProfile.email.trim() || undefined,
+        countyTown: [persistedProfile.county.trim(), persistedProfile.town.trim()].filter(Boolean).join(" / ") || undefined,
+        estateLandmark: persistedProfile.estateLandmark.trim() || undefined,
+        locationNotes: persistedProfile.locationNotes.trim() || undefined,
+      });
       setNotice("Customer details saved successfully.");
-      router.refresh();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Could not save your customer details.");
     } finally {
