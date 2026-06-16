@@ -35,6 +35,7 @@ const WEBSITE_ORDER_SCHEMA_SQL = [
   `CREATE TABLE IF NOT EXISTS "WebsiteOrder" (
     "id" TEXT NOT NULL,
     "orderRef" TEXT NOT NULL,
+    "customerUserId" TEXT,
     "customerName" TEXT NOT NULL,
     "customerPhone" TEXT NOT NULL,
     "customerLocation" TEXT NOT NULL,
@@ -71,10 +72,12 @@ const WEBSITE_ORDER_SCHEMA_SQL = [
     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "WebsiteOrderItem_pkey" PRIMARY KEY ("id")
   )`,
+  `ALTER TABLE "WebsiteOrder" ADD COLUMN IF NOT EXISTS "customerUserId" TEXT`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "WebsiteOrder_orderRef_key" ON "WebsiteOrder"("orderRef")`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "WebsiteOrder_receiptId_key" ON "WebsiteOrder"("receiptId")`,
   `CREATE INDEX IF NOT EXISTS "WebsiteOrder_status_createdAt_idx" ON "WebsiteOrder"("status", "createdAt")`,
   `CREATE INDEX IF NOT EXISTS "WebsiteOrder_orderType_createdAt_idx" ON "WebsiteOrder"("orderType", "createdAt")`,
+  `CREATE INDEX IF NOT EXISTS "WebsiteOrder_customerUserId_createdAt_idx" ON "WebsiteOrder"("customerUserId", "createdAt")`,
   `CREATE INDEX IF NOT EXISTS "WebsiteOrderItem_websiteOrderId_idx" ON "WebsiteOrderItem"("websiteOrderId")`,
   `CREATE INDEX IF NOT EXISTS "WebsiteOrderItem_productId_idx" ON "WebsiteOrderItem"("productId")`,
   `DO $$
@@ -88,6 +91,20 @@ const WEBSITE_ORDER_SCHEMA_SQL = [
       ALTER TABLE "WebsiteOrder"
         ADD CONSTRAINT "WebsiteOrder_confirmedById_fkey"
         FOREIGN KEY ("confirmedById") REFERENCES "User"("id")
+        ON DELETE SET NULL ON UPDATE CASCADE;
+    END IF;
+  END $$`,
+  `DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM information_schema.table_constraints
+      WHERE constraint_name = 'WebsiteOrder_customerUserId_fkey'
+        AND table_name = 'WebsiteOrder'
+    ) THEN
+      ALTER TABLE "WebsiteOrder"
+        ADD CONSTRAINT "WebsiteOrder_customerUserId_fkey"
+        FOREIGN KEY ("customerUserId") REFERENCES "User"("id")
         ON DELETE SET NULL ON UPDATE CASCADE;
     END IF;
   END $$`,

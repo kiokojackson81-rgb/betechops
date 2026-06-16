@@ -21,6 +21,7 @@ import {
   type ProfitReceiptContributor,
 } from "@/lib/adminReceiptsSummary";
 import { adjustProfitForPodDeliveryFee, getPodDeliveryFee, loadPodDeliveryFeeMap } from "@/lib/podDeliveryFee";
+import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
 import { waitForReceiptById } from "@/lib/receiptReadAfterWrite";
 
 const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" | null => {
@@ -535,6 +536,7 @@ export async function GET(req: NextRequest) {
       createdAt: r.generatedAt,
       customerName: r.order?.customerName,
       customerPhone: (r.order as any)?.customerPhone ?? null,
+      customerEmail: (r.order as any)?.customerEmail ?? null,
       total,
       buyingTotal: resolvedBuyingTotal > 0 ? resolvedBuyingTotal : null,
       profit,
@@ -577,6 +579,7 @@ export async function GET(req: NextRequest) {
       createdAt: receipt.createdAt,
       customerName: null,
       customerPhone: null,
+      customerEmail: null,
       total,
       buyingTotal: buyingTotal > 0 ? buyingTotal : null,
       profit,
@@ -621,6 +624,7 @@ export async function GET(req: NextRequest) {
       createdAt: receipt.createdAt,
       customerName: null,
       customerPhone: null,
+      customerEmail: null,
       total,
       buyingTotal: buyingTotal > 0 ? buyingTotal : null,
       profit,
@@ -1820,6 +1824,23 @@ export async function POST(req: NextRequest) {
       loggerPrefix: "[receipts] pre-send readiness",
       select: { id: true },
     });
+
+    try {
+      const customerAccountSync = await syncPosReceiptToCustomerAccount(result.receiptId);
+      console.info("[receipts] synced POS receipt to customer account", {
+        requestId,
+        receiptId: result.receiptId,
+        orderRef: result.orderRef,
+        customerAccountSync,
+      });
+    } catch (customerSyncErr) {
+      console.error("[receipts] failed to sync POS receipt to customer account", {
+        requestId,
+        receiptId: result.receiptId,
+        orderRef: result.orderRef,
+        error: customerSyncErr instanceof Error ? customerSyncErr.message : String(customerSyncErr),
+      });
+    }
 
     // Recompute support commission ledger after committing the transaction
     if (attendantId) {

@@ -445,7 +445,7 @@ export default function AccountClient({ initialProfile, recentOrders }: AccountC
                     </div>
                   ))
                 ) : (
-                  <div className="text-sm text-slate-500">No recent website orders saved yet.</div>
+                  <div className="text-sm text-slate-500">No recent orders saved yet.</div>
                 )}
               </div>
             </section>

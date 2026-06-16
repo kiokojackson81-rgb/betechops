@@ -17,6 +17,7 @@ import {
 } from "@/lib/marketingReceiptCleanup";
 import { getShopProductHref } from "@/app/shop/storefrontPaths";
 import { getOpsCatalogueProductMappedById } from "@/app/shop/shopProductMapper";
+import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
 
 export const dynamic = "force-dynamic";
 const SHOP_BASE_URL = "https://www.betech.co.ke";
@@ -714,6 +715,15 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
       } catch (e) {
         console.error("[receipts PATCH] failed to recompute support ledger", e);
       }
+    }
+
+    try {
+      await syncPosReceiptToCustomerAccount(id);
+    } catch (syncErr) {
+      console.error("[receipts PATCH] failed to sync POS receipt to customer account", {
+        receiptId: id,
+        error: syncErr instanceof Error ? syncErr.message : String(syncErr),
+      });
     }
 
     return NextResponse.json({ ok: true, receipt: updated });

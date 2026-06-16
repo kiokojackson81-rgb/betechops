@@ -9,6 +9,8 @@ type DailyReportReceiptRow = {
   receiptNumber?: string | null;
   docType?: string | null;
   customerName?: string | null;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
   attendantName?: string | null;
   total?: number | null;
   createdAt: string;
@@ -519,6 +521,9 @@ export default function DailyReportReceiptsPanel({
                   </div>
                   <p className="mt-1 text-[12px] text-slate-400">{receipt.attendantName ?? "Attendant unknown"} · {formatDateTime(receipt.createdAt)}</p>
                   <p className="mt-1 text-[12px] text-slate-500">{receipt.customerName ?? "-"} · {receipt.docType ?? "Receipt"}</p>
+                  <p className="mt-1 text-[12px] text-slate-500">
+                    {(receipt.customerPhone || "-")}{receipt.customerEmail ? ` · ${receipt.customerEmail}` : ""}
+                  </p>
                   {receipt.podDeliveryNote ? (
                     <p className="mt-1 text-[12px] text-yellow-200">{receipt.podDeliveryNote}</p>
                   ) : null}

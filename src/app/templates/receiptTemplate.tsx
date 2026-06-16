@@ -28,6 +28,7 @@ export default function renderReceiptTemplate(
   const attendant = (snapshot.attendantName && String(snapshot.attendantName).trim()) || (order?.attendant?.name && String(order.attendant.name).trim()) || (snapshot.issuedByName && String(snapshot.issuedByName).trim()) || '';
   const paymentMethod = snapshot.paymentMethod || order?.paymentMethod || '';
   const deliveryAddress = snapshot.deliveryAddress || order?.deliveryAddress || '';
+  const customerEmail = snapshot.customerEmail || order?.customerEmail || '';
   const formatWarrantyValue = (value: any) => {
     if (!value) return '';
     if (typeof value === 'string') return value;
@@ -452,6 +453,7 @@ export default function renderReceiptTemplate(
         <div><strong>Date:</strong> ${new Date(snapshot.generatedAt || Date.now()).toLocaleString()}</div>
         <div><strong>M/S:</strong> ${snapshot.customerName || order?.customerName || ''}</div>
         <div><strong>Phone:</strong> ${phoneNumber || '-'}</div>
+        <div><strong>Email:</strong> ${customerEmail || '-'}</div>
       </div>
       <div class="right meta-right">
         <div><strong>Receipt No.</strong> ${order.orderNumber || snapshot.serial || ''}</div>

@@ -82,6 +82,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [serial, setSerial] = useState<string>(() => generateReceiptSerial());
   const [customerName, setCustomerName] = useState<string>("");
   const [customerPhone, setCustomerPhone] = useState<string>("");
+  const [customerEmail, setCustomerEmail] = useState<string>("");
   const [normalizingName, setNormalizingName] = useState<boolean>(false);
   const [items, setItems] = useState<ItemRow[]>([newItem()]);
   const [taxRate, setTaxRate] = useState<number>(16);
@@ -216,6 +217,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       if (parsed.websiteOrderRef) setWebsiteOrderRef(String(parsed.websiteOrderRef));
       if (parsed.customerName) setCustomerName(String(parsed.customerName));
       if (parsed.customerPhone) setCustomerPhone(String(parsed.customerPhone));
+      if (parsed.customerEmail) setCustomerEmail(String(parsed.customerEmail));
       if (parsed.deliveryAddress) {
         setDeliveryAddress(String(parsed.deliveryAddress));
         setShowAddressInput(true);
@@ -583,6 +585,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     showDiscount: effectiveShowDiscount,
     customerName,
     customerPhone,
+    customerEmail,
     serial,
     docType,
     attendantName: selectedStaff?.name ?? "",
@@ -832,6 +835,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     setItems([newItem()]);
     setCustomerName("");
     setCustomerPhone("");
+    setCustomerEmail("");
     setCustomerType("");
     setDeliveryStatus("pending");
     setDeposit(0);
@@ -890,6 +894,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         date: new Date().toISOString(),
         customerName,
         customerPhone,
+        customerEmail: customerEmail || undefined,
         deliveryAddress: deliveryAddress || undefined,
         attendantId: staffId,
         issuedById: staffId,
@@ -1058,6 +1063,16 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
             value={customerPhone}
             onChange={(e) => setCustomerPhone(e.target.value)}
             placeholder="07..."
+            className={fieldClass}
+          />
+        </div>
+        <div>
+          <label className={labelClass}>Customer Email</label>
+          <input
+            type="email"
+            value={customerEmail}
+            onChange={(e) => setCustomerEmail(e.target.value)}
+            placeholder="customer@example.com"
             className={fieldClass}
           />
         </div>

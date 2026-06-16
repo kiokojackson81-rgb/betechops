@@ -360,6 +360,8 @@ type MarketingReceiptRow = {
   docType?: string | null;
   createdAt: string;
   customerName?: string | null;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
   attendantName?: string | null;
   total?: number | null;
 };
@@ -611,6 +613,9 @@ function ReceiptsList({ anchorId = "receipts" }: { anchorId?: string }) {
               </p>
               <p className="text-[11px] text-slate-500">
                 {receipt.customerName ?? "-"} • {receipt.docType ?? "Receipt"}
+              </p>
+              <p className="text-[11px] text-slate-500">
+                {(receipt.customerPhone || "-")}{receipt.customerEmail ? ` • ${receipt.customerEmail}` : ""}
               </p>
             </div>
             <div className="text-right">
