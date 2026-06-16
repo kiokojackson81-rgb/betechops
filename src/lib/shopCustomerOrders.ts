@@ -1,0 +1,424 @@
+import { Prisma } from "@prisma/client";
+import { getKenyanPhoneVariants, normalizeKenyanPhone } from "@/lib/phone";
+import { prisma } from "@/lib/prisma";
+import { ensureWebsiteOrdersSchema } from "@/lib/websiteOrders";
+
+type CustomerProfileLike = {
+  phone?: string | null;
+  email?: string | null;
+};
+
+type SessionUserLike = {
+  id: string;
+  phone?: string | null;
+  email?: string | null;
+};
+
+type ReceiptMetadataRecord = Record<string, unknown>;
+
+export type CustomerAccountIdentity = {
+  userId: string;
+  normalizedPhones: string[];
+  phoneVariants: string[];
+  normalizedEmails: string[];
+};
+
+export type CustomerAccountOrderSummary = {
+  routeId: string;
+  orderRef: string;
+  status: string;
+  total: number;
+  createdAt: string;
+  deliveryMethod: string;
+  customerLocation: string;
+  itemsCount: number;
+  receiptId: string | null;
+  source: "WEBSITE" | "POS";
+};
+
+export type CustomerAccountOrderDetail = {
+  routeId: string;
+  orderRef: string;
+  status: string;
+  total: number;
+  subtotal: number;
+  createdAt: string;
+  deliveryMethod: string;
+  customerLocation: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string | null;
+  paymentMethod: string;
+  notes: string | null;
+  receiptId: string | null;
+  receiptNumber: string | null;
+  itemsCount: number;
+  source: "WEBSITE" | "POS";
+  items: Array<{
+    id: string;
+    productName: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+    sku: string | null;
+    category: string | null;
+  }>;
+};
+
+function readJsonObject(value: unknown): ReceiptMetadataRecord {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as ReceiptMetadataRecord;
+  }
+  return {};
+}
+
+function normalizeCustomerEmail(value?: string | null) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized || "";
+}
+
+function toNumber(value: Prisma.Decimal | number | string | null | undefined) {
+  if (value == null) return 0;
+  const numeric = typeof value === "object" && "toNumber" in value ? value.toNumber() : Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function buildReceiptLocation(metadata: ReceiptMetadataRecord) {
+  const deliveryAddress = typeof metadata.deliveryAddress === "string" ? metadata.deliveryAddress.trim() : "";
+  return deliveryAddress || "Betech POS customer";
+}
+
+function buildReceiptDeliveryMethod(metadata: ReceiptMetadataRecord) {
+  const customerType = typeof metadata.customerType === "string" ? metadata.customerType.trim().toLowerCase() : "";
+  if (customerType === "pod") return "POS Pay on Delivery";
+  if (buildReceiptLocation(metadata) !== "Betech POS customer") return "POS Delivery";
+  return "POS Walk-in";
+}
+
+function buildSummaryFromWebsiteOrder(order: {
+  id: string;
+  orderRef: string;
+  status: string;
+  total: Prisma.Decimal | number;
+  createdAt: Date;
+  deliveryMethod: string;
+  customerLocation: string;
+  receiptId: string | null;
+  source: string;
+  _count: { items: number };
+}): CustomerAccountOrderSummary {
+  return {
+    routeId: `website-${order.id}`,
+    orderRef: order.orderRef,
+    status: order.status,
+    total: toNumber(order.total),
+    createdAt: order.createdAt.toISOString(),
+    deliveryMethod: order.deliveryMethod,
+    customerLocation: order.customerLocation,
+    itemsCount: order._count.items,
+    receiptId: order.receiptId,
+    source: order.source === "POS" ? "POS" : "WEBSITE",
+  };
+}
+
+function buildSummaryFromReceipt(receipt: {
+  id: string;
+  receiptNumber: string | null;
+  generatedAt: Date;
+  createdAt: Date;
+  order: {
+    orderNumber: string;
+    totalAmount: Prisma.Decimal | number;
+    metadata: unknown;
+    items: Array<{ id: string }>;
+  } | null;
+}): CustomerAccountOrderSummary {
+  const metadata = readJsonObject(receipt.order?.metadata);
+  return {
+    routeId: `receipt-${receipt.id}`,
+    orderRef: receipt.order?.orderNumber || receipt.receiptNumber || receipt.id,
+    status: "DELIVERED",
+    total: toNumber(receipt.order?.totalAmount),
+    createdAt: (receipt.generatedAt || receipt.createdAt).toISOString(),
+    deliveryMethod: buildReceiptDeliveryMethod(metadata),
+    customerLocation: buildReceiptLocation(metadata),
+    itemsCount: receipt.order?.items.length || 0,
+    receiptId: receipt.id,
+    source: "POS",
+  };
+}
+
+export function buildCustomerAccountIdentity(
+  user: SessionUserLike,
+  customerProfile?: CustomerProfileLike | null,
+): CustomerAccountIdentity {
+  const normalizedPhones = Array.from(
+    new Set([customerProfile?.phone, user.phone].map((value) => normalizeKenyanPhone(value || "")).filter(Boolean)),
+  );
+  const phoneVariants = Array.from(new Set(normalizedPhones.flatMap((value) => getKenyanPhoneVariants(value))));
+  const normalizedEmails = Array.from(
+    new Set([customerProfile?.email, user.email].map((value) => normalizeCustomerEmail(value)).filter(Boolean)),
+  );
+
+  return {
+    userId: user.id,
+    normalizedPhones,
+    phoneVariants,
+    normalizedEmails,
+  };
+}
+
+export async function listCustomerAccountOrders(args: {
+  userId: string;
+  phoneVariants: string[];
+  normalizedEmails: string[];
+  take?: number;
+}) {
+  await ensureWebsiteOrdersSchema();
+
+  const recentOrders = await prisma.websiteOrder.findMany({
+    where: {
+      OR: [
+        { customerUserId: args.userId },
+        ...(args.phoneVariants.length ? [{ customerPhone: { in: args.phoneVariants } }] : []),
+        ...(args.normalizedEmails.length ? [{ customerEmail: { in: args.normalizedEmails } }] : []),
+      ],
+    },
+    orderBy: { createdAt: "desc" },
+    take: args.take ?? 20,
+    select: {
+      id: true,
+      orderRef: true,
+      receiptId: true,
+      status: true,
+      total: true,
+      createdAt: true,
+      deliveryMethod: true,
+      customerLocation: true,
+      source: true,
+      _count: {
+        select: {
+          items: true,
+        },
+      },
+    },
+  });
+
+  const fallbackReceipts = await prisma.receipt.findMany({
+    where: {
+      order: {
+        OR: [
+          ...(args.phoneVariants.length ? [{ customerPhone: { in: args.phoneVariants } }] : []),
+          ...(args.normalizedEmails.length ? [{ customerEmail: { in: args.normalizedEmails } }] : []),
+        ],
+      },
+    },
+    orderBy: [{ generatedAt: "desc" }, { createdAt: "desc" }],
+    take: Math.max(args.take ?? 20, 20),
+    select: {
+      id: true,
+      receiptNumber: true,
+      generatedAt: true,
+      createdAt: true,
+      order: {
+        select: {
+          orderNumber: true,
+          totalAmount: true,
+          metadata: true,
+          items: {
+            select: {
+              id: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const websiteSummaries = recentOrders.map(buildSummaryFromWebsiteOrder);
+  const fallbackSummaries = fallbackReceipts
+    .filter((receipt) => {
+      const orderRef = receipt.order?.orderNumber || receipt.receiptNumber || receipt.id;
+      return !recentOrders.some((order) => order.receiptId === receipt.id || order.orderRef === orderRef);
+    })
+    .map(buildSummaryFromReceipt);
+
+  return [...websiteSummaries, ...fallbackSummaries]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, args.take ?? 20);
+}
+
+export async function getCustomerAccountOrderDetail(args: {
+  routeId: string;
+  userId: string;
+  phoneVariants: string[];
+  normalizedEmails: string[];
+}): Promise<CustomerAccountOrderDetail | null> {
+  await ensureWebsiteOrdersSchema();
+
+  if (args.routeId.startsWith("receipt-")) {
+    const receiptId = args.routeId.slice("receipt-".length);
+    if (!receiptId) return null;
+
+    const receipt = await prisma.receipt.findFirst({
+      where: {
+        id: receiptId,
+        order: {
+          OR: [
+            ...(args.phoneVariants.length ? [{ customerPhone: { in: args.phoneVariants } }] : []),
+            ...(args.normalizedEmails.length ? [{ customerEmail: { in: args.normalizedEmails } }] : []),
+          ],
+        },
+      },
+      select: {
+        id: true,
+        receiptNumber: true,
+        generatedAt: true,
+        createdAt: true,
+        order: {
+          select: {
+            orderNumber: true,
+            customerName: true,
+            customerPhone: true,
+            customerEmail: true,
+            totalAmount: true,
+            metadata: true,
+            items: {
+              select: {
+                id: true,
+                quantity: true,
+                sellingPrice: true,
+                product: {
+                  select: {
+                    name: true,
+                    sku: true,
+                    category: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!receipt?.order) return null;
+
+    const metadata = readJsonObject(receipt.order.metadata);
+    const items = receipt.order.items.map((item) => ({
+      id: item.id,
+      productName: item.product?.name || "POS item",
+      quantity: item.quantity,
+      unitPrice: toNumber(item.sellingPrice),
+      total: toNumber(item.sellingPrice) * item.quantity,
+      sku: item.product?.sku || null,
+      category: item.product?.category || null,
+    }));
+
+    return {
+      routeId: args.routeId,
+      orderRef: receipt.order.orderNumber || receipt.receiptNumber || receipt.id,
+      status: "DELIVERED",
+      total: toNumber(receipt.order.totalAmount),
+      subtotal: toNumber(receipt.order.totalAmount),
+      createdAt: (receipt.generatedAt || receipt.createdAt).toISOString(),
+      deliveryMethod: buildReceiptDeliveryMethod(metadata),
+      customerLocation: buildReceiptLocation(metadata),
+      customerName: receipt.order.customerName || "Betech customer",
+      customerPhone: receipt.order.customerPhone || "",
+      customerEmail: receipt.order.customerEmail || null,
+      paymentMethod:
+        typeof metadata.paymentMethod === "string" && metadata.paymentMethod.trim()
+          ? metadata.paymentMethod.trim()
+          : "CASH",
+      notes: typeof metadata.notes === "string" && metadata.notes.trim() ? metadata.notes.trim() : null,
+      receiptId: receipt.id,
+      receiptNumber: receipt.receiptNumber,
+      itemsCount: items.reduce((sum, item) => sum + item.quantity, 0),
+      source: "POS",
+      items,
+    };
+  }
+
+  if (!args.routeId.startsWith("website-")) return null;
+
+  const websiteOrderId = args.routeId.slice("website-".length);
+  if (!websiteOrderId) return null;
+
+  const websiteOrder = await prisma.websiteOrder.findFirst({
+    where: {
+      id: websiteOrderId,
+      OR: [
+        { customerUserId: args.userId },
+        ...(args.phoneVariants.length ? [{ customerPhone: { in: args.phoneVariants } }] : []),
+        ...(args.normalizedEmails.length ? [{ customerEmail: { in: args.normalizedEmails } }] : []),
+      ],
+    },
+    select: {
+      id: true,
+      orderRef: true,
+      status: true,
+      subtotal: true,
+      total: true,
+      createdAt: true,
+      deliveryMethod: true,
+      customerLocation: true,
+      customerName: true,
+      customerPhone: true,
+      customerEmail: true,
+      paymentMethod: true,
+      notes: true,
+      source: true,
+      receiptId: true,
+      receipt: {
+        select: {
+          id: true,
+          receiptNumber: true,
+        },
+      },
+      items: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          productName: true,
+          quantity: true,
+          unitPrice: true,
+          total: true,
+          sku: true,
+          category: true,
+        },
+      },
+    },
+  });
+
+  if (!websiteOrder) return null;
+
+  return {
+    routeId: args.routeId,
+    orderRef: websiteOrder.orderRef,
+    status: websiteOrder.status,
+    total: toNumber(websiteOrder.total),
+    subtotal: toNumber(websiteOrder.subtotal),
+    createdAt: websiteOrder.createdAt.toISOString(),
+    deliveryMethod: websiteOrder.deliveryMethod,
+    customerLocation: websiteOrder.customerLocation,
+    customerName: websiteOrder.customerName,
+    customerPhone: websiteOrder.customerPhone,
+    customerEmail: websiteOrder.customerEmail,
+    paymentMethod: websiteOrder.paymentMethod,
+    notes: websiteOrder.notes,
+    receiptId: websiteOrder.receiptId,
+    receiptNumber: websiteOrder.receipt?.receiptNumber || null,
+    itemsCount: websiteOrder.items.reduce((sum, item) => sum + item.quantity, 0),
+    source: websiteOrder.source === "POS" ? "POS" : "WEBSITE",
+    items: websiteOrder.items.map((item) => ({
+      id: item.id,
+      productName: item.productName,
+      quantity: item.quantity,
+      unitPrice: toNumber(item.unitPrice),
+      total: toNumber(item.total),
+      sku: item.sku,
+      category: item.category,
+    })),
+  };
+}

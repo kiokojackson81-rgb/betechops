@@ -198,6 +198,7 @@ export default async function ShopAccountPage() {
             }}
             recentOrders={recentOrderRows.map((order) => ({
               id: order.id,
+              routeId: order.id.startsWith("receipt-") ? order.id : `website-${order.id}`,
               orderRef: order.orderRef,
               status: order.status,
               total: order.total,
@@ -205,6 +206,7 @@ export default async function ShopAccountPage() {
               deliveryMethod: order.deliveryMethod,
               customerLocation: order.customerLocation,
               itemsCount: order.itemsCount,
+              receiptId: order.receiptId,
             }))}
           />
           <div className="mt-4">

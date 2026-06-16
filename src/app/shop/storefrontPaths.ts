@@ -1,6 +1,7 @@
 export const SHOP_HOME_HREF = "/";
 export const SHOP_ALL_PRODUCTS_HREF = "/all-products";
 export const SHOP_ACCOUNT_HREF = "/login/phone?callbackUrl=/account";
+export const SHOP_ACCOUNT_ORDERS_HREF = "/account/orders";
 export const SHOP_CART_HREF = "/cart";
 export const SHOP_CHECKOUT_HREF = "/checkout";
 export const SHOP_REQUEST_QUOTE_HREF = "/request-quote";
