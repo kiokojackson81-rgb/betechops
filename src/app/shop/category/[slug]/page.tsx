@@ -96,8 +96,10 @@ function filterByPrice(price: number, bucket?: string) {
 }
 
 function normalizePriceRange(minPrice?: string, maxPrice?: string) {
-  const parsedMin = Number(minPrice);
-  const parsedMax = Number(maxPrice);
+  const normalizedMin = minPrice?.trim();
+  const normalizedMax = maxPrice?.trim();
+  const parsedMin = normalizedMin ? Number(normalizedMin) : Number.NaN;
+  const parsedMax = normalizedMax ? Number(normalizedMax) : Number.NaN;
   const hasMin = Number.isFinite(parsedMin) && parsedMin >= 0;
   const hasMax = Number.isFinite(parsedMax) && parsedMax >= 0;
 
