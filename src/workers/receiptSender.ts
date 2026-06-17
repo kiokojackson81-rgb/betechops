@@ -2,7 +2,6 @@ import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { waitForReceiptById } from '@/lib/receiptReadAfterWrite';
 import { Prisma } from '@prisma/client';
-import Twilio from 'twilio';
 import { getActorId } from '@/lib/api';
 import { uploadBufferToS3 } from '@/lib/storage';
 import renderReceiptTemplate from '@/app/templates/receiptTemplate';
@@ -12,6 +11,7 @@ import { launchChromiumBrowser } from '@/lib/pdf/chromium';
 import { uploadReceiptPdfToBlob } from '@/lib/blob/uploadReceiptPdf';
 import { getBranding } from '@/lib/branding';
 import { describeEmailError, sendReceiptEmail } from '@/lib/email';
+import { sendTransactionalSms } from '@/lib/africasTalking';
 
 
 function getSiteUrl() {
@@ -83,6 +83,16 @@ function toFiniteNumber(value: unknown) {
   if (value === null || value === undefined) return 0;
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function resolveReceiptItemUnitPrice(item: any) {
+  return toFiniteNumber(item?.unitPrice ?? item?.sellingPrice ?? item?.price ?? 0);
+}
+
+function resolveReceiptItemLineTotal(item: any) {
+  const explicitTotal = toFiniteNumber(item?.totalPrice ?? item?.lineTotal ?? item?.total ?? 0);
+  if (explicitTotal > 0) return explicitTotal;
+  return resolveReceiptItemUnitPrice(item) * toFiniteNumber(item?.quantity ?? 0);
 }
 
 function computeReceiptProfit(order: any, snapshot: Record<string, unknown>) {
@@ -1048,20 +1058,24 @@ export async function sendReceiptChannels(
     if (wantEmail && toEmail) {
       try {
         const attachmentBuffer = pdfCustomerBuffer ?? Buffer.from('');
-        const orderItems = Array.isArray((receipt.order as any)?.items) ? ((receipt.order as any).items as any[]) : [];
-        const orderAmountText = formatCurrencyKes(Number(receipt.totalAmount ?? (receipt.order as any)?.totalAmount ?? 0));
-        const paymentMethod = (receipt.order as any)?.paymentMethod || (receipt.data as any)?.paymentMethod || null;
+        const orderAny = receipt.order as any;
+        const orderItems = Array.isArray(orderAny?.items) ? (orderAny.items as any[]) : [];
+        const receiptTotal = toFiniteNumber(receipt.totalAmount ?? orderAny?.totalAmount ?? 0);
+        const rawSubtotal = toFiniteNumber(orderAny?.subtotalAmount ?? receipt.totalAmount ?? orderAny?.totalAmount ?? 0);
+        const resolvedSubtotal = rawSubtotal > 0 ? rawSubtotal : receiptTotal;
+        const orderAmountText = formatCurrencyKes(receiptTotal);
+        const paymentMethod = orderAny?.paymentMethod || (receipt.data as any)?.paymentMethod || null;
         await sendReceiptEmail({
           to: toEmail,
           receiptNumber: receipt.order?.orderNumber ?? receipt.id,
           receiptLink: pdfUrlCustomer || `${getSiteUrl().replace(/\/$/, '')}/receipts/${receipt.id}`,
-          customerName: (receipt.order as any)?.customerName || (receipt.data as any)?.customerName || null,
-          customerPhone: (receipt.order as any)?.customerPhone || (receipt.data as any)?.customerPhone || null,
+          customerName: orderAny?.customerName || (receipt.data as any)?.customerName || null,
+          customerPhone: orderAny?.customerPhone || (receipt.data as any)?.customerPhone || null,
           customerEmail: toEmail,
           paymentMethod,
           issuedAt: formatReceiptIssuedAt(receipt.createdAt || (receipt.order as any)?.createdAt || null),
-          subtotalText: formatCurrencyKes(Number((receipt.order as any)?.subtotalAmount ?? receipt.totalAmount ?? 0)),
-          totalText: formatCurrencyKes(Number(receipt.totalAmount ?? (receipt.order as any)?.totalAmount ?? 0)),
+          subtotalText: formatCurrencyKes(resolvedSubtotal),
+          totalText: formatCurrencyKes(receiptTotal),
           accountUrl: 'https://www.betech.co.ke/account',
           isPodReceipt,
           orderAmountText: isPodReceipt ? orderAmountText : null,
@@ -1069,8 +1083,8 @@ export async function sendReceiptChannels(
           items: orderItems.map((item) => ({
             productName: String(item?.product?.name || item?.productSnapshotName || item?.name || 'Receipt item'),
             quantity: Number(item?.quantity || 0),
-            unitPriceText: formatCurrencyKes(Number(item?.unitPrice || item?.price || 0)),
-            lineTotalText: formatCurrencyKes(Number(item?.totalPrice || (Number(item?.unitPrice || item?.price || 0) * Number(item?.quantity || 0)))),
+            unitPriceText: formatCurrencyKes(resolveReceiptItemUnitPrice(item)),
+            lineTotalText: formatCurrencyKes(resolveReceiptItemLineTotal(item)),
           })),
           attachments: attachmentBuffer.length
             ? [
@@ -1105,12 +1119,13 @@ export async function sendReceiptChannels(
   }
 
   // WhatsApp (customer) must be delivered via Chatrace only. Do not call
-  // internal WhatsApp providers for customer notifications. SMS may still be
-  // sent via Twilio if configured.
+  // internal WhatsApp providers for customer notifications. SMS is sent via
+  // Africa's Talking so the same BETECHSOLAR sender can be reused consistently.
   try {
     const orderAny = receipt.order as any;
     const dataAny = (receipt.data as any) || {};
-    const toPhone = (orderAny?.customerPhone || dataAny?.customerPhone || '').trim();
+    const rawSmsPhone = (orderAny?.customerPhone || dataAny?.customerPhone || '').trim();
+    const toPhone = normalizePhone(rawSmsPhone);
     if (!wantWhatsapp) channelStatus.whatsapp = 'skipped';
     if (!wantSms) channelStatus.sms = 'skipped';
 
@@ -1150,11 +1165,10 @@ export async function sendReceiptChannels(
       }
     }
 
-    // SMS: keep existing Twilio SMS behavior (if requested)
+    // SMS: use the shared Africa's Talking transactional sender (same path as OTP SMS)
     if (wantSms) {
       const link = receiptPage;
-      if (toPhone && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_SMS) {
-        const client = Twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+      if (toPhone) {
         const customerName = (orderAny?.customerName || dataAny?.customerName || 'Customer').trim();
         const receiptNumber = receipt.order?.orderNumber ?? receipt.id;
         const amountText = formatCurrencyKes(Number(receipt.totalAmount ?? orderAny?.totalAmount ?? 0));
@@ -1175,16 +1189,14 @@ export async function sendReceiptChannels(
               `Login with your phone number at https://www.betech.co.ke/account to view your order details and download your receipt.`,
               `Receipt link: ${link}`,
             ].join(' ');
-        const smsPayload: any = { from: process.env.TWILIO_FROM_SMS, to: toPhone, body: smsBody };
-        if (pdfUrlCustomer) smsPayload.mediaUrl = [pdfUrlCustomer];
-        await client.messages.create(smsPayload);
+        await sendTransactionalSms(toPhone, smsBody);
         sent.push('sms');
         channelStatus.sms = 'sent';
         logStep(requestId, 'SMS', 'ok', { to: toPhone });
       } else {
         channelStatus.sms = 'failed';
-        errors.push({ channel: 'sms', error: 'SMS provider not configured or missing phone' });
-        logStep(requestId, 'SMS', 'failed', { reason: 'missing_provider_or_phone' });
+        errors.push({ channel: 'sms', error: 'Missing phone number for SMS receipt send' });
+        logStep(requestId, 'SMS', 'failed', { reason: 'missing_phone' });
       }
     }
   } catch (e) {

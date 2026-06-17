@@ -1,5 +1,6 @@
-import { Prisma, WebsiteOrderStatus, WebsiteOrderType, type User } from "@prisma/client";
+import { Prisma, WebsiteOrderStatus, WebsiteOrderType } from "@prisma/client";
 import { randomUUID } from "crypto";
+import { findSafeCustomerProfileByUserId, getUserProfileColumnMap } from "@/lib/customerProfile";
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { ensureWebsiteOrdersSchema } from "@/lib/websiteOrders";
@@ -24,10 +25,61 @@ function pickFirstNonEmpty(...values: Array<string | null | undefined>) {
   return "";
 }
 
+type SafeCustomerUser = {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  county?: string | null;
+  town?: string | null;
+  estateLandmark?: string | null;
+  locationNotes?: string | null;
+};
+
+function getSafeUserSelectSql(columns: Awaited<ReturnType<typeof getUserProfileColumnMap>>) {
+  const selectedColumns = [
+    "id",
+    "name",
+    "email",
+    "phone",
+    ...(columns.county ? ["county"] : []),
+    ...(columns.town ? ["town"] : []),
+    ...(columns.estateLandmark ? ["estateLandmark"] : []),
+    ...(columns.locationNotes ? ["locationNotes"] : []),
+  ];
+
+  return selectedColumns.map((column) => `"${column}"`).join(", ");
+}
+
+async function findSafeUserByField(field: "phone" | "email", value: string): Promise<SafeCustomerUser | null> {
+  const columns = await getUserProfileColumnMap();
+  const selectSql = getSafeUserSelectSql(columns);
+  const rows = await prisma.$queryRawUnsafe<Array<SafeCustomerUser>>(
+    `SELECT ${selectSql} FROM "User" WHERE "${field}" = $1 LIMIT 1`,
+    value,
+  );
+  return rows[0] ?? null;
+}
+
+async function findSafeUserById(userId: string): Promise<SafeCustomerUser | null> {
+  const profile = await findSafeCustomerProfileByUserId(userId);
+  if (!profile?.id) return null;
+  return {
+    id: profile.id,
+    name: profile.name ?? null,
+    email: profile.email ?? null,
+    phone: profile.phone ?? null,
+    county: profile.county ?? null,
+    town: profile.town ?? null,
+    estateLandmark: profile.estateLandmark ?? null,
+    locationNotes: profile.locationNotes ?? null,
+  };
+}
+
 function buildCustomerLocation(
   metadata: Record<string, unknown>,
   data: Record<string, unknown>,
-  user: Pick<User, "county" | "town" | "estateLandmark" | "locationNotes"> | null,
+  user: Pick<SafeCustomerUser, "county" | "town" | "estateLandmark" | "locationNotes"> | null,
 ) {
   const deliveryAddress = pickFirstNonEmpty(
     typeof metadata.deliveryAddress === "string" ? metadata.deliveryAddress : "",
@@ -62,36 +114,8 @@ function readPodDeliveryState(data: Record<string, unknown>) {
 
 async function resolveExistingCustomerUsers(args: { normalizedPhone: string; normalizedEmail: string }) {
   const [phoneUser, emailUser] = await Promise.all([
-    args.normalizedPhone
-      ? prisma.user.findUnique({
-          where: { phone: args.normalizedPhone },
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-            county: true,
-            town: true,
-            estateLandmark: true,
-            locationNotes: true,
-          },
-        })
-      : Promise.resolve(null),
-    args.normalizedEmail
-      ? prisma.user.findUnique({
-          where: { email: args.normalizedEmail },
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-            county: true,
-            town: true,
-            estateLandmark: true,
-            locationNotes: true,
-          },
-        })
-      : Promise.resolve(null),
+    args.normalizedPhone ? findSafeUserByField("phone", args.normalizedPhone) : Promise.resolve(null),
+    args.normalizedEmail ? findSafeUserByField("email", args.normalizedEmail) : Promise.resolve(null),
   ]);
 
   return { phoneUser, emailUser };
@@ -102,7 +126,7 @@ async function findOrCreateCustomerUser(input: {
   normalizedPhone: string;
   normalizedEmail: string;
 }): Promise<{
-  user: Pick<User, "id" | "name" | "email" | "phone" | "county" | "town" | "estateLandmark" | "locationNotes">;
+  user: SafeCustomerUser;
   matchedBy: "phone" | "email" | "created";
   emailConflict: boolean;
 }> {
@@ -137,20 +161,14 @@ async function findOrCreateCustomerUser(input: {
     }
 
     if (Object.keys(updateData).length) {
-      const user = await prisma.user.update({
+      await prisma.user.update({
         where: { id: existing.id },
         data: updateData,
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          phone: true,
-          county: true,
-          town: true,
-          estateLandmark: true,
-          locationNotes: true,
-        },
       });
+      const user = await findSafeUserById(existing.id);
+      if (!user) {
+        throw new Error(`Failed to reload synced customer account ${existing.id}`);
+      }
       return {
         user,
         matchedBy: hasPhoneIdentity ? "phone" : emailUser?.id === existing.id ? "email" : "phone",
@@ -166,23 +184,17 @@ async function findOrCreateCustomerUser(input: {
   }
 
   if (hasPhoneIdentity) {
-    const user = await prisma.user.create({
+    const createdUser = await prisma.user.create({
       data: {
         name: input.customerName || null,
         phone: input.normalizedPhone || null,
         email: input.normalizedEmail && !emailUser ? input.normalizedEmail : null,
       },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        county: true,
-        town: true,
-        estateLandmark: true,
-        locationNotes: true,
-      },
     });
+    const user = await findSafeUserById(createdUser.id);
+    if (!user) {
+      throw new Error(`Failed to load created customer account ${createdUser.id}`);
+    }
     return {
       user,
       matchedBy: "created",
@@ -190,23 +202,17 @@ async function findOrCreateCustomerUser(input: {
     };
   }
 
-  const user = await prisma.user.create({
+  const createdUser = await prisma.user.create({
     data: {
       name: input.customerName || null,
       phone: input.normalizedPhone || null,
       email: input.normalizedEmail || null,
     },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      phone: true,
-      county: true,
-      town: true,
-      estateLandmark: true,
-      locationNotes: true,
-    },
   });
+  const user = await findSafeUserById(createdUser.id);
+  if (!user) {
+    throw new Error(`Failed to load created customer account ${createdUser.id}`);
+  }
   return {
     user,
     matchedBy: "created",

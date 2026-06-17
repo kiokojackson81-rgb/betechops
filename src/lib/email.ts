@@ -185,18 +185,28 @@ function renderReceiptItemsTable(
 
   const rowsHtml = items
     .map(
-      (item) => `
+      (item, index) => `
         <tr>
-          <td style="padding:10px 12px;border-top:1px solid #f1e4d3;vertical-align:top;font-size:14px;line-height:1.5;color:#1f2937">
-            ${escapeHtml(item.productName)}
+          <td colspan="3" style="padding:12px 14px;${
+            index === 0 ? "" : "border-top:1px solid #f1e4d3;"
+          }vertical-align:top;white-space:normal;word-break:break-word;font-size:14px;line-height:1.65;color:#1f2937">
+            <div style="font-size:11px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:#7a0000;margin-bottom:6px">Item name</div>
+            <div style="font-size:16px;font-weight:700;color:#111827">${escapeHtml(item.productName)}</div>
           </td>
-          <td style="padding:10px 12px;border-top:1px solid #f1e4d3;vertical-align:top;text-align:center;font-size:14px;color:#1f2937">
+        </tr>
+        <tr style="background:#fffaf0">
+          <th align="left" style="padding:10px 14px;border-top:1px solid #f7ead8;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#7a0000">Quantity</th>
+          <th align="right" style="padding:10px 14px;border-top:1px solid #f7ead8;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#7a0000">Unit price</th>
+          <th align="right" style="padding:10px 14px;border-top:1px solid #f7ead8;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#7a0000">Total</th>
+        </tr>
+        <tr>
+          <td style="padding:10px 14px;border-top:1px solid #f7ead8;vertical-align:top;font-size:14px;color:#1f2937">
             ${escapeHtml(String(item.quantity))}
           </td>
-          <td style="padding:10px 12px;border-top:1px solid #f1e4d3;vertical-align:top;text-align:right;font-size:14px;color:#1f2937">
+          <td style="padding:10px 14px;border-top:1px solid #f7ead8;vertical-align:top;text-align:right;font-size:14px;color:#1f2937">
             ${escapeHtml(item.unitPriceText)}
           </td>
-          <td style="padding:10px 12px;border-top:1px solid #f1e4d3;vertical-align:top;text-align:right;font-size:14px;font-weight:800;color:#111827">
+          <td style="padding:10px 14px;border-top:1px solid #f7ead8;vertical-align:top;text-align:right;font-size:14px;font-weight:800;color:#111827">
             ${escapeHtml(item.lineTotalText)}
           </td>
         </tr>`,
@@ -207,14 +217,6 @@ function renderReceiptItemsTable(
     <div style="margin-top:20px">
       <div style="font-size:13px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:#7a0000;margin-bottom:10px">Items purchased</div>
       <table role="presentation" width="100%" cellPadding="0" cellSpacing="0" style="border:1px solid #f1e4d3;border-radius:14px;overflow:hidden;background:#fffdfa">
-        <thead>
-          <tr style="background:#fff4df">
-            <th align="left" style="padding:10px 12px;font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:#7a0000">Item</th>
-            <th align="center" style="padding:10px 12px;font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:#7a0000">Qty</th>
-            <th align="right" style="padding:10px 12px;font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:#7a0000">Unit price</th>
-            <th align="right" style="padding:10px 12px;font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:#7a0000">Line total</th>
-          </tr>
-        </thead>
         <tbody>${rowsHtml}</tbody>
       </table>
     </div>`;
@@ -223,7 +225,7 @@ function renderReceiptItemsTable(
     "Items purchased:",
     ...items.map(
       (item) =>
-        `- ${item.productName} | Qty ${item.quantity} | Unit ${item.unitPriceText} | Total ${item.lineTotalText}`,
+        `- Item name: ${item.productName}\n  Quantity: ${item.quantity}\n  Unit price: ${item.unitPriceText}\n  Total: ${item.lineTotalText}`,
     ),
   ].join("\n");
 
@@ -446,18 +448,26 @@ export async function sendReceiptEmail(input: ReceiptEmailInput) {
   ].filter((row): row is [string, string] => Boolean(row && row[1]));
 
   const detailsHtml = detailRows.length
-    ? `<div style="margin-top:20px;border:1px solid #f1e4d3;border-radius:14px;background:#fffdfa;padding:16px 18px">
-        ${detailRows
-          .map(([label, value], index) => {
-            const isLast = index === detailRows.length - 1;
-            return `<div style="display:flex;justify-content:space-between;gap:16px;padding:6px 0${
-              isLast ? "" : ";border-bottom:1px solid #f7ead8"
-            }">
-              <span style="font-size:13px;font-weight:700;color:#7a0000">${escapeHtml(label)}</span>
-              <span style="font-size:14px;color:#1f2937;text-align:right">${escapeHtml(value)}</span>
-            </div>`;
-          })
-          .join("")}
+    ? `<div style="margin-top:20px;border:1px solid #f1e4d3;border-radius:14px;background:#fffdfa;padding:10px 14px">
+        <table role="presentation" width="100%" cellPadding="0" cellSpacing="0" style="width:100%;border-collapse:collapse">
+          ${detailRows
+            .map(([label, value], index) => {
+              const isLast = index === detailRows.length - 1;
+              return `<tr>
+                <td style="padding:10px 6px 10px 0;vertical-align:top;font-size:13px;font-weight:700;color:#7a0000;${
+                  isLast ? "" : "border-bottom:1px solid #f7ead8;"
+                }">
+                  ${escapeHtml(label)}:
+                </td>
+                <td style="padding:10px 0 10px 6px;vertical-align:top;font-size:14px;color:#1f2937;text-align:right;${
+                  isLast ? "" : "border-bottom:1px solid #f7ead8;"
+                }">
+                  ${escapeHtml(value)}
+                </td>
+              </tr>`;
+            })
+            .join("")}
+        </table>
       </div>`
     : "";
   const detailsText = detailRows.length
