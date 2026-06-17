@@ -72,6 +72,10 @@ const SORT_OPTIONS = [
   { value: "price-high", label: "Price: High to Low" },
 ] as const;
 
+function normalizeSortValue(sort?: string) {
+  return sort && sort !== "featured" ? sort : "";
+}
+
 function buildCategoryDescription(category: ShopCategoryDefinition, subcategoryLabel?: string | null) {
   if (subcategoryLabel) {
     return `${subcategoryLabel} from Betech Solar Solutions. Browse products in ${category.label} and request a quote if you need help sizing the right system.`;
@@ -168,7 +172,7 @@ function getFilterHref(categorySlug: string, filters: ListingFilters, patch: Par
     maxPrice: filters.maxPrice || "",
     stock: filters.stock || "",
     warranty: filters.warranty || "",
-    sort: filters.sort || "",
+    sort: normalizeSortValue(filters.sort),
     ...patch,
   };
 
@@ -279,7 +283,7 @@ export default async function ShopCategoryPage({ params, searchParams }: Categor
     maxPrice: resolvedSearchParams?.maxPrice || "",
     stock: resolvedSearchParams?.stock || "",
     warranty: resolvedSearchParams?.warranty || "",
-    sort: resolvedSearchParams?.sort || "featured",
+    sort: normalizeSortValue(resolvedSearchParams?.sort),
   };
   const manualPriceRange = normalizePriceRange(filters.minPrice, filters.maxPrice);
 
@@ -413,7 +417,7 @@ export default async function ShopCategoryPage({ params, searchParams }: Categor
                   <input type="hidden" name="price" value={filters.price || ""} />
                   <input type="hidden" name="stock" value={filters.stock || ""} />
                   <input type="hidden" name="warranty" value={filters.warranty || ""} />
-                  <input type="hidden" name="sort" value={filters.sort || "featured"} />
+                  {filters.sort ? <input type="hidden" name="sort" value={filters.sort} /> : null}
                   <div className="grid grid-cols-2 gap-2">
                     <input
                       type="number"
@@ -495,7 +499,7 @@ export default async function ShopCategoryPage({ params, searchParams }: Categor
                       <input type="hidden" name="price" value={filters.price || ""} />
                       <input type="hidden" name="stock" value={filters.stock || ""} />
                       <input type="hidden" name="warranty" value={filters.warranty || ""} />
-                      <input type="hidden" name="sort" value={filters.sort || "featured"} />
+                      {filters.sort ? <input type="hidden" name="sort" value={filters.sort} /> : null}
                       <div className="grid grid-cols-2 gap-2">
                         <input
                           type="number"

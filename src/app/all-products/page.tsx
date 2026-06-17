@@ -72,6 +72,10 @@ const SORT_OPTIONS = [
   { value: "price-high", label: "Price: High to Low" },
 ] as const;
 
+function normalizeSortValue(sort?: string) {
+  return sort && sort !== "featured" ? sort : "";
+}
+
 function filterByPrice(price: number, bucket?: string) {
   switch (bucket) {
     case "under-10000":
@@ -157,7 +161,7 @@ function getFilterHref(filters: ListingFilters, patch: Partial<ListingFilters>) 
     maxPrice: filters.maxPrice || "",
     stock: filters.stock || "",
     warranty: filters.warranty || "",
-    sort: filters.sort || "",
+    sort: normalizeSortValue(filters.sort),
     ...patch,
   };
 
@@ -257,7 +261,7 @@ export default async function AllProductsPage({ searchParams }: AllProductsPageP
     maxPrice: resolvedSearchParams?.maxPrice || "",
     stock: resolvedSearchParams?.stock || "",
     warranty: resolvedSearchParams?.warranty || "",
-    sort: resolvedSearchParams?.sort || "featured",
+    sort: normalizeSortValue(resolvedSearchParams?.sort),
   };
   const manualPriceRange = normalizePriceRange(filters.minPrice, filters.maxPrice);
 
@@ -427,7 +431,7 @@ export default async function AllProductsPage({ searchParams }: AllProductsPageP
                   <input type="hidden" name="price" value={filters.price || ""} />
                   <input type="hidden" name="stock" value={filters.stock || ""} />
                   <input type="hidden" name="warranty" value={filters.warranty || ""} />
-                  <input type="hidden" name="sort" value={filters.sort || "featured"} />
+                  {filters.sort ? <input type="hidden" name="sort" value={filters.sort} /> : null}
                   <div className="grid grid-cols-2 gap-2">
                     <input
                       type="number"
@@ -524,7 +528,7 @@ export default async function AllProductsPage({ searchParams }: AllProductsPageP
                       <input type="hidden" name="price" value={filters.price || ""} />
                       <input type="hidden" name="stock" value={filters.stock || ""} />
                       <input type="hidden" name="warranty" value={filters.warranty || ""} />
-                      <input type="hidden" name="sort" value={filters.sort || "featured"} />
+                      {filters.sort ? <input type="hidden" name="sort" value={filters.sort} /> : null}
                       <div className="grid grid-cols-2 gap-2">
                         <input
                           type="number"
