@@ -10,14 +10,14 @@ export default function ShopAccountLogoutButton() {
     <button
       type="button"
       disabled={busy}
-      onClick={async () => {
-        try {
-          setBusy(true);
-          await signOut({ callbackUrl: "/login/phone?callbackUrl=/account" });
-        } finally {
-          setBusy(false);
-        }
-      }}
+        onClick={async () => {
+          try {
+            setBusy(true);
+            await signOut({ callbackUrl: "/" });
+          } finally {
+            setBusy(false);
+          }
+        }}
       className="inline-flex items-center justify-center rounded-2xl border border-[#7a0000]/15 bg-white px-4 py-2.5 text-sm font-semibold text-[#7a0000] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
     >
       {busy ? "Signing out..." : "Log out"}
