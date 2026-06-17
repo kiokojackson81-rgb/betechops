@@ -265,6 +265,11 @@ export type SerializedWebsiteOrder = {
     name: string;
     email: string | null;
   } | null;
+  assignedAttendant: {
+    id: string;
+    name: string;
+    email: string | null;
+  } | null;
   cancelledAt: string | null;
   processingAt: string | null;
   receiptIssuedAt: string | null;
@@ -291,6 +296,39 @@ export type SerializedWebsiteOrder = {
     updatedAt: string;
   }>;
 };
+
+const WEBSITE_ORDER_STAFF_EMAILS = ["jeniffer@betech.co.ke", "brendah@betech.co.ke"] as const;
+
+function normalizeEmail(value: unknown) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+export function isWebsiteOrdersStaffEmail(email: unknown) {
+  return WEBSITE_ORDER_STAFF_EMAILS.includes(normalizeEmail(email) as (typeof WEBSITE_ORDER_STAFF_EMAILS)[number]);
+}
+
+function readWebsiteOrderAssignment(metadata: unknown) {
+  const base = metadata && typeof metadata === "object" ? (metadata as Record<string, unknown>) : {};
+  const assignedAttendantId =
+    typeof base.assignedAttendantId === "string" && base.assignedAttendantId.trim()
+      ? base.assignedAttendantId.trim()
+      : null;
+  const assignedAttendantEmail =
+    typeof base.assignedAttendantEmail === "string" && base.assignedAttendantEmail.trim()
+      ? base.assignedAttendantEmail.trim().toLowerCase()
+      : null;
+  const assignedAttendantName =
+    typeof base.assignedAttendantName === "string" && base.assignedAttendantName.trim()
+      ? base.assignedAttendantName.trim()
+      : null;
+
+  if (!assignedAttendantId) return null;
+  return {
+    id: assignedAttendantId,
+    email: assignedAttendantEmail,
+    name: assignedAttendantName,
+  };
+}
 
 function readWebsiteOrderMetadata(metadata: unknown) {
   const base = metadata && typeof metadata === "object" ? (metadata as Record<string, unknown>) : {};
@@ -351,6 +389,16 @@ export function serializeWebsiteOrder(order: WebsiteOrderListRow) {
           email: order.confirmedBy.email ?? null,
         }
       : null,
+    assignedAttendant: (() => {
+      const assigned = readWebsiteOrderAssignment(metadata);
+      return assigned
+        ? {
+            id: assigned.id,
+            name: assigned.name ?? assigned.email ?? "Assigned staff",
+            email: assigned.email ?? null,
+          }
+        : null;
+    })(),
     cancelledAt: order.cancelledAt?.toISOString() ?? null,
     processingAt: lifecycle.processingAt,
     receiptIssuedAt: lifecycle.receiptIssuedAt,
@@ -516,6 +564,170 @@ export async function requireWebsiteOrdersAdmin() {
   }
 
   return { ok: true as const, session, userId, role };
+}
+
+export async function requireWebsiteOrdersStaffActor(options?: { impersonateId?: string | null }) {
+  const session = await auth();
+  const role = (session?.user as { role?: string } | undefined)?.role ?? null;
+  const userId = (session?.user as { id?: string } | undefined)?.id ?? null;
+  const email = normalizeEmail((session?.user as { email?: string } | undefined)?.email);
+
+  if (!session || !userId) {
+    return { ok: false as const, status: 401, error: "Unauthorized" };
+  }
+
+  const hasElevatedRole = role === "ADMIN" || role === "SUPERVISOR";
+  if (hasElevatedRole && options?.impersonateId) {
+    const targetUser = await prisma.user.findUnique({
+      where: { id: options.impersonateId },
+      select: { id: true, name: true, email: true },
+    });
+    if (!targetUser || !isWebsiteOrdersStaffEmail(targetUser.email)) {
+      return { ok: false as const, status: 403, error: "Invalid website-order attendant target." };
+    }
+    return {
+      ok: true as const,
+      session,
+      role,
+      actorUserId: userId,
+      userId: targetUser.id,
+      email: normalizeEmail(targetUser.email),
+      name: targetUser.name ?? targetUser.email ?? "Website order attendant",
+      isElevatedActor: true,
+    };
+  }
+
+  if (!hasElevatedRole && !isWebsiteOrdersStaffEmail(email)) {
+    return { ok: false as const, status: 403, error: "Forbidden" };
+  }
+
+  return {
+    ok: true as const,
+    session,
+    role,
+    actorUserId: userId,
+    userId,
+    email,
+    name:
+      (session.user as { name?: string } | undefined)?.name ??
+      (session.user as { email?: string } | undefined)?.email ??
+      "Website order attendant",
+    isElevatedActor: hasElevatedRole,
+  };
+}
+
+export async function ensureWebsiteOrderAssignments() {
+  await ensureWebsiteOrdersSchema();
+  const staffUsers = await prisma.user.findMany({
+    where: { email: { in: [...WEBSITE_ORDER_STAFF_EMAILS] } },
+    select: { id: true, name: true, email: true },
+  });
+
+  const orderedStaff = WEBSITE_ORDER_STAFF_EMAILS.map((email) =>
+    staffUsers.find((user) => normalizeEmail(user.email) === email),
+  ).filter(
+    (user): user is { id: string; name: string | null; email: string | null } => Boolean(user?.id),
+  );
+
+  if (!orderedStaff.length) return orderedStaff;
+
+  const staffIds = new Set(orderedStaff.map((user) => user.id));
+  const orders = await prisma.websiteOrder.findMany({
+    select: {
+      id: true,
+      metadata: true,
+      createdAt: true,
+      confirmedById: true,
+    },
+    orderBy: [{ createdAt: "asc" }],
+  });
+
+  const assignmentCounts = new Map<string, number>(orderedStaff.map((user) => [user.id, 0]));
+  const queuedAssignments: Array<{
+    id: string;
+    metadata: Record<string, unknown>;
+    assignee: { id: string; name: string | null; email: string | null };
+  }> = [];
+
+  let roundRobinIndex = 0;
+
+  for (const order of orders) {
+    const currentAssignment = readWebsiteOrderAssignment(order.metadata);
+    if (currentAssignment?.id && staffIds.has(currentAssignment.id)) {
+      assignmentCounts.set(
+        currentAssignment.id,
+        Number(assignmentCounts.get(currentAssignment.id) ?? 0) + 1,
+      );
+      continue;
+    }
+
+    const metadata =
+      order.metadata && typeof order.metadata === "object"
+        ? { ...(order.metadata as Record<string, unknown>) }
+        : {};
+    const confirmedStaff = order.confirmedById && staffIds.has(order.confirmedById)
+      ? orderedStaff.find((user) => user.id === order.confirmedById) ?? null
+      : null;
+    const assignee =
+      confirmedStaff ??
+      [...orderedStaff]
+        .sort((left, right) => {
+          const countDiff =
+            Number(assignmentCounts.get(left.id) ?? 0) - Number(assignmentCounts.get(right.id) ?? 0);
+          if (countDiff !== 0) return countDiff;
+          const leftIndex = orderedStaff.findIndex((user) => user.id === left.id);
+          const rightIndex = orderedStaff.findIndex((user) => user.id === right.id);
+          const leftScore = (leftIndex - roundRobinIndex + orderedStaff.length) % orderedStaff.length;
+          const rightScore = (rightIndex - roundRobinIndex + orderedStaff.length) % orderedStaff.length;
+          return leftScore - rightScore;
+        })[0];
+
+    if (!assignee) continue;
+    roundRobinIndex = (orderedStaff.findIndex((user) => user.id === assignee.id) + 1) % orderedStaff.length;
+    assignmentCounts.set(assignee.id, Number(assignmentCounts.get(assignee.id) ?? 0) + 1);
+    queuedAssignments.push({ id: order.id, metadata, assignee });
+  }
+
+  for (const assignment of queuedAssignments) {
+    await prisma.websiteOrder.update({
+      where: { id: assignment.id },
+      data: {
+        metadata: {
+          ...assignment.metadata,
+          assignedAttendantId: assignment.assignee.id,
+          assignedAttendantEmail: normalizeEmail(assignment.assignee.email),
+          assignedAttendantName:
+            assignment.assignee.name ?? assignment.assignee.email ?? "Website order attendant",
+          assignedAt:
+            typeof assignment.metadata.assignedAt === "string" && assignment.metadata.assignedAt
+              ? assignment.metadata.assignedAt
+              : new Date().toISOString(),
+        } as Prisma.InputJsonValue,
+      },
+    });
+  }
+
+  return orderedStaff;
+}
+
+export function isWebsiteOrderAssignedToUser(metadata: unknown, userId: string) {
+  const assigned = readWebsiteOrderAssignment(metadata);
+  return assigned?.id === userId;
+}
+
+export function withWebsiteOrderAssignmentMetadata(
+  metadata: unknown,
+  assignment: { id: string; email?: string | null; name?: string | null },
+) {
+  const base = metadata && typeof metadata === "object" ? { ...(metadata as Record<string, unknown>) } : {};
+  return {
+    ...base,
+    assignedAttendantId: assignment.id,
+    assignedAttendantEmail: normalizeEmail(assignment.email),
+    assignedAttendantName: assignment.name ?? assignment.email ?? "Website order attendant",
+    assignedAt:
+      typeof base.assignedAt === "string" && base.assignedAt ? base.assignedAt : new Date().toISOString(),
+  } as Prisma.InputJsonValue;
 }
 
 export async function ensureWebsiteOrdersSchema() {

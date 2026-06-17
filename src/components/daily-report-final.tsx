@@ -12,6 +12,7 @@ import { showToast } from "@/lib/ui/toast";
 import { useCardLock, LockButton } from "@/app/_components/useCardLock";
 import SensitiveValue from "./SensitiveValue";
 import DailyReportReceiptsPanel from "./daily-report-receipts";
+import WebsiteOrdersDeskClient from "@/components/WebsiteOrdersDeskClient";
 import PeriodSwitcher from "@/app/_components/PeriodSwitcher";
 import useTradingPeriodQueryState from "@/app/_components/useTradingPeriodQueryState";
 import { withImpersonateId } from "@/lib/impersonation";
@@ -101,7 +102,9 @@ const inputClasses =
 const textareaClasses =
   "w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500";
 export default function DailyReportFinal() {
-  const [currentView, setCurrentView] = useState<"dashboard" | "receipts" | "product-desk">("dashboard");
+  const [currentView, setCurrentView] = useState<
+    "dashboard" | "receipts" | "web-orders" | "product-desk"
+  >("dashboard");
 
   // receipts-history controls (used when #my-receipts)
   const todayIso = toKenyaIsoDate(new Date());
@@ -168,6 +171,10 @@ export default function DailyReportFinal() {
         setCurrentView("receipts");
         return;
       }
+      if (window.location.hash === "#web-orders") {
+        setCurrentView("web-orders");
+        return;
+      }
       if (window.location.hash === "#product-desk") {
         setCurrentView("product-desk");
         return;
@@ -180,8 +187,14 @@ export default function DailyReportFinal() {
   }, []);
 
   useEffect(() => {
-    if (currentView !== "receipts" && currentView !== "product-desk") return;
-    const el = document.getElementById(currentView === "receipts" ? "my-receipts" : "product-desk");
+    if (!["receipts", "web-orders", "product-desk"].includes(currentView)) return;
+    const targetId =
+      currentView === "receipts"
+        ? "my-receipts"
+        : currentView === "web-orders"
+          ? "web-orders"
+          : "product-desk";
+    const el = document.getElementById(targetId);
     el?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [currentView]);
 
@@ -1013,6 +1026,43 @@ export default function DailyReportFinal() {
     );
   }
 
+  if (currentView === "web-orders") {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100">
+        <main className="mx-auto max-w-7xl space-y-6 p-6">
+          <header className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-semibold">Web orders</h1>
+              <p className="text-sm text-slate-300">
+                Process website orders assigned to your customer-service desk with the same lifecycle used by admin.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={backToDashboard}
+              className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
+            >
+              Back to dashboard
+            </button>
+          </header>
+
+          <div id="web-orders">
+            <WebsiteOrdersDeskClient
+              apiBasePath="/api/attendant/website-orders"
+              apiQueryParams={impersonateId ? { impersonateId } : undefined}
+              defaultStatusFilter="PENDING"
+              orderListLabel="Website orders"
+              orderListTitle="Assigned web orders"
+              orderListDescription="Handle assigned website orders, update lifecycle status, and issue receipts when needed."
+              emptyMessage="No assigned website orders found right now."
+              filterStorageKey="attendant:web-orders:status"
+            />
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 px-5 py-6 text-slate-50 lg:px-8">
       <div className="mx-auto flex w-full max-w-[1460px] flex-col gap-6">
@@ -1036,12 +1086,19 @@ export default function DailyReportFinal() {
               {/* Header actions extracted to shared component */}
               <HeaderActions
                 receiptsHref="#my-receipts"
+                webOrdersHref="#web-orders"
                 productDeskHref={isBrendahView ? "#product-desk" : undefined}
                 createHref={`/receipts?view=create`}
                 wellnessHref={withImpersonateId("/attendant/wellness", impersonateId)}
                 onSignOut={() => signOut({ callbackUrl: "/attendant/login" })}
                 onReceiptsClick={() => setCurrentView("receipts")}
+                onWebOrdersClick={() => setCurrentView("web-orders")}
                 onProductDeskClick={isBrendahView ? () => setCurrentView("product-desk") : undefined}
+                showWebOrders={Boolean(
+                  effectiveAttendantEmail === "brendah@betech.co.ke" ||
+                    effectiveAttendantEmail === "jeniffer@betech.co.ke" ||
+                    impersonateId,
+                )}
                 showProductDesk={isBrendahView}
                 showDot={true}
               />

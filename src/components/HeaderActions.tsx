@@ -1,30 +1,34 @@
 "use client";
 
-"use client";
-
 import Link from "next/link";
 import React from "react";
 
 type Props = {
   receiptsHref?: string;
+  webOrdersHref?: string;
   productDeskHref?: string;
   createHref?: string;
   wellnessHref?: string;
   onSignOut?: () => void;
   onReceiptsClick?: () => void;
+  onWebOrdersClick?: () => void;
   onProductDeskClick?: () => void;
+  showWebOrders?: boolean;
   showProductDesk?: boolean;
   showDot?: boolean;
 };
 
 export default function HeaderActions({
   receiptsHref = "/marketing/receipts",
+  webOrdersHref,
   productDeskHref,
   createHref = "/receipts",
   wellnessHref = "/attendant/wellness",
   onSignOut,
   onReceiptsClick,
+  onWebOrdersClick,
   onProductDeskClick,
+  showWebOrders = false,
   showProductDesk = false,
   showDot = false,
 }: Props) {
@@ -45,6 +49,16 @@ export default function HeaderActions({
           )}
           Receipts
         </Link>
+        {showWebOrders && webOrdersHref ? (
+          <Link
+            href={webOrdersHref}
+            aria-label="Web orders"
+            onClick={onWebOrdersClick}
+            className="rounded-full border border-white/10 bg-white/3 px-5 py-2 text-sm font-semibold uppercase tracking-wide text-slate-100 transition-colors duration-150 hover:border-white/30 hover:bg-white/5"
+          >
+            Web orders
+          </Link>
+        ) : null}
         {showProductDesk && productDeskHref ? (
           <Link
             href={productDeskHref}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import Card from "@/app/_components/Card";
 import DailyReportReceiptsPanel from "@/components/daily-report-receipts";
+import WebsiteOrdersDeskClient from "@/components/WebsiteOrdersDeskClient";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 
 type ReceiptRangeKey = "today" | "yesterday" | "this-week" | "period" | "custom";
@@ -66,6 +67,7 @@ export default function MarketingReceiptsPage() {
     totalSales: 0,
     receiptsCount: 0,
   });
+  const [viewMode, setViewMode] = useState<"receipts" | "web-orders">("receipts");
 
   const rangeLabel = (() => {
     if (rangeKey === "today") return "Today";
@@ -144,98 +146,144 @@ export default function MarketingReceiptsPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts list</p>
-              <h2 className="text-lg font-semibold text-slate-100">My POS receipts</h2>
+              <h2 className="text-lg font-semibold text-slate-100">
+                {viewMode === "receipts" ? "My POS receipts" : "My web orders"}
+              </h2>
               <p className="text-sm text-slate-400">
-                Filter your own receipts by date, search term, or POD status. Pending PODs can be marked delivered with proof here.
+                {viewMode === "receipts"
+                  ? "Filter your own receipts by date, search term, or POD status. Pending PODs can be marked delivered with proof here."
+                  : "Process your assigned website orders here using the same lifecycle used in admin."}
               </p>
             </div>
             <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
-              {ReceiptRangeOptions.map((option) => (
-                <button
-                  key={option.key}
-                  type="button"
-                  onClick={() => applyRange(option.key)}
-                  className={`rounded-full border px-4 py-1 transition ${
-                    rangeKey === option.key
-                      ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
-                      : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
+              <button
+                type="button"
+                onClick={() => setViewMode("receipts")}
+                className={`rounded-full border px-4 py-1 transition ${
+                  viewMode === "receipts"
+                    ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
+                    : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"
+                }`}
+              >
+                POS receipts
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("web-orders")}
+                className={`rounded-full border px-4 py-1 transition ${
+                  viewMode === "web-orders"
+                    ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
+                    : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"
+                }`}
+              >
+                Web orders
+              </button>
+              {viewMode === "receipts"
+                ? ReceiptRangeOptions.map((option) => (
+                    <button
+                      key={option.key}
+                      type="button"
+                      onClick={() => applyRange(option.key)}
+                      className={`rounded-full border px-4 py-1 transition ${
+                        rangeKey === option.key
+                          ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
+                          : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))
+                : null}
             </div>
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-4">
-            <label className="text-xs uppercase tracking-wide text-slate-400">
-              Search
-              <input
-                type="search"
-                placeholder="Customer, attendant, receipt..."
-                value={filters.query}
-                onChange={(event) =>
-                  setFilters((prev) => ({ ...prev, query: event.target.value }))
+          {viewMode === "receipts" ? (
+            <>
+              <div className="grid gap-3 lg:grid-cols-4">
+                <label className="text-xs uppercase tracking-wide text-slate-400">
+                  Search
+                  <input
+                    type="search"
+                    placeholder="Customer, attendant, receipt..."
+                    value={filters.query}
+                    onChange={(event) =>
+                      setFilters((prev) => ({ ...prev, query: event.target.value }))
+                    }
+                    className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                  />
+                </label>
+                <label className="text-xs uppercase tracking-wide text-slate-400">
+                  Start date
+                  <input
+                    type="date"
+                    value={filters.start}
+                    onChange={(event) => handleStartChange(event.target.value)}
+                    className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                  />
+                </label>
+                <label className="text-xs uppercase tracking-wide text-slate-400">
+                  End date
+                  <input
+                    type="date"
+                    value={filters.end}
+                    onChange={(event) => handleEndChange(event.target.value)}
+                    className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                  />
+                </label>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Range</p>
+                  <p className="text-sm font-semibold text-slate-100">{rangeLabel}</p>
+                  <p className="text-xs text-slate-400">
+                    Showing receipts from {filters.start} to {filters.end}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Receipts</p>
+                  <p className="text-2xl font-semibold text-emerald-300">
+                    {summary.receiptsCount}
+                  </p>
+                  <p className="text-xs text-slate-400">Your receipts in the selected window</p>
+                </div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Total sales</p>
+                  <p className="text-2xl font-semibold text-emerald-300">
+                    {formatKES(summary.totalSales)}
+                  </p>
+                  <p className="text-xs text-slate-400">Aggregated from the receipts below</p>
+                </div>
+              </div>
+
+              <DailyReportReceiptsPanel
+                start={filters.start}
+                end={filters.end}
+                q={filters.query}
+                attendantId={undefined}
+                onlyPos
+                hideHeader
+                showPodFilters
+                initialPodFilter="all"
+                emptyMessage="No receipts found for this range."
+                onSummary={(panelSummary) =>
+                  setSummary({
+                    totalSales: panelSummary.totalSales,
+                    receiptsCount: panelSummary.count,
+                  })
                 }
-                className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
               />
-            </label>
-            <label className="text-xs uppercase tracking-wide text-slate-400">
-              Start date
-              <input
-                type="date"
-                value={filters.start}
-                onChange={(event) => handleStartChange(event.target.value)}
-                className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-              />
-            </label>
-            <label className="text-xs uppercase tracking-wide text-slate-400">
-              End date
-              <input
-                type="date"
-                value={filters.end}
-                onChange={(event) => handleEndChange(event.target.value)}
-                className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-              />
-            </label>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
-              <p className="text-[11px] uppercase tracking-wide text-slate-400">Range</p>
-              <p className="text-sm font-semibold text-slate-100">{rangeLabel}</p>
-              <p className="text-xs text-slate-400">
-                Showing receipts from {filters.start} to {filters.end}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
-              <p className="text-[11px] uppercase tracking-wide text-slate-400">Receipts</p>
-              <p className="text-2xl font-semibold text-emerald-300">{summary.receiptsCount}</p>
-              <p className="text-xs text-slate-400">Your receipts in the selected window</p>
-            </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
-              <p className="text-[11px] uppercase tracking-wide text-slate-400">Total sales</p>
-              <p className="text-2xl font-semibold text-emerald-300">{formatKES(summary.totalSales)}</p>
-              <p className="text-xs text-slate-400">Aggregated from the receipts below</p>
-            </div>
-          </div>
-
-          <DailyReportReceiptsPanel
-            start={filters.start}
-            end={filters.end}
-            q={filters.query}
-            attendantId={undefined}
-            onlyPos
-            hideHeader
-            showPodFilters
-            initialPodFilter="all"
-            emptyMessage="No receipts found for this range."
-            onSummary={(panelSummary) =>
-              setSummary({
-                totalSales: panelSummary.totalSales,
-                receiptsCount: panelSummary.count,
-              })
-            }
-          />
+            </>
+          ) : (
+            <WebsiteOrdersDeskClient
+              apiBasePath="/api/attendant/website-orders"
+              defaultStatusFilter="PENDING"
+              orderListLabel="Website orders"
+              orderListTitle="Assigned web orders"
+              orderListDescription="Process direct website orders assigned to your customer-service desk."
+              emptyMessage="No assigned website orders found right now."
+              filterStorageKey="marketing:web-orders:status"
+            />
+          )}
         </Card>
       </main>
     </div>
