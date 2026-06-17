@@ -1167,7 +1167,6 @@ export async function sendReceiptChannels(
 
     // SMS: use the shared Africa's Talking transactional sender (same path as OTP SMS)
     if (wantSms) {
-      const link = receiptPage;
       if (toPhone) {
         const customerName = (orderAny?.customerName || dataAny?.customerName || 'Customer').trim();
         const receiptNumber = receipt.order?.orderNumber ?? receipt.id;
@@ -1180,14 +1179,12 @@ export async function sendReceiptChannels(
               `Amount to pay: ${amountText}.`,
               buildPodPaymentGuidance(paymentMethod, amountText),
               `Login with your phone number at https://www.betech.co.ke/account to view your order details and download your receipt.`,
-              `Receipt link: ${link}`,
             ].join(' ')
           : [
               `Hello ${customerName}, thank you for shopping at BETECH SOLAR SOLUTIONS.`,
               `Your receipt number is ${receiptNumber}.`,
               `Amount: ${amountText}.`,
               `Login with your phone number at https://www.betech.co.ke/account to view your order details and download your receipt.`,
-              `Receipt link: ${link}`,
             ].join(' ');
         await sendTransactionalSms(toPhone, smsBody);
         sent.push('sms');
