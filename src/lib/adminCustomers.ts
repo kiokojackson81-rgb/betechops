@@ -217,6 +217,66 @@ function pushOrderIntoGroup(group: CustomerGroup, orderDetail: CustomerOrderDeta
 
 export async function getAdminCustomersData(q = "", sort = "recent"): Promise<AdminCustomerRow[]> {
   const query = q.trim();
+  const legacyOrders = await prisma.order.findMany({
+    where: {
+      AND: [
+        {
+          OR: [
+            { customerName: { not: "" } },
+            { customerPhone: { not: null } },
+            { customerEmail: { not: null } },
+          ],
+        },
+        query
+          ? {
+              OR: [
+                { customerName: { contains: query, mode: "insensitive" } },
+                { customerPhone: { contains: query, mode: "insensitive" } },
+                { customerEmail: { contains: query, mode: "insensitive" } },
+                { orderNumber: { contains: query, mode: "insensitive" } },
+                { shop: { name: { contains: query, mode: "insensitive" } } },
+                { attendant: { name: { contains: query, mode: "insensitive" } } },
+                { items: { some: { product: { name: { contains: query, mode: "insensitive" } } } } },
+              ],
+            }
+          : {},
+      ],
+    },
+    include: {
+      receipt: {
+        select: {
+          receiptNumber: true,
+          generatedAt: true,
+        },
+      },
+      shop: {
+        select: {
+          name: true,
+        },
+      },
+      attendant: {
+        select: {
+          name: true,
+          email: true,
+        },
+      },
+      items: {
+        select: {
+          quantity: true,
+          sellingPrice: true,
+          product: {
+            select: {
+              name: true,
+              sku: true,
+              category: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: [{ createdAt: "desc" }],
+  });
+
   const websiteOrders = await prisma.websiteOrder.findMany({
     where: {
       AND: [
@@ -315,6 +375,64 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
   const phoneToGroup = new Map<string, string>();
   const emailToGroup = new Map<string, string>();
   const nameToGroup = new Map<string, string>();
+
+  for (const order of legacyOrders) {
+    const identity = buildGroupId({
+      phone: order.customerPhone || null,
+      email: order.customerEmail || null,
+      name: order.customerName || null,
+      fallbackPrefix: "legacy-order",
+      fallbackId: order.id,
+      phoneToGroup,
+      emailToGroup,
+      nameToGroup,
+    });
+
+    let group = groups.get(identity.groupId);
+    if (!group) {
+      group = makeGroup(identity.groupId, order.customerName.trim() || "Unnamed customer");
+      groups.set(identity.groupId, group);
+    }
+
+    applyGroupIdentity(group, {
+      ...identity,
+      phoneToGroup,
+      emailToGroup,
+      nameToGroup,
+    });
+
+    if (!group.displayName || group.displayName === "Unnamed customer") {
+      group.displayName = order.customerName.trim() || group.displayName;
+    }
+
+    const orderDetail: CustomerOrderDetail = {
+      id: order.id,
+      orderNumber: order.orderNumber,
+      customerName: order.customerName,
+      customerPhone: order.customerPhone,
+      customerEmail: order.customerEmail,
+      totalAmount: Number(order.totalAmount ?? 0),
+      paidAmount: Number(order.paidAmount ?? 0),
+      paymentStatus: String(order.paymentStatus),
+      status: String(order.status),
+      createdAt: order.createdAt,
+      shopName: order.shop?.name ?? "Legacy Orders",
+      attendantName: order.attendant?.name ?? null,
+      attendantEmail: order.attendant?.email ?? null,
+      receiptNumber: order.receipt?.receiptNumber ?? null,
+      receiptGeneratedAt: order.receipt?.generatedAt ?? null,
+      items: order.items.map((item) => ({
+        productName: item.product.name,
+        sku: item.product.sku ?? null,
+        category: item.product.category ?? null,
+        quantity: Number(item.quantity ?? 0),
+        sellingPrice: Number(item.sellingPrice ?? 0),
+        lineTotal: Number(item.quantity ?? 0) * Number(item.sellingPrice ?? 0),
+      })),
+    };
+
+    pushOrderIntoGroup(group, orderDetail);
+  }
 
   for (const order of websiteOrders) {
     const identity = buildGroupId({
