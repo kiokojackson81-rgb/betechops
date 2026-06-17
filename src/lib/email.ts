@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { BETECH_SIGNATURE_TEXT_FALLBACK, renderBetechSignatureHtml } from "@/components/email/BetechSignature";
 
 type EmailAttachment = {
   filename: string;
@@ -275,6 +276,7 @@ export function renderBetechEmailTemplate(input: BrandedTemplateInput) {
     input.ctaLabel && input.ctaUrl
       ? `<div style="margin:24px 0 0"><a href="${escapeHtml(input.ctaUrl)}" style="display:inline-block;background:#7a0000;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:12px;font-weight:700">${escapeHtml(input.ctaLabel)}</a></div>`
       : "";
+  const signatureHtml = renderBetechSignatureHtml();
 
   const html = `<!doctype html>
 <html>
@@ -301,6 +303,7 @@ export function renderBetechEmailTemplate(input: BrandedTemplateInput) {
                 <div style="font-size:15px;line-height:1.7;color:#334155">${input.bodyHtml}</div>
                 ${ctaHtml}
                 ${safeOutro ? `<p style="margin:24px 0 0;font-size:15px;line-height:1.65">${safeOutro}</p>` : ""}
+                ${signatureHtml}
               </td>
             </tr>
             <tr>
@@ -331,6 +334,8 @@ export function renderBetechEmailTemplate(input: BrandedTemplateInput) {
     input.bodyText || normalizeText(input.bodyHtml),
     input.ctaLabel && input.ctaUrl ? `${input.ctaLabel}: ${input.ctaUrl}` : "",
     input.outro || "",
+    "",
+    BETECH_SIGNATURE_TEXT_FALLBACK,
     "",
     BETECH_NAME,
     `Email: ${BETECH_EMAIL}`,
