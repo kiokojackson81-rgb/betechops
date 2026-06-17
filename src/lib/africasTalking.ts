@@ -1,3 +1,5 @@
+import { detectKenyanMobileNetwork } from "@/lib/phone";
+
 const AT_SANDBOX_BASE = "https://api.sandbox.africastalking.com/version1";
 const AT_PRODUCTION_BASE = "https://api.africastalking.com/version1";
 
@@ -45,8 +47,63 @@ export function getAfricaTalkingConfig() {
   };
 }
 
+function getAfricaTalkingAlternateConfig(primary: ReturnType<typeof getAfricaTalkingConfig>) {
+  const username = String(
+    process.env.AFRICASTALKING_ALT_USERNAME ||
+      process.env.AFRICASTALKING_NON_SAFARICOM_USERNAME ||
+      primary.username ||
+      "",
+  ).trim();
+  const apiKey = String(
+    process.env.AFRICASTALKING_ALT_API_KEY ||
+      process.env.AFRICASTALKING_NON_SAFARICOM_API_KEY ||
+      primary.apiKey ||
+      "",
+  ).trim();
+  const senderId = String(
+    process.env.AFRICASTALKING_ALT_SENDER_ID ||
+      process.env.AFRICASTALKING_NON_SAFARICOM_SENDER_ID ||
+      process.env.AFRICASTALKING_ALT_FROM ||
+      process.env.AFRICASTALKING_NON_SAFARICOM_FROM ||
+      "",
+  ).trim();
+
+  return {
+    username,
+    apiKey,
+    senderId,
+    environment: primary.environment,
+    baseUrl: primary.baseUrl,
+  };
+}
+
+function resolveSmsProfile(phone: string) {
+  const primary = getAfricaTalkingConfig();
+  const network = detectKenyanMobileNetwork(phone);
+  const alternate = getAfricaTalkingAlternateConfig(primary);
+  const useAlternate =
+    network !== "safaricom" &&
+    Boolean(alternate.senderId || (alternate.username && alternate.username !== primary.username));
+
+  const selected = useAlternate ? alternate : primary;
+
+  if (selected.environment === "production" && !selected.senderId) {
+    throw new Error(
+      useAlternate
+        ? "Africa's Talking alternate sender ID is required for non-Safaricom SMS in production."
+        : "Africa's Talking sender ID is required in production.",
+    );
+  }
+
+  return {
+    ...selected,
+    network,
+    profile: useAlternate ? "alternate" : "primary",
+  };
+}
+
 export async function sendTransactionalSms(phone: string, message: string) {
-  const { username, apiKey, senderId, baseUrl, environment } = getAfricaTalkingConfig();
+  const { username, apiKey, senderId, baseUrl, environment, network, profile } = resolveSmsProfile(phone);
   const requestUrl = `${baseUrl}/messaging`;
 
   const requestPayload: AfricaTalkingPayload = {
@@ -59,6 +116,8 @@ export async function sendTransactionalSms(phone: string, message: string) {
   console.log("AT SMS", {
     username,
     senderId,
+    network,
+    profile,
     phone,
     messageLength: message.length,
   });
@@ -67,6 +126,8 @@ export async function sendTransactionalSms(phone: string, message: string) {
     username,
     environment,
     senderId: senderId || null,
+    network,
+    profile,
     requestUrl,
     requestPayload,
   });
@@ -106,6 +167,8 @@ export async function sendTransactionalSms(phone: string, message: string) {
     username,
     environment,
     senderId: senderId || null,
+    network,
+    profile,
     serializedPayload,
     requestUrl,
     status: response.status,
@@ -126,6 +189,8 @@ export async function sendTransactionalSms(phone: string, message: string) {
       username,
       environment,
       senderId: senderId || null,
+      network,
+      profile,
       serializedPayload,
       requestUrl,
       status: response.status,
@@ -142,6 +207,8 @@ export async function sendTransactionalSms(phone: string, message: string) {
       username,
       environment,
       senderId: senderId || null,
+      network,
+      profile,
       serializedPayload,
       requestUrl,
       recipients,
@@ -172,6 +239,8 @@ export async function sendTransactionalSms(phone: string, message: string) {
       username,
       environment,
       senderId: senderId || null,
+      network,
+      profile,
       serializedPayload,
       requestUrl,
       recipients,

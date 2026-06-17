@@ -1,5 +1,7 @@
 const KENYAN_MOBILE_REGEX = /^\+254(?:7|1)\d{8}$/;
 
+export type KenyanMobileNetwork = "safaricom" | "airtel" | "telkom" | "unknown";
+
 export function normalizeKenyanPhone(input?: string) {
   if (!input) return "";
   let s = String(input).trim();
@@ -68,4 +70,36 @@ export function formatPhoneForDisplay(input?: string) {
     return `${s.slice(0,4)} ${s.slice(4,7)} ${s.slice(7,10)} ${s.slice(10,13)}`;
   }
   return s;
+}
+
+export function detectKenyanMobileNetwork(input?: string): KenyanMobileNetwork {
+  const normalized = normalizeKenyanPhone(input);
+  if (!normalized) return "unknown";
+
+  const prefix = normalized.slice(4, 8);
+
+  if (
+    /^07(0|1|2|4)\d$/.test(prefix) ||
+    /^075[7-9]$/.test(prefix) ||
+    /^076[89]$/.test(prefix) ||
+    /^079\d$/.test(prefix) ||
+    /^011[0-5]$/.test(prefix)
+  ) {
+    return "safaricom";
+  }
+
+  if (
+    /^073\d$/.test(prefix) ||
+    /^075[0-6]$/.test(prefix) ||
+    /^078\d$/.test(prefix) ||
+    /^010[0-6]$/.test(prefix)
+  ) {
+    return "airtel";
+  }
+
+  if (/^077\d$/.test(prefix)) {
+    return "telkom";
+  }
+
+  return "unknown";
 }
