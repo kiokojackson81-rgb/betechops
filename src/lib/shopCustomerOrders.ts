@@ -102,6 +102,47 @@ function buildReceiptDeliveryMethod(metadata: ReceiptMetadataRecord) {
   return "Complete order";
 }
 
+function matchesPhoneIdentity(phoneValue: string | null | undefined, phoneVariants: string[]) {
+  const normalizedPhone = normalizeKenyanPhone(phoneValue || "");
+  if (!normalizedPhone) return false;
+  return phoneVariants.includes(normalizedPhone) || getKenyanPhoneVariants(normalizedPhone).some((variant) => phoneVariants.includes(variant));
+}
+
+function matchesEmailIdentity(emailValue: string | null | undefined, normalizedEmails: string[]) {
+  const normalizedEmail = normalizeCustomerEmail(emailValue);
+  if (!normalizedEmail) return false;
+  return normalizedEmails.includes(normalizedEmail);
+}
+
+function canAccessPosLinkedOrder(args: {
+  source: "WEBSITE" | "POS";
+  customerUserId?: string | null;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
+  userId: string;
+  phoneVariants: string[];
+  normalizedEmails: string[];
+}) {
+  if (args.source !== "POS") {
+    return (
+      args.customerUserId === args.userId ||
+      matchesPhoneIdentity(args.customerPhone, args.phoneVariants) ||
+      matchesEmailIdentity(args.customerEmail, args.normalizedEmails)
+    );
+  }
+
+  if (args.customerUserId) {
+    return args.customerUserId === args.userId;
+  }
+
+  const hasPhoneIdentity = matchesPhoneIdentity(args.customerPhone, args.phoneVariants);
+  if (String(args.customerPhone || "").trim()) {
+    return hasPhoneIdentity;
+  }
+
+  return matchesEmailIdentity(args.customerEmail, args.normalizedEmails);
+}
+
 function buildSummaryFromWebsiteOrder(order: {
   id: string;
   orderRef: string;
@@ -237,6 +278,9 @@ export async function listCustomerAccountOrders(args: {
       deliveryMethod: true,
       customerLocation: true,
       source: true,
+      customerUserId: true,
+      customerPhone: true,
+      customerEmail: true,
       _count: {
         select: {
           items: true,
@@ -278,6 +322,8 @@ export async function listCustomerAccountOrders(args: {
           orderNumber: true,
           totalAmount: true,
           metadata: true,
+          customerPhone: true,
+          customerEmail: true,
           items: {
             orderBy: { id: "asc" },
             take: 3,
@@ -299,8 +345,27 @@ export async function listCustomerAccountOrders(args: {
     },
   });
 
-  const websiteSummaries = recentOrders.map(buildSummaryFromWebsiteOrder);
+  const websiteSummaries = recentOrders
+    .filter((order) =>
+      canAccessPosLinkedOrder({
+        source: order.source === "POS" ? "POS" : "WEBSITE",
+        customerUserId: order.customerUserId,
+        customerPhone: order.customerPhone,
+        customerEmail: order.customerEmail,
+        userId: args.userId,
+        phoneVariants: args.phoneVariants,
+        normalizedEmails: args.normalizedEmails,
+      }),
+    )
+    .map(buildSummaryFromWebsiteOrder);
   const fallbackSummaries = fallbackReceipts
+    .filter((receipt) => {
+      const orderPhone = receipt.order?.customerPhone || "";
+      if (String(orderPhone || "").trim()) {
+        return matchesPhoneIdentity(orderPhone, args.phoneVariants);
+      }
+      return matchesEmailIdentity(receipt.order?.customerEmail || "", args.normalizedEmails);
+    })
     .filter((receipt) => {
       const orderRef = receipt.order?.orderNumber || receipt.receiptNumber || receipt.id;
       return !recentOrders.some((order) => order.receiptId === receipt.id || order.orderRef === orderRef);
@@ -368,6 +433,15 @@ export async function getCustomerAccountOrderDetail(args: {
 
     if (!receipt?.order) return null;
 
+    const hasPhoneOnReceipt = String(receipt.order.customerPhone || "").trim().length > 0;
+    if (hasPhoneOnReceipt) {
+      if (!matchesPhoneIdentity(receipt.order.customerPhone, args.phoneVariants)) {
+        return null;
+      }
+    } else if (!matchesEmailIdentity(receipt.order.customerEmail, args.normalizedEmails)) {
+      return null;
+    }
+
     const metadata = readJsonObject(receipt.order.metadata);
     const items = receipt.order.items.map((item) => ({
       id: item.id,
@@ -412,11 +486,6 @@ export async function getCustomerAccountOrderDetail(args: {
   const websiteOrder = await prisma.websiteOrder.findFirst({
     where: {
       id: websiteOrderId,
-      OR: [
-        { customerUserId: args.userId },
-        ...(args.phoneVariants.length ? [{ customerPhone: { in: args.phoneVariants } }] : []),
-        ...(args.normalizedEmails.length ? [{ customerEmail: { in: args.normalizedEmails } }] : []),
-      ],
     },
     select: {
       id: true,
@@ -433,6 +502,7 @@ export async function getCustomerAccountOrderDetail(args: {
       paymentMethod: true,
       notes: true,
       source: true,
+      customerUserId: true,
       receiptId: true,
       receipt: {
         select: {
@@ -456,6 +526,18 @@ export async function getCustomerAccountOrderDetail(args: {
   });
 
   if (!websiteOrder) return null;
+
+  const canAccessWebsiteOrder = canAccessPosLinkedOrder({
+    source: websiteOrder.source === "POS" ? "POS" : "WEBSITE",
+    customerUserId: websiteOrder.customerUserId,
+    customerPhone: websiteOrder.customerPhone,
+    customerEmail: websiteOrder.customerEmail,
+    userId: args.userId,
+    phoneVariants: args.phoneVariants,
+    normalizedEmails: args.normalizedEmails,
+  });
+
+  if (!canAccessWebsiteOrder) return null;
 
   return {
     routeId: args.routeId,
