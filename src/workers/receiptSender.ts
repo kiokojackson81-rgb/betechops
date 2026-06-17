@@ -297,13 +297,14 @@ export async function generateReceiptPdf(
     await page.emulateMediaType('print');
     await page.setContent(html, { waitUntil: 'networkidle0' });
     const pdf = await page.pdf({
-      format: 'A4',
+      preferCSSPageSize: true,
+      format: 'A5',
       printBackground: true,
       margin: {
-        top: '1mm',
-        right: '1mm',
-        bottom: '1mm',
-        left: '1mm',
+        top: '0',
+        right: '0',
+        bottom: '0',
+        left: '0',
       },
     });
     return pdf;

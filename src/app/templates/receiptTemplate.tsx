@@ -170,6 +170,7 @@ export default function renderReceiptTemplate(
           box-sizing: border-box;
           width: calc(148mm - 4mm);
           min-height: calc(210mm - 4mm);
+          height: calc(210mm - 4mm);
           margin: 0 auto;
           padding: 2.5mm 3.5mm 3mm;
           background: #fff;
@@ -177,16 +178,19 @@ export default function renderReceiptTemplate(
           box-shadow: 0 14px 28px rgba(15, 23, 42, 0.12);
           display: flex;
           flex-direction: column;
+          justify-content: flex-start;
+          overflow: hidden;
         }
         .receipt-body {
           display: flex;
           flex-direction: column;
-          flex: 1;
+          flex: 1 1 auto;
+          height: 100%;
           min-height: 0;
         }
         .receipt-bottom {
           margin-top: auto;
-          padding-top: 10px;
+          padding-top: 8px;
         }
         header {
           text-align: center;
@@ -287,7 +291,7 @@ export default function renderReceiptTemplate(
       }
 
       .receipt-footer {
-        margin-top: 14px;
+        margin-top: 0;
         padding-top: 10px;
         border-top: 1px dashed rgba(0, 0, 0, 0.35);
         text-align: center;
@@ -298,7 +302,7 @@ export default function renderReceiptTemplate(
 
       /* Ensure the footer container stays on the same printed page */
       .receipt-footer-container {
-        margin-top: 12px;
+        margin-top: 8px;
         page-break-inside: avoid;
         break-inside: avoid;
       }
@@ -382,7 +386,7 @@ export default function renderReceiptTemplate(
         body { overflow: visible; }
         .page {
           width: calc(148mm - 4mm);
-          height: auto;
+          height: calc(210mm - 4mm);
           min-height: calc(210mm - 4mm);
           max-height: none;
           margin: 0;
@@ -395,13 +399,13 @@ export default function renderReceiptTemplate(
           display: flex;
           flex-direction: column;
           flex: 1 1 auto;
+          height: 100%;
           min-height: 0;
-          height: auto;
           overflow: visible;
         }
         .receipt-bottom {
           margin-top: auto;
-          padding-top: 5px;
+          padding-top: 4px;
         }
         header {
           margin-bottom: 6px;
@@ -428,7 +432,7 @@ export default function renderReceiptTemplate(
         .totals td { padding: 2px 0; }
         .notes { margin-top: 5px; padding: 6px; }
         .signature { margin-top: 5px; font-size: 10.6px; line-height: 1.25; }
-        .receipt-footer-container { margin-top: 4px; }
+        .receipt-footer-container { margin-top: 2px; }
         .receipt-footer { margin-top: 0; padding-top: 5px; font-size: 10.3px; line-height: 1.25; }
         .footer-badge { margin-bottom: 3px; font-size: 10.3px; padding: 2px 7px; }
         .social-row { gap: 2px; margin-bottom: 4px; }
