@@ -155,46 +155,6 @@ export default function MarketingReceiptsPage() {
                   : "Process your assigned website orders here using the same lifecycle used in admin."}
               </p>
             </div>
-            <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
-              <button
-                type="button"
-                onClick={() => setViewMode("receipts")}
-                className={`rounded-full border px-4 py-1 transition ${
-                  viewMode === "receipts"
-                    ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
-                    : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"
-                }`}
-              >
-                POS receipts
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("web-orders")}
-                className={`rounded-full border px-4 py-1 transition ${
-                  viewMode === "web-orders"
-                    ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
-                    : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"
-                }`}
-              >
-                Web orders
-              </button>
-              {viewMode === "receipts"
-                ? ReceiptRangeOptions.map((option) => (
-                    <button
-                      key={option.key}
-                      type="button"
-                      onClick={() => applyRange(option.key)}
-                      className={`rounded-full border px-4 py-1 transition ${
-                        rangeKey === option.key
-                          ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
-                          : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))
-                : null}
-            </div>
           </div>
 
           {viewMode === "receipts" ? (
@@ -264,6 +224,20 @@ export default function MarketingReceiptsPage() {
                 hideHeader
                 showPodFilters
                 initialPodFilter="all"
+                extraFilterActions={[
+                  {
+                    key: "web-orders",
+                    label: "Web orders",
+                    active: false,
+                    onClick: () => setViewMode("web-orders"),
+                  },
+                  ...ReceiptRangeOptions.map((option) => ({
+                    key: option.key,
+                    label: option.label,
+                    active: rangeKey === option.key,
+                    onClick: () => applyRange(option.key),
+                  })),
+                ]}
                 emptyMessage="No receipts found for this range."
                 onSummary={(panelSummary) =>
                   setSummary({
@@ -274,15 +248,32 @@ export default function MarketingReceiptsPage() {
               />
             </>
           ) : (
-            <WebsiteOrdersDeskClient
-              apiBasePath="/api/attendant/website-orders"
-              defaultStatusFilter="PENDING"
-              orderListLabel="Website orders"
-              orderListTitle="Assigned web orders"
-              orderListDescription="Process direct website orders assigned to your customer-service desk."
-              emptyMessage="No assigned website orders found right now."
-              filterStorageKey="marketing:web-orders:status"
-            />
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("receipts")}
+                  className="rounded-full border border-white/15 px-4 py-1 text-slate-200 transition hover:border-emerald-500 hover:text-white"
+                >
+                  POS receipts
+                </button>
+                <button
+                  type="button"
+                  className="rounded-full border border-emerald-500 bg-emerald-500/20 px-4 py-1 text-emerald-200 transition"
+                >
+                  Web orders
+                </button>
+              </div>
+              <WebsiteOrdersDeskClient
+                apiBasePath="/api/attendant/website-orders"
+                defaultStatusFilter="PENDING"
+                orderListLabel="Website orders"
+                orderListTitle="Assigned web orders"
+                orderListDescription="Process direct website orders assigned to your customer-service desk."
+                emptyMessage="No assigned website orders found right now."
+                filterStorageKey="marketing:web-orders:status"
+              />
+            </div>
           )}
         </Card>
       </main>

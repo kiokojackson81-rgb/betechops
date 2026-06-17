@@ -26,6 +26,13 @@ type DailyReportReceiptRow = {
 
 type PodFilterValue = "all" | "normal_only" | "settled" | "pod_pending" | "pod_delivered" | "pod_failed";
 
+type ExtraFilterAction = {
+  key: string;
+  label: string;
+  active?: boolean;
+  onClick: () => void;
+};
+
 type Props = {
   // start and end should be date strings (YYYY-MM-DD) or ISO date strings
   start?: string | null;
@@ -41,6 +48,7 @@ type Props = {
   emptyMessage?: string;
   showPodFilters?: boolean;
   initialPodFilter?: PodFilterValue;
+  extraFilterActions?: ExtraFilterAction[];
   onSummary?: (s: { totalSales: number; count: number }) => void;
 };
 
@@ -119,6 +127,7 @@ export default function DailyReportReceiptsPanel({
   emptyMessage,
   showPodFilters = false,
   initialPodFilter = "all",
+  extraFilterActions = [],
   onSummary,
 }: Props) {
   const [receipts, setReceipts] = useState<DailyReportReceiptRow[]>([]);
@@ -473,6 +482,20 @@ export default function DailyReportReceiptsPanel({
       <div className="mt-5 space-y-3">
         {showPodFilters && (
           <div className="flex flex-wrap gap-2">
+            {extraFilterActions.map((action) => (
+              <button
+                key={action.key}
+                type="button"
+                onClick={action.onClick}
+                className={`rounded-full border px-4 py-1 text-[11px] font-semibold uppercase tracking-wide transition ${
+                  action.active
+                    ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
+                    : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"
+                }`}
+              >
+                {action.label}
+              </button>
+            ))}
             {[
               { key: "all", label: onlyPos ? "All POS receipts" : "All receipts" },
               { key: "normal_only", label: "Normal only" },

@@ -989,6 +989,23 @@ export default function DailyReportFinal() {
                 includeLedger={!isBrendahView}
                 showPodFilters
                 hideHeader
+                extraFilterActions={[
+                  {
+                    key: "web-orders",
+                    label: "Web orders",
+                    active: false,
+                    onClick: () => {
+                      setCurrentView("web-orders");
+                      if (typeof window !== "undefined") {
+                        window.history.replaceState(
+                          null,
+                          "",
+                          `${window.location.pathname}${window.location.search}#web-orders`,
+                        );
+                      }
+                    },
+                  },
+                ]}
                 onSummary={(s) => setReceiptsSummary({ count: s.count, totalSales: s.totalSales })}
               />
             </div>
@@ -1094,11 +1111,7 @@ export default function DailyReportFinal() {
                 onReceiptsClick={() => setCurrentView("receipts")}
                 onWebOrdersClick={() => setCurrentView("web-orders")}
                 onProductDeskClick={isBrendahView ? () => setCurrentView("product-desk") : undefined}
-                showWebOrders={Boolean(
-                  effectiveAttendantEmail === "brendah@betech.co.ke" ||
-                    effectiveAttendantEmail === "jeniffer@betech.co.ke" ||
-                    impersonateId,
-                )}
+                showWebOrders={false}
                 showProductDesk={isBrendahView}
                 showDot={true}
               />

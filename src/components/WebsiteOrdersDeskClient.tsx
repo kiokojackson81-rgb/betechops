@@ -10,6 +10,7 @@ import {
   RefreshCcw,
 } from "lucide-react";
 import type { SerializedWebsiteOrder } from "@/lib/websiteOrders";
+import { getShopProductHref } from "@/app/shop/storefrontPaths";
 
 type WebsiteOrderStatusFilter =
   | "ALL"
@@ -55,6 +56,8 @@ const WEBSITE_LIFECYCLE = [
   "DELIVERED",
 ] as const;
 
+const SHOP_BASE_URL = "https://www.betech.co.ke";
+
 function formatCurrency(value: number) {
   return `Ksh ${value.toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
 }
@@ -62,6 +65,20 @@ function formatCurrency(value: number) {
 function formatDateTime(value: string | null) {
   if (!value) return "-";
   return new Date(value).toLocaleString("en-KE");
+}
+
+function slugifyProductName(value: string) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function buildProductShopHref(productName: string, productId?: string | null) {
+  const normalizedProductId = String(productId || "").trim();
+  const slug = slugifyProductName(productName);
+  if (!slug || !normalizedProductId) return null;
+  return `${SHOP_BASE_URL}${getShopProductHref(slug, normalizedProductId)}`;
 }
 
 export default function WebsiteOrdersDeskClient({
@@ -391,21 +408,36 @@ export default function WebsiteOrdersDeskClient({
                                 </tr>
                               </thead>
                               <tbody>
-                                {order.items.map((item) => (
-                                  <tr key={item.id} className="border-t border-white/10">
-                                    <td className="py-2.5 pr-3 text-slate-200">
-                                      <div className="font-medium text-white">{item.productName}</div>
-                                      <div className="text-xs text-slate-500">
-                                        {item.sku || item.category || ""}
-                                      </div>
-                                    </td>
-                                    <td className="py-2.5 pr-3 text-slate-200">{item.quantity}</td>
-                                    <td className="py-2.5 pr-3 text-slate-200">
-                                      {formatCurrency(item.unitPrice)}
-                                    </td>
-                                    <td className="py-2.5 text-white">{formatCurrency(item.total)}</td>
-                                  </tr>
-                                ))}
+                                {order.items.map((item) => {
+                                  const productShopHref = buildProductShopHref(item.productName, item.productId);
+
+                                  return (
+                                    <tr key={item.id} className="border-t border-white/10">
+                                      <td className="py-2.5 pr-3 text-slate-200">
+                                        {productShopHref ? (
+                                          <Link
+                                            href={productShopHref}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="font-medium text-white underline-offset-4 hover:text-emerald-200 hover:underline"
+                                          >
+                                            {item.productName}
+                                          </Link>
+                                        ) : (
+                                          <div className="font-medium text-white">{item.productName}</div>
+                                        )}
+                                        <div className="text-xs text-slate-500">
+                                          {item.sku || item.category || ""}
+                                        </div>
+                                      </td>
+                                      <td className="py-2.5 pr-3 text-slate-200">{item.quantity}</td>
+                                      <td className="py-2.5 pr-3 text-slate-200">
+                                        {formatCurrency(item.unitPrice)}
+                                      </td>
+                                      <td className="py-2.5 text-white">{formatCurrency(item.total)}</td>
+                                    </tr>
+                                  );
+                                })}
                               </tbody>
                             </table>
                           </div>
