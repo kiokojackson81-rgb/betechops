@@ -45,6 +45,22 @@ type ReceiptEmailInput = {
   receiptNumber: string;
   receiptLink?: string | null;
   customerName?: string | null;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
+  paymentMethod?: string | null;
+  issuedAt?: string | null;
+  subtotalText?: string | null;
+  totalText?: string | null;
+  accountUrl?: string | null;
+  isPodReceipt?: boolean;
+  orderAmountText?: string | null;
+  paymentGuidance?: string | null;
+  items?: Array<{
+    productName: string;
+    quantity: number;
+    unitPriceText: string;
+    lineTotalText: string;
+  }>;
   attachments?: EmailAttachment[];
 };
 
@@ -151,6 +167,67 @@ function normalizeText(value?: string | null) {
     .replace(/<[^>]+>/g, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function escapeAttribute(value: string) {
+  return escapeHtml(value).replace(/`/g, "&#96;");
+}
+
+function renderReceiptItemsTable(
+  items: NonNullable<ReceiptEmailInput["items"]>,
+) {
+  if (!items.length) {
+    return {
+      html: "",
+      text: "",
+    };
+  }
+
+  const rowsHtml = items
+    .map(
+      (item) => `
+        <tr>
+          <td style="padding:10px 12px;border-top:1px solid #f1e4d3;vertical-align:top;font-size:14px;line-height:1.5;color:#1f2937">
+            ${escapeHtml(item.productName)}
+          </td>
+          <td style="padding:10px 12px;border-top:1px solid #f1e4d3;vertical-align:top;text-align:center;font-size:14px;color:#1f2937">
+            ${escapeHtml(String(item.quantity))}
+          </td>
+          <td style="padding:10px 12px;border-top:1px solid #f1e4d3;vertical-align:top;text-align:right;font-size:14px;color:#1f2937">
+            ${escapeHtml(item.unitPriceText)}
+          </td>
+          <td style="padding:10px 12px;border-top:1px solid #f1e4d3;vertical-align:top;text-align:right;font-size:14px;font-weight:800;color:#111827">
+            ${escapeHtml(item.lineTotalText)}
+          </td>
+        </tr>`,
+    )
+    .join("");
+
+  const html = `
+    <div style="margin-top:20px">
+      <div style="font-size:13px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:#7a0000;margin-bottom:10px">Items purchased</div>
+      <table role="presentation" width="100%" cellPadding="0" cellSpacing="0" style="border:1px solid #f1e4d3;border-radius:14px;overflow:hidden;background:#fffdfa">
+        <thead>
+          <tr style="background:#fff4df">
+            <th align="left" style="padding:10px 12px;font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:#7a0000">Item</th>
+            <th align="center" style="padding:10px 12px;font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:#7a0000">Qty</th>
+            <th align="right" style="padding:10px 12px;font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:#7a0000">Unit price</th>
+            <th align="right" style="padding:10px 12px;font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:#7a0000">Line total</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>`;
+
+  const text = [
+    "Items purchased:",
+    ...items.map(
+      (item) =>
+        `- ${item.productName} | Qty ${item.quantity} | Unit ${item.unitPriceText} | Total ${item.lineTotalText}`,
+    ),
+  ].join("\n");
+
+  return { html, text };
 }
 
 async function getTransporter() {
@@ -342,13 +419,75 @@ export async function sendCustomerLoginNotificationEmail(input: { to: string | s
 }
 
 export async function sendReceiptEmail(input: ReceiptEmailInput) {
+  const accountUrl = input.accountUrl || "https://www.betech.co.ke/account";
+  const itemsTable = renderReceiptItemsTable(input.items || []);
+  const introHtml = input.isPodReceipt
+    ? `<p>Thank you for shopping with Betech Solar Solutions.</p>
+       <p>Your delivery receipt has been created${input.orderAmountText ? ` with an amount to pay of <strong>${escapeHtml(input.orderAmountText)}</strong>` : ""}.</p>
+       ${input.paymentGuidance ? `<p>${escapeHtml(input.paymentGuidance)}</p>` : ""}`
+    : `<p>Thank you for shopping with Betech Solar Solutions.</p>`;
+  const introText = input.isPodReceipt
+    ? [
+        "Thank you for shopping with Betech Solar Solutions.",
+        `Your delivery receipt has been created${input.orderAmountText ? ` with an amount to pay of ${input.orderAmountText}` : ""}.`,
+        input.paymentGuidance || "",
+      ]
+        .filter(Boolean)
+        .join("\n\n")
+    : "Thank you for shopping with Betech Solar Solutions.";
+  const detailRows = [
+    input.receiptNumber ? ["Receipt number", input.receiptNumber] : null,
+    input.issuedAt ? ["Issued at", input.issuedAt] : null,
+    input.customerPhone ? ["Phone", input.customerPhone] : null,
+    input.customerEmail ? ["Email", input.customerEmail] : null,
+    input.paymentMethod ? ["Payment method", input.paymentMethod] : null,
+    input.subtotalText ? ["Subtotal", input.subtotalText] : null,
+    input.totalText ? ["Total", input.totalText] : null,
+  ].filter((row): row is [string, string] => Boolean(row && row[1]));
+
+  const detailsHtml = detailRows.length
+    ? `<div style="margin-top:20px;border:1px solid #f1e4d3;border-radius:14px;background:#fffdfa;padding:16px 18px">
+        ${detailRows
+          .map(([label, value], index) => {
+            const isLast = index === detailRows.length - 1;
+            return `<div style="display:flex;justify-content:space-between;gap:16px;padding:6px 0${
+              isLast ? "" : ";border-bottom:1px solid #f7ead8"
+            }">
+              <span style="font-size:13px;font-weight:700;color:#7a0000">${escapeHtml(label)}</span>
+              <span style="font-size:14px;color:#1f2937;text-align:right">${escapeHtml(value)}</span>
+            </div>`;
+          })
+          .join("")}
+      </div>`
+    : "";
+  const detailsText = detailRows.length
+    ? detailRows.map(([label, value]) => `${label}: ${value}`).join("\n")
+    : "";
+
   return sendCustomerNotificationEmail({
     to: input.to,
     subject: `Your Betech Solar receipt ${input.receiptNumber}`,
     title: "Your receipt is ready",
     intro: input.customerName ? `Hello ${input.customerName},` : "Hello,",
-    bodyHtml: `<p>Thank you for shopping with Betech Solar Solutions.</p><p>Your receipt number is <strong>${escapeHtml(input.receiptNumber)}</strong>.</p><p>Your receipt PDF is attached to this email.${input.receiptLink ? ` You can also view it here: <a href="${escapeHtml(input.receiptLink)}">${escapeHtml(input.receiptLink)}</a>.` : ""}</p>`,
-    bodyText: `Thank you for shopping with Betech Solar Solutions. Your receipt number is ${input.receiptNumber}.${input.receiptLink ? ` View it here: ${input.receiptLink}` : ""}`,
+    bodyHtml: `
+      ${introHtml}
+      <p>Your receipt PDF is attached to this email${input.receiptLink ? `, and you can also view it online <a href="${escapeAttribute(input.receiptLink)}">here</a>` : ""}.</p>
+      <p>Login to your account using your <strong>email address or phone number</strong> to view your order details and download your receipt anytime.</p>
+      ${detailsHtml}
+      ${itemsTable.html}
+    `,
+    bodyText: [
+      introText,
+      input.receiptLink ? `View your receipt here: ${input.receiptLink}` : "",
+      "Login to your account using your email address or phone number to view your order details and download your receipt anytime.",
+      detailsText,
+      itemsTable.text,
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
+    ctaLabel: "Login to your account",
+    ctaUrl: accountUrl,
+    outro: "You can use the same account to review your saved order history and download future receipts.",
     attachments: input.attachments,
   });
 }

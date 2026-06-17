@@ -42,6 +42,43 @@ function formatCurrencyKes(value: number) {
   }
 }
 
+function formatReceiptIssuedAt(value: unknown) {
+  const date = value instanceof Date ? value : new Date(String(value || ''));
+  if (Number.isNaN(date.getTime())) return null;
+  try {
+    return new Intl.DateTimeFormat('en-KE', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(date);
+  } catch {
+    return date.toISOString();
+  }
+}
+
+function buildPodPaymentGuidance(paymentMethod: unknown, amountText: string) {
+  const method = String(paymentMethod || '').trim();
+  const normalized = method.toLowerCase();
+  if (!normalized) {
+    return `Please check your Betech Solar account for the payment guidance and amount due of ${amountText}.`;
+  }
+  if (normalized.includes('transport fee first')) {
+    return `Please pay the transport fee first to allow dispatch planning. Your current receipt amount is ${amountText}.`;
+  }
+  if (normalized.includes('deposit')) {
+    return `Please pay the agreed deposit to continue processing this order. Your current receipt amount is ${amountText}.`;
+  }
+  if (normalized.includes('full amount')) {
+    return `Please clear the full amount of ${amountText} so this order can proceed smoothly.`;
+  }
+  if (normalized.includes('pay on delivery')) {
+    return `Please prepare payment of ${amountText} on delivery where this arrangement is available.`;
+  }
+  return `Payment arrangement: ${method}. Current amount due: ${amountText}.`;
+}
+
 function toFiniteNumber(value: unknown) {
   if (value === null || value === undefined) return 0;
   const numeric = Number(value);
@@ -425,6 +462,8 @@ export async function sendReceiptChannels(
   const wantEmail = channels.length === 0 || channels.includes('email');
   const wantWhatsapp = channels.length === 0 || channels.includes('whatsapp');
   const wantSms = channels.length === 0 || channels.includes('sms');
+  const baseDataAny = (typeof receipt.data === 'object' && receipt.data ? (receipt.data as any) : {}) as any;
+  const isPodReceipt = Boolean(baseDataAny?.podDelivery) || Boolean(opts?.markPodSent) || isPodDispatchTag(opts?.chatraceTag);
   logStep(requestId, 'START', 'send_pipeline', { wantEmail, wantWhatsapp, wantSms });
   // Normalize receipt.data into a mutable object for template rendering and metadata additions.
   // `receipt.data` is a Prisma JsonValue (could be string/number/etc) so narrow it to an object first.
@@ -1009,11 +1048,30 @@ export async function sendReceiptChannels(
     if (wantEmail && toEmail) {
       try {
         const attachmentBuffer = pdfCustomerBuffer ?? Buffer.from('');
+        const orderItems = Array.isArray((receipt.order as any)?.items) ? ((receipt.order as any).items as any[]) : [];
+        const orderAmountText = formatCurrencyKes(Number(receipt.totalAmount ?? (receipt.order as any)?.totalAmount ?? 0));
+        const paymentMethod = (receipt.order as any)?.paymentMethod || (receipt.data as any)?.paymentMethod || null;
         await sendReceiptEmail({
           to: toEmail,
           receiptNumber: receipt.order?.orderNumber ?? receipt.id,
           receiptLink: pdfUrlCustomer || `${getSiteUrl().replace(/\/$/, '')}/receipts/${receipt.id}`,
           customerName: (receipt.order as any)?.customerName || (receipt.data as any)?.customerName || null,
+          customerPhone: (receipt.order as any)?.customerPhone || (receipt.data as any)?.customerPhone || null,
+          customerEmail: toEmail,
+          paymentMethod,
+          issuedAt: formatReceiptIssuedAt(receipt.createdAt || (receipt.order as any)?.createdAt || null),
+          subtotalText: formatCurrencyKes(Number((receipt.order as any)?.subtotalAmount ?? receipt.totalAmount ?? 0)),
+          totalText: formatCurrencyKes(Number(receipt.totalAmount ?? (receipt.order as any)?.totalAmount ?? 0)),
+          accountUrl: 'https://www.betech.co.ke/account',
+          isPodReceipt,
+          orderAmountText: isPodReceipt ? orderAmountText : null,
+          paymentGuidance: isPodReceipt ? buildPodPaymentGuidance(paymentMethod, orderAmountText) : null,
+          items: orderItems.map((item) => ({
+            productName: String(item?.product?.name || item?.productSnapshotName || item?.name || 'Receipt item'),
+            quantity: Number(item?.quantity || 0),
+            unitPriceText: formatCurrencyKes(Number(item?.unitPrice || item?.price || 0)),
+            lineTotalText: formatCurrencyKes(Number(item?.totalPrice || (Number(item?.unitPrice || item?.price || 0) * Number(item?.quantity || 0)))),
+          })),
           attachments: attachmentBuffer.length
             ? [
                 {
@@ -1097,7 +1155,27 @@ export async function sendReceiptChannels(
       const link = receiptPage;
       if (toPhone && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_SMS) {
         const client = Twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-        const smsPayload: any = { from: process.env.TWILIO_FROM_SMS, to: toPhone, body: `Your receipt: ${link}` };
+        const customerName = (orderAny?.customerName || dataAny?.customerName || 'Customer').trim();
+        const receiptNumber = receipt.order?.orderNumber ?? receipt.id;
+        const amountText = formatCurrencyKes(Number(receipt.totalAmount ?? orderAny?.totalAmount ?? 0));
+        const paymentMethod = orderAny?.paymentMethod || dataAny?.paymentMethod || '';
+        const smsBody = isPodReceipt
+          ? [
+              `Hello ${customerName}, thank you for shopping at BETECH SOLAR SOLUTIONS.`,
+              `Your delivery receipt number is ${receiptNumber}.`,
+              `Amount to pay: ${amountText}.`,
+              buildPodPaymentGuidance(paymentMethod, amountText),
+              `Login with your phone number at https://www.betech.co.ke/account to view your order details and download your receipt.`,
+              `Receipt link: ${link}`,
+            ].join(' ')
+          : [
+              `Hello ${customerName}, thank you for shopping at BETECH SOLAR SOLUTIONS.`,
+              `Your receipt number is ${receiptNumber}.`,
+              `Amount: ${amountText}.`,
+              `Login with your phone number at https://www.betech.co.ke/account to view your order details and download your receipt.`,
+              `Receipt link: ${link}`,
+            ].join(' ');
+        const smsPayload: any = { from: process.env.TWILIO_FROM_SMS, to: toPhone, body: smsBody };
         if (pdfUrlCustomer) smsPayload.mediaUrl = [pdfUrlCustomer];
         await client.messages.create(smsPayload);
         sent.push('sms');

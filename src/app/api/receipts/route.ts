@@ -1894,7 +1894,7 @@ export async function POST(req: NextRequest) {
       // skips default tags so downstream routing can treat it as a POD event.
       console.info(`[receiptSender][${requestId}] START send pipeline (pod_delivery)`);
       try {
-        sendResult = await sendReceiptChannels(result.receiptId, ['whatsapp'], {
+        sendResult = await sendReceiptChannels(result.receiptId, ['whatsapp', 'email', 'sms'], {
           requestId,
           chatraceTag: (process.env.CHATRACE_POD_CUSTOMER_TAG || 'pod_dispatch_speedaf').trim(),
           skipDefaultChatraceTags: true,
