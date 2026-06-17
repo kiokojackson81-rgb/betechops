@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { findOrCreateCustomerIdentityUser } from "@/lib/customerIdentity";
 import {
   buildWebsiteOrderRef,
   deriveWebsiteOrderType,
@@ -30,8 +30,6 @@ async function buildUniqueOrderRef() {
 }
 
 export async function POST(request: Request) {
-  const session = await auth().catch(() => null);
-  const sessionUserId = (session?.user as { id?: string } | undefined)?.id ?? null;
   const body = await request.json().catch(() => null);
   const parsed = websiteOrderCreateSchema.safeParse(body);
 
@@ -66,12 +64,18 @@ export async function POST(request: Request) {
     };
   });
   const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+  const customerIdentity = await findOrCreateCustomerIdentityUser({
+    customerName: data.customerName.trim(),
+    customerPhone: data.customerPhone.trim(),
+    customerEmail: data.customerEmail?.trim() || null,
+    locationNotes: data.notes?.trim() || null,
+  });
 
   const created = await prisma.websiteOrder.create({
     data: {
       id: buildEntityId(),
       orderRef,
-      customerUserId: sessionUserId,
+      customerUserId: customerIdentity.user.id,
       customerName: data.customerName.trim(),
       customerPhone: data.customerPhone.trim(),
       customerLocation: data.customerLocation.trim(),
@@ -86,6 +90,8 @@ export async function POST(request: Request) {
       source: "WEBSITE",
       metadata: {
         checkoutSource: "shop",
+        customerIdentitySource: customerIdentity.matchedBy,
+        customerEmailConflict: customerIdentity.emailConflict,
       },
       items: {
         create: items.map((item) => ({

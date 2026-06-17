@@ -1,3 +1,4 @@
+import { WebsiteOrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { formatPhoneForDisplay, normalizePhone } from "@/lib/phone";
 
@@ -77,8 +78,8 @@ function normalizeName(value?: string | null) {
     .toLowerCase();
 }
 
-function buildFallbackCustomerId(orderId: string) {
-  return `customer-${orderId}`;
+function buildFallbackCustomerId(prefix: string, recordId: string) {
+  return `${prefix}-${recordId}`;
 }
 
 function makeGroup(id: string, displayName: string): CustomerGroup {
@@ -113,15 +114,116 @@ function makeGroup(id: string, displayName: string): CustomerGroup {
   };
 }
 
+function moneyLabel(value: number) {
+  return new Intl.NumberFormat("en-KE", {
+    style: "currency",
+    currency: "KES",
+    maximumFractionDigits: 0,
+  }).format(value || 0);
+}
+
+function buildGroupId(args: {
+  userId?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  name?: string | null;
+  fallbackPrefix: string;
+  fallbackId: string;
+  phoneToGroup: Map<string, string>;
+  emailToGroup: Map<string, string>;
+  nameToGroup: Map<string, string>;
+}) {
+  const normalizedPhone = normalizePhone(args.phone ?? undefined);
+  const normalizedEmail = normalizeEmail(args.email);
+  const normalizedName = normalizeName(args.name);
+  const fallbackId =
+    args.userId ||
+    normalizedPhone ||
+    normalizedEmail ||
+    normalizedName ||
+    buildFallbackCustomerId(args.fallbackPrefix, args.fallbackId);
+
+  const groupId =
+    args.userId ||
+    (normalizedPhone ? args.phoneToGroup.get(normalizedPhone) : undefined) ||
+    (normalizedEmail ? args.emailToGroup.get(normalizedEmail) : undefined) ||
+    (normalizedName ? args.nameToGroup.get(normalizedName) : undefined) ||
+    fallbackId;
+
+  return { groupId, normalizedPhone, normalizedEmail, normalizedName };
+}
+
+function applyGroupIdentity(
+  group: CustomerGroup,
+  identity: {
+    normalizedPhone: string;
+    normalizedEmail: string;
+    normalizedName: string;
+    phoneToGroup: Map<string, string>;
+    emailToGroup: Map<string, string>;
+    nameToGroup: Map<string, string>;
+  },
+) {
+  if (identity.normalizedPhone) {
+    group._phones.add(identity.normalizedPhone);
+    identity.phoneToGroup.set(identity.normalizedPhone, group.id);
+  }
+  if (identity.normalizedEmail) {
+    group._emails.add(identity.normalizedEmail);
+    identity.emailToGroup.set(identity.normalizedEmail, group.id);
+  }
+  if (identity.normalizedName) {
+    identity.nameToGroup.set(identity.normalizedName, group.id);
+  }
+}
+
+function pushOrderIntoGroup(group: CustomerGroup, orderDetail: CustomerOrderDetail) {
+  group.orders.push(orderDetail);
+  group.totalOrders += 1;
+  if (orderDetail.receiptNumber) group.totalReceipts += 1;
+  group.totalSpend += orderDetail.totalAmount;
+  group.totalPaid += orderDetail.paidAmount;
+  group.outstandingBalance += Math.max(0, orderDetail.totalAmount - orderDetail.paidAmount);
+
+  if (!group.firstPurchaseAt || orderDetail.createdAt < group.firstPurchaseAt) {
+    group.firstPurchaseAt = orderDetail.createdAt;
+  }
+  if (!group.lastPurchaseAt || orderDetail.createdAt > group.lastPurchaseAt) {
+    group.lastPurchaseAt = orderDetail.createdAt;
+    group.lastShopName = orderDetail.shopName ?? group.lastShopName;
+  }
+
+  if (orderDetail.shopName) group._shops.add(orderDetail.shopName);
+  if (orderDetail.attendantName) group._attendants.add(orderDetail.attendantName);
+  if (orderDetail.attendantEmail) group._attendants.add(orderDetail.attendantEmail);
+
+  const paymentLine = `${String(orderDetail.paymentStatus).toLowerCase()} ${moneyLabel(orderDetail.totalAmount)}`;
+  group._activitySet.add(`${String(orderDetail.status).toLowerCase()} order · ${paymentLine}`);
+
+  for (const item of orderDetail.items) {
+    const productKey = `${item.productName.toLowerCase()}::${item.sku ?? ""}`;
+    const current = group._productMap.get(productKey) ?? {
+      name: item.productName,
+      quantity: 0,
+      spend: 0,
+      sku: item.sku,
+      category: item.category,
+    };
+    current.quantity += item.quantity;
+    current.spend += item.lineTotal;
+    group._productMap.set(productKey, current);
+  }
+}
+
 export async function getAdminCustomersData(q = "", sort = "recent"): Promise<AdminCustomerRow[]> {
   const query = q.trim();
-  const orders = await prisma.order.findMany({
+  const websiteOrders = await prisma.websiteOrder.findMany({
     where: {
       AND: [
         {
           OR: [
             { customerName: { not: "" } },
-            { customerPhone: { not: null } },
+            { customerPhone: { not: "" } },
             { customerEmail: { not: null } },
           ],
         },
@@ -131,60 +233,82 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
                 { customerName: { contains: query, mode: "insensitive" } },
                 { customerPhone: { contains: query, mode: "insensitive" } },
                 { customerEmail: { contains: query, mode: "insensitive" } },
-                { orderNumber: { contains: query, mode: "insensitive" } },
-                { shop: { name: { contains: query, mode: "insensitive" } } },
-                { attendant: { name: { contains: query, mode: "insensitive" } } },
-                { items: { some: { product: { name: { contains: query, mode: "insensitive" } } } } },
+                { customerLocation: { contains: query, mode: "insensitive" } },
+                { orderRef: { contains: query, mode: "insensitive" } },
+                { deliveryMethod: { contains: query, mode: "insensitive" } },
+                { paymentMethod: { contains: query, mode: "insensitive" } },
+                { items: { some: { productName: { contains: query, mode: "insensitive" } } } },
               ],
             }
           : {},
       ],
     },
-    select: {
-      id: true,
-      orderNumber: true,
-      customerName: true,
-      customerPhone: true,
-      customerEmail: true,
-      totalAmount: true,
-      paidAmount: true,
-      paymentStatus: true,
-      status: true,
-      createdAt: true,
+    include: {
+      items: true,
       receipt: {
         select: {
           receiptNumber: true,
           generatedAt: true,
         },
       },
-      shop: {
-        select: {
-          name: true,
-        },
-      },
-      attendant: {
+      confirmedBy: {
         select: {
           name: true,
           email: true,
         },
       },
-      items: {
+      customerUser: {
         select: {
-          quantity: true,
-          sellingPrice: true,
-          product: {
-            select: {
-              name: true,
-              sku: true,
-              category: true,
-            },
-          },
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
         },
       },
     },
-    orderBy: {
-      createdAt: "desc",
+    orderBy: [{ createdAt: "desc" }],
+  });
+
+  const agentSales = await prisma.agentSale.findMany({
+    where: {
+      receiptId: null,
+      AND: [
+        {
+          OR: [
+            { customerName: { not: "" } },
+            { customerPhone: { not: "" } },
+          ],
+        },
+        query
+          ? {
+              OR: [
+                { customerName: { contains: query, mode: "insensitive" } },
+                { customerPhone: { contains: query, mode: "insensitive" } },
+                { customerLocation: { contains: query, mode: "insensitive" } },
+                { productName: { contains: query, mode: "insensitive" } },
+                { productCategory: { contains: query, mode: "insensitive" } },
+              ],
+            }
+          : {},
+      ],
     },
+    include: {
+      agent: {
+        select: {
+          name: true,
+          email: true,
+        },
+      },
+      customerUser: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+        },
+      },
+    },
+    orderBy: [{ createdAt: "desc" }],
   });
 
   const groups = new Map<string, CustomerGroup>();
@@ -192,104 +316,134 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
   const emailToGroup = new Map<string, string>();
   const nameToGroup = new Map<string, string>();
 
-  for (const order of orders) {
-    const normalizedPhone = normalizePhone(order.customerPhone ?? undefined);
-    const normalizedEmail = normalizeEmail(order.customerEmail);
-    const normalizedName = normalizeName(order.customerName);
-    const fallbackId = normalizedPhone || normalizedEmail || normalizedName || buildFallbackCustomerId(order.id);
-    const groupId =
-      (normalizedPhone ? phoneToGroup.get(normalizedPhone) : undefined) ??
-      (normalizedEmail ? emailToGroup.get(normalizedEmail) : undefined) ??
-      (normalizedName ? nameToGroup.get(normalizedName) : undefined) ??
-      fallbackId;
+  for (const order of websiteOrders) {
+    const identity = buildGroupId({
+      userId: order.customerUserId || order.customerUser?.id || null,
+      phone: order.customerPhone || order.customerUser?.phone || null,
+      email: order.customerEmail || order.customerUser?.email || null,
+      name: order.customerName || order.customerUser?.name || null,
+      fallbackPrefix: "website-order",
+      fallbackId: order.id,
+      phoneToGroup,
+      emailToGroup,
+      nameToGroup,
+    });
 
-    let group = groups.get(groupId);
+    let group = groups.get(identity.groupId);
     if (!group) {
-      group = makeGroup(groupId, order.customerName.trim() || "Unnamed customer");
-      groups.set(groupId, group);
+      group = makeGroup(identity.groupId, order.customerName.trim() || order.customerUser?.name || "Unnamed customer");
+      groups.set(identity.groupId, group);
     }
 
-    if (normalizedPhone) {
-      group._phones.add(normalizedPhone);
-      phoneToGroup.set(normalizedPhone, group.id);
-    }
-    if (normalizedEmail) {
-      group._emails.add(normalizedEmail);
-      emailToGroup.set(normalizedEmail, group.id);
-    }
-    if (normalizedName) {
-      nameToGroup.set(normalizedName, group.id);
-    }
+    applyGroupIdentity(group, {
+      ...identity,
+      phoneToGroup,
+      emailToGroup,
+      nameToGroup,
+    });
 
     if (!group.displayName || group.displayName === "Unnamed customer") {
-      group.displayName = order.customerName.trim() || group.displayName;
+      group.displayName = order.customerName.trim() || order.customerUser?.name || group.displayName;
     }
+
+    const paidAmount =
+      order.status === WebsiteOrderStatus.CANCELLED
+        ? 0
+        : Number(order.total ?? 0);
 
     const orderDetail: CustomerOrderDetail = {
       id: order.id,
-      orderNumber: order.orderNumber,
+      orderNumber: order.orderRef,
       customerName: order.customerName,
       customerPhone: order.customerPhone,
       customerEmail: order.customerEmail,
-      totalAmount: Number(order.totalAmount ?? 0),
-      paidAmount: Number(order.paidAmount ?? 0),
-      paymentStatus: String(order.paymentStatus),
-      status: String(order.status),
+      totalAmount: Number(order.total ?? 0),
+      paidAmount,
+      paymentStatus: order.paymentMethod,
+      status: order.status,
       createdAt: order.createdAt,
-      shopName: order.shop?.name ?? null,
-      attendantName: order.attendant?.name ?? null,
-      attendantEmail: order.attendant?.email ?? null,
+      shopName:
+        order.source === "POS"
+          ? "POS Receipts"
+          : order.source === "WEBSITE"
+            ? "Website Orders"
+            : order.source || "Website Orders",
+      attendantName: order.confirmedBy?.name ?? null,
+      attendantEmail: order.confirmedBy?.email ?? null,
       receiptNumber: order.receipt?.receiptNumber ?? null,
       receiptGeneratedAt: order.receipt?.generatedAt ?? null,
       items: order.items.map((item) => ({
-        productName: item.product.name,
-        sku: item.product.sku ?? null,
-        category: item.product.category ?? null,
+        productName: item.productName,
+        sku: item.sku ?? null,
+        category: item.category ?? null,
         quantity: Number(item.quantity ?? 0),
-        sellingPrice: Number(item.sellingPrice ?? 0),
-        lineTotal: Number(item.quantity ?? 0) * Number(item.sellingPrice ?? 0),
+        sellingPrice: Number(item.unitPrice ?? 0),
+        lineTotal: Number(item.total ?? 0),
       })),
     };
 
-    group.orders.push(orderDetail);
-    group.totalOrders += 1;
-    if (order.receipt) group.totalReceipts += 1;
-    group.totalSpend += Number(order.totalAmount ?? 0);
-    group.totalPaid += Number(order.paidAmount ?? 0);
-    group.outstandingBalance += Math.max(0, Number(order.totalAmount ?? 0) - Number(order.paidAmount ?? 0));
+    pushOrderIntoGroup(group, orderDetail);
+  }
 
-    if (!group.firstPurchaseAt || order.createdAt < group.firstPurchaseAt) {
-      group.firstPurchaseAt = order.createdAt;
+  for (const sale of agentSales) {
+    const identity = buildGroupId({
+      userId: sale.customerUserId || sale.customerUser?.id || null,
+      phone: sale.customerPhone || sale.customerUser?.phone || null,
+      email: sale.customerUser?.email || null,
+      name: sale.customerName || sale.customerUser?.name || null,
+      fallbackPrefix: "agent-sale",
+      fallbackId: sale.id,
+      phoneToGroup,
+      emailToGroup,
+      nameToGroup,
+    });
+
+    let group = groups.get(identity.groupId);
+    if (!group) {
+      group = makeGroup(identity.groupId, sale.customerName.trim() || sale.customerUser?.name || "Unnamed customer");
+      groups.set(identity.groupId, group);
     }
-    if (!group.lastPurchaseAt || order.createdAt > group.lastPurchaseAt) {
-      group.lastPurchaseAt = order.createdAt;
-      group.lastShopName = order.shop?.name ?? null;
+
+    applyGroupIdentity(group, {
+      ...identity,
+      phoneToGroup,
+      emailToGroup,
+      nameToGroup,
+    });
+
+    if (!group.displayName || group.displayName === "Unnamed customer") {
+      group.displayName = sale.customerName.trim() || sale.customerUser?.name || group.displayName;
     }
 
-    if (order.shop?.name) group._shops.add(order.shop.name);
-    if (order.attendant?.name) group._attendants.add(order.attendant.name);
-    if (order.attendant?.email) group._attendants.add(order.attendant.email);
+    const orderDetail: CustomerOrderDetail = {
+      id: sale.id,
+      orderNumber: sale.receiptNumber || `AGENT-${sale.id.slice(0, 8).toUpperCase()}`,
+      customerName: sale.customerName,
+      customerPhone: sale.customerPhone,
+      customerEmail: sale.customerUser?.email ?? null,
+      totalAmount: Number(sale.totalAmount ?? 0),
+      paidAmount: Number(sale.amountPaid ?? 0),
+      paymentStatus: sale.paymentType,
+      status: sale.status,
+      createdAt: sale.createdAt,
+      shopName: "Agent Orders",
+      attendantName: sale.agent?.name ?? null,
+      attendantEmail: sale.agent?.email ?? null,
+      receiptNumber: sale.receiptNumber ?? null,
+      receiptGeneratedAt: null,
+      items: [
+        {
+          productName: sale.productName,
+          sku: null,
+          category: sale.productCategory ?? null,
+          quantity: Number(sale.quantity ?? 0),
+          sellingPrice: Number(sale.unitPrice ?? 0),
+          lineTotal: Number(sale.totalAmount ?? 0),
+        },
+      ],
+    };
 
-    const paymentLine = `${String(order.paymentStatus).toLowerCase()} ${new Intl.NumberFormat("en-KE", {
-      style: "currency",
-      currency: "KES",
-      maximumFractionDigits: 0,
-    }).format(Number(order.totalAmount ?? 0))}`;
-    group._activitySet.add(`${String(order.status).toLowerCase()} order · ${paymentLine}`);
-
-    for (const item of orderDetail.items) {
-      const productKey = `${item.productName.toLowerCase()}::${item.sku ?? ""}`;
-      const current = group._productMap.get(productKey) ?? {
-        name: item.productName,
-        quantity: 0,
-        spend: 0,
-        sku: item.sku,
-        category: item.category,
-      };
-      current.quantity += item.quantity;
-      current.spend += item.lineTotal;
-      group._productMap.set(productKey, current);
-    }
+    pushOrderIntoGroup(group, orderDetail);
   }
 
   const rows: AdminCustomerRow[] = Array.from(groups.values()).map((group) => {
@@ -319,7 +473,7 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
       attendants: Array.from(group._attendants).sort((a, b) => a.localeCompare(b)),
       recentProductNames: topProducts.slice(0, 4).map((item) => item.name),
       activities: Array.from(group._activitySet).slice(0, 4),
-      orders: group.orders,
+      orders: group.orders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
       topProducts,
     };
   });

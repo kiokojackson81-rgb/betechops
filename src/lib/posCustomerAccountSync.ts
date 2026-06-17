@@ -1,14 +1,13 @@
 import { Prisma, WebsiteOrderStatus, WebsiteOrderType } from "@prisma/client";
 import { randomUUID } from "crypto";
-import { findSafeCustomerProfileByUserId, getUserProfileColumnMap } from "@/lib/customerProfile";
+import {
+  findOrCreateCustomerIdentityUser,
+  normalizeCustomerIdentityEmail,
+  type SafeCustomerIdentityUser,
+} from "@/lib/customerIdentity";
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { ensureWebsiteOrdersSchema } from "@/lib/websiteOrders";
-
-function normalizeCustomerEmail(value?: string | null) {
-  const normalized = String(value || "").trim().toLowerCase();
-  return normalized || "";
-}
 
 function readJsonObject(value: unknown) {
   if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -25,61 +24,10 @@ function pickFirstNonEmpty(...values: Array<string | null | undefined>) {
   return "";
 }
 
-type SafeCustomerUser = {
-  id: string;
-  name?: string | null;
-  email?: string | null;
-  phone?: string | null;
-  county?: string | null;
-  town?: string | null;
-  estateLandmark?: string | null;
-  locationNotes?: string | null;
-};
-
-function getSafeUserSelectSql(columns: Awaited<ReturnType<typeof getUserProfileColumnMap>>) {
-  const selectedColumns = [
-    "id",
-    "name",
-    "email",
-    "phone",
-    ...(columns.county ? ["county"] : []),
-    ...(columns.town ? ["town"] : []),
-    ...(columns.estateLandmark ? ["estateLandmark"] : []),
-    ...(columns.locationNotes ? ["locationNotes"] : []),
-  ];
-
-  return selectedColumns.map((column) => `"${column}"`).join(", ");
-}
-
-async function findSafeUserByField(field: "phone" | "email", value: string): Promise<SafeCustomerUser | null> {
-  const columns = await getUserProfileColumnMap();
-  const selectSql = getSafeUserSelectSql(columns);
-  const rows = await prisma.$queryRawUnsafe<Array<SafeCustomerUser>>(
-    `SELECT ${selectSql} FROM "User" WHERE "${field}" = $1 LIMIT 1`,
-    value,
-  );
-  return rows[0] ?? null;
-}
-
-async function findSafeUserById(userId: string): Promise<SafeCustomerUser | null> {
-  const profile = await findSafeCustomerProfileByUserId(userId);
-  if (!profile?.id) return null;
-  return {
-    id: profile.id,
-    name: profile.name ?? null,
-    email: profile.email ?? null,
-    phone: profile.phone ?? null,
-    county: profile.county ?? null,
-    town: profile.town ?? null,
-    estateLandmark: profile.estateLandmark ?? null,
-    locationNotes: profile.locationNotes ?? null,
-  };
-}
-
 function buildCustomerLocation(
   metadata: Record<string, unknown>,
   data: Record<string, unknown>,
-  user: Pick<SafeCustomerUser, "county" | "town" | "estateLandmark" | "locationNotes"> | null,
+  user: Pick<SafeCustomerIdentityUser, "county" | "town" | "estateLandmark" | "locationNotes"> | null,
 ) {
   const deliveryAddress = pickFirstNonEmpty(
     typeof metadata.deliveryAddress === "string" ? metadata.deliveryAddress : "",
@@ -110,114 +58,6 @@ function readPodDeliveryState(data: Record<string, unknown>) {
       : null;
   const status = typeof podDelivery?.status === "string" ? podDelivery.status.trim().toLowerCase() : "";
   return { podDelivery, status };
-}
-
-async function resolveExistingCustomerUsers(args: { normalizedPhone: string; normalizedEmail: string }) {
-  const [phoneUser, emailUser] = await Promise.all([
-    args.normalizedPhone ? findSafeUserByField("phone", args.normalizedPhone) : Promise.resolve(null),
-    args.normalizedEmail ? findSafeUserByField("email", args.normalizedEmail) : Promise.resolve(null),
-  ]);
-
-  return { phoneUser, emailUser };
-}
-
-async function findOrCreateCustomerUser(input: {
-  customerName: string;
-  normalizedPhone: string;
-  normalizedEmail: string;
-}): Promise<{
-  user: SafeCustomerUser;
-  matchedBy: "phone" | "email" | "created";
-  emailConflict: boolean;
-}> {
-  const { phoneUser, emailUser } = await resolveExistingCustomerUsers(input);
-  const hasPhoneIdentity = Boolean(input.normalizedPhone);
-  const conflictingAccounts =
-    Boolean(phoneUser?.id) &&
-    Boolean(emailUser?.id) &&
-    phoneUser!.id !== emailUser!.id;
-
-  const existing = hasPhoneIdentity
-    ? phoneUser
-    : phoneUser && emailUser && phoneUser.id === emailUser.id
-      ? phoneUser
-      : phoneUser || emailUser;
-
-  if (existing) {
-    const updateData: Prisma.UserUpdateInput = {};
-    if (input.customerName && input.customerName !== existing.name) {
-      updateData.name = input.customerName;
-    }
-    if (input.normalizedPhone && !existing.phone && (!phoneUser || phoneUser.id === existing.id)) {
-      updateData.phone = input.normalizedPhone;
-    }
-    if (
-      input.normalizedEmail &&
-      !existing.email &&
-      (!emailUser || emailUser.id === existing.id) &&
-      !conflictingAccounts
-    ) {
-      updateData.email = input.normalizedEmail;
-    }
-
-    if (Object.keys(updateData).length) {
-      await prisma.user.update({
-        where: { id: existing.id },
-        data: updateData,
-      });
-      const user = await findSafeUserById(existing.id);
-      if (!user) {
-        throw new Error(`Failed to reload synced customer account ${existing.id}`);
-      }
-      return {
-        user,
-        matchedBy: hasPhoneIdentity ? "phone" : emailUser?.id === existing.id ? "email" : "phone",
-        emailConflict: conflictingAccounts,
-      };
-    }
-
-    return {
-      user: existing,
-      matchedBy: hasPhoneIdentity ? "phone" : emailUser?.id === existing.id ? "email" : "phone",
-      emailConflict: conflictingAccounts,
-    };
-  }
-
-  if (hasPhoneIdentity) {
-    const createdUser = await prisma.user.create({
-      data: {
-        name: input.customerName || null,
-        phone: input.normalizedPhone || null,
-        email: input.normalizedEmail && !emailUser ? input.normalizedEmail : null,
-      },
-    });
-    const user = await findSafeUserById(createdUser.id);
-    if (!user) {
-      throw new Error(`Failed to load created customer account ${createdUser.id}`);
-    }
-    return {
-      user,
-      matchedBy: "created",
-      emailConflict: Boolean(emailUser),
-    };
-  }
-
-  const createdUser = await prisma.user.create({
-    data: {
-      name: input.customerName || null,
-      phone: input.normalizedPhone || null,
-      email: input.normalizedEmail || null,
-    },
-  });
-  const user = await findSafeUserById(createdUser.id);
-  if (!user) {
-    throw new Error(`Failed to load created customer account ${createdUser.id}`);
-  }
-  return {
-    user,
-    matchedBy: "created",
-    emailConflict: false,
-  };
 }
 
 export async function syncPosReceiptToCustomerAccount(receiptId: string) {
@@ -266,15 +106,15 @@ export async function syncPosReceiptToCustomerAccount(receiptId: string) {
   const data = readJsonObject(receipt.data);
   const metadata = readJsonObject(order.metadata);
   const normalizedPhone = normalizeKenyanPhone(order.customerPhone || String(data.customerPhone || ""));
-  const normalizedEmail = normalizeCustomerEmail(order.customerEmail || String(data.customerEmail || ""));
+  const normalizedEmail = normalizeCustomerIdentityEmail(order.customerEmail || String(data.customerEmail || ""));
   const customerName = pickFirstNonEmpty(order.customerName, String(data.customerName || ""));
 
   const customerResolution =
     normalizedPhone || normalizedEmail || customerName
-      ? await findOrCreateCustomerUser({
+      ? await findOrCreateCustomerIdentityUser({
           customerName,
-          normalizedPhone,
-          normalizedEmail,
+          customerPhone: normalizedPhone,
+          customerEmail: normalizedEmail,
         })
       : null;
   const customerUser = customerResolution?.user ?? null;
@@ -421,7 +261,7 @@ export async function backfillPosReceiptsForCustomerAccount(args: {
   const normalizedEmails = Array.from(
     new Set(
       [args.normalizedEmail, ...(args.normalizedEmails || [])]
-        .map((value) => normalizeCustomerEmail(value))
+        .map((value) => normalizeCustomerIdentityEmail(value))
         .filter(Boolean),
     ),
   );

@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
+import { findOrCreateCustomerIdentityUser } from "@/lib/customerIdentity";
 import { prisma } from "@/lib/prisma";
 import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
 import { generateReceiptSerial, normalizeReceiptSerial } from "@/lib/receipts/serial";
@@ -1121,12 +1122,19 @@ export async function createAgentSale(agentId: string, body: unknown) {
   const input = parseAgentSaleCreateInput(body);
   const totalAmount = normalizeAmount(input.totalAmount > 0 ? input.totalAmount : input.quantity * input.unitPrice);
   const amountPaid = normalizeAmount(input.amountPaid);
+  const customerIdentity = await findOrCreateCustomerIdentityUser({
+    customerName: input.customerName,
+    customerPhone: input.customerPhone,
+    county: cleanOptional(input.customerCounty),
+    locationNotes: cleanOptional(input.customerLocation),
+  });
   let sale;
   try {
     sale = await prisma.$transaction(async (tx) => {
       const created = await tx.agentSale.create({
         data: {
           agentId,
+          customerUserId: customerIdentity.user.id,
           customerName: input.customerName,
           customerPhone: input.customerPhone,
           customerLocation: input.customerLocation,
@@ -1179,6 +1187,8 @@ export async function createAgentSale(agentId: string, body: unknown) {
             customerPhone: created.customerPhone,
             customerName: created.customerName,
             totalAmount,
+            customerIdentitySource: customerIdentity.matchedBy,
+            customerEmailConflict: customerIdentity.emailConflict,
           } as Prisma.InputJsonValue,
         },
         tx,

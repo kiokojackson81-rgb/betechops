@@ -63,7 +63,7 @@ export default async function AdminCustomersPage({
             <div className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-300">POS Management</div>
             <h1 className="text-4xl font-semibold tracking-tight text-white">Customer desk</h1>
             <p className="max-w-3xl text-sm text-slate-400">
-              Keep one clean customer list across receipts and orders, then expand any row to see contact details, total purchases, purchased items, shop history, and recent activity.
+              Keep one harmonized customer list across POS receipts, website orders, and agent orders, then expand any row to review purchase history, contact details, and linked order activity.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">

@@ -79,7 +79,7 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
       </div>
 
       <div className="hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.96))] lg:block">
-        <div className="grid grid-cols-[56px_minmax(260px,1.8fr)_180px_120px_120px_160px_160px_150px] items-center gap-3 border-b border-white/10 bg-slate-950/95 px-4 py-4 text-[11px] uppercase tracking-[0.18em] text-slate-500">
+        <div className="grid grid-cols-[56px_minmax(260px,1.9fr)_190px_110px_120px_160px_170px] items-center gap-3 border-b border-white/10 bg-slate-950/95 px-4 py-4 text-[11px] uppercase tracking-[0.18em] text-slate-500">
           <div />
           <div>Customer</div>
           <div>Contact</div>
@@ -87,14 +87,13 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
           <div>Receipts</div>
           <div>Total purchase</div>
           <div>Last activity</div>
-          <div>Highlights</div>
         </div>
         <div className="divide-y divide-white/5">
           {customers.map((customer) => {
             const expanded = expandedIds.includes(customer.id);
             return (
               <div key={customer.id} className="transition hover:bg-white/[0.02]">
-                <div className="grid grid-cols-[56px_minmax(260px,1.8fr)_180px_120px_120px_160px_160px_150px] items-center gap-3 px-4 py-4">
+                <div className="grid grid-cols-[56px_minmax(260px,1.9fr)_190px_110px_120px_160px_170px] items-center gap-3 px-4 py-4">
                   <div>
                     <button
                       onClick={() => toggleExpanded(customer.id)}
@@ -118,7 +117,6 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
                   <div className="text-white">{customer.totalReceipts}</div>
                   <div className="font-semibold text-emerald-300">{money(customer.totalSpend)}</div>
                   <div className="text-sm text-slate-300">{dateTime(customer.lastPurchaseAt)}</div>
-                  <div className="text-xs text-slate-400">{customer.recentProductNames.slice(0, 2).join(" · ") || "No item summary"}</div>
                 </div>
 
                 {expanded ? (
