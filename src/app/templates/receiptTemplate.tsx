@@ -118,13 +118,13 @@ export default function renderReceiptTemplate(
   );
 
   const itemsHtml = items
-    .map((it: any) => {
+    .map((it: any, index: number) => {
       const qty = Number.isFinite(Number(it.quantity)) ? Number(it.quantity) : 1;
       const unit = Number.isFinite(Number(it.unitPrice ?? it.sellingPrice)) ? Number(it.unitPrice ?? it.sellingPrice) : 0;
       const lineTotal = qty * unit;
       const unitText = formatAmount(unit) || '';
       const lineTotalText = formatAmount(lineTotal) || '';
-      const title = it.title || it.productName || '';
+      const title = it.title || it.productName || 'Item';
       const itemMeta: string[] = [];
       if (it.serial) {
         itemMeta.push(`Serial / IMEI: ${String(it.serial)}`);
@@ -132,19 +132,30 @@ export default function renderReceiptTemplate(
       if (it.warranty) {
         itemMeta.push(`Warranty: ${String(it.warranty)}`);
       }
-      const itemMetaHtml = itemMeta.length
-        ? `<div class="item-meta">${itemMeta.map((m) => `<span>${m}</span>`).join(' | ')}</div>`
-        : '';
       return `
-      <tr>
-        <td style="padding:8px;border-bottom:1px solid #ddd;text-align:center">${qty}</td>
-        <td style="padding:8px;border-bottom:1px solid #ddd">
-          ${title}
-          ${itemMetaHtml}
-        </td>
-        <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right">${unitText}</td>
-        <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right">${lineTotalText}</td>
-      </tr>`;
+      <tbody class="receipt-item-block${index ? ' receipt-item-block--spaced' : ''}">
+        <tr class="product-name-row">
+          <td colspan="3">
+            <div class="product-name-label">Item name</div>
+            <div class="product-name-value">${title}</div>
+            ${
+              itemMeta.length
+                ? `<div class="item-meta">${itemMeta.map((m) => `<span>${m}</span>`).join('')}</div>`
+                : ''
+            }
+          </td>
+        </tr>
+        <tr class="pricing-header">
+          <th>Quantity</th>
+          <th class="right">Unit price</th>
+          <th class="right">Total</th>
+        </tr>
+        <tr class="pricing-values">
+          <td>${qty}</td>
+          <td class="right">${unitText}</td>
+          <td class="right total-value">${lineTotalText}</td>
+        </tr>
+      </tbody>`;
     })
     .join('');
 
@@ -232,6 +243,64 @@ export default function renderReceiptTemplate(
         }
         td { padding:8px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
         .right { text-align:right }
+        .items-table {
+          margin-top: 8px;
+          border: 1px solid #e5e7eb;
+          border-radius: 10px;
+          overflow: hidden;
+        }
+        .items-table th,
+        .items-table td {
+          border: none;
+        }
+        .receipt-item-block--spaced .product-name-row td {
+          border-top: 1px solid #e5e7eb;
+        }
+        .product-name-row td {
+          padding: 10px 10px 8px;
+          background: #fffdf8;
+          white-space: normal;
+          word-break: break-word;
+        }
+        .product-name-label {
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: ${brandColor};
+        }
+        .product-name-value {
+          margin-top: 3px;
+          font-size: 12.5px;
+          line-height: 1.45;
+          font-weight: 700;
+          color: #111827;
+        }
+        .pricing-header th {
+          padding: 6px 10px;
+          background: #f8fafc;
+          text-align: center;
+          font-size: 10px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: ${brandColor};
+        }
+        .pricing-header th.right {
+          text-align: right;
+        }
+        .pricing-values td {
+          padding: 7px 10px 9px;
+          border-top: 1px solid #e5e7eb;
+          font-size: 12px;
+          color: #1f2937;
+        }
+        .pricing-values td:first-child {
+          text-align: center;
+        }
+        .pricing-values .total-value {
+          font-weight: 800;
+          color: #111827;
+        }
         .totals {
           width: 56%;
           margin: 10px 0 0 auto;
@@ -279,7 +348,7 @@ export default function renderReceiptTemplate(
         display: flex;
         flex-wrap: wrap;
         gap: 6px;
-        margin-top: 4px;
+        margin-top: 5px;
         font-size: 10px;
         color: rgba(15, 23, 42, 0.8);
       }
@@ -427,6 +496,13 @@ export default function renderReceiptTemplate(
         .meta > div { padding: 5px 7px; }
         table { font-size: 11px; }
         th, td { padding: 4px; }
+        .items-table { margin-top: 6px; }
+        .product-name-row td { padding: 7px 7px 5px; }
+        .product-name-label { font-size: 9px; }
+        .product-name-value { font-size: 11px; line-height: 1.35; }
+        .pricing-header th { padding: 4px 7px; font-size: 8.8px; }
+        .pricing-values td { padding: 4px 7px 6px; font-size: 10.2px; }
+        .item-meta { gap: 4px; margin-top: 4px; font-size: 9px; }
         .totals { font-size: 11.5px; width: 58%; }
         .totals { margin-top: 5px; }
         .totals td { padding: 2px 0; }
@@ -465,13 +541,8 @@ export default function renderReceiptTemplate(
       </div>
     </div>
 
-      <table>
-        <thead>
-          <tr><th>Qty</th><th>Particulars</th><th class="right">@ (Ksh)</th><th class="right">Kshs.</th></tr>
-        </thead>
-        <tbody>
-          ${itemsHtml}
-        </tbody>
+      <table class="items-table">
+        ${itemsHtml}
       </table>
 
     <table class="totals">
