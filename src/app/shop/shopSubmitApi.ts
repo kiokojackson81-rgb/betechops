@@ -22,11 +22,25 @@ export type QuoteRequestInput = {
   county?: string;
   town?: string;
   specificLocation?: string;
+  projectType:
+    | "SOLAR_HOME_SYSTEM"
+    | "SOLAR_WATER_PUMP"
+    | "SOLAR_WATER_HEATER"
+    | "BOREHOLE_SOLAR_SYSTEM"
+    | "COMMERCIAL_SOLAR_SYSTEM"
+    | "CCTV_PLUS_SOLAR"
+    | "STREET_LIGHTS"
+    | "OTHER";
   propertyType?: string;
+  preferredContactMethod?: "PHONE_CALL" | "WHATSAPP" | "EMAIL";
+  bestTimeToContact?: "ANYTIME" | "MORNING" | "AFTERNOON" | "EVENING";
+  urgency?: "TODAY" | "THIS_WEEK" | "THIS_MONTH" | "JUST_RESEARCHING";
+  installationStatus?: "NEW_INSTALLATION" | "UPGRADE_EXISTING_SYSTEM" | "REPAIR_OR_REPLACEMENT";
   load?: string;
   budgetRange?: string;
   preferredProducts?: string;
   notes?: string;
+  answers?: Record<string, unknown>;
 };
 
 export type ShopOrderResponse = {

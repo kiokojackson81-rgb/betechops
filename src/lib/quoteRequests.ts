@@ -16,11 +16,17 @@ const QUOTE_REQUEST_SCHEMA_SQL = [
     "county" TEXT,
     "town" TEXT,
     "specificLocation" TEXT,
+    "projectType" TEXT,
     "propertyType" TEXT,
+    "preferredContactMethod" TEXT,
+    "bestTimeToContact" TEXT,
+    "urgency" TEXT,
+    "installationStatus" TEXT,
     "loadDescription" TEXT,
     "budgetRange" TEXT,
     "preferredProducts" TEXT,
     "notes" TEXT,
+    "answersJson" JSONB,
     "status" TEXT NOT NULL DEFAULT 'NEW',
     "assignedAttendantId" TEXT,
     "assignedAttendantEmail" TEXT,
@@ -42,6 +48,12 @@ const QUOTE_REQUEST_SCHEMA_SQL = [
   `CREATE INDEX IF NOT EXISTS "QuoteRequest_customerUserId_createdAt_idx" ON "QuoteRequest"("customerUserId","createdAt")`,
   `CREATE INDEX IF NOT EXISTS "QuoteRequest_customerPhone_createdAt_idx" ON "QuoteRequest"("customerPhone","createdAt")`,
   `CREATE INDEX IF NOT EXISTS "QuoteRequest_customerEmail_createdAt_idx" ON "QuoteRequest"("customerEmail","createdAt")`,
+  `ALTER TABLE "QuoteRequest" ADD COLUMN IF NOT EXISTS "projectType" TEXT`,
+  `ALTER TABLE "QuoteRequest" ADD COLUMN IF NOT EXISTS "preferredContactMethod" TEXT`,
+  `ALTER TABLE "QuoteRequest" ADD COLUMN IF NOT EXISTS "bestTimeToContact" TEXT`,
+  `ALTER TABLE "QuoteRequest" ADD COLUMN IF NOT EXISTS "urgency" TEXT`,
+  `ALTER TABLE "QuoteRequest" ADD COLUMN IF NOT EXISTS "installationStatus" TEXT`,
+  `ALTER TABLE "QuoteRequest" ADD COLUMN IF NOT EXISTS "answersJson" JSONB`,
   `DO $$
   BEGIN
     IF NOT EXISTS (
@@ -89,6 +101,99 @@ export const QUOTE_REQUEST_STATUSES = [
 
 export type QuoteRequestStatus = (typeof QUOTE_REQUEST_STATUSES)[number];
 
+export const QUOTE_PROJECT_TYPES = [
+  "SOLAR_HOME_SYSTEM",
+  "SOLAR_WATER_PUMP",
+  "SOLAR_WATER_HEATER",
+  "BOREHOLE_SOLAR_SYSTEM",
+  "COMMERCIAL_SOLAR_SYSTEM",
+  "CCTV_PLUS_SOLAR",
+  "STREET_LIGHTS",
+  "OTHER",
+] as const;
+
+export type QuoteProjectType = (typeof QUOTE_PROJECT_TYPES)[number];
+
+export const QUOTE_CONTACT_METHODS = ["PHONE_CALL", "WHATSAPP", "EMAIL"] as const;
+export type QuoteContactMethod = (typeof QUOTE_CONTACT_METHODS)[number];
+
+export const QUOTE_CONTACT_TIMES = ["ANYTIME", "MORNING", "AFTERNOON", "EVENING"] as const;
+export type QuoteContactTime = (typeof QUOTE_CONTACT_TIMES)[number];
+
+export const QUOTE_URGENCY_LEVELS = [
+  "TODAY",
+  "THIS_WEEK",
+  "THIS_MONTH",
+  "JUST_RESEARCHING",
+] as const;
+export type QuoteUrgency = (typeof QUOTE_URGENCY_LEVELS)[number];
+
+export const QUOTE_INSTALLATION_STATUSES = [
+  "NEW_INSTALLATION",
+  "UPGRADE_EXISTING_SYSTEM",
+  "REPAIR_OR_REPLACEMENT",
+] as const;
+export type QuoteInstallationStatus = (typeof QUOTE_INSTALLATION_STATUSES)[number];
+
+const quoteStructuredAnswersSchema = z
+  .object({
+    solarHome: z
+      .object({
+        appliances: z.array(z.string().trim()).optional(),
+        quantities: z.record(z.string(), z.string()).optional(),
+        backupDuration: z.string().trim().optional(),
+        powerUsePattern: z.string().trim().optional(),
+        existingPowerSource: z.string().trim().optional(),
+      })
+      .optional(),
+    solarWaterPump: z
+      .object({
+        waterSource: z.string().trim().optional(),
+        boreholeDepth: z.string().trim().optional(),
+        waterLevel: z.string().trim().optional(),
+        tankSize: z.string().trim().optional(),
+        tankHeight: z.string().trim().optional(),
+        distanceToTank: z.string().trim().optional(),
+        dailyWaterRequirement: z.string().trim().optional(),
+      })
+      .optional(),
+    solarWaterHeater: z
+      .object({
+        numberOfUsers: z.string().trim().optional(),
+        usageType: z.string().trim().optional(),
+        existingTankSize: z.string().trim().optional(),
+        dailyHotWaterUsage: z.string().trim().optional(),
+      })
+      .optional(),
+    commercialSolar: z
+      .object({
+        businessType: z.string().trim().optional(),
+        keyEquipment: z.string().trim().optional(),
+        estimatedMonthlyBill: z.string().trim().optional(),
+        phaseType: z.string().trim().optional(),
+        usagePattern: z.string().trim().optional(),
+      })
+      .optional(),
+    cctvSolar: z
+      .object({
+        cameraCount: z.string().trim().optional(),
+        recorderType: z.string().trim().optional(),
+        routerRequired: z.string().trim().optional(),
+        backupDuration: z.string().trim().optional(),
+      })
+      .optional(),
+    streetLights: z
+      .object({
+        poleCount: z.string().trim().optional(),
+        poleHeight: z.string().trim().optional(),
+        coverageArea: z.string().trim().optional(),
+        brightnessNeed: z.string().trim().optional(),
+      })
+      .optional(),
+    general: z.record(z.string(), z.string()).optional(),
+  })
+  .optional();
+
 export const quoteRequestCreateSchema = z.object({
   name: z.string().trim().min(2),
   phone: z.string().trim().min(7),
@@ -97,11 +202,17 @@ export const quoteRequestCreateSchema = z.object({
   county: z.string().trim().optional(),
   town: z.string().trim().optional(),
   specificLocation: z.string().trim().optional(),
+  projectType: z.enum(QUOTE_PROJECT_TYPES),
   propertyType: z.string().trim().optional(),
+  preferredContactMethod: z.enum(QUOTE_CONTACT_METHODS).optional(),
+  bestTimeToContact: z.enum(QUOTE_CONTACT_TIMES).optional(),
+  urgency: z.enum(QUOTE_URGENCY_LEVELS).optional(),
+  installationStatus: z.enum(QUOTE_INSTALLATION_STATUSES).optional(),
   load: z.string().trim().optional(),
   budgetRange: z.string().trim().optional(),
   preferredProducts: z.string().trim().optional(),
   notes: z.string().trim().optional(),
+  answers: quoteStructuredAnswersSchema,
 });
 
 export type QuoteRequestCreateInput = z.infer<typeof quoteRequestCreateSchema> & {
@@ -136,11 +247,17 @@ type QuoteRequestRow = {
   county: string | null;
   town: string | null;
   specificLocation: string | null;
+  projectType: string | null;
   propertyType: string | null;
+  preferredContactMethod: string | null;
+  bestTimeToContact: string | null;
+  urgency: string | null;
+  installationStatus: string | null;
   loadDescription: string | null;
   budgetRange: string | null;
   preferredProducts: string | null;
   notes: string | null;
+  answersJson: Prisma.JsonValue | null;
   status: string;
   assignedAttendantId: string | null;
   assignedAttendantEmail: string | null;
@@ -167,11 +284,17 @@ export type SerializedQuoteRequest = {
   county: string | null;
   town: string | null;
   specificLocation: string | null;
+  projectType: QuoteProjectType | null;
   propertyType: string | null;
+  preferredContactMethod: QuoteContactMethod | null;
+  bestTimeToContact: QuoteContactTime | null;
+  urgency: QuoteUrgency | null;
+  installationStatus: QuoteInstallationStatus | null;
   loadDescription: string | null;
   budgetRange: string | null;
   preferredProducts: string | null;
   notes: string | null;
+  answers: Record<string, unknown> | null;
   status: QuoteRequestStatus;
   assignedAttendant: {
     id: string | null;
@@ -199,6 +322,28 @@ function normalizePhone(value: unknown) {
 
 function isQuoteStatus(value: unknown): value is QuoteRequestStatus {
   return QUOTE_REQUEST_STATUSES.includes(String(value).trim().toUpperCase() as QuoteRequestStatus);
+}
+
+function isQuoteProjectType(value: unknown): value is QuoteProjectType {
+  return QUOTE_PROJECT_TYPES.includes(String(value).trim().toUpperCase() as QuoteProjectType);
+}
+
+function isQuoteContactMethod(value: unknown): value is QuoteContactMethod {
+  return QUOTE_CONTACT_METHODS.includes(String(value).trim().toUpperCase() as QuoteContactMethod);
+}
+
+function isQuoteContactTime(value: unknown): value is QuoteContactTime {
+  return QUOTE_CONTACT_TIMES.includes(String(value).trim().toUpperCase() as QuoteContactTime);
+}
+
+function isQuoteUrgency(value: unknown): value is QuoteUrgency {
+  return QUOTE_URGENCY_LEVELS.includes(String(value).trim().toUpperCase() as QuoteUrgency);
+}
+
+function isQuoteInstallationStatus(value: unknown): value is QuoteInstallationStatus {
+  return QUOTE_INSTALLATION_STATUSES.includes(
+    String(value).trim().toUpperCase() as QuoteInstallationStatus,
+  );
 }
 
 function toIsoString(value: Date | string | null | undefined) {
@@ -389,11 +534,21 @@ export function serializeQuoteRequest(row: QuoteRequestRow): SerializedQuoteRequ
     county: row.county,
     town: row.town,
     specificLocation: row.specificLocation,
+    projectType: isQuoteProjectType(row.projectType) ? row.projectType : null,
     propertyType: row.propertyType,
+    preferredContactMethod: isQuoteContactMethod(row.preferredContactMethod)
+      ? row.preferredContactMethod
+      : null,
+    bestTimeToContact: isQuoteContactTime(row.bestTimeToContact) ? row.bestTimeToContact : null,
+    urgency: isQuoteUrgency(row.urgency) ? row.urgency : null,
+    installationStatus: isQuoteInstallationStatus(row.installationStatus)
+      ? row.installationStatus
+      : null,
     loadDescription: row.loadDescription,
     budgetRange: row.budgetRange,
     preferredProducts: row.preferredProducts,
     notes: row.notes,
+    answers: asJsonObject(row.answersJson),
     status: isQuoteStatus(row.status) ? row.status : "NEW",
     assignedAttendant: row.assignedAttendantId
       ? {
@@ -432,11 +587,17 @@ export async function createQuoteRequest(input: QuoteRequestCreateInput) {
       "county",
       "town",
       "specificLocation",
+      "projectType",
       "propertyType",
+      "preferredContactMethod",
+      "bestTimeToContact",
+      "urgency",
+      "installationStatus",
       "loadDescription",
       "budgetRange",
       "preferredProducts",
       "notes",
+      "answersJson",
       "status",
       "assignedAttendantId",
       "assignedAttendantEmail",
@@ -455,11 +616,17 @@ export async function createQuoteRequest(input: QuoteRequestCreateInput) {
       ${input.county?.trim() || null},
       ${input.town?.trim() || null},
       ${input.specificLocation?.trim() || null},
+      ${input.projectType},
       ${input.propertyType?.trim() || null},
+      ${input.preferredContactMethod || null},
+      ${input.bestTimeToContact || null},
+      ${input.urgency || null},
+      ${input.installationStatus || null},
       ${input.load?.trim() || null},
       ${input.budgetRange?.trim() || null},
       ${input.preferredProducts?.trim() || null},
       ${input.notes?.trim() || null},
+      ${(input.answers || null) as Prisma.JsonObject | null},
       ${"NEW"},
       ${assignee?.id ?? null},
       ${assignee?.email ? normalizeEmail(assignee.email) : null},

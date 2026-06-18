@@ -3,7 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Loader2, RefreshCcw } from "lucide-react";
 import type {
+  QuoteContactMethod,
+  QuoteContactTime,
+  QuoteInstallationStatus,
+  QuoteProjectType,
   QuoteRequestStatus,
+  QuoteUrgency,
   SerializedQuoteRequest,
 } from "@/lib/quoteRequests";
 
@@ -63,6 +68,89 @@ function normalizeRecommendedProducts(value: string) {
     .map((line) => line.trim())
     .filter(Boolean)
     .join("\n");
+}
+
+function formatProjectType(value: QuoteProjectType | string | null | undefined) {
+  if (!value) return "-";
+  return value
+    .replace(/PLUS/g, "PLUS")
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+    .replace("Cctv", "CCTV");
+}
+
+function formatContactMethod(value: QuoteContactMethod | string | null | undefined) {
+  if (!value) return "-";
+  return value.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatContactTime(value: QuoteContactTime | string | null | undefined) {
+  if (!value) return "-";
+  return value.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatUrgency(value: QuoteUrgency | string | null | undefined) {
+  if (!value) return "-";
+  return value.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatInstallationStatus(value: QuoteInstallationStatus | string | null | undefined) {
+  if (!value) return "-";
+  return value.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function renderAnswerValue(value: unknown): string {
+  if (typeof value === "string") return value.trim() || "-";
+  if (typeof value === "number") return String(value);
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (Array.isArray(value)) {
+    const values = value
+      .map((entry) => (typeof entry === "string" ? entry.trim() : String(entry)))
+      .filter(Boolean);
+    return values.length ? values.join(", ") : "-";
+  }
+  if (value && typeof value === "object") {
+    const objectEntries = Object.entries(value as Record<string, unknown>)
+      .filter(([, entry]) => entry !== null && entry !== undefined && `${entry}`.trim() !== "");
+    return objectEntries.length
+      ? objectEntries.map(([key, entry]) => `${key}: ${renderAnswerValue(entry)}`).join(" | ")
+      : "-";
+  }
+  return "-";
+}
+
+function renderAnswerBlock(title: string, answers?: Record<string, unknown> | null) {
+  if (!answers) return null;
+  const entries = Object.entries(answers).filter(([, value]) => {
+    if (value === null || value === undefined) return false;
+    if (typeof value === "string") return value.trim().length > 0;
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === "object") return Object.keys(value as Record<string, unknown>).length > 0;
+    return true;
+  });
+
+  if (!entries.length) return null;
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+        {title}
+      </div>
+      <div className="mt-3 grid gap-3 text-sm text-slate-200 sm:grid-cols-2">
+        {entries.map(([key, value]) => (
+          <div key={key} className="min-w-0">
+            <div className="font-semibold text-white">
+              {key.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase())}
+            </div>
+            <div className="mt-1 whitespace-pre-wrap break-words text-slate-300">
+              {renderAnswerValue(value)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function QuotationRequestsDeskClient({
@@ -337,12 +425,30 @@ export default function QuotationRequestsDeskClient({
                           </div>
                           <div className="mt-3 grid gap-3 text-sm text-slate-200 sm:grid-cols-2">
                             <div>
-                              <div className="font-semibold text-white">Property type</div>
-                              <div className="mt-1 text-slate-300">{request.propertyType || "-"}</div>
+                              <div className="font-semibold text-white">Project type</div>
+                              <div className="mt-1 text-slate-300">
+                                {formatProjectType(request.projectType || request.propertyType)}
+                              </div>
                             </div>
                             <div>
                               <div className="font-semibold text-white">Budget range</div>
                               <div className="mt-1 text-slate-300">{request.budgetRange || "-"}</div>
+                            </div>
+                            <div>
+                              <div className="font-semibold text-white">Preferred contact</div>
+                              <div className="mt-1 text-slate-300">{formatContactMethod(request.preferredContactMethod)}</div>
+                            </div>
+                            <div>
+                              <div className="font-semibold text-white">Best time to contact</div>
+                              <div className="mt-1 text-slate-300">{formatContactTime(request.bestTimeToContact)}</div>
+                            </div>
+                            <div>
+                              <div className="font-semibold text-white">Urgency</div>
+                              <div className="mt-1 text-slate-300">{formatUrgency(request.urgency)}</div>
+                            </div>
+                            <div>
+                              <div className="font-semibold text-white">Installation status</div>
+                              <div className="mt-1 text-slate-300">{formatInstallationStatus(request.installationStatus)}</div>
                             </div>
                             <div className="sm:col-span-2">
                               <div className="font-semibold text-white">Power/load description</div>
@@ -358,6 +464,40 @@ export default function QuotationRequestsDeskClient({
                             </div>
                           </div>
                         </div>
+
+                        {renderAnswerBlock(
+                          "Structured project answers",
+                          request.answers as Record<string, unknown> | null | undefined,
+                        )}
+
+                        {renderAnswerBlock(
+                          "Solar home details",
+                          request.answers?.solarHome as Record<string, unknown> | null | undefined,
+                        )}
+                        {renderAnswerBlock(
+                          "Water pump / borehole details",
+                          request.answers?.solarWaterPump as Record<string, unknown> | null | undefined,
+                        )}
+                        {renderAnswerBlock(
+                          "Solar water heater details",
+                          request.answers?.solarWaterHeater as Record<string, unknown> | null | undefined,
+                        )}
+                        {renderAnswerBlock(
+                          "Commercial solar details",
+                          request.answers?.commercialSolar as Record<string, unknown> | null | undefined,
+                        )}
+                        {renderAnswerBlock(
+                          "CCTV + solar details",
+                          request.answers?.cctvSolar as Record<string, unknown> | null | undefined,
+                        )}
+                        {renderAnswerBlock(
+                          "Street lights details",
+                          request.answers?.streetLights as Record<string, unknown> | null | undefined,
+                        )}
+                        {renderAnswerBlock(
+                          "General project details",
+                          request.answers?.general as Record<string, unknown> | null | undefined,
+                        )}
 
                         <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
                           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">

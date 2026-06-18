@@ -91,6 +91,11 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+function formatProjectLabel(value?: string | null) {
+  if (!value) return "Solar quotation";
+  return value.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 export default function AccountClient({ initialProfile, recentOrders, recentQuotes }: AccountClientProps) {
   const [localOrders, setLocalOrders] = useState<MockOrderRecord[]>([]);
   const [saving, setSaving] = useState(false);
@@ -505,7 +510,7 @@ export default function AccountClient({ initialProfile, recentOrders, recentQuot
                         <div>
                           <div className="text-sm font-black text-slate-950">{quote.quoteRef}</div>
                           <div className="mt-1 text-xs text-slate-500">
-                            {quote.propertyType || "Solar quotation"} • {formatDate(quote.createdAt)}
+                            {formatProjectLabel(quote.projectType || quote.propertyType)} • {formatDate(quote.createdAt)}
                           </div>
                         </div>
                         <div className="rounded-full bg-[#fff3d8] px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-[#7a0000]">
