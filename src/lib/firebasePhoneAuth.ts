@@ -1,4 +1,5 @@
 import { Role, type User } from "@prisma/client";
+import { updateSafeUserById } from "@/lib/customerProfile";
 import { prisma } from "@/lib/prisma";
 import { isAgentLeadOwnershipTableAvailable } from "@/lib/agentLeadOwnershipTable";
 import { adminAuth } from "@/lib/firebaseAdmin";
@@ -157,20 +158,21 @@ export async function resolveFirebasePhoneUser(idToken: string, preferredRedirec
       throw new Error("This account is inactive. Please contact Betech support.");
     }
 
-    user = await prisma.user.update({
+    await updateSafeUserById(user.id, {
+      phone: normalizedPhone,
+      phoneVerifiedAt: new Date(),
+      lastLoginMethod: "firebase_phone",
+    });
+    if (user.agentProfile) {
+      await prisma.agentProfile.update({
+        where: { id: user.agentProfile.id },
+        data: {
+          phone: normalizedPhone,
+        },
+      });
+    }
+    user = await prisma.user.findUniqueOrThrow({
       where: { id: user.id },
-      data: {
-        phone: normalizedPhone,
-        phoneVerifiedAt: new Date(),
-        lastLoginMethod: "firebase_phone",
-        agentProfile: user.agentProfile
-          ? {
-              update: {
-                phone: normalizedPhone,
-              },
-            }
-          : undefined,
-      },
       select: firebasePhoneUserSelect,
     });
   }

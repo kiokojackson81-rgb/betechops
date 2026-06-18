@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/api";
+import { updateSafeUserById } from "@/lib/customerProfile";
 import bcrypt from "bcryptjs";
 
 export async function POST(request: Request) {
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
 
   try {
     const hashed = await bcrypt.hash(newPassword, 10);
-    await prisma.user.update({ where: { id }, data: { password: hashed } });
+    await updateSafeUserById(id, { password: hashed });
     return NextResponse.json({ ok: true });
   } catch (err) {
     return NextResponse.json({ error: "update_failed", detail: err instanceof Error ? err.message : String(err) }, { status: 500 });

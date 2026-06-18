@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/nextAuth";
+import { updateSafeUserById } from "@/lib/customerProfile";
 
 export async function PATCH(request: any, { params }: any) {
   try {
@@ -18,8 +19,8 @@ export async function PATCH(request: any, { params }: any) {
     }
 
     const isActive = action === "activate";
-    const updated = await prisma.user.update({ where: { id }, data: { isActive } });
-    return NextResponse.json({ id: updated.id, isActive: updated.isActive });
+    await updateSafeUserById(id, { isActive });
+    return NextResponse.json({ id, isActive });
   } catch (err: any) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

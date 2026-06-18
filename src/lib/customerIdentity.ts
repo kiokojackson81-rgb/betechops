@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { findSafeCustomerProfileByUserId, getUserProfileColumnMap } from "@/lib/customerProfile";
+import { findSafeCustomerProfileByUserId, getUserProfileColumnMap, updateSafeUserById } from "@/lib/customerProfile";
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 
@@ -127,9 +127,14 @@ export async function findOrCreateCustomerIdentityUser(input: {
     if (patchInput.locationNotes && !existing.locationNotes) updateData.locationNotes = patchInput.locationNotes;
 
     if (Object.keys(updateData).length) {
-      await prisma.user.update({
-        where: { id: existing.id },
-        data: updateData,
+      await updateSafeUserById(existing.id, {
+        name: typeof updateData.name === "string" ? updateData.name : undefined,
+        phone: typeof updateData.phone === "string" ? updateData.phone : undefined,
+        email: typeof updateData.email === "string" ? updateData.email : undefined,
+        county: typeof updateData.county === "string" ? updateData.county : undefined,
+        town: typeof updateData.town === "string" ? updateData.town : undefined,
+        estateLandmark: typeof updateData.estateLandmark === "string" ? updateData.estateLandmark : undefined,
+        locationNotes: typeof updateData.locationNotes === "string" ? updateData.locationNotes : undefined,
       });
       const user = await findSafeUserById(existing.id);
       if (!user) throw new Error(`Failed to reload synced customer account ${existing.id}`);
@@ -151,15 +156,16 @@ export async function findOrCreateCustomerIdentityUser(input: {
     };
   }
 
+  const columns = await getUserProfileColumnMap();
   const createdUser = await prisma.user.create({
     data: {
       name: patchInput.name || null,
       phone: patchInput.phone || null,
       email: patchInput.email && !emailUser ? patchInput.email : null,
-      county: patchInput.county,
-      town: patchInput.town,
-      estateLandmark: patchInput.estateLandmark,
-      locationNotes: patchInput.locationNotes,
+      ...(columns.county ? { county: patchInput.county } : {}),
+      ...(columns.town ? { town: patchInput.town } : {}),
+      ...(columns.estateLandmark ? { estateLandmark: patchInput.estateLandmark } : {}),
+      ...(columns.locationNotes ? { locationNotes: patchInput.locationNotes } : {}),
     },
   });
   const user = await findSafeUserById(createdUser.id);

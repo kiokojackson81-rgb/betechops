@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { Role, type User } from "@prisma/client";
+import { updateSafeUserById } from "@/lib/customerProfile";
 import { prisma } from "@/lib/prisma";
 import { isAgentLeadOwnershipTableAvailable } from "@/lib/agentLeadOwnershipTable";
 import { getKenyanPhoneVariants, normalizeKenyanPhone } from "@/lib/phone";
@@ -317,20 +318,21 @@ async function resolveVerifiedPhoneUser(normalizedPhone: string, preferredRedire
       throw new Error("This account is inactive. Please contact Betech support.");
     }
 
-    user = await prisma.user.update({
+    await updateSafeUserById(user.id, {
+      phone: normalizedPhone,
+      phoneVerifiedAt: new Date(),
+      lastLoginMethod: "africastalking_otp",
+    });
+    if (user.agentProfile) {
+      await prisma.agentProfile.update({
+        where: { id: user.agentProfile.id },
+        data: {
+          phone: normalizedPhone,
+        },
+      });
+    }
+    user = await prisma.user.findUniqueOrThrow({
       where: { id: user.id },
-      data: {
-        phone: normalizedPhone,
-        phoneVerifiedAt: new Date(),
-        lastLoginMethod: "africastalking_otp",
-        agentProfile: user.agentProfile
-          ? {
-              update: {
-                phone: normalizedPhone,
-              },
-            }
-          : undefined,
-      },
       select: otpAuthUserSelect,
     });
   }
@@ -364,20 +366,21 @@ async function resolveVerifiedEmailUser(normalizedEmail: string, preferredRedire
       throw new Error("This account is inactive. Please contact Betech support.");
     }
 
-    user = await prisma.user.update({
+    await updateSafeUserById(user.id, {
+      email: normalizedEmail,
+      emailVerifiedAt: new Date(),
+      lastLoginMethod: "email_otp",
+    });
+    if (user.agentProfile) {
+      await prisma.agentProfile.update({
+        where: { id: user.agentProfile.id },
+        data: {
+          email: normalizedEmail,
+        },
+      });
+    }
+    user = await prisma.user.findUniqueOrThrow({
       where: { id: user.id },
-      data: {
-        email: normalizedEmail,
-        emailVerifiedAt: new Date(),
-        lastLoginMethod: "email_otp",
-        agentProfile: user.agentProfile
-          ? {
-              update: {
-                email: normalizedEmail,
-              },
-            }
-          : undefined,
-      },
       select: otpAuthUserSelect,
     });
   }

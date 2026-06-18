@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/api";
 import { AttendantCategory, Role } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
+import { updateSafeUserById } from "@/lib/customerProfile";
 import { categoryValues, sanitizeCategories, syncUserCategories, shapeUser } from "../utils";
 
 export async function PATCH(request: Request) {
@@ -57,22 +58,32 @@ export async function PATCH(request: Request) {
         : null;
 
       const data: Prisma.UserUpdateInput = {};
-      if (typeof body.isActive === "boolean") data.isActive = body.isActive;
-      if (body.role) data.role = body.role;
-      if (body.name) data.name = body.name;
+      const safeUserUpdate: Record<string, string | boolean | null | undefined> = {};
+      if (typeof body.isActive === "boolean") {
+        data.isActive = body.isActive;
+        safeUserUpdate.isActive = body.isActive;
+      }
+      if (body.role) {
+        data.role = body.role;
+        safeUserUpdate.role = body.role;
+      }
+      if (body.name) {
+        data.name = body.name;
+        safeUserUpdate.name = body.name;
+      }
       if (desiredAssignments && desiredAssignments.length) {
         data.attendantCategory = desiredAssignments[0];
+        safeUserUpdate.attendantCategory = desiredAssignments[0];
       } else if (attendantCategoryUpdate) {
         data.attendantCategory = attendantCategoryUpdate;
+        safeUserUpdate.attendantCategory = attendantCategoryUpdate;
       }
 
-      const saved = await tx.user.update({
-        where: { id },
-        data,
-        select: {
-          id: true,
-        },
-      });
+      if (Object.keys(safeUserUpdate).length) {
+        await updateSafeUserById(id, safeUserUpdate);
+      }
+
+      const saved = { id };
 
       if (desiredAssignments) {
         await syncUserCategories(tx, saved.id, desiredAssignments);

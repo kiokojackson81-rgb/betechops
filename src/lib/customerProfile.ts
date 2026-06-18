@@ -1,8 +1,22 @@
 import { prisma } from "@/lib/prisma";
 
 const OPTIONAL_USER_PROFILE_COLUMNS = ["whatsappNumber", "county", "town", "estateLandmark", "locationNotes"] as const;
+const SAFE_USER_UPDATE_COLUMNS = [
+  "name",
+  "email",
+  "phone",
+  "password",
+  "role",
+  "attendantCategory",
+  "isActive",
+  "phoneVerifiedAt",
+  "emailVerifiedAt",
+  "lastLoginMethod",
+  ...OPTIONAL_USER_PROFILE_COLUMNS,
+] as const;
 
 type OptionalUserProfileColumn = (typeof OPTIONAL_USER_PROFILE_COLUMNS)[number];
+type SafeUserUpdateColumn = (typeof SAFE_USER_UPDATE_COLUMNS)[number];
 
 type UserProfileColumnMap = Record<OptionalUserProfileColumn, boolean>;
 
@@ -28,6 +42,13 @@ type SafeCustomerProfile = {
   estateLandmark?: string | null;
   locationNotes?: string | null;
 };
+
+type SafeUserUpdateInput = Partial<
+  Record<
+    SafeUserUpdateColumn,
+    string | boolean | Date | null
+  >
+>;
 
 let cachedColumns: { expiresAt: number; value: UserProfileColumnMap } | null = null;
 
@@ -151,4 +172,32 @@ export async function updateSafeCustomerProfile(userId: string, input: CustomerP
     estateLandmark: columns.estateLandmark ? (typeof input.estateLandmark === "undefined" ? null : input.estateLandmark) : null,
     locationNotes: columns.locationNotes ? (typeof input.locationNotes === "undefined" ? null : input.locationNotes) : null,
   };
+}
+
+function isOptionalUserProfileColumn(column: SafeUserUpdateColumn): column is OptionalUserProfileColumn {
+  return (OPTIONAL_USER_PROFILE_COLUMNS as readonly string[]).includes(column);
+}
+
+export async function updateSafeUserById(userId: string, input: SafeUserUpdateInput) {
+  const columns = await getUserProfileColumnMap();
+  const updates: Array<[SafeUserUpdateColumn, string | boolean | Date | null]> = [];
+
+  for (const column of SAFE_USER_UPDATE_COLUMNS) {
+    if (!(column in input) || typeof input[column] === "undefined") continue;
+    if (isOptionalUserProfileColumn(column) && !columns[column]) continue;
+    updates.push([column, input[column] ?? null]);
+  }
+
+  if (!updates.length) {
+    return;
+  }
+
+  const assignments = updates.map(([column], index) => `"${column}" = $${index + 2}`).join(", ");
+  const values = updates.map(([, value]) => value);
+
+  await prisma.$executeRawUnsafe(
+    `UPDATE "User" SET ${assignments}, "updatedAt" = NOW() WHERE id = $1`,
+    userId,
+    ...values,
+  );
 }
