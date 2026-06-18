@@ -2,10 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Loader2, RefreshCcw } from "lucide-react";
-import {
-  QUOTE_REQUEST_STATUSES,
-  type QuoteRequestStatus,
-  type SerializedQuoteRequest,
+import type {
+  QuoteRequestStatus,
+  SerializedQuoteRequest,
 } from "@/lib/quoteRequests";
 
 type QuoteRequestStatusFilter = "ALL" | QuoteRequestStatus;
@@ -19,6 +18,15 @@ type Props = {
   deskDescription?: string;
   emptyMessage?: string;
 };
+
+const QUOTE_REQUEST_STATUSES: QuoteRequestStatus[] = [
+  "NEW",
+  "CONTACTED",
+  "QUOTED",
+  "FOLLOW_UP",
+  "CONVERTED",
+  "CLOSED",
+];
 
 const STATUS_OPTIONS: QuoteRequestStatusFilter[] = ["ALL", ...QUOTE_REQUEST_STATUSES];
 
