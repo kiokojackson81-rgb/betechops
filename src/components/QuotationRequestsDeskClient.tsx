@@ -1,16 +1,28 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Loader2, RefreshCcw } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader2, Plus, RefreshCcw, Trash2 } from "lucide-react";
 import type {
   QuoteContactMethod,
   QuoteContactTime,
   QuoteInstallationStatus,
+  QuoteRequestResponseInput,
   QuoteProjectType,
   QuoteRequestStatus,
   QuoteUrgency,
   SerializedQuoteRequest,
 } from "@/lib/quoteRequests";
+import {
+  formatQuoteCurrency,
+  getQuotePaymentMethodLabel,
+  getQuotePaymentTermsLabel,
+  parseStoredQuoteProposal,
+  PAYMENT_METHOD_DETAILS,
+  QUOTE_PAYMENT_METHODS,
+  QUOTE_PAYMENT_TERMS,
+  type QuotePaymentMethod,
+  type QuotePaymentTerms,
+} from "@/lib/quoteProposal";
 
 type QuoteRequestStatusFilter = "ALL" | QuoteRequestStatus;
 
@@ -62,12 +74,81 @@ function formatStatus(value: string) {
   return value.replace(/_/g, " ");
 }
 
-function normalizeRecommendedProducts(value: string) {
-  return value
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .join("\n");
+type QuoteItemDraft = {
+  itemName: string;
+  quantity: string;
+  unitPrice: string;
+};
+
+type QuoteDeskFormState = {
+  status: QuoteRequestStatus;
+  quoteTitle: string;
+  quoteMessage: string;
+  quoteItems: QuoteItemDraft[];
+  paymentMethod: QuotePaymentMethod | "";
+  paymentTerms: QuotePaymentTerms;
+  depositAmount: string;
+  balanceAmount: string;
+  followUpNotes: string;
+  sendEmail: boolean;
+  sendSms: boolean;
+};
+
+function createEmptyQuoteItem(): QuoteItemDraft {
+  return {
+    itemName: "",
+    quantity: "1",
+    unitPrice: "",
+  };
+}
+
+function createDefaultFormState(status: QuoteRequestStatus): QuoteDeskFormState {
+  return {
+    status,
+    quoteTitle: "",
+    quoteMessage: "",
+    quoteItems: [createEmptyQuoteItem()],
+    paymentMethod: "",
+    paymentTerms: "FULL_PAYMENT",
+    depositAmount: "",
+    balanceAmount: "",
+    followUpNotes: "",
+    sendEmail: true,
+    sendSms: true,
+  };
+}
+
+function parseMoneyInput(value: string) {
+  const normalized = value.replace(/,/g, "").trim();
+  if (!normalized) return 0;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function buildQuoteRequestPayload(formState: QuoteDeskFormState): QuoteRequestResponseInput {
+  return {
+    status: formState.status,
+    quoteTitle: formState.quoteTitle.trim() || undefined,
+    quoteMessage: formState.quoteMessage.trim() || undefined,
+    quoteItems: formState.quoteItems.map((item) => ({
+      itemName: item.itemName,
+      quantity: parseMoneyInput(item.quantity),
+      unitPrice: parseMoneyInput(item.unitPrice),
+    })),
+    paymentMethod: formState.paymentMethod || undefined,
+    paymentTerms: formState.paymentTerms,
+    depositAmount:
+      formState.paymentTerms === "DEPOSIT_AND_BALANCE" && formState.depositAmount.trim()
+        ? parseMoneyInput(formState.depositAmount)
+        : undefined,
+    balanceAmount:
+      formState.paymentTerms === "DEPOSIT_AND_BALANCE" && formState.balanceAmount.trim()
+        ? parseMoneyInput(formState.balanceAmount)
+        : undefined,
+    followUpNotes: formState.followUpNotes.trim() || undefined,
+    sendEmail: formState.sendEmail,
+    sendSms: formState.sendSms,
+  };
 }
 
 function formatProjectType(value: QuoteProjectType | string | null | undefined) {
@@ -176,20 +257,34 @@ export default function QuotationRequestsDeskClient({
     [requests, expandedId],
   );
 
-  const [formState, setFormState] = useState({
-    status: defaultStatusFilter === "ALL" ? "CONTACTED" : defaultStatusFilter,
-    quoteTitle: "",
-    quoteMessage: "",
-    batterySize: "",
-    inverterSize: "",
-    panelSetup: "",
-    accessories: "",
-    estimatedAmount: "",
-    recommendedProducts: "",
-    followUpNotes: "",
-    sendEmail: true,
-    sendSms: true,
-  });
+  const initialResponseStatus = defaultStatusFilter === "ALL" ? "CONTACTED" : defaultStatusFilter;
+  const [formState, setFormState] = useState<QuoteDeskFormState>(createDefaultFormState(initialResponseStatus));
+
+  const quoteItemsPreview = useMemo(() => {
+    return formState.quoteItems.map((item) => {
+      const quantity = parseMoneyInput(item.quantity);
+      const unitPrice = parseMoneyInput(item.unitPrice);
+      const lineTotal = quantity * unitPrice;
+      return {
+        ...item,
+        quantityValue: quantity,
+        unitPriceValue: unitPrice,
+        lineTotal,
+      };
+    });
+  }, [formState.quoteItems]);
+
+  const quoteSubtotalPreview = useMemo(
+    () => quoteItemsPreview.reduce((sum, item) => sum + item.lineTotal, 0),
+    [quoteItemsPreview],
+  );
+
+  const quoteBalancePreview = useMemo(() => {
+    if (formState.paymentTerms !== "DEPOSIT_AND_BALANCE") return null;
+    const depositAmount = parseMoneyInput(formState.depositAmount);
+    const explicitBalance = formState.balanceAmount.trim() ? parseMoneyInput(formState.balanceAmount) : null;
+    return explicitBalance ?? Math.max(0, quoteSubtotalPreview - depositAmount);
+  }, [formState.balanceAmount, formState.depositAmount, formState.paymentTerms, quoteSubtotalPreview]);
 
   async function refreshRequests(nextStatus = statusFilter, nextQuery = query) {
     setLoading(true);
@@ -239,34 +334,24 @@ export default function QuotationRequestsDeskClient({
 
   useEffect(() => {
     if (!expandedRequest) return;
+    const storedProposal = parseStoredQuoteProposal(expandedRequest.quotationData);
     setFormState({
       status: expandedRequest.status,
       quoteTitle: expandedRequest.quoteTitle || "",
       quoteMessage: expandedRequest.quoteMessage || "",
-      batterySize:
-        typeof expandedRequest.quotationData?.batterySize === "string"
-          ? expandedRequest.quotationData.batterySize
-          : "",
-      inverterSize:
-        typeof expandedRequest.quotationData?.inverterSize === "string"
-          ? expandedRequest.quotationData.inverterSize
-          : "",
-      panelSetup:
-        typeof expandedRequest.quotationData?.panelSetup === "string"
-          ? expandedRequest.quotationData.panelSetup
-          : "",
-      accessories:
-        typeof expandedRequest.quotationData?.accessories === "string"
-          ? expandedRequest.quotationData.accessories
-          : "",
-      estimatedAmount:
-        typeof expandedRequest.quotationData?.estimatedAmount === "string"
-          ? expandedRequest.quotationData.estimatedAmount
-          : "",
-      recommendedProducts:
-        typeof expandedRequest.quotationData?.recommendedProducts === "string"
-          ? expandedRequest.quotationData.recommendedProducts
-          : "",
+      quoteItems: storedProposal.items.length
+        ? storedProposal.items.map((item) => ({
+            itemName: item.itemName,
+            quantity: String(item.quantity),
+            unitPrice: String(item.unitPrice),
+          }))
+        : [createEmptyQuoteItem()],
+      paymentMethod: storedProposal.paymentMethod || "",
+      paymentTerms: storedProposal.paymentTerms || "FULL_PAYMENT",
+      depositAmount:
+        typeof storedProposal.depositAmount === "number" ? String(storedProposal.depositAmount) : "",
+      balanceAmount:
+        typeof storedProposal.balanceAmount === "number" ? String(storedProposal.balanceAmount) : "",
       followUpNotes:
         typeof expandedRequest.responseMetadata?.followUpNotes === "string"
           ? expandedRequest.responseMetadata.followUpNotes
@@ -286,10 +371,7 @@ export default function QuotationRequestsDeskClient({
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...formState,
-            recommendedProducts: normalizeRecommendedProducts(formState.recommendedProducts),
-          }),
+          body: JSON.stringify(buildQuoteRequestPayload(formState)),
         },
       );
       const data = await response.json().catch(() => null);
@@ -533,69 +615,213 @@ export default function QuotationRequestsDeskClient({
                                 className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
                               />
                             </label>
-                            <label className="text-xs uppercase tracking-wide text-slate-400">
-                              Battery size
-                              <input
-                                value={formState.batterySize}
-                                onChange={(event) =>
-                                  setFormState((current) => ({ ...current, batterySize: event.target.value }))
-                                }
-                                className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
-                              />
-                            </label>
-                            <label className="text-xs uppercase tracking-wide text-slate-400">
-                              Inverter size
-                              <input
-                                value={formState.inverterSize}
-                                onChange={(event) =>
-                                  setFormState((current) => ({ ...current, inverterSize: event.target.value }))
-                                }
-                                className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
-                              />
-                            </label>
-                            <label className="text-xs uppercase tracking-wide text-slate-400 md:col-span-2">
-                              Solar panel setup
-                              <input
-                                value={formState.panelSetup}
-                                onChange={(event) =>
-                                  setFormState((current) => ({ ...current, panelSetup: event.target.value }))
-                                }
-                                className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
-                              />
-                            </label>
-                            <label className="text-xs uppercase tracking-wide text-slate-400 md:col-span-2">
-                              Accessories
-                              <textarea
-                                rows={3}
-                                value={formState.accessories}
-                                onChange={(event) =>
-                                  setFormState((current) => ({ ...current, accessories: event.target.value }))
-                                }
-                                className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
-                              />
-                            </label>
-                            <label className="text-xs uppercase tracking-wide text-slate-400">
-                              Estimated amount
-                              <input
-                                value={formState.estimatedAmount}
-                                onChange={(event) =>
-                                  setFormState((current) => ({ ...current, estimatedAmount: event.target.value }))
-                                }
-                                className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
-                              />
-                            </label>
-                            <label className="text-xs uppercase tracking-wide text-slate-400 md:col-span-2">
-                              Recommended catalogue products
-                              <textarea
-                                rows={4}
-                                value={formState.recommendedProducts}
-                                onChange={(event) =>
-                                  setFormState((current) => ({ ...current, recommendedProducts: event.target.value }))
-                                }
-                                placeholder="Paste product names, URLs, or short recommended bundle notes."
-                                className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
-                              />
-                            </label>
+                            <div className="md:col-span-2 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                                    Itemized quotation builder
+                                  </div>
+                                  <div className="mt-1 text-sm text-slate-300">
+                                    Add each quoted item, quantity, and unit price. The system will calculate totals automatically.
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setFormState((current) => ({
+                                      ...current,
+                                      quoteItems: [...current.quoteItems, createEmptyQuoteItem()],
+                                    }))
+                                  }
+                                  className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 hover:bg-emerald-500/20"
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                  Add item
+                                </button>
+                              </div>
+
+                              <div className="mt-4 space-y-3">
+                                {formState.quoteItems.map((item, index) => (
+                                  <div key={`quote-item-${index}`} className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
+                                    <div className="grid gap-3 lg:grid-cols-[minmax(0,1.6fr)_140px_160px_auto]">
+                                      <label className="text-xs uppercase tracking-wide text-slate-400">
+                                        Item name
+                                        <textarea
+                                          rows={2}
+                                          value={item.itemName}
+                                          onChange={(event) =>
+                                            setFormState((current) => ({
+                                              ...current,
+                                              quoteItems: current.quoteItems.map((entry, entryIndex) =>
+                                                entryIndex === index ? { ...entry, itemName: event.target.value } : entry,
+                                              ),
+                                            }))
+                                          }
+                                          placeholder="Example: 5KW Hybrid Inverter + 5.12kWh Lithium Battery"
+                                          className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                                        />
+                                      </label>
+                                      <label className="text-xs uppercase tracking-wide text-slate-400">
+                                        Quantity
+                                        <input
+                                          value={item.quantity}
+                                          onChange={(event) =>
+                                            setFormState((current) => ({
+                                              ...current,
+                                              quoteItems: current.quoteItems.map((entry, entryIndex) =>
+                                                entryIndex === index ? { ...entry, quantity: event.target.value } : entry,
+                                              ),
+                                            }))
+                                          }
+                                          className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                                        />
+                                      </label>
+                                      <label className="text-xs uppercase tracking-wide text-slate-400">
+                                        Unit price
+                                        <input
+                                          value={item.unitPrice}
+                                          onChange={(event) =>
+                                            setFormState((current) => ({
+                                              ...current,
+                                              quoteItems: current.quoteItems.map((entry, entryIndex) =>
+                                                entryIndex === index ? { ...entry, unitPrice: event.target.value } : entry,
+                                              ),
+                                            }))
+                                          }
+                                          placeholder="275000"
+                                          className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                                        />
+                                      </label>
+                                      <div className="flex items-end justify-between gap-3 lg:flex-col lg:items-end">
+                                        <div className="text-right">
+                                          <div className="text-xs uppercase tracking-wide text-slate-400">Line total</div>
+                                          <div className="mt-1 text-sm font-semibold text-white">
+                                            {formatQuoteCurrency(quoteItemsPreview[index]?.lineTotal || 0)}
+                                          </div>
+                                        </div>
+                                        <button
+                                          type="button"
+                                          disabled={formState.quoteItems.length <= 1}
+                                          onClick={() =>
+                                            setFormState((current) => ({
+                                              ...current,
+                                              quoteItems:
+                                                current.quoteItems.length <= 1
+                                                  ? current.quoteItems
+                                                  : current.quoteItems.filter((_, entryIndex) => entryIndex !== index),
+                                            }))
+                                          }
+                                          className="inline-flex items-center gap-2 rounded-full border border-rose-500/25 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-rose-200 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:opacity-40"
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                          Remove
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+
+                              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                                <label className="text-xs uppercase tracking-wide text-slate-400">
+                                  Payment method
+                                  <select
+                                    value={formState.paymentMethod}
+                                    onChange={(event) =>
+                                      setFormState((current) => ({
+                                        ...current,
+                                        paymentMethod: event.target.value as QuotePaymentMethod | "",
+                                      }))
+                                    }
+                                    className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                                  >
+                                    <option value="">Select payment method</option>
+                                    {QUOTE_PAYMENT_METHODS.map((method) => (
+                                      <option key={method} value={method}>
+                                        {getQuotePaymentMethodLabel(method)}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  {formState.paymentMethod ? (
+                                    <div className="mt-2 rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-[11px] normal-case tracking-normal text-slate-300">
+                                      {PAYMENT_METHOD_DETAILS[formState.paymentMethod].lines.map((line) => (
+                                        <div key={line}>{line}</div>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                </label>
+                                <label className="text-xs uppercase tracking-wide text-slate-400">
+                                  Payment terms
+                                  <select
+                                    value={formState.paymentTerms}
+                                    onChange={(event) =>
+                                      setFormState((current) => ({
+                                        ...current,
+                                        paymentTerms: event.target.value as QuotePaymentTerms,
+                                      }))
+                                    }
+                                    className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                                  >
+                                    {QUOTE_PAYMENT_TERMS.map((term) => (
+                                      <option key={term} value={term}>
+                                        {getQuotePaymentTermsLabel(term)}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                {formState.paymentTerms === "DEPOSIT_AND_BALANCE" ? (
+                                  <>
+                                    <label className="text-xs uppercase tracking-wide text-slate-400">
+                                      Deposit amount
+                                      <input
+                                        value={formState.depositAmount}
+                                        onChange={(event) =>
+                                          setFormState((current) => ({ ...current, depositAmount: event.target.value }))
+                                        }
+                                        placeholder="100000"
+                                        className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                                      />
+                                    </label>
+                                    <label className="text-xs uppercase tracking-wide text-slate-400">
+                                      Balance amount
+                                      <input
+                                        value={formState.balanceAmount}
+                                        onChange={(event) =>
+                                          setFormState((current) => ({ ...current, balanceAmount: event.target.value }))
+                                        }
+                                        placeholder={quoteBalancePreview !== null ? String(quoteBalancePreview) : ""}
+                                        className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                                      />
+                                    </label>
+                                  </>
+                                ) : null}
+                              </div>
+
+                              <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                                <div className="grid gap-2 text-sm text-slate-300 sm:grid-cols-2">
+                                  <div>
+                                    <span className="font-semibold text-white">Subtotal:</span>{" "}
+                                    {formatQuoteCurrency(quoteSubtotalPreview)}
+                                  </div>
+                                  <div>
+                                    <span className="font-semibold text-white">Total quoted amount:</span>{" "}
+                                    {formatQuoteCurrency(quoteSubtotalPreview)}
+                                  </div>
+                                  {formState.paymentTerms === "DEPOSIT_AND_BALANCE" ? (
+                                    <>
+                                      <div>
+                                        <span className="font-semibold text-white">Deposit:</span>{" "}
+                                        {formatQuoteCurrency(parseMoneyInput(formState.depositAmount))}
+                                      </div>
+                                      <div>
+                                        <span className="font-semibold text-white">Balance:</span>{" "}
+                                        {formatQuoteCurrency(quoteBalancePreview || 0)}
+                                      </div>
+                                    </>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </div>
                             <label className="text-xs uppercase tracking-wide text-slate-400 md:col-span-2">
                               Customer message
                               <textarea

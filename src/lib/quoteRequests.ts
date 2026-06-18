@@ -3,6 +3,14 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  quoteLineItemSchema,
+  quotePaymentMethodSchema,
+  quotePaymentTermsSchema,
+  sanitizeQuoteLineItems,
+  calculateQuoteTotal,
+  normalizeQuotePaymentBreakdown,
+} from "@/lib/quoteProposal";
 
 const QUOTE_REQUEST_SCHEMA_SQL = [
   `CREATE TABLE IF NOT EXISTS "QuoteRequest" (
@@ -223,12 +231,17 @@ export const quoteRequestResponseSchema = z.object({
   status: z.enum(QUOTE_REQUEST_STATUSES),
   quoteTitle: z.string().trim().max(200).optional(),
   quoteMessage: z.string().trim().max(12000).optional(),
-  batterySize: z.string().trim().max(200).optional(),
-  inverterSize: z.string().trim().max(200).optional(),
-  panelSetup: z.string().trim().max(500).optional(),
-  accessories: z.string().trim().max(1200).optional(),
-  estimatedAmount: z.string().trim().max(120).optional(),
-  recommendedProducts: z.string().trim().max(4000).optional(),
+  quoteItems: z.array(quoteLineItemSchema).min(1),
+  paymentMethod: quotePaymentMethodSchema.optional(),
+  paymentTerms: quotePaymentTermsSchema.optional(),
+  depositAmount: z.preprocess(
+    (value) => (value === "" || value === null || value === undefined ? undefined : Number(value)),
+    z.number().nonnegative().max(1000000000).optional(),
+  ),
+  balanceAmount: z.preprocess(
+    (value) => (value === "" || value === null || value === undefined ? undefined : Number(value)),
+    z.number().nonnegative().max(1000000000).optional(),
+  ),
   followUpNotes: z.string().trim().max(4000).optional(),
   sendEmail: z.boolean().optional(),
   sendSms: z.boolean().optional(),
@@ -712,14 +725,23 @@ export async function updateQuoteRequestResponse(
   input: QuoteRequestResponseInput,
 ) {
   await ensureQuoteRequestsSchema();
+  const sanitizedItems = sanitizeQuoteLineItems(input.quoteItems);
+  const subtotal = calculateQuoteTotal(sanitizedItems);
+  const paymentBreakdown = normalizeQuotePaymentBreakdown({
+    total: subtotal,
+    paymentTerms: input.paymentTerms,
+    depositAmount: input.depositAmount,
+    balanceAmount: input.balanceAmount,
+  });
   const quotationData = {
-    batterySize: input.batterySize?.trim() || null,
-    inverterSize: input.inverterSize?.trim() || null,
-    panelSetup: input.panelSetup?.trim() || null,
-    accessories: input.accessories?.trim() || null,
-    estimatedAmount: input.estimatedAmount?.trim() || null,
-    recommendedProducts: input.recommendedProducts?.trim() || null,
-  } satisfies Record<string, string | null>;
+    items: sanitizedItems,
+    subtotal,
+    total: paymentBreakdown.total,
+    paymentMethod: input.paymentMethod || null,
+    paymentTerms: paymentBreakdown.paymentTerms,
+    depositAmount: paymentBreakdown.depositAmount,
+    balanceAmount: paymentBreakdown.balanceAmount,
+  } satisfies Record<string, Prisma.JsonValue>;
 
   const responseMetadata = {
     followUpNotes: input.followUpNotes?.trim() || null,

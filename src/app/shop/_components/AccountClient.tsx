@@ -22,6 +22,11 @@ import {
 } from "@/app/shop/shopStorage";
 import { formatCurrency, shopStyles } from "@/app/shop/_components/shopStyles";
 import { SHOP_ACCOUNT_ORDERS_HREF, SHOP_CHECKOUT_HREF } from "@/app/shop/storefrontPaths";
+import {
+  formatQuoteCurrency,
+  getQuotePaymentTermsLabel,
+  parseStoredQuoteProposal,
+} from "@/lib/quoteProposal";
 
 type AccountClientProps = {
   initialProfile: {
@@ -504,48 +509,52 @@ export default function AccountClient({ initialProfile, recentOrders, recentQuot
               <div className={shopStyles.sectionEyebrow}>Quote follow-up</div>
               <div className="mt-4 space-y-3">
                 {recentQuotes.length ? (
-                  recentQuotes.slice(0, 3).map((quote) => (
-                    <div key={quote.id} className="rounded-[18px] border border-[#7a0000]/10 bg-[#fcfaf7] p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-black text-slate-950">{quote.quoteRef}</div>
-                          <div className="mt-1 text-xs text-slate-500">
-                            {formatProjectLabel(quote.projectType || quote.propertyType)} • {formatDate(quote.createdAt)}
+                  recentQuotes.slice(0, 3).map((quote) => {
+                    const proposal = parseStoredQuoteProposal(quote.quotationData);
+                    const itemPreview = proposal.items.slice(0, 2).map((item) => item.itemName).join(" • ");
+
+                    return (
+                      <div key={quote.id} className="rounded-[18px] border border-[#7a0000]/10 bg-[#fcfaf7] p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-black text-slate-950">{quote.quoteRef}</div>
+                            <div className="mt-1 text-xs text-slate-500">
+                              {formatProjectLabel(quote.projectType || quote.propertyType)} • {formatDate(quote.createdAt)}
+                            </div>
+                          </div>
+                          <div className="rounded-full bg-[#fff3d8] px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-[#7a0000]">
+                            {formatOrderStatus(quote.status)}
                           </div>
                         </div>
-                        <div className="rounded-full bg-[#fff3d8] px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-[#7a0000]">
-                          {formatOrderStatus(quote.status)}
+                        <div className="mt-2 text-sm text-slate-600">
+                          {quote.customerLocation || [quote.town, quote.county].filter(Boolean).join(", ") || "Location pending"}
                         </div>
+                        {quote.quoteTitle || quote.quoteMessage ? (
+                          <div className="mt-3 rounded-[14px] border border-[#7a0000]/10 bg-white px-3 py-3">
+                            {quote.quoteTitle ? <div className="text-sm font-bold text-slate-950">{quote.quoteTitle}</div> : null}
+                            {quote.quoteMessage ? (
+                              <div className="mt-1 line-clamp-3 text-sm leading-6 text-slate-600">{quote.quoteMessage}</div>
+                            ) : null}
+                          </div>
+                        ) : null}
+                        {proposal.items.length ? (
+                          <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
+                            <div><span className="font-bold text-slate-950">Items:</span> {proposal.items.length}</div>
+                            <div><span className="font-bold text-slate-950">Total:</span> {formatQuoteCurrency(proposal.total)}</div>
+                            <div className="sm:col-span-2">
+                              <span className="font-bold text-slate-950">Payment terms:</span>{" "}
+                              {getQuotePaymentTermsLabel(proposal.paymentTerms)}
+                            </div>
+                            {itemPreview ? (
+                              <div className="sm:col-span-2">
+                                <span className="font-bold text-slate-950">Quoted items:</span> {itemPreview}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </div>
-                      <div className="mt-2 text-sm text-slate-600">
-                        {quote.customerLocation || [quote.town, quote.county].filter(Boolean).join(", ") || "Location pending"}
-                      </div>
-                      {quote.quoteTitle || quote.quoteMessage ? (
-                        <div className="mt-3 rounded-[14px] border border-[#7a0000]/10 bg-white px-3 py-3">
-                          {quote.quoteTitle ? <div className="text-sm font-bold text-slate-950">{quote.quoteTitle}</div> : null}
-                          {quote.quoteMessage ? (
-                            <div className="mt-1 line-clamp-3 text-sm leading-6 text-slate-600">{quote.quoteMessage}</div>
-                          ) : null}
-                        </div>
-                      ) : null}
-                      {quote.quotationData ? (
-                        <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
-                          {typeof quote.quotationData.batterySize === "string" && quote.quotationData.batterySize ? (
-                            <div><span className="font-bold text-slate-950">Battery:</span> {quote.quotationData.batterySize}</div>
-                          ) : null}
-                          {typeof quote.quotationData.inverterSize === "string" && quote.quotationData.inverterSize ? (
-                            <div><span className="font-bold text-slate-950">Inverter:</span> {quote.quotationData.inverterSize}</div>
-                          ) : null}
-                          {typeof quote.quotationData.panelSetup === "string" && quote.quotationData.panelSetup ? (
-                            <div className="sm:col-span-2"><span className="font-bold text-slate-950">Panels:</span> {quote.quotationData.panelSetup}</div>
-                          ) : null}
-                          {typeof quote.quotationData.estimatedAmount === "string" && quote.quotationData.estimatedAmount ? (
-                            <div><span className="font-bold text-slate-950">Estimate:</span> {quote.quotationData.estimatedAmount}</div>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="text-sm text-slate-500">No recent quote requests saved yet.</div>
                 )}
