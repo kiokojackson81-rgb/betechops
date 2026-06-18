@@ -65,6 +65,8 @@ type ReceiptEmailInput = {
   attachments?: EmailAttachment[];
 };
 
+const BETECH_PHONE_POD_OFFICE = "0716 722 601";
+
 type OrderConfirmationEmailInput = {
   to: string | string[];
   orderRef: string;
@@ -229,6 +231,37 @@ function renderReceiptItemsTable(
         `- Item name: ${item.productName}\n  Quantity: ${item.quantity}\n  Unit price: ${item.unitPriceText}\n  Total: ${item.lineTotalText}`,
     ),
   ].join("\n");
+
+  return { html, text };
+}
+
+function renderReceiptItemsSummary(
+  items: NonNullable<ReceiptEmailInput["items"]>,
+) {
+  if (!items.length) {
+    return {
+      html: "",
+      text: "",
+    };
+  }
+
+  const html = `<ul style="margin:10px 0 0 18px;padding:0;color:#334155;font-size:15px;line-height:1.75">
+    ${items
+      .map(
+        (item) =>
+          `<li><strong>${escapeHtml(item.productName)}</strong> — Qty ${escapeHtml(
+            String(item.quantity),
+          )}, Unit Price ${escapeHtml(item.unitPriceText)}, Total ${escapeHtml(item.lineTotalText)}</li>`,
+      )
+      .join("")}
+  </ul>`;
+
+  const text = items
+    .map(
+      (item) =>
+        `${item.productName} — Qty ${item.quantity}, Unit Price ${item.unitPriceText}, Total ${item.lineTotalText}`,
+    )
+    .join("\n");
 
   return { html, text };
 }
@@ -428,16 +461,37 @@ export async function sendCustomerLoginNotificationEmail(input: { to: string | s
 export async function sendReceiptEmail(input: ReceiptEmailInput) {
   const accountUrl = input.accountUrl || "https://www.betech.co.ke/account";
   const itemsTable = renderReceiptItemsTable(input.items || []);
+  const itemsSummary = renderReceiptItemsSummary(input.items || []);
+  const podAmountText = input.orderAmountText || input.totalText || "";
   const introHtml = input.isPodReceipt
-    ? `<p>Thank you for shopping with Betech Solar Solutions.</p>
-       <p>Your delivery receipt has been created${input.orderAmountText ? ` with an amount to pay of <strong>${escapeHtml(input.orderAmountText)}</strong>` : ""}.</p>
-       ${input.paymentGuidance ? `<p>${escapeHtml(input.paymentGuidance)}</p>` : ""}`
+    ? `<p>Thank you for shopping with <strong>Betech Solar Solutions</strong>.</p>
+       <p>Your <strong>Pay on Delivery</strong> order has been successfully received and is currently being processed. We will dispatch it shortly through our delivery partner, <strong>SpeedAf</strong>.</p>
+       <p><strong>Receipt Number:</strong> ${escapeHtml(input.receiptNumber)}<br /><strong>Amount to Pay on Delivery:</strong> ${escapeHtml(
+         podAmountText || "KES 0",
+       )}</p>
+       ${
+         itemsSummary.html
+           ? `<p><strong>Order Details:</strong></p>${itemsSummary.html}`
+           : ""
+       }
+       <p><strong>Delivery Information</strong></p>
+       <p>Your order will be delivered by <strong>SpeedAf</strong>. You will be guided on how to make payment when receiving or collecting your order.</p>
+       <p><strong>Important:</strong> Please do <strong>not</strong> make any payment before receiving your item(s).</p>
+       <p>Your receipt is attached to this email for your reference.</p>
+       <p>Login to your account using your <strong>email address or phone number</strong> to view your order details and download your receipt anytime.</p>`
     : `<p>Thank you for shopping with Betech Solar Solutions.</p>`;
   const introText = input.isPodReceipt
     ? [
         "Thank you for shopping with Betech Solar Solutions.",
-        `Your delivery receipt has been created${input.orderAmountText ? ` with an amount to pay of ${input.orderAmountText}` : ""}.`,
-        input.paymentGuidance || "",
+        "Your Pay on Delivery order has been successfully received and is currently being processed. We will dispatch it shortly through our delivery partner, SpeedAf.",
+        `Receipt Number: ${input.receiptNumber}`,
+        `Amount to Pay on Delivery: ${podAmountText || "KES 0"}`,
+        itemsSummary.text ? `Order Details:\n${itemsSummary.text}` : "",
+        "Delivery Information:",
+        "Your order will be delivered by SpeedAf. You will be guided on how to make payment when receiving or collecting your order.",
+        "Important: Please do not make any payment before receiving your item(s).",
+        "Your receipt is attached to this email for your reference.",
+        "Login to your account using your email address or phone number to view your order details and download your receipt anytime.",
       ]
         .filter(Boolean)
         .join("\n\n")
@@ -481,28 +535,69 @@ export async function sendReceiptEmail(input: ReceiptEmailInput) {
 
   return sendCustomerNotificationEmail({
     to: input.to,
-    subject: `Your Betech Solar receipt ${input.receiptNumber}`,
-    title: "Your receipt is ready",
+    subject: input.isPodReceipt
+      ? `Your Betech Solar Pay on Delivery Order - ${input.receiptNumber}`
+      : `Your Betech Solar receipt ${input.receiptNumber}`,
+    title: input.isPodReceipt ? "Your Pay on Delivery order is being processed" : "Your receipt is ready",
     intro: input.customerName ? `Hello ${input.customerName},` : "Hello,",
     bodyHtml: `
       ${introHtml}
-      <p>Your receipt PDF is attached to this email${input.receiptLink ? `, and you can also view it online <a href="${escapeAttribute(input.receiptLink)}">here</a>` : ""}.</p>
-      <p>Login to your account using your <strong>email address or phone number</strong> to view your order details and download your receipt anytime.</p>
+      ${
+        input.isPodReceipt
+          ? ""
+          : `<p>Your receipt PDF is attached to this email${
+              input.receiptLink ? `, and you can also view it online <a href="${escapeAttribute(input.receiptLink)}">here</a>` : ""
+            }.</p>
+      <p>Login to your account using your <strong>email address or phone number</strong> to view your order details and download your receipt anytime.</p>`
+      }
       ${detailsHtml}
       ${itemsTable.html}
+      ${
+        input.isPodReceipt
+          ? `<p>You can log in to your account using your email address or phone number to:</p>
+      <ul style="margin:10px 0 0 18px;padding:0;color:#334155;font-size:15px;line-height:1.75">
+        <li>View your order details</li>
+        <li>Track your order status</li>
+        <li>Download your receipt</li>
+        <li>Receive delivery updates</li>
+      </ul>
+      <p><strong>Account Portal:</strong><br /><a href="${escapeAttribute(accountUrl)}">${escapeHtml(accountUrl)}</a></p>
+      <p>If you have any questions or concerns, please contact our office:</p>
+      <p>${BETECH_PHONE_PRIMARY}<br />${BETECH_PHONE_POD_OFFICE}</p>
+      <p>Thank you for choosing <strong>Betech Solar Solutions</strong>.</p>`
+          : ""
+      }
     `,
     bodyText: [
       introText,
-      input.receiptLink ? `View your receipt here: ${input.receiptLink}` : "",
-      "Login to your account using your email address or phone number to view your order details and download your receipt anytime.",
+      !input.isPodReceipt && input.receiptLink ? `View your receipt here: ${input.receiptLink}` : "",
+      !input.isPodReceipt
+        ? "Login to your account using your email address or phone number to view your order details and download your receipt anytime."
+        : "",
       detailsText,
       itemsTable.text,
+      input.isPodReceipt
+        ? [
+            "You can log in to your account using your email address or phone number to:",
+            "- View your order details",
+            "- Track your order status",
+            "- Download your receipt",
+            "- Receive delivery updates",
+            `Account Portal: ${accountUrl}`,
+            "If you have any questions or concerns, please contact our office:",
+            BETECH_PHONE_PRIMARY,
+            BETECH_PHONE_POD_OFFICE,
+            "Thank you for choosing Betech Solar Solutions.",
+          ].join("\n")
+        : "",
     ]
       .filter(Boolean)
       .join("\n\n"),
     ctaLabel: "Login to your account",
     ctaUrl: accountUrl,
-    outro: "You can use the same account to review your saved order history and download future receipts.",
+    outro: input.isPodReceipt
+      ? "Kind regards,\nBetech Solar Solutions"
+      : "You can use the same account to review your saved order history and download future receipts.",
     attachments: input.attachments,
   });
 }

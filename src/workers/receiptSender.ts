@@ -1172,14 +1172,13 @@ export async function sendReceiptChannels(
         const customerName = (orderAny?.customerName || dataAny?.customerName || 'Customer').trim();
         const receiptNumber = receipt.order?.orderNumber ?? receipt.id;
         const amountText = formatCurrencyKes(Number(receipt.totalAmount ?? orderAny?.totalAmount ?? 0));
-        const paymentMethod = orderAny?.paymentMethod || dataAny?.paymentMethod || '';
         const smsBody = isPodReceipt
           ? [
-              `Hello ${customerName}, thank you for shopping at BETECH SOLAR SOLUTIONS.`,
-              `Your delivery receipt number is ${receiptNumber}.`,
-              `Amount to pay: ${amountText}.`,
-              buildPodPaymentGuidance(paymentMethod, amountText),
-              `Login with your phone number at https://www.betech.co.ke/account to view your order details and download your receipt.`,
+              `Hello ${customerName}, your Pay on Delivery order has been received and is being dispatched.`,
+              `Receipt No: ${receiptNumber}.`,
+              `Amount due on delivery: ${amountText}.`,
+              `Login with your phone number at www.betech.co.ke/account to view order details, download your receipt, or track your order.`,
+              `Call 0722151083 for assistance.`,
             ].join(' ')
           : [
               `Hello ${customerName}, thank you for shopping at BETECH SOLAR SOLUTIONS.`,
