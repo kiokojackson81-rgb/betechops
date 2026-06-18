@@ -1,5 +1,4 @@
 import nodemailer from "nodemailer";
-import { BETECH_SIGNATURE_TEXT_FALLBACK, renderBetechSignatureHtml } from "@/components/email/BetechSignature";
 
 type EmailAttachment = {
   filename: string;
@@ -235,6 +234,16 @@ function renderReceiptItemsTable(
   return { html, text };
 }
 
+function renderSectionLabel(label: string) {
+  return `<div style="display:inline-block;margin:0 0 12px;padding:8px 14px;border-radius:999px;background:#fff7e7;color:#7a0000;font-size:12px;font-weight:800;letter-spacing:0.18em;text-transform:uppercase">${escapeHtml(
+    label,
+  )}</div>`;
+}
+
+function renderInfoCard(innerHtml: string) {
+  return `<div style="margin-top:18px;padding:18px 18px 16px;border:1px solid #f1e4d3;border-radius:18px;background:#fffdfa">${innerHtml}</div>`;
+}
+
 function renderReceiptItemsSummary(
   items: NonNullable<ReceiptEmailInput["items"]>,
 ) {
@@ -309,8 +318,6 @@ export function renderBetechEmailTemplate(input: BrandedTemplateInput) {
     input.ctaLabel && input.ctaUrl
       ? `<div style="margin:24px 0 0"><a href="${escapeHtml(input.ctaUrl)}" style="display:inline-block;background:#7a0000;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:12px;font-weight:700">${escapeHtml(input.ctaLabel)}</a></div>`
       : "";
-  const signatureHtml = renderBetechSignatureHtml();
-
   const html = `<!doctype html>
 <html>
   <head>
@@ -336,7 +343,6 @@ export function renderBetechEmailTemplate(input: BrandedTemplateInput) {
                 <div style="font-size:15px;line-height:1.7;color:#334155">${input.bodyHtml}</div>
                 ${ctaHtml}
                 ${safeOutro ? `<p style="margin:24px 0 0;font-size:15px;line-height:1.65">${safeOutro}</p>` : ""}
-                ${signatureHtml}
               </td>
             </tr>
             <tr>
@@ -367,8 +373,6 @@ export function renderBetechEmailTemplate(input: BrandedTemplateInput) {
     input.bodyText || normalizeText(input.bodyHtml),
     input.ctaLabel && input.ctaUrl ? `${input.ctaLabel}: ${input.ctaUrl}` : "",
     input.outro || "",
-    "",
-    BETECH_SIGNATURE_TEXT_FALLBACK,
     "",
     BETECH_NAME,
     `Email: ${BETECH_EMAIL}`,
@@ -463,22 +467,68 @@ export async function sendReceiptEmail(input: ReceiptEmailInput) {
   const itemsTable = renderReceiptItemsTable(input.items || []);
   const itemsSummary = renderReceiptItemsSummary(input.items || []);
   const podAmountText = input.orderAmountText || input.totalText || "";
+  const detailRows = [
+    input.receiptNumber ? ["Receipt number", input.receiptNumber] : null,
+    input.issuedAt ? ["Issued at", input.issuedAt] : null,
+    input.customerPhone ? ["Phone", input.customerPhone] : null,
+    input.customerEmail ? ["Email", input.customerEmail] : null,
+    input.paymentMethod ? ["Payment method", input.paymentMethod] : null,
+    input.subtotalText ? ["Subtotal", input.subtotalText] : null,
+    input.totalText ? ["Total", input.totalText] : null,
+  ].filter((row): row is [string, string] => Boolean(row && row[1]));
+  const detailsCardHtml = detailRows.length
+    ? renderInfoCard(`
+        ${renderSectionLabel("Receipt summary")}
+        <table role="presentation" width="100%" cellPadding="0" cellSpacing="0" style="width:100%;border-collapse:collapse">
+          ${detailRows
+            .map(([label, value], index) => {
+              const isLast = index === detailRows.length - 1;
+              return `<tr>
+                <td style="padding:12px 10px 12px 0;vertical-align:top;font-size:14px;font-weight:800;color:#7a0000;${
+                  isLast ? "" : "border-bottom:1px solid #f7ead8;"
+                }">
+                  ${escapeHtml(label)}:
+                </td>
+                <td style="padding:12px 0 12px 10px;vertical-align:top;font-size:15px;color:#1f2937;text-align:right;${
+                  isLast ? "" : "border-bottom:1px solid #f7ead8;"
+                }">
+                  ${escapeHtml(value)}
+                </td>
+              </tr>`;
+            })
+            .join("")}
+        </table>
+      `)
+    : "";
   const introHtml = input.isPodReceipt
-    ? `<p>Thank you for shopping with <strong>Betech Solar Solutions</strong>.</p>
-       <p>Your <strong>Pay on Delivery</strong> order has been successfully received and is currently being processed. We will dispatch it shortly through our delivery partner, <strong>SpeedAf</strong>.</p>
-       <p><strong>Receipt Number:</strong> ${escapeHtml(input.receiptNumber)}<br /><strong>Amount to Pay on Delivery:</strong> ${escapeHtml(
-         podAmountText || "KES 0",
-       )}</p>
+    ? `<p style="margin:0 0 14px">Thank you for shopping with <strong>Betech Solar Solutions</strong>.</p>
+       <p style="margin:0 0 18px">Your <strong>Pay on Delivery</strong> order has been successfully received and is currently being processed. We will dispatch it shortly through our delivery partner, <strong>SpeedAf</strong>.</p>
+       ${renderInfoCard(`
+         ${renderSectionLabel("Pay on delivery")}
+         <div style="font-size:15px;line-height:1.75;color:#334155">
+           <div style="margin-bottom:10px"><strong>Receipt Number:</strong> ${escapeHtml(input.receiptNumber)}</div>
+           <div><strong>Amount to Pay on Delivery:</strong> <span style="font-size:20px;font-weight:800;color:#111827">${escapeHtml(
+             podAmountText || "KES 0",
+           )}</span></div>
+         </div>
+       `)}
        ${
          itemsSummary.html
-           ? `<p><strong>Order Details:</strong></p>${itemsSummary.html}`
+           ? renderInfoCard(`
+               ${renderSectionLabel("Order details")}
+               ${itemsSummary.html}
+             `)
            : ""
        }
-       <p><strong>Delivery Information</strong></p>
-       <p>Your order will be delivered by <strong>SpeedAf</strong>. You will be guided on how to make payment when receiving or collecting your order.</p>
-       <p><strong>Important:</strong> Please do <strong>not</strong> make any payment before receiving your item(s).</p>
-       <p>Your receipt is attached to this email for your reference.</p>
-       <p>Login to your account using your <strong>email address or phone number</strong> to view your order details and download your receipt anytime.</p>`
+       ${renderInfoCard(`
+         ${renderSectionLabel("Delivery information")}
+         <div style="font-size:15px;line-height:1.75;color:#334155">
+           <p style="margin:0 0 12px">Your order will be delivered by <strong>SpeedAf</strong>. You will be guided on how to make payment when receiving or collecting your order.</p>
+           <p style="margin:0;color:#7a0000;font-weight:800">Important: Please do not make any payment before receiving your item(s).</p>
+         </div>
+       `)}
+       <p style="margin:18px 0 0">Your receipt is attached to this email for your reference.</p>
+       <p style="margin:14px 0 0">Login to your account using your <strong>email address or phone number</strong> to view your order details and download your receipt anytime.</p>`
     : `<p>Thank you for shopping with Betech Solar Solutions.</p>`;
   const introText = input.isPodReceipt
     ? [
@@ -496,39 +546,6 @@ export async function sendReceiptEmail(input: ReceiptEmailInput) {
         .filter(Boolean)
         .join("\n\n")
     : "Thank you for shopping with Betech Solar Solutions.";
-  const detailRows = [
-    input.receiptNumber ? ["Receipt number", input.receiptNumber] : null,
-    input.issuedAt ? ["Issued at", input.issuedAt] : null,
-    input.customerPhone ? ["Phone", input.customerPhone] : null,
-    input.customerEmail ? ["Email", input.customerEmail] : null,
-    input.paymentMethod ? ["Payment method", input.paymentMethod] : null,
-    input.subtotalText ? ["Subtotal", input.subtotalText] : null,
-    input.totalText ? ["Total", input.totalText] : null,
-  ].filter((row): row is [string, string] => Boolean(row && row[1]));
-
-  const detailsHtml = detailRows.length
-    ? `<div style="margin-top:20px;border:1px solid #f1e4d3;border-radius:14px;background:#fffdfa;padding:10px 14px">
-        <table role="presentation" width="100%" cellPadding="0" cellSpacing="0" style="width:100%;border-collapse:collapse">
-          ${detailRows
-            .map(([label, value], index) => {
-              const isLast = index === detailRows.length - 1;
-              return `<tr>
-                <td style="padding:10px 6px 10px 0;vertical-align:top;font-size:13px;font-weight:700;color:#7a0000;${
-                  isLast ? "" : "border-bottom:1px solid #f7ead8;"
-                }">
-                  ${escapeHtml(label)}:
-                </td>
-                <td style="padding:10px 0 10px 6px;vertical-align:top;font-size:14px;color:#1f2937;text-align:right;${
-                  isLast ? "" : "border-bottom:1px solid #f7ead8;"
-                }">
-                  ${escapeHtml(value)}
-                </td>
-              </tr>`;
-            })
-            .join("")}
-        </table>
-      </div>`
-    : "";
   const detailsText = detailRows.length
     ? detailRows.map(([label, value]) => `${label}: ${value}`).join("\n")
     : "";
@@ -550,21 +567,30 @@ export async function sendReceiptEmail(input: ReceiptEmailInput) {
             }.</p>
       <p>Login to your account using your <strong>email address or phone number</strong> to view your order details and download your receipt anytime.</p>`
       }
-      ${detailsHtml}
+      ${detailsCardHtml}
       ${itemsTable.html}
       ${
         input.isPodReceipt
-          ? `<p>You can log in to your account using your email address or phone number to:</p>
-      <ul style="margin:10px 0 0 18px;padding:0;color:#334155;font-size:15px;line-height:1.75">
-        <li>View your order details</li>
-        <li>Track your order status</li>
-        <li>Download your receipt</li>
-        <li>Receive delivery updates</li>
-      </ul>
-      <p><strong>Account Portal:</strong><br /><a href="${escapeAttribute(accountUrl)}">${escapeHtml(accountUrl)}</a></p>
-      <p>If you have any questions or concerns, please contact our office:</p>
-      <p>${BETECH_PHONE_PRIMARY}<br />${BETECH_PHONE_POD_OFFICE}</p>
-      <p>Thank you for choosing <strong>Betech Solar Solutions</strong>.</p>`
+          ? `${renderInfoCard(`
+              ${renderSectionLabel("Account portal")}
+              <p style="margin:0 0 12px;font-size:15px;line-height:1.75;color:#334155">You can log in to your account using your email address or phone number to:</p>
+              <ul style="margin:0 0 14px 18px;padding:0;color:#334155;font-size:15px;line-height:1.75">
+                <li>View your order details</li>
+                <li>Track your order status</li>
+                <li>Download your receipt</li>
+                <li>Receive delivery updates</li>
+              </ul>
+              <div style="font-size:15px;line-height:1.75"><strong>Account Portal:</strong><br /><a href="${escapeAttribute(accountUrl)}">${escapeHtml(accountUrl)}</a></div>
+            `)}
+            ${renderInfoCard(`
+              ${renderSectionLabel("Need help?")}
+              <div style="font-size:15px;line-height:1.75;color:#334155">
+                <p style="margin:0 0 10px">If you have any questions or concerns, please contact our office:</p>
+                <div><strong>${BETECH_PHONE_PRIMARY}</strong></div>
+                <div><strong>${BETECH_PHONE_POD_OFFICE}</strong></div>
+              </div>
+            `)}
+            <p style="margin:18px 0 0">Thank you for choosing <strong>Betech Solar Solutions</strong>.</p>`
           : ""
       }
     `,
