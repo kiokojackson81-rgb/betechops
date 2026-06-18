@@ -1,7 +1,5 @@
 "use client";
 
-import { buildQuoteRequestDraft } from "@/app/shop/integrationPlan";
-
 export type ShopOrderInput = {
   items: Array<{
     productId: string;
@@ -19,7 +17,11 @@ export type ShopOrderInput = {
 export type QuoteRequestInput = {
   name: string;
   phone: string;
+  email?: string;
   location?: string;
+  county?: string;
+  town?: string;
+  specificLocation?: string;
   propertyType?: string;
   load?: string;
   budgetRange?: string;
@@ -56,26 +58,12 @@ export async function createShopOrder(input: ShopOrderInput): Promise<ShopOrderR
 }
 
 export async function createQuoteRequest(input: QuoteRequestInput) {
-  try {
-    return await postJson("/api/shop/quotes", input);
-  } catch {
-    const draft = buildQuoteRequestDraft({
-      customerName: input.name,
-      phone: input.phone,
-      location: input.location || "",
-      propertyType: input.propertyType || "",
-      loadDescription: input.load || "",
-      budgetRange: input.budgetRange || "",
-      preferredProducts: input.preferredProducts || "",
-      notes: input.notes,
-    });
-
-    return {
-      ok: true,
-      source: "mock" as const,
-      message: "Quote request placeholder accepted.",
-      draft,
-      request: input,
+  return postJson<{
+    ok: true;
+    quoteRef: string;
+    quote: {
+      id: string;
+      quoteRef: string;
     };
-  }
+  }>("/api/shop/quotes", input);
 }

@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import Card from "@/app/_components/Card";
 import DailyReportReceiptsPanel from "@/components/daily-report-receipts";
 import WebsiteOrdersDeskClient from "@/components/WebsiteOrdersDeskClient";
+import QuotationRequestsDeskClient from "@/components/QuotationRequestsDeskClient";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 
 type ReceiptRangeKey = "today" | "yesterday" | "this-week" | "period" | "custom";
@@ -67,7 +68,7 @@ export default function MarketingReceiptsPage() {
     totalSales: 0,
     receiptsCount: 0,
   });
-  const [viewMode, setViewMode] = useState<"receipts" | "web-orders">("receipts");
+  const [viewMode, setViewMode] = useState<"receipts" | "web-orders" | "quote-requests">("receipts");
 
   const rangeLabel = (() => {
     if (rangeKey === "today") return "Today";
@@ -231,6 +232,12 @@ export default function MarketingReceiptsPage() {
                     active: false,
                     onClick: () => setViewMode("web-orders"),
                   },
+                  {
+                    key: "quote-requests",
+                    label: "Quotation requests",
+                    active: false,
+                    onClick: () => setViewMode("quote-requests"),
+                  },
                   ...ReceiptRangeOptions.map((option) => ({
                     key: option.key,
                     label: option.label,
@@ -247,7 +254,7 @@ export default function MarketingReceiptsPage() {
                 }
               />
             </>
-          ) : (
+          ) : viewMode === "web-orders" ? (
             <div className="space-y-4">
               <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
                 <button
@@ -263,6 +270,13 @@ export default function MarketingReceiptsPage() {
                 >
                   Web orders
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("quote-requests")}
+                  className="rounded-full border border-white/15 px-4 py-1 text-slate-200 transition hover:border-emerald-500 hover:text-white"
+                >
+                  Quotation requests
+                </button>
               </div>
               <WebsiteOrdersDeskClient
                 apiBasePath="/api/attendant/website-orders"
@@ -272,6 +286,39 @@ export default function MarketingReceiptsPage() {
                 orderListDescription="Process direct website orders assigned to your customer-service desk."
                 emptyMessage="No assigned website orders found right now."
                 filterStorageKey="marketing:web-orders:status"
+              />
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("receipts")}
+                  className="rounded-full border border-white/15 px-4 py-1 text-slate-200 transition hover:border-emerald-500 hover:text-white"
+                >
+                  POS receipts
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("web-orders")}
+                  className="rounded-full border border-white/15 px-4 py-1 text-slate-200 transition hover:border-emerald-500 hover:text-white"
+                >
+                  Web orders
+                </button>
+                <button
+                  type="button"
+                  className="rounded-full border border-emerald-500 bg-emerald-500/20 px-4 py-1 text-emerald-200 transition"
+                >
+                  Quotation requests
+                </button>
+              </div>
+              <QuotationRequestsDeskClient
+                apiBasePath="/api/attendant/quote-requests"
+                defaultStatusFilter="NEW"
+                filterStorageKey="marketing:quote-requests:status"
+                deskTitle="Assigned quotation requests"
+                deskDescription="Prepare customer quotations, recommend products, and notify customers from the same follow-up desk."
+                emptyMessage="No assigned quotation requests found right now."
               />
             </div>
           )}

@@ -12,6 +12,10 @@ import { auth } from "@/lib/auth";
 import { findSafeCustomerProfileByUserId } from "@/lib/customerProfile";
 import { backfillPosReceiptsForCustomerAccount } from "@/lib/posCustomerAccountSync";
 import { prisma } from "@/lib/prisma";
+import {
+  backfillQuoteRequestsForCustomerAccount,
+  listCustomerQuoteRequests,
+} from "@/lib/quoteRequests";
 import { buildCustomerAccountIdentity, listCustomerAccountOrders } from "@/lib/shopCustomerOrders";
 
 export const metadata: Metadata = buildShopMetadata({
@@ -42,6 +46,11 @@ export default async function ShopAccountPage() {
     normalizedEmails: identity.normalizedEmails,
     limit: 100,
   });
+  await backfillQuoteRequestsForCustomerAccount({
+    userId: user.id,
+    phoneVariants: identity.phoneVariants,
+    normalizedEmails: identity.normalizedEmails,
+  });
 
   if (identity.phoneVariants.length) {
     await prisma.websiteOrder.updateMany({
@@ -60,6 +69,12 @@ export default async function ShopAccountPage() {
     phoneVariants: identity.phoneVariants,
     normalizedEmails: identity.normalizedEmails,
     take: 10,
+  });
+  const recentQuotes = await listCustomerQuoteRequests({
+    userId: identity.userId,
+    phoneVariants: identity.phoneVariants,
+    normalizedEmails: identity.normalizedEmails,
+    take: 6,
   });
 
   const account = dbUser || {
@@ -103,6 +118,7 @@ export default async function ShopAccountPage() {
               receiptId: order.receiptId,
               itemPreview: order.itemPreview,
             }))}
+            recentQuotes={recentQuotes}
           />
           <div className="mt-4">
             <ShopSupportStrip />

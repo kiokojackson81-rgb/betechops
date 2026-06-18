@@ -1,12 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { MessageCircle, PhoneCall } from "lucide-react";
 import ShopSupportStrip from "@/app/shop/_components/ShopSupportStrip";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
-import { getLastMockQuote, type MockQuoteRecord } from "@/app/shop/shopStorage";
 import { SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
 
 type QuoteSuccessClientProps = {
@@ -14,22 +13,12 @@ type QuoteSuccessClientProps = {
 };
 
 export default function QuoteSuccessClient({ quoteRef }: QuoteSuccessClientProps) {
-  const [quote, setQuote] = useState<MockQuoteRecord | null>(null);
-
-  useEffect(() => {
-    const stored = getLastMockQuote();
-    if (!stored) return;
-    if (!quoteRef || stored.quoteRef === quoteRef) {
-      setQuote(stored);
-    }
-  }, [quoteRef]);
-
   const whatsappHref = useMemo(() => {
-    const ref = quote?.quoteRef || quoteRef || "BT-QUOTE-REF";
+    const ref = quoteRef || "BT-QUOTE-REF";
     return `https://wa.me/254722151083?text=${encodeURIComponent(
       `Hello Betech Solar, I requested a solar quote ${ref}. Kindly assist.`,
     )}`;
-  }, [quote, quoteRef]);
+  }, [quoteRef]);
 
   return (
     <div className="grid gap-5">
@@ -43,15 +32,12 @@ export default function QuoteSuccessClient({ quoteRef }: QuoteSuccessClientProps
         </p>
         <div className="mt-6 rounded-[26px] border border-white/10 bg-white/10 p-5">
           <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#ffd761]">Quote reference</div>
-          <div className="mt-2 text-2xl font-black text-white">{quote?.quoteRef || quoteRef || "BT-QUOTE-REF"}</div>
-          {quote ? (
-            <div className="mt-4 grid gap-2 text-sm leading-6 text-white/76">
-              <div>{quote.customerName}</div>
-              <div>{quote.phone}</div>
-              <div>{quote.location}</div>
-              <div>{quote.propertyType}</div>
-            </div>
-          ) : null}
+          <div className="mt-2 text-2xl font-black text-white">{quoteRef || "BT-QUOTE-REF"}</div>
+          <div className="mt-4 grid gap-2 text-sm leading-6 text-white/76">
+            <div>Your quotation request is now in the Betech Solar follow-up queue.</div>
+            <div>Our team will contact you using the phone number or email you shared.</div>
+            <div>When you log in to your account later, your quotation follow-up updates will appear there.</div>
+          </div>
         </div>
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
           <TrackedWhatsAppLink

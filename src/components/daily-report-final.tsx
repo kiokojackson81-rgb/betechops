@@ -13,6 +13,7 @@ import { useCardLock, LockButton } from "@/app/_components/useCardLock";
 import SensitiveValue from "./SensitiveValue";
 import DailyReportReceiptsPanel from "./daily-report-receipts";
 import WebsiteOrdersDeskClient from "@/components/WebsiteOrdersDeskClient";
+import QuotationRequestsDeskClient from "@/components/QuotationRequestsDeskClient";
 import PeriodSwitcher from "@/app/_components/PeriodSwitcher";
 import useTradingPeriodQueryState from "@/app/_components/useTradingPeriodQueryState";
 import { withImpersonateId } from "@/lib/impersonation";
@@ -103,7 +104,7 @@ const textareaClasses =
   "w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500";
 export default function DailyReportFinal() {
   const [currentView, setCurrentView] = useState<
-    "dashboard" | "receipts" | "web-orders" | "product-desk"
+    "dashboard" | "receipts" | "web-orders" | "quote-requests" | "product-desk"
   >("dashboard");
 
   // receipts-history controls (used when #my-receipts)
@@ -175,6 +176,10 @@ export default function DailyReportFinal() {
         setCurrentView("web-orders");
         return;
       }
+      if (window.location.hash === "#quote-requests") {
+        setCurrentView("quote-requests");
+        return;
+      }
       if (window.location.hash === "#product-desk") {
         setCurrentView("product-desk");
         return;
@@ -187,12 +192,14 @@ export default function DailyReportFinal() {
   }, []);
 
   useEffect(() => {
-    if (!["receipts", "web-orders", "product-desk"].includes(currentView)) return;
+    if (!["receipts", "web-orders", "quote-requests", "product-desk"].includes(currentView)) return;
     const targetId =
       currentView === "receipts"
         ? "my-receipts"
         : currentView === "web-orders"
           ? "web-orders"
+          : currentView === "quote-requests"
+            ? "quote-requests"
           : "product-desk";
     const el = document.getElementById(targetId);
     el?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1005,6 +1012,21 @@ export default function DailyReportFinal() {
                       }
                     },
                   },
+                  {
+                    key: "quote-requests",
+                    label: "Quotation requests",
+                    active: false,
+                    onClick: () => {
+                      setCurrentView("quote-requests");
+                      if (typeof window !== "undefined") {
+                        window.history.replaceState(
+                          null,
+                          "",
+                          `${window.location.pathname}${window.location.search}#quote-requests`,
+                        );
+                      }
+                    },
+                  },
                 ]}
                 onSummary={(s) => setReceiptsSummary({ count: s.count, totalSales: s.totalSales })}
               />
@@ -1073,6 +1095,42 @@ export default function DailyReportFinal() {
               orderListDescription="Handle assigned website orders, update lifecycle status, and issue receipts when needed."
               emptyMessage="No assigned website orders found right now."
               filterStorageKey="attendant:web-orders:status"
+            />
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (currentView === "quote-requests") {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100">
+        <main className="mx-auto max-w-7xl space-y-6 p-6">
+          <header className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-semibold">Quotation requests</h1>
+              <p className="text-sm text-slate-300">
+                Handle assigned quotation requests, recommend products, and notify the customer from one desk.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={backToDashboard}
+              className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
+            >
+              Back to dashboard
+            </button>
+          </header>
+
+          <div id="quote-requests">
+            <QuotationRequestsDeskClient
+              apiBasePath="/api/attendant/quote-requests"
+              apiQueryParams={impersonateId ? { impersonateId } : undefined}
+              defaultStatusFilter="NEW"
+              filterStorageKey="attendant:quote-requests:status"
+              deskTitle="Assigned quotation requests"
+              deskDescription="Respond to quotation requests, build recommended solar bundles, and notify customers by email or SMS."
+              emptyMessage="No assigned quotation requests found right now."
             />
           </div>
         </main>

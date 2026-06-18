@@ -6,7 +6,6 @@ import { useMemo, useState } from "react";
 import { createQuoteRequest } from "@/app/shop/shopSubmitApi";
 import { trackQuoteSubmitted } from "@/app/shop/shopAnalytics";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
-import { saveMockQuote } from "@/app/shop/shopStorage";
 import { getShopQuoteSuccessHref, SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
 import { getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
 
@@ -21,6 +20,7 @@ export default function QuoteRequestClient({ preferredProduct = "" }: QuoteReque
   const [fieldErrors, setFieldErrors] = useState<{
     name?: string;
     phone?: string;
+    email?: string;
     county?: string;
     town?: string;
     propertyType?: string;
@@ -28,6 +28,7 @@ export default function QuoteRequestClient({ preferredProduct = "" }: QuoteReque
   const [form, setForm] = useState({
     name: "",
     phone: "",
+    email: "",
     county: "",
     town: "",
     specificLocation: "",
@@ -44,9 +45,12 @@ export default function QuoteRequestClient({ preferredProduct = "" }: QuoteReque
   const resolvedLocation = [form.town.trim(), form.county.trim(), form.specificLocation.trim()].filter(Boolean).join(" - ");
 
   function validateForm() {
-    const nextErrors: { name?: string; phone?: string; county?: string; town?: string; propertyType?: string } = {};
+    const nextErrors: { name?: string; phone?: string; email?: string; county?: string; town?: string; propertyType?: string } = {};
     if (!form.name.trim()) nextErrors.name = "Please enter your name so Betech Solar can prepare this quote.";
     if (!form.phone.trim()) nextErrors.phone = "Please enter a phone number so our solar sizing team can reach you.";
+    if (form.email.trim() && !/\S+@\S+\.\S+/.test(form.email.trim())) {
+      nextErrors.email = "Enter a valid email address or leave it blank.";
+    }
     if (!form.county.trim()) nextErrors.county = "Please select the county for this quote request.";
     if (!form.town.trim()) nextErrors.town = "Please select the town or area for this quote request.";
     if (!form.propertyType.trim()) nextErrors.propertyType = "Please choose the property type for this quote.";
@@ -63,10 +67,14 @@ export default function QuoteRequestClient({ preferredProduct = "" }: QuoteReque
         setSubmitting(true);
         setError(null);
         try {
-          await createQuoteRequest({
+          const result = await createQuoteRequest({
             name: form.name,
             phone: form.phone,
+            email: form.email,
             location: resolvedLocation,
+            county: form.county,
+            town: form.town,
+            specificLocation: form.specificLocation,
             propertyType: form.propertyType,
             load: form.load,
             budgetRange: form.budgetRange,
@@ -74,24 +82,13 @@ export default function QuoteRequestClient({ preferredProduct = "" }: QuoteReque
             notes: form.notes,
           });
 
-          const savedQuote = saveMockQuote({
-            customerName: form.name.trim(),
-            phone: form.phone.trim(),
-            location: resolvedLocation,
-            propertyType: form.propertyType,
-            loadDescription: form.load.trim(),
-            budgetRange: form.budgetRange,
-            preferredProducts: form.preferredProducts.trim(),
-            notes: form.notes.trim() || undefined,
-          });
-
           trackQuoteSubmitted({
-            quoteRef: savedQuote.quoteRef,
-            propertyType: savedQuote.propertyType,
-            location: savedQuote.location,
-            preferredProducts: savedQuote.preferredProducts,
+            quoteRef: result.quoteRef,
+            propertyType: form.propertyType,
+            location: resolvedLocation,
+            preferredProducts: form.preferredProducts.trim(),
           });
-          router.push(getShopQuoteSuccessHref(savedQuote.quoteRef));
+          router.push(getShopQuoteSuccessHref(result.quoteRef));
         } catch (submissionError) {
           setError(submissionError instanceof Error ? submissionError.message : "Unable to send the quote request.");
         } finally {
@@ -131,6 +128,21 @@ export default function QuoteRequestClient({ preferredProduct = "" }: QuoteReque
             className={resolveFieldClass(fieldErrors.phone)}
           />
           {fieldErrors.phone ? <span className="text-xs font-semibold text-red-600">{fieldErrors.phone}</span> : null}
+        </label>
+        <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
+          Email address
+          <input
+            type="email"
+            value={form.email}
+            onChange={(event) => {
+              const value = event.target.value;
+              setForm((current) => ({ ...current, email: value }));
+              if (fieldErrors.email) setFieldErrors((current) => ({ ...current, email: undefined }));
+            }}
+            className={resolveFieldClass(fieldErrors.email)}
+            placeholder="Optional, for quotation delivery and follow-up"
+          />
+          {fieldErrors.email ? <span className="text-xs font-semibold text-red-600">{fieldErrors.email}</span> : null}
         </label>
         <label className="grid gap-2 text-sm font-semibold text-slate-700">
           County
@@ -262,7 +274,7 @@ export default function QuoteRequestClient({ preferredProduct = "" }: QuoteReque
         </Link>
       </div>
       <p className="mt-4 text-sm leading-6 text-slate-500">
-        Quote requests are reviewed directly by the Betech Solar team before follow-up.
+        Quote requests are assigned directly to the Betech Solar quotation desk for follow-up.
       </p>
     </form>
   );

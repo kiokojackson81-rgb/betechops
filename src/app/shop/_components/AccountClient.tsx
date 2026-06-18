@@ -12,14 +12,13 @@ import {
 } from "lucide-react";
 import CustomerAccountSidebar from "@/app/shop/_components/CustomerAccountSidebar";
 import { getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
+import type { SerializedQuoteRequest } from "@/lib/quoteRequests";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import {
   getShopCustomerProfile,
   getMockOrderHistory,
-  getMockQuoteHistory,
   saveShopCustomerProfile,
   type MockOrderRecord,
-  type MockQuoteRecord,
 } from "@/app/shop/shopStorage";
 import { formatCurrency, shopStyles } from "@/app/shop/_components/shopStyles";
 import { SHOP_ACCOUNT_ORDERS_HREF, SHOP_CHECKOUT_HREF } from "@/app/shop/storefrontPaths";
@@ -55,6 +54,7 @@ type AccountClientProps = {
       category: string | null;
     }>;
   }>;
+  recentQuotes: SerializedQuoteRequest[];
 };
 
 function buildFormProfile(
@@ -91,8 +91,7 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
-export default function AccountClient({ initialProfile, recentOrders }: AccountClientProps) {
-  const [quotes, setQuotes] = useState<MockQuoteRecord[]>([]);
+export default function AccountClient({ initialProfile, recentOrders, recentQuotes }: AccountClientProps) {
   const [localOrders, setLocalOrders] = useState<MockOrderRecord[]>([]);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -109,7 +108,6 @@ export default function AccountClient({ initialProfile, recentOrders }: AccountC
   }, [initialProfile]);
 
   useEffect(() => {
-    setQuotes(getMockQuoteHistory());
     setLocalOrders(getMockOrderHistory());
   }, []);
 
@@ -500,12 +498,47 @@ export default function AccountClient({ initialProfile, recentOrders }: AccountC
             <section id="quote-follow-up" className={`${shopStyles.lightCard} scroll-mt-28 p-5`}>
               <div className={shopStyles.sectionEyebrow}>Quote follow-up</div>
               <div className="mt-4 space-y-3">
-                {quotes.length ? (
-                  quotes.slice(0, 3).map((quote) => (
-                    <div key={quote.quoteRef} className="rounded-[18px] border border-[#7a0000]/10 bg-[#fcfaf7] p-4">
-                      <div className="text-sm font-black text-slate-950">{quote.quoteRef}</div>
-                      <div className="mt-1 text-xs text-slate-500">{quote.propertyType || "Solar quote"} • {formatDate(quote.createdAt)}</div>
-                      <div className="mt-2 text-sm text-slate-600">{quote.location || "Location pending"}</div>
+                {recentQuotes.length ? (
+                  recentQuotes.slice(0, 3).map((quote) => (
+                    <div key={quote.id} className="rounded-[18px] border border-[#7a0000]/10 bg-[#fcfaf7] p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-black text-slate-950">{quote.quoteRef}</div>
+                          <div className="mt-1 text-xs text-slate-500">
+                            {quote.propertyType || "Solar quotation"} • {formatDate(quote.createdAt)}
+                          </div>
+                        </div>
+                        <div className="rounded-full bg-[#fff3d8] px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-[#7a0000]">
+                          {formatOrderStatus(quote.status)}
+                        </div>
+                      </div>
+                      <div className="mt-2 text-sm text-slate-600">
+                        {quote.customerLocation || [quote.town, quote.county].filter(Boolean).join(", ") || "Location pending"}
+                      </div>
+                      {quote.quoteTitle || quote.quoteMessage ? (
+                        <div className="mt-3 rounded-[14px] border border-[#7a0000]/10 bg-white px-3 py-3">
+                          {quote.quoteTitle ? <div className="text-sm font-bold text-slate-950">{quote.quoteTitle}</div> : null}
+                          {quote.quoteMessage ? (
+                            <div className="mt-1 line-clamp-3 text-sm leading-6 text-slate-600">{quote.quoteMessage}</div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      {quote.quotationData ? (
+                        <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
+                          {typeof quote.quotationData.batterySize === "string" && quote.quotationData.batterySize ? (
+                            <div><span className="font-bold text-slate-950">Battery:</span> {quote.quotationData.batterySize}</div>
+                          ) : null}
+                          {typeof quote.quotationData.inverterSize === "string" && quote.quotationData.inverterSize ? (
+                            <div><span className="font-bold text-slate-950">Inverter:</span> {quote.quotationData.inverterSize}</div>
+                          ) : null}
+                          {typeof quote.quotationData.panelSetup === "string" && quote.quotationData.panelSetup ? (
+                            <div className="sm:col-span-2"><span className="font-bold text-slate-950">Panels:</span> {quote.quotationData.panelSetup}</div>
+                          ) : null}
+                          {typeof quote.quotationData.estimatedAmount === "string" && quote.quotationData.estimatedAmount ? (
+                            <div><span className="font-bold text-slate-950">Estimate:</span> {quote.quotationData.estimatedAmount}</div>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   ))
                 ) : (
