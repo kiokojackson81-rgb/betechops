@@ -529,7 +529,20 @@ export async function sendReceiptEmail(input: ReceiptEmailInput) {
        `)}
        <p style="margin:18px 0 0">Your receipt is attached to this email for your reference.</p>
        <p style="margin:14px 0 0">Login to your account using your <strong>email address or phone number</strong> to view your order details and download your receipt anytime.</p>`
-    : `<p>Thank you for shopping with Betech Solar Solutions.</p>`;
+    : `<p style="margin:0 0 14px">Thank you for shopping with <strong>Betech Solar Solutions</strong>.</p>
+       <p style="margin:0 0 18px">Your receipt is ready. You can keep this email for your records, and your receipt PDF is attached for quick access.</p>
+       ${
+         input.receiptLink
+           ? renderInfoCard(`
+               ${renderSectionLabel("Receipt access")}
+               <div style="font-size:15px;line-height:1.75;color:#334155">
+                 <p style="margin:0 0 10px">Your receipt is also available online.</p>
+                 <div><a href="${escapeAttribute(input.receiptLink)}">Open your receipt online</a></div>
+               </div>
+             `)
+           : ""
+       }
+       <p style="margin:14px 0 0">Login to your account using your <strong>email address or phone number</strong> to view your order details and download your receipt anytime.</p>`;
   const introText = input.isPodReceipt
     ? [
         "Thank you for shopping with Betech Solar Solutions.",
@@ -562,10 +575,7 @@ export async function sendReceiptEmail(input: ReceiptEmailInput) {
       ${
         input.isPodReceipt
           ? ""
-          : `<p>Your receipt PDF is attached to this email${
-              input.receiptLink ? `, and you can also view it online <a href="${escapeAttribute(input.receiptLink)}">here</a>` : ""
-            }.</p>
-      <p>Login to your account using your <strong>email address or phone number</strong> to view your order details and download your receipt anytime.</p>`
+          : ""
       }
       ${detailsCardHtml}
       ${itemsTable.html}
@@ -591,7 +601,25 @@ export async function sendReceiptEmail(input: ReceiptEmailInput) {
               </div>
             `)}
             <p style="margin:18px 0 0">Thank you for choosing <strong>Betech Solar Solutions</strong>.</p>`
-          : ""
+          : `${renderInfoCard(`
+              ${renderSectionLabel("Account portal")}
+              <p style="margin:0 0 12px;font-size:15px;line-height:1.75;color:#334155">You can log in to your account using your email address or phone number to:</p>
+              <ul style="margin:0 0 14px 18px;padding:0;color:#334155;font-size:15px;line-height:1.75">
+                <li>View your order details</li>
+                <li>Download your receipt again</li>
+                <li>Review your saved order history</li>
+              </ul>
+              <div style="font-size:15px;line-height:1.75"><strong>Account Portal:</strong><br /><a href="${escapeAttribute(accountUrl)}">${escapeHtml(accountUrl)}</a></div>
+            `)}
+            ${renderInfoCard(`
+              ${renderSectionLabel("Need help?")}
+              <div style="font-size:15px;line-height:1.75;color:#334155">
+                <p style="margin:0 0 10px">If you have any questions about this receipt, please contact our office:</p>
+                <div><strong>${BETECH_PHONE_PRIMARY}</strong></div>
+                <div><strong>${BETECH_PHONE_SECONDARY}</strong></div>
+              </div>
+            `)}
+            <p style="margin:18px 0 0">Thank you for choosing <strong>Betech Solar Solutions</strong>.</p>`
       }
     `,
     bodyText: [
@@ -615,7 +643,17 @@ export async function sendReceiptEmail(input: ReceiptEmailInput) {
             BETECH_PHONE_POD_OFFICE,
             "Thank you for choosing Betech Solar Solutions.",
           ].join("\n")
-        : "",
+        : [
+            "You can log in to your account using your email address or phone number to:",
+            "- View your order details",
+            "- Download your receipt again",
+            "- Review your saved order history",
+            `Account Portal: ${accountUrl}`,
+            "If you have any questions about this receipt, please contact our office:",
+            BETECH_PHONE_PRIMARY,
+            BETECH_PHONE_SECONDARY,
+            "Thank you for choosing Betech Solar Solutions.",
+          ].join("\n"),
     ]
       .filter(Boolean)
       .join("\n\n"),
