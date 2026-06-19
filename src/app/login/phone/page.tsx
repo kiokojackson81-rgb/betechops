@@ -403,15 +403,15 @@ export default function PhoneLoginPage() {
       </div>
 
       {step === "complete-profile" ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6">
-          <div className="w-full max-w-lg rounded-[2rem] border border-[#7a0000]/10 bg-white p-6 shadow-[0_32px_80px_rgba(15,23,42,0.22)] sm:p-7">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/45 px-4 py-4 sm:flex sm:items-center sm:justify-center sm:py-6">
+          <div className="mx-auto w-full max-w-lg max-h-[calc(100vh-2rem)] overflow-y-auto rounded-[2rem] border border-[#7a0000]/10 bg-white p-5 shadow-[0_32px_80px_rgba(15,23,42,0.22)] sm:max-h-[calc(100vh-3rem)] sm:p-7">
             <div className="text-xs font-black uppercase tracking-[0.24em] text-[#7a0000]">Complete profile</div>
             <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Finish creating your account</h2>
             <p className="mt-3 text-sm leading-6 text-slate-600">
               Your OTP is verified. Add your details once so we can save your Betech customer account and log you in.
             </p>
 
-            <form onSubmit={handleCompleteProfile} className="mt-6 space-y-4">
+            <form onSubmit={handleCompleteProfile} className="mt-6 space-y-3 sm:space-y-4">
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-slate-700">Full name</span>
                 <input
