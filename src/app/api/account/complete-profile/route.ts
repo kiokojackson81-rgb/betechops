@@ -22,7 +22,8 @@ export async function POST(req: NextRequest) {
     const name = String(body?.name || "").trim();
     const emailRaw = String(body?.email || "").trim().toLowerCase();
     const normalizedPhone = normalizeKenyanPhone(String(body?.phone || "").trim());
-    const normalizedWhatsapp = normalizeKenyanPhone(String(body?.whatsappNumber || "").trim());
+    const whatsappRaw = String(body?.whatsappNumber || body?.phone || "").trim();
+    const normalizedWhatsapp = normalizeKenyanPhone(whatsappRaw);
     const county = String(body?.county || "").trim();
     const town = String(body?.town || "").trim();
     const estateLandmark = String(body?.estateLandmark || "").trim();

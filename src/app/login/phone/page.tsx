@@ -53,11 +53,9 @@ export default function PhoneLoginPage() {
   const [profileName, setProfileName] = useState("");
   const [profileEmail, setProfileEmail] = useState("");
   const [profilePhone, setProfilePhone] = useState("");
-  const [profileWhatsappNumber, setProfileWhatsappNumber] = useState("");
   const [profileCounty, setProfileCounty] = useState("");
   const [profileTown, setProfileTown] = useState("");
   const [profileEstateLandmark, setProfileEstateLandmark] = useState("");
-  const [profileLocationNotes, setProfileLocationNotes] = useState("");
 
   const normalizedEmailPreview = useMemo(() => resolvedIdentifier.trim().toLowerCase(), [resolvedIdentifier]);
   const canResend = cooldown <= 0;
@@ -91,7 +89,6 @@ export default function PhoneLoginPage() {
     setProfileName(payload?.name || "");
     setProfileEmail(payload?.email || emailFallback || "");
     setProfilePhone(payload?.phone || phoneFallback || "");
-    setProfileWhatsappNumber(payload?.phone || phoneFallback || "");
   }
 
   async function sendOtp(nextIdentifierType: "email" | "phone", nextIdentifier: string, nextPhone?: string) {
@@ -256,11 +253,10 @@ export default function PhoneLoginPage() {
           name: profileName,
           email: profileEmail,
           phone: profilePhone,
-          whatsappNumber: profileWhatsappNumber,
+          whatsappNumber: profilePhone,
           county: profileCounty,
           town: profileTown,
           estateLandmark: profileEstateLandmark,
-          locationNotes: profileLocationNotes,
         }),
       });
       const payload = await response.json().catch(() => null);
@@ -289,11 +285,9 @@ export default function PhoneLoginPage() {
     setProfileName("");
     setProfileEmail("");
     setProfilePhone("");
-    setProfileWhatsappNumber("");
     setProfileCounty("");
     setProfileTown("");
     setProfileEstateLandmark("");
-    setProfileLocationNotes("");
     setMessage(null);
     setError(null);
     setCooldown(0);
@@ -444,17 +438,6 @@ export default function PhoneLoginPage() {
                 />
               </label>
 
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-slate-700">WhatsApp number</span>
-                <input
-                  type="tel"
-                  value={profileWhatsappNumber}
-                  onChange={(event) => setProfileWhatsappNumber(event.target.value)}
-                  placeholder="0712345678 or 0101234567"
-                  className="w-full rounded-2xl border border-[#ead8c4] bg-[#fffdf9] px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#7a0000]/35 focus:ring-2 focus:ring-[#f2b20f]/30"
-                />
-              </label>
-
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block">
                   <span className="mb-2 block text-sm font-semibold text-slate-700">County</span>
@@ -501,16 +484,6 @@ export default function PhoneLoginPage() {
                   type="text"
                   value={profileEstateLandmark}
                   onChange={(event) => setProfileEstateLandmark(event.target.value)}
-                  className="w-full rounded-2xl border border-[#ead8c4] bg-[#fffdf9] px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#7a0000]/35 focus:ring-2 focus:ring-[#f2b20f]/30"
-                />
-              </label>
-
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-slate-700">Delivery notes</span>
-                <textarea
-                  rows={3}
-                  value={profileLocationNotes}
-                  onChange={(event) => setProfileLocationNotes(event.target.value)}
                   className="w-full rounded-2xl border border-[#ead8c4] bg-[#fffdf9] px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#7a0000]/35 focus:ring-2 focus:ring-[#f2b20f]/30"
                 />
               </label>
