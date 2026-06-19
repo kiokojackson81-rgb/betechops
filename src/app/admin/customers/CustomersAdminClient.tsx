@@ -25,6 +25,22 @@ const dateTime = (value?: string | null) =>
       }).format(new Date(value))
     : "—";
 
+function buildPortalLoginHref(args: {
+  customerUserId?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
+  callbackUrl?: string;
+}) {
+  const params = new URLSearchParams();
+  if (args.customerUserId) params.set("userId", args.customerUserId);
+  if (args.customerName) params.set("name", args.customerName);
+  if (args.customerPhone) params.set("phone", args.customerPhone);
+  if (args.customerEmail) params.set("email", args.customerEmail);
+  params.set("callbackUrl", args.callbackUrl || "/account");
+  return `/api/admin/customers/portal-login?${params.toString()}`;
+}
+
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
@@ -149,6 +165,22 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
                               <div>{customer.attendants.join(", ") || "No assigned attendant"}</div>
                             </div>
                           </div>
+                          <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                            <a
+                              href={buildPortalLoginHref({
+                                customerUserId: customer.customerUserId,
+                                customerName: customer.displayName,
+                                customerPhone: customer.primaryPhone,
+                                customerEmail: customer.primaryEmail,
+                                callbackUrl: "/account",
+                              })}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1.5 font-semibold text-emerald-100 transition hover:border-emerald-300/35"
+                            >
+                              Open customer account
+                            </a>
+                          </div>
                         </div>
                       </div>
 
@@ -230,6 +262,22 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
                                   ))}
                                 </div>
                                 <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                                  {order.routeId ? (
+                                    <a
+                                      href={buildPortalLoginHref({
+                                        customerUserId: order.customerUserId || customer.customerUserId,
+                                        customerName: order.customerName || customer.displayName,
+                                        customerPhone: order.customerPhone || customer.primaryPhone,
+                                        customerEmail: order.customerEmail || customer.primaryEmail,
+                                        callbackUrl: `/account/orders/${order.routeId}`,
+                                      })}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1.5 font-semibold text-emerald-100 transition hover:border-emerald-300/35"
+                                    >
+                                      Open customer order
+                                    </a>
+                                  ) : null}
                                   <Link
                                     href={`/admin/orders?q=${encodeURIComponent(order.orderNumber)}`}
                                     className="rounded-full border border-white/10 px-3 py-1.5 text-slate-300 transition hover:border-white/20 hover:text-white"
@@ -297,12 +345,52 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
                       ))}
                     </div>
                   </div>
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <a
+                      href={buildPortalLoginHref({
+                        customerUserId: customer.customerUserId,
+                        customerName: customer.displayName,
+                        customerPhone: customer.primaryPhone,
+                        customerEmail: customer.primaryEmail,
+                        callbackUrl: "/account",
+                      })}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1.5 font-semibold text-emerald-100 transition hover:border-emerald-300/35"
+                    >
+                      Open customer account
+                    </a>
+                  </div>
                   <div className="space-y-3">
                     {customer.orders.slice(0, 5).map((order) => (
                       <div key={order.id} className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
                         <div className="font-medium text-white">{order.orderNumber}</div>
                         <div className="mt-1 text-xs text-slate-500">{dateTime(order.createdAt)} · {order.shopName || "No shop"}</div>
                         <div className="mt-2 text-sm font-semibold text-emerald-300">{money(order.totalAmount)}</div>
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                          {order.routeId ? (
+                            <a
+                              href={buildPortalLoginHref({
+                                customerUserId: order.customerUserId || customer.customerUserId,
+                                customerName: order.customerName || customer.displayName,
+                                customerPhone: order.customerPhone || customer.primaryPhone,
+                                customerEmail: order.customerEmail || customer.primaryEmail,
+                                callbackUrl: `/account/orders/${order.routeId}`,
+                              })}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1.5 font-semibold text-emerald-100 transition hover:border-emerald-300/35"
+                            >
+                              Open customer order
+                            </a>
+                          ) : null}
+                          <Link
+                            href={`/admin/orders?q=${encodeURIComponent(order.orderNumber)}`}
+                            className="rounded-full border border-white/10 px-3 py-1.5 text-slate-300 transition hover:border-white/20 hover:text-white"
+                          >
+                            Open in orders
+                          </Link>
+                        </div>
                       </div>
                     ))}
                   </div>

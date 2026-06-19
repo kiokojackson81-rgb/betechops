@@ -472,6 +472,27 @@ export function createVerifiedAuthToken(result: OtpAuthResult) {
   return `${encoded}.${signature}`;
 }
 
+export function createDirectVerifiedAuthToken(args: {
+  userId: string;
+  channel: AuthOtpChannel;
+  identifier: string;
+  redirectTo: string;
+  requiresProfileCompletion: boolean;
+}) {
+  const payload: VerifiedAuthTokenPayload = {
+    userId: args.userId,
+    channel: args.channel,
+    identifier: args.identifier,
+    redirectTo: args.redirectTo,
+    requiresProfileCompletion: args.requiresProfileCompletion,
+    exp: Date.now() + VERIFIED_TOKEN_TTL_MS,
+  };
+
+  const encoded = base64UrlEncode(JSON.stringify(payload));
+  const signature = hmacHex(encoded, getVerifiedTokenSecret());
+  return `${encoded}.${signature}`;
+}
+
 export function createVerifiedPhoneToken(result: OtpAuthResult) {
   return createVerifiedAuthToken(result);
 }

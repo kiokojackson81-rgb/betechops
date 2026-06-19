@@ -4,6 +4,10 @@ import { formatPhoneForDisplay, normalizePhone } from "@/lib/phone";
 
 type CustomerOrderDetail = {
   id: string;
+  routeId: string | null;
+  customerUserId: string | null;
+  receiptId: string | null;
+  source: "LEGACY" | "WEBSITE" | "POS" | "AGENT";
   orderNumber: string;
   customerName: string;
   customerPhone: string | null;
@@ -30,6 +34,7 @@ type CustomerOrderDetail = {
 
 export type AdminCustomerRow = {
   id: string;
+  customerUserId: string | null;
   displayName: string;
   primaryPhone: string | null;
   primaryEmail: string | null;
@@ -85,6 +90,7 @@ function buildFallbackCustomerId(prefix: string, recordId: string) {
 function makeGroup(id: string, displayName: string): CustomerGroup {
   return {
     id,
+    customerUserId: null,
     displayName,
     primaryPhone: null,
     primaryEmail: null,
@@ -177,6 +183,12 @@ function applyGroupIdentity(
   }
 }
 
+function setGroupCustomerUserId(group: CustomerGroup, userId?: string | null) {
+  const normalizedUserId = String(userId || "").trim();
+  if (!normalizedUserId || group.customerUserId) return;
+  group.customerUserId = normalizedUserId;
+}
+
 function pushOrderIntoGroup(group: CustomerGroup, orderDetail: CustomerOrderDetail) {
   group.orders.push(orderDetail);
   group.totalOrders += 1;
@@ -245,6 +257,7 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
     include: {
       receipt: {
         select: {
+          id: true,
           receiptNumber: true,
           generatedAt: true,
         },
@@ -307,6 +320,7 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
       items: true,
       receipt: {
         select: {
+          id: true,
           receiptNumber: true,
           generatedAt: true,
         },
@@ -407,6 +421,10 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
 
     const orderDetail: CustomerOrderDetail = {
       id: order.id,
+      routeId: order.receipt?.id ? `receipt-${order.receipt.id}` : null,
+      customerUserId: null,
+      receiptId: order.receipt?.id ?? null,
+      source: "LEGACY",
       orderNumber: order.orderNumber,
       customerName: order.customerName,
       customerPhone: order.customerPhone,
@@ -463,6 +481,7 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
     if (!group.displayName || group.displayName === "Unnamed customer") {
       group.displayName = order.customerName.trim() || order.customerUser?.name || group.displayName;
     }
+    setGroupCustomerUserId(group, order.customerUserId || order.customerUser?.id || null);
 
     const paidAmount =
       order.status === WebsiteOrderStatus.CANCELLED
@@ -471,6 +490,10 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
 
     const orderDetail: CustomerOrderDetail = {
       id: order.id,
+      routeId: `website-${order.id}`,
+      customerUserId: order.customerUserId || order.customerUser?.id || null,
+      receiptId: order.receipt?.id ?? null,
+      source: order.source === "POS" ? "POS" : "WEBSITE",
       orderNumber: order.orderRef,
       customerName: order.customerName,
       customerPhone: order.customerPhone,
@@ -532,9 +555,14 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
     if (!group.displayName || group.displayName === "Unnamed customer") {
       group.displayName = sale.customerName.trim() || sale.customerUser?.name || group.displayName;
     }
+    setGroupCustomerUserId(group, sale.customerUserId || sale.customerUser?.id || null);
 
     const orderDetail: CustomerOrderDetail = {
       id: sale.id,
+      routeId: null,
+      customerUserId: sale.customerUserId || sale.customerUser?.id || null,
+      receiptId: null,
+      source: "AGENT",
       orderNumber: sale.receiptNumber || `AGENT-${sale.id.slice(0, 8).toUpperCase()}`,
       customerName: sale.customerName,
       customerPhone: sale.customerPhone,
@@ -573,6 +601,7 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
 
     return {
       id: group.id,
+      customerUserId: group.customerUserId,
       displayName: group.displayName,
       primaryPhone: phones[0] ?? null,
       primaryEmail: emails[0] ?? null,

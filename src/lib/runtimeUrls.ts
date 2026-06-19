@@ -1,5 +1,6 @@
 const DEFAULT_OPS_BASE_URL = "https://ops.betech.co.ke";
 const DEFAULT_AGENTS_BASE_URL = "https://agents.betech.co.ke";
+const DEFAULT_SHOP_BASE_URL = "https://www.betech.co.ke";
 
 function normalizeOrigin(value: string | null | undefined) {
   if (!value) return null;
@@ -24,8 +25,16 @@ export function getAgentsBaseUrl() {
   );
 }
 
+export function getShopBaseUrl() {
+  return (
+    normalizeOrigin(process.env.SHOP_BASE_URL) ??
+    normalizeOrigin(process.env.NEXT_PUBLIC_SHOP_URL) ??
+    DEFAULT_SHOP_BASE_URL
+  );
+}
+
 export function getAllowedAuthOrigins() {
-  return Array.from(new Set([getOpsBaseUrl(), getAgentsBaseUrl()].filter(Boolean)));
+  return Array.from(new Set([getOpsBaseUrl(), getAgentsBaseUrl(), getShopBaseUrl()].filter(Boolean)));
 }
 
 export function isAgentsHost(host: string | null | undefined) {
