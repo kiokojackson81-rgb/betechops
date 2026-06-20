@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { Role, type User } from "@prisma/client";
+import { Prisma, Role, type User } from "@prisma/client";
 import { updateSafeUserById } from "@/lib/customerProfile";
 import { prisma } from "@/lib/prisma";
 import { isAgentLeadOwnershipTableAvailable } from "@/lib/agentLeadOwnershipTable";
@@ -357,6 +357,57 @@ async function resolveUserByEmail(normalizedEmail: string, preferredRedirect?: s
   return fallbackUser;
 }
 
+async function reloadOtpAuthUser(userId: string) {
+  return prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    select: otpAuthUserSelect,
+  });
+}
+
+function isUniqueConstraintError(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
+
+async function createPhoneOtpUser(normalizedPhone: string) {
+  try {
+    return await prisma.user.create({
+      data: {
+        phone: normalizedPhone,
+        phoneVerifiedAt: new Date(),
+        lastLoginMethod: "africastalking_otp",
+        role: Role.ATTENDANT,
+      },
+      select: otpAuthUserSelect,
+    });
+  } catch (error) {
+    if (!isUniqueConstraintError(error)) throw error;
+
+    const existing = await resolveUserByPhone(normalizedPhone);
+    if (!existing) throw error;
+    return existing;
+  }
+}
+
+async function createEmailOtpUser(normalizedEmail: string) {
+  try {
+    return await prisma.user.create({
+      data: {
+        email: normalizedEmail,
+        emailVerifiedAt: new Date(),
+        lastLoginMethod: "email_otp",
+        role: Role.ATTENDANT,
+      },
+      select: otpAuthUserSelect,
+    });
+  } catch (error) {
+    if (!isUniqueConstraintError(error)) throw error;
+
+    const existing = await resolveUserByEmail(normalizedEmail);
+    if (!existing) throw error;
+    return existing;
+  }
+}
+
 export async function findPhoneAuthUserByPhone(phoneInput: string) {
   const normalizedPhone = normalizeKenyanPhone(phoneInput);
   if (!normalizedPhone) return null;
@@ -387,15 +438,7 @@ async function resolveVerifiedPhoneUser(normalizedPhone: string, preferredRedire
   let user = await resolveUserByPhone(normalizedPhone, preferredRedirect);
 
   if (!user) {
-    user = await prisma.user.create({
-      data: {
-        phone: normalizedPhone,
-        phoneVerifiedAt: new Date(),
-        lastLoginMethod: "africastalking_otp",
-        role: Role.ATTENDANT,
-      },
-      select: otpAuthUserSelect,
-    });
+    user = await createPhoneOtpUser(normalizedPhone);
   } else {
     if (!user.isActive) {
       throw new Error("This account is inactive. Please contact Betech support.");
@@ -414,10 +457,7 @@ async function resolveVerifiedPhoneUser(normalizedPhone: string, preferredRedire
         },
       });
     }
-    user = await prisma.user.findUniqueOrThrow({
-      where: { id: user.id },
-      select: otpAuthUserSelect,
-    });
+    user = await reloadOtpAuthUser(user.id);
   }
 
   await syncVerifiedIdentityLinks(user.id, normalizedPhone);
@@ -435,15 +475,7 @@ async function resolveVerifiedEmailUser(normalizedEmail: string, preferredRedire
   let user = await resolveUserByEmail(normalizedEmail, preferredRedirect);
 
   if (!user) {
-    user = await prisma.user.create({
-      data: {
-        email: normalizedEmail,
-        emailVerifiedAt: new Date(),
-        lastLoginMethod: "email_otp",
-        role: Role.ATTENDANT,
-      },
-      select: otpAuthUserSelect,
-    });
+    user = await createEmailOtpUser(normalizedEmail);
   } else {
     if (!user.isActive) {
       throw new Error("This account is inactive. Please contact Betech support.");
@@ -462,10 +494,7 @@ async function resolveVerifiedEmailUser(normalizedEmail: string, preferredRedire
         },
       });
     }
-    user = await prisma.user.findUniqueOrThrow({
-      where: { id: user.id },
-      select: otpAuthUserSelect,
-    });
+    user = await reloadOtpAuthUser(user.id);
   }
 
   return {

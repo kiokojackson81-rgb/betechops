@@ -1,4 +1,4 @@
-import { Role, type User } from "@prisma/client";
+import { Prisma, Role, type User } from "@prisma/client";
 import { updateSafeUserById } from "@/lib/customerProfile";
 import { prisma } from "@/lib/prisma";
 import { isAgentLeadOwnershipTableAvailable } from "@/lib/agentLeadOwnershipTable";
@@ -133,6 +133,10 @@ async function resolveUserByPhone(normalizedPhone: string) {
   return agentProfile?.user ?? null;
 }
 
+function isUniqueConstraintError(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
+
 export async function resolveFirebasePhoneUser(idToken: string, preferredRedirect?: string | null): Promise<FirebasePhoneAuthResult> {
   const decoded = await adminAuth.verifyIdToken(idToken, true);
   const normalizedPhone = normalizeKenyanPhone(decoded.phone_number);
@@ -144,15 +148,22 @@ export async function resolveFirebasePhoneUser(idToken: string, preferredRedirec
   let user = await resolveUserByPhone(normalizedPhone);
 
   if (!user) {
-    user = await prisma.user.create({
-      data: {
-        phone: normalizedPhone,
-        phoneVerifiedAt: new Date(),
-        lastLoginMethod: "firebase_phone",
-        role: Role.ATTENDANT,
-      },
-      select: firebasePhoneUserSelect,
-    });
+    try {
+      user = await prisma.user.create({
+        data: {
+          phone: normalizedPhone,
+          phoneVerifiedAt: new Date(),
+          lastLoginMethod: "firebase_phone",
+          role: Role.ATTENDANT,
+        },
+        select: firebasePhoneUserSelect,
+      });
+    } catch (error) {
+      if (!isUniqueConstraintError(error)) throw error;
+      const existing = await resolveUserByPhone(normalizedPhone);
+      if (!existing) throw error;
+      user = existing;
+    }
   } else {
     if (!user.isActive) {
       throw new Error("This account is inactive. Please contact Betech support.");

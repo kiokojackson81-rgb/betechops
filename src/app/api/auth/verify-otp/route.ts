@@ -41,10 +41,19 @@ function getClientKey(req: NextRequest, channel: "phone" | "email", identifier: 
 
 function getPreferredRedirect(req: NextRequest, rawCallbackUrl: string) {
   const callbackUrl = String(rawCallbackUrl || "").trim();
-  if (callbackUrl.startsWith("/")) return callbackUrl;
-
   const host = req.headers.get("host");
-  if (isAgentsHost(host)) return "/dashboard";
+  if (isAgentsHost(host)) {
+    if (
+      callbackUrl === "/dashboard" ||
+      callbackUrl === "/agents/dashboard" ||
+      callbackUrl.startsWith("/agents/")
+    ) {
+      return callbackUrl;
+    }
+    return "/dashboard";
+  }
+
+  if (callbackUrl.startsWith("/")) return callbackUrl;
   if (isOpsHost(host)) return "/auth/post-login";
   return "/account";
 }

@@ -3,6 +3,8 @@ import { auth } from '@/lib/auth';
 import { agentPath, isAgentRoutePath, isAgentsHost } from '@/lib/agents/host';
 import getLandingPage from '@/lib/getLandingPage';
 import { isOpsHost } from '@/lib/runtimeUrls';
+import { prisma } from '@/lib/prisma';
+import { getKenyanPhoneVariants, normalizeKenyanPhone } from '@/lib/phone';
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -26,21 +28,76 @@ export async function GET(req: Request) {
     if (value.startsWith("/agents/")) return value.slice("/agents".length) || "/";
     return value;
   };
+  const getSafeAgentTarget = (value: string) => {
+    const normalized = normalizeAgentTarget(value);
+    if (normalized === "/account" || normalized.startsWith("/account/")) {
+      return agentPath("/dashboard", useRootAgentPaths);
+    }
+    return normalized;
+  };
 
   if (!session) {
-    const original = url.pathname + url.search + url.hash;
+    const intendedTarget = rawCallback && rawCallback.startsWith("/")
+      ? normalizeAgentTarget(rawCallback)
+      : shouldUseAgentLogin
+        ? agentPath("/dashboard", useRootAgentPaths)
+        : "/account";
     const loginUrl = new URL(
       shouldUseAgentLogin ? agentPath("/login", useRootAgentPaths) : "/attendant/login",
       url,
     );
-    loginUrl.searchParams.set('callbackUrl', original);
+    loginUrl.searchParams.set('callbackUrl', intendedTarget);
     return NextResponse.redirect(loginUrl);
   }
 
-  const user = session.user as { role?: string; attendantCategory?: string | null; isAgent?: boolean } | undefined;
+  const user = session.user as {
+    id?: string;
+    email?: string | null;
+    phone?: string | null;
+    role?: string;
+    attendantCategory?: string | null;
+    isAgent?: boolean;
+  } | undefined;
   const role = user?.role ?? '';
   const category = user?.attendantCategory ?? null;
-  const isAgent = Boolean(user?.isAgent);
+  let isAgent = Boolean(user?.isAgent);
+
+  if (!isAgent) {
+    const normalizedPhone = normalizeKenyanPhone(typeof user?.phone === "string" ? user.phone : "");
+    const phoneVariants = normalizedPhone ? getKenyanPhoneVariants(normalizedPhone) : [];
+    const normalizedEmail = typeof user?.email === "string" ? user.email.trim().toLowerCase() : "";
+    const fallbackAgent = await prisma.agentProfile.findFirst({
+      where: {
+        OR: [
+          ...(typeof user?.id === "string" ? [{ userId: user.id }] : []),
+          ...(phoneVariants.length ? [{ phone: { in: phoneVariants } }] : []),
+          ...(normalizedPhone ? [{ user: { phone: normalizedPhone } }] : []),
+          ...(normalizedEmail
+            ? [
+                { email: { equals: normalizedEmail, mode: "insensitive" as const } },
+                { user: { email: { equals: normalizedEmail, mode: "insensitive" as const } } },
+              ]
+            : []),
+        ],
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    console.log("[post-login] fallback agent lookup", {
+      userId: user?.id ?? null,
+      normalizedPhone: normalizedPhone || null,
+      normalizedEmail: normalizedEmail || null,
+      foundAgentProfileId: fallbackAgent?.id ?? null,
+      foundAgentStatus: fallbackAgent?.status ?? null,
+    });
+
+    if (fallbackAgent) {
+      isAgent = true;
+    }
+  }
   let target = isAgentsHost(host)
     ? (isAgent ? agentPath("/dashboard", useRootAgentPaths) : "/")
     : isOpsHost(host)
@@ -65,11 +122,12 @@ export async function GET(req: Request) {
 
     try {
       if (decoded.startsWith('/')) {
-        target = normalizeAgentTarget(decoded);
+        target = isAgentsHost(host) && isAgent ? getSafeAgentTarget(decoded) : normalizeAgentTarget(decoded);
       } else {
         const cbUrl = new URL(decoded, url);
         if (cbUrl.origin === url.origin) {
-          target = normalizeAgentTarget(cbUrl.pathname + cbUrl.search + cbUrl.hash);
+          const callbackTarget = cbUrl.pathname + cbUrl.search + cbUrl.hash;
+          target = isAgentsHost(host) && isAgent ? getSafeAgentTarget(callbackTarget) : normalizeAgentTarget(callbackTarget);
         }
       }
     } catch {
