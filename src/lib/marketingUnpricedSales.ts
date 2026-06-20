@@ -96,9 +96,18 @@ export async function getUnpricedDailySalesForCurrentPeriod(): Promise<UnpricedS
         },
       },
       include: {
-        dailyEntry: {
-          include: { submittedBy: true },
+      dailyEntry: {
+        select: {
+          date: true,
+          dayOfWeek: true,
+          submittedBy: {
+            select: {
+              name: true,
+              email: true,
+            },
+          },
         },
+      },
         items: true,
       },
       orderBy: { createdAt: "asc" },
