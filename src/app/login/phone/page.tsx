@@ -326,18 +326,23 @@ export default function PhoneLoginPage() {
         throw new Error(payload?.error || "Unable to save your profile.");
       }
 
+      const effectiveVerificationToken =
+        typeof payload?.verificationToken === "string" && payload.verificationToken
+          ? payload.verificationToken
+          : verificationToken;
+
       const target = normalizeAgentCallbackForHost(
         postAuthRedirect || callbackUrl || getDefaultCallbackForHost(isAgentsDomainFlow),
         isAgentsDomainFlow,
       );
-      if (!verificationToken) {
+      if (!effectiveVerificationToken) {
         window.location.href = target;
         return;
       }
 
       const signInResult = await signIn("phone-otp", {
         redirect: false,
-        verificationToken,
+        verificationToken: effectiveVerificationToken,
         callbackUrl: target,
       });
 

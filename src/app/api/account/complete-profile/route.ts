@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { applyReferralAttributionToUser, REFERRAL_COOKIE_NAME } from "@/lib/attribution";
 import { getToken } from "next-auth/jwt";
 import { updateSafeCustomerProfile } from "@/lib/customerProfile";
+import { findOrCreateCustomerIdentityUser } from "@/lib/customerIdentity";
 import { generateUniqueReferralCode } from "@/lib/agents/service";
 import { prisma } from "@/lib/prisma";
 import { normalizeKenyanPhone } from "@/lib/phone";
+import { createDirectVerifiedAuthToken } from "@/lib/phoneOtpAuth";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +49,7 @@ export async function POST(req: NextRequest) {
     const town = String(body?.town || "").trim();
     const estateLandmark = String(body?.estateLandmark || "").trim();
     const locationNotes = String(body?.locationNotes || "").trim();
+    const preferredRedirect = String(body?.callbackUrl || (accountMode === "agent" ? "/dashboard" : "/account")).trim() || "/account";
 
     if (!name) {
       return NextResponse.json({ ok: false, error: "Name is required." }, { status: 400 });
@@ -60,7 +63,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "Phone number is required for agent accounts." }, { status: 400 });
     }
 
-    if (emailRaw) {
+    if (accountMode === "agent" && emailRaw) {
       const existing = await prisma.user.findFirst({
         where: {
           email: emailRaw,
@@ -82,7 +85,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "Enter a valid Kenyan WhatsApp number." }, { status: 400 });
     }
 
-    if (normalizedPhone) {
+    if (accountMode === "agent" && normalizedPhone) {
       const existingPhone = await prisma.user.findFirst({
         where: {
           phone: normalizedPhone,
@@ -96,16 +99,55 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const updated = await updateSafeCustomerProfile(userId, {
-      name,
-      email: emailRaw || null,
-      phone: normalizedPhone || null,
-      whatsappNumber: normalizedWhatsapp || null,
-      county: county || null,
-      town: town || null,
-      estateLandmark: estateLandmark || null,
-      locationNotes: locationNotes || null,
-    });
+    let updated;
+    let resolvedUserId = userId;
+    let nextVerificationToken: string | null = null;
+
+    if (accountMode === "agent") {
+      updated = await updateSafeCustomerProfile(userId, {
+        name,
+        email: emailRaw || null,
+        phone: normalizedPhone || null,
+        whatsappNumber: normalizedWhatsapp || null,
+        county: county || null,
+        town: town || null,
+        estateLandmark: estateLandmark || null,
+        locationNotes: locationNotes || null,
+      });
+    } else {
+      const resolution = await findOrCreateCustomerIdentityUser({
+        customerName: name,
+        customerPhone: normalizedPhone || null,
+        customerEmail: emailRaw || null,
+        county: county || null,
+        town: town || null,
+        estateLandmark: estateLandmark || null,
+        locationNotes: locationNotes || null,
+      });
+
+      updated = await updateSafeCustomerProfile(resolution.user.id, {
+        name,
+        email: resolution.emailConflict ? resolution.user.email || null : emailRaw || resolution.user.email || null,
+        phone: resolution.normalizedPhone || resolution.user.phone || null,
+        whatsappNumber: normalizedWhatsapp || resolution.normalizedPhone || resolution.user.phone || null,
+        county: county || resolution.user.county || null,
+        town: town || resolution.user.town || null,
+        estateLandmark: estateLandmark || resolution.user.estateLandmark || null,
+        locationNotes: locationNotes || resolution.user.locationNotes || null,
+      });
+
+      resolvedUserId = updated.id;
+
+      if (resolvedUserId !== userId) {
+        nextVerificationToken = createDirectVerifiedAuthToken({
+          userId: resolvedUserId,
+          channel: normalizedPhone ? "phone" : "email",
+          identifier: normalizedPhone || emailRaw,
+          redirectTo: preferredRedirect,
+          requiresProfileCompletion: false,
+        });
+      }
+    }
 
     if (accountMode === "agent") {
       const { firstName, lastName } = splitNameParts(name);
@@ -158,10 +200,15 @@ export async function POST(req: NextRequest) {
 
     const referralCode = req.cookies.get(REFERRAL_COOKIE_NAME)?.value || "";
     if (referralCode) {
-      await applyReferralAttributionToUser(userId, referralCode);
+      await applyReferralAttributionToUser(resolvedUserId, referralCode);
     }
 
-    return NextResponse.json({ ok: true, user: updated });
+    return NextResponse.json({
+      ok: true,
+      user: updated,
+      verificationToken: nextVerificationToken,
+      resolvedUserId,
+    });
   } catch (error) {
     console.error("[account.complete-profile] save failed", {
       error: error instanceof Error ? error.message : String(error),
