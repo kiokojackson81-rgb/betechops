@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { applyReferralAttributionToUser, REFERRAL_COOKIE_NAME } from "@/lib/attribution";
 import { getToken } from "next-auth/jwt";
-import { updateSafeCustomerProfile } from "@/lib/customerProfile";
+import { findSafeCustomerProfileByUserId, updateSafeCustomerProfile } from "@/lib/customerProfile";
 import { findOrCreateCustomerIdentityUser } from "@/lib/customerIdentity";
 import { generateUniqueReferralCode } from "@/lib/agents/service";
 import { prisma } from "@/lib/prisma";
@@ -127,13 +127,15 @@ export async function POST(req: NextRequest) {
 
       updated = await updateSafeCustomerProfile(resolution.user.id, {
         name,
-        email: resolution.emailConflict ? resolution.user.email || null : emailRaw || resolution.user.email || null,
-        phone: resolution.normalizedPhone || resolution.user.phone || null,
-        whatsappNumber: normalizedWhatsapp || resolution.normalizedPhone || resolution.user.phone || null,
         county: county || resolution.user.county || null,
         town: town || resolution.user.town || null,
         estateLandmark: estateLandmark || resolution.user.estateLandmark || null,
         locationNotes: locationNotes || resolution.user.locationNotes || null,
+        whatsappNumber:
+          normalizedWhatsapp ||
+          resolution.normalizedPhone ||
+          resolution.user.phone ||
+          null,
       });
 
       resolvedUserId = updated.id;
@@ -147,6 +149,8 @@ export async function POST(req: NextRequest) {
           requiresProfileCompletion: false,
         });
       }
+
+      updated = (await findSafeCustomerProfileByUserId(resolvedUserId)) || updated;
     }
 
     if (accountMode === "agent") {
