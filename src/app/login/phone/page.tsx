@@ -42,8 +42,12 @@ function normalizeAgentCallbackForHost(target: string, isAgentsDomainFlow: boole
   return target;
 }
 
+function getDefaultCallbackForHost(isAgentsDomainFlow: boolean) {
+  return isAgentsDomainFlow ? "/dashboard" : "/account";
+}
+
 function getResolvedPostLoginUrlForFlow(target: string, isAgentsDomainFlow: boolean, isAgentFlow: boolean) {
-  const normalizedTarget = normalizeAgentCallbackForHost(target || "/account", isAgentsDomainFlow);
+  const normalizedTarget = normalizeAgentCallbackForHost(target || getDefaultCallbackForHost(isAgentsDomainFlow), isAgentsDomainFlow);
   if (!isAgentFlow) return normalizedTarget;
   return `/auth/post-login?callbackUrl=${encodeURIComponent(normalizedTarget)}`;
 }
@@ -75,6 +79,7 @@ async function waitForAuthenticatedSession(expectAgentSession: boolean, attempts
 export default function PhoneLoginPage() {
   const { status } = useSession();
   const [isAgentsDomainFlow, setIsAgentsDomainFlow] = useState(false);
+  const [callbackReady, setCallbackReady] = useState(false);
   const [identifier, setIdentifier] = useState("");
   const [resolvedIdentifier, setResolvedIdentifier] = useState("");
   const [normalizedPhone, setNormalizedPhone] = useState("");
@@ -82,7 +87,7 @@ export default function PhoneLoginPage() {
   const [identifierType, setIdentifierType] = useState<"email" | "phone" | null>(null);
   const [account, setAccount] = useState<AccountPreview>(null);
   const [otp, setOtp] = useState("");
-  const [callbackUrl, setCallbackUrl] = useState("/account");
+  const [callbackUrl, setCallbackUrl] = useState<string | null>(null);
   const [postAuthRedirect, setPostAuthRedirect] = useState<string | null>(null);
   const [verificationToken, setVerificationToken] = useState<string | null>(null);
   const [step, setStep] = useState<"identify" | "verify" | "complete-profile">("identify");
@@ -104,8 +109,8 @@ export default function PhoneLoginPage() {
   const isAgentFlow =
     callbackUrl === "/dashboard" ||
     callbackUrl === "/agents/dashboard" ||
-    callbackUrl.startsWith("/agents/") ||
-    (isAgentsDomainFlow && callbackUrl.startsWith("/"));
+    (callbackUrl?.startsWith("/agents/") ?? false) ||
+    (isAgentsDomainFlow && (callbackUrl?.startsWith("/") ?? false));
 
   useEffect(() => {
     if (!cooldown) return;
@@ -114,19 +119,23 @@ export default function PhoneLoginPage() {
   }, [cooldown]);
 
   useEffect(() => {
-    setIsAgentsDomainFlow(isAgentsHost(window.location.host));
+    const nextIsAgentsDomainFlow = isAgentsHost(window.location.host);
+    setIsAgentsDomainFlow(nextIsAgentsDomainFlow);
     const params = new URLSearchParams(window.location.search);
-    const requestedCallback = params.get("callbackUrl") || "/account";
-    setCallbackUrl(normalizeAgentCallbackForHost(requestedCallback, isAgentsHost(window.location.host)));
+    const requestedCallback = params.get("callbackUrl") || getDefaultCallbackForHost(nextIsAgentsDomainFlow);
+    setCallbackUrl(normalizeAgentCallbackForHost(requestedCallback, nextIsAgentsDomainFlow));
+    setCallbackReady(true);
   }, []);
 
   useEffect(() => {
+    if (!callbackReady) return;
     if (status !== "authenticated") return;
     if (step === "complete-profile") return;
-    const target = postAuthRedirect || (step === "identify" ? callbackUrl || "/account" : null);
+    const target =
+      postAuthRedirect || (step === "identify" ? callbackUrl || getDefaultCallbackForHost(isAgentsDomainFlow) : null);
     if (!target) return;
     window.location.replace(getResolvedPostLoginUrlForFlow(target, isAgentsDomainFlow, isAgentFlow));
-  }, [callbackUrl, postAuthRedirect, status, step, isAgentFlow, isAgentsDomainFlow]);
+  }, [callbackReady, callbackUrl, postAuthRedirect, status, step, isAgentFlow, isAgentsDomainFlow]);
 
   if (status === "authenticated" && step !== "complete-profile") {
     return null;
@@ -229,13 +238,13 @@ export default function PhoneLoginPage() {
               identifierType: "email",
               identifier: normalizedEmailPreview,
               code: otp,
-              callbackUrl,
+              callbackUrl: callbackUrl || getDefaultCallbackForHost(isAgentsDomainFlow),
             }
           : {
               identifierType: "phone",
               identifier: normalizedPhone || resolvedIdentifier,
               code: otp,
-              callbackUrl,
+              callbackUrl: callbackUrl || getDefaultCallbackForHost(isAgentsDomainFlow),
             };
 
       const response = await fetch("/api/auth/verify-otp", {
@@ -249,7 +258,10 @@ export default function PhoneLoginPage() {
         throw new Error(payload?.error || "OTP verification failed.");
       }
 
-      const target = normalizeAgentCallbackForHost(payload.redirectTo || callbackUrl, isAgentsDomainFlow);
+      const target = normalizeAgentCallbackForHost(
+        payload.redirectTo || callbackUrl || getDefaultCallbackForHost(isAgentsDomainFlow),
+        isAgentsDomainFlow,
+      );
       setPostAuthRedirect(target);
       setVerificationToken(payload.verificationToken);
 
@@ -314,7 +326,10 @@ export default function PhoneLoginPage() {
         throw new Error(payload?.error || "Unable to save your profile.");
       }
 
-      const target = normalizeAgentCallbackForHost(postAuthRedirect || callbackUrl || "/account", isAgentsDomainFlow);
+      const target = normalizeAgentCallbackForHost(
+        postAuthRedirect || callbackUrl || getDefaultCallbackForHost(isAgentsDomainFlow),
+        isAgentsDomainFlow,
+      );
       if (!verificationToken) {
         window.location.href = target;
         return;
