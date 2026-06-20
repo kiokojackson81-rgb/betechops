@@ -8,5 +8,5 @@ export default async function AgentSalesDetailCompatibilityPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <AgentSaleDetailPage id={id} />;
+  return <AgentSaleDetailPage id={id} useRootPaths />;
 }

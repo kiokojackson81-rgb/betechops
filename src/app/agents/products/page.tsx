@@ -15,5 +15,5 @@ export default async function AgentsProductsRoute({
     sort?: string;
   }>;
 }) {
-  return <AgentProductsPage searchParams={searchParams} />;
+  return <AgentProductsPage searchParams={searchParams} useRootPaths />;
 }

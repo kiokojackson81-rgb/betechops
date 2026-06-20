@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { signIn, useSession } from "next-auth/react";
 import { getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
+import { isAgentsHost } from "@/lib/runtimeUrls";
 
 type AccountPreview = {
   name?: string | null;
@@ -36,6 +37,7 @@ type VerifyResponse = {
 
 export default function PhoneLoginPage() {
   const { status } = useSession();
+  const [isAgentsDomainFlow, setIsAgentsDomainFlow] = useState(false);
   const [identifier, setIdentifier] = useState("");
   const [resolvedIdentifier, setResolvedIdentifier] = useState("");
   const [normalizedPhone, setNormalizedPhone] = useState("");
@@ -62,7 +64,18 @@ export default function PhoneLoginPage() {
   const canResend = cooldown <= 0;
   const availableTowns = useMemo(() => getTownsForCounty(profileCounty), [profileCounty]);
   const isCheckoutFlow = callbackUrl === "/checkout";
-  const isAgentFlow = callbackUrl === "/agents/dashboard" || callbackUrl.startsWith("/agents/");
+  const isAgentFlow =
+    callbackUrl === "/dashboard" ||
+    callbackUrl === "/agents/dashboard" ||
+    callbackUrl.startsWith("/agents/") ||
+    (isAgentsDomainFlow && callbackUrl.startsWith("/"));
+
+  function normalizeAgentCallback(target: string) {
+    if (!isAgentsDomainFlow) return target;
+    if (target === "/agents") return "/";
+    if (target.startsWith("/agents/")) return target.slice("/agents".length) || "/";
+    return target;
+  }
 
   useEffect(() => {
     if (!cooldown) return;
@@ -71,8 +84,11 @@ export default function PhoneLoginPage() {
   }, [cooldown]);
 
   useEffect(() => {
+    setIsAgentsDomainFlow(isAgentsHost(window.location.host));
     const params = new URLSearchParams(window.location.search);
-    setCallbackUrl(params.get("callbackUrl") || "/account");
+    const requestedCallback = params.get("callbackUrl") || "/account";
+    setCallbackUrl(normalizeAgentCallback(requestedCallback));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -204,7 +220,7 @@ export default function PhoneLoginPage() {
         throw new Error(payload?.error || "OTP verification failed.");
       }
 
-      const target = payload.redirectTo || callbackUrl;
+      const target = normalizeAgentCallback(payload.redirectTo || callbackUrl);
       setPostAuthRedirect(target);
       setVerificationToken(payload.verificationToken);
 
@@ -268,7 +284,7 @@ export default function PhoneLoginPage() {
         throw new Error(payload?.error || "Unable to save your profile.");
       }
 
-      const target = postAuthRedirect || callbackUrl || "/account";
+      const target = normalizeAgentCallback(postAuthRedirect || callbackUrl || "/account");
       if (!verificationToken) {
         window.location.href = target;
         return;
