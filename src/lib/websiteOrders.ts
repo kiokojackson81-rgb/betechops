@@ -36,6 +36,8 @@ const WEBSITE_ORDER_SCHEMA_SQL = [
     "id" TEXT NOT NULL,
     "orderRef" TEXT NOT NULL,
     "customerUserId" TEXT,
+    "referredByAgentId" TEXT,
+    "attributionCodeUsed" TEXT,
     "customerName" TEXT NOT NULL,
     "customerPhone" TEXT NOT NULL,
     "customerLocation" TEXT NOT NULL,
@@ -73,11 +75,14 @@ const WEBSITE_ORDER_SCHEMA_SQL = [
     CONSTRAINT "WebsiteOrderItem_pkey" PRIMARY KEY ("id")
   )`,
   `ALTER TABLE "WebsiteOrder" ADD COLUMN IF NOT EXISTS "customerUserId" TEXT`,
+  `ALTER TABLE "WebsiteOrder" ADD COLUMN IF NOT EXISTS "referredByAgentId" TEXT`,
+  `ALTER TABLE "WebsiteOrder" ADD COLUMN IF NOT EXISTS "attributionCodeUsed" TEXT`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "WebsiteOrder_orderRef_key" ON "WebsiteOrder"("orderRef")`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "WebsiteOrder_receiptId_key" ON "WebsiteOrder"("receiptId")`,
   `CREATE INDEX IF NOT EXISTS "WebsiteOrder_status_createdAt_idx" ON "WebsiteOrder"("status", "createdAt")`,
   `CREATE INDEX IF NOT EXISTS "WebsiteOrder_orderType_createdAt_idx" ON "WebsiteOrder"("orderType", "createdAt")`,
   `CREATE INDEX IF NOT EXISTS "WebsiteOrder_customerUserId_createdAt_idx" ON "WebsiteOrder"("customerUserId", "createdAt")`,
+  `CREATE INDEX IF NOT EXISTS "WebsiteOrder_referredByAgentId_createdAt_idx" ON "WebsiteOrder"("referredByAgentId", "createdAt")`,
   `CREATE INDEX IF NOT EXISTS "WebsiteOrderItem_websiteOrderId_idx" ON "WebsiteOrderItem"("websiteOrderId")`,
   `CREATE INDEX IF NOT EXISTS "WebsiteOrderItem_productId_idx" ON "WebsiteOrderItem"("productId")`,
   `DO $$
@@ -191,6 +196,16 @@ export type WebsiteOrderListRow = Prisma.WebsiteOrderGetPayload<{
         email: true;
       };
     };
+    customerUser: {
+      select: {
+        id: true;
+        name: true;
+        email: true;
+        phone: true;
+        referredByAgentId: true;
+        attributionCodeUsed: true;
+      };
+    };
   };
 }>;
 
@@ -208,6 +223,16 @@ export const websiteOrderAdminInclude = {
       id: true,
       name: true,
       email: true,
+    },
+  },
+  customerUser: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      referredByAgentId: true,
+      attributionCodeUsed: true,
     },
   },
 } satisfies Prisma.WebsiteOrderInclude;
@@ -240,10 +265,19 @@ export function toNumberValue(value: Prisma.Decimal | number | string | null | u
 export type SerializedWebsiteOrder = {
   id: string;
   orderRef: string;
+  customerUserId: string | null;
   customerName: string;
   customerPhone: string;
   customerLocation: string;
   customerEmail: string | null;
+  referredByAgentId: string | null;
+  attributionCodeUsed: string | null;
+  referredByAgent: {
+    id: string;
+    name: string;
+    email: string | null;
+    referralCode: string | null;
+  } | null;
   deliveryMethod: string;
   paymentMethod: string;
   orderType: WebsiteOrderType;
@@ -295,6 +329,13 @@ export type SerializedWebsiteOrder = {
     createdAt: string;
     updatedAt: string;
   }>;
+};
+
+type WebsiteOrderReferralAgentSummary = {
+  id: string;
+  name: string;
+  email: string | null;
+  referralCode: string | null;
 };
 
 const WEBSITE_ORDER_STAFF_EMAILS = ["jeniffer@betech.co.ke", "brendah@betech.co.ke"] as const;
@@ -350,20 +391,75 @@ function readWebsiteOrderMetadata(metadata: unknown) {
   } as const;
 }
 
-export function serializeWebsiteOrder(order: WebsiteOrderListRow) {
+async function buildWebsiteOrderReferralAgentMap(orders: WebsiteOrderListRow[]) {
+  const agentIds = Array.from(
+    new Set(
+      orders
+        .flatMap((order) => [order.referredByAgentId, order.customerUser?.referredByAgentId])
+        .map((value) => String(value || "").trim())
+        .filter(Boolean),
+    ),
+  );
+
+  if (!agentIds.length) {
+    return new Map<string, WebsiteOrderReferralAgentSummary>();
+  }
+
+  const users = await prisma.user.findMany({
+    where: { id: { in: agentIds } },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      agentProfile: {
+        select: {
+          referralCode: true,
+          firstName: true,
+          lastName: true,
+        },
+      },
+    },
+  });
+
+  return new Map<string, WebsiteOrderReferralAgentSummary>(
+    users.map((user) => {
+      const profileName = [user.agentProfile?.firstName, user.agentProfile?.lastName].filter(Boolean).join(" ").trim();
+      return [
+        user.id,
+        {
+          id: user.id,
+          name: profileName || user.name || user.email || "Agent",
+          email: user.email ?? null,
+          referralCode: user.agentProfile?.referralCode ?? null,
+        },
+      ];
+    }),
+  );
+}
+
+function serializeWebsiteOrderRow(
+  order: WebsiteOrderListRow,
+  referralAgentsById: Map<string, WebsiteOrderReferralAgentSummary>,
+) {
   const subtotal = toNumberValue(order.subtotal) ?? 0;
   const deliveryFee = toNumberValue(order.deliveryFee);
   const total = toNumberValue(order.total) ?? 0;
   const metadata = order.metadata ?? null;
   const lifecycle = readWebsiteOrderMetadata(metadata);
+  const referredByAgentId = order.referredByAgentId || order.customerUser?.referredByAgentId || null;
+  const attributionCodeUsed = order.attributionCodeUsed || order.customerUser?.attributionCodeUsed || null;
 
   return {
     id: order.id,
     orderRef: order.orderRef,
+    customerUserId: order.customerUserId || order.customerUser?.id || null,
     customerName: order.customerName,
     customerPhone: order.customerPhone,
     customerLocation: order.customerLocation,
     customerEmail: order.customerEmail,
+    referredByAgentId,
+    attributionCodeUsed,
+    referredByAgent: referredByAgentId ? referralAgentsById.get(referredByAgentId) ?? null : null,
     deliveryMethod: order.deliveryMethod,
     paymentMethod: order.paymentMethod,
     orderType: order.orderType,
@@ -427,7 +523,17 @@ export function serializeWebsiteOrder(order: WebsiteOrderListRow) {
   } satisfies SerializedWebsiteOrder;
 }
 
-export function buildWebsiteOrderReceiptPrefill(order: ReturnType<typeof serializeWebsiteOrder>, mode: "pod" | "normal") {
+export async function serializeWebsiteOrders(orders: WebsiteOrderListRow[]) {
+  const referralAgentsById = await buildWebsiteOrderReferralAgentMap(orders);
+  return orders.map((order) => serializeWebsiteOrderRow(order, referralAgentsById));
+}
+
+export async function serializeWebsiteOrder(order: WebsiteOrderListRow) {
+  const [serialized] = await serializeWebsiteOrders([order]);
+  return serialized;
+}
+
+export function buildWebsiteOrderReceiptPrefill(order: SerializedWebsiteOrder, mode: "pod" | "normal") {
   const isPickup = order.orderType === WebsiteOrderType.SHOP_PICKUP || order.deliveryMethod.toLowerCase().includes("pickup");
   const customerType = mode === "pod" ? "pod" : isPickup ? "online" : "delivery";
   const paymentMethod =
@@ -525,7 +631,7 @@ export function canAdvanceWebsiteOrderStatus(current: WebsiteOrderStatus, next: 
   return { ok: true as const };
 }
 
-export function buildWebsiteOrderReceiptPayload(order: ReturnType<typeof serializeWebsiteOrder>, mode: "pod" | "normal") {
+export function buildWebsiteOrderReceiptPayload(order: SerializedWebsiteOrder, mode: "pod" | "normal") {
   const prefill = buildWebsiteOrderReceiptPrefill(order, mode);
   return {
     serial: order.orderRef,

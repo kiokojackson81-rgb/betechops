@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { applyReferralAttributionToUser, REFERRAL_COOKIE_NAME } from "@/lib/attribution";
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { createVerifiedAuthToken, verifyOtpCodeForChannel } from "@/lib/phoneOtpAuth";
 import { isAgentsHost } from "@/lib/agents/host";
@@ -71,6 +72,10 @@ export async function POST(req: NextRequest) {
 
   try {
     const resolved = await verifyOtpCodeForChannel(identifierType, rateLimitIdentifier, code, preferredRedirect);
+    const referralCode = req.cookies.get(REFERRAL_COOKIE_NAME)?.value || "";
+    if (resolved.user.id && referralCode) {
+      await applyReferralAttributionToUser(resolved.user.id, referralCode);
+    }
     const verificationToken = createVerifiedAuthToken(resolved);
 
     return NextResponse.json({

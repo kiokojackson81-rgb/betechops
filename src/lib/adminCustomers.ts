@@ -20,6 +20,10 @@ type CustomerOrderDetail = {
   shopName: string | null;
   attendantName: string | null;
   attendantEmail: string | null;
+  referredByAgentId: string | null;
+  referredByAgentName: string | null;
+  referredByAgentEmail: string | null;
+  attributionCodeUsed: string | null;
   receiptNumber: string | null;
   receiptGeneratedAt: Date | null;
   items: Array<{
@@ -337,6 +341,8 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
           name: true,
           email: true,
           phone: true,
+          referredByAgentId: true,
+          attributionCodeUsed: true,
         },
       },
     },
@@ -437,6 +443,10 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
       shopName: order.shop?.name ?? "Legacy Orders",
       attendantName: order.attendant?.name ?? null,
       attendantEmail: order.attendant?.email ?? null,
+      referredByAgentId: null,
+      referredByAgentName: null,
+      referredByAgentEmail: null,
+      attributionCodeUsed: null,
       receiptNumber: order.receipt?.receiptNumber ?? null,
       receiptGeneratedAt: order.receipt?.generatedAt ?? null,
       items: order.items.map((item) => ({
@@ -487,6 +497,10 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
       order.status === WebsiteOrderStatus.CANCELLED
         ? 0
         : Number(order.total ?? 0);
+    const websiteMetadata =
+      order.metadata && typeof order.metadata === "object"
+        ? (order.metadata as Record<string, unknown>)
+        : {};
 
     const orderDetail: CustomerOrderDetail = {
       id: order.id,
@@ -511,6 +525,12 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
             : order.source || "Website Orders",
       attendantName: order.confirmedBy?.name ?? null,
       attendantEmail: order.confirmedBy?.email ?? null,
+      referredByAgentId: String(order.referredByAgentId || order.customerUser?.referredByAgentId || "").trim() || null,
+      referredByAgentName: String(websiteMetadata.referredByAgentName || "").trim() || null,
+      referredByAgentEmail: String(websiteMetadata.referredByAgentEmail || "").trim() || null,
+      attributionCodeUsed:
+        String(order.attributionCodeUsed || order.customerUser?.attributionCodeUsed || websiteMetadata.attributionCodeUsed || "").trim() ||
+        null,
       receiptNumber: order.receipt?.receiptNumber ?? null,
       receiptGeneratedAt: order.receipt?.generatedAt ?? null,
       items: order.items.map((item) => ({
@@ -575,6 +595,10 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
       shopName: "Agent Orders",
       attendantName: sale.agent?.name ?? null,
       attendantEmail: sale.agent?.email ?? null,
+      referredByAgentId: null,
+      referredByAgentName: null,
+      referredByAgentEmail: null,
+      attributionCodeUsed: null,
       receiptNumber: sale.receiptNumber ?? null,
       receiptGeneratedAt: null,
       items: [

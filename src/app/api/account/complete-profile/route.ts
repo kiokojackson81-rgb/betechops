@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { applyReferralAttributionToUser, REFERRAL_COOKIE_NAME } from "@/lib/attribution";
 import { getToken } from "next-auth/jwt";
 import { updateSafeCustomerProfile } from "@/lib/customerProfile";
 import { prisma } from "@/lib/prisma";
@@ -79,6 +80,11 @@ export async function POST(req: NextRequest) {
       estateLandmark: estateLandmark || null,
       locationNotes: locationNotes || null,
     });
+
+    const referralCode = req.cookies.get(REFERRAL_COOKIE_NAME)?.value || "";
+    if (referralCode) {
+      await applyReferralAttributionToUser(userId, referralCode);
+    }
 
     return NextResponse.json({ ok: true, user: updated });
   } catch (error) {

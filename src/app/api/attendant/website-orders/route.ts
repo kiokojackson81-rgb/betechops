@@ -6,7 +6,7 @@ import {
   ensureWebsiteOrdersSchema,
   isWebsiteOrderAssignedToUser,
   requireWebsiteOrdersStaffActor,
-  serializeWebsiteOrder,
+  serializeWebsiteOrders,
   WEBSITE_ORDER_ACTIVE_STATUSES,
   websiteOrderAdminInclude,
 } from "@/lib/websiteOrders";
@@ -52,9 +52,10 @@ export async function GET(request: NextRequest) {
   const assignedOrders = orders.filter((order) =>
     isWebsiteOrderAssignedToUser(order.metadata, guard.userId),
   );
+  const serializedOrders = await serializeWebsiteOrders(assignedOrders);
 
   return NextResponse.json({
     ok: true,
-    orders: assignedOrders.map(serializeWebsiteOrder),
+    orders: serializedOrders,
   });
 }

@@ -388,6 +388,14 @@ export default function WebsiteOrdersDeskClient({
                               {order.assignedAttendant?.name || "-"}
                             </div>
                             <div>
+                              <span className="text-slate-500">Referred by:</span>{" "}
+                              {order.referredByAgent?.name || "-"}
+                            </div>
+                            <div>
+                              <span className="text-slate-500">Referral code:</span>{" "}
+                              {order.attributionCodeUsed || order.referredByAgent?.referralCode || "-"}
+                            </div>
+                            <div>
                               <span className="text-slate-500">Receipt:</span>{" "}
                               {order.receipt?.receiptNumber || "-"}
                             </div>

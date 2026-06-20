@@ -52,5 +52,5 @@ export async function POST(_: NextRequest, context: { params: Promise<any> }) {
     include: websiteOrderAdminInclude,
   });
 
-  return NextResponse.json({ ok: true, order: serializeWebsiteOrder(order) });
+  return NextResponse.json({ ok: true, order: await serializeWebsiteOrder(order) });
 }

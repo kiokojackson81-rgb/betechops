@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { applyReferralAttributionToUser, ensureAttributionSchema, REFERRAL_COOKIE_NAME } from "@/lib/attribution";
 import { prisma } from "@/lib/prisma";
 import { findOrCreateCustomerIdentityUser } from "@/lib/customerIdentity";
 import {
@@ -6,6 +7,7 @@ import {
   deriveWebsiteOrderType,
   ensureWebsiteOrdersSchema,
   serializeWebsiteOrder,
+  type WebsiteOrderListRow,
   websiteOrderAdminInclude,
   websiteOrderCreateSchema,
 } from "@/lib/websiteOrders";
@@ -29,7 +31,14 @@ async function buildUniqueOrderRef() {
   throw new Error("Unable to generate website order reference");
 }
 
-export async function POST(request: Request) {
+async function loadWebsiteOrderRow(id: string): Promise<WebsiteOrderListRow | null> {
+  return prisma.websiteOrder.findUnique({
+    where: { id },
+    include: websiteOrderAdminInclude,
+  });
+}
+
+export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const parsed = websiteOrderCreateSchema.safeParse(body);
 
@@ -39,6 +48,7 @@ export async function POST(request: Request) {
 
   const data = parsed.data;
   await ensureWebsiteOrdersSchema();
+  await ensureAttributionSchema();
   const products = await getShopProducts();
   const productMap = new Map(products.map((product) => [product.id, product]));
   const missingProduct = data.items.find((item) => !productMap.has(item.productId));
@@ -70,6 +80,8 @@ export async function POST(request: Request) {
     customerEmail: data.customerEmail?.trim() || null,
     locationNotes: data.notes?.trim() || null,
   });
+  const referralCode = request.cookies.get(REFERRAL_COOKIE_NAME)?.value || "";
+  const resolvedReferral = await applyReferralAttributionToUser(customerIdentity.user.id, referralCode);
 
   const created = await prisma.websiteOrder.create({
     data: {
@@ -88,10 +100,16 @@ export async function POST(request: Request) {
       total: subtotal,
       notes: data.notes?.trim() || null,
       source: "WEBSITE",
+      referredByAgentId: resolvedReferral?.agentUserId ?? null,
+      attributionCodeUsed: resolvedReferral?.referralCode ?? null,
       metadata: {
         checkoutSource: "shop",
         customerIdentitySource: customerIdentity.matchedBy,
         customerEmailConflict: customerIdentity.emailConflict,
+        referredByAgentId: resolvedReferral?.agentUserId ?? null,
+        referredByAgentName: resolvedReferral?.agentName ?? null,
+        referredByAgentEmail: resolvedReferral?.agentEmail ?? null,
+        attributionCodeUsed: resolvedReferral?.referralCode ?? null,
       },
       items: {
         create: items.map((item) => ({
@@ -106,16 +124,20 @@ export async function POST(request: Request) {
         })),
       },
     },
-    include: websiteOrderAdminInclude,
   });
+
+  const createdRow = await loadWebsiteOrderRow(created.id);
+  if (!createdRow) {
+    return NextResponse.json({ ok: false, error: "Website order was created but could not be loaded." }, { status: 500 });
+  }
 
   return NextResponse.json({
     ok: true,
     source: "website",
-    orderRef: created.orderRef,
-    status: created.status,
-    successUrl: getShopOrderSuccessHref(created.orderRef),
-    order: serializeWebsiteOrder(created),
+    orderRef: createdRow.orderRef,
+    status: createdRow.status,
+    successUrl: getShopOrderSuccessHref(createdRow.orderRef),
+    order: await serializeWebsiteOrder(createdRow),
   });
 }
 
@@ -134,7 +156,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ ok: false, error: "Order not found." }, { status: 404 });
     }
 
-    const serialized = serializeWebsiteOrder(order);
+    const serialized = await serializeWebsiteOrder(order);
     return NextResponse.json({
       ok: true,
       order: {
@@ -162,6 +184,9 @@ export async function GET(request: Request) {
         paymentConfirmationReference: serialized.paymentConfirmationReference,
         deliveredAt: serialized.deliveredAt,
         items: serialized.items,
+        referredByAgentId: serialized.referredByAgentId,
+        attributionCodeUsed: serialized.attributionCodeUsed,
+        referredByAgent: serialized.referredByAgent,
       },
     });
   }

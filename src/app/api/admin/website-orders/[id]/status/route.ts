@@ -63,7 +63,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<any
     if (existing.receiptId) {
       return NextResponse.json({ ok: false, error: "Receipt has already been issued for this website order." }, { status: 409 });
     }
-    const serialized = serializeWebsiteOrder(existing);
+    const serialized = await serializeWebsiteOrder(existing);
     const mode = isWebsiteOrderPod(serialized.orderType, serialized.paymentMethod) ? "pod" : "normal";
     const receiptPayload = buildWebsiteOrderReceiptPayload(serialized, mode);
     const receiptResponse = await fetch(new URL("/api/receipts?link=1", request.nextUrl.origin), {
@@ -126,5 +126,5 @@ export async function PATCH(request: NextRequest, context: { params: Promise<any
     include: websiteOrderAdminInclude,
   });
 
-  return NextResponse.json({ ok: true, order: serializeWebsiteOrder(order) });
+  return NextResponse.json({ ok: true, order: await serializeWebsiteOrder(order) });
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { getReferralCookieMaxAge, normalizeReferralCode, REFERRAL_COOKIE_NAME } from "@/lib/attribution";
 
 // Combined middleware:
 // - Fast-fail unauthenticated requests to sensitive API routes (support/admin/pos)
@@ -8,10 +9,24 @@ export function middleware(req: NextRequest) {
   try {
     const pathname = req.nextUrl.pathname || "";
     const params = req.nextUrl.searchParams;
+    const referralCode = normalizeReferralCode(params.get("ref"));
+    const response = NextResponse.next();
+
+    if (referralCode) {
+      response.cookies.set({
+        name: REFERRAL_COOKIE_NAME,
+        value: referralCode,
+        maxAge: getReferralCookieMaxAge(),
+        path: "/",
+        sameSite: "lax",
+        secure: req.nextUrl.protocol === "https:",
+        httpOnly: false,
+      });
+    }
 
     // Allow the post-login rehydration endpoint to pass through unchanged
-    if (pathname.startsWith("/auth/post-login")) return NextResponse.next();
-    if (params.has("_rehydrated")) return NextResponse.next();
+    if (pathname.startsWith("/auth/post-login")) return response;
+    if (params.has("_rehydrated")) return response;
 
     // If the request targets protected API areas, perform a quick cookie check
     if (
@@ -40,14 +55,15 @@ export function middleware(req: NextRequest) {
       }
     }
 
-    return NextResponse.next();
-  } catch (e) {
+    return response;
+  } catch {
     return NextResponse.next();
   }
 }
 
 export const config = {
   matcher: [
+    "/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)",
     "/api/support/:path*",
     "/api/admin/:path*",
     "/api/pos-commissions/:path*",

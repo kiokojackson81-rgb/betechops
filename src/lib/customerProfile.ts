@@ -1,6 +1,15 @@
 import { prisma } from "@/lib/prisma";
 
-const OPTIONAL_USER_PROFILE_COLUMNS = ["whatsappNumber", "county", "town", "estateLandmark", "locationNotes"] as const;
+const OPTIONAL_USER_PROFILE_COLUMNS = [
+  "whatsappNumber",
+  "county",
+  "town",
+  "estateLandmark",
+  "locationNotes",
+  "referredByAgentId",
+  "attributionCodeUsed",
+  "referredAt",
+] as const;
 const SAFE_USER_UPDATE_COLUMNS = [
   "name",
   "email",
@@ -29,6 +38,9 @@ type CustomerProfileInput = {
   town?: string | null;
   estateLandmark?: string | null;
   locationNotes?: string | null;
+  referredByAgentId?: string | null;
+  attributionCodeUsed?: string | null;
+  referredAt?: string | Date | null;
 };
 
 type SafeCustomerProfile = {
@@ -41,6 +53,9 @@ type SafeCustomerProfile = {
   town?: string | null;
   estateLandmark?: string | null;
   locationNotes?: string | null;
+  referredByAgentId?: string | null;
+  attributionCodeUsed?: string | null;
+  referredAt?: string | Date | null;
 };
 
 type SafeUserUpdateInput = Partial<
@@ -59,6 +74,9 @@ function defaultColumnMap(): UserProfileColumnMap {
     town: false,
     estateLandmark: false,
     locationNotes: false,
+    referredByAgentId: false,
+    attributionCodeUsed: false,
+    referredAt: false,
   };
 }
 
@@ -76,7 +94,7 @@ export async function getUserProfileColumnMap(forceRefresh = false): Promise<Use
         FROM information_schema.columns
         WHERE table_schema = current_schema()
           AND table_name = 'User'
-          AND column_name IN ('whatsappNumber', 'county', 'town', 'estateLandmark', 'locationNotes')
+          AND column_name IN ('whatsappNumber', 'county', 'town', 'estateLandmark', 'locationNotes', 'referredByAgentId', 'attributionCodeUsed', 'referredAt')
       `,
     );
 
@@ -151,6 +169,21 @@ export async function updateSafeCustomerProfile(userId: string, input: CustomerP
   if (columns.locationNotes && typeof input.locationNotes !== "undefined") {
     updates.push(["locationNotes", input.locationNotes]);
   }
+  if (columns.referredByAgentId && typeof input.referredByAgentId !== "undefined") {
+    updates.push(["referredByAgentId", input.referredByAgentId]);
+  }
+  if (columns.attributionCodeUsed && typeof input.attributionCodeUsed !== "undefined") {
+    updates.push(["attributionCodeUsed", input.attributionCodeUsed]);
+  }
+  if (columns.referredAt && typeof input.referredAt !== "undefined") {
+    const referredAtValue =
+      input.referredAt == null
+        ? null
+        : input.referredAt instanceof Date
+          ? input.referredAt.toISOString()
+          : input.referredAt;
+    updates.push(["referredAt", referredAtValue]);
+  }
 
   const assignments = updates.map(([column], index) => `"${column}" = $${index + 2}`).join(", ");
   const values = updates.map(([, value]) => value);
@@ -171,6 +204,9 @@ export async function updateSafeCustomerProfile(userId: string, input: CustomerP
     town: columns.town ? (typeof input.town === "undefined" ? null : input.town) : null,
     estateLandmark: columns.estateLandmark ? (typeof input.estateLandmark === "undefined" ? null : input.estateLandmark) : null,
     locationNotes: columns.locationNotes ? (typeof input.locationNotes === "undefined" ? null : input.locationNotes) : null,
+    referredByAgentId: columns.referredByAgentId ? (typeof input.referredByAgentId === "undefined" ? null : input.referredByAgentId) : null,
+    attributionCodeUsed: columns.attributionCodeUsed ? (typeof input.attributionCodeUsed === "undefined" ? null : input.attributionCodeUsed) : null,
+    referredAt: columns.referredAt ? (typeof input.referredAt === "undefined" ? null : input.referredAt) : null,
   };
 }
 

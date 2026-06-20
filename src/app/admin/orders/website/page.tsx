@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import WebsiteOrdersAdminClient from "@/app/admin/orders/website/WebsiteOrdersAdminClient";
-import { ensureWebsiteOrdersSchema, serializeWebsiteOrder, websiteOrderAdminInclude } from "@/lib/websiteOrders";
+import { ensureWebsiteOrdersSchema, serializeWebsiteOrders, websiteOrderAdminInclude } from "@/lib/websiteOrders";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +11,7 @@ export default async function WebsiteOrdersPage() {
     include: websiteOrderAdminInclude,
     orderBy: [{ createdAt: "desc" }],
   });
+  const serializedOrders = await serializeWebsiteOrders(orders);
 
   return (
     <div className="space-y-6">
@@ -37,7 +38,7 @@ export default async function WebsiteOrdersPage() {
         </div>
       </div>
 
-      <WebsiteOrdersAdminClient initialOrders={orders.map(serializeWebsiteOrder)} />
+      <WebsiteOrdersAdminClient initialOrders={serializedOrders} />
     </div>
   );
 }

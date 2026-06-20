@@ -72,7 +72,7 @@ export async function getAgentDashboardData(userId: string) {
 
   if (!profile) return null;
 
-  const [{ sales, summary: salesSummary }, commissions, payouts, activities] = await Promise.all([
+  const [{ sales, summary: salesSummary }, commissions, payouts, activities, referredWebsiteOrders] = await Promise.all([
     getAgentSalesDashboardSummary(userId),
     prisma.agentCommission.findMany({
       where: { agentId: userId },
@@ -92,6 +92,37 @@ export async function getAgentDashboardData(userId: string) {
       orderBy: { createdAt: "desc" },
       take: 10,
     }),
+    prisma.websiteOrder.findMany({
+      where: {
+        OR: [
+          { referredByAgentId: userId },
+          { customerUser: { referredByAgentId: userId } },
+        ],
+      },
+      select: {
+        id: true,
+        orderRef: true,
+        customerName: true,
+        customerPhone: true,
+        customerLocation: true,
+        paymentMethod: true,
+        orderType: true,
+        status: true,
+        total: true,
+        createdAt: true,
+        items: {
+          select: {
+            id: true,
+            productName: true,
+            quantity: true,
+            total: true,
+          },
+          take: 3,
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 8,
+    }),
   ]);
 
   const adjustedCommissions = applyPaidPayoutsToCommissions(commissions, payouts);
@@ -110,6 +141,18 @@ export async function getAgentDashboardData(userId: string) {
 
   const paidCount = adjustedCommissions.filter((row) => String(row.status).toLowerCase() === "paid").length;
   const successRate = adjustedCommissions.length ? Math.round((paidCount / adjustedCommissions.length) * 100) : 0;
+  const websiteReferralSummary = referredWebsiteOrders.reduce(
+    (acc, order) => {
+      acc.totalOrders += 1;
+      acc.totalRevenue += Number(order.total ?? 0);
+      const status = String(order.status || "").toUpperCase();
+      if (["DELIVERED", "PAYMENT_CONFIRMED"].includes(status)) acc.completedOrders += 1;
+      if (["PENDING", "CONFIRMED", "PROCESSING", "RECEIPT_ISSUED", "DISPATCHED"].includes(status)) acc.openOrders += 1;
+      if (status === "CANCELLED") acc.cancelledOrders += 1;
+      return acc;
+    },
+    { totalOrders: 0, totalRevenue: 0, completedOrders: 0, openOrders: 0, cancelledOrders: 0 },
+  );
 
   return {
     profile,
@@ -125,6 +168,25 @@ export async function getAgentDashboardData(userId: string) {
     },
     salesSummary,
     sales,
+    websiteReferralSummary,
+    referredWebsiteOrders: referredWebsiteOrders.map((order) => ({
+      id: order.id,
+      orderRef: order.orderRef,
+      customerName: order.customerName,
+      customerPhone: order.customerPhone,
+      customerLocation: order.customerLocation,
+      paymentMethod: order.paymentMethod,
+      orderType: order.orderType,
+      status: String(order.status),
+      totalAmount: Number(order.total ?? 0),
+      createdAt: order.createdAt,
+      items: order.items.map((item) => ({
+        id: item.id,
+        productName: item.productName,
+        quantity: Number(item.quantity ?? 0),
+        totalAmount: Number(item.total ?? 0),
+      })),
+    })),
     commissions: adjustedCommissions,
     payouts,
     activities,

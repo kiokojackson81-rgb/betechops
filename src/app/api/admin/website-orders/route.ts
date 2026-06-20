@@ -5,6 +5,7 @@ import {
   ensureWebsiteOrdersSchema,
   requireWebsiteOrdersAdmin,
   serializeWebsiteOrder,
+  serializeWebsiteOrders,
   WEBSITE_ORDER_ACTIVE_STATUSES,
   websiteOrderAdminInclude,
 } from "@/lib/websiteOrders";
@@ -43,9 +44,10 @@ export async function GET(request: NextRequest) {
     include: websiteOrderAdminInclude,
     orderBy: [{ createdAt: "desc" }],
   });
+  const serializedOrders = await serializeWebsiteOrders(orders);
 
   return NextResponse.json({
     ok: true,
-    orders: orders.map(serializeWebsiteOrder),
+    orders: serializedOrders,
   });
 }

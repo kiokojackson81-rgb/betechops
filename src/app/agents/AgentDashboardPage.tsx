@@ -26,6 +26,8 @@ const statCards = [
   { key: "pendingSales", label: "Orders Pending", tone: "bg-[#fffaf5] text-slate-700" },
   { key: "processingSales", label: "Orders In Progress", tone: "bg-[#f1f8ff] text-[#174c7a]" },
   { key: "completedSales", label: "Completed Orders", tone: "bg-[#edf9f0] text-[#136233]" },
+  { key: "websiteReferralOrders", label: "Website Referral Orders", tone: "bg-[#f6f1ff] text-[#4f2d7f]" },
+  { key: "websiteReferralRevenue", label: "Website Referral Revenue", tone: "bg-[#eef8ff] text-[#174c7a]", money: true },
   { key: "totalCommissionEarnedSoFar", label: "Total Earned So Far", tone: "bg-[#fff3cf] text-[#5a4300]", money: true },
   { key: "earnedCommission", label: "Ready To Withdraw", tone: "bg-[#fceeee] text-[#7a0000]", money: true },
   { key: "paidCommission", label: "Withdrawn Earnings", tone: "bg-[#edf9f0] text-[#136233]", money: true },
@@ -68,6 +70,8 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
     Number(dashboard.salesSummary.earnedCommission || 0) + Number(dashboard.salesSummary.paidCommission || 0);
   const dashboardSummary = {
     ...dashboard.salesSummary,
+    websiteReferralOrders: dashboard.websiteReferralSummary.totalOrders,
+    websiteReferralRevenue: dashboard.websiteReferralSummary.totalRevenue,
     totalCommissionEarnedSoFar,
   };
 
@@ -383,6 +387,50 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
                   <div className="text-sm font-semibold text-[#210505]">Withdrawn Earnings</div>
                   <p className="mt-1 text-sm text-[#136233]">Completed payouts appear here.</p>
                 </div>
+              </div>
+            </article>
+
+            <article className="rounded-[28px] border border-[#e4d4cb] bg-white p-6 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">🌐 Website Referral Orders</p>
+                  <h3 className="mt-1 text-2xl font-black tracking-tight text-[#210505]">Orders From Your Referral Link</h3>
+                </div>
+                <div className="text-right text-sm text-slate-500">
+                  <div>{dashboard.websiteReferralSummary.openOrders} open</div>
+                  <div>{dashboard.websiteReferralSummary.completedOrders} completed</div>
+                </div>
+              </div>
+              <div className="mt-5 space-y-3">
+                {dashboard.referredWebsiteOrders.length ? dashboard.referredWebsiteOrders.slice(0, 4).map((order) => (
+                  <div key={order.id} className="rounded-[24px] border border-[#ece1d9] bg-[#fffaf5] p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-[#210505]">{order.customerName}</div>
+                        <div className="mt-1 text-sm text-slate-600">
+                          {order.orderRef} · {order.customerLocation || "Location pending"}
+                        </div>
+                        <div className="mt-2 text-sm text-slate-500">
+                          {order.items.slice(0, 2).map((item) => item.productName).join(" • ") || "Products captured on order"}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-semibold uppercase tracking-[0.14em] text-[#7a0000]">
+                          {String(order.status).replace(/_/g, " ")}
+                        </div>
+                        <div className="mt-1 text-base font-black text-[#210505]">{money(order.totalAmount)}</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-4 text-sm text-slate-500">
+                      <span>{new Intl.DateTimeFormat("en-KE", { dateStyle: "medium" }).format(order.createdAt)}</span>
+                      <span>{order.paymentMethod}</span>
+                    </div>
+                  </div>
+                )) : (
+                  <div className="rounded-[24px] border border-dashed border-[#d9c6ba] bg-[#fffaf5] p-6 text-sm text-slate-500">
+                    No website orders have been attributed to your referral link yet.
+                  </div>
+                )}
               </div>
             </article>
 

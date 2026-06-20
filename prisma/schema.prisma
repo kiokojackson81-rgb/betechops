@@ -13,6 +13,9 @@ model User {
   email                                String?                         @unique
   phone                                String?                         @unique
   whatsappNumber                       String?
+  referredByAgentId                    String?
+  attributionCodeUsed                  String?
+  referredAt                           DateTime?
   name                                 String?
   county                               String?
   town                                 String?
@@ -1444,6 +1447,8 @@ model WebsiteOrder {
   id               String             @id @default(cuid())
   orderRef         String             @unique
   customerUserId   String?
+  referredByAgentId String?
+  attributionCodeUsed String?
   customerName     String
   customerPhone    String
   customerLocation String

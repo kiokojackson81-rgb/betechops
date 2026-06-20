@@ -67,7 +67,7 @@ export async function POST(request: NextRequest, context: { params: Promise<any>
     );
   }
 
-  const order = serializeWebsiteOrder(existing);
+  const order = await serializeWebsiteOrder(existing);
   const defaultMode = isWebsiteOrderPod(order.orderType, order.paymentMethod) ? "pod" : "normal";
   const mode = parsed.data.mode ?? defaultMode;
   const currentMetadata =

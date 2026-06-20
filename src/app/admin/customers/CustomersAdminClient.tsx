@@ -164,6 +164,17 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
                               <UserRound className="mt-0.5 h-4 w-4 text-rose-300" />
                               <div>{customer.attendants.join(", ") || "No assigned attendant"}</div>
                             </div>
+                            {customer.orders.find((order) => order.referredByAgentName || order.attributionCodeUsed) ? (
+                              <div className="flex items-start gap-2">
+                                <UserRound className="mt-0.5 h-4 w-4 text-violet-300" />
+                                <div>
+                                  {customer.orders.find((order) => order.referredByAgentName || order.attributionCodeUsed)?.referredByAgentName || "Attributed referral"}
+                                  {customer.orders.find((order) => order.referredByAgentName || order.attributionCodeUsed)?.attributionCodeUsed
+                                    ? ` · code ${customer.orders.find((order) => order.referredByAgentName || order.attributionCodeUsed)?.attributionCodeUsed}`
+                                    : ""}
+                                </div>
+                              </div>
+                            ) : null}
                           </div>
                           <div className="mt-4 flex flex-wrap gap-2 text-xs">
                             <a
@@ -242,6 +253,12 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
                                     <div className="mt-1 text-xs text-slate-500">
                                       {dateTime(order.createdAt)} · {order.shopName || "No shop"} · {order.attendantName || order.attendantEmail || "No attendant"}
                                     </div>
+                                    {order.referredByAgentName || order.attributionCodeUsed ? (
+                                      <div className="mt-1 text-xs text-violet-300">
+                                        Referred by {order.referredByAgentName || "agent"}
+                                        {order.attributionCodeUsed ? ` · code ${order.attributionCodeUsed}` : ""}
+                                      </div>
+                                    ) : null}
                                   </div>
                                   <div className="text-right">
                                     <div className="font-semibold text-emerald-300">{money(order.totalAmount)}</div>
@@ -366,6 +383,12 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
                       <div key={order.id} className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
                         <div className="font-medium text-white">{order.orderNumber}</div>
                         <div className="mt-1 text-xs text-slate-500">{dateTime(order.createdAt)} · {order.shopName || "No shop"}</div>
+                        {order.referredByAgentName || order.attributionCodeUsed ? (
+                          <div className="mt-1 text-xs text-violet-300">
+                            Referred by {order.referredByAgentName || "agent"}
+                            {order.attributionCodeUsed ? ` · code ${order.attributionCodeUsed}` : ""}
+                          </div>
+                        ) : null}
                         <div className="mt-2 text-sm font-semibold text-emerald-300">{money(order.totalAmount)}</div>
                         <div className="mt-3 flex flex-wrap gap-2 text-xs">
                           {order.routeId ? (

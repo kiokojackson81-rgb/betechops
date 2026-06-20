@@ -21,5 +21,5 @@ export async function GET(_: NextRequest, context: { params: Promise<any> }) {
     return NextResponse.json({ ok: false, error: "Website order not found." }, { status: 404 });
   }
 
-  return NextResponse.json({ ok: true, order: serializeWebsiteOrder(order) });
+  return NextResponse.json({ ok: true, order: await serializeWebsiteOrder(order) });
 }
