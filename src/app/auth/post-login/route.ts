@@ -13,10 +13,19 @@ export async function GET(req: Request) {
     isAgentsHost(host) ||
     isAgentRoutePath(rawCallback);
   const useRootAgentPaths = isAgentsHost(host);
+  const normalizeAgentTarget = (value: string) => {
+    if (!useRootAgentPaths) return value;
+    if (value === "/agents") return "/";
+    if (value.startsWith("/agents/")) return value.slice("/agents".length) || "/";
+    return value;
+  };
 
   if (!session) {
     const original = url.pathname + url.search + url.hash;
-    const loginUrl = new URL(shouldUseAgentLogin ? agentPath("/login") : '/attendant/login', url);
+    const loginUrl = new URL(
+      shouldUseAgentLogin ? agentPath("/login", useRootAgentPaths) : "/attendant/login",
+      url,
+    );
     loginUrl.searchParams.set('callbackUrl', original);
     return NextResponse.redirect(loginUrl);
   }
@@ -49,11 +58,11 @@ export async function GET(req: Request) {
 
     try {
       if (decoded.startsWith('/')) {
-        target = decoded;
+        target = normalizeAgentTarget(decoded);
       } else {
         const cbUrl = new URL(decoded, url);
         if (cbUrl.origin === url.origin) {
-          target = cbUrl.pathname + cbUrl.search + cbUrl.hash;
+          target = normalizeAgentTarget(cbUrl.pathname + cbUrl.search + cbUrl.hash);
         }
       }
     } catch {
