@@ -235,18 +235,19 @@ async function syncVerifiedIdentityLinks(userId: string, normalizedPhone: string
   await prisma.$transaction(updates);
 }
 
-async function resolveUserByPhone(normalizedPhone: string) {
-  const directUser = await prisma.user.findUnique({
+async function resolveUserByPhone(normalizedPhone: string, options?: { preferAgent?: boolean }) {
+  const preferAgent = Boolean(options?.preferAgent);
+  const phoneVariants = getKenyanPhoneVariants(normalizedPhone);
+
+  const directUserLookup = prisma.user.findUnique({
     where: { phone: normalizedPhone },
     select: otpAuthUserSelect,
   });
 
-  if (directUser) return directUser;
-
-  const agentProfile = await prisma.agentProfile.findFirst({
+  const agentProfileLookup = prisma.agentProfile.findFirst({
     where: {
       OR: [
-        { phone: { in: getKenyanPhoneVariants(normalizedPhone) } },
+        { phone: { in: phoneVariants } },
         { user: { phone: normalizedPhone } },
       ],
     },
@@ -257,18 +258,28 @@ async function resolveUserByPhone(normalizedPhone: string) {
     },
   });
 
+  if (preferAgent) {
+    const agentProfile = await agentProfileLookup;
+    if (agentProfile?.user) return agentProfile.user;
+    return await directUserLookup;
+  }
+
+  const directUser = await directUserLookup;
+  if (directUser) return directUser;
+
+  const agentProfile = await agentProfileLookup;
   return agentProfile?.user ?? null;
 }
 
-async function resolveUserByEmail(normalizedEmail: string) {
-  const directUser = await prisma.user.findUnique({
+async function resolveUserByEmail(normalizedEmail: string, options?: { preferAgent?: boolean }) {
+  const preferAgent = Boolean(options?.preferAgent);
+
+  const directUserLookup = prisma.user.findUnique({
     where: { email: normalizedEmail },
     select: otpAuthUserSelect,
   });
 
-  if (directUser) return directUser;
-
-  const agentProfile = await prisma.agentProfile.findFirst({
+  const agentProfileLookup = prisma.agentProfile.findFirst({
     where: {
       email: {
         equals: normalizedEmail,
@@ -282,6 +293,16 @@ async function resolveUserByEmail(normalizedEmail: string) {
     },
   });
 
+  if (preferAgent) {
+    const agentProfile = await agentProfileLookup;
+    if (agentProfile?.user) return agentProfile.user;
+    return await directUserLookup;
+  }
+
+  const directUser = await directUserLookup;
+  if (directUser) return directUser;
+
+  const agentProfile = await agentProfileLookup;
   return agentProfile?.user ?? null;
 }
 
@@ -312,7 +333,7 @@ export async function findPhoneAuthUserByEmail(emailInput: string) {
 }
 
 async function resolveVerifiedPhoneUser(normalizedPhone: string, preferredRedirect?: string | null): Promise<OtpAuthResult> {
-  let user = await resolveUserByPhone(normalizedPhone);
+  let user = await resolveUserByPhone(normalizedPhone, { preferAgent: isAgentPreferredRedirect(preferredRedirect) });
 
   if (!user) {
     user = await prisma.user.create({
@@ -360,7 +381,7 @@ async function resolveVerifiedPhoneUser(normalizedPhone: string, preferredRedire
 }
 
 async function resolveVerifiedEmailUser(normalizedEmail: string, preferredRedirect?: string | null): Promise<OtpAuthResult> {
-  let user = await resolveUserByEmail(normalizedEmail);
+  let user = await resolveUserByEmail(normalizedEmail, { preferAgent: isAgentPreferredRedirect(preferredRedirect) });
 
   if (!user) {
     user = await prisma.user.create({
