@@ -45,6 +45,7 @@ export default function PhoneLoginPage() {
   const [otp, setOtp] = useState("");
   const [callbackUrl, setCallbackUrl] = useState("/account");
   const [postAuthRedirect, setPostAuthRedirect] = useState<string | null>(null);
+  const [verificationToken, setVerificationToken] = useState<string | null>(null);
   const [step, setStep] = useState<"identify" | "verify" | "complete-profile">("identify");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -205,6 +206,7 @@ export default function PhoneLoginPage() {
 
       const target = payload.redirectTo || callbackUrl;
       setPostAuthRedirect(target);
+      setVerificationToken(payload.verificationToken);
 
       const signInResult = await signIn("phone-otp", {
         redirect: false,
@@ -266,7 +268,23 @@ export default function PhoneLoginPage() {
         throw new Error(payload?.error || "Unable to save your profile.");
       }
 
-      window.location.href = postAuthRedirect || callbackUrl || "/account";
+      const target = postAuthRedirect || callbackUrl || "/account";
+      if (!verificationToken) {
+        window.location.href = target;
+        return;
+      }
+
+      const signInResult = await signIn("phone-otp", {
+        redirect: false,
+        verificationToken,
+        callbackUrl: target,
+      });
+
+      if (!signInResult?.ok) {
+        throw new Error(signInResult?.error || "Unable to create your session.");
+      }
+
+      window.location.href = signInResult.url || target;
     } catch (profileError) {
       setError(profileError instanceof Error ? profileError.message : "Unable to save your profile.");
     } finally {
@@ -284,6 +302,7 @@ export default function PhoneLoginPage() {
     setAccount(null);
     setOtp("");
     setPostAuthRedirect(null);
+    setVerificationToken(null);
     setProfileName("");
     setProfileEmail("");
     setProfilePhone("");
