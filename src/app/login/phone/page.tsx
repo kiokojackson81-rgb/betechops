@@ -48,6 +48,30 @@ function getResolvedPostLoginUrlForFlow(target: string, isAgentsDomainFlow: bool
   return `/auth/post-login?callbackUrl=${encodeURIComponent(normalizedTarget)}`;
 }
 
+async function waitForAuthenticatedSession(expectAgentSession: boolean, attempts = 20, delayMs = 250) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const response = await fetch("/api/auth/session", {
+        method: "GET",
+        cache: "no-store",
+        headers: { "Cache-Control": "no-store" },
+      });
+      const payload = await response.json().catch(() => null);
+      const hasSession = Boolean(payload?.user);
+      const isAgentSession = Boolean(payload?.user?.isAgent);
+      if (hasSession && (!expectAgentSession || isAgentSession)) {
+        return true;
+      }
+    } catch {
+      // Ignore transient polling failures while the session cookie settles.
+    }
+
+    await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+  }
+
+  return false;
+}
+
 export default function PhoneLoginPage() {
   const { status } = useSession();
   const [isAgentsDomainFlow, setIsAgentsDomainFlow] = useState(false);
@@ -256,6 +280,7 @@ export default function PhoneLoginPage() {
         return;
       }
 
+      await waitForAuthenticatedSession(isAgentFlow);
       window.location.href = getResolvedPostLoginUrlForFlow(signInResult.url || target, isAgentsDomainFlow, isAgentFlow);
     } catch (verifyError) {
       setError(verifyError instanceof Error ? verifyError.message : "Invalid OTP.");
@@ -305,6 +330,7 @@ export default function PhoneLoginPage() {
         throw new Error(signInResult?.error || "Unable to create your session.");
       }
 
+      await waitForAuthenticatedSession(isAgentFlow);
       window.location.href = getResolvedPostLoginUrlForFlow(signInResult.url || target, isAgentsDomainFlow, isAgentFlow);
     } catch (profileError) {
       setError(profileError instanceof Error ? profileError.message : "Unable to save your profile.");
