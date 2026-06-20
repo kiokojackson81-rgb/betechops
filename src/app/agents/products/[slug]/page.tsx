@@ -202,8 +202,9 @@ export default async function AgentProductDetailPage({
   const requiresApproval = productCommissionRequiresApproval(product);
   const commissionPercent =
     product.price > 0 && displayCommissionAmount > 0 ? Math.round((displayCommissionAmount / product.price) * 100) : 0;
-  const loginHref = agentPath("/login");
-  const registerHref = agentPath("/register");
+  const otpHref = `/login/phone?callbackUrl=${encodeURIComponent(agentPath("/dashboard", useRootPaths))}`;
+  const loginHref = otpHref;
+  const registerHref = otpHref;
   const dashboardHref = agentPath("/dashboard", useRootPaths);
   const commissionHref = agentPath("/withdrawals", useRootPaths);
   const supportItems = [

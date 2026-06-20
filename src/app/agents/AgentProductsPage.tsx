@@ -164,8 +164,9 @@ export default async function AgentProductsPage({
   };
   const manualPriceRange = normalizePriceRange(filters.minPrice, filters.maxPrice);
 
-  const registerHref = agentPath("/register");
-  const loginHref = agentPath("/login");
+  const otpHref = `/login/phone?callbackUrl=${encodeURIComponent(agentPath("/dashboard", useRootPaths))}`;
+  const registerHref = otpHref;
+  const loginHref = otpHref;
   const dashboardHref = agentPath("/dashboard", useRootPaths);
   const commissionHref = agentPath("/withdrawals", useRootPaths);
   const agentDashboard = agentSession ? await getAgentDashboardData(agentSession.userId) : null;

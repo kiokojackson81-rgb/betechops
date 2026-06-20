@@ -78,6 +78,7 @@ export default async function AgentLoginPage({ useRootPaths = false }: AgentLogi
   if ((session?.user as { isAgent?: boolean } | undefined)?.isAgent) {
     redirect(agentPath("/dashboard", useRootPaths));
   }
+  const otpAgentHref = `/login/phone?callbackUrl=${encodeURIComponent(agentPath("/dashboard", useRootPaths))}`;
 
   return (
     <div className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(242,178,15,0.20),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(122,0,0,0.12),transparent_26%),linear-gradient(180deg,#fffdf9_0%,#fff5ea_100%)] px-4 py-4 text-slate-950 sm:px-6 sm:py-6 lg:px-8 lg:py-10">
@@ -112,7 +113,7 @@ export default async function AgentLoginPage({ useRootPaths = false }: AgentLogi
             </div>
           </Link>
           <Link
-            href={agentPath("/register")}
+            href={otpAgentHref}
             className="hidden rounded-2xl border border-[#7a0000]/12 bg-white px-4 py-3 text-sm font-semibold text-[#7a0000] shadow-[0_12px_24px_rgba(15,23,42,0.05)] transition hover:-translate-y-0.5 sm:inline-flex"
           >
             Create Account

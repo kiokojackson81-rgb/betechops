@@ -61,6 +61,7 @@ export default function PhoneLoginPage() {
   const canResend = cooldown <= 0;
   const availableTowns = useMemo(() => getTownsForCounty(profileCounty), [profileCounty]);
   const isCheckoutFlow = callbackUrl === "/checkout";
+  const isAgentFlow = callbackUrl === "/agents/dashboard" || callbackUrl.startsWith("/agents/");
 
   useEffect(() => {
     if (!cooldown) return;
@@ -250,6 +251,7 @@ export default function PhoneLoginPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          accountMode: isAgentFlow ? "agent" : "customer",
           name: profileName,
           email: profileEmail,
           phone: profilePhone,
@@ -299,10 +301,12 @@ export default function PhoneLoginPage() {
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(242,178,15,0.16),transparent_24%),linear-gradient(180deg,#fffdf8_0%,#fff3e5_100%)] px-4 py-8 text-slate-950 sm:px-6">
       <div className="mx-auto max-w-md">
         <div className="rounded-[2rem] border border-[#7a0000]/10 bg-white p-6 shadow-[0_28px_70px_rgba(122,0,0,0.10)] sm:p-7">
-          <div className="text-xs font-black uppercase tracking-[0.24em] text-[#7a0000]">Customer login</div>
+          <div className="text-xs font-black uppercase tracking-[0.24em] text-[#7a0000]">{isAgentFlow ? "Agent login" : "Customer login"}</div>
           <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950">
             {step === "identify"
-              ? isCheckoutFlow
+              ? isAgentFlow
+                ? "Agent sign in"
+                : isCheckoutFlow
                 ? "Continue to checkout"
                 : "Sign in with email or phone"
               : identifierType === "email"
@@ -311,7 +315,9 @@ export default function PhoneLoginPage() {
           </h1>
           <p className="mt-3 text-sm leading-6 text-slate-600">
             {step === "identify"
-              ? isCheckoutFlow
+              ? isAgentFlow
+                ? "Enter your email address or Kenyan mobile number. We will send an OTP immediately, sign you in to your agent dashboard, or help you create your affiliate account without a password."
+                : isCheckoutFlow
                 ? "Enter your email address or Kenyan mobile number. We will send an OTP immediately, sign you in or create your account, then return you to checkout with any saved details prefilled."
                 : "Enter your email address or Kenyan mobile number. We will immediately send you a one-time verification code."
               : "Enter the code to complete sign in."}
@@ -400,9 +406,13 @@ export default function PhoneLoginPage() {
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/45 px-4 py-4 sm:flex sm:items-center sm:justify-center sm:py-6">
           <div className="mx-auto w-full max-w-lg max-h-[calc(100vh-2rem)] overflow-y-auto rounded-[2rem] border border-[#7a0000]/10 bg-white p-5 shadow-[0_32px_80px_rgba(15,23,42,0.22)] sm:max-h-[calc(100vh-3rem)] sm:p-7">
             <div className="text-xs font-black uppercase tracking-[0.24em] text-[#7a0000]">Complete profile</div>
-            <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Finish creating your account</h2>
+            <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950">
+              {isAgentFlow ? "Finish creating your agent account" : "Finish creating your account"}
+            </h2>
             <p className="mt-3 text-sm leading-6 text-slate-600">
-              Your OTP is verified. Add your details once so we can save your Betech customer account and log you in.
+              {isAgentFlow
+                ? "Your OTP is verified. Add your details once so we can create your Betech agent account and log you in."
+                : "Your OTP is verified. Add your details once so we can save your Betech customer account and log you in."}
             </p>
 
             <form onSubmit={handleCompleteProfile} className="mt-6 space-y-3 sm:space-y-4">

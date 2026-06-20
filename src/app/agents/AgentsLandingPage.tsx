@@ -436,8 +436,9 @@ function ProductCommissionSection({
 }
 
 export default async function AgentsLandingPage({ useRootPaths = false }: AgentsLandingPageProps) {
-  const registerHref = agentPath("/register");
-  const loginHref = agentPath("/login");
+  const otpHref = `/login/phone?callbackUrl=${encodeURIComponent(agentPath("/dashboard", useRootPaths))}`;
+  const registerHref = otpHref;
+  const loginHref = otpHref;
   const productsHref = agentPath("/products", useRootPaths);
   const shopProducts = await getShopProducts();
   const popularitySignals = await getPopularitySignalsByProduct(shopProducts);

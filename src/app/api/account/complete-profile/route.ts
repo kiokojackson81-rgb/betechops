@@ -2,10 +2,27 @@ import { NextRequest, NextResponse } from "next/server";
 import { applyReferralAttributionToUser, REFERRAL_COOKIE_NAME } from "@/lib/attribution";
 import { getToken } from "next-auth/jwt";
 import { updateSafeCustomerProfile } from "@/lib/customerProfile";
+import { generateUniqueReferralCode } from "@/lib/agents/service";
 import { prisma } from "@/lib/prisma";
 import { normalizeKenyanPhone } from "@/lib/phone";
 
 export const dynamic = "force-dynamic";
+
+function splitNameParts(name: string) {
+  const segments = name
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (!segments.length) {
+    return { firstName: "", lastName: "" };
+  }
+
+  return {
+    firstName: segments[0] || "",
+    lastName: segments.slice(1).join(" ") || segments[0] || "",
+  };
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,6 +37,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json().catch(() => null);
+    const accountMode = String(body?.accountMode || "customer").trim().toLowerCase();
     const name = String(body?.name || "").trim();
     const emailRaw = String(body?.email || "").trim().toLowerCase();
     const normalizedPhone = normalizeKenyanPhone(String(body?.phone || "").trim());
@@ -32,6 +50,14 @@ export async function POST(req: NextRequest) {
 
     if (!name) {
       return NextResponse.json({ ok: false, error: "Name is required." }, { status: 400 });
+    }
+
+    if (accountMode === "agent" && !emailRaw) {
+      return NextResponse.json({ ok: false, error: "Email is required for agent accounts." }, { status: 400 });
+    }
+
+    if (accountMode === "agent" && !normalizedPhone) {
+      return NextResponse.json({ ok: false, error: "Phone number is required for agent accounts." }, { status: 400 });
     }
 
     if (emailRaw) {
@@ -80,6 +106,55 @@ export async function POST(req: NextRequest) {
       estateLandmark: estateLandmark || null,
       locationNotes: locationNotes || null,
     });
+
+    if (accountMode === "agent") {
+      const { firstName, lastName } = splitNameParts(name);
+      const existingAgentProfile = await prisma.agentProfile.findUnique({
+        where: { userId },
+        select: { id: true, referralCode: true },
+      });
+
+      if (existingAgentProfile) {
+        await prisma.agentProfile.update({
+          where: { userId },
+          data: {
+            firstName,
+            lastName,
+            email: emailRaw || null,
+            phone: normalizedPhone || null,
+            country: "Kenya",
+            county: county || null,
+            city: town || null,
+          },
+        });
+      } else {
+        const referralCode = await generateUniqueReferralCode();
+        await prisma.$transaction(async (tx) => {
+          await tx.agentProfile.create({
+            data: {
+              userId,
+              referralCode,
+              firstName,
+              lastName,
+              email: emailRaw,
+              phone: normalizedPhone,
+              country: "Kenya",
+              county: county || null,
+              city: town || null,
+              status: "pending",
+            },
+          });
+
+          await tx.agentActivityLog.create({
+            data: {
+              agentId: userId,
+              action: "registered",
+              description: "Registered through passwordless OTP agent onboarding",
+            },
+          });
+        });
+      }
+    }
 
     const referralCode = req.cookies.get(REFERRAL_COOKIE_NAME)?.value || "";
     if (referralCode) {
