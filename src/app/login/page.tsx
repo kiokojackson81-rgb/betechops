@@ -9,7 +9,7 @@ import { isOpsHost } from "@/lib/runtimeUrls";
 export default async function LoginPage() {
   const host = (await headers()).get("host");
   if (isAgentsHost(host)) {
-    redirect("/login/phone?callbackUrl=/account");
+    redirect("/login/phone?callbackUrl=/dashboard");
   }
 
   if (!isOpsHost(host)) {

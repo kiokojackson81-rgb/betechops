@@ -179,6 +179,12 @@ function normalizePreferredRedirect(value?: string | null) {
   return redirect;
 }
 
+function isAgentPreferredRedirect(value?: string | null) {
+  const redirect = normalizePreferredRedirect(value);
+  if (!redirect) return false;
+  return redirect === "/dashboard" || redirect === "/agents/dashboard" || redirect.startsWith("/agents/");
+}
+
 function getPreferredRedirect(user: OtpAuthUserRecord, preferredRedirect?: string | null) {
   const normalizedPreferredRedirect = normalizePreferredRedirect(preferredRedirect);
   if (normalizedPreferredRedirect) return normalizedPreferredRedirect;
@@ -187,8 +193,13 @@ function getPreferredRedirect(user: OtpAuthUserRecord, preferredRedirect?: strin
   return "/account";
 }
 
-function requiresProfileCompletion(user: OtpAuthUserRecord) {
-  return !String(user.name || "").trim() || !String(user.email || "").trim();
+function requiresProfileCompletion(user: OtpAuthUserRecord, preferredRedirect?: string | null) {
+  const missingCoreFields = !String(user.name || "").trim() || !String(user.email || "").trim();
+  if (missingCoreFields) return true;
+  if (isAgentPreferredRedirect(preferredRedirect) && !user.agentProfile) {
+    return true;
+  }
+  return false;
 }
 
 async function syncVerifiedIdentityLinks(userId: string, normalizedPhone: string) {
@@ -342,7 +353,7 @@ async function resolveVerifiedPhoneUser(normalizedPhone: string, preferredRedire
   return {
     user,
     redirectTo: getPreferredRedirect(user, preferredRedirect),
-    requiresProfileCompletion: requiresProfileCompletion(user),
+    requiresProfileCompletion: requiresProfileCompletion(user, preferredRedirect),
     channel: "phone",
     identifier: normalizedPhone,
   };
@@ -388,7 +399,7 @@ async function resolveVerifiedEmailUser(normalizedEmail: string, preferredRedire
   return {
     user,
     redirectTo: getPreferredRedirect(user, preferredRedirect),
-    requiresProfileCompletion: requiresProfileCompletion(user),
+    requiresProfileCompletion: requiresProfileCompletion(user, preferredRedirect),
     channel: "email",
     identifier: normalizedEmail,
   };
