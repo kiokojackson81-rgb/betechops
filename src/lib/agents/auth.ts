@@ -1,4 +1,6 @@
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { getKenyanPhoneVariants, normalizeKenyanPhone } from "@/lib/phone";
 
 export function isApprovedAgentStatus(status: string | null | undefined) {
   return String(status || "").toLowerCase() === "approved";
@@ -13,7 +15,51 @@ export async function requireAgentSession() {
     isAgent: Boolean(user?.isAgent),
     agentStatus: typeof user?.agentStatus === "string" ? user.agentStatus : null,
   });
-  if (!session || !user?.id || !user?.isAgent) return null;
+  if (!session || !user?.id) return null;
+
+  if (!user?.isAgent) {
+    const normalizedPhone = normalizeKenyanPhone(typeof user.phone === "string" ? user.phone : "");
+    const phoneVariants = normalizedPhone ? getKenyanPhoneVariants(normalizedPhone) : [];
+    const normalizedEmail = typeof user.email === "string" ? user.email.trim().toLowerCase() : "";
+
+    const fallbackAgent = await prisma.agentProfile.findFirst({
+      where: {
+        OR: [
+          { userId: String(user.id) },
+          ...(phoneVariants.length ? [{ phone: { in: phoneVariants } }] : []),
+          ...(normalizedPhone ? [{ user: { phone: normalizedPhone } }] : []),
+          ...(normalizedEmail
+            ? [
+                { email: { equals: normalizedEmail, mode: "insensitive" as const } },
+                { user: { email: { equals: normalizedEmail, mode: "insensitive" as const } } },
+              ]
+            : []),
+        ],
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    console.log("[agents] fallback agent lookup", {
+      sessionUserId: String(user.id),
+      normalizedPhone: normalizedPhone || null,
+      normalizedEmail: normalizedEmail || null,
+      foundAgentProfileId: fallbackAgent?.id ?? null,
+      foundAgentStatus: fallbackAgent?.status ?? null,
+    });
+
+    if (fallbackAgent) {
+      return {
+        session,
+        userId: String(user.id),
+        agentStatus: fallbackAgent.status ?? null,
+      };
+    }
+  }
+
+  if (!user?.isAgent) return null;
   return {
     session,
     userId: String(user.id),

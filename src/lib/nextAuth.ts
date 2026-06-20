@@ -7,6 +7,7 @@ import bcrypt from "bcryptjs";
 import { getAllowedAuthOrigins, isAllowedAuthOrigin } from "@/lib/runtimeUrls";
 import { readVerifiedPhoneToken } from "@/lib/phoneOtpAuth";
 import { Prisma } from "@prisma/client";
+import { getKenyanPhoneVariants, normalizeKenyanPhone } from "@/lib/phone";
 
 type ExtendedToken = {
   email?: string;
@@ -40,6 +41,48 @@ const nextAuthOtpUserSelect = {
     },
   },
 } as const;
+
+async function resolveAgentProfileForAuth(args: {
+  userId?: string | null;
+  phone?: string | null;
+  email?: string | null;
+}) {
+  const normalizedPhone = normalizeKenyanPhone(args.phone || "");
+  const phoneVariants = normalizedPhone ? getKenyanPhoneVariants(normalizedPhone) : [];
+  const normalizedEmail = String(args.email || "").trim().toLowerCase();
+
+  const agentProfile = await prisma.agentProfile.findFirst({
+    where: {
+      OR: [
+        ...(args.userId ? [{ userId: args.userId }] : []),
+        ...(phoneVariants.length ? [{ phone: { in: phoneVariants } }] : []),
+        ...(normalizedPhone ? [{ user: { phone: normalizedPhone } }] : []),
+        ...(normalizedEmail
+          ? [
+              { email: { equals: normalizedEmail, mode: "insensitive" as const } },
+              { user: { email: { equals: normalizedEmail, mode: "insensitive" as const } } },
+            ]
+          : []),
+      ],
+    },
+    select: {
+      id: true,
+      status: true,
+      userId: true,
+    },
+  });
+
+  console.log("[nextAuth] phone-otp resolved agent", {
+    userId: args.userId ?? null,
+    normalizedPhone,
+    normalizedEmail: normalizedEmail || null,
+    agentProfileId: agentProfile?.id ?? null,
+    agentProfileUserId: agentProfile?.userId ?? null,
+    agentStatus: agentProfile?.status ?? null,
+  });
+
+  return agentProfile;
+}
 
 function isMissingColumnError(error: unknown) {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022";
@@ -113,6 +156,12 @@ export const authOptions = {
         });
         if (!resolved || !resolved.isActive) return null;
 
+        const resolvedAgent = await resolveAgentProfileForAuth({
+          userId: resolved.id,
+          phone: payload.channel === "phone" ? payload.identifier : resolved.phone,
+          email: payload.channel === "email" ? payload.identifier : resolved.email,
+        });
+
         return {
           id: resolved.id,
           email: resolved.email ?? undefined,
@@ -120,8 +169,8 @@ export const authOptions = {
           role: resolved.role,
           attendantCategory: resolved.attendantCategory ?? undefined,
           isActive: resolved.isActive,
-          isAgent: Boolean(resolved.agentProfile),
-          agentStatus: resolved.agentProfile?.status ?? null,
+          isAgent: Boolean(resolvedAgent ?? resolved.agentProfile),
+          agentStatus: resolvedAgent?.status ?? resolved.agentProfile?.status ?? null,
           phone: resolved.phone ?? undefined,
           lastLoginMethod: resolved.lastLoginMethod ?? "africastalking_otp",
         };
