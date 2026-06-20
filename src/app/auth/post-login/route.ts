@@ -16,7 +16,7 @@ export async function GET(req: Request) {
 
   if (!session) {
     const original = url.pathname + url.search + url.hash;
-    const loginUrl = new URL(shouldUseAgentLogin ? agentPath("/login", useRootAgentPaths) : '/attendant/login', url);
+    const loginUrl = new URL(shouldUseAgentLogin ? agentPath("/login") : '/attendant/login', url);
     loginUrl.searchParams.set('callbackUrl', original);
     return NextResponse.redirect(loginUrl);
   }

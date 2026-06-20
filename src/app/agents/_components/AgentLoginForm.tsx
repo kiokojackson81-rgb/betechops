@@ -100,7 +100,7 @@ export default function AgentLoginForm({ useRootPaths = false }: AgentLoginFormP
 
       <div className="rounded-[1.4rem] border border-[#7a0000]/10 bg-white px-4 py-4 text-sm text-slate-600 shadow-[0_12px_24px_rgba(15,23,42,0.04)]">
         <div className="font-semibold text-slate-800">New agent?</div>
-        <Link href={agentPath("/register", useRootPaths)} className="mt-1 inline-flex font-bold text-[#7a0000] hover:text-[#9a1010]">
+        <Link href={agentPath("/register")} className="mt-1 inline-flex font-bold text-[#7a0000] hover:text-[#9a1010]">
           Create your BETECH affiliate account
         </Link>
       </div>

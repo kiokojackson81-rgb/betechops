@@ -9,7 +9,6 @@ import {
   type AgentListingFilters,
   filterByManualPrice,
   filterByPrice,
-  getAgentCommissionValue,
   getBrandOptions,
   getPopularitySignalsByProduct,
   getWarrantyOptions,
@@ -165,8 +164,8 @@ export default async function AgentProductsPage({
   };
   const manualPriceRange = normalizePriceRange(filters.minPrice, filters.maxPrice);
 
-  const registerHref = agentPath("/register", useRootPaths);
-  const loginHref = agentPath("/login", useRootPaths);
+  const registerHref = agentPath("/register");
+  const loginHref = agentPath("/login");
   const dashboardHref = agentPath("/dashboard", useRootPaths);
   const commissionHref = agentPath("/withdrawals", useRootPaths);
   const agentDashboard = agentSession ? await getAgentDashboardData(agentSession.userId) : null;

@@ -11,10 +11,10 @@ type AgentProfilePageProps = {
 
 export default async function AgentProfilePage({ useRootPaths = false }: AgentProfilePageProps) {
   const agentSession = await requireAgentSession();
-  if (!agentSession) redirect(agentPath("/login", useRootPaths));
+  if (!agentSession) redirect(agentPath("/login"));
 
   const dashboard = await getAgentDashboardData(agentSession.userId);
-  if (!dashboard) redirect(agentPath("/register", useRootPaths));
+  if (!dashboard) redirect(agentPath("/register"));
 
   const profile = dashboard.profile;
   const location = [profile.city, profile.county, profile.country].filter(Boolean).join(", ") || "Not set";

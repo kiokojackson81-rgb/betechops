@@ -58,10 +58,10 @@ type AgentDashboardPageProps = {
 
 export default async function AgentDashboardPage({ useRootPaths = false }: AgentDashboardPageProps) {
   const agentSession = await requireAgentSession();
-  if (!agentSession) redirect(agentPath("/login", useRootPaths));
+  if (!agentSession) redirect(agentPath("/login"));
 
   const dashboard = await getAgentDashboardData(agentSession.userId);
-  if (!dashboard) redirect(agentPath("/register", useRootPaths));
+  if (!dashboard) redirect(agentPath("/register"));
   const shopProducts = await getShopProducts();
   const popularitySignals = await getPopularitySignalsByProduct(shopProducts);
   const opportunityProducts = sortAgentProductsBySignals(shopProducts, popularitySignals, "featured").slice(0, 10);

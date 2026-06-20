@@ -69,7 +69,7 @@ export default async function AgentRegisterPage({ useRootPaths = false }: AgentR
             </div>
           </Link>
           <Link
-            href={agentPath("/login", useRootPaths)}
+            href={agentPath("/login")}
             className="hidden rounded-2xl border border-[#7a0000]/12 bg-white px-4 py-3 text-sm font-semibold text-[#7a0000] shadow-[0_12px_24px_rgba(15,23,42,0.05)] transition hover:-translate-y-0.5 sm:inline-flex"
           >
             Sign In

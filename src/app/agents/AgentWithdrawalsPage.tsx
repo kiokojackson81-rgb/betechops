@@ -18,10 +18,10 @@ type AgentWithdrawalsPageProps = {
 
 export default async function AgentWithdrawalsPage({ useRootPaths = false }: AgentWithdrawalsPageProps) {
   const agentSession = await requireAgentSession();
-  if (!agentSession) redirect(agentPath("/login", useRootPaths));
+  if (!agentSession) redirect(agentPath("/login"));
 
   const dashboard = await getAgentDashboardData(agentSession.userId);
-  if (!dashboard) redirect(agentPath("/register", useRootPaths));
+  if (!dashboard) redirect(agentPath("/register"));
 
   const profile = dashboard.profile;
   const eligibleCommission = dashboard.commissions

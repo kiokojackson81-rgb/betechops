@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BadgeCheck, CircleDollarSign, CreditCard, Headphones, MapPin, Truck } from "lucide-react";
+import { BadgeCheck, CircleDollarSign, CreditCard, Headphones, Truck } from "lucide-react";
 import AgentCatalogueProductCard from "@/app/agents/_components/AgentCatalogueProductCard";
 import AgentProductDetailActions from "@/app/agents/_components/AgentProductDetailActions";
 import AgentWhatsAppFloat from "@/app/agents/_components/AgentWhatsAppFloat";
@@ -202,8 +202,8 @@ export default async function AgentProductDetailPage({
   const requiresApproval = productCommissionRequiresApproval(product);
   const commissionPercent =
     product.price > 0 && displayCommissionAmount > 0 ? Math.round((displayCommissionAmount / product.price) * 100) : 0;
-  const loginHref = agentPath("/login", useRootPaths);
-  const registerHref = agentPath("/register", useRootPaths);
+  const loginHref = agentPath("/login");
+  const registerHref = agentPath("/register");
   const dashboardHref = agentPath("/dashboard", useRootPaths);
   const commissionHref = agentPath("/withdrawals", useRootPaths);
   const supportItems = [
@@ -436,7 +436,7 @@ export default async function AgentProductDetailPage({
                   <AgentCatalogueProductCard
                     key={item.id}
                     product={item}
-                    primaryHref={agentPath("/login", useRootPaths)}
+                    primaryHref={agentPath("/login")}
                     primaryLabel="Open dashboard"
                     useRootPaths={useRootPaths}
                   />

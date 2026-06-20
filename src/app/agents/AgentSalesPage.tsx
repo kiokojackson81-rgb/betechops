@@ -29,7 +29,7 @@ type AgentSalesPageProps = {
 
 export default async function AgentSalesPage({ useRootPaths = false }: AgentSalesPageProps) {
   const agentSession = await requireAgentSession();
-  if (!agentSession) redirect(agentPath("/login", useRootPaths));
+  if (!agentSession) redirect(agentPath("/login"));
   if (String(agentSession.agentStatus || "").toLowerCase() !== "approved") {
     redirect(agentPath("/dashboard", useRootPaths));
   }
@@ -39,7 +39,7 @@ export default async function AgentSalesPage({ useRootPaths = false }: AgentSale
     getAgentSalesDashboardSummary(agentSession.userId),
   ]);
 
-  if (!dashboard) redirect(agentPath("/register", useRootPaths));
+  if (!dashboard) redirect(agentPath("/register"));
 
   const cards = [
     { label: "Total submitted sales", value: String(summary.totalSubmittedSales), note: "Every sale you have logged so far" },

@@ -68,7 +68,7 @@ export default function AgentPortalShell({
   stats,
 }: AgentPortalShellProps) {
   const pathname = usePathname() || "";
-  const loginPath = agentPath("/login", useRootPaths);
+  const loginPath = agentPath("/login");
   const navItems = [
     { href: agentPath("/dashboard", useRootPaths), label: "Dashboard", icon: Home },
     { href: agentPath("/sales", useRootPaths), label: "My Sales", icon: ClipboardList },

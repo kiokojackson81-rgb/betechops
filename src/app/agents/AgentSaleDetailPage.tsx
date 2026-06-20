@@ -20,7 +20,7 @@ type AgentSaleDetailPageProps = {
 
 export default async function AgentSaleDetailPage({ id, useRootPaths = false }: AgentSaleDetailPageProps) {
   const agentSession = await requireAgentSession();
-  if (!agentSession) redirect(agentPath("/login", useRootPaths));
+  if (!agentSession) redirect(agentPath("/login"));
   if (String(agentSession.agentStatus || "").toLowerCase() !== "approved") {
     redirect(agentPath("/dashboard", useRootPaths));
   }
@@ -30,7 +30,7 @@ export default async function AgentSaleDetailPage({ id, useRootPaths = false }: 
     getAgentSaleById(agentSession.userId, id),
   ]);
 
-  if (!dashboard) redirect(agentPath("/register", useRootPaths));
+  if (!dashboard) redirect(agentPath("/register"));
   if (!sale) notFound();
 
   const status = getAgentSaleStatusMeta(sale.status);

@@ -70,7 +70,7 @@ export default function AgentRegisterForm({ useRootPaths = false }: AgentRegiste
       window.location.href = signInRes.url;
       return;
     }
-    window.location.href = agentPath("/login", useRootPaths);
+    window.location.href = agentPath("/login");
   }
 
   return (
@@ -214,7 +214,7 @@ export default function AgentRegisterForm({ useRootPaths = false }: AgentRegiste
 
       <div className="rounded-[1.4rem] border border-[#7a0000]/10 bg-white px-4 py-4 text-sm text-slate-600 shadow-[0_12px_24px_rgba(15,23,42,0.04)]">
         <div className="font-semibold text-slate-800">Already have an account?</div>
-        <Link href={agentPath("/login", useRootPaths)} className="mt-1 inline-flex font-bold text-[#7a0000] hover:text-[#9a1010]">
+        <Link href={agentPath("/login")} className="mt-1 inline-flex font-bold text-[#7a0000] hover:text-[#9a1010]">
           Sign in
         </Link>
       </div>

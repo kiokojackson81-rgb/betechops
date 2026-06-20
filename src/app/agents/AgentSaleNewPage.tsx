@@ -12,14 +12,14 @@ type AgentSaleNewPageProps = {
 export default async function AgentSaleNewPage({ useRootPaths = false }: AgentSaleNewPageProps) {
   const agentSession = await requireAgentSession();
   if (!agentSession) {
-    redirect(agentPath("/login", useRootPaths));
+    redirect(agentPath("/login"));
   }
   if (String(agentSession.agentStatus || "").toLowerCase() !== "approved") {
     redirect(agentPath("/dashboard", useRootPaths));
   }
 
   const dashboard = await getAgentDashboardData(agentSession.userId);
-  if (!dashboard) redirect(agentPath("/register", useRootPaths));
+  if (!dashboard) redirect(agentPath("/register"));
 
   return (
     <AgentPortalShell
