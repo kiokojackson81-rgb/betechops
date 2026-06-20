@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { getServerSession } from "next-auth/next";
+import { getToken } from "next-auth/jwt";
 import type { Session } from "next-auth";
 import type { Role } from "@prisma/client";
+import { headers } from "next/headers";
 import { isCategoryAllowed, normalizeCategory } from "@/lib/attendants/categoryCompat";
 import { authOptions } from "@/lib/nextAuth";
 import { prisma } from "@/lib/prisma";
@@ -26,10 +29,70 @@ export async function auth(): Promise<Session | null> {
   // null so callers can handle unauthenticated flows in tests.
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return await getServerSession(authOptions as any);
+    const session = (await getServerSession(authOptions as any)) as Session | null;
+    if (session) return session;
   } catch (err) {
-    return null;
+    console.error("[auth] getServerSession failed", err);
   }
+
+  try {
+    const headerStore = await headers();
+    const token = await getToken({
+      req: {
+        headers: {
+          cookie: headerStore.get("cookie") ?? "",
+          host: headerStore.get("host") ?? "",
+          "x-forwarded-proto": headerStore.get("x-forwarded-proto") ?? "https",
+        },
+      } as unknown as NextRequest,
+      secret: authOptions.secret,
+      secureCookie: process.env.NODE_ENV === "production",
+    });
+
+    if (!token?.sub && !token?.email) return null;
+
+    const existing = await prisma.user.findFirst({
+      where: token.sub ? { id: token.sub } : { email: String(token.email).toLowerCase() },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        role: true,
+        attendantCategory: true,
+        isActive: true,
+        lastLoginMethod: true,
+        agentProfile: { select: { id: true, status: true } },
+      },
+    });
+
+    if (!existing || !existing.isActive) return null;
+
+    const fallbackSession = {
+      user: {
+        id: existing.id,
+        name: existing.name,
+        email: existing.email,
+        phone: existing.phone,
+        role: existing.role,
+        attendantCategory: existing.attendantCategory,
+        isActive: existing.isActive,
+        isAgent: Boolean(existing.agentProfile),
+        agentStatus: existing.agentProfile?.status ?? null,
+        lastLoginMethod: existing.lastLoginMethod ?? null,
+      },
+      expires:
+        typeof token.exp === "number"
+          ? new Date(token.exp * 1000).toISOString()
+          : new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    } as Session;
+
+    return fallbackSession;
+  } catch (err) {
+    console.error("[auth] JWT fallback failed", err);
+  }
+
+  return null;
 }
 
 // Simple auth helper for audit logging (placeholder until we wire real audit/session data)

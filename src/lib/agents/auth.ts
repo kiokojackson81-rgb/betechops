@@ -7,6 +7,12 @@ export function isApprovedAgentStatus(status: string | null | undefined) {
 export async function requireAgentSession() {
   const session = await auth();
   const user = session?.user as Record<string, unknown> | undefined;
+  console.log("[agents] requireAgentSession", {
+    hasSession: Boolean(session),
+    userId: user?.id ?? null,
+    isAgent: Boolean(user?.isAgent),
+    agentStatus: typeof user?.agentStatus === "string" ? user.agentStatus : null,
+  });
   if (!session || !user?.id || !user?.isAgent) return null;
   return {
     session,

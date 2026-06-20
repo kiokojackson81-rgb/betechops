@@ -13,6 +13,13 @@ export async function GET(req: Request) {
     isAgentsHost(host) ||
     isAgentRoutePath(rawCallback);
   const useRootAgentPaths = isAgentsHost(host);
+  console.log("[post-login] session check", {
+    host,
+    hasSession: Boolean(session),
+    userId: (session?.user as { id?: string } | undefined)?.id ?? null,
+    isAgent: Boolean((session?.user as { isAgent?: boolean } | undefined)?.isAgent),
+    rawCallback,
+  });
   const normalizeAgentTarget = (value: string) => {
     if (!useRootAgentPaths) return value;
     if (value === "/agents") return "/";
