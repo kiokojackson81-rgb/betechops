@@ -35,6 +35,19 @@ type VerifyResponse = {
   };
 };
 
+function normalizeAgentCallbackForHost(target: string, isAgentsDomainFlow: boolean) {
+  if (!isAgentsDomainFlow) return target;
+  if (target === "/agents") return "/";
+  if (target.startsWith("/agents/")) return target.slice("/agents".length) || "/";
+  return target;
+}
+
+function getResolvedPostLoginUrlForFlow(target: string, isAgentsDomainFlow: boolean, isAgentFlow: boolean) {
+  const normalizedTarget = normalizeAgentCallbackForHost(target || "/account", isAgentsDomainFlow);
+  if (!isAgentFlow) return normalizedTarget;
+  return `/auth/post-login?callbackUrl=${encodeURIComponent(normalizedTarget)}`;
+}
+
 export default function PhoneLoginPage() {
   const { status } = useSession();
   const [isAgentsDomainFlow, setIsAgentsDomainFlow] = useState(false);
@@ -70,13 +83,6 @@ export default function PhoneLoginPage() {
     callbackUrl.startsWith("/agents/") ||
     (isAgentsDomainFlow && callbackUrl.startsWith("/"));
 
-  function normalizeAgentCallback(target: string) {
-    if (!isAgentsDomainFlow) return target;
-    if (target === "/agents") return "/";
-    if (target.startsWith("/agents/")) return target.slice("/agents".length) || "/";
-    return target;
-  }
-
   useEffect(() => {
     if (!cooldown) return;
     const timer = window.setTimeout(() => setCooldown((value) => Math.max(0, value - 1)), 1000);
@@ -87,8 +93,7 @@ export default function PhoneLoginPage() {
     setIsAgentsDomainFlow(isAgentsHost(window.location.host));
     const params = new URLSearchParams(window.location.search);
     const requestedCallback = params.get("callbackUrl") || "/account";
-    setCallbackUrl(normalizeAgentCallback(requestedCallback));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setCallbackUrl(normalizeAgentCallbackForHost(requestedCallback, isAgentsHost(window.location.host)));
   }, []);
 
   useEffect(() => {
@@ -96,8 +101,8 @@ export default function PhoneLoginPage() {
     if (step === "complete-profile") return;
     const target = postAuthRedirect || (step === "identify" ? callbackUrl || "/account" : null);
     if (!target) return;
-    window.location.replace(target);
-  }, [callbackUrl, postAuthRedirect, status, step]);
+    window.location.replace(getResolvedPostLoginUrlForFlow(target, isAgentsDomainFlow, isAgentFlow));
+  }, [callbackUrl, postAuthRedirect, status, step, isAgentFlow, isAgentsDomainFlow]);
 
   if (status === "authenticated" && step !== "complete-profile") {
     return null;
@@ -220,7 +225,7 @@ export default function PhoneLoginPage() {
         throw new Error(payload?.error || "OTP verification failed.");
       }
 
-      const target = normalizeAgentCallback(payload.redirectTo || callbackUrl);
+      const target = normalizeAgentCallbackForHost(payload.redirectTo || callbackUrl, isAgentsDomainFlow);
       setPostAuthRedirect(target);
       setVerificationToken(payload.verificationToken);
 
@@ -251,7 +256,7 @@ export default function PhoneLoginPage() {
         return;
       }
 
-      window.location.href = signInResult.url || target;
+      window.location.href = getResolvedPostLoginUrlForFlow(signInResult.url || target, isAgentsDomainFlow, isAgentFlow);
     } catch (verifyError) {
       setError(verifyError instanceof Error ? verifyError.message : "Invalid OTP.");
     } finally {
@@ -284,7 +289,7 @@ export default function PhoneLoginPage() {
         throw new Error(payload?.error || "Unable to save your profile.");
       }
 
-      const target = normalizeAgentCallback(postAuthRedirect || callbackUrl || "/account");
+      const target = normalizeAgentCallbackForHost(postAuthRedirect || callbackUrl || "/account", isAgentsDomainFlow);
       if (!verificationToken) {
         window.location.href = target;
         return;
@@ -300,7 +305,7 @@ export default function PhoneLoginPage() {
         throw new Error(signInResult?.error || "Unable to create your session.");
       }
 
-      window.location.href = signInResult.url || target;
+      window.location.href = getResolvedPostLoginUrlForFlow(signInResult.url || target, isAgentsDomainFlow, isAgentFlow);
     } catch (profileError) {
       setError(profileError instanceof Error ? profileError.message : "Unable to save your profile.");
     } finally {
