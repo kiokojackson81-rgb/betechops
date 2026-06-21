@@ -81,6 +81,14 @@ function formatPriceInput(value?: string) {
 }
 
 function formatPriceRangeLabel(minPrice?: number, maxPrice?: number) {
+  if (
+    typeof minPrice === "number" &&
+    typeof maxPrice === "number" &&
+    minPrice <= 0 &&
+    maxPrice <= 0
+  ) {
+    return "";
+  }
   const money = (value: number) => `Ksh ${new Intl.NumberFormat("en-KE", { maximumFractionDigits: 0 }).format(value)}`;
   if (typeof minPrice === "number" && typeof maxPrice === "number") {
     return `${money(minPrice)} - ${money(maxPrice)}`;

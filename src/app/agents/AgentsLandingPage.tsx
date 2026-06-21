@@ -1,260 +1,409 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, BadgeCheck, CircleDollarSign, Headphones, MapPin, PanelsTopLeft, ShieldCheck, Users } from "lucide-react";
+import {
+  BadgeCheck,
+  CircleDollarSign,
+  Headphones,
+  MapPinned,
+  PanelsTopLeft,
+  ShieldCheck,
+  Smartphone,
+} from "lucide-react";
 import AgentCatalogueProductCard from "@/app/agents/_components/AgentCatalogueProductCard";
 import AgentStorefrontAuthActions from "@/app/agents/_components/AgentStorefrontAuthActions";
 import AgentWhatsAppFloat from "@/app/agents/_components/AgentWhatsAppFloat";
-import { getAgentCommissionValue, getPopularitySignalsByProduct, sortAgentProductsBySignals } from "@/app/agents/agentCatalogue";
+import {
+  getAgentCommissionValue,
+  getPopularitySignalsByProduct,
+  sortAgentProductsBySignals,
+} from "@/app/agents/agentCatalogue";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
-import { buildShopCategories, type ShopProduct } from "@/app/shop/shopData";
+import { type ShopProduct } from "@/app/shop/shopData";
 import { getShopProducts } from "@/app/shop/shopApi";
 import { auth } from "@/lib/auth";
-import { getShopImageOverrides } from "@/lib/shopImageOverrides";
 import { agentPath } from "@/lib/agents/host";
 
 type AgentsLandingPageProps = {
   useRootPaths?: boolean;
 };
 
-function slugify(value: string) {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-}
+const productHighlights = [
+  {
+    title: "Earn up to Ksh 57,000",
+    copy: "SRNE 20KW Solar System",
+    tone: "gold",
+  },
+  {
+    title: "Track referrals in real time",
+    copy: "Follow every order from submission to payout",
+    tone: "maroon",
+  },
+  {
+    title: "Withdraw commission through M-Pesa",
+    copy: "Fast payout flow after completed sales",
+    tone: "gold",
+  },
+  {
+    title: "Nationwide delivery & installation",
+    copy: "Betech handles fulfillment across Kenya",
+    tone: "maroon",
+  },
+] as const;
 
-function getProductsForCategory(
-  products: ShopProduct[],
-  categorySlugs: string[],
-  limit = 4,
-) {
-  const allowed = new Set(categorySlugs);
-  return products.filter((product) => allowed.has(slugify(product.category))).slice(0, limit);
+const trustPoints = [
+  { label: "Nationwide delivery", icon: MapPinned },
+  { label: "Real-time commission tracking", icon: PanelsTopLeft },
+  { label: "M-Pesa payouts", icon: Smartphone },
+  { label: "Installation support", icon: BadgeCheck },
+] as const;
+
+const howItWorksSteps = [
+  {
+    title: "Submit order & earn",
+    copy: "Capture customer details from any live product and send the order straight into the Betech workflow.",
+    icon: CircleDollarSign,
+  },
+  {
+    title: "Refer now",
+    copy: "Share the tracked public product link through WhatsApp or SMS without exposing the internal commission flow.",
+    icon: Smartphone,
+  },
+  {
+    title: "Track completion",
+    copy: "Follow delivery, payment, and final commission status from the agent dashboard after the sale closes.",
+    icon: PanelsTopLeft,
+  },
+] as const;
+
+const faqItems = [
+  {
+    question: "How do I earn commission?",
+    answer:
+      "You earn after a referred or submitted customer order is successfully completed and payment is confirmed by Betech.",
+  },
+  {
+    question: "Can I refer without logging in first?",
+    answer:
+      "If you are not logged in, the system first prompts OTP sign-in so the referral or submitted order is linked back to your agent profile.",
+  },
+  {
+    question: "Do customers see the agent commission?",
+    answer:
+      "No. Customers receive the public Betech product link, while referral attribution stays attached behind the scenes.",
+  },
+] as const;
+
+function getSectionProducts(products: ShopProduct[], keywords: string[], limit = 4) {
+  const lowerKeywords = keywords.map((keyword) => keyword.toLowerCase());
+  return products
+    .filter((product) => {
+      const haystack = [
+        product.category,
+        product.subcategory,
+        product.name,
+        product.brand,
+        ...product.tags,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return lowerKeywords.some((keyword) => haystack.includes(keyword));
+    })
+    .slice(0, limit);
 }
 
 export default async function AgentsLandingPage({
   useRootPaths = false,
 }: AgentsLandingPageProps) {
-  const [products, imageOverrides, session] = await Promise.all([
+  const [products, session] = await Promise.all([
     getShopProducts(),
-    getShopImageOverrides(),
     auth().catch(() => null),
   ]);
-  const isLoggedInAgent = Boolean((session?.user as { isAgent?: boolean } | undefined)?.isAgent);
+
+  const isLoggedInAgent = Boolean(
+    (session?.user as { isAgent?: boolean } | undefined)?.isAgent,
+  );
 
   const popularitySignals = await getPopularitySignalsByProduct(products);
-  const sortedProducts = sortAgentProductsBySignals(products, popularitySignals, "featured");
-  const categories = buildShopCategories(imageOverrides.categoryImages);
+  const sortedProducts = sortAgentProductsBySignals(
+    products,
+    popularitySignals,
+    "featured",
+  );
 
-  const featuredCategories = categories.slice(0, 8);
   const featuredProducts = sortedProducts.slice(0, 8);
-  const solarKitProducts = getProductsForCategory(sortedProducts, ["solar-full-kits"]);
-  const batteryProducts = getProductsForCategory(sortedProducts, ["solar-batteries", "lithium-batteries"]);
-  const inverterProducts = getProductsForCategory(sortedProducts, ["solar-inverters"]);
-  const pumpProducts = getProductsForCategory(sortedProducts, ["solar-water-pumps"]);
+  const solarKitProducts = getSectionProducts(sortedProducts, ["solar full kits"], 4);
+  const batteryProducts = getSectionProducts(
+    sortedProducts,
+    ["solar batteries", "lithium batteries"],
+    4,
+  );
+  const pumpProducts = getSectionProducts(sortedProducts, ["solar water pumps"], 4);
 
-  const otpHref = `/login/phone?callbackUrl=${encodeURIComponent(agentPath("/dashboard", useRootPaths))}`;
+  const otpHref = `/login/phone?callbackUrl=${encodeURIComponent(
+    agentPath("/dashboard", useRootPaths),
+  )}`;
   const dashboardHref = agentPath("/dashboard", useRootPaths);
   const homeHref = agentPath("/", useRootPaths);
   const productsHref = agentPath("/products", useRootPaths);
-  const totalCommissionVisible = featuredProducts.filter((product) => getAgentCommissionValue(product) > 0).length;
-
-  const trustItems = [
-    { title: "Same live catalogue", icon: PanelsTopLeft },
-    { title: "Commission visible", icon: CircleDollarSign },
-    { title: "Trusted Betech brand", icon: ShieldCheck },
-    { title: "Customer support handled", icon: Headphones },
-  ] as const;
-
-  const quickReasons = [
-    "Share the same live products customers see on betech.co.ke.",
-    "Track referrals and commissions from your agent dashboard.",
-    "Let Betech handle fulfilment, delivery coordination, and support.",
-  ] as const;
+  const totalCommissionVisible = featuredProducts.filter(
+    (product) => getAgentCommissionValue(product) > 0,
+  ).length;
 
   return (
-    <div className={`${shopStyles.page} pb-32`}>
-      <section className={shopStyles.headerGlass}>
-        <div className={`${shopStyles.shell} py-4`}>
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <Link href={agentPath("/", useRootPaths)} className="flex items-center gap-4">
-                <div className="relative h-20 w-20 overflow-hidden rounded-[24px] border border-[#7a0000]/10 bg-white shadow-[0_16px_38px_rgba(15,23,42,0.08)] sm:h-24 sm:w-24">
-                  <Image
-                    src="/agents/betech-logo-crop.png"
-                    alt="Betech Solar Solutions"
-                    fill
-                    sizes="96px"
-                    className="object-contain p-2.5"
-                  />
-                </div>
-                <div>
-                  <div className="text-[11px] font-black uppercase tracking-[0.22em] text-[#7a0000]">
-                    Betech Agents
-                  </div>
-                  <div className="mt-1 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
-                    Agent Storefront
-                  </div>
-                  <p className="mt-1 text-sm text-slate-600 sm:text-[15px]">
-                    Refer from the same live Betech catalogue and earn commission after completed sales.
-                  </p>
-                </div>
-              </Link>
+    <div className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(242,178,15,0.20),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(122,0,0,0.12),transparent_26%),linear-gradient(180deg,#fffdf9_0%,#fff5ea_100%)] px-4 py-4 text-slate-950 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+      <div className="mx-auto max-w-7xl">
+        <header className="mb-5 flex flex-wrap items-center justify-between gap-4 sm:mb-6">
+          <Link href={agentPath("/", useRootPaths)} className="flex items-center gap-3">
+            <div className="overflow-hidden rounded-2xl border border-[#7a0000]/10 bg-white px-2 py-1 shadow-[0_14px_28px_rgba(122,0,0,0.10)]">
+              <Image
+                src="/agents/betech-logo-crop.png"
+                alt="Betech Solar Solutions"
+                width={112}
+                height={84}
+                className="h-12 w-auto object-contain"
+              />
+            </div>
+            <div className="hidden leading-tight sm:block">
+              <div className="text-sm font-black uppercase tracking-[0.18em] text-[#7a0000]">
+                Betech Agents
+              </div>
+              <div className="text-xs text-slate-500">Solar sales network</div>
+            </div>
+          </Link>
 
-              <div className="flex flex-wrap gap-2.5">
-                <Link href={productsHref} className={shopStyles.secondaryButton}>
+          <nav className="hidden items-center gap-6 text-sm font-semibold text-slate-700 lg:flex">
+            <a href="#home" className="transition hover:text-[#7a0000]">Home</a>
+            <a href="#how-it-works" className="transition hover:text-[#7a0000]">How It Works</a>
+            <a href="#benefits" className="transition hover:text-[#7a0000]">Benefits</a>
+            <a href="#products" className="transition hover:text-[#7a0000]">Products</a>
+            <a href="#earnings" className="transition hover:text-[#7a0000]">Earnings</a>
+            <a href="#faqs" className="transition hover:text-[#7a0000]">FAQs</a>
+            <a href="#contact" className="transition hover:text-[#7a0000]">Contact</a>
+          </nav>
+
+          <AgentStorefrontAuthActions
+            dashboardHref={dashboardHref}
+            loginHref={otpHref}
+            homeHref={homeHref}
+            loggedIn={isLoggedInAgent}
+          />
+        </header>
+
+        <section
+          id="home"
+          className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr] lg:items-stretch lg:gap-8"
+        >
+          <div className="space-y-6">
+            <div className="rounded-[2rem] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#fff9ef_0%,#ffffff_100%)] p-5 shadow-[0_28px_70px_rgba(122,0,0,0.10)] sm:p-7">
+              <div className="inline-flex rounded-full border border-[#f2b20f]/30 bg-[#fff3d8] px-4 py-2 text-xs font-black uppercase tracking-[0.24em] text-[#7a0000]">
+                BETECH AGENTS
+              </div>
+              <h1 className="mt-5 max-w-2xl text-3xl font-black leading-tight text-slate-950 sm:text-4xl md:text-5xl">
+                Earn commission by referring solar customers across Kenya.
+              </h1>
+              <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg sm:leading-8">
+                Share Betech Solar products, submit customer orders, and earn 6% commission after successful delivery and payment.
+              </p>
+
+              <div className="mt-6 flex flex-wrap gap-3">
+                <Link href={productsHref} className={shopStyles.primaryButton}>
                   Browse products
                 </Link>
-                <AgentStorefrontAuthActions
-                  dashboardHref={dashboardHref}
-                  loginHref={otpHref}
-                  homeHref={homeHref}
-                  loggedIn={isLoggedInAgent}
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {featuredCategories.map((category) => (
-                <Link
-                  key={category.slug}
-                  href={`${productsHref}?category=${encodeURIComponent(category.slug)}`}
-                  className="shrink-0 rounded-full border border-[#7a0000]/10 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-[#7a0000]/25 hover:text-[#7a0000]"
-                >
-                  {category.title}
+                <Link href={dashboardHref} className={shopStyles.secondaryButton}>
+                  Track commissions
                 </Link>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+              </div>
 
-      <section className="py-5 sm:py-6">
-        <div className={shopStyles.shell}>
-          <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-            <aside className={`${shopStyles.lightCard} p-4 sm:p-5`}>
-              <div className={shopStyles.sectionEyebrow}>Categories</div>
-              <div className="mt-4 grid gap-2">
-                {featuredCategories.map((category) => (
-                  <Link
-                    key={category.slug}
-                    href={`${productsHref}?category=${encodeURIComponent(category.slug)}`}
-                    className="flex items-center justify-between rounded-[18px] border border-[#7a0000]/8 bg-[#fcfaf7] px-4 py-3 text-sm font-semibold text-slate-800 transition hover:border-[#7a0000]/18 hover:bg-white hover:text-[#7a0000]"
+              <div className="mt-6 hidden gap-3 sm:mt-8 sm:gap-4 md:grid md:grid-cols-2">
+                {productHighlights.map((item) => (
+                  <div
+                    key={item.title}
+                    className={`rounded-[1.6rem] border p-4 shadow-[0_16px_34px_rgba(15,23,42,0.06)] transition duration-300 hover:-translate-y-1 sm:p-5 ${
+                      item.tone === "gold"
+                        ? "border-[#f2b20f]/25 bg-[linear-gradient(180deg,#fff5de_0%,#fffdfa_100%)]"
+                        : "border-[#7a0000]/12 bg-[linear-gradient(180deg,#fff8f5_0%,#ffffff_100%)]"
+                    }`}
                   >
-                    <span>{category.title}</span>
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
+                    <div
+                      className={`inline-flex rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.18em] ${
+                        item.tone === "gold"
+                          ? "bg-[#f2b20f] text-slate-950"
+                          : "bg-[#7a0000] text-white"
+                      }`}
+                    >
+                      Opportunity
+                    </div>
+                    <div className="mt-4 text-xl font-black text-slate-950 sm:text-2xl">
+                      {item.title}
+                    </div>
+                    <div className="mt-2 text-sm leading-7 text-slate-600">{item.copy}</div>
+                  </div>
                 ))}
               </div>
 
-              <div className="mt-5 rounded-[22px] border border-[#f2b20f]/20 bg-[#fff8e8] p-4">
-                <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">
-                  Why agents use this
-                </div>
-                <div className="mt-3 grid gap-2.5 text-sm leading-6 text-slate-700">
-                  {quickReasons.map((reason) => (
-                    <div key={reason} className="flex gap-2.5">
-                      <BadgeCheck className="mt-1 h-4 w-4 shrink-0 text-[#7a0000]" />
-                      <span>{reason}</span>
+              <div className="mt-6 grid grid-cols-2 gap-3 sm:mt-8 sm:gap-4 sm:grid-cols-4">
+                {trustPoints.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <div
+                      key={item.label}
+                      className="rounded-[1.4rem] border border-[#7a0000]/8 bg-white px-4 py-4 text-center shadow-[0_12px_26px_rgba(15,23,42,0.05)]"
+                    >
+                      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#fff3d8] text-[#7a0000]">
+                        <Icon className="h-6 w-6" />
+                      </div>
+                      <div className="mt-3 text-sm font-semibold text-slate-700">
+                        {item.label}
+                      </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-            </aside>
-
-            <div className={`${shopStyles.softCard} overflow-hidden p-5 sm:p-6 lg:p-7`}>
-              <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_310px] xl:items-center">
-                <div>
-                  <div className={shopStyles.sectionEyebrow}>Earn commission with the live Betech catalogue</div>
-                  <h1 className="mt-4 max-w-4xl text-4xl font-black tracking-tight text-slate-950 sm:text-5xl lg:text-[3.5rem] lg:leading-[1.02]">
-                    Share solar products across Kenya and manage referrals from one dashboard.
-                  </h1>
-                  <p className="mt-4 max-w-3xl text-base leading-7 text-slate-600">
-                    The agent website now follows the same cleaner catalogue structure as betech.co.ke so categories, products, and customer-facing pricing feel familiar and easy to pitch.
-                  </p>
-
-                  <div className="mt-5 flex flex-wrap gap-3">
-                    <Link href={otpHref} className={shopStyles.primaryButton}>
-                      Continue with OTP
-                    </Link>
-                    <Link href={dashboardHref} className={shopStyles.secondaryButton}>
-                      Go to dashboard
-                    </Link>
-                    <Link href={productsHref} className={shopStyles.goldButton}>
-                      Open full catalogue
-                    </Link>
-                  </div>
-
-                  <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    {trustItems.map((item) => {
-                      const Icon = item.icon;
-                      return (
-                        <div
-                          key={item.title}
-                          className="flex items-center gap-2 rounded-[18px] border border-[#7a0000]/8 bg-white px-3 py-3"
-                        >
-                          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#fff3d8] text-[#7a0000]">
-                            <Icon className="h-4 w-4" />
-                          </span>
-                          <span className="text-sm font-bold text-slate-800">{item.title}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-                  <div className="rounded-[24px] border border-[#7a0000]/10 bg-white p-4 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
-                    <div className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000]">
-                      Live products
-                    </div>
-                    <div className="mt-2 text-3xl font-black tracking-tight text-slate-950">
-                      {sortedProducts.length}
-                    </div>
-                    <p className="mt-1 text-sm text-slate-600">Same products customers browse on the main shop.</p>
-                  </div>
-                  <div className="rounded-[24px] border border-[#7a0000]/10 bg-white p-4 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
-                    <div className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000]">
-                      Categories
-                    </div>
-                    <div className="mt-2 text-3xl font-black tracking-tight text-slate-950">
-                      {featuredCategories.length}
-                    </div>
-                    <p className="mt-1 text-sm text-slate-600">Fast access to the most referred solar categories.</p>
-                  </div>
-                  <div className="rounded-[24px] border border-[#f2b20f]/20 bg-[#fff8e8] p-4 shadow-[0_18px_45px_rgba(242,178,15,0.12)]">
-                    <div className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000]">
-                      Commission visible
-                    </div>
-                    <div className="mt-2 text-3xl font-black tracking-tight text-slate-950">
-                      {totalCommissionVisible}
-                    </div>
-                    <p className="mt-1 text-sm text-slate-600">Featured products already showing earning visibility.</p>
-                  </div>
-                </div>
+                  );
+                })}
               </div>
             </div>
           </div>
-        </div>
-      </section>
 
-      <section className="py-1 sm:py-2">
-        <div className={shopStyles.shell}>
-          <div className={`${shopStyles.lightCard} p-4 sm:p-5`}>
-            <div className="flex items-center justify-between gap-3">
+          <div className="space-y-6">
+            <div className="rounded-[2rem] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#fff9ef_0%,#ffffff_100%)] p-5 shadow-[0_32px_80px_rgba(122,0,0,0.12)] sm:p-8">
+              <div className="inline-flex rounded-full bg-[#fff3d8] px-4 py-2 text-xs font-black uppercase tracking-[0.22em] text-[#7a0000]">
+                Agent portal
+              </div>
+              <h2 className="mt-5 text-3xl font-black leading-tight sm:text-4xl">
+                Submit real customer orders and track referrals from one dashboard.
+              </h2>
+              <p className="mt-4 text-base leading-8 text-slate-600">
+                Existing agents continue with OTP and go straight to the dashboard. New agents can sign in with phone or email OTP and complete their profile without passwords.
+              </p>
+
+              <div className="mt-8 grid gap-4 sm:grid-cols-3">
+                <div className="rounded-[1.6rem] border border-[#7a0000]/10 bg-white px-4 py-4 shadow-[0_12px_26px_rgba(15,23,42,0.05)]">
+                  <div className="text-xs font-black uppercase tracking-[0.16em] text-[#7a0000]">
+                    Live products
+                  </div>
+                  <div className="mt-2 text-3xl font-black text-slate-950">
+                    {sortedProducts.length}
+                  </div>
+                </div>
+                <div className="rounded-[1.6rem] border border-[#7a0000]/10 bg-white px-4 py-4 shadow-[0_12px_26px_rgba(15,23,42,0.05)]">
+                  <div className="text-xs font-black uppercase tracking-[0.16em] text-[#7a0000]">
+                    Featured products
+                  </div>
+                  <div className="mt-2 text-3xl font-black text-slate-950">
+                    {featuredProducts.length}
+                  </div>
+                </div>
+                <div className="rounded-[1.6rem] border border-[#f2b20f]/20 bg-[#fff8e8] px-4 py-4 shadow-[0_12px_26px_rgba(242,178,15,0.10)]">
+                  <div className="text-xs font-black uppercase tracking-[0.16em] text-[#7a0000]">
+                    Commission visible
+                  </div>
+                  <div className="mt-2 text-3xl font-black text-slate-950">
+                    {totalCommissionVisible}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-[2rem] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#7a0000_0%,#4d0000_100%)] p-5 text-white shadow-[0_30px_70px_rgba(122,0,0,0.18)] sm:p-6">
+              <div className="inline-flex rounded-full bg-white/10 px-4 py-2 text-xs font-black uppercase tracking-[0.22em] text-[#ffd761]">
+                Why agents stay
+              </div>
+              <h2 className="mt-5 text-2xl font-black leading-tight sm:text-3xl">
+                Betech handles fulfilment while you focus on closing customers.
+              </h2>
+              <p className="mt-4 text-base leading-8 text-white/75">
+                Refer products, submit paid orders, and let the Betech team manage logistics, support, and post-sale follow-up.
+              </p>
+              <div className="mt-8 space-y-4">
+                {[
+                  "Premium solar products customers already need",
+                  "Warm leads from homes, farms, and businesses",
+                  "Fast M-Pesa withdrawals after completed sales",
+                ].map((line) => (
+                  <div
+                    key={line}
+                    className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/6 px-4 py-4"
+                  >
+                    <BadgeCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#ffd761]" />
+                    <div className="text-sm leading-7 text-white/85">{line}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="how-it-works" className="py-8 sm:py-10">
+          <div className="rounded-[2rem] border border-[#7a0000]/10 bg-white p-5 shadow-[0_24px_50px_rgba(15,23,42,0.06)] sm:p-7">
+            <div className="inline-flex rounded-full border border-[#f2b20f]/30 bg-[#fff3d8] px-4 py-2 text-xs font-black uppercase tracking-[0.24em] text-[#7a0000]">
+              How It Works
+            </div>
+            <h2 className="mt-5 text-3xl font-black tracking-tight text-slate-950">
+              Simple flow from product sharing to commission payout
+            </h2>
+            <div className="mt-6 grid gap-4 md:grid-cols-3">
+              {howItWorksSteps.map((step) => {
+                const Icon = step.icon;
+                return (
+                  <div
+                    key={step.title}
+                    className="rounded-[1.6rem] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#fff9ef_0%,#ffffff_100%)] p-5 shadow-[0_16px_34px_rgba(15,23,42,0.06)]"
+                  >
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#fff3d8] text-[#7a0000]">
+                      <Icon className="h-6 w-6" />
+                    </div>
+                    <h3 className="mt-4 text-xl font-black text-slate-950">{step.title}</h3>
+                    <p className="mt-2 text-sm leading-7 text-slate-600">{step.copy}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        <section id="benefits" className="py-2 sm:py-4">
+          <div className="grid gap-5 md:grid-cols-3">
+            <div className="rounded-[2rem] border border-[#7a0000]/10 bg-white p-5 shadow-[0_24px_50px_rgba(15,23,42,0.06)]">
+              <ShieldCheck className="h-8 w-8 text-[#7a0000]" />
+              <h3 className="mt-4 text-2xl font-black text-slate-950">Trusted Betech brand</h3>
+              <p className="mt-3 text-sm leading-7 text-slate-600">
+                Sell against a recognised solar brand with products customers already see on betech.co.ke.
+              </p>
+            </div>
+            <div className="rounded-[2rem] border border-[#7a0000]/10 bg-white p-5 shadow-[0_24px_50px_rgba(15,23,42,0.06)]">
+              <CircleDollarSign className="h-8 w-8 text-[#7a0000]" />
+              <h3 className="mt-4 text-2xl font-black text-slate-950">Clear commission visibility</h3>
+              <p className="mt-3 text-sm leading-7 text-slate-600">
+                Every product card shows earnings potential so you can pitch accurately and prioritize high-value referrals.
+              </p>
+            </div>
+            <div className="rounded-[2rem] border border-[#7a0000]/10 bg-white p-5 shadow-[0_24px_50px_rgba(15,23,42,0.06)]">
+              <Headphones className="h-8 w-8 text-[#7a0000]" />
+              <h3 className="mt-4 text-2xl font-black text-slate-950">Support handled centrally</h3>
+              <p className="mt-3 text-sm leading-7 text-slate-600">
+                Customer support, dispatch, installation, and payment confirmation remain inside the Betech operations flow.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section id="products" className="py-8 sm:py-10">
+          <div className="rounded-[2rem] border border-[#7a0000]/10 bg-white p-5 shadow-[0_24px_50px_rgba(15,23,42,0.06)] sm:p-7">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <div className={shopStyles.sectionEyebrow}>Popular right now</div>
-                <h2 className="mt-3 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
-                  Best products to start referring
+                <div className="inline-flex rounded-full border border-[#f2b20f]/30 bg-[#fff3d8] px-4 py-2 text-xs font-black uppercase tracking-[0.24em] text-[#7a0000]">
+                  Products
+                </div>
+                <h2 className="mt-5 text-3xl font-black tracking-tight text-slate-950">
+                  Live products ready for referral or direct order capture
                 </h2>
               </div>
-              <Link href={productsHref} className="hidden sm:inline-flex sm:items-center sm:gap-2 sm:font-bold sm:text-[#7a0000]">
+              <Link href={productsHref} className={shopStyles.secondaryButton}>
                 View full catalogue
-                <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
 
-            <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {featuredProducts.map((product) => (
                 <AgentCatalogueProductCard
                   key={product.id}
@@ -266,142 +415,109 @@ export default async function AgentsLandingPage({
               ))}
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {solarKitProducts.length ? (
-        <section className="py-4">
-          <div className={shopStyles.shell}>
-            <div className={`${shopStyles.lightCard} p-4 sm:p-5`}>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className={shopStyles.sectionEyebrow}>Solar full kits</div>
-                  <h2 className="mt-3 text-2xl font-black tracking-tight text-slate-950">
-                    Complete kits customers ask for most
-                  </h2>
+        <section id="earnings" className="py-2 sm:py-4">
+          <div className="grid gap-5 lg:grid-cols-3">
+            {solarKitProducts.length ? (
+              <div className="rounded-[2rem] border border-[#7a0000]/10 bg-white p-5 shadow-[0_24px_50px_rgba(15,23,42,0.06)]">
+                <div className="text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">
+                  Solar full kits
                 </div>
-                <Link
-                  href={`${productsHref}?category=solar-full-kits`}
-                  className="hidden sm:inline-flex sm:items-center sm:gap-2 sm:font-bold sm:text-[#7a0000]"
+                <div className="mt-3 space-y-3 text-sm text-slate-700">
+                  {solarKitProducts.map((product) => (
+                    <div key={product.id} className="rounded-2xl border border-[#7a0000]/8 bg-[#fcfaf7] px-4 py-3">
+                      <div className="font-bold text-slate-950">{product.name}</div>
+                      <div className="mt-1 text-[#7a0000]">
+                        Commission visible: {getAgentCommissionValue(product) > 0 ? "Yes" : "Review required"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {batteryProducts.length ? (
+              <div className="rounded-[2rem] border border-[#7a0000]/10 bg-white p-5 shadow-[0_24px_50px_rgba(15,23,42,0.06)]">
+                <div className="text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">
+                  Solar batteries
+                </div>
+                <div className="mt-3 space-y-3 text-sm text-slate-700">
+                  {batteryProducts.map((product) => (
+                    <div key={product.id} className="rounded-2xl border border-[#7a0000]/8 bg-[#fcfaf7] px-4 py-3">
+                      <div className="font-bold text-slate-950">{product.name}</div>
+                      <div className="mt-1 text-slate-600">Best for backup and lithium upgrades.</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {pumpProducts.length ? (
+              <div className="rounded-[2rem] border border-[#7a0000]/10 bg-white p-5 shadow-[0_24px_50px_rgba(15,23,42,0.06)]">
+                <div className="text-xs font-black uppercase tracking-[0.2em] text-[#7a0000]">
+                  Water pumps
+                </div>
+                <div className="mt-3 space-y-3 text-sm text-slate-700">
+                  {pumpProducts.map((product) => (
+                    <div key={product.id} className="rounded-2xl border border-[#7a0000]/8 bg-[#fcfaf7] px-4 py-3">
+                      <div className="font-bold text-slate-950">{product.name}</div>
+                      <div className="mt-1 text-slate-600">Good for farms, boreholes, and irrigation referrals.</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </section>
+
+        <section id="faqs" className="py-8 sm:py-10">
+          <div className="rounded-[2rem] border border-[#7a0000]/10 bg-white p-5 shadow-[0_24px_50px_rgba(15,23,42,0.06)] sm:p-7">
+            <div className="inline-flex rounded-full border border-[#f2b20f]/30 bg-[#fff3d8] px-4 py-2 text-xs font-black uppercase tracking-[0.24em] text-[#7a0000]">
+              FAQs
+            </div>
+            <div className="mt-6 grid gap-4">
+              {faqItems.map((item) => (
+                <details
+                  key={item.question}
+                  className="rounded-[1.5rem] border border-[#7a0000]/10 bg-[#fffdfb] px-5 py-4"
                 >
-                  See all kits
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
+                  <summary className="cursor-pointer list-none text-lg font-black text-slate-950">
+                    {item.question}
+                  </summary>
+                  <p className="mt-3 text-sm leading-7 text-slate-600">{item.answer}</p>
+                </details>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="contact" className="py-2 sm:py-4">
+          <div className="rounded-[2rem] border border-[#7a0000]/10 bg-[linear-gradient(180deg,#fff9ef_0%,#ffffff_100%)] p-5 shadow-[0_24px_50px_rgba(15,23,42,0.06)] sm:p-7">
+            <div className="inline-flex rounded-full border border-[#f2b20f]/30 bg-[#fff3d8] px-4 py-2 text-xs font-black uppercase tracking-[0.24em] text-[#7a0000]">
+              Contact
+            </div>
+            <h2 className="mt-5 text-3xl font-black tracking-tight text-slate-950">
+              Need help before sending a customer?
+            </h2>
+            <div className="mt-6 grid gap-4 md:grid-cols-3">
+              <div className="rounded-[1.6rem] border border-[#7a0000]/10 bg-white px-5 py-4">
+                <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a0000]">Phone</div>
+                <div className="mt-2 text-lg font-bold text-slate-950">0722 151 083</div>
+                <div className="mt-1 text-sm text-slate-600">Main Betech Solar support line</div>
               </div>
-              <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                {solarKitProducts.map((product) => (
-                  <AgentCatalogueProductCard
-                    key={product.id}
-                    product={product}
-                    loginHref={otpHref}
-                    loggedIn={isLoggedInAgent}
-                    useRootPaths={useRootPaths}
-                  />
-                ))}
+              <div className="rounded-[1.6rem] border border-[#7a0000]/10 bg-white px-5 py-4">
+                <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a0000]">Alternative line</div>
+                <div className="mt-2 text-lg font-bold text-slate-950">0703 241 917</div>
+                <div className="mt-1 text-sm text-slate-600">Use for delivery and product follow-up</div>
+              </div>
+              <div className="rounded-[1.6rem] border border-[#7a0000]/10 bg-white px-5 py-4">
+                <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a0000]">Email</div>
+                <div className="mt-2 text-lg font-bold text-slate-950">info@betech.co.ke</div>
+                <div className="mt-1 text-sm text-slate-600">For quotation, operations, and customer support</div>
               </div>
             </div>
           </div>
         </section>
-      ) : null}
-
-      {(batteryProducts.length || inverterProducts.length || pumpProducts.length) ? (
-        <section className="py-4">
-          <div className={shopStyles.shell}>
-            <div className="grid gap-4 xl:grid-cols-3">
-              {batteryProducts.length ? (
-                <div className={`${shopStyles.lightCard} p-4 sm:p-5`}>
-                  <div className={shopStyles.sectionEyebrow}>Batteries</div>
-                  <h3 className="mt-3 text-xl font-black tracking-tight text-slate-950">Storage options</h3>
-                  <div className="mt-4 grid gap-4">
-                    {batteryProducts.map((product) => (
-                      <AgentCatalogueProductCard
-                        key={product.id}
-                        product={product}
-                        loginHref={otpHref}
-                        loggedIn={isLoggedInAgent}
-                        useRootPaths={useRootPaths}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              {inverterProducts.length ? (
-                <div className={`${shopStyles.lightCard} p-4 sm:p-5`}>
-                  <div className={shopStyles.sectionEyebrow}>Inverters</div>
-                  <h3 className="mt-3 text-xl font-black tracking-tight text-slate-950">Backup control</h3>
-                  <div className="mt-4 grid gap-4">
-                    {inverterProducts.map((product) => (
-                      <AgentCatalogueProductCard
-                        key={product.id}
-                        product={product}
-                        loginHref={otpHref}
-                        loggedIn={isLoggedInAgent}
-                        useRootPaths={useRootPaths}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              {pumpProducts.length ? (
-                <div className={`${shopStyles.lightCard} p-4 sm:p-5`}>
-                  <div className={shopStyles.sectionEyebrow}>Water pumps</div>
-                  <h3 className="mt-3 text-xl font-black tracking-tight text-slate-950">Farm and borehole demand</h3>
-                  <div className="mt-4 grid gap-4">
-                    {pumpProducts.map((product) => (
-                      <AgentCatalogueProductCard
-                        key={product.id}
-                        product={product}
-                        loginHref={otpHref}
-                        loggedIn={isLoggedInAgent}
-                        useRootPaths={useRootPaths}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </section>
-      ) : null}
-
-      <section className="py-5">
-        <div className={shopStyles.shell}>
-          <div className={`${shopStyles.darkPanel} overflow-hidden p-5 sm:p-6 lg:p-8`}>
-            <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-              <div>
-                <div className="inline-flex rounded-full bg-white/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#ffd761]">
-                  Agent support
-                </div>
-                <h2 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">
-                  Start with OTP, then manage referrals from the agent dashboard.
-                </h2>
-                <p className="mt-3 max-w-2xl text-sm leading-7 text-white/80 sm:text-[15px]">
-                  Existing agents go straight to the dashboard after OTP. New agents can finish a short profile and begin referring products immediately.
-                </p>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-[22px] border border-white/10 bg-white/6 p-4">
-                  <Users className="h-5 w-5 text-[#ffd761]" />
-                  <div className="mt-3 text-lg font-black">Referral dashboard</div>
-                  <p className="mt-2 text-sm leading-6 text-white/75">
-                    Track submitted customers, commissions, and withdrawals in one place.
-                  </p>
-                </div>
-                <div className="rounded-[22px] border border-white/10 bg-white/6 p-4">
-                  <MapPin className="h-5 w-5 text-[#ffd761]" />
-                  <div className="mt-3 text-lg font-black">Nationwide selling</div>
-                  <p className="mt-2 text-sm leading-6 text-white/75">
-                    Refer customers from any county while Betech handles product fulfilment and support.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      </div>
 
       <AgentWhatsAppFloat />
     </div>
