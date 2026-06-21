@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { Prisma, Role, type User } from "@prisma/client";
+import { findSafeUserById, mergeCustomerIdentityUsers } from "@/lib/customerIdentity";
 import { updateSafeUserById } from "@/lib/customerProfile";
 import { prisma } from "@/lib/prisma";
 import { isAgentLeadOwnershipTableAvailable } from "@/lib/agentLeadOwnershipTable";
@@ -364,6 +365,60 @@ async function reloadOtpAuthUser(userId: string) {
   });
 }
 
+async function mergeDuplicateUsersByPhone(targetUserId: string, normalizedPhone: string) {
+  const duplicates = await prisma.user.findMany({
+    where: {
+      phone: normalizedPhone,
+      id: {
+        not: targetUserId,
+      },
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!duplicates.length) return;
+
+  console.log("[otp] merging duplicate phone identities", {
+    normalizedPhone,
+    targetUserId,
+    sourceUserIds: duplicates.map((entry) => entry.id),
+  });
+
+  await mergeCustomerIdentityUsers({
+    targetUserId,
+    sourceUserIds: duplicates.map((entry) => entry.id),
+  });
+}
+
+async function mergeDuplicateUsersByEmail(targetUserId: string, normalizedEmail: string) {
+  const duplicates = await prisma.user.findMany({
+    where: {
+      email: normalizedEmail,
+      id: {
+        not: targetUserId,
+      },
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!duplicates.length) return;
+
+  console.log("[otp] merging duplicate email identities", {
+    normalizedEmail,
+    targetUserId,
+    sourceUserIds: duplicates.map((entry) => entry.id),
+  });
+
+  await mergeCustomerIdentityUsers({
+    targetUserId,
+    sourceUserIds: duplicates.map((entry) => entry.id),
+  });
+}
+
 function isUniqueConstraintError(error: unknown) {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 }
@@ -444,8 +499,11 @@ async function resolveVerifiedPhoneUser(normalizedPhone: string, preferredRedire
       throw new Error("This account is inactive. Please contact Betech support.");
     }
 
+    await mergeDuplicateUsersByPhone(user.id, normalizedPhone);
+    const canonicalUser = (await findSafeUserById(user.id)) ?? user;
+
     await updateSafeUserById(user.id, {
-      phone: normalizedPhone,
+      phone: canonicalUser.phone || normalizedPhone,
       phoneVerifiedAt: new Date(),
       lastLoginMethod: "africastalking_otp",
     });
@@ -481,8 +539,11 @@ async function resolveVerifiedEmailUser(normalizedEmail: string, preferredRedire
       throw new Error("This account is inactive. Please contact Betech support.");
     }
 
+    await mergeDuplicateUsersByEmail(user.id, normalizedEmail);
+    const canonicalUser = (await findSafeUserById(user.id)) ?? user;
+
     await updateSafeUserById(user.id, {
-      email: normalizedEmail,
+      email: canonicalUser.email || normalizedEmail,
       emailVerifiedAt: new Date(),
       lastLoginMethod: "email_otp",
     });

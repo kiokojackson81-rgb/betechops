@@ -100,7 +100,7 @@ async function reassignQuoteRequestsCustomerUser(sourceUserIds: string[], target
   );
 }
 
-async function mergeCustomerIdentityUsers(args: {
+export async function mergeCustomerIdentityUsers(args: {
   targetUserId: string;
   sourceUserIds: string[];
 }) {
@@ -157,6 +157,18 @@ async function mergeCustomerIdentityUsers(args: {
   });
 
   await reassignQuoteRequestsCustomerUser(sourceUserIds, args.targetUserId);
+
+  await prisma.agentProfile.updateMany({
+    where: {
+      userId: {
+        in: sourceUserIds,
+      },
+    },
+    data: {
+      phone: null,
+      email: null,
+    },
+  });
 
   for (const sourceUserId of sourceUserIds) {
     await updateSafeUserById(sourceUserId, {
