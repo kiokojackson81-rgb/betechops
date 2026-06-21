@@ -30,6 +30,7 @@ function isAgentSalesSchemaError(error: unknown) {
     "AgentCommission",
     "AgentPayout",
     "AgentActivityLog",
+    "WebsiteOrder",
     "AgentLeadOwnership",
     "AgentDuplicateReview",
     "AgentFraudSignal",
@@ -40,6 +41,7 @@ function isAgentSalesSchemaError(error: unknown) {
     "saleAmount",
     "commissionPct",
     "commissionAmt",
+    "referredByAgentId",
   ].some((token) => haystack.includes(token));
 }
 
