@@ -42,6 +42,17 @@ function getSafeUserSelectSql(columns: Awaited<ReturnType<typeof getUserProfileC
   return selectedColumns.map((column) => `"${column}"`).join(", ");
 }
 
+function dedupeUsers(users: Array<SafeCustomerIdentityUser | null | undefined>) {
+  const seen = new Set<string>();
+  const deduped: SafeCustomerIdentityUser[] = [];
+  for (const user of users) {
+    if (!user?.id || seen.has(user.id)) continue;
+    seen.add(user.id);
+    deduped.push(user);
+  }
+  return deduped;
+}
+
 async function findSafeUserByField(field: "phone" | "email", value: string): Promise<SafeCustomerIdentityUser | null> {
   const columns = await getUserProfileColumnMap();
   const selectSql = getSafeUserSelectSql(columns);
@@ -76,6 +87,86 @@ export async function resolveExistingCustomerUsers(args: { normalizedPhone: stri
   return { phoneUser, emailUser };
 }
 
+async function reassignQuoteRequestsCustomerUser(sourceUserIds: string[], targetUserId: string) {
+  if (!sourceUserIds.length) return;
+
+  await prisma.$executeRawUnsafe(
+    `UPDATE "QuoteRequest"
+      SET "customerUserId" = $1,
+          "updatedAt" = CURRENT_TIMESTAMP
+      WHERE "customerUserId" = ANY($2::text[])`,
+    targetUserId,
+    sourceUserIds,
+  );
+}
+
+async function mergeCustomerIdentityUsers(args: {
+  targetUserId: string;
+  sourceUserIds: string[];
+}) {
+  const sourceUserIds = args.sourceUserIds.filter((id) => id && id !== args.targetUserId);
+  if (!sourceUserIds.length) return;
+
+  console.log("[customerIdentity] merging duplicate users", {
+    targetUserId: args.targetUserId,
+    sourceUserIds,
+  });
+
+  await prisma.$transaction(async (tx) => {
+    const agentProfiles = await tx.agentProfile.findMany({
+      where: {
+        userId: {
+          in: [args.targetUserId, ...sourceUserIds],
+        },
+      },
+      select: {
+        id: true,
+        userId: true,
+        phone: true,
+        email: true,
+      },
+    });
+
+    const targetAgentProfile = agentProfiles.find((profile) => profile.userId === args.targetUserId) ?? null;
+    const sourceAgentProfiles = agentProfiles.filter((profile) => profile.userId !== args.targetUserId);
+
+    if (!targetAgentProfile && sourceAgentProfiles.length) {
+      const sourceAgentProfile = sourceAgentProfiles[0];
+      await tx.agentProfile.update({
+        where: { id: sourceAgentProfile.id },
+        data: {
+          userId: args.targetUserId,
+        },
+      });
+    }
+
+    await Promise.all([
+      tx.agentSale.updateMany({
+        where: { customerUserId: { in: sourceUserIds } },
+        data: { customerUserId: args.targetUserId },
+      }),
+      tx.websiteOrder.updateMany({
+        where: { customerUserId: { in: sourceUserIds } },
+        data: { customerUserId: args.targetUserId },
+      }),
+      tx.agentLeadOwnership.updateMany({
+        where: { customerUserId: { in: sourceUserIds } },
+        data: { customerUserId: args.targetUserId },
+      }),
+    ]);
+  });
+
+  await reassignQuoteRequestsCustomerUser(sourceUserIds, args.targetUserId);
+
+  for (const sourceUserId of sourceUserIds) {
+    await updateSafeUserById(sourceUserId, {
+      phone: null,
+      email: null,
+      whatsappNumber: null,
+    });
+  }
+}
+
 export async function findOrCreateCustomerIdentityUser(input: {
   customerName: string;
   customerPhone?: string | null;
@@ -84,6 +175,7 @@ export async function findOrCreateCustomerIdentityUser(input: {
   town?: string | null;
   estateLandmark?: string | null;
   locationNotes?: string | null;
+  currentUserId?: string | null;
 }): Promise<{
   user: SafeCustomerIdentityUser;
   matchedBy: "phone" | "email" | "created";
@@ -94,17 +186,27 @@ export async function findOrCreateCustomerIdentityUser(input: {
   const normalizedPhone = normalizeKenyanPhone(input.customerPhone || "");
   const normalizedEmail = normalizeCustomerIdentityEmail(input.customerEmail || "");
   const { phoneUser, emailUser } = await resolveExistingCustomerUsers({ normalizedPhone, normalizedEmail });
+  const currentUser =
+    input.currentUserId && input.currentUserId !== phoneUser?.id && input.currentUserId !== emailUser?.id
+      ? await findSafeUserById(input.currentUserId)
+      : phoneUser?.id === input.currentUserId
+        ? phoneUser
+        : emailUser?.id === input.currentUserId
+          ? emailUser
+          : null;
   const hasPhoneIdentity = Boolean(normalizedPhone);
   const conflictingAccounts =
     Boolean(phoneUser?.id) &&
     Boolean(emailUser?.id) &&
     phoneUser!.id !== emailUser!.id;
-
-  const existing = hasPhoneIdentity
-    ? phoneUser
-    : phoneUser && emailUser && phoneUser.id === emailUser.id
-      ? phoneUser
-      : phoneUser || emailUser;
+  const existingCandidates = dedupeUsers([
+    hasPhoneIdentity ? phoneUser : null,
+    emailUser,
+    currentUser,
+  ]);
+  const existing =
+    existingCandidates[0] ??
+    null;
 
   const patchInput = {
     name: pickFirstNonEmpty(input.customerName),
@@ -117,17 +219,28 @@ export async function findOrCreateCustomerIdentityUser(input: {
   };
 
   if (existing) {
+    const sourceUsers = dedupeUsers([phoneUser, emailUser, currentUser]).filter((user) => user.id !== existing.id);
+    if (sourceUsers.length) {
+      await mergeCustomerIdentityUsers({
+        targetUserId: existing.id,
+        sourceUserIds: sourceUsers.map((user) => user.id),
+      });
+    }
+
+    const mergedExisting = (await findSafeUserById(existing.id)) || existing;
     const updateData: Prisma.UserUpdateInput = {};
-    if (patchInput.name && patchInput.name !== existing.name) updateData.name = patchInput.name;
-    if (patchInput.phone && !existing.phone && (!phoneUser || phoneUser.id === existing.id)) updateData.phone = patchInput.phone;
-    if (patchInput.email && !existing.email && (!emailUser || emailUser.id === existing.id) && !conflictingAccounts) updateData.email = patchInput.email;
-    if (patchInput.county && !existing.county) updateData.county = patchInput.county;
-    if (patchInput.town && !existing.town) updateData.town = patchInput.town;
-    if (patchInput.estateLandmark && !existing.estateLandmark) updateData.estateLandmark = patchInput.estateLandmark;
-    if (patchInput.locationNotes && !existing.locationNotes) updateData.locationNotes = patchInput.locationNotes;
+    if (patchInput.name && patchInput.name !== mergedExisting.name) updateData.name = patchInput.name;
+    if (patchInput.phone && (!mergedExisting.phone || mergedExisting.phone !== patchInput.phone)) updateData.phone = patchInput.phone;
+    if (patchInput.email && (!mergedExisting.email || mergedExisting.email !== patchInput.email) && (!conflictingAccounts || emailUser?.id === mergedExisting.id)) {
+      updateData.email = patchInput.email;
+    }
+    if (patchInput.county && !mergedExisting.county) updateData.county = patchInput.county;
+    if (patchInput.town && !mergedExisting.town) updateData.town = patchInput.town;
+    if (patchInput.estateLandmark && !mergedExisting.estateLandmark) updateData.estateLandmark = patchInput.estateLandmark;
+    if (patchInput.locationNotes && !mergedExisting.locationNotes) updateData.locationNotes = patchInput.locationNotes;
 
     if (Object.keys(updateData).length) {
-      await updateSafeUserById(existing.id, {
+      await updateSafeUserById(mergedExisting.id, {
         name: typeof updateData.name === "string" ? updateData.name : undefined,
         phone: typeof updateData.phone === "string" ? updateData.phone : undefined,
         email: typeof updateData.email === "string" ? updateData.email : undefined,
@@ -136,8 +249,8 @@ export async function findOrCreateCustomerIdentityUser(input: {
         estateLandmark: typeof updateData.estateLandmark === "string" ? updateData.estateLandmark : undefined,
         locationNotes: typeof updateData.locationNotes === "string" ? updateData.locationNotes : undefined,
       });
-      const user = await findSafeUserById(existing.id);
-      if (!user) throw new Error(`Failed to reload synced customer account ${existing.id}`);
+      const user = await findSafeUserById(mergedExisting.id);
+      if (!user) throw new Error(`Failed to reload synced customer account ${mergedExisting.id}`);
       return {
         user,
         matchedBy: hasPhoneIdentity ? "phone" : emailUser?.id === existing.id ? "email" : "phone",
@@ -148,7 +261,7 @@ export async function findOrCreateCustomerIdentityUser(input: {
     }
 
     return {
-      user: existing,
+      user: mergedExisting,
       matchedBy: hasPhoneIdentity ? "phone" : emailUser?.id === existing.id ? "email" : "phone",
       emailConflict: conflictingAccounts,
       normalizedPhone,

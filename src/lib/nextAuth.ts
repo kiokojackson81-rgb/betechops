@@ -211,13 +211,18 @@ export const authOptions = {
           },
         });
         if (existing) {
+          const resolvedAgent = await resolveAgentProfileForAuth({
+            userId: existing.id,
+            phone: existing.phone ?? token.phone ?? null,
+            email: existing.email ?? token.email ?? null,
+          });
           token.role = existing.role ?? token.role;
           token.email = existing.email ?? token.email;
           token.phone = existing.phone ?? token.phone;
           token.sub = existing.id ?? token.sub;
           token.isActive = existing.isActive ?? token.isActive ?? true;
-          token.isAgent = Boolean(existing.agentProfile);
-          token.agentStatus = existing.agentProfile?.status ?? null;
+          token.isAgent = Boolean(resolvedAgent ?? existing.agentProfile);
+          token.agentStatus = resolvedAgent?.status ?? existing.agentProfile?.status ?? null;
           token.lastLoginMethod = existing.lastLoginMethod ?? token.lastLoginMethod ?? null;
         }
       } catch (err) {
@@ -231,16 +236,23 @@ export const authOptions = {
                 email: true,
                 role: true,
                 isActive: true,
+                phone: true,
                 agentProfile: { select: { id: true, status: true } },
               },
             });
             if (fallback) {
+              const resolvedAgent = await resolveAgentProfileForAuth({
+                userId: fallback.id,
+                phone: fallback.phone ?? token.phone ?? null,
+                email: fallback.email ?? token.email ?? null,
+              });
               token.role = fallback.role ?? token.role;
               token.email = fallback.email ?? token.email;
+              token.phone = fallback.phone ?? token.phone;
               token.sub = fallback.id ?? token.sub;
               token.isActive = fallback.isActive ?? token.isActive ?? true;
-              token.isAgent = Boolean(fallback.agentProfile);
-              token.agentStatus = fallback.agentProfile?.status ?? null;
+              token.isAgent = Boolean(resolvedAgent ?? fallback.agentProfile);
+              token.agentStatus = resolvedAgent?.status ?? fallback.agentProfile?.status ?? null;
             }
           } catch (retryErr) {
             console.error("nextAuth: fallback user lookup failed:", retryErr);

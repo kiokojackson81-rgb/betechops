@@ -63,106 +63,64 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "Phone number is required for agent accounts." }, { status: 400 });
     }
 
-    if (accountMode === "agent" && emailRaw) {
-      const existing = await prisma.user.findFirst({
-        where: {
-          email: emailRaw,
-          id: { not: userId },
-        },
-        select: { id: true },
-      });
-
-      if (existing) {
-        return NextResponse.json({ ok: false, error: "That email address is already in use." }, { status: 409 });
-      }
-    }
-
     if (body?.phone && !normalizedPhone) {
       return NextResponse.json({ ok: false, error: "Enter a valid Kenyan phone number." }, { status: 400 });
-    }
-
-    if (body?.whatsappNumber && !normalizedWhatsapp) {
-      return NextResponse.json({ ok: false, error: "Enter a valid Kenyan WhatsApp number." }, { status: 400 });
-    }
-
-    if (accountMode === "agent" && normalizedPhone) {
-      const existingPhone = await prisma.user.findFirst({
-        where: {
-          phone: normalizedPhone,
-          id: { not: userId },
-        },
-        select: { id: true },
-      });
-
-      if (existingPhone) {
-        return NextResponse.json({ ok: false, error: "That phone number is already in use." }, { status: 409 });
-      }
     }
 
     let updated;
     let resolvedUserId = userId;
     let nextVerificationToken: string | null = null;
+    const resolution = await findOrCreateCustomerIdentityUser({
+      customerName: name,
+      customerPhone: normalizedPhone || null,
+      customerEmail: emailRaw || null,
+      county: county || null,
+      town: town || null,
+      estateLandmark: estateLandmark || null,
+      locationNotes: locationNotes || null,
+      currentUserId: userId,
+    });
 
-    if (accountMode === "agent") {
-      updated = await updateSafeCustomerProfile(userId, {
-        name,
-        email: emailRaw || null,
-        phone: normalizedPhone || null,
-        whatsappNumber: normalizedWhatsapp || null,
-        county: county || null,
-        town: town || null,
-        estateLandmark: estateLandmark || null,
-        locationNotes: locationNotes || null,
+    updated = await updateSafeCustomerProfile(resolution.user.id, {
+      name,
+      email: emailRaw || resolution.user.email || null,
+      phone: normalizedPhone || resolution.normalizedPhone || resolution.user.phone || null,
+      county: county || resolution.user.county || null,
+      town: town || resolution.user.town || null,
+      estateLandmark: estateLandmark || resolution.user.estateLandmark || null,
+      locationNotes: locationNotes || resolution.user.locationNotes || null,
+      whatsappNumber:
+        normalizedWhatsapp ||
+        normalizedPhone ||
+        resolution.normalizedPhone ||
+        resolution.user.phone ||
+        null,
+    });
+
+    resolvedUserId = updated.id;
+
+    if (resolvedUserId !== userId) {
+      nextVerificationToken = createDirectVerifiedAuthToken({
+        userId: resolvedUserId,
+        channel: normalizedPhone ? "phone" : "email",
+        identifier: normalizedPhone || emailRaw,
+        redirectTo: preferredRedirect,
+        requiresProfileCompletion: false,
       });
-    } else {
-      const resolution = await findOrCreateCustomerIdentityUser({
-        customerName: name,
-        customerPhone: normalizedPhone || null,
-        customerEmail: emailRaw || null,
-        county: county || null,
-        town: town || null,
-        estateLandmark: estateLandmark || null,
-        locationNotes: locationNotes || null,
-      });
-
-      updated = await updateSafeCustomerProfile(resolution.user.id, {
-        name,
-        county: county || resolution.user.county || null,
-        town: town || resolution.user.town || null,
-        estateLandmark: estateLandmark || resolution.user.estateLandmark || null,
-        locationNotes: locationNotes || resolution.user.locationNotes || null,
-        whatsappNumber:
-          normalizedWhatsapp ||
-          resolution.normalizedPhone ||
-          resolution.user.phone ||
-          null,
-      });
-
-      resolvedUserId = updated.id;
-
-      if (resolvedUserId !== userId) {
-        nextVerificationToken = createDirectVerifiedAuthToken({
-          userId: resolvedUserId,
-          channel: normalizedPhone ? "phone" : "email",
-          identifier: normalizedPhone || emailRaw,
-          redirectTo: preferredRedirect,
-          requiresProfileCompletion: false,
-        });
-      }
-
-      updated = (await findSafeCustomerProfileByUserId(resolvedUserId)) || updated;
     }
+
+    updated = (await findSafeCustomerProfileByUserId(resolvedUserId)) || updated;
 
     if (accountMode === "agent") {
       const { firstName, lastName } = splitNameParts(name);
       const existingAgentProfile = await prisma.agentProfile.findUnique({
-        where: { userId },
+        where: { userId: resolvedUserId },
         select: { id: true, referralCode: true },
       });
 
       if (existingAgentProfile) {
         await prisma.agentProfile.update({
-          where: { userId },
+          where: { userId: resolvedUserId },
           data: {
             firstName,
             lastName,
@@ -178,7 +136,7 @@ export async function POST(req: NextRequest) {
         await prisma.$transaction(async (tx) => {
           await tx.agentProfile.create({
             data: {
-              userId,
+              userId: resolvedUserId,
               referralCode,
               firstName,
               lastName,
@@ -193,7 +151,7 @@ export async function POST(req: NextRequest) {
 
           await tx.agentActivityLog.create({
             data: {
-              agentId: userId,
+              agentId: resolvedUserId,
               action: "registered",
               description: "Registered through passwordless OTP agent onboarding",
             },

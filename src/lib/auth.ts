@@ -7,6 +7,7 @@ import type { Role } from "@prisma/client";
 import { headers } from "next/headers";
 import { isCategoryAllowed, normalizeCategory } from "@/lib/attendants/categoryCompat";
 import { authOptions } from "@/lib/nextAuth";
+import { getKenyanPhoneVariants, normalizeKenyanPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 
 // `NextAuthOptions` type may vary between next-auth versions; use a local alias
@@ -17,6 +18,36 @@ export const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "kiokojackson81@gmail.c
   .split(",")
   .map(s => s.trim().toLowerCase())
   .filter(Boolean);
+
+async function resolveAgentProfileForSession(args: {
+  userId?: string | null;
+  phone?: string | null;
+  email?: string | null;
+}) {
+  const normalizedPhone = normalizeKenyanPhone(args.phone || "");
+  const phoneVariants = normalizedPhone ? getKenyanPhoneVariants(normalizedPhone) : [];
+  const normalizedEmail = String(args.email || "").trim().toLowerCase();
+
+  return prisma.agentProfile.findFirst({
+    where: {
+      OR: [
+        ...(args.userId ? [{ userId: args.userId }] : []),
+        ...(phoneVariants.length ? [{ phone: { in: phoneVariants } }] : []),
+        ...(normalizedPhone ? [{ user: { phone: normalizedPhone } }] : []),
+        ...(normalizedEmail
+          ? [
+              { email: { equals: normalizedEmail, mode: "insensitive" as const } },
+              { user: { email: { equals: normalizedEmail, mode: "insensitive" as const } } },
+            ]
+          : []),
+      ],
+    },
+    select: {
+      id: true,
+      status: true,
+    },
+  });
+}
 
 /**
  * Small helper to return the server session in server components/pages.
@@ -68,6 +99,12 @@ export async function auth(): Promise<Session | null> {
 
     if (!existing || !existing.isActive) return null;
 
+    const resolvedAgent = await resolveAgentProfileForSession({
+      userId: existing.id,
+      phone: existing.phone ?? null,
+      email: existing.email ?? null,
+    });
+
     const fallbackSession = {
       user: {
         id: existing.id,
@@ -77,8 +114,8 @@ export async function auth(): Promise<Session | null> {
         role: existing.role,
         attendantCategory: existing.attendantCategory,
         isActive: existing.isActive,
-        isAgent: Boolean(existing.agentProfile),
-        agentStatus: existing.agentProfile?.status ?? null,
+        isAgent: Boolean(resolvedAgent ?? existing.agentProfile),
+        agentStatus: resolvedAgent?.status ?? existing.agentProfile?.status ?? null,
         lastLoginMethod: existing.lastLoginMethod ?? null,
       },
       expires:

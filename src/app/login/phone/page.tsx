@@ -315,7 +315,6 @@ export default function PhoneLoginPage() {
           name: profileName,
           email: profileEmail,
           phone: profilePhone,
-          whatsappNumber: profilePhone,
           county: profileCounty,
           town: profileTown,
           estateLandmark: profileEstateLandmark,
