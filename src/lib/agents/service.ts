@@ -28,6 +28,8 @@ function isAgentSalesSchemaError(error: unknown) {
   return [
     "AgentSale",
     "AgentCommission",
+    "AgentPayout",
+    "AgentActivityLog",
     "AgentLeadOwnership",
     "AgentDuplicateReview",
     "AgentFraudSignal",
@@ -39,6 +41,16 @@ function isAgentSalesSchemaError(error: unknown) {
     "commissionPct",
     "commissionAmt",
   ].some((token) => haystack.includes(token));
+}
+
+async function withAgentDashboardFallback<T>(label: string, work: Promise<T>, fallback: T) {
+  try {
+    return await work;
+  } catch (error) {
+    if (!isAgentSalesSchemaError(error)) throw error;
+    console.info("[agents.dashboard] legacy schema fallback", { label });
+    return fallback;
+  }
 }
 
 export async function generateUniqueReferralCode() {
@@ -73,56 +85,73 @@ export async function getAgentDashboardData(userId: string) {
   if (!profile) return null;
 
   const [{ sales, summary: salesSummary }, commissions, payouts, activities, referredWebsiteOrders] = await Promise.all([
-    getAgentSalesDashboardSummary(userId),
-    prisma.agentCommission.findMany({
-      where: { agentId: userId },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-    }).catch((error) => {
-      if (isAgentSalesSchemaError(error)) return [];
-      throw error;
-    }),
-    prisma.agentPayout.findMany({
-      where: { agentId: userId },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-    }),
-    prisma.agentActivityLog.findMany({
-      where: { agentId: userId },
-      orderBy: { createdAt: "desc" },
-      take: 10,
-    }),
-    prisma.websiteOrder.findMany({
-      where: {
-        OR: [
-          { referredByAgentId: userId },
-          { customerUser: { referredByAgentId: userId } },
-        ],
-      },
-      select: {
-        id: true,
-        orderRef: true,
-        customerName: true,
-        customerPhone: true,
-        customerLocation: true,
-        paymentMethod: true,
-        orderType: true,
-        status: true,
-        total: true,
-        createdAt: true,
-        items: {
-          select: {
-            id: true,
-            productName: true,
-            quantity: true,
-            total: true,
-          },
-          take: 3,
+    withAgentDashboardFallback(
+      "sales-summary",
+      getAgentSalesDashboardSummary(userId),
+      { sales: [], summary: { totalSubmittedSales: 0, pendingSales: 0, processingSales: 0, completedSales: 0, potentialCommission: 0, earnedCommission: 0, paidCommission: 0 } },
+    ),
+    withAgentDashboardFallback(
+      "agent-commissions",
+      prisma.agentCommission.findMany({
+        where: { agentId: userId },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
+      [],
+    ),
+    withAgentDashboardFallback(
+      "agent-payouts",
+      prisma.agentPayout.findMany({
+        where: { agentId: userId },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
+      [],
+    ),
+    withAgentDashboardFallback(
+      "agent-activity-log",
+      prisma.agentActivityLog.findMany({
+        where: { agentId: userId },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      }),
+      [],
+    ),
+    withAgentDashboardFallback(
+      "website-referrals",
+      prisma.websiteOrder.findMany({
+        where: {
+          OR: [
+            { referredByAgentId: userId },
+            { customerUser: { referredByAgentId: userId } },
+          ],
         },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 8,
-    }),
+        select: {
+          id: true,
+          orderRef: true,
+          customerName: true,
+          customerPhone: true,
+          customerLocation: true,
+          paymentMethod: true,
+          orderType: true,
+          status: true,
+          total: true,
+          createdAt: true,
+          items: {
+            select: {
+              id: true,
+              productName: true,
+              quantity: true,
+              total: true,
+            },
+            take: 3,
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 8,
+      }),
+      [],
+    ),
   ]);
 
   const adjustedCommissions = applyPaidPayoutsToCommissions(commissions, payouts);
