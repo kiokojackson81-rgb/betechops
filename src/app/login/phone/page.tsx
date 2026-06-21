@@ -49,7 +49,11 @@ function getDefaultCallbackForHost(isAgentsDomainFlow: boolean) {
 function getResolvedPostLoginUrlForFlow(target: string, isAgentsDomainFlow: boolean, isAgentFlow: boolean) {
   const normalizedTarget = normalizeAgentCallbackForHost(target || getDefaultCallbackForHost(isAgentsDomainFlow), isAgentsDomainFlow);
   if (!isAgentFlow) return normalizedTarget;
-  return `/auth/post-login?callbackUrl=${encodeURIComponent(normalizedTarget)}`;
+  const safeAgentTarget =
+    normalizedTarget.startsWith("/") && normalizedTarget !== "/account" && !normalizedTarget.startsWith("/account/")
+      ? normalizedTarget
+      : "/dashboard";
+  return `/auth/post-login?callbackUrl=${encodeURIComponent(safeAgentTarget)}`;
 }
 
 async function waitForAuthenticatedSession(expectAgentSession: boolean, attempts = 20, delayMs = 250) {
@@ -293,7 +297,7 @@ export default function PhoneLoginPage() {
       }
 
       await waitForAuthenticatedSession(isAgentFlow);
-      window.location.href = getResolvedPostLoginUrlForFlow(signInResult.url || target, isAgentsDomainFlow, isAgentFlow);
+      window.location.href = getResolvedPostLoginUrlForFlow(target, isAgentsDomainFlow, isAgentFlow);
     } catch (verifyError) {
       setError(verifyError instanceof Error ? verifyError.message : "Invalid OTP.");
     } finally {
@@ -350,7 +354,7 @@ export default function PhoneLoginPage() {
       }
 
       await waitForAuthenticatedSession(isAgentFlow);
-      window.location.href = getResolvedPostLoginUrlForFlow(signInResult.url || target, isAgentsDomainFlow, isAgentFlow);
+      window.location.href = getResolvedPostLoginUrlForFlow(target, isAgentsDomainFlow, isAgentFlow);
     } catch (profileError) {
       setError(profileError instanceof Error ? profileError.message : "Unable to save your profile.");
     } finally {
