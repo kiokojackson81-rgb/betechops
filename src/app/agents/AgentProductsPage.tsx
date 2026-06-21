@@ -9,6 +9,7 @@ import {
   type AgentListingFilters,
   filterByManualPrice,
   filterByPrice,
+  getAgentCommissionValue,
   getBrandOptions,
   getPopularitySignalsByProduct,
   getWarrantyOptions,
@@ -25,15 +26,6 @@ import {
 } from "@/app/shop/shopCatalogConfig";
 import { getShopProducts } from "@/app/shop/shopApi";
 import { agentPath } from "@/lib/agents/host";
-import { requireAgentSession } from "@/lib/agents/auth";
-import { getAgentDashboardData } from "@/lib/agents/service";
-
-const money = (value: number) =>
-  new Intl.NumberFormat("en-KE", {
-    style: "currency",
-    currency: "KES",
-    maximumFractionDigits: 0,
-  }).format(value || 0);
 
 type AgentProductsPageProps = {
   searchParams?: Promise<{
@@ -150,7 +142,6 @@ export default async function AgentProductsPage({
   useRootPaths = false,
 }: AgentProductsPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  const agentSession = await requireAgentSession();
   const filters: AgentListingFilters = {
     category: resolvedSearchParams?.category || "",
     sub: resolvedSearchParams?.sub || "",
@@ -166,10 +157,6 @@ export default async function AgentProductsPage({
 
   const otpHref = `/login/phone?callbackUrl=${encodeURIComponent(agentPath("/dashboard", useRootPaths))}`;
   const registerHref = otpHref;
-  const loginHref = otpHref;
-  const dashboardHref = agentPath("/dashboard", useRootPaths);
-  const commissionHref = agentPath("/withdrawals", useRootPaths);
-  const agentDashboard = agentSession ? await getAgentDashboardData(agentSession.userId) : null;
   const activeCategory = getShopCategoryDefinition(filters.category || "");
   const activeSubcategory = activeCategory ? getShopSubcategoryDefinition(activeCategory.value, filters.sub || "") : null;
   const products = await getShopProducts({
@@ -235,10 +222,7 @@ export default async function AgentProductsPage({
   ].filter(Boolean) as Array<{ label: string; href: string }>;
 
   const currentSubcategories = activeCategory?.subcategories ?? [];
-  const earnedSoFar =
-    agentDashboard
-      ? Number(agentDashboard.salesSummary.earnedCommission || 0) + Number(agentDashboard.salesSummary.paidCommission || 0)
-      : 0;
+  const commissionVisibleCount = filteredProducts.filter((product) => getAgentCommissionValue(product) > 0).length;
 
   return (
     <div className={`${shopStyles.page} pb-28 lg:pb-0`}>
@@ -257,35 +241,14 @@ export default async function AgentProductsPage({
               </p>
             </div>
             <div className="flex flex-col gap-3 lg:items-end">
-              <div className="flex flex-wrap gap-2.5 lg:justify-end">
-                {agentSession ? (
-                  <>
-                    <Link href={dashboardHref} className={shopStyles.secondaryButton}>
-                      Dashboard
-                    </Link>
-                    <Link href={commissionHref} className={shopStyles.primaryButton}>
-                      Your commission
-                    </Link>
-                  </>
-                ) : (
-                  <>
-                    <Link href={loginHref} className={shopStyles.secondaryButton}>
-                      Log in
-                    </Link>
-                    <Link href={registerHref} className={shopStyles.primaryButton}>
-                      Start earning
-                    </Link>
-                  </>
-                )}
-              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-[20px] border border-[#7a0000]/10 bg-[#fffaf2] px-4 py-3">
                   <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000]">Products shown</div>
                   <div className="mt-1 text-2xl font-black text-slate-950">{filteredProducts.length}</div>
                 </div>
                 <div className="rounded-[20px] border border-[#f2b20f]/20 bg-[#fff6df] px-4 py-3">
-                  <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000]">Earned so far</div>
-                  <div className="mt-1 text-2xl font-black text-slate-950">{money(earnedSoFar)}</div>
+                  <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000]">With commission visible</div>
+                  <div className="mt-1 text-2xl font-black text-slate-950">{commissionVisibleCount}</div>
                 </div>
               </div>
             </div>

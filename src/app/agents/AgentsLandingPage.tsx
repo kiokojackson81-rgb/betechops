@@ -268,6 +268,13 @@ const testimonials = [
   },
 ];
 
+const featuredCatalogueCategories = [
+  "solar-full-kits",
+  "solar-batteries",
+  "solar-inverters",
+  "solar-water-pumps",
+] as const;
+
 type AgentsLandingPageProps = {
   useRootPaths?: boolean;
 };
@@ -443,32 +450,34 @@ export default async function AgentsLandingPage({ useRootPaths = false }: Agents
   const shopProducts = await getShopProducts();
   const popularitySignals = await getPopularitySignalsByProduct(shopProducts);
   const popularProducts = sortAgentProductsBySignals(shopProducts, popularitySignals, "featured").slice(0, 10);
-  const categoryShowcase = SHOP_CATEGORY_DEFINITIONS.map((category) => {
-    const categoryProducts = sortAgentProductsBySignals(
-      shopProducts.filter(
-        (product) => String(product.category || "").trim().toLowerCase() === category.label.toLowerCase(),
-      ),
-      popularitySignals,
-      "featured",
-    );
-    const highestPricedProduct = categoryProducts.reduce<typeof categoryProducts[number] | null>(
-      (selected, product) => {
-        if (!selected) return product;
-        return Number(product.price ?? 0) > Number(selected.price ?? 0) ? product : selected;
-      },
-      null,
-    );
-    const topCommission = highestPricedProduct ? getAgentPotentialCommissionValue(highestPricedProduct) : 0;
-    const commissionReadyCount = categoryProducts.filter((product) => getAgentCommissionValue(product) > 0).length;
-    return {
-      ...category,
-      href: `${productsHref}?category=${encodeURIComponent(category.value)}`,
-      count: categoryProducts.length,
-      commissionReadyCount,
-      topCommission,
-      highestPricedProductName: highestPricedProduct?.name ?? null,
-    };
-  }).filter((category) => category.count > 0);
+  const categoryShowcase = SHOP_CATEGORY_DEFINITIONS.filter((category) =>
+    featuredCatalogueCategories.includes(
+      category.value as (typeof featuredCatalogueCategories)[number],
+    ),
+  )
+    .map((category) => {
+      const categoryProducts = sortAgentProductsBySignals(
+        shopProducts.filter(
+          (product) => String(product.category || "").trim().toLowerCase() === category.label.toLowerCase(),
+        ),
+        popularitySignals,
+        "featured",
+      );
+      const topCommission = categoryProducts.reduce(
+        (maxValue, product) => Math.max(maxValue, getAgentPotentialCommissionValue(product)),
+        0,
+      );
+      const commissionReadyCount = categoryProducts.filter((product) => getAgentCommissionValue(product) > 0).length;
+      return {
+        ...category,
+        href: `${productsHref}?category=${encodeURIComponent(category.value)}`,
+        count: categoryProducts.length,
+        commissionReadyCount,
+        topCommission,
+        topProducts: categoryProducts.slice(0, 3),
+      };
+    })
+    .filter((category) => category.count > 0);
 
   return (
     <div className="scroll-smooth bg-[#fcfaf7] text-slate-950">
@@ -1052,7 +1061,21 @@ export default async function AgentsLandingPage({ useRootPaths = false }: Agents
                       </div>
                       <div className="mt-1 text-xl font-black text-slate-950">{category.commissionReadyCount}</div>
                     </div>
-
+                    <div className="mt-4">
+                      <div className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
+                        Most popular in this category
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {category.topProducts.map((product) => (
+                          <span
+                            key={product.id}
+                            className="inline-flex rounded-full border border-[#7a0000]/10 bg-[#fffaf2] px-3 py-1 text-[11px] font-semibold text-slate-700"
+                          >
+                            {product.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </Link>
               ))}

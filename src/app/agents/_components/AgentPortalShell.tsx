@@ -68,7 +68,7 @@ export default function AgentPortalShell({
   stats,
 }: AgentPortalShellProps) {
   const pathname = usePathname() || "";
-  const loginPath = agentPath("/login");
+  const homePath = agentPath("/", useRootPaths);
   const navItems = [
     { href: agentPath("/dashboard", useRootPaths), label: "Dashboard", icon: Home },
     { href: agentPath("/sales", useRootPaths), label: "My Sales", icon: ClipboardList },
@@ -185,7 +185,7 @@ export default function AgentPortalShell({
             </a>
             <button
               type="button"
-              onClick={() => signOut({ callbackUrl: loginPath })}
+              onClick={() => signOut({ callbackUrl: homePath })}
               className="flex w-full items-center gap-3 rounded-2xl border border-white/10 px-4 py-3 text-sm text-white/78 transition hover:bg-white/10 hover:text-white"
             >
               <LogOut className="h-4 w-4" />
@@ -215,7 +215,7 @@ export default function AgentPortalShell({
                 </div>
                 <button
                   type="button"
-                  onClick={() => signOut({ callbackUrl: loginPath })}
+                  onClick={() => signOut({ callbackUrl: homePath })}
                   className="rounded-2xl border border-[#d9c6ba] bg-white px-4 py-3 text-sm font-semibold text-[#210505] transition hover:border-[#7a0000]/30 hover:text-[#7a0000]"
                 >
                   Logout
