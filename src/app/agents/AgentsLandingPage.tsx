@@ -2,11 +2,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, BadgeCheck, CircleDollarSign, Headphones, MapPin, PanelsTopLeft, ShieldCheck, Users } from "lucide-react";
 import AgentCatalogueProductCard from "@/app/agents/_components/AgentCatalogueProductCard";
+import AgentStorefrontAuthActions from "@/app/agents/_components/AgentStorefrontAuthActions";
 import AgentWhatsAppFloat from "@/app/agents/_components/AgentWhatsAppFloat";
 import { getAgentCommissionValue, getPopularitySignalsByProduct, sortAgentProductsBySignals } from "@/app/agents/agentCatalogue";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { buildShopCategories, type ShopProduct } from "@/app/shop/shopData";
 import { getShopProducts } from "@/app/shop/shopApi";
+import { auth } from "@/lib/auth";
 import { getShopImageOverrides } from "@/lib/shopImageOverrides";
 import { agentPath } from "@/lib/agents/host";
 
@@ -33,10 +35,12 @@ function getProductsForCategory(
 export default async function AgentsLandingPage({
   useRootPaths = false,
 }: AgentsLandingPageProps) {
-  const [products, imageOverrides] = await Promise.all([
+  const [products, imageOverrides, session] = await Promise.all([
     getShopProducts(),
     getShopImageOverrides(),
+    auth().catch(() => null),
   ]);
+  const isLoggedInAgent = Boolean((session?.user as { isAgent?: boolean } | undefined)?.isAgent);
 
   const popularitySignals = await getPopularitySignalsByProduct(products);
   const sortedProducts = sortAgentProductsBySignals(products, popularitySignals, "featured");
@@ -51,6 +55,7 @@ export default async function AgentsLandingPage({
 
   const otpHref = `/login/phone?callbackUrl=${encodeURIComponent(agentPath("/dashboard", useRootPaths))}`;
   const dashboardHref = agentPath("/dashboard", useRootPaths);
+  const homeHref = agentPath("/", useRootPaths);
   const productsHref = agentPath("/products", useRootPaths);
   const totalCommissionVisible = featuredProducts.filter((product) => getAgentCommissionValue(product) > 0).length;
 
@@ -100,9 +105,12 @@ export default async function AgentsLandingPage({
                 <Link href={productsHref} className={shopStyles.secondaryButton}>
                   Browse products
                 </Link>
-                <Link href={otpHref} className={shopStyles.primaryButton}>
-                  Login with OTP
-                </Link>
+                <AgentStorefrontAuthActions
+                  dashboardHref={dashboardHref}
+                  loginHref={otpHref}
+                  homeHref={homeHref}
+                  loggedIn={isLoggedInAgent}
+                />
               </div>
             </div>
 
@@ -251,8 +259,8 @@ export default async function AgentsLandingPage({
                 <AgentCatalogueProductCard
                   key={product.id}
                   product={product}
-                  primaryHref={otpHref}
-                  primaryLabel="Refer & earn"
+                  loginHref={otpHref}
+                  loggedIn={isLoggedInAgent}
                   useRootPaths={useRootPaths}
                 />
               ))}
@@ -285,8 +293,8 @@ export default async function AgentsLandingPage({
                   <AgentCatalogueProductCard
                     key={product.id}
                     product={product}
-                    primaryHref={otpHref}
-                    primaryLabel="Refer kit"
+                    loginHref={otpHref}
+                    loggedIn={isLoggedInAgent}
                     useRootPaths={useRootPaths}
                   />
                 ))}
@@ -309,8 +317,8 @@ export default async function AgentsLandingPage({
                       <AgentCatalogueProductCard
                         key={product.id}
                         product={product}
-                        primaryHref={otpHref}
-                        primaryLabel="Refer battery"
+                        loginHref={otpHref}
+                        loggedIn={isLoggedInAgent}
                         useRootPaths={useRootPaths}
                       />
                     ))}
@@ -327,8 +335,8 @@ export default async function AgentsLandingPage({
                       <AgentCatalogueProductCard
                         key={product.id}
                         product={product}
-                        primaryHref={otpHref}
-                        primaryLabel="Refer inverter"
+                        loginHref={otpHref}
+                        loggedIn={isLoggedInAgent}
                         useRootPaths={useRootPaths}
                       />
                     ))}
@@ -345,8 +353,8 @@ export default async function AgentsLandingPage({
                       <AgentCatalogueProductCard
                         key={product.id}
                         product={product}
-                        primaryHref={otpHref}
-                        primaryLabel="Refer pump"
+                        loginHref={otpHref}
+                        loggedIn={isLoggedInAgent}
                         useRootPaths={useRootPaths}
                       />
                     ))}

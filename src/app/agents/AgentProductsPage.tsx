@@ -146,13 +146,16 @@ export default async function AgentProductsPage({
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const session = await auth().catch(() => null);
   const isLoggedInAgent = Boolean((session?.user as { isAgent?: boolean } | undefined)?.isAgent);
+  const rawMinPrice = resolvedSearchParams?.minPrice || "";
+  const rawMaxPrice = resolvedSearchParams?.maxPrice || "";
+  const normalizedIncomingRange = normalizePriceRange(rawMinPrice, rawMaxPrice);
   const filters: AgentListingFilters = {
     category: resolvedSearchParams?.category || "",
     sub: resolvedSearchParams?.sub || "",
     brand: resolvedSearchParams?.brand || "",
     price: resolvedSearchParams?.price || "",
-    minPrice: resolvedSearchParams?.minPrice || "",
-    maxPrice: resolvedSearchParams?.maxPrice || "",
+    minPrice: rawMinPrice && normalizedIncomingRange.min !== undefined ? String(normalizedIncomingRange.min) : "",
+    maxPrice: rawMaxPrice && normalizedIncomingRange.max !== undefined ? String(normalizedIncomingRange.max) : "",
     stock: resolvedSearchParams?.stock || "",
     warranty: resolvedSearchParams?.warranty || "",
     sort: resolvedSearchParams?.sort || "featured",
@@ -162,7 +165,6 @@ export default async function AgentProductsPage({
   const otpHref = `/login/phone?callbackUrl=${encodeURIComponent(agentPath("/dashboard", useRootPaths))}`;
   const dashboardHref = agentPath("/dashboard", useRootPaths);
   const homeHref = agentPath("/", useRootPaths);
-  const registerHref = otpHref;
   const activeCategory = getShopCategoryDefinition(filters.category || "");
   const activeSubcategory = activeCategory ? getShopSubcategoryDefinition(activeCategory.value, filters.sub || "") : null;
   const products = await getShopProducts({
@@ -570,7 +572,8 @@ export default async function AgentProductsPage({
                     <AgentCatalogueProductCard
                       key={product.id}
                       product={product}
-                      primaryHref={registerHref}
+                      loginHref={otpHref}
+                      loggedIn={isLoggedInAgent}
                       useRootPaths={useRootPaths}
                     />
                   ))}

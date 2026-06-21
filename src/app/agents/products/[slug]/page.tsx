@@ -19,8 +19,8 @@ import { getProductAvailabilityBadge, getProductAvailabilityMessage, getProductC
 import { getShopProductBySlug, getShopProductBySlugOrOpsProductId, getShopProducts } from "@/app/shop/shopApi";
 import { buildProductJsonLd, buildShopMetadata } from "@/app/shop/shopMetadata";
 import type { ShopProduct } from "@/app/shop/shopData";
+import { auth } from "@/lib/auth";
 import { agentPath, isAgentsHost } from "@/lib/agents/host";
-import { requireAgentSession } from "@/lib/agents/auth";
 
 function normalizeProductText(value: string) {
   return value
@@ -170,7 +170,8 @@ export default async function AgentProductDetailPage({
 }) {
   const host = (await headers()).get("host");
   const useRootPaths = isAgentsHost(host);
-  const agentSession = await requireAgentSession();
+  const session = await auth().catch(() => null);
+  const isLoggedInAgent = Boolean((session?.user as { isAgent?: boolean } | undefined)?.isAgent);
   const { slug } = await params;
   const resolvedSearchParams = await Promise.resolve(searchParams ?? {});
   const product = await getShopProductBySlugOrOpsProductId(slug, resolvedSearchParams.opsProductId);
@@ -204,7 +205,6 @@ export default async function AgentProductDetailPage({
     product.price > 0 && displayCommissionAmount > 0 ? Math.round((displayCommissionAmount / product.price) * 100) : 0;
   const otpHref = `/login/phone?callbackUrl=${encodeURIComponent(agentPath("/dashboard", useRootPaths))}`;
   const loginHref = otpHref;
-  const registerHref = otpHref;
   const dashboardHref = agentPath("/dashboard", useRootPaths);
   const commissionHref = agentPath("/withdrawals", useRootPaths);
   const supportItems = [
@@ -254,7 +254,7 @@ export default async function AgentProductDetailPage({
             <Link href={getAgentProductsHref(useRootPaths)} className={shopStyles.secondaryButton}>
               All Products
             </Link>
-            {agentSession ? (
+            {isLoggedInAgent ? (
               <>
                 <Link href={dashboardHref} className={shopStyles.secondaryButton}>
                   Dashboard
@@ -268,7 +268,7 @@ export default async function AgentProductDetailPage({
                 <Link href={loginHref} className={shopStyles.secondaryButton}>
                   Log in
                 </Link>
-                <Link href={registerHref} className={shopStyles.primaryButton}>
+                <Link href={loginHref} className={shopStyles.primaryButton}>
                   Start earning
                 </Link>
               </>
@@ -367,7 +367,7 @@ export default async function AgentProductDetailPage({
                     <AgentProductDetailActions
                       product={product}
                       loginHref={loginHref}
-                      registerHref={registerHref}
+                      loggedIn={isLoggedInAgent}
                     />
                   </div>
 
@@ -437,8 +437,8 @@ export default async function AgentProductDetailPage({
                   <AgentCatalogueProductCard
                     key={item.id}
                     product={item}
-                    primaryHref={agentPath("/login")}
-                    primaryLabel="Open dashboard"
+                    loginHref={otpHref}
+                    loggedIn={isLoggedInAgent}
                     useRootPaths={useRootPaths}
                   />
                 ))}
