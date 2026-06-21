@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { isAgentLeadOwnershipTableAvailable } from "@/lib/agentLeadOwnershipTable";
 import { findSafeCustomerProfileByUserId, getUserProfileColumnMap, updateSafeUserById } from "@/lib/customerProfile";
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
@@ -112,6 +113,8 @@ export async function mergeCustomerIdentityUsers(args: {
     sourceUserIds,
   });
 
+  const hasAgentLeadOwnershipTable = await isAgentLeadOwnershipTableAvailable();
+
   await prisma.$transaction(async (tx) => {
     const agentProfiles = await tx.agentProfile.findMany({
       where: {
@@ -140,7 +143,7 @@ export async function mergeCustomerIdentityUsers(args: {
       });
     }
 
-    await Promise.all([
+    const reassignments = [
       tx.agentSale.updateMany({
         where: { customerUserId: { in: sourceUserIds } },
         data: { customerUserId: args.targetUserId },
@@ -149,11 +152,18 @@ export async function mergeCustomerIdentityUsers(args: {
         where: { customerUserId: { in: sourceUserIds } },
         data: { customerUserId: args.targetUserId },
       }),
-      tx.agentLeadOwnership.updateMany({
-        where: { customerUserId: { in: sourceUserIds } },
-        data: { customerUserId: args.targetUserId },
-      }),
-    ]);
+    ];
+
+    if (hasAgentLeadOwnershipTable) {
+      reassignments.push(
+        tx.agentLeadOwnership.updateMany({
+          where: { customerUserId: { in: sourceUserIds } },
+          data: { customerUserId: args.targetUserId },
+        }),
+      );
+    }
+
+    await Promise.all(reassignments);
   });
 
   await reassignQuoteRequestsCustomerUser(sourceUserIds, args.targetUserId);
