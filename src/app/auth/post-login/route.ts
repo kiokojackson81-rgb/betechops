@@ -38,7 +38,9 @@ export async function GET(req: Request) {
 
   if (!session) {
     const intendedTarget = rawCallback && rawCallback.startsWith("/")
-      ? normalizeAgentTarget(rawCallback)
+      ? shouldUseAgentLogin
+        ? getSafeAgentTarget(rawCallback)
+        : normalizeAgentTarget(rawCallback)
       : shouldUseAgentLogin
         ? agentPath("/dashboard", useRootAgentPaths)
         : "/account";
@@ -122,12 +124,12 @@ export async function GET(req: Request) {
 
     try {
       if (decoded.startsWith('/')) {
-        target = isAgentsHost(host) && isAgent ? getSafeAgentTarget(decoded) : normalizeAgentTarget(decoded);
+        target = isAgentsHost(host) ? getSafeAgentTarget(decoded) : normalizeAgentTarget(decoded);
       } else {
         const cbUrl = new URL(decoded, url);
         if (cbUrl.origin === url.origin) {
           const callbackTarget = cbUrl.pathname + cbUrl.search + cbUrl.hash;
-          target = isAgentsHost(host) && isAgent ? getSafeAgentTarget(callbackTarget) : normalizeAgentTarget(callbackTarget);
+          target = isAgentsHost(host) ? getSafeAgentTarget(callbackTarget) : normalizeAgentTarget(callbackTarget);
         }
       }
     } catch {

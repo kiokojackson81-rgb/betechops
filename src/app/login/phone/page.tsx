@@ -39,6 +39,7 @@ function normalizeAgentCallbackForHost(target: string, isAgentsDomainFlow: boole
   if (!isAgentsDomainFlow) return target;
   if (target === "/agents") return "/";
   if (target.startsWith("/agents/")) return target.slice("/agents".length) || "/";
+  if (target === "/account" || target.startsWith("/account/")) return "/dashboard";
   return target;
 }
 
