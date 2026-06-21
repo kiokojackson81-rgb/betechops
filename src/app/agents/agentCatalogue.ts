@@ -73,6 +73,13 @@ export function normalizePriceRange(minPrice?: string, maxPrice?: string) {
   const hasMin = Number.isFinite(parsedMin) && parsedMin >= 0;
   const hasMax = Number.isFinite(parsedMax) && parsedMax >= 0;
 
+  if (hasMin && hasMax && parsedMin === 0 && parsedMax === 0) {
+    return {
+      min: undefined,
+      max: undefined,
+    };
+  }
+
   if (hasMin && hasMax) {
     return {
       min: Math.min(parsedMin, parsedMax),

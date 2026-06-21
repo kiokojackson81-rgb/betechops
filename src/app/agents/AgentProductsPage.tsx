@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { ChevronDown, Filter, SlidersHorizontal, X } from "lucide-react";
 import AgentCatalogueProductCard from "@/app/agents/_components/AgentCatalogueProductCard";
+import AgentStorefrontAuthActions from "@/app/agents/_components/AgentStorefrontAuthActions";
 import {
   AGENT_PRICE_OPTIONS,
   AGENT_SORT_OPTIONS,
@@ -25,6 +26,7 @@ import {
   SHOP_CATEGORY_DEFINITIONS,
 } from "@/app/shop/shopCatalogConfig";
 import { getShopProducts } from "@/app/shop/shopApi";
+import { auth } from "@/lib/auth";
 import { agentPath } from "@/lib/agents/host";
 
 type AgentProductsPageProps = {
@@ -142,6 +144,8 @@ export default async function AgentProductsPage({
   useRootPaths = false,
 }: AgentProductsPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const session = await auth().catch(() => null);
+  const isLoggedInAgent = Boolean((session?.user as { isAgent?: boolean } | undefined)?.isAgent);
   const filters: AgentListingFilters = {
     category: resolvedSearchParams?.category || "",
     sub: resolvedSearchParams?.sub || "",
@@ -156,6 +160,8 @@ export default async function AgentProductsPage({
   const manualPriceRange = normalizePriceRange(filters.minPrice, filters.maxPrice);
 
   const otpHref = `/login/phone?callbackUrl=${encodeURIComponent(agentPath("/dashboard", useRootPaths))}`;
+  const dashboardHref = agentPath("/dashboard", useRootPaths);
+  const homeHref = agentPath("/", useRootPaths);
   const registerHref = otpHref;
   const activeCategory = getShopCategoryDefinition(filters.category || "");
   const activeSubcategory = activeCategory ? getShopSubcategoryDefinition(activeCategory.value, filters.sub || "") : null;
@@ -241,6 +247,12 @@ export default async function AgentProductsPage({
               </p>
             </div>
             <div className="flex flex-col gap-3 lg:items-end">
+              <AgentStorefrontAuthActions
+                dashboardHref={dashboardHref}
+                loginHref={otpHref}
+                homeHref={homeHref}
+                loggedIn={isLoggedInAgent}
+              />
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-[20px] border border-[#7a0000]/10 bg-[#fffaf2] px-4 py-3">
                   <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000]">Products shown</div>
