@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   BadgeCheck,
+  CirclePlay,
   CircleDollarSign,
   Headphones,
   MapPinned,
@@ -177,10 +178,10 @@ export default async function AgentsLandingPage({
               />
             </div>
             <div className="hidden leading-tight sm:block">
-              <div className="text-[1.1rem] font-black uppercase tracking-[0.18em] text-[#7a0000]">
+              <div className="text-sm font-black uppercase tracking-[0.18em] text-[#7a0000]">
                 Betech Solar
               </div>
-              <div className="text-[1.1rem] text-slate-500">Solutions Kenya</div>
+              <div className="text-xs text-slate-500">Solutions Kenya</div>
             </div>
           </Link>
 
@@ -200,8 +201,8 @@ export default async function AgentsLandingPage({
                 <Link href={dashboardHref} className={shopStyles.secondaryButton}>
                   Go to dashboard
                 </Link>
-                <Link href={dashboardHref} className={shopStyles.primaryButton}>
-                  Submit order &amp; earn
+                <Link href={productsHref} className={shopStyles.primaryButton}>
+                  Browse products
                 </Link>
               </>
             ) : (
@@ -214,6 +215,56 @@ export default async function AgentsLandingPage({
                 </Link>
               </>
             )}
+          </div>
+        </div>
+
+        <div className="border-t border-[#7a0000]/8 xl:hidden">
+          <div className="overflow-x-auto px-4 py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:px-6 lg:px-8">
+            <div className="flex min-w-max items-center gap-2">
+              <a
+                href="#home"
+                className="inline-flex items-center gap-1.5 rounded-full border border-[#7a0000]/18 bg-[#fff3d8] px-3 py-2 text-[11px] font-semibold text-[#7a0000] shadow-[0_8px_20px_rgba(15,23,42,0.04)]"
+              >
+                Home
+                <span className="h-1.5 w-1.5 rounded-full bg-[#f2b20f]" />
+              </a>
+              <a
+                href="#how-it-works"
+                className="inline-flex items-center rounded-full border border-[#7a0000]/12 bg-white px-3 py-2 text-[11px] font-semibold text-slate-700 shadow-[0_8px_20px_rgba(15,23,42,0.04)]"
+              >
+                How It Works
+              </a>
+              <a
+                href="#benefits"
+                className="inline-flex items-center rounded-full border border-[#7a0000]/12 bg-white px-3 py-2 text-[11px] font-semibold text-slate-700 shadow-[0_8px_20px_rgba(15,23,42,0.04)]"
+              >
+                Benefits
+              </a>
+              <a
+                href="#products"
+                className="inline-flex items-center rounded-full border border-[#7a0000]/12 bg-white px-3 py-2 text-[11px] font-semibold text-slate-700 shadow-[0_8px_20px_rgba(15,23,42,0.04)]"
+              >
+                Products
+              </a>
+              <a
+                href="#earnings"
+                className="inline-flex items-center rounded-full border border-[#7a0000]/12 bg-white px-3 py-2 text-[11px] font-semibold text-slate-700 shadow-[0_8px_20px_rgba(15,23,42,0.04)]"
+              >
+                Earnings
+              </a>
+              <a
+                href="#faqs"
+                className="inline-flex items-center rounded-full border border-[#7a0000]/12 bg-white px-3 py-2 text-[11px] font-semibold text-slate-700 shadow-[0_8px_20px_rgba(15,23,42,0.04)]"
+              >
+                FAQs
+              </a>
+              <a
+                href="#contact"
+                className="inline-flex items-center rounded-full border border-[#7a0000]/12 bg-white px-3 py-2 text-[11px] font-semibold text-slate-700 shadow-[0_8px_20px_rgba(15,23,42,0.04)]"
+              >
+                Contact
+              </a>
+            </div>
           </div>
         </div>
       </header>
@@ -229,24 +280,44 @@ export default async function AgentsLandingPage({
             </div>
             <div className="max-w-3xl">
               <h1 className="text-4xl font-black leading-[0.95] tracking-[-0.04em] text-slate-950 sm:text-5xl lg:text-[4.5rem]">
-                Earn Money By Referring Solar Customers
+                Earn Money By <span className="text-[#7a0000]">Referring Solar</span>{" "}
+                Customers <span className="text-[#f2b20f]">☀️</span>
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600 sm:text-lg">
-                Share Betech Solar products, submit customer orders, and earn commission after successful delivery and payment without managing fulfilment yourself.
+                Help customers access trusted solar products and earn commission directly to M-Pesa. Refer customers, submit orders, and earn from every successful sale.
               </p>
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <Link href={productsHref} className={shopStyles.primaryButton}>
-                Browse Products
-              </Link>
-              <Link
-                href={isLoggedInAgent ? dashboardHref : otpHref}
-                className={shopStyles.secondaryButton}
-              >
-                {isLoggedInAgent ? "Go to dashboard" : "Login with OTP"}
-              </Link>
+              {isLoggedInAgent ? (
+                <>
+                  <Link href={dashboardHref} className={shopStyles.primaryButton}>
+                    Go to dashboard
+                  </Link>
+                  <Link href={productsHref} className={shopStyles.secondaryButton}>
+                    Browse products
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link href={otpHref} className={shopStyles.primaryButton}>
+                    Start Earning With Betech
+                  </Link>
+                  <Link href={otpHref} className={shopStyles.secondaryButton}>
+                    Sign In
+                  </Link>
+                </>
+              )}
+              <a href="#how-it-works" className={shopStyles.goldButton}>
+                <CirclePlay className="h-5 w-5" />
+                How It Works
+              </a>
             </div>
+
+            <p className="text-sm font-medium text-slate-600 sm:hidden">
+              Join free, refer products, and start unlocking 6% commission across
+              Kenya.
+            </p>
 
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {heroTrustPoints.map((item) => {
