@@ -35,7 +35,7 @@ export const AGENT_PRICE_OPTIONS = [
 export const AGENT_STOCK_OPTIONS = [
   { value: "in_stock", label: "In stock" },
   { value: "limited_stock", label: "Limited stock" },
-  { value: "quote_only", label: "Request quote" },
+  { value: "quote_only", label: "Quote required" },
 ] as const;
 
 export type AgentListingFilters = {

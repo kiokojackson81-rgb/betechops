@@ -196,7 +196,7 @@ export default async function AgentProductDetailPage({
     in_stock: "In stock",
     limited_stock: "Limited stock",
     preorder: "Pre-order",
-    quote_only: "Request quote",
+    quote_only: "Quote required",
   } as const;
   const commissionAmount = getAgentCommissionValue(product);
   const displayCommissionAmount = getAgentPotentialCommissionValue(product);
@@ -269,7 +269,7 @@ export default async function AgentProductDetailPage({
                   Log in
                 </Link>
                 <Link href={loginHref} className={shopStyles.primaryButton}>
-                  Start earning
+                  Submit order & earn
                 </Link>
               </>
             )}

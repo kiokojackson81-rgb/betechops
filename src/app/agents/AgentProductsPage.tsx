@@ -214,7 +214,7 @@ export default async function AgentProductsPage({
           href: getProductsHref(filters, useRootPaths, { price: "" }),
         }
       : null,
-    manualPriceRange.min !== undefined || manualPriceRange.max !== undefined
+    formatPriceRangeLabel(manualPriceRange.min, manualPriceRange.max)
       ? {
           label: formatPriceRangeLabel(manualPriceRange.min, manualPriceRange.max),
           href: getProductsHref(filters, useRootPaths, { minPrice: "", maxPrice: "" }),

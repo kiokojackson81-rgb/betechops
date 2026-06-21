@@ -87,7 +87,7 @@ export default function AgentCatalogueProductCard({
               : product.stockStatus === "limited_stock"
                 ? "Limited stock"
                 : product.stockStatus === "quote_only"
-                  ? "Request quote"
+                  ? "Quote required"
                   : "Pre-order"}
           </span>
           {requiresApproval ? (
@@ -96,7 +96,7 @@ export default function AgentCatalogueProductCard({
             </span>
           ) : (
             <span className="inline-flex rounded-full border border-[#f2b20f]/20 bg-[#fff8e8] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#8a5a00]">
-              Ready to refer
+              Referral ready
             </span>
           )}
         </div>
