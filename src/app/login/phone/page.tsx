@@ -5,6 +5,8 @@ import { signIn, useSession } from "next-auth/react";
 import { getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
 import { isAgentsHost } from "@/lib/runtimeUrls";
 
+const AGENT_LOGIN_CALLBACK_STORAGE_KEY = "agentLoginCallbackUrl";
+
 type AccountPreview = {
   name?: string | null;
   email?: string | null;
@@ -47,14 +49,37 @@ function getDefaultCallbackForHost(isAgentsDomainFlow: boolean) {
   return isAgentsDomainFlow ? "/dashboard" : "/account";
 }
 
-function getResolvedPostLoginUrlForFlow(target: string, isAgentsDomainFlow: boolean, isAgentFlow: boolean) {
-  const normalizedTarget = normalizeAgentCallbackForHost(target || getDefaultCallbackForHost(isAgentsDomainFlow), isAgentsDomainFlow);
-  if (!isAgentFlow) return normalizedTarget;
-  const safeAgentTarget =
-    normalizedTarget.startsWith("/") && normalizedTarget !== "/account" && !normalizedTarget.startsWith("/account/")
-      ? normalizedTarget
-      : "/dashboard";
-  return `/auth/post-login?callbackUrl=${encodeURIComponent(safeAgentTarget)}`;
+function getStoredCallbackUrl() {
+  if (typeof window === "undefined") return null;
+  return window.sessionStorage.getItem(AGENT_LOGIN_CALLBACK_STORAGE_KEY);
+}
+
+function setStoredCallbackUrl(target: string) {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.setItem(AGENT_LOGIN_CALLBACK_STORAGE_KEY, target);
+}
+
+function clearStoredCallbackUrl() {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.removeItem(AGENT_LOGIN_CALLBACK_STORAGE_KEY);
+}
+
+function resolveCallbackUrl(
+  target: string | null | undefined,
+  isAgentsDomainFlow: boolean,
+  fallback?: string | null,
+) {
+  const normalizedTarget = normalizeAgentCallbackForHost(
+    target || fallback || getDefaultCallbackForHost(isAgentsDomainFlow),
+    isAgentsDomainFlow,
+  );
+  if (!isAgentsDomainFlow) return normalizedTarget;
+
+  if (normalizedTarget.startsWith("/account")) {
+    return "/dashboard";
+  }
+
+  return normalizedTarget.startsWith("/") ? normalizedTarget : "/dashboard";
 }
 
 async function waitForAuthenticatedSession(expectAgentSession: boolean, attempts = 20, delayMs = 250) {
@@ -127,8 +152,11 @@ export default function PhoneLoginPage() {
     const nextIsAgentsDomainFlow = isAgentsHost(window.location.host);
     setIsAgentsDomainFlow(nextIsAgentsDomainFlow);
     const params = new URLSearchParams(window.location.search);
-    const requestedCallback = params.get("callbackUrl") || getDefaultCallbackForHost(nextIsAgentsDomainFlow);
-    setCallbackUrl(normalizeAgentCallbackForHost(requestedCallback, nextIsAgentsDomainFlow));
+    const requestedCallback = params.get("callbackUrl");
+    const storedCallback = getStoredCallbackUrl();
+    const resolvedCallback = resolveCallbackUrl(requestedCallback, nextIsAgentsDomainFlow, storedCallback);
+    setStoredCallbackUrl(resolvedCallback);
+    setCallbackUrl(resolvedCallback);
     setCallbackReady(true);
   }, []);
 
@@ -139,7 +167,9 @@ export default function PhoneLoginPage() {
     const target =
       postAuthRedirect || (step === "identify" ? callbackUrl || getDefaultCallbackForHost(isAgentsDomainFlow) : null);
     if (!target) return;
-    window.location.replace(getResolvedPostLoginUrlForFlow(target, isAgentsDomainFlow, isAgentFlow));
+    const resolvedTarget = resolveCallbackUrl(target, isAgentsDomainFlow, getStoredCallbackUrl());
+    clearStoredCallbackUrl();
+    window.location.replace(resolvedTarget);
   }, [callbackReady, callbackUrl, postAuthRedirect, status, step, isAgentFlow, isAgentsDomainFlow]);
 
   if (status === "authenticated" && step !== "complete-profile") {
@@ -184,6 +214,7 @@ export default function PhoneLoginPage() {
     setBusy(true);
     setError(null);
     setMessage(null);
+    setStoredCallbackUrl(callbackUrl || getDefaultCallbackForHost(isAgentsDomainFlow));
 
     try {
       const response = await fetch("/api/auth/identify", {
@@ -263,10 +294,12 @@ export default function PhoneLoginPage() {
         throw new Error(payload?.error || "OTP verification failed.");
       }
 
-      const target = normalizeAgentCallbackForHost(
-        payload.redirectTo || callbackUrl || getDefaultCallbackForHost(isAgentsDomainFlow),
+      const target = resolveCallbackUrl(
+        payload.redirectTo,
         isAgentsDomainFlow,
+        callbackUrl || getStoredCallbackUrl(),
       );
+      setStoredCallbackUrl(target);
       setPostAuthRedirect(target);
       setVerificationToken(payload.verificationToken);
 
@@ -298,7 +331,8 @@ export default function PhoneLoginPage() {
       }
 
       await waitForAuthenticatedSession(isAgentFlow);
-      window.location.href = getResolvedPostLoginUrlForFlow(target, isAgentsDomainFlow, isAgentFlow);
+      clearStoredCallbackUrl();
+      window.location.replace(target);
     } catch (verifyError) {
       setError(verifyError instanceof Error ? verifyError.message : "Invalid OTP.");
     } finally {
@@ -335,12 +369,14 @@ export default function PhoneLoginPage() {
           ? payload.verificationToken
           : verificationToken;
 
-      const target = normalizeAgentCallbackForHost(
-        postAuthRedirect || callbackUrl || getDefaultCallbackForHost(isAgentsDomainFlow),
+      const target = resolveCallbackUrl(
+        postAuthRedirect,
         isAgentsDomainFlow,
+        callbackUrl || getStoredCallbackUrl(),
       );
       if (!effectiveVerificationToken) {
-        window.location.href = target;
+        clearStoredCallbackUrl();
+        window.location.replace(target);
         return;
       }
 
@@ -355,7 +391,8 @@ export default function PhoneLoginPage() {
       }
 
       await waitForAuthenticatedSession(isAgentFlow);
-      window.location.href = getResolvedPostLoginUrlForFlow(target, isAgentsDomainFlow, isAgentFlow);
+      clearStoredCallbackUrl();
+      window.location.replace(target);
     } catch (profileError) {
       setError(profileError instanceof Error ? profileError.message : "Unable to save your profile.");
     } finally {
