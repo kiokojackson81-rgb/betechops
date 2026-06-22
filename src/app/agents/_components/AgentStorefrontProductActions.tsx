@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -82,6 +82,8 @@ export default function AgentStorefrontProductActions({
   compact = false,
 }: AgentStorefrontProductActionsProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { data: session, status } = useSession();
   const [mode, setMode] = useState<ModalMode>(null);
   const [busy, setBusy] = useState(false);
@@ -91,6 +93,7 @@ export default function AgentStorefrontProductActions({
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
   const modalCardRef = useRef<HTMLDivElement | null>(null);
+  const restoredActionRef = useRef(false);
   const customerNameInputRef = useRef<HTMLInputElement | null>(null);
   const customerPhoneInputRef = useRef<HTMLInputElement | null>(null);
   const customerCountySelectRef = useRef<HTMLSelectElement | null>(null);
@@ -130,11 +133,39 @@ export default function AgentStorefrontProductActions({
     );
   const selectedPayment =
     paymentOptions.find((option) => option.value === orderForm.paymentOption) ?? paymentOptions[0];
+  const pendingAuthAction = searchParams?.get("authAction");
+  const pendingProductId = searchParams?.get("productId");
 
   useEffect(() => {
     setPortalReady(true);
     return () => setPortalReady(false);
   }, []);
+
+  useEffect(() => {
+    if (!portalReady || !effectiveLoggedIn || restoredActionRef.current) return;
+    if (!pendingAuthAction || pendingProductId !== product.id) return;
+    if (pendingAuthAction !== "submit" && pendingAuthAction !== "refer") return;
+
+    restoredActionRef.current = true;
+    resetFeedback();
+    setMode(pendingAuthAction === "submit" ? "order" : "refer");
+
+    const nextParams = new URLSearchParams(searchParams?.toString() || "");
+    nextParams.delete("authAction");
+    nextParams.delete("productId");
+    const nextQuery = nextParams.toString();
+    const nextUrl = `${pathname}${nextQuery ? `?${nextQuery}` : ""}`;
+    router.replace(nextUrl, { scroll: false });
+  }, [
+    effectiveLoggedIn,
+    pathname,
+    pendingAuthAction,
+    pendingProductId,
+    portalReady,
+    product.id,
+    router,
+    searchParams,
+  ]);
 
   useEffect(() => {
     if (!mode || !portalReady) return;
@@ -210,7 +241,14 @@ export default function AgentStorefrontProductActions({
       return;
     }
 
-    router.push(loginHref);
+    const nextParams = new URLSearchParams(searchParams?.toString() || "");
+    nextParams.set("authAction", nextMode === "order" ? "submit" : "refer");
+    nextParams.set("productId", product.id);
+    const callbackUrl = pathname
+      ? `${pathname}${nextParams.toString() ? `?${nextParams.toString()}` : ""}`
+      : loginHref;
+
+    router.push(`/login/phone?callbackUrl=${encodeURIComponent(callbackUrl)}`);
   }
 
   function openMode(event: React.MouseEvent<HTMLButtonElement>, nextMode: Exclude<ModalMode, null>) {
