@@ -160,6 +160,14 @@ async function createSafeCustomerIdentityUser(input: {
   const fallbackEmail = `customer-${generatedId}@placeholder.betech.local`;
   const now = new Date();
   const data: Array<[string, string | boolean | Date | null]> = [];
+  const directInsertValues: Array<[string, string | null]> = [
+    ["name", input.name ?? null],
+    ["phone", input.phone ?? null],
+    ["county", input.county ?? null],
+    ["town", input.town ?? null],
+    ["estateLandmark", input.estateLandmark ?? null],
+    ["locationNotes", input.locationNotes ?? null],
+  ];
 
   if (insertMeta.has("id")) {
     data.push(["id", generatedId]);
@@ -171,6 +179,12 @@ async function createSafeCustomerIdentityUser(input: {
       input.email ??
       (emailMeta?.is_nullable === "NO" && !emailMeta.column_default ? fallbackEmail : null);
     data.push(["email", emailValue]);
+  }
+
+  for (const [column, value] of directInsertValues) {
+    if (insertMeta.has(column)) {
+      data.push([column, value]);
+    }
   }
 
   const roleMeta = insertMeta.get("role");
@@ -196,6 +210,15 @@ async function createSafeCustomerIdentityUser(input: {
   const columnSql = data.map(([column]) => `"${column}"`).join(", ");
   const valueSql = data.map((_, index) => `$${index + 1}`).join(", ");
   const values = data.map(([, value]) => value);
+
+  console.log("[customerIdentity] creating safe customer identity user", {
+    insertColumns: data.map(([column]) => column),
+    hasPhone: Boolean(input.phone),
+    hasEmail: Boolean(input.email),
+    hasName: Boolean(input.name),
+    hasCounty: Boolean(input.county),
+    hasTown: Boolean(input.town),
+  });
 
   const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
     `INSERT INTO "User" (${columnSql}) VALUES (${valueSql}) RETURNING id`,

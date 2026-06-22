@@ -454,7 +454,6 @@ export default function AgentStorefrontProductActions({
         <div
           className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/55 px-4 py-6"
           onClick={(event) => {
-            event.preventDefault();
             event.stopPropagation();
           }}
         >
@@ -462,7 +461,6 @@ export default function AgentStorefrontProductActions({
             ref={modalCardRef}
             className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-[#7a0000]/10 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.24)]"
             onClick={(event) => {
-              event.preventDefault();
               event.stopPropagation();
             }}
           >
