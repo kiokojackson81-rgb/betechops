@@ -137,12 +137,16 @@ export default function AgentStorefrontProductActions({
     setSuccess(null);
   }
 
-  function openMode(nextMode: Exclude<ModalMode, null>) {
+  function openMode(event: React.MouseEvent<HTMLButtonElement>, nextMode: Exclude<ModalMode, null>) {
+    event.preventDefault();
+    event.stopPropagation();
     resetFeedback();
     setMode(nextMode);
   }
 
-  function closeModal() {
+  function closeModal(event?: React.MouseEvent<HTMLButtonElement | HTMLDivElement>) {
+    event?.preventDefault();
+    event?.stopPropagation();
     setMode(null);
     setBusy(false);
     resetFeedback();
@@ -168,6 +172,7 @@ export default function AgentStorefrontProductActions({
 
   async function handleSubmitOrder(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    event.stopPropagation();
     resetFeedback();
     setBusy(true);
 
@@ -226,6 +231,7 @@ export default function AgentStorefrontProductActions({
 
   function handleRefer(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    event.stopPropagation();
     resetFeedback();
 
     const normalizedPhone = normalizeKenyanPhone(referForm.customerPhone);
@@ -274,14 +280,14 @@ export default function AgentStorefrontProductActions({
       <div className={compact ? "grid grid-cols-2 gap-2" : "grid gap-3 sm:grid-cols-2"}>
         <button
           type="button"
-          onClick={() => openMode("order")}
+          onClick={(event) => openMode(event, "order")}
           className="inline-flex min-h-[2.95rem] items-center justify-center gap-2 rounded-2xl bg-[#7a0000] px-4 py-3 text-sm font-bold text-white shadow-[0_16px_34px_rgba(122,0,0,0.18)] transition hover:-translate-y-0.5"
         >
           Submit order & earn
         </button>
         <button
           type="button"
-          onClick={() => openMode("refer")}
+          onClick={(event) => openMode(event, "refer")}
           className="inline-flex min-h-[2.95rem] items-center justify-center gap-2 rounded-2xl border border-[#0f9d58]/20 bg-[#effcf4] px-4 py-3 text-sm font-bold text-[#0f9d58] shadow-[0_14px_28px_rgba(15,157,88,0.10)] transition hover:-translate-y-0.5"
         >
           Refer now
@@ -289,8 +295,20 @@ export default function AgentStorefrontProductActions({
       </div>
 
       {mode ? (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/55 px-4 py-6">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-[#7a0000]/10 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.24)]">
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/55 px-4 py-6"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+        >
+          <div
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-[#7a0000]/10 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.24)]"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+          >
             <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-[#7a0000]/8 bg-white px-5 py-4">
               <div>
                 <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">
@@ -305,7 +323,7 @@ export default function AgentStorefrontProductActions({
               </div>
               <button
                 type="button"
-                onClick={closeModal}
+                onClick={(event) => closeModal(event)}
                 className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#7a0000]/10 text-slate-500 transition hover:bg-[#fcfaf7] hover:text-[#7a0000]"
                 aria-label="Close"
               >
@@ -449,7 +467,7 @@ export default function AgentStorefrontProductActions({
                     </button>
                     <button
                       type="button"
-                      onClick={closeModal}
+                      onClick={(event) => closeModal(event)}
                       className="inline-flex min-h-[3rem] items-center justify-center rounded-2xl border border-[#7a0000]/12 bg-white px-5 py-3 text-sm font-semibold text-[#7a0000]"
                     >
                       Cancel
@@ -537,7 +555,7 @@ export default function AgentStorefrontProductActions({
                     </button>
                     <button
                       type="button"
-                      onClick={closeModal}
+                      onClick={(event) => closeModal(event)}
                       className="inline-flex min-h-[3rem] items-center justify-center rounded-2xl border border-[#7a0000]/12 bg-white px-5 py-3 text-sm font-semibold text-[#7a0000]"
                     >
                       Cancel

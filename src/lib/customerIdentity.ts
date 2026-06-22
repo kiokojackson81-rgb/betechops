@@ -79,6 +79,44 @@ export async function findSafeUserById(userId: string): Promise<SafeCustomerIden
   };
 }
 
+async function createSafeCustomerIdentityUser(input: {
+  name?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  county?: string | null;
+  town?: string | null;
+  estateLandmark?: string | null;
+  locationNotes?: string | null;
+}) {
+  const columns = await getUserProfileColumnMap();
+  const data: Array<[string, string | null]> = [
+    ["name", input.name ?? null],
+    ["phone", input.phone ?? null],
+    ["email", input.email ?? null],
+  ];
+
+  if (columns.county) data.push(["county", input.county ?? null]);
+  if (columns.town) data.push(["town", input.town ?? null]);
+  if (columns.estateLandmark) data.push(["estateLandmark", input.estateLandmark ?? null]);
+  if (columns.locationNotes) data.push(["locationNotes", input.locationNotes ?? null]);
+
+  const columnSql = data.map(([column]) => `"${column}"`).join(", ");
+  const valueSql = data.map((_, index) => `$${index + 1}`).join(", ");
+  const values = data.map(([, value]) => value);
+
+  const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+    `INSERT INTO "User" (${columnSql}) VALUES (${valueSql}) RETURNING id`,
+    ...values,
+  );
+
+  const createdId = rows[0]?.id;
+  if (!createdId) {
+    throw new Error("Failed to create customer account.");
+  }
+
+  return createdId;
+}
+
 export async function resolveExistingCustomerUsers(args: { normalizedPhone: string; normalizedEmail: string }) {
   const [phoneUser, emailUser] = await Promise.all([
     args.normalizedPhone ? findSafeUserByField("phone", args.normalizedPhone) : Promise.resolve(null),
@@ -291,20 +329,17 @@ export async function findOrCreateCustomerIdentityUser(input: {
     };
   }
 
-  const columns = await getUserProfileColumnMap();
-  const createdUser = await prisma.user.create({
-    data: {
-      name: patchInput.name || null,
-      phone: patchInput.phone || null,
-      email: patchInput.email && !emailUser ? patchInput.email : null,
-      ...(columns.county ? { county: patchInput.county } : {}),
-      ...(columns.town ? { town: patchInput.town } : {}),
-      ...(columns.estateLandmark ? { estateLandmark: patchInput.estateLandmark } : {}),
-      ...(columns.locationNotes ? { locationNotes: patchInput.locationNotes } : {}),
-    },
+  const createdUserId = await createSafeCustomerIdentityUser({
+    name: patchInput.name || null,
+    phone: patchInput.phone || null,
+    email: patchInput.email && !emailUser ? patchInput.email : null,
+    county: patchInput.county,
+    town: patchInput.town,
+    estateLandmark: patchInput.estateLandmark,
+    locationNotes: patchInput.locationNotes,
   });
-  const user = await findSafeUserById(createdUser.id);
-  if (!user) throw new Error(`Failed to load created customer account ${createdUser.id}`);
+  const user = await findSafeUserById(createdUserId);
+  if (!user) throw new Error(`Failed to load created customer account ${createdUserId}`);
   return {
     user,
     matchedBy: "created",
