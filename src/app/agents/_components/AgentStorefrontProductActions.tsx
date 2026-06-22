@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -83,7 +83,6 @@ export default function AgentStorefrontProductActions({
 }: AgentStorefrontProductActionsProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const { data: session, status } = useSession();
   const [mode, setMode] = useState<ModalMode>(null);
   const [busy, setBusy] = useState(false);
@@ -133,12 +132,20 @@ export default function AgentStorefrontProductActions({
     );
   const selectedPayment =
     paymentOptions.find((option) => option.value === orderForm.paymentOption) ?? paymentOptions[0];
-  const pendingAuthAction = searchParams?.get("authAction");
-  const pendingProductId = searchParams?.get("productId");
+  const [pendingAuthAction, setPendingAuthAction] = useState<string | null>(null);
+  const [pendingProductId, setPendingProductId] = useState<string | null>(null);
 
   useEffect(() => {
     setPortalReady(true);
     return () => setPortalReady(false);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    setPendingAuthAction(params.get("authAction"));
+    setPendingProductId(params.get("productId"));
   }, []);
 
   useEffect(() => {
@@ -150,7 +157,7 @@ export default function AgentStorefrontProductActions({
     resetFeedback();
     setMode(pendingAuthAction === "submit" ? "order" : "refer");
 
-    const nextParams = new URLSearchParams(searchParams?.toString() || "");
+    const nextParams = new URLSearchParams(window.location.search);
     nextParams.delete("authAction");
     nextParams.delete("productId");
     const nextQuery = nextParams.toString();
@@ -164,7 +171,6 @@ export default function AgentStorefrontProductActions({
     portalReady,
     product.id,
     router,
-    searchParams,
   ]);
 
   useEffect(() => {
@@ -241,7 +247,7 @@ export default function AgentStorefrontProductActions({
       return;
     }
 
-    const nextParams = new URLSearchParams(searchParams?.toString() || "");
+    const nextParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
     nextParams.set("authAction", nextMode === "order" ? "submit" : "refer");
     nextParams.set("productId", product.id);
     const callbackUrl = pathname
