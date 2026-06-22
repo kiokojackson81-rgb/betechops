@@ -95,6 +95,7 @@ export default function AgentStorefrontProductActions({
   const customerPhoneInputRef = useRef<HTMLInputElement | null>(null);
   const customerCountySelectRef = useRef<HTMLSelectElement | null>(null);
   const customerLocationSelectRef = useRef<HTMLSelectElement | null>(null);
+  const referralPhoneInputRef = useRef<HTMLInputElement | null>(null);
   const [orderForm, setOrderForm] = useState({
     customerName: "",
     customerPhone: "",
@@ -177,6 +178,24 @@ export default function AgentStorefrontProductActions({
     setSuccess(null);
   }
 
+  function scrollModalToTop() {
+    window.requestAnimationFrame(() => {
+      modalCardRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
+
+  function showError(message: string) {
+    setSuccess(null);
+    setError(message);
+    scrollModalToTop();
+  }
+
+  function showSuccess(message: string) {
+    setError(null);
+    setSuccess(message);
+    scrollModalToTop();
+  }
+
   function handleAuthenticatedAction(event: React.MouseEvent<HTMLButtonElement>, nextMode: Exclude<ModalMode, null>) {
     event.preventDefault();
     event.stopPropagation();
@@ -187,7 +206,7 @@ export default function AgentStorefrontProductActions({
     }
 
     if (status === "loading") {
-      setError("Checking your agent session. Please tap again in a second.");
+      showError("Checking your agent session. Please tap again in a second.");
       return;
     }
 
@@ -252,25 +271,25 @@ export default function AgentStorefrontProductActions({
     const customerLocation = orderForm.customerLocation.trim();
 
     if (!customerName) {
-      setError("Enter the customer name before submitting this order.");
+      showError("Enter the customer name before submitting this order.");
       focusInvalidOrderField("name");
       return;
     }
 
     if (!customerPhone) {
-      setError("Enter a valid Kenyan customer phone number before submitting this order.");
+      showError("Enter a valid Kenyan customer phone number before submitting this order.");
       focusInvalidOrderField("phone");
       return;
     }
 
     if (!customerCounty) {
-      setError("Select the customer county before submitting this order.");
+      showError("Select the customer county before submitting this order.");
       focusInvalidOrderField("county");
       return;
     }
 
     if (!customerLocation) {
-      setError("Select the customer town or market centre before submitting this order.");
+      showError("Select the customer town or market centre before submitting this order.");
       focusInvalidOrderField("location");
       return;
     }
@@ -317,15 +336,15 @@ export default function AgentStorefrontProductActions({
 
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setError(payload?.error || "Unable to submit this customer order right now.");
+        showError(payload?.error || "Unable to submit this customer order right now.");
         setBusy(false);
         return;
       }
 
-      setSuccess("Customer order submitted successfully. It will now appear in the agent order workflow.");
+      showSuccess("Customer order submitted successfully. It will now appear in the agent order workflow.");
       setBusy(false);
     } catch {
-      setError("Unable to submit this customer order right now.");
+      showError("Unable to submit this customer order right now.");
       setBusy(false);
     }
   }
@@ -337,7 +356,10 @@ export default function AgentStorefrontProductActions({
 
     const normalizedPhone = normalizeKenyanPhone(referForm.customerPhone);
     if (!normalizedPhone) {
-      setError("Enter a valid Kenyan phone number for the customer you want to refer.");
+      showError("Enter a valid Kenyan phone number for the customer you want to refer.");
+      window.requestAnimationFrame(() => {
+        referralPhoneInputRef.current?.focus();
+      });
       return;
     }
 
@@ -346,13 +368,17 @@ export default function AgentStorefrontProductActions({
     const encoded = encodeURIComponent(message);
 
     if (referForm.channel === "whatsapp") {
-      window.open(`https://wa.me/${digits}?text=${encoded}`, "_blank", "noopener,noreferrer");
-      setSuccess("WhatsApp referral message prepared. Send it from your phone to complete the referral.");
+      const whatsappUrl = `https://wa.me/${digits}?text=${encoded}`;
+      const popup = window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+      if (!popup) {
+        window.location.assign(whatsappUrl);
+      }
+      showSuccess("WhatsApp referral message prepared. Send it from your phone to complete the referral.");
       return;
     }
 
     window.location.href = `sms:${normalizedPhone}?body=${encoded}`;
-    setSuccess("SMS referral message prepared. Send it from your phone to complete the referral.");
+    showSuccess("SMS referral message prepared. Send it from your phone to complete the referral.");
   }
 
   return (
@@ -562,6 +588,7 @@ export default function AgentStorefrontProductActions({
                     <label className="grid gap-2 sm:col-span-2">
                       <span className="text-sm font-semibold text-slate-700">Customer phone number</span>
                       <input
+                        ref={referralPhoneInputRef}
                         required
                         value={referForm.customerPhone}
                         onChange={(event) => setReferForm((current) => ({ ...current, customerPhone: event.target.value }))}
