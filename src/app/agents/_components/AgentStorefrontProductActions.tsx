@@ -371,15 +371,12 @@ export default function AgentStorefrontProductActions({
 
     if (referForm.channel === "whatsapp") {
       const whatsappUrl = `https://wa.me/${digits}?text=${encoded}`;
-      const popup = window.open(whatsappUrl, "_blank", "noopener,noreferrer");
-      if (!popup) {
-        window.location.assign(whatsappUrl);
-      }
+      window.location.assign(whatsappUrl);
       showSuccess("WhatsApp referral message prepared. Send it from your phone to complete the referral.");
       return;
     }
 
-    window.location.href = `sms:${normalizedPhone}?body=${encoded}`;
+    window.location.assign(`sms:${normalizedPhone}?body=${encoded}`);
     showSuccess("SMS referral message prepared. Send it from your phone to complete the referral.");
   }
 
@@ -574,12 +571,7 @@ export default function AgentStorefrontProductActions({
 
                   <div className="flex flex-col gap-3 sm:flex-row">
                     <button
-                      type="button"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        void submitOrder();
-                      }}
+                      type="submit"
                       disabled={busy}
                       className="inline-flex min-h-[3rem] flex-1 items-center justify-center gap-2 rounded-2xl bg-[#7a0000] px-5 py-3 text-sm font-bold text-white shadow-[0_16px_34px_rgba(122,0,0,0.18)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                     >
@@ -669,12 +661,7 @@ export default function AgentStorefrontProductActions({
 
                   <div className="flex flex-col gap-3 sm:flex-row">
                     <button
-                      type="button"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        openReferralAction();
-                      }}
+                      type="submit"
                       className="inline-flex min-h-[3rem] flex-1 items-center justify-center gap-2 rounded-2xl bg-[#7a0000] px-5 py-3 text-sm font-bold text-white shadow-[0_16px_34px_rgba(122,0,0,0.18)] transition hover:-translate-y-0.5"
                     >
                       {referForm.channel === "whatsapp" ? "Open WhatsApp referral" : "Open SMS referral"}

@@ -155,15 +155,15 @@ async function createSafeCustomerIdentityUser(input: {
   estateLandmark?: string | null;
   locationNotes?: string | null;
 }) {
-  const [columns, insertMeta] = await Promise.all([getUserProfileColumnMap(), getUserInsertColumnMeta()]);
+  const insertMeta = await getUserInsertColumnMeta();
   const generatedId = randomUUID();
   const fallbackEmail = `customer-${generatedId}@placeholder.betech.local`;
   const now = new Date();
   const data: Array<[string, string | boolean | Date | null]> = [];
 
-  if (insertMeta.has("id")) data.push(["id", generatedId]);
-  if (insertMeta.has("name")) data.push(["name", input.name ?? null]);
-  if (insertMeta.has("phone")) data.push(["phone", input.phone ?? null]);
+  if (insertMeta.has("id")) {
+    data.push(["id", generatedId]);
+  }
 
   if (insertMeta.has("email")) {
     const emailMeta = insertMeta.get("email");
@@ -172,11 +172,6 @@ async function createSafeCustomerIdentityUser(input: {
       (emailMeta?.is_nullable === "NO" && !emailMeta.column_default ? fallbackEmail : null);
     data.push(["email", emailValue]);
   }
-
-  if (columns.county && insertMeta.has("county")) data.push(["county", input.county ?? null]);
-  if (columns.town && insertMeta.has("town")) data.push(["town", input.town ?? null]);
-  if (columns.estateLandmark && insertMeta.has("estateLandmark")) data.push(["estateLandmark", input.estateLandmark ?? null]);
-  if (columns.locationNotes && insertMeta.has("locationNotes")) data.push(["locationNotes", input.locationNotes ?? null]);
 
   const roleMeta = insertMeta.get("role");
   if (roleMeta?.is_nullable === "NO" && !roleMeta.column_default) {
@@ -211,6 +206,16 @@ async function createSafeCustomerIdentityUser(input: {
   if (!createdId) {
     throw new Error("Failed to create customer account.");
   }
+
+  await updateSafeUserById(createdId, {
+    name: input.name ?? undefined,
+    phone: input.phone ?? undefined,
+    email: input.email ?? undefined,
+    county: input.county ?? undefined,
+    town: input.town ?? undefined,
+    estateLandmark: input.estateLandmark ?? undefined,
+    locationNotes: input.locationNotes ?? undefined,
+  });
 
   return createdId;
 }
