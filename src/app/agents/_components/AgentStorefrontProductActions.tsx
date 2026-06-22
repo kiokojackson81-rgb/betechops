@@ -1,6 +1,7 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, MessageCircle, Send, X } from "lucide-react";
 import type { ShopProduct } from "@/app/shop/shopData";
@@ -79,6 +80,8 @@ export default function AgentStorefrontProductActions({
   loggedIn,
   compact = false,
 }: AgentStorefrontProductActionsProps) {
+  const router = useRouter();
+  const { data: session, status } = useSession();
   const [mode, setMode] = useState<ModalMode>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -105,6 +108,18 @@ export default function AgentStorefrontProductActions({
   );
   const quantity = Math.max(Number(orderForm.quantity || 1), 1);
   const totalAmount = Math.round(product.price * quantity * 100) / 100;
+  const effectiveLoggedIn =
+    loggedIn ||
+    Boolean(
+      (session?.user as
+        | {
+            isAgent?: boolean;
+            agentStatus?: string | null;
+          }
+        | undefined)?.isAgent &&
+        ((session?.user as { agentStatus?: string | null } | undefined)?.agentStatus || "").toLowerCase() ===
+          "approved",
+    );
   const selectedPayment =
     paymentOptions.find((option) => option.value === orderForm.paymentOption) ?? paymentOptions[0];
 
@@ -135,6 +150,23 @@ export default function AgentStorefrontProductActions({
   function resetFeedback() {
     setError(null);
     setSuccess(null);
+  }
+
+  function handleAuthenticatedAction(event: React.MouseEvent<HTMLButtonElement>, nextMode: Exclude<ModalMode, null>) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (effectiveLoggedIn) {
+      openMode(event, nextMode);
+      return;
+    }
+
+    if (status === "loading") {
+      setError("Checking your agent session. Please tap again in a second.");
+      return;
+    }
+
+    router.push(loginHref);
   }
 
   function openMode(event: React.MouseEvent<HTMLButtonElement>, nextMode: Exclude<ModalMode, null>) {
@@ -254,40 +286,19 @@ export default function AgentStorefrontProductActions({
     setSuccess("SMS referral message prepared. Send it from your phone to complete the referral.");
   }
 
-  if (!loggedIn) {
-    return (
-      <div className={compact ? "grid grid-cols-2 gap-2" : "grid gap-3 sm:grid-cols-2"}>
-        <Link
-          href={loginHref}
-          prefetch={false}
-          className="inline-flex min-h-[2.95rem] items-center justify-center gap-2 rounded-2xl bg-[#7a0000] px-4 py-3 text-sm font-bold text-white shadow-[0_16px_34px_rgba(122,0,0,0.18)] transition hover:-translate-y-0.5"
-        >
-          Submit order & earn
-        </Link>
-        <Link
-          href={loginHref}
-          prefetch={false}
-          className="inline-flex min-h-[2.95rem] items-center justify-center gap-2 rounded-2xl border border-[#0f9d58]/20 bg-[#effcf4] px-4 py-3 text-sm font-bold text-[#0f9d58] shadow-[0_14px_28px_rgba(15,157,88,0.10)] transition hover:-translate-y-0.5"
-        >
-          Refer now
-        </Link>
-      </div>
-    );
-  }
-
   return (
     <>
       <div className={compact ? "grid grid-cols-2 gap-2" : "grid gap-3 sm:grid-cols-2"}>
         <button
           type="button"
-          onClick={(event) => openMode(event, "order")}
+          onClick={(event) => handleAuthenticatedAction(event, "order")}
           className="inline-flex min-h-[2.95rem] items-center justify-center gap-2 rounded-2xl bg-[#7a0000] px-4 py-3 text-sm font-bold text-white shadow-[0_16px_34px_rgba(122,0,0,0.18)] transition hover:-translate-y-0.5"
         >
           Submit order & earn
         </button>
         <button
           type="button"
-          onClick={(event) => openMode(event, "refer")}
+          onClick={(event) => handleAuthenticatedAction(event, "refer")}
           className="inline-flex min-h-[2.95rem] items-center justify-center gap-2 rounded-2xl border border-[#0f9d58]/20 bg-[#effcf4] px-4 py-3 text-sm font-bold text-[#0f9d58] shadow-[0_14px_28px_rgba(15,157,88,0.10)] transition hover:-translate-y-0.5"
         >
           Refer now

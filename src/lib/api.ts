@@ -5,6 +5,29 @@ import type { AttendantCategory } from "@prisma/client";
 
 export type Role = "ADMIN" | "SUPERVISOR" | "ATTENDANT";
 
+async function createSafeSystemUser(input: {
+  email: string;
+  name: string;
+  role: Role;
+  isActive: boolean;
+  attendantCategory: AttendantCategory;
+}) {
+  const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+    `INSERT INTO "User" ("email", "name", "role", "isActive", "attendantCategory")
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT ("email") DO NOTHING
+     RETURNING "id"`,
+    input.email,
+    input.name,
+    input.role,
+    input.isActive,
+    input.attendantCategory,
+  );
+
+  if (rows[0]?.id) return rows[0];
+  return prisma.user.findUnique({ where: { email: input.email }, select: { id: true } });
+}
+
 export function isBenjaminSupervisorEmail(email: unknown) {
   return String(email ?? "").trim().toLowerCase() === "benjamin@betech.co.ke";
 }
@@ -71,17 +94,14 @@ export async function getActorId(): Promise<string | null> {
     let sysUser = await prisma.user.findUnique({ where: { email: sysEmail }, select: { id: true } });
     if (!sysUser) {
       try {
-        sysUser = await prisma.user.create({
-          data: {
-            email: sysEmail,
-            name: "System",
-            role: "ADMIN",
-            isActive: true,
-            attendantCategory: (process.env.DEFAULT_SYSTEM_CATEGORY as AttendantCategory) ?? "DIRECT_SALES_OPS",
-          },
-          select: { id: true },
+        sysUser = await createSafeSystemUser({
+          email: sysEmail,
+          name: "System",
+          role: "ADMIN",
+          isActive: true,
+          attendantCategory: (process.env.DEFAULT_SYSTEM_CATEGORY as AttendantCategory) ?? "DIRECT_SALES_OPS",
         });
-      } catch (createErr) {
+      } catch {
         // If creation fails (race or DB restriction), attempt to read again
         sysUser = await prisma.user.findUnique({ where: { email: sysEmail }, select: { id: true } });
       }
