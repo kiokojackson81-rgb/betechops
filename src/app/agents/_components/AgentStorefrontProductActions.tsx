@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowRight, MessageCircle, Send, X } from "lucide-react";
 import type { ShopProduct } from "@/app/shop/shopData";
@@ -90,6 +90,11 @@ export default function AgentStorefrontProductActions({
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
+  const modalCardRef = useRef<HTMLDivElement | null>(null);
+  const customerNameInputRef = useRef<HTMLInputElement | null>(null);
+  const customerPhoneInputRef = useRef<HTMLInputElement | null>(null);
+  const customerCountySelectRef = useRef<HTMLSelectElement | null>(null);
+  const customerLocationSelectRef = useRef<HTMLSelectElement | null>(null);
   const [orderForm, setOrderForm] = useState({
     customerName: "",
     customerPhone: "",
@@ -129,6 +134,19 @@ export default function AgentStorefrontProductActions({
     setPortalReady(true);
     return () => setPortalReady(false);
   }, []);
+
+  useEffect(() => {
+    if (!mode || !portalReady) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      modalCardRef.current?.scrollTo({ top: 0 });
+      if (mode === "order") {
+        customerNameInputRef.current?.focus();
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [mode, portalReady]);
 
   useEffect(() => {
     if (mode !== "refer" || !effectiveLoggedIn || referralCode || loadingProfile) return;
@@ -198,21 +216,65 @@ export default function AgentStorefrontProductActions({
     return [
       greeting,
       "",
-      "Betech Solar Solutions has recommended this product for you:",
-      `${product.name}`,
+      "I came across this product from Betech Solar Solutions and thought it might be useful for you.",
+      "",
+      product.name,
       `Price: ${formatCurrency(product.price)}`,
       "",
       "You can view the full product details, confirm pricing, and order directly here:",
       link,
       "",
-      "If you need help choosing the right solar product, you can also contact Betech Solar Solutions through the website.",
+      "If you need help choosing the right solar product, you can also contact Betech Solar Solutions through the website or call 0722151083.",
     ].join("\n");
+  }
+
+  function focusInvalidOrderField(target: "name" | "phone" | "county" | "location") {
+    const fieldRefs = {
+      name: customerNameInputRef,
+      phone: customerPhoneInputRef,
+      county: customerCountySelectRef,
+      location: customerLocationSelectRef,
+    } as const;
+
+    window.requestAnimationFrame(() => {
+      modalCardRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+      fieldRefs[target].current?.focus();
+    });
   }
 
   async function handleSubmitOrder(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     event.stopPropagation();
     resetFeedback();
+    const customerName = orderForm.customerName.trim();
+    const customerPhone = normalizeKenyanPhone(orderForm.customerPhone);
+    const customerCounty = orderForm.customerCounty.trim();
+    const customerLocation = orderForm.customerLocation.trim();
+
+    if (!customerName) {
+      setError("Enter the customer name before submitting this order.");
+      focusInvalidOrderField("name");
+      return;
+    }
+
+    if (!customerPhone) {
+      setError("Enter a valid Kenyan customer phone number before submitting this order.");
+      focusInvalidOrderField("phone");
+      return;
+    }
+
+    if (!customerCounty) {
+      setError("Select the customer county before submitting this order.");
+      focusInvalidOrderField("county");
+      return;
+    }
+
+    if (!customerLocation) {
+      setError("Select the customer town or market centre before submitting this order.");
+      focusInvalidOrderField("location");
+      return;
+    }
+
     setBusy(true);
 
     const deliveryMethod =
@@ -227,10 +289,10 @@ export default function AgentStorefrontProductActions({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          customerName: orderForm.customerName.trim(),
-          customerPhone: orderForm.customerPhone.trim(),
-          customerCounty: orderForm.customerCounty,
-          customerLocation: orderForm.customerLocation,
+          customerName,
+          customerPhone,
+          customerCounty,
+          customerLocation,
           productName: product.name,
           productCategory: product.category,
           quantity,
@@ -322,6 +384,7 @@ export default function AgentStorefrontProductActions({
           }}
         >
           <div
+            ref={modalCardRef}
             className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-[#7a0000]/10 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.24)]"
             onClick={(event) => {
               event.preventDefault();
@@ -359,12 +422,12 @@ export default function AgentStorefrontProductActions({
               ) : null}
 
               {mode === "order" ? (
-                <form onSubmit={handleSubmitOrder} className="grid gap-4">
+                <form noValidate onSubmit={handleSubmitOrder} className="grid gap-4">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <label className="grid gap-2 sm:col-span-2">
                       <span className="text-sm font-semibold text-slate-700">Customer name</span>
                       <input
-                        required
+                        ref={customerNameInputRef}
                         value={orderForm.customerName}
                         onChange={(event) => setOrderForm((current) => ({ ...current, customerName: event.target.value }))}
                         className={inputClassName}
@@ -374,7 +437,7 @@ export default function AgentStorefrontProductActions({
                     <label className="grid gap-2">
                       <span className="text-sm font-semibold text-slate-700">Customer phone number</span>
                       <input
-                        required
+                        ref={customerPhoneInputRef}
                         value={orderForm.customerPhone}
                         onChange={(event) => setOrderForm((current) => ({ ...current, customerPhone: event.target.value }))}
                         className={inputClassName}
@@ -396,7 +459,7 @@ export default function AgentStorefrontProductActions({
                     <label className="grid gap-2">
                       <span className="text-sm font-semibold text-slate-700">County</span>
                       <select
-                        required
+                        ref={customerCountySelectRef}
                         value={orderForm.customerCounty}
                         onChange={(event) =>
                           setOrderForm((current) => ({
@@ -418,7 +481,7 @@ export default function AgentStorefrontProductActions({
                     <label className="grid gap-2">
                       <span className="text-sm font-semibold text-slate-700">Town / market centre</span>
                       <select
-                        required
+                        ref={customerLocationSelectRef}
                         disabled={!orderForm.customerCounty}
                         value={orderForm.customerLocation}
                         onChange={(event) => setOrderForm((current) => ({ ...current, customerLocation: event.target.value }))}
