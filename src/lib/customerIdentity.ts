@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 import { isAgentLeadOwnershipTableAvailable } from "@/lib/agentLeadOwnershipTable";
 import { findSafeCustomerProfileByUserId, getUserProfileColumnMap, updateSafeUserById } from "@/lib/customerProfile";
 import { normalizeKenyanPhone } from "@/lib/phone";
@@ -26,6 +27,72 @@ function pickFirstNonEmpty(...values: Array<string | null | undefined>) {
     if (trimmed) return trimmed;
   }
   return "";
+}
+
+type UserInsertColumnMeta = {
+  column_name: string;
+  is_nullable: "YES" | "NO";
+  column_default: string | null;
+};
+
+let cachedUserInsertColumns:
+  | {
+      expiresAt: number;
+      value: Map<string, UserInsertColumnMeta>;
+    }
+  | null = null;
+
+async function getUserInsertColumnMeta() {
+  if (cachedUserInsertColumns && cachedUserInsertColumns.expiresAt > Date.now()) {
+    return cachedUserInsertColumns.value;
+  }
+
+  const rows = await prisma.$queryRawUnsafe<UserInsertColumnMeta[]>(
+    `
+      SELECT column_name, is_nullable, column_default
+      FROM information_schema.columns
+      WHERE (table_schema = current_schema() OR table_schema = 'public')
+        AND lower(table_name) = lower('User')
+        AND column_name IN (
+          'id',
+          'email',
+          'phone',
+          'name',
+          'county',
+          'town',
+          'estateLandmark',
+          'locationNotes',
+          'role',
+          'isActive',
+          'createdAt',
+          'updatedAt'
+        )
+    `,
+  );
+
+  const meta = new Map(rows.map((row) => [row.column_name, row]));
+  if (!meta.has("id")) {
+    meta.set("id", {
+      column_name: "id",
+      is_nullable: "NO",
+      column_default: null,
+    });
+  }
+  if (!meta.has("email")) {
+    meta.set("email", {
+      column_name: "email",
+      is_nullable: "NO",
+      column_default: null,
+    });
+  }
+  cachedUserInsertColumns = {
+    value: meta,
+    expiresAt: Date.now() + 60_000,
+  };
+  console.log("[customerIdentity] user insert columns", {
+    columns: Array.from(meta.keys()),
+  });
+  return meta;
 }
 
 function getSafeUserSelectSql(columns: Awaited<ReturnType<typeof getUserProfileColumnMap>>) {
@@ -88,17 +155,48 @@ async function createSafeCustomerIdentityUser(input: {
   estateLandmark?: string | null;
   locationNotes?: string | null;
 }) {
-  const columns = await getUserProfileColumnMap();
-  const data: Array<[string, string | null]> = [
-    ["name", input.name ?? null],
-    ["phone", input.phone ?? null],
-    ["email", input.email ?? null],
-  ];
+  const [columns, insertMeta] = await Promise.all([getUserProfileColumnMap(), getUserInsertColumnMeta()]);
+  const generatedId = randomUUID();
+  const fallbackEmail = `customer-${generatedId}@placeholder.betech.local`;
+  const now = new Date();
+  const data: Array<[string, string | boolean | Date | null]> = [];
 
-  if (columns.county) data.push(["county", input.county ?? null]);
-  if (columns.town) data.push(["town", input.town ?? null]);
-  if (columns.estateLandmark) data.push(["estateLandmark", input.estateLandmark ?? null]);
-  if (columns.locationNotes) data.push(["locationNotes", input.locationNotes ?? null]);
+  if (insertMeta.has("id")) data.push(["id", generatedId]);
+  if (insertMeta.has("name")) data.push(["name", input.name ?? null]);
+  if (insertMeta.has("phone")) data.push(["phone", input.phone ?? null]);
+
+  if (insertMeta.has("email")) {
+    const emailMeta = insertMeta.get("email");
+    const emailValue =
+      input.email ??
+      (emailMeta?.is_nullable === "NO" && !emailMeta.column_default ? fallbackEmail : null);
+    data.push(["email", emailValue]);
+  }
+
+  if (columns.county && insertMeta.has("county")) data.push(["county", input.county ?? null]);
+  if (columns.town && insertMeta.has("town")) data.push(["town", input.town ?? null]);
+  if (columns.estateLandmark && insertMeta.has("estateLandmark")) data.push(["estateLandmark", input.estateLandmark ?? null]);
+  if (columns.locationNotes && insertMeta.has("locationNotes")) data.push(["locationNotes", input.locationNotes ?? null]);
+
+  const roleMeta = insertMeta.get("role");
+  if (roleMeta?.is_nullable === "NO" && !roleMeta.column_default) {
+    data.push(["role", "ATTENDANT"]);
+  }
+
+  const activeMeta = insertMeta.get("isActive");
+  if (activeMeta?.is_nullable === "NO" && !activeMeta.column_default) {
+    data.push(["isActive", true]);
+  }
+
+  const createdAtMeta = insertMeta.get("createdAt");
+  if (createdAtMeta?.is_nullable === "NO" && !createdAtMeta.column_default) {
+    data.push(["createdAt", now]);
+  }
+
+  const updatedAtMeta = insertMeta.get("updatedAt");
+  if (updatedAtMeta?.is_nullable === "NO" && !updatedAtMeta.column_default) {
+    data.push(["updatedAt", now]);
+  }
 
   const columnSql = data.map(([column]) => `"${column}"`).join(", ");
   const valueSql = data.map((_, index) => `$${index + 1}`).join(", ");
