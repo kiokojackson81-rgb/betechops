@@ -26,6 +26,7 @@ export function isAgentRoutePath(path: string | null | undefined) {
     normalizedPath === "/products" ||
     normalizedPath === "/login" ||
     normalizedPath === "/register" ||
+    normalizedPath === "/referrals" ||
     normalizedPath === "/dashboard" ||
     normalizedPath === "/withdrawals" ||
     normalizedPath === "/profile" ||
