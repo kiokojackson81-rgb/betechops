@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { ArrowRight, MessageCircle, Send, X } from "lucide-react";
 import type { ShopProduct } from "@/app/shop/shopData";
 import { formatCurrency } from "@/app/shop/_components/shopStyles";
@@ -88,6 +89,7 @@ export default function AgentStorefrontProductActions({
   const [success, setSuccess] = useState<string | null>(null);
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
+  const [portalReady, setPortalReady] = useState(false);
   const [orderForm, setOrderForm] = useState({
     customerName: "",
     customerPhone: "",
@@ -124,7 +126,12 @@ export default function AgentStorefrontProductActions({
     paymentOptions.find((option) => option.value === orderForm.paymentOption) ?? paymentOptions[0];
 
   useEffect(() => {
-    if (mode !== "refer" || !loggedIn || referralCode || loadingProfile) return;
+    setPortalReady(true);
+    return () => setPortalReady(false);
+  }, []);
+
+  useEffect(() => {
+    if (mode !== "refer" || !effectiveLoggedIn || referralCode || loadingProfile) return;
 
     let cancelled = false;
     setLoadingProfile(true);
@@ -145,7 +152,7 @@ export default function AgentStorefrontProductActions({
     return () => {
       cancelled = true;
     };
-  }, [loggedIn, loadingProfile, mode, referralCode]);
+  }, [effectiveLoggedIn, loadingProfile, mode, referralCode]);
 
   function resetFeedback() {
     setError(null);
@@ -305,7 +312,8 @@ export default function AgentStorefrontProductActions({
         </button>
       </div>
 
-      {mode ? (
+      {mode && portalReady
+        ? createPortal(
         <div
           className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/55 px-4 py-6"
           onClick={(event) => {
@@ -576,8 +584,10 @@ export default function AgentStorefrontProductActions({
               )}
             </div>
           </div>
-        </div>
-      ) : null}
+        </div>,
+        document.body,
+      )
+        : null}
     </>
   );
 }
