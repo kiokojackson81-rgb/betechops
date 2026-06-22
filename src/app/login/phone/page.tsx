@@ -64,6 +64,20 @@ function clearStoredCallbackUrl() {
   window.sessionStorage.removeItem(AGENT_LOGIN_CALLBACK_STORAGE_KEY);
 }
 
+function isAgentProductActionCallback(target?: string | null) {
+  if (!target || typeof window === "undefined") return false;
+
+  try {
+    const url = new URL(target, window.location.origin);
+    const authAction = url.searchParams.get("authAction");
+    const productId = url.searchParams.get("productId");
+
+    return (authAction === "submit" || authAction === "refer") && Boolean(productId);
+  } catch {
+    return false;
+  }
+}
+
 function resolveCallbackUrl(
   target: string | null | undefined,
   isAgentsDomainFlow: boolean,
@@ -294,11 +308,11 @@ export default function PhoneLoginPage() {
         throw new Error(payload?.error || "OTP verification failed.");
       }
 
-      const target = resolveCallbackUrl(
-        payload.redirectTo,
-        isAgentsDomainFlow,
-        callbackUrl || getStoredCallbackUrl(),
-      );
+      const storedCallback = getStoredCallbackUrl();
+      const target =
+        isAgentProductActionCallback(callbackUrl) || isAgentProductActionCallback(storedCallback)
+          ? resolveCallbackUrl(callbackUrl || storedCallback, isAgentsDomainFlow, "/dashboard")
+          : resolveCallbackUrl(payload.redirectTo, isAgentsDomainFlow, callbackUrl || storedCallback);
       setStoredCallbackUrl(target);
       setPostAuthRedirect(target);
       setVerificationToken(payload.verificationToken);
@@ -369,11 +383,11 @@ export default function PhoneLoginPage() {
           ? payload.verificationToken
           : verificationToken;
 
-      const target = resolveCallbackUrl(
-        postAuthRedirect,
-        isAgentsDomainFlow,
-        callbackUrl || getStoredCallbackUrl(),
-      );
+      const storedCallback = getStoredCallbackUrl();
+      const target =
+        isAgentProductActionCallback(callbackUrl) || isAgentProductActionCallback(storedCallback)
+          ? resolveCallbackUrl(callbackUrl || storedCallback, isAgentsDomainFlow, "/dashboard")
+          : resolveCallbackUrl(postAuthRedirect, isAgentsDomainFlow, callbackUrl || storedCallback);
       if (!effectiveVerificationToken) {
         clearStoredCallbackUrl();
         window.location.replace(target);
