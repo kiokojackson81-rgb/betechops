@@ -261,9 +261,7 @@ export default function AgentStorefrontProductActions({
     });
   }
 
-  async function handleSubmitOrder(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    event.stopPropagation();
+  async function submitOrder() {
     resetFeedback();
     const customerName = orderForm.customerName.trim();
     const customerPhone = normalizeKenyanPhone(orderForm.customerPhone);
@@ -349,9 +347,13 @@ export default function AgentStorefrontProductActions({
     }
   }
 
-  function handleRefer(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmitOrder(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     event.stopPropagation();
+    await submitOrder();
+  }
+
+  function openReferralAction() {
     resetFeedback();
 
     const normalizedPhone = normalizeKenyanPhone(referForm.customerPhone);
@@ -379,6 +381,12 @@ export default function AgentStorefrontProductActions({
 
     window.location.href = `sms:${normalizedPhone}?body=${encoded}`;
     showSuccess("SMS referral message prepared. Send it from your phone to complete the referral.");
+  }
+
+  function handleRefer(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    openReferralAction();
   }
 
   return (
@@ -566,7 +574,12 @@ export default function AgentStorefrontProductActions({
 
                   <div className="flex flex-col gap-3 sm:flex-row">
                     <button
-                      type="submit"
+                      type="button"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void submitOrder();
+                      }}
                       disabled={busy}
                       className="inline-flex min-h-[3rem] flex-1 items-center justify-center gap-2 rounded-2xl bg-[#7a0000] px-5 py-3 text-sm font-bold text-white shadow-[0_16px_34px_rgba(122,0,0,0.18)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                     >
@@ -583,7 +596,7 @@ export default function AgentStorefrontProductActions({
                   </div>
                 </form>
               ) : (
-                <form onSubmit={handleRefer} className="grid gap-4">
+                <form noValidate onSubmit={handleRefer} className="grid gap-4">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <label className="grid gap-2 sm:col-span-2">
                       <span className="text-sm font-semibold text-slate-700">Customer phone number</span>
@@ -656,7 +669,12 @@ export default function AgentStorefrontProductActions({
 
                   <div className="flex flex-col gap-3 sm:flex-row">
                     <button
-                      type="submit"
+                      type="button"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        openReferralAction();
+                      }}
                       className="inline-flex min-h-[3rem] flex-1 items-center justify-center gap-2 rounded-2xl bg-[#7a0000] px-5 py-3 text-sm font-bold text-white shadow-[0_16px_34px_rgba(122,0,0,0.18)] transition hover:-translate-y-0.5"
                     >
                       {referForm.channel === "whatsapp" ? "Open WhatsApp referral" : "Open SMS referral"}
