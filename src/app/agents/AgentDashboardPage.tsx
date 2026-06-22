@@ -399,6 +399,12 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
                 <div className="text-right text-sm text-slate-500">
                   <div>{dashboard.websiteReferralSummary.openOrders} open</div>
                   <div>{dashboard.websiteReferralSummary.completedOrders} completed</div>
+                  <Link
+                    href={agentPath("/referrals", useRootPaths)}
+                    className="mt-2 inline-flex items-center gap-1 font-semibold text-[#7a0000] hover:text-[#5d0000]"
+                  >
+                    View all <ArrowRight className="h-4 w-4" />
+                  </Link>
                 </div>
               </div>
               <div className="mt-5 space-y-3">

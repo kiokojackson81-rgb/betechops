@@ -12,6 +12,7 @@ import {
   LogOut,
   PhoneCall,
   PlusCircle,
+  Share2,
   Settings2,
   UserRound,
   Wallet,
@@ -72,13 +73,14 @@ export default function AgentPortalShell({
   const navItems = [
     { href: agentPath("/dashboard", useRootPaths), label: "Dashboard", icon: Home },
     { href: agentPath("/sales", useRootPaths), label: "My Sales", icon: ClipboardList },
+    { href: agentPath("/referrals", useRootPaths), label: "Referrals", icon: Share2 },
     { href: agentPath("/sales/new", useRootPaths), label: "Submit Order", icon: PlusCircle },
     { href: agentPath("/withdrawals", useRootPaths), label: "Withdrawals", icon: Wallet },
     { href: agentPath("/profile", useRootPaths), label: "Profile", icon: UserRound },
     { href: agentPath("/profile/payment-method", useRootPaths), label: "Payout Setup", icon: CreditCard },
   ];
 
-  const mobileItems = [navItems[0], navItems[1], navItems[2], navItems[3]];
+  const mobileItems = [navItems[0], navItems[1], navItems[2], navItems[4]];
 
   return (
     <div className="min-h-screen bg-[#f7f1eb] text-slate-900">
