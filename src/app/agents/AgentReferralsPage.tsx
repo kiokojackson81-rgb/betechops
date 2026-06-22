@@ -17,6 +17,18 @@ type AgentReferralsPageProps = {
   useRootPaths?: boolean;
 };
 
+function maskPhoneNumber(value?: string | null) {
+  const raw = String(value || "").trim();
+  if (!raw) return "Not captured";
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length < 7) return raw;
+  const lastTwo = digits.slice(-2);
+  if (raw.startsWith("+")) {
+    return `+${digits.slice(0, 4)}•••••${lastTwo}`;
+  }
+  return `${digits.slice(0, 4)}••••${lastTwo}`;
+}
+
 function statusBadge(status: string) {
   const normalized = String(status || "").toLowerCase();
   if (["delivered", "payment_confirmed"].includes(normalized)) return "bg-[#edf9f0] text-[#136233]";
@@ -102,20 +114,32 @@ export default async function AgentReferralsPage({ useRootPaths = false }: Agent
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                     <div className="space-y-3">
                       <div className="flex flex-wrap items-center gap-3">
-                        <h3 className="text-lg font-semibold text-[#210505] sm:text-xl">{order.customerName}</h3>
+                        <h3 className="text-lg font-semibold text-[#210505] sm:text-xl">
+                          {order.customerName || "Referred customer"}
+                        </h3>
                         <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${statusBadge(order.status)}`}>
                           {String(order.status).replace(/_/g, " ")}
                         </span>
                       </div>
+                      <div className="flex flex-wrap gap-2">
+                        {order.items.map((item) => (
+                          <span
+                            key={`${order.id}-${item.id}-tag`}
+                            className="rounded-full border border-[#ead8cb] bg-white px-3 py-1 text-xs font-medium text-slate-700"
+                          >
+                            {item.productName}
+                          </span>
+                        ))}
+                      </div>
                       <div className="grid gap-2 text-sm text-slate-600 sm:grid-cols-2 xl:grid-cols-4">
                         <div>Order: {order.orderRef}</div>
-                        <div>Phone: {order.customerPhone || "Not captured"}</div>
+                        <div>Phone: {maskPhoneNumber(order.customerPhone)}</div>
                         <div>Location: {order.customerLocation || "Pending"}</div>
                         <div>Payment: {order.paymentMethod}</div>
-                        <div>Type: {order.orderType}</div>
                         <div>Date: {new Intl.DateTimeFormat("en-KE", { dateStyle: "medium" }).format(order.createdAt)}</div>
                         <div>Total: {money(order.totalAmount)}</div>
                         <div>Items: {order.items.reduce((sum, item) => sum + item.quantity, 0)}</div>
+                        <div>Referred product: {order.items[0]?.productName || "Not captured"}</div>
                       </div>
                     </div>
                     <div className="w-full rounded-[24px] border border-[#f1b81d]/25 bg-[#fff3cf] p-4 xl:min-w-[260px] xl:max-w-[320px]">
