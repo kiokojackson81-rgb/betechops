@@ -662,62 +662,76 @@ export function MarketingTrackerTopActions() {
   };
 
   return (
-    <div className="flex flex-wrap gap-2 lg:max-w-[52rem] lg:justify-end">
+    <div className="flex flex-col gap-3 lg:items-end">
       <Link
         href={`/receipts?start=${selectedReportDate}&end=${selectedReportDate}`}
-        className="inline-flex items-center rounded-full border-2 border-emerald-400 bg-transparent px-5 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-600/5 hover:shadow-[0_6px_18px_rgba(16,185,129,0.12)]"
+        className="rounded-full border-2 border-emerald-400 bg-emerald-400/10 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-400/15"
       >
         Create Receipt
       </Link>
-      <Link
-        href="/marketing/receipts?tab=pos"
-        className="rounded-full border border-white/10 bg-white/3 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition-colors duration-150 hover:border-white/30 hover:bg-white/5"
-      >
-        Receipts
-      </Link>
-      <Link
-        href="/marketing/receipts?tab=pos"
-        className="rounded-full border border-white/10 bg-white/3 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition-colors duration-150 hover:border-white/30 hover:bg-white/5"
-      >
-        POS Receipts
-      </Link>
-      <Link
-        href="/marketing/receipts?tab=web-orders"
-        className="rounded-full border border-white/10 bg-white/3 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition-colors duration-150 hover:border-white/30 hover:bg-white/5"
-      >
-        Web Orders
-      </Link>
-      <Link
-        href="/marketing/agent-orders"
-        className="rounded-full border border-white/10 bg-white/3 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition-colors duration-150 hover:border-white/30 hover:bg-white/5"
-      >
-        Agent Orders
-      </Link>
-      <Link
-        href="/marketing/receipts?tab=quotations"
-        className="rounded-full border border-white/10 bg-white/3 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition-colors duration-150 hover:border-white/30 hover:bg-white/5"
-      >
-        Quotations
-      </Link>
-      <Button type="button" variant="secondary" onClick={downloadPerformancePdf}>
-        {downloadingPerformance ? "Preparing…" : "Download report (PDF)"}
-      </Button>
-      <Button type="button" variant="secondary" onClick={downloadPerformancePdf}>
-        {downloadingPerformance ? "Preparing…" : "Performance PDF"}
-      </Button>
-      <Link
-        href={withImpersonateId("/attendant/wellness", impersonateIdFromWindow())}
-        className="rounded-full border border-white/10 bg-white/3 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition-colors duration-150 hover:border-white/30 hover:bg-white/5"
-      >
-        Wellness
-      </Link>
-      <button
-        type="button"
-        onClick={() => signOut({ callbackUrl: "/attendant/login" })}
-        className="rounded-full border border-white/10 bg-white/3 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition-colors duration-150 hover:border-white/30 hover:bg-white/5"
-      >
-        Log out
-      </button>
+
+      <div className="flex max-w-[46rem] flex-wrap justify-start gap-2 lg:justify-end">
+        <Link
+          href="/marketing/receipts?tab=pos"
+          className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 hover:border-white/30 hover:bg-white/[0.06]"
+        >
+          Receipts
+        </Link>
+        <Link
+          href="/marketing/receipts?tab=pos"
+          className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 hover:border-white/30 hover:bg-white/[0.06]"
+        >
+          POS Receipts
+        </Link>
+        <Link
+          href="/marketing/receipts?tab=web-orders"
+          className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 hover:border-white/30 hover:bg-white/[0.06]"
+        >
+          Web Orders
+        </Link>
+        <Link
+          href="/marketing/agent-orders"
+          className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 hover:border-white/30 hover:bg-white/[0.06]"
+        >
+          Agent Orders
+        </Link>
+        <Link
+          href="/marketing/receipts?tab=quotations"
+          className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 hover:border-white/30 hover:bg-white/[0.06]"
+        >
+          Quotations
+        </Link>
+      </div>
+
+      <div className="flex max-w-[46rem] flex-wrap justify-start gap-2 lg:justify-end">
+        <button
+          type="button"
+          onClick={downloadPerformancePdf}
+          className="rounded-full border border-white/10 bg-slate-950/40 px-4 py-2 text-xs font-medium text-slate-200 hover:border-white/30 hover:bg-white/[0.06]"
+        >
+          {downloadingPerformance ? "Preparing…" : "Download report"}
+        </button>
+        <button
+          type="button"
+          onClick={downloadPerformancePdf}
+          className="rounded-full border border-white/10 bg-slate-950/40 px-4 py-2 text-xs font-medium text-slate-200 hover:border-white/30 hover:bg-white/[0.06]"
+        >
+          {downloadingPerformance ? "Preparing…" : "Performance PDF"}
+        </button>
+        <Link
+          href={withImpersonateId("/attendant/wellness", impersonateIdFromWindow())}
+          className="rounded-full border border-white/10 bg-slate-950/40 px-4 py-2 text-xs font-medium text-slate-200 hover:border-white/30 hover:bg-white/[0.06]"
+        >
+          Wellness
+        </Link>
+        <button
+          type="button"
+          onClick={() => signOut({ callbackUrl: "/attendant/login" })}
+          className="rounded-full border border-white/10 bg-slate-950/40 px-4 py-2 text-xs font-medium text-slate-200 hover:border-white/30 hover:bg-white/[0.06]"
+        >
+          Log out
+        </button>
+      </div>
     </div>
   );
 }

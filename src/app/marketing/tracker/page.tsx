@@ -491,29 +491,27 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <main className="mx-auto max-w-7xl space-y-6 p-6">
-        <header className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] px-6 py-6 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="space-y-3">
+        <header className="rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(15,23,42,.98),rgba(2,6,23,.98))] px-6 py-6 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+            <div className="space-y-4">
               <div className="inline-flex items-center rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
                 {staffRoleLabel(user.role, user.attendantCategory)}
               </div>
               <div>
-                <h1 className="text-3xl font-semibold text-white">Sales Operations Dashboard</h1>
-                <p className="mt-2 max-w-3xl text-sm text-slate-300">
+                <h1 className="max-w-xl text-4xl font-semibold leading-tight text-white">Sales Operations Dashboard</h1>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
                   Pending sales work, web orders, agent orders, quotations, POD follow-up, and staff reporting in one place.
                 </p>
               </div>
-              <div className="flex flex-wrap items-center gap-2 text-sm text-slate-400">
-                <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-slate-300">
                   {user.name || user.email || "Operations staff"}
                 </span>
-                <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-slate-300">
                   {period.label}
                 </span>
                 <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-emerald-100">
-                  <span className="mr-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-200">Today</span>
-                  {nairobiDate}
-                  <span className="ml-2 text-[11px] uppercase tracking-[0.16em] text-emerald-200">Nairobi Time</span>
+                  Today • {nairobiDate} • Nairobi
                 </span>
               </div>
             </div>
