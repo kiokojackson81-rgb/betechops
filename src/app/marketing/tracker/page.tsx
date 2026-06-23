@@ -10,6 +10,12 @@ import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod"
 import { WEBSITE_ORDER_ACTIVE_STATUSES } from "@/lib/websiteOrders";
 import { getAdminAgentSales } from "@/lib/agents/sales";
 import {
+  isOpenQuotationStatus,
+  isOpenWorkItemStatus,
+  isPendingPodStatus,
+  wasCreatedOrUpdatedInPeriod,
+} from "@/lib/operationsWorkQueue";
+import {
   ensureQuoteRequestAssignments,
   ensureQuoteRequestsSchema,
   listAssignedQuoteRequests,
@@ -35,8 +41,6 @@ const WEBSITE_PENDING_STATUSES = new Set<WebsiteOrderStatus>([
   WebsiteOrderStatus.DISPATCHED,
   WebsiteOrderStatus.PAYMENT_CONFIRMED,
 ]);
-
-const QUOTE_PENDING_STATUSES = new Set(["NEW", "CONTACTED", "FOLLOW_UP", "QUOTED"]);
 
 function canAccessOperationsHub(role: string | null | undefined, attendantCategory: string | null | undefined) {
   return (
@@ -126,7 +130,9 @@ type PodFollowUpItem = {
   customerName: string;
   customerPhone: string | null;
   total: number;
+  status: string;
   createdAt: Date | null;
+  updatedAt: Date | null;
 };
 
 type TrackerWebsiteOrder = {
@@ -136,6 +142,7 @@ type TrackerWebsiteOrder = {
   total: number;
   status: WebsiteOrderStatus;
   createdAt: Date;
+  updatedAt: Date;
   assignedAttendant: {
     id: string | null;
     email: string | null;
@@ -182,6 +189,7 @@ async function listTrackerWebsiteOrders(): Promise<TrackerWebsiteOrder[]> {
       total: true,
       status: true,
       createdAt: true,
+      updatedAt: true,
       metadata: true,
     },
   });
@@ -193,6 +201,7 @@ async function listTrackerWebsiteOrders(): Promise<TrackerWebsiteOrder[]> {
     total: Number(row.total ?? 0),
     status: row.status,
     createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
     assignedAttendant: readWebsiteOrderAssignment(row.metadata),
   }));
 }
@@ -243,14 +252,16 @@ async function listVisibleQuoteRequests(input: {
     }>>(Prisma.sql`
       SELECT *
       FROM "QuoteRequest"
-      WHERE "status" IN ('NEW', 'CONTACTED', 'FOLLOW_UP', 'QUOTED')
+      WHERE LOWER(COALESCE("status", '')) IN ('new', 'contacted', 'pending', 'follow_up', 'quoted', 'amount_pending')
       ORDER BY
         CASE
           WHEN "status" = 'NEW' THEN 1
           WHEN "status" = 'CONTACTED' THEN 2
-          WHEN "status" = 'FOLLOW_UP' THEN 3
-          WHEN "status" = 'QUOTED' THEN 4
-          ELSE 5
+          WHEN "status" = 'PENDING' THEN 3
+          WHEN "status" = 'FOLLOW_UP' THEN 4
+          WHEN "status" = 'QUOTED' THEN 5
+          WHEN "status" = 'AMOUNT_PENDING' THEN 6
+          ELSE 7
         END ASC,
         "createdAt" DESC
     `);
@@ -290,7 +301,7 @@ async function listVisibleQuoteRequests(input: {
 
 async function listPodFollowUp(limit = 5): Promise<PodFollowUpItem[]> {
   const receipts = await prisma.receipt.findMany({
-    where: { data: { path: ["podDelivery", "status"], equals: "pending" } },
+    where: { data: { path: ["podDelivery"], not: Prisma.JsonNull } },
     orderBy: { generatedAt: "desc" },
     take: 50,
     select: {
@@ -315,6 +326,10 @@ async function listPodFollowUp(limit = 5): Promise<PodFollowUpItem[]> {
 
   for (const receipt of receipts as PodReceiptFollowUpRow[]) {
     const receiptData = receipt.data ?? {};
+    const podDelivery =
+      receiptData.podDelivery && typeof receiptData.podDelivery === "object" && !Array.isArray(receiptData.podDelivery)
+        ? (receiptData.podDelivery as Record<string, unknown>)
+        : null;
     const receiptTotals = receipt.totals ?? {};
     const receiptNumber = String(receipt.order?.orderNumber ?? receiptData.receiptNumber ?? receipt.id);
     if (seen.has(receiptNumber)) continue;
@@ -322,13 +337,25 @@ async function listPodFollowUp(limit = 5): Promise<PodFollowUpItem[]> {
 
     const total =
       Number(receiptTotals.total ?? receiptTotals.grandTotal ?? receipt.order?.totalAmount ?? receiptData.amount ?? 0) || 0;
+    const status = String(podDelivery?.status ?? "pending");
     items.push({
       id: String(receipt.id),
       receiptNumber,
       customerName: String(receipt.order?.customerName ?? receiptData.customerName ?? "POD customer"),
       customerPhone: String(receipt.order?.customerPhone ?? receiptData.customerPhone ?? "").trim() || null,
       total,
+      status,
       createdAt: receipt.generatedAt instanceof Date ? receipt.generatedAt : receipt.createdAt instanceof Date ? receipt.createdAt : null,
+      updatedAt:
+        typeof podDelivery?.updatedAt === "string"
+          ? new Date(String(podDelivery.updatedAt))
+          : typeof podDelivery?.createdAt === "string"
+            ? new Date(String(podDelivery.createdAt))
+            : receipt.generatedAt instanceof Date
+              ? receipt.generatedAt
+              : receipt.createdAt instanceof Date
+                ? receipt.createdAt
+                : null,
     });
     if (items.length >= limit) break;
   }
@@ -382,6 +409,10 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
               order.assignedAttendant.email.toLowerCase() === user.email.toLowerCase()),
         );
   const websiteOrdersPending = websiteOrders.filter((order) => WEBSITE_PENDING_STATUSES.has(order.status));
+  const websiteOrdersInPeriod = websiteOrdersPending.filter((order) =>
+    isOpenWorkItemStatus(order.status) &&
+    wasCreatedOrUpdatedInPeriod(order.createdAt, order.updatedAt, period),
+  );
 
   const agentOrders =
     user.role === "ADMIN"
@@ -393,10 +424,21 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
               user.email &&
               sale.assignedProcessorEmail.toLowerCase() === user.email.toLowerCase()),
         );
+  const openAgentOrders = agentOrders.filter((sale) =>
+    isOpenWorkItemStatus(sale.status) &&
+    wasCreatedOrUpdatedInPeriod(sale.createdAt, sale.updatedAt, period),
+  );
 
-  const quoteRequests = rawQuoteRequests.filter((request) => QUOTE_PENDING_STATUSES.has(request.status));
+  const quoteRequests = rawQuoteRequests.filter((request) =>
+    isOpenQuotationStatus(request.status) &&
+    wasCreatedOrUpdatedInPeriod(request.createdAt, request.updatedAt, period),
+  );
+  const pendingPodFollowUp = podFollowUp.filter((item) =>
+    isPendingPodStatus(item.status) &&
+    wasCreatedOrUpdatedInPeriod(item.createdAt, item.updatedAt, period),
+  );
   const needsAttentionQueue: QueueItem[] = [
-    ...websiteOrdersPending.slice(0, 6).map((order) => ({
+    ...websiteOrdersInPeriod.slice(0, 6).map((order) => ({
       id: `website:${order.id}`,
       type: "Website Order" as const,
       customerName: order.customerName,
@@ -407,7 +449,7 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
       assignedTo: order.assignedAttendant?.name || order.assignedAttendant?.email || null,
       href: `/marketing/receipts?tab=web-orders&orderId=${encodeURIComponent(order.id)}`,
     })),
-    ...agentOrders.slice(0, 6).map((sale) => ({
+    ...openAgentOrders.slice(0, 6).map((sale) => ({
       id: `agent:${sale.id}`,
       type: "Agent Order" as const,
       customerName: sale.customerName,
@@ -429,13 +471,13 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
       assignedTo: request.assignedAttendant?.name || request.assignedAttendant?.email || null,
       href: `/marketing/receipts?tab=quotations&quoteId=${encodeURIComponent(request.id)}`,
     })),
-    ...podFollowUp.map((item) => ({
+    ...pendingPodFollowUp.map((item) => ({
       id: `pod:${item.id}`,
       type: "POD" as const,
       customerName: item.customerName,
       phone: item.customerPhone,
       amount: item.total,
-      status: "pending follow-up",
+      status: item.status.replace(/_/g, " ").toLowerCase(),
       createdAt: item.createdAt,
       assignedTo: null,
       href: `/marketing/receipts?tab=pos&pod=pending&receiptId=${encodeURIComponent(item.id)}`,
@@ -483,8 +525,11 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
               <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Needs Attention</div>
               <h2 className="mt-2 text-2xl font-semibold text-white">Unified work queue</h2>
               <p className="mt-1 text-sm text-slate-400">
-                Pending website orders, assigned agent orders, quotation follow-up, and POD work in one place.
+                Open work in the active statistics period only. Closed, delivered, cancelled, and settled items are hidden automatically.
               </p>
+            </div>
+            <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-slate-300">
+              {needsAttentionQueue.length} pending item{needsAttentionQueue.length === 1 ? "" : "s"}
             </div>
           </div>
 
@@ -534,7 +579,7 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
               ))
             ) : (
               <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-5 text-sm text-slate-400">
-                No active work queue items found right now.
+                No pending work right now.
               </div>
             )}
           </div>
@@ -552,7 +597,7 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
               </Link>
             </div>
             <div className="mt-4 space-y-3">
-              {agentOrders.slice(0, 5).map((sale) => (
+              {openAgentOrders.slice(0, 5).map((sale) => (
                 <div key={sale.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -569,7 +614,7 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
                   </div>
                 </div>
               ))}
-              {!agentOrders.length ? <div className="text-sm text-slate-400">No assigned agent orders right now.</div> : null}
+              {!openAgentOrders.length ? <div className="text-sm text-slate-400">No assigned agent orders right now.</div> : null}
             </div>
           </div>
 
@@ -603,7 +648,7 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
                   </div>
                 </div>
               ))}
-              {!quoteRequests.length ? <div className="text-sm text-slate-400">No quotation follow-up items right now.</div> : null}
+              {!quoteRequests.length ? <div className="text-sm text-slate-400">No pending quotations.</div> : null}
             </div>
           </div>
 
@@ -618,7 +663,7 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
               </Link>
             </div>
             <div className="mt-4 space-y-3">
-              {podFollowUp.map((item) => (
+              {pendingPodFollowUp.map((item) => (
                 <div key={item.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -626,7 +671,7 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
                       <div className="mt-1 text-sm text-slate-400">{item.receiptNumber}</div>
                     </div>
                     <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-100">
-                      Pending
+                      {item.status.replace(/_/g, " ")}
                     </span>
                   </div>
                   <div className="mt-3 flex items-center justify-between gap-3 text-sm text-slate-400">
@@ -635,7 +680,7 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
                   </div>
                 </div>
               ))}
-              {!podFollowUp.length ? <div className="text-sm text-slate-400">No pending POD follow-up right now.</div> : null}
+              {!pendingPodFollowUp.length ? <div className="text-sm text-slate-400">No pending POD follow-up.</div> : null}
             </div>
           </div>
         </section>
