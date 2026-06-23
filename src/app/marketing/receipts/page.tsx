@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Card from "@/app/_components/Card";
 import DailyReportReceiptsPanel from "@/components/daily-report-receipts";
 import WebsiteOrdersDeskClient from "@/components/WebsiteOrdersDeskClient";
@@ -50,7 +50,6 @@ const ReceiptRangeOptions: { key: ReceiptRangeKey; label: string }[] = [
 export default function MarketingReceiptsPage() {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const defaultDate = toDateInput(new Date());
   const tradingPeriod = useMemo(() => getTradingPeriodFor(new Date()), []);
   const periodRange = useMemo(
@@ -72,30 +71,37 @@ export default function MarketingReceiptsPage() {
     totalSales: 0,
     receiptsCount: 0,
   });
-  const initialTab = searchParams.get("tab");
-  const initialPodFilter = searchParams.get("pod") === "pending" ? "pod_pending" : "all";
-  const [viewMode, setViewMode] = useState<"receipts" | "web-orders" | "quote-requests">(
-    initialTab === "web-orders"
-      ? "web-orders"
-      : initialTab === "quotations"
-        ? "quote-requests"
-        : "receipts",
-  );
+  const [currentSearch, setCurrentSearch] = useState("");
+  const [initialPodFilter, setInitialPodFilter] = useState<"all" | "pod_pending">("all");
+  const [viewMode, setViewMode] = useState<"receipts" | "web-orders" | "quote-requests">("receipts");
 
   useEffect(() => {
-    const nextTab = searchParams.get("tab");
-    const resolvedViewMode =
-      nextTab === "web-orders"
-        ? "web-orders"
-        : nextTab === "quotations"
-          ? "quote-requests"
-          : "receipts";
-    setViewMode((current) => (current === resolvedViewMode ? current : resolvedViewMode));
-  }, [searchParams]);
+    if (typeof window === "undefined") return;
+
+    const syncFromLocation = () => {
+      const nextSearch = window.location.search;
+      setCurrentSearch(nextSearch);
+
+      const params = new URLSearchParams(nextSearch);
+      const nextTab = params.get("tab");
+      const resolvedViewMode =
+        nextTab === "web-orders"
+          ? "web-orders"
+          : nextTab === "quotations"
+            ? "quote-requests"
+            : "receipts";
+      setViewMode((current) => (current === resolvedViewMode ? current : resolvedViewMode));
+      setInitialPodFilter(params.get("pod") === "pending" ? "pod_pending" : "all");
+    };
+
+    syncFromLocation();
+    window.addEventListener("popstate", syncFromLocation);
+    return () => window.removeEventListener("popstate", syncFromLocation);
+  }, []);
 
   function setReceiptViewMode(nextMode: "receipts" | "web-orders" | "quote-requests") {
     setViewMode(nextMode);
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(currentSearch);
     if (nextMode === "receipts") {
       params.set("tab", "pos");
       params.delete("orderId");
@@ -108,6 +114,7 @@ export default function MarketingReceiptsPage() {
       params.delete("orderId");
     }
     const nextQuery = params.toString();
+    setCurrentSearch(nextQuery ? `?${nextQuery}` : "");
     router.replace(`${pathname}${nextQuery ? `?${nextQuery}` : ""}`, { scroll: false });
   }
 
@@ -272,6 +279,7 @@ export default function MarketingReceiptsPage() {
               </div>
 
               <DailyReportReceiptsPanel
+                key={`pos:${initialPodFilter}`}
                 start={filters.start}
                 end={filters.end}
                 q={filters.query}
