@@ -82,7 +82,7 @@ export default async function MarketingAgentOrdersPage() {
               href="/marketing/tracker"
               className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 hover:bg-emerald-500/15"
             >
-              Dashboard
+              Operations overview
             </Link>
           </div>
         </header>
