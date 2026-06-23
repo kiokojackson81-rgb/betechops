@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Prisma, WebsiteOrderStatus } from "@prisma/client";
-import MarketingTrackerLegacySections from "@/app/marketing/tracker/MarketingTrackerLegacySections";
+import MarketingTrackerLegacySections, {
+  MarketingTrackerTopActions,
+} from "@/app/marketing/tracker/MarketingTrackerLegacySections";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
@@ -584,7 +586,6 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
     })
     .slice(0, 14);
 
-  const performancePdfHref = `/api/attendant/daily-report/performance-receipt/pdf?periodKey=${encodeURIComponent(period.key)}`;
   const periodMarketingSales = Number(marketingSummary.totals.totalSales ?? 0);
   const periodMarketingReceipts = Number(marketingSummary.totals.totalReceipts ?? 0);
   const periodMarketingItems = Number(marketingSummary.totals.totalItems ?? 0);
@@ -626,7 +627,8 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-2">
               <Link
                 href="/marketing/receipts"
                 className="rounded-full border border-white/15 bg-white/[0.04] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.08]"
@@ -651,14 +653,8 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
               >
                 Quotations
               </Link>
-              <a
-                href={performancePdfHref}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-full border border-amber-400/20 bg-amber-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-amber-100 transition hover:border-amber-300/30 hover:bg-amber-400/15"
-              >
-                Performance PDF
-              </a>
+              </div>
+              <MarketingTrackerTopActions />
             </div>
           </div>
         </header>
@@ -842,7 +838,18 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
           </div>
         </section>
 
-        <MarketingTrackerLegacySections />
+        <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
+          <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Staff Report & Payroll</div>
+              <h2 className="mt-2 text-2xl font-semibold text-white">Daily reporting, quick stats, and payslip tools</h2>
+              <p className="mt-1 text-sm text-slate-400">
+                Complete the daily checklist, review your period stats, and download payroll documents from one integrated section.
+              </p>
+            </div>
+          </div>
+          <MarketingTrackerLegacySections />
+        </section>
 
         <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -853,14 +860,6 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
                 Uses the same trading-period and performance-report logic already powering Jeniffer&apos;s PDF.
               </p>
             </div>
-            <a
-              href={performancePdfHref}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center justify-center rounded-full border border-amber-400/20 bg-amber-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-amber-100 transition hover:border-amber-300/30 hover:bg-amber-400/15"
-            >
-              Download performance PDF
-            </a>
           </div>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">

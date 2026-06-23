@@ -194,8 +194,12 @@ function StatsCard({
   nextTarget,
 }: StatsCardProps) {
   const hasNextTier = typeof nextTarget === "number" && nextTarget > 0;
-  const { locked, toggle } = useCardLock("marketing:quickstats");
+  const { locked, toggle, unlock } = useCardLock("marketing:quickstats");
   const mask = (val: React.ReactNode) => (locked ? "..." : val);
+
+  useEffect(() => {
+    unlock();
+  }, [unlock]);
 
   const remaining =
     hasNextTier && nextTarget! > currentSalesForTier
@@ -280,7 +284,10 @@ type EarningsCardProps = {
 };
 
 function EarningsCard({ summary, downloadHref }: EarningsCardProps) {
-  const { locked, toggle } = useCardLock("marketing:earnings");
+  const { locked, toggle, unlock } = useCardLock("marketing:earnings");
+  useEffect(() => {
+    unlock();
+  }, [unlock]);
   if (!summary) return null;
   const mask = (v: React.ReactNode) => (locked ? "..." : v);
   const breakdown = buildEarningsCardBreakdown({
@@ -638,6 +645,44 @@ function ReceiptsList({ anchorId = "receipts" }: { anchorId?: string }) {
 }
 
 /* ---------- Page component ---------- */
+
+export function MarketingTrackerTopActions() {
+  const [downloadingPerformance, setDownloadingPerformance] = useState(false);
+  const { selectedPeriod } = useTradingPeriodQueryState();
+  const impersonateIdFromWindow = () =>
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("impersonateId")
+      : null;
+  const defaultFormDate = defaultFormState().date;
+  const downloadPerformancePdf = () => {
+    try {
+      setDownloadingPerformance(true);
+      const params = new URLSearchParams();
+      if (selectedPeriod?.key) params.set("periodKey", selectedPeriod.key);
+      const imp = impersonateIdFromWindow();
+      if (imp) params.set("impersonateId", imp);
+      const url = `/api/attendant/daily-report/performance-receipt/pdf?${params.toString()}`;
+      window.open(url, "_blank", "noopener,noreferrer");
+    } finally {
+      setTimeout(() => setDownloadingPerformance(false), 700);
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap gap-2 lg:justify-end">
+      <Button type="button" variant="secondary" onClick={downloadPerformancePdf}>
+        {downloadingPerformance ? "Preparing…" : "Download report (PDF)"}
+      </Button>
+      <HeaderActions
+        receiptsHref="/marketing/receipts"
+        createHref={`/receipts?start=${defaultFormDate}&end=${defaultFormDate}`}
+        wellnessHref={withImpersonateId("/attendant/wellness", impersonateIdFromWindow())}
+        onSignOut={() => signOut({ callbackUrl: "/attendant/login" })}
+        showDot={false}
+      />
+    </div>
+  );
+}
 
 export default function MarketingTrackerLegacySections() {
   const impersonateIdFromWindow = () =>
@@ -1542,27 +1587,6 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
         onSubmit={handleSubmit}
         className="flex w-full flex-col gap-6 text-slate-100"
       >
-        <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="space-y-1">
-            <h1 className="text-3xl font-semibold">Sales Operations Dashboard</h1>
-            <p className="text-sm text-slate-300">
-              Every task you complete brings you closer to your next reward.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2 lg:justify-end">
-            <Button type="button" variant="secondary" onClick={downloadPerformancePdf}>
-              Download report (PDF)
-            </Button>
-            <HeaderActions
-              receiptsHref="/marketing/receipts"
-              createHref={`/receipts?start=${form.date}&end=${form.date}`}
-              wellnessHref={withImpersonateId("/attendant/wellness", impersonateIdFromWindow())}
-              onSignOut={() => signOut({ callbackUrl: "/attendant/login" })}
-              showDot={false}
-            />
-          </div>
-        </header>
-
         <div className="flex flex-col gap-3 rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-4 md:px-8 md:py-5">
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div>
