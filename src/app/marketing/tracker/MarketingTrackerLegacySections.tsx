@@ -193,12 +193,8 @@ function StatsCard({
   nextTarget,
 }: StatsCardProps) {
   const hasNextTier = typeof nextTarget === "number" && nextTarget > 0;
-  const { locked, toggle, unlock } = useCardLock("marketing:quickstats");
+  const { locked, toggle } = useCardLock("marketing:quickstats");
   const mask = (val: React.ReactNode) => (locked ? "..." : val);
-
-  useEffect(() => {
-    unlock();
-  }, [unlock]);
 
   const remaining =
     hasNextTier && nextTarget! > currentSalesForTier
@@ -283,10 +279,7 @@ type EarningsCardProps = {
 };
 
 function EarningsCard({ summary, downloadHref }: EarningsCardProps) {
-  const { locked, toggle, unlock } = useCardLock("marketing:earnings");
-  useEffect(() => {
-    unlock();
-  }, [unlock]);
+  const { locked, toggle } = useCardLock("marketing:earnings");
   if (!summary) return null;
   const mask = (v: React.ReactNode) => (locked ? "..." : v);
   const breakdown = buildEarningsCardBreakdown({

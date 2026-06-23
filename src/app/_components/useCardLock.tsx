@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 /**
  * Small helper to lock/unlock sensitive cards (values blurred when locked).
- * Unlock requires an authenticated session; otherwise the user is redirected to login.
+ * Uses localStorage and auto-locks after a period when left unlocked.
  */
 export function useCardLock(storageKey: string) {
   // This hook now operates purely client-side using localStorage so that
@@ -70,8 +70,6 @@ export function useCardLock(storageKey: string) {
     } catch {
       // ignore
     }
-    // eslint-disable-next-line no-console
-    console.debug('useCardLock: _lock -> setting locked=true', { key });
     setLocked(true);
   };
 
@@ -81,17 +79,12 @@ export function useCardLock(storageKey: string) {
     } catch {
       // ignore
     }
-    // eslint-disable-next-line no-console
-    console.debug('useCardLock: _unlock -> setting locked=false', { key });
     setLocked(false);
   };
 
   const lock = () => _lock();
 
   const unlock = () => {
-    // Simple local unlock — no session gating.
-    // eslint-disable-next-line no-console
-    console.debug("useCardLock: unlock() called", { storageKey });
     _unlock();
   };
 
@@ -112,21 +105,12 @@ export function LockButton({
   return (
     <button
       type="button"
-      onClick={() => {
-        // eslint-disable-next-line no-console
-        console.debug('LockButton: clicked', { locked });
-        try {
-          onToggle();
-        } catch (err) {
-          // eslint-disable-next-line no-console
-          console.error('LockButton: onToggle error', err);
-        }
-      }}
+      onClick={onToggle}
       className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-2.5 py-1 text-xs text-slate-300 transition hover:border-emerald-400 hover:text-emerald-200"
-      aria-pressed={!locked}
-      title={locked ? "Unlock (login required)" : "Lock"}
+      aria-pressed={locked}
+      title={locked ? "Unlock values" : "Lock values"}
     >
-      <span aria-hidden>{locked ? "🔓" : "🔒"}</span>
+      <span aria-hidden>{locked ? "🔒" : "🔓"}</span>
       <span className="hidden sm:inline">{label ?? (locked ? "Unlock" : "Lock")}</span>
     </button>
   );
