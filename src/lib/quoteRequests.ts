@@ -231,7 +231,7 @@ export const quoteRequestResponseSchema = z.object({
   status: z.enum(QUOTE_REQUEST_STATUSES),
   quoteTitle: z.string().trim().max(200).optional(),
   quoteMessage: z.string().trim().max(12000).optional(),
-  quoteItems: z.array(quoteLineItemSchema).min(1),
+  quoteItems: z.array(quoteLineItemSchema).default([]),
   paymentMethod: quotePaymentMethodSchema.optional(),
   paymentTerms: quotePaymentTermsSchema.optional(),
   depositAmount: z.preprocess(

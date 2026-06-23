@@ -126,15 +126,19 @@ function parseMoneyInput(value: string) {
 }
 
 function buildQuoteRequestPayload(formState: QuoteDeskFormState): QuoteRequestResponseInput {
+  const quoteItems = formState.quoteItems
+    .map((item) => ({
+      itemName: item.itemName.trim(),
+      quantity: parseMoneyInput(item.quantity),
+      unitPrice: parseMoneyInput(item.unitPrice),
+    }))
+    .filter((item) => item.itemName.length > 0);
+
   return {
     status: formState.status,
     quoteTitle: formState.quoteTitle.trim() || undefined,
     quoteMessage: formState.quoteMessage.trim() || undefined,
-    quoteItems: formState.quoteItems.map((item) => ({
-      itemName: item.itemName,
-      quantity: parseMoneyInput(item.quantity),
-      unitPrice: parseMoneyInput(item.unitPrice),
-    })),
+    quoteItems,
     paymentMethod: formState.paymentMethod || undefined,
     paymentTerms: formState.paymentTerms,
     depositAmount:
