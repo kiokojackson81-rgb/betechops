@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Card from "@/app/_components/Card";
 import DailyReportReceiptsPanel from "@/components/daily-report-receipts";
 import WebsiteOrdersDeskClient from "@/components/WebsiteOrdersDeskClient";
@@ -47,6 +48,9 @@ const ReceiptRangeOptions: { key: ReceiptRangeKey; label: string }[] = [
 ];
 
 export default function MarketingReceiptsPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const defaultDate = toDateInput(new Date());
   const tradingPeriod = useMemo(() => getTradingPeriodFor(new Date()), []);
   const periodRange = useMemo(
@@ -68,7 +72,44 @@ export default function MarketingReceiptsPage() {
     totalSales: 0,
     receiptsCount: 0,
   });
-  const [viewMode, setViewMode] = useState<"receipts" | "web-orders" | "quote-requests">("receipts");
+  const initialTab = searchParams.get("tab");
+  const initialPodFilter = searchParams.get("pod") === "pending" ? "pod_pending" : "all";
+  const [viewMode, setViewMode] = useState<"receipts" | "web-orders" | "quote-requests">(
+    initialTab === "web-orders"
+      ? "web-orders"
+      : initialTab === "quotations"
+        ? "quote-requests"
+        : "receipts",
+  );
+
+  useEffect(() => {
+    const nextTab = searchParams.get("tab");
+    const resolvedViewMode =
+      nextTab === "web-orders"
+        ? "web-orders"
+        : nextTab === "quotations"
+          ? "quote-requests"
+          : "receipts";
+    setViewMode((current) => (current === resolvedViewMode ? current : resolvedViewMode));
+  }, [searchParams]);
+
+  function setReceiptViewMode(nextMode: "receipts" | "web-orders" | "quote-requests") {
+    setViewMode(nextMode);
+    const params = new URLSearchParams(searchParams.toString());
+    if (nextMode === "receipts") {
+      params.set("tab", "pos");
+      params.delete("orderId");
+      params.delete("quoteId");
+    } else if (nextMode === "web-orders") {
+      params.set("tab", "web-orders");
+      params.delete("quoteId");
+    } else {
+      params.set("tab", "quotations");
+      params.delete("orderId");
+    }
+    const nextQuery = params.toString();
+    router.replace(`${pathname}${nextQuery ? `?${nextQuery}` : ""}`, { scroll: false });
+  }
 
   const rangeLabel = (() => {
     if (rangeKey === "today") return "Today";
@@ -156,12 +197,18 @@ export default function MarketingReceiptsPage() {
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts list</p>
               <h2 className="text-lg font-semibold text-slate-100">
-                {viewMode === "receipts" ? "My POS receipts" : "My web orders"}
+                {viewMode === "receipts"
+                  ? "My POS receipts"
+                  : viewMode === "web-orders"
+                    ? "My web orders"
+                    : "My quotation requests"}
               </h2>
               <p className="text-sm text-slate-400">
                 {viewMode === "receipts"
                   ? "Filter your own receipts by date, search term, or POD status. Pending PODs can be marked delivered with proof here."
-                  : "Process your assigned website orders here using the same lifecycle used in admin."}
+                  : viewMode === "web-orders"
+                    ? "Process your assigned website orders here using the same lifecycle used in admin."
+                    : "Review assigned quotation requests and prepare product recommendations from the same desk."}
               </p>
             </div>
           </div>
@@ -232,19 +279,19 @@ export default function MarketingReceiptsPage() {
                 onlyPos
                 hideHeader
                 showPodFilters
-                initialPodFilter="all"
+                initialPodFilter={initialPodFilter}
                 extraFilterActions={[
                   {
                     key: "web-orders",
                     label: "Web orders",
                     active: false,
-                    onClick: () => setViewMode("web-orders"),
+                    onClick: () => setReceiptViewMode("web-orders"),
                   },
                   {
                     key: "quote-requests",
                     label: "Quotation requests",
                     active: false,
-                    onClick: () => setViewMode("quote-requests"),
+                    onClick: () => setReceiptViewMode("quote-requests"),
                   },
                   ...ReceiptRangeOptions.map((option) => ({
                     key: option.key,
@@ -267,7 +314,7 @@ export default function MarketingReceiptsPage() {
               <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
                 <button
                   type="button"
-                  onClick={() => setViewMode("receipts")}
+                  onClick={() => setReceiptViewMode("receipts")}
                   className="rounded-full border border-white/15 px-4 py-1 text-slate-200 transition hover:border-emerald-500 hover:text-white"
                 >
                   POS receipts
@@ -280,7 +327,7 @@ export default function MarketingReceiptsPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setViewMode("quote-requests")}
+                  onClick={() => setReceiptViewMode("quote-requests")}
                   className="rounded-full border border-white/15 px-4 py-1 text-slate-200 transition hover:border-emerald-500 hover:text-white"
                 >
                   Quotation requests
@@ -301,14 +348,14 @@ export default function MarketingReceiptsPage() {
               <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
                 <button
                   type="button"
-                  onClick={() => setViewMode("receipts")}
+                  onClick={() => setReceiptViewMode("receipts")}
                   className="rounded-full border border-white/15 px-4 py-1 text-slate-200 transition hover:border-emerald-500 hover:text-white"
                 >
                   POS receipts
                 </button>
                 <button
                   type="button"
-                  onClick={() => setViewMode("web-orders")}
+                  onClick={() => setReceiptViewMode("web-orders")}
                   className="rounded-full border border-white/15 px-4 py-1 text-slate-200 transition hover:border-emerald-500 hover:text-white"
                 >
                   Web orders

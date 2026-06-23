@@ -432,8 +432,6 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
     rawQuoteRequests,
     allAgentOrders,
     podFollowUp,
-    completedWebsiteOrdersToday,
-    completedAgentOrdersToday,
   ] = await Promise.all([
     summarizePosReceiptsForPeriod({
       start: todayStart,
@@ -478,31 +476,6 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
     safeLoad("quote requests", () => listVisibleQuoteRequests({ userId, role: user.role }), [] as SerializedQuoteRequest[]),
     safeLoad("agent orders", () => getAdminAgentSales({ statuses: [...AGENT_OPEN_STATUSES] }), [] as TrackerAgentOrder[]),
     safeLoad("pod follow-up", () => listPodFollowUp(5), [] as PodFollowUpItem[]),
-    safeLoad(
-      "completed website orders today",
-      () =>
-        prisma.websiteOrder.count({
-          where: {
-            status: WebsiteOrderStatus.DELIVERED,
-            updatedAt: { gte: todayStart, lte: todayEnd },
-          },
-        }),
-      0,
-    ),
-    safeLoad(
-      "completed agent orders today",
-      () =>
-        prisma.agentSale.count({
-          where: {
-            status: "completed",
-            OR: [
-              { completedAt: { gte: todayStart, lte: todayEnd } },
-              { updatedAt: { gte: todayStart, lte: todayEnd } },
-            ],
-          },
-        }),
-      0,
-    ),
   ]);
 
   const websiteOrders =
@@ -530,7 +503,6 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
 
   const quoteRequests = rawQuoteRequests.filter((request) => QUOTE_PENDING_STATUSES.has(request.status));
 
-  const completedToday = completedWebsiteOrdersToday + completedAgentOrdersToday;
   const chatLeadsPending = 0; // TODO: wire stable chat/lead source when the queue is finalized.
   const pendingTasks =
     websiteOrdersPending.length +
@@ -549,7 +521,7 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
       status: websiteStatusLabel(order.status),
       createdAt: order.createdAt,
       assignedTo: order.assignedAttendant?.name || order.assignedAttendant?.email || null,
-      href: "/marketing/receipts",
+      href: `/marketing/receipts?tab=web-orders&orderId=${encodeURIComponent(order.id)}`,
     })),
     ...agentOrders.slice(0, 6).map((sale) => ({
       id: `agent:${sale.id}`,
@@ -560,7 +532,7 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
       status: sale.statusMeta.label,
       createdAt: sale.createdAt,
       assignedTo: sale.assignedProcessorName || sale.assignedProcessorEmail || null,
-      href: "/marketing/agent-orders",
+      href: `/marketing/agent-orders?saleId=${encodeURIComponent(sale.id)}`,
     })),
     ...quoteRequests.slice(0, 6).map((request) => ({
       id: `quote:${request.id}`,
@@ -571,7 +543,7 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
       status: quoteStatusLabel(request.status),
       createdAt: request.createdAt,
       assignedTo: request.assignedAttendant?.name || request.assignedAttendant?.email || null,
-      href: "/marketing/receipts",
+      href: `/marketing/receipts?tab=quotations&quoteId=${encodeURIComponent(request.id)}`,
     })),
     ...podFollowUp.map((item) => ({
       id: `pod:${item.id}`,
@@ -582,7 +554,7 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
       status: "pending follow-up",
       createdAt: item.createdAt,
       assignedTo: null,
-      href: "/marketing/receipts",
+      href: `/marketing/receipts?tab=pos&pod=pending&receiptId=${encodeURIComponent(item.id)}`,
     })),
   ]
     .sort((left, right) => {
@@ -725,7 +697,13 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
                       href={item.href}
                       className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-300/30 hover:bg-emerald-400/15"
                     >
-                      Open queue
+                      {item.type === "Agent Order"
+                        ? "Process order"
+                        : item.type === "Website Order"
+                          ? "Open order"
+                          : item.type === "Quotation"
+                            ? "View quotation"
+                            : "Open POD"}
                     </Link>
                   </div>
                 </div>
@@ -851,50 +829,6 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
           <MarketingTrackerLegacySections />
         </section>
 
-        <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Performance Snapshot</div>
-              <h2 className="mt-2 text-2xl font-semibold text-white">Current trading period</h2>
-              <p className="mt-1 text-sm text-slate-400">
-                Uses the same trading-period and performance-report logic already powering Jeniffer&apos;s PDF.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
-              <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Sales</div>
-              <div className="mt-2 text-2xl font-semibold text-white">{formatKes(periodSales)}</div>
-              <div className="mt-1 text-sm text-slate-400">Marketing: {formatKes(periodMarketingSales)} · Support: {formatKes(periodSupportSales)}</div>
-            </div>
-            <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
-              <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Receipts count</div>
-              <div className="mt-2 text-2xl font-semibold text-white">{periodReceipts}</div>
-              <div className="mt-1 text-sm text-slate-400">Trading-period receipt volume</div>
-            </div>
-            <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
-              <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Items sold</div>
-              <div className="mt-2 text-2xl font-semibold text-white">{periodItems}</div>
-              <div className="mt-1 text-sm text-slate-400">Combined from the earnings summary</div>
-            </div>
-            <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
-              <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Estimated commission</div>
-              <div className="mt-2 text-2xl font-semibold text-amber-200">{formatKes(periodCommission)}</div>
-              <div className="mt-1 text-sm text-slate-400">Authoritative earnings summary output</div>
-            </div>
-            <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
-              <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">POD pending</div>
-              <div className="mt-2 text-2xl font-semibold text-white">{podPendingStats.pendingCount}</div>
-              <div className="mt-1 text-sm text-slate-400">{formatKes(podPendingStats.pendingTotal)} awaiting closure</div>
-            </div>
-            <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
-              <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Completed deliveries</div>
-              <div className="mt-2 text-2xl font-semibold text-white">{completedToday}</div>
-              <div className="mt-1 text-sm text-slate-400">Orders finalized today across active queues</div>
-            </div>
-          </div>
-        </section>
       </main>
     </div>
   );

@@ -16,7 +16,7 @@ import {
   marketingFieldKeys,
   marketingFieldTypes,
 } from "@/lib/marketingDayConfigs";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import getLandingPage from "@/lib/getLandingPage";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import type { EarningsSummary } from "@/lib/marketingEarnings";
@@ -648,11 +648,12 @@ function ReceiptsList({ anchorId = "receipts" }: { anchorId?: string }) {
 export function MarketingTrackerTopActions() {
   const [downloadingPerformance, setDownloadingPerformance] = useState(false);
   const { selectedPeriod } = useTradingPeriodQueryState();
+  const searchParams = useSearchParams();
   const impersonateIdFromWindow = () =>
     typeof window !== "undefined"
       ? new URLSearchParams(window.location.search).get("impersonateId")
       : null;
-  const defaultFormDate = defaultFormState().date;
+  const selectedReportDate = searchParams.get("reportDate") || defaultFormState().date;
   const downloadPerformancePdf = () => {
     try {
       setDownloadingPerformance(true);
@@ -670,25 +671,25 @@ export function MarketingTrackerTopActions() {
   return (
     <div className="flex flex-wrap gap-2 lg:max-w-[52rem] lg:justify-end">
       <Link
-        href={`/receipts?start=${defaultFormDate}&end=${defaultFormDate}`}
+        href={`/receipts?start=${selectedReportDate}&end=${selectedReportDate}`}
         className="inline-flex items-center rounded-full border-2 border-emerald-400 bg-transparent px-5 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-600/5 hover:shadow-[0_6px_18px_rgba(16,185,129,0.12)]"
       >
         Create Receipt
       </Link>
       <Link
-        href="/marketing/receipts"
+        href="/marketing/receipts?tab=pos"
         className="rounded-full border border-white/10 bg-white/3 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition-colors duration-150 hover:border-white/30 hover:bg-white/5"
       >
         Receipts
       </Link>
       <Link
-        href="/marketing/receipts"
+        href="/marketing/receipts?tab=pos"
         className="rounded-full border border-white/10 bg-white/3 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition-colors duration-150 hover:border-white/30 hover:bg-white/5"
       >
         POS Receipts
       </Link>
       <Link
-        href="/marketing/receipts"
+        href="/marketing/receipts?tab=web-orders"
         className="rounded-full border border-white/10 bg-white/3 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition-colors duration-150 hover:border-white/30 hover:bg-white/5"
       >
         Web Orders
@@ -700,7 +701,7 @@ export function MarketingTrackerTopActions() {
         Agent Orders
       </Link>
       <Link
-        href="/marketing/receipts"
+        href="/marketing/receipts?tab=quotations"
         className="rounded-full border border-white/10 bg-white/3 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition-colors duration-150 hover:border-white/30 hover:bg-white/5"
       >
         Quotations
@@ -825,6 +826,19 @@ export default function MarketingTrackerLegacySections() {
 
   useEffect(() => {
     setForm((prev) => ({ ...prev, dayOfWeek: deriveDayOfWeek(prev.date) }));
+  }, [form.date]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("reportDate") === form.date) return;
+    params.set("reportDate", form.date);
+    const nextQuery = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}${window.location.hash}`,
+    );
   }, [form.date]);
 
   useEffect(() => {
