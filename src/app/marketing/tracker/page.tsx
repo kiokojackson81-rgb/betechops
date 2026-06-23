@@ -87,6 +87,16 @@ function websiteStatusLabel(status: string) {
   return status.replace(/_/g, " ").toLowerCase();
 }
 
+function pendingToneClasses(count: number) {
+  if (count === 0) {
+    return "border-emerald-400/20 bg-emerald-400/10 text-emerald-100";
+  }
+  if (count <= 5) {
+    return "border-amber-400/20 bg-amber-400/10 text-amber-100";
+  }
+  return "border-rose-400/20 bg-rose-400/10 text-rose-100";
+}
+
 function explainTrackerError(error: unknown) {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     return `${error.code}: ${error.message}`;
@@ -112,9 +122,38 @@ type QueueItem = {
   amount: number | null;
   status: string;
   createdAt: string | Date | null;
+  updatedAt: string | Date | null;
   assignedTo?: string | null;
   href: string;
 };
+
+function PendingKpiCard({
+  title,
+  count,
+  href,
+}: {
+  title: string;
+  count: number;
+  href: string;
+}) {
+  const tone = pendingToneClasses(count);
+
+  return (
+    <Link
+      href={href}
+      className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition hover:border-emerald-400/30 hover:bg-white/[0.05]"
+    >
+      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{title}</div>
+      <div className="mt-3 flex items-end justify-between gap-3">
+        <div>
+          <div className="text-4xl font-semibold text-white">{count}</div>
+          <div className="mt-1 text-sm text-slate-400">Pending</div>
+        </div>
+        <span className={`rounded-full border px-3 py-1 text-xs font-medium ${tone}`}>Open</span>
+      </div>
+    </Link>
+  );
+}
 
 type PodFollowUpItem = {
   id: string;
@@ -444,6 +483,7 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
       amount: order.total,
       status: websiteStatusLabel(order.status),
       createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
       assignedTo: order.assignedAttendant?.name || order.assignedAttendant?.email || null,
       href: `/marketing/receipts?tab=web-orders&orderId=${encodeURIComponent(order.id)}`,
     })),
@@ -455,6 +495,7 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
       amount: sale.totalAmount,
       status: sale.statusMeta.label,
       createdAt: sale.createdAt,
+      updatedAt: sale.updatedAt,
       assignedTo: sale.assignedProcessorName || sale.assignedProcessorEmail || null,
       href: `/marketing/agent-orders?saleId=${encodeURIComponent(sale.id)}`,
     })),
@@ -466,6 +507,7 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
       amount: null,
       status: quoteStatusLabel(request.status),
       createdAt: request.createdAt,
+      updatedAt: request.updatedAt,
       assignedTo: request.assignedAttendant?.name || request.assignedAttendant?.email || null,
       href: `/marketing/receipts?tab=quotations&quoteId=${encodeURIComponent(request.id)}`,
     })),
@@ -477,14 +519,23 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
       amount: item.total,
       status: item.status.replace(/_/g, " ").toLowerCase(),
       createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
       assignedTo: null,
       href: `/marketing/receipts?tab=pos&pod=pending&receiptId=${encodeURIComponent(item.id)}`,
     })),
   ]
     .sort((left, right) => {
-      const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0;
-      const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0;
-      return rightTime - leftTime;
+      const leftCreatedAt = left.createdAt ? new Date(left.createdAt).getTime() : Number.MAX_SAFE_INTEGER;
+      const rightCreatedAt = right.createdAt ? new Date(right.createdAt).getTime() : Number.MAX_SAFE_INTEGER;
+      if (leftCreatedAt !== rightCreatedAt) return leftCreatedAt - rightCreatedAt;
+
+      const leftAmount = Number(left.amount ?? 0);
+      const rightAmount = Number(right.amount ?? 0);
+      if (leftAmount !== rightAmount) return rightAmount - leftAmount;
+
+      const leftUpdatedAt = left.updatedAt ? new Date(left.updatedAt).getTime() : 0;
+      const rightUpdatedAt = right.updatedAt ? new Date(right.updatedAt).getTime() : 0;
+      return rightUpdatedAt - leftUpdatedAt;
     })
     .slice(0, 14);
 
@@ -521,12 +572,26 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
         </header>
 
         <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mb-5">
+            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Needs Attention</div>
+            <h2 className="mt-2 text-2xl font-semibold text-white">Sales Control Center</h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Live pending counts for web orders, agent orders, quotations, and POD follow-up.
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <PendingKpiCard title="Web Orders" count={websiteOrdersInPeriod.length} href="/marketing/receipts?tab=web-orders" />
+            <PendingKpiCard title="Agent Orders" count={openAgentOrders.length} href="/marketing/agent-orders" />
+            <PendingKpiCard title="Quotations" count={quoteRequests.length} href="/marketing/receipts?tab=quotations" />
+            <PendingKpiCard title="POD Follow-up" count={pendingPodFollowUp.length} href="/marketing/receipts?tab=pos&pod=pending" />
+          </div>
+
+          <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Needs Attention</div>
-              <h2 className="mt-2 text-2xl font-semibold text-white">Unified work queue</h2>
+              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Unified Work Queue</div>
               <p className="mt-1 text-sm text-slate-400">
-                Open work in the active statistics period only. Closed, delivered, cancelled, and settled items are hidden automatically.
+                Only actual action-needed items appear here, ordered by oldest pending first.
               </p>
             </div>
             <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-slate-300">
@@ -583,138 +648,6 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
                 No pending work right now.
               </div>
             )}
-          </div>
-        </section>
-
-        <section className="grid gap-6 xl:grid-cols-2 2xl:grid-cols-4">
-          <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Web Orders</div>
-                <h3 className="mt-2 text-xl font-semibold text-white">Pending top 5</h3>
-              </div>
-              <Link href="/marketing/receipts?tab=web-orders" className="text-sm font-medium text-emerald-300 hover:text-emerald-200">
-                Open desk
-              </Link>
-            </div>
-            <div className="mt-4 space-y-3">
-              {websiteOrdersInPeriod.slice(0, 5).map((order) => (
-                <div key={order.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="font-semibold text-white">{order.customerName}</div>
-                      <div className="mt-1 text-sm text-slate-400">{order.customerPhone || "No phone captured"}</div>
-                    </div>
-                    <span className="rounded-full border border-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
-                      {websiteStatusLabel(order.status)}
-                    </span>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between gap-3 text-sm text-slate-400">
-                    <span>{formatDateOnly(order.createdAt)}</span>
-                    <span className="font-medium text-white">{formatKes(order.total)}</span>
-                  </div>
-                </div>
-              ))}
-              {!websiteOrdersInPeriod.length ? <div className="text-sm text-slate-400">No pending web orders.</div> : null}
-            </div>
-          </div>
-
-          <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Agent Orders</div>
-                <h3 className="mt-2 text-xl font-semibold text-white">Assigned top 5</h3>
-              </div>
-              <Link href="/marketing/agent-orders" className="text-sm font-medium text-emerald-300 hover:text-emerald-200">
-                Open all
-              </Link>
-            </div>
-            <div className="mt-4 space-y-3">
-              {openAgentOrders.slice(0, 5).map((sale) => (
-                <div key={sale.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="font-semibold text-white">{sale.customerName}</div>
-                      <div className="mt-1 text-sm text-slate-400">{sale.productName}</div>
-                    </div>
-                    <span className="rounded-full border border-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
-                      {sale.statusMeta.label}
-                    </span>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between gap-3 text-sm text-slate-400">
-                    <span>{sale.customerPhone}</span>
-                    <span className="font-medium text-white">{formatKes(sale.totalAmount)}</span>
-                  </div>
-                </div>
-              ))}
-              {!openAgentOrders.length ? <div className="text-sm text-slate-400">No assigned agent orders right now.</div> : null}
-            </div>
-          </div>
-
-          <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Quotations</div>
-                <h3 className="mt-2 text-xl font-semibold text-white">Pending top 5</h3>
-              </div>
-              <Link href="/marketing/receipts" className="text-sm font-medium text-emerald-300 hover:text-emerald-200">
-                Open desk
-              </Link>
-            </div>
-            <div className="mt-4 space-y-3">
-              {quoteRequests.slice(0, 5).map((request) => (
-                <div key={request.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="font-semibold text-white">{request.customerName}</div>
-                      <div className="mt-1 text-sm text-slate-400">
-                        {request.projectType ? request.projectType.replace(/_/g, " ").toLowerCase() : "Quotation request"}
-                      </div>
-                    </div>
-                    <span className="rounded-full border border-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
-                      {quoteStatusLabel(request.status)}
-                    </span>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between gap-3 text-sm text-slate-400">
-                    <span>{request.customerPhone}</span>
-                    <span>{formatDateOnly(request.createdAt)}</span>
-                  </div>
-                </div>
-              ))}
-              {!quoteRequests.length ? <div className="text-sm text-slate-400">No pending quotations.</div> : null}
-            </div>
-          </div>
-
-          <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">POD Follow-up</div>
-                <h3 className="mt-2 text-xl font-semibold text-white">Pending top 5</h3>
-              </div>
-              <Link href="/marketing/receipts" className="text-sm font-medium text-emerald-300 hover:text-emerald-200">
-                Open receipts
-              </Link>
-            </div>
-            <div className="mt-4 space-y-3">
-              {pendingPodFollowUp.map((item) => (
-                <div key={item.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="font-semibold text-white">{item.customerName}</div>
-                      <div className="mt-1 text-sm text-slate-400">{item.receiptNumber}</div>
-                    </div>
-                    <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-100">
-                      {item.status.replace(/_/g, " ")}
-                    </span>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between gap-3 text-sm text-slate-400">
-                    <span>{item.customerPhone || "-"}</span>
-                    <span className="font-medium text-white">{formatKes(item.total)}</span>
-                  </div>
-                </div>
-              ))}
-              {!pendingPodFollowUp.length ? <div className="text-sm text-slate-400">No pending POD follow-up.</div> : null}
-            </div>
           </div>
         </section>
 
