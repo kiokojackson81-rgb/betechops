@@ -26,6 +26,26 @@ export function isOpenQuotationStatus(status: string | null | undefined) {
   return new Set(["new", "contacted", "pending", "follow_up", "quoted", "amount_pending"]).has(normalized);
 }
 
+export function isPendingWebOrderStatus(status: string | null | undefined) {
+  const normalized = normalizeStatus(status);
+  return new Set([
+    "pending",
+    "new",
+    "unpaid",
+    "awaiting_payment",
+    "awaiting payment",
+    "awaiting_confirmation",
+    "awaiting confirmation",
+    "processing",
+    "confirmed",
+    "receipt_issued",
+    "receipt issued",
+    "dispatched",
+    "payment_confirmed",
+    "payment confirmed",
+  ]).has(normalized);
+}
+
 export function isPendingPodStatus(status: string | null | undefined) {
   const normalized = normalizeStatus(status);
   return new Set(["pending", "follow_up", "delivery_failed", "failed"]).has(normalized);
@@ -55,4 +75,3 @@ export function wasCreatedOrUpdatedInPeriod(
 ) {
   return isWithinPeriod(createdAt, period) || isWithinPeriod(updatedAt, period);
 }
-

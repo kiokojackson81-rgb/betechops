@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Prisma, WebsiteOrderStatus } from "@prisma/client";
 import MarketingTrackerLegacySections, {
@@ -11,6 +12,7 @@ import { WEBSITE_ORDER_ACTIVE_STATUSES } from "@/lib/websiteOrders";
 import { getAdminAgentSales } from "@/lib/agents/sales";
 import {
   isOpenQuotationStatus,
+  isPendingWebOrderStatus,
   isOpenWorkItemStatus,
   isPendingPodStatus,
   wasCreatedOrUpdatedInPeriod,
@@ -32,15 +34,6 @@ const AGENT_OPEN_STATUSES = [
   "dispatched",
   "delivered_pending_balance",
 ] as const;
-
-const WEBSITE_PENDING_STATUSES = new Set<WebsiteOrderStatus>([
-  WebsiteOrderStatus.PENDING,
-  WebsiteOrderStatus.CONFIRMED,
-  WebsiteOrderStatus.PROCESSING,
-  WebsiteOrderStatus.RECEIPT_ISSUED,
-  WebsiteOrderStatus.DISPATCHED,
-  WebsiteOrderStatus.PAYMENT_CONFIRMED,
-]);
 
 function canAccessOperationsHub(role: string | null | undefined, attendantCategory: string | null | undefined) {
   return (
@@ -114,7 +107,7 @@ async function safeLoad<T>(label: string, loader: () => Promise<T>, fallback: T)
 
 type QueueItem = {
   id: string;
-  type: "Website Order" | "Agent Order" | "Quotation" | "POD";
+  type: "Web Order" | "Agent Order" | "Quotation" | "POD";
   customerName: string;
   phone: string | null;
   amount: number | null;
@@ -386,6 +379,13 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
     ? resolvedSearchParams.periodKey[0]
     : resolvedSearchParams.periodKey;
   const period = parseTradingPeriodKey(periodKeyParam) ?? getTradingPeriodFor(new Date());
+  const nairobiDate = new Intl.DateTimeFormat("en-KE", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "Africa/Nairobi",
+  }).format(new Date());
   const [
     rawWebsiteOrders,
     rawQuoteRequests,
@@ -408,9 +408,8 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
               user.email &&
               order.assignedAttendant.email.toLowerCase() === user.email.toLowerCase()),
         );
-  const websiteOrdersPending = websiteOrders.filter((order) => WEBSITE_PENDING_STATUSES.has(order.status));
+  const websiteOrdersPending = websiteOrders.filter((order) => isPendingWebOrderStatus(order.status));
   const websiteOrdersInPeriod = websiteOrdersPending.filter((order) =>
-    isOpenWorkItemStatus(order.status) &&
     wasCreatedOrUpdatedInPeriod(order.createdAt, order.updatedAt, period),
   );
 
@@ -440,7 +439,7 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
   const needsAttentionQueue: QueueItem[] = [
     ...websiteOrdersInPeriod.slice(0, 6).map((order) => ({
       id: `website:${order.id}`,
-      type: "Website Order" as const,
+      type: "Web Order" as const,
       customerName: order.customerName,
       phone: order.customerPhone,
       amount: order.total,
@@ -500,9 +499,9 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
                 {staffRoleLabel(user.role, user.attendantCategory)}
               </div>
               <div>
-                <h1 className="text-3xl font-semibold text-white">Operations Command Center</h1>
+                <h1 className="text-3xl font-semibold text-white">Sales Operations Dashboard</h1>
                 <p className="mt-2 max-w-3xl text-sm text-slate-300">
-                  Overview of POS sales, web orders, agent orders, quotations, chats, and delivery follow-up.
+                  Pending sales work, web orders, agent orders, quotations, POD follow-up, and staff reporting in one place.
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-sm text-slate-400">
@@ -511,6 +510,11 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
                 </span>
                 <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5">
                   {period.label}
+                </span>
+                <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-emerald-100">
+                  <span className="mr-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-200">Today</span>
+                  {nairobiDate}
+                  <span className="ml-2 text-[11px] uppercase tracking-[0.16em] text-emerald-200">Nairobi Time</span>
                 </span>
               </div>
             </div>
@@ -568,7 +572,7 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
                     >
                       {item.type === "Agent Order"
                         ? "Process order"
-                        : item.type === "Website Order"
+                        : item.type === "Web Order"
                           ? "Open order"
                           : item.type === "Quotation"
                             ? "View quotation"
@@ -585,7 +589,39 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
           </div>
         </section>
 
-        <section className="grid gap-6 xl:grid-cols-3">
+        <section className="grid gap-6 xl:grid-cols-2 2xl:grid-cols-4">
+          <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Web Orders</div>
+                <h3 className="mt-2 text-xl font-semibold text-white">Pending top 5</h3>
+              </div>
+              <Link href="/marketing/receipts?tab=web-orders" className="text-sm font-medium text-emerald-300 hover:text-emerald-200">
+                Open desk
+              </Link>
+            </div>
+            <div className="mt-4 space-y-3">
+              {websiteOrdersInPeriod.slice(0, 5).map((order) => (
+                <div key={order.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="font-semibold text-white">{order.customerName}</div>
+                      <div className="mt-1 text-sm text-slate-400">{order.customerPhone || "No phone captured"}</div>
+                    </div>
+                    <span className="rounded-full border border-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
+                      {websiteStatusLabel(order.status)}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-3 text-sm text-slate-400">
+                    <span>{formatDateOnly(order.createdAt)}</span>
+                    <span className="font-medium text-white">{formatKes(order.total)}</span>
+                  </div>
+                </div>
+              ))}
+              {!websiteOrdersInPeriod.length ? <div className="text-sm text-slate-400">No pending web orders.</div> : null}
+            </div>
+          </div>
+
           <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
             <div className="flex items-center justify-between gap-3">
               <div>

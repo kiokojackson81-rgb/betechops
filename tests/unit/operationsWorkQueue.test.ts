@@ -1,5 +1,6 @@
 import {
   isOpenQuotationStatus,
+  isPendingWebOrderStatus,
   isOpenWorkItemStatus,
   isPendingPodStatus,
   wasCreatedOrUpdatedInPeriod,
@@ -32,6 +33,19 @@ describe("operations work queue helpers", () => {
     expect(isPendingPodStatus("pending")).toBe(true);
   });
 
+  it("shows pending web orders", () => {
+    expect(isPendingWebOrderStatus("pending")).toBe(true);
+    expect(isPendingWebOrderStatus("awaiting_payment")).toBe(true);
+  });
+
+  it("hides completed web orders", () => {
+    expect(isPendingWebOrderStatus("completed")).toBe(false);
+  });
+
+  it("hides cancelled web orders", () => {
+    expect(isPendingWebOrderStatus("cancelled")).toBe(false);
+  });
+
   it("hides delivered POD items", () => {
     expect(isPendingPodStatus("delivered")).toBe(false);
   });
@@ -61,4 +75,3 @@ describe("operations work queue helpers", () => {
     expect(isOpenWorkItemStatus("processing")).toBe(true);
   });
 });
-
