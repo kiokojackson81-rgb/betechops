@@ -52,7 +52,11 @@ export default async function AdminAttendantsPage() {
   }
 
   const prepared = attendantsRaw.map((a) => ({
-    ...a,
+    id: a.id,
+    name: a.name ?? "-",
+    email: a.email ?? "",
+    attendantCategory: a.attendantCategory ?? null,
+    isActive: a.isActive ?? true,
     createdAt: a.createdAt.toISOString(),
     categoryLabel: getCategoryLabel(a.attendantCategory),
   }));
