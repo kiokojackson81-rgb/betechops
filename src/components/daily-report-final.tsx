@@ -295,8 +295,20 @@ export default function DailyReportFinal() {
     typeof (session?.user as { email?: string } | undefined)?.email === "string"
       ? (session?.user as { email?: string }).email!.toLowerCase().trim()
       : null;
+  const sessionRole =
+    typeof (session?.user as { role?: string | null } | undefined)?.role === "string"
+      ? ((session?.user as { role?: string | null }).role ?? null)
+      : null;
+  const sessionAttendantCategory =
+    typeof (session?.user as { attendantCategory?: string | null } | undefined)?.attendantCategory === "string"
+      ? ((session?.user as { attendantCategory?: string | null }).attendantCategory ?? null)
+      : null;
   const effectiveAttendantEmail = resolvedAttendantEmail ?? (impersonateId ? null : sessionEmail);
   const isBrendahView = effectiveAttendantEmail === "brendah@betech.co.ke";
+  const canAccessAgentOrders =
+    sessionRole === "ADMIN" ||
+    sessionAttendantCategory === "DIRECT_SALES_OPS" ||
+    sessionAttendantCategory === "MARKETING_OPS";
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasValidationErrors] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -997,6 +1009,24 @@ export default function DailyReportFinal() {
                 showPodFilters
                 hideHeader
                 extraFilterActions={[
+                  ...(canAccessAgentOrders
+                    ? [
+                        {
+                          key: "agent-orders",
+                          label: "Agent orders",
+                          active: false,
+                          onClick: () => {
+                            setCurrentView("dashboard");
+                            if (typeof window !== "undefined") {
+                              window.location.href = withImpersonateId(
+                                "/marketing/agent-orders",
+                                impersonateId,
+                              );
+                            }
+                          },
+                        },
+                      ]
+                    : []),
                   {
                     key: "web-orders",
                     label: "Web orders",

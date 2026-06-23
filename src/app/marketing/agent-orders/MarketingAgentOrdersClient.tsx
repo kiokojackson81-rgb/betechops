@@ -8,6 +8,10 @@ type AgentOrderRow = {
   id: string;
   agentId: string;
   agentName: string;
+  assignedProcessorId?: string | null;
+  assignedProcessorName?: string | null;
+  assignedProcessorEmail?: string | null;
+  assignedAt?: string | null;
   customerName: string;
   customerPhone: string;
   customerLocation: string;
@@ -249,6 +253,12 @@ export default function MarketingAgentOrdersClient({ sales }: { sales: AgentOrde
                         <div className="mt-1 text-slate-200">{sale.agentName}</div>
                       </div>
                       <div>
+                        <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Assigned desk</div>
+                        <div className="mt-1 text-slate-200">
+                          {sale.assignedProcessorName || sale.assignedProcessorEmail || "Not assigned"}
+                        </div>
+                      </div>
+                      <div>
                         <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Submitted</div>
                         <div className="mt-1 text-slate-200">{new Date(sale.createdAt).toLocaleString("en-KE")}</div>
                       </div>
@@ -323,6 +333,16 @@ export default function MarketingAgentOrdersClient({ sales }: { sales: AgentOrde
                       <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Agent & support notes</div>
                       <div className="mt-3 space-y-2 text-sm text-slate-300">
                         <div><span className="text-slate-500">Agent:</span> {sale.agentName}</div>
+                        <div>
+                          <span className="text-slate-500">Assigned processor:</span>{" "}
+                          {sale.assignedProcessorName || sale.assignedProcessorEmail || "Not assigned"}
+                        </div>
+                        {sale.assignedAt ? (
+                          <div>
+                            <span className="text-slate-500">Assigned at:</span>{" "}
+                            {new Date(sale.assignedAt).toLocaleString("en-KE")}
+                          </div>
+                        ) : null}
                         <div><span className="text-slate-500">Commission:</span> {money(sale.commissionAmount)}</div>
                         <div><span className="text-slate-500">Status note:</span> {sale.statusMeta.note}</div>
                         {sale.duplicateNote ? <div><span className="text-slate-500">Review:</span> {sale.duplicateNote}</div> : null}

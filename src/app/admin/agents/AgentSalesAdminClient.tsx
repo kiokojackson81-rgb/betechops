@@ -9,6 +9,10 @@ type AdminSaleRow = {
   id: string;
   agentId: string;
   agentName: string;
+  assignedProcessorId?: string | null;
+  assignedProcessorName?: string | null;
+  assignedProcessorEmail?: string | null;
+  assignedAt?: string | null;
   customerName: string;
   customerPhone: string;
   customerLocation: string;
@@ -419,7 +423,12 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
                         </div>
                       </td>
                       <td className="px-3 py-4">
-                        <div className="max-w-[180px] truncate">{sale.agentName}</div>
+                        <div className="max-w-[180px]">
+                          <div className="truncate">{sale.agentName}</div>
+                          <div className="mt-1 truncate text-xs text-slate-500">
+                            {sale.assignedProcessorName || sale.assignedProcessorEmail || "Unassigned"}
+                          </div>
+                        </div>
                       </td>
                       <td className="px-3 py-4 font-semibold text-white whitespace-nowrap">{money(sale.totalAmount)}</td>
                       <td className="px-3 py-4">
@@ -478,6 +487,14 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
                                 <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Agent Information</div>
                                 <div className="mt-3 space-y-2 text-sm text-slate-300">
                                   <div><span className="text-slate-500">Agent Name:</span> {sale.agentName}</div>
+                                  <div>
+                                    <span className="text-slate-500">Assigned Processor:</span>{" "}
+                                    {sale.assignedProcessorName || sale.assignedProcessorEmail || "Unassigned"}
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-500">Assigned At:</span>{" "}
+                                    {sale.assignedAt ? new Date(sale.assignedAt).toLocaleString("en-KE") : "Not assigned"}
+                                  </div>
                                   <div><span className="text-slate-500">Commission:</span> {money(sale.commissionAmount)}</div>
                                   <div><span className="text-slate-500">Risk Status:</span> <span className={`inline-flex rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${duplicateBadge(sale.duplicateRisk)}`}>{sale.duplicateRisk}</span></div>
                                   <div><span className="text-slate-500">Receipt:</span> {sale.receiptNumber || "Not linked"}</div>
@@ -639,6 +656,12 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
                         <div className="mt-1 truncate text-slate-200">{sale.agentName}</div>
                       </div>
                       <div>
+                        <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Assigned Desk</div>
+                        <div className="mt-1 truncate text-slate-200">
+                          {sale.assignedProcessorName || sale.assignedProcessorEmail || "Unassigned"}
+                        </div>
+                      </div>
+                      <div>
                         <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Order Value</div>
                         <div className="mt-1 font-semibold text-white">{money(sale.totalAmount)}</div>
                       </div>
@@ -702,6 +725,8 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
                         <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Agent Information</div>
                         <div className="mt-3 space-y-2 text-sm text-slate-300">
                           <div>Agent Name: {sale.agentName}</div>
+                          <div>Assigned Processor: {sale.assignedProcessorName || sale.assignedProcessorEmail || "Unassigned"}</div>
+                          <div>Assigned At: {sale.assignedAt ? new Date(sale.assignedAt).toLocaleString("en-KE") : "Not assigned"}</div>
                           <div>Commission: {money(sale.commissionAmount)}</div>
                           <div>Risk Status: {sale.duplicateRisk}</div>
                           <div>Receipt: {sale.receiptNumber || "Not linked"}</div>

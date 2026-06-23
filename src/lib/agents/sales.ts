@@ -49,6 +49,20 @@ const agentSaleStatusNotes: Record<(typeof agentSaleStatuses)[number], string> =
 };
 
 const terminalAgentSaleStatuses = new Set<string>(["completed", "cancelled", "rejected"]);
+const activeAssignedAgentOrderStatuses = [
+  "pending_review",
+  "awaiting_payment",
+  "payment_confirmed",
+  "processing",
+  "dispatched",
+  "delivered_pending_balance",
+] as const;
+const assignmentMetadataKeys = {
+  id: "ASSIGNED_PROCESSOR_ID",
+  name: "ASSIGNED_PROCESSOR_NAME",
+  email: "ASSIGNED_PROCESSOR_EMAIL",
+  at: "ASSIGNED_AT",
+} as const;
 
 function normalizeAgentSaleStatus(status: string | null | undefined) {
   return String(status || "").toLowerCase();
@@ -260,6 +274,75 @@ function cleanOptional(value: string | null | undefined) {
   return cleaned ? cleaned : null;
 }
 
+type ParsedAssignmentMetadata = {
+  processorId: string | null;
+  processorName: string | null;
+  processorEmail: string | null;
+  assignedAt: Date | null;
+  publicNotes: string | null;
+};
+
+type AssignedProcessor = {
+  processorId: string;
+  processorName: string | null;
+  processorEmail: string | null;
+  assignedAt: Date;
+};
+
+function buildAssignmentMetadataLine(key: string, value: string) {
+  return `[[${key}:${value}]]`;
+}
+
+function parseAssignmentMetadataValue(notes: string, key: string) {
+  const match = notes.match(new RegExp(`\\[\\[${key}:(.*?)\\]\\]`, "i"));
+  return cleanOptional(match?.[1] ?? null);
+}
+
+function parseAssignmentMetadata(notes: string | null | undefined): ParsedAssignmentMetadata {
+  const raw = String(notes || "");
+  const publicNotes = cleanOptional(
+    raw
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("[[ASSIGNED_"))
+      .join("\n"),
+  );
+  const processorId = parseAssignmentMetadataValue(raw, assignmentMetadataKeys.id);
+  const processorName = parseAssignmentMetadataValue(raw, assignmentMetadataKeys.name);
+  const processorEmail = parseAssignmentMetadataValue(raw, assignmentMetadataKeys.email);
+  const assignedAtRaw = parseAssignmentMetadataValue(raw, assignmentMetadataKeys.at);
+  const assignedAt =
+    assignedAtRaw && !Number.isNaN(new Date(assignedAtRaw).getTime()) ? new Date(assignedAtRaw) : null;
+
+  return {
+    processorId,
+    processorName,
+    processorEmail,
+    assignedAt,
+    publicNotes,
+  };
+}
+
+function serializeInternalAgentNotes(
+  publicNotes: string | null | undefined,
+  assignment: AssignedProcessor | null,
+) {
+  const lines: string[] = [];
+  const cleanedNotes = cleanOptional(publicNotes);
+  if (cleanedNotes) lines.push(cleanedNotes);
+  if (assignment) {
+    lines.push(buildAssignmentMetadataLine(assignmentMetadataKeys.id, assignment.processorId));
+    if (assignment.processorName) {
+      lines.push(buildAssignmentMetadataLine(assignmentMetadataKeys.name, assignment.processorName));
+    }
+    if (assignment.processorEmail) {
+      lines.push(buildAssignmentMetadataLine(assignmentMetadataKeys.email, assignment.processorEmail));
+    }
+    lines.push(buildAssignmentMetadataLine(assignmentMetadataKeys.at, assignment.assignedAt.toISOString()));
+  }
+  return cleanOptional(lines.join("\n"));
+}
+
 function normalizeCustomerPhone(value: string | null | undefined) {
   return String(value || "").replace(/\D/g, "");
 }
@@ -271,6 +354,53 @@ function normalizeAmount(value: number) {
 
 function ensureReceiptNumber(sale: AgentSaleRecord) {
   return sale.receiptNumber || sale.receipt?.receiptNumber || sale.receipt?.order?.orderNumber || null;
+}
+
+async function chooseAssignedProcessor(
+  tx: Prisma.TransactionClient,
+): Promise<AssignedProcessor | null> {
+  const [processors, openSales] = await Promise.all([
+    tx.user.findMany({
+      where: {
+        isActive: true,
+        attendantCategory: { in: ["DIRECT_SALES_OPS", "MARKETING_OPS"] },
+      },
+      select: { id: true, name: true, email: true },
+      orderBy: [{ name: "asc" }, { email: "asc" }],
+    }),
+    tx.agentSale.findMany({
+      where: {
+        status: { in: [...activeAssignedAgentOrderStatuses] },
+      },
+      select: { internalAgentNotes: true },
+    }),
+  ]);
+
+  if (!processors.length) return null;
+
+  const loadByProcessorId = new Map<string, number>(processors.map((processor) => [processor.id, 0] as const));
+  for (const sale of openSales) {
+    const parsed = parseAssignmentMetadata(sale.internalAgentNotes);
+    if (!parsed.processorId) continue;
+    if (!loadByProcessorId.has(parsed.processorId)) continue;
+    loadByProcessorId.set(parsed.processorId, (loadByProcessorId.get(parsed.processorId) ?? 0) + 1);
+  }
+
+  const selected = processors
+    .slice()
+    .sort((left, right) => {
+      const leftCount = loadByProcessorId.get(left.id) ?? 0;
+      const rightCount = loadByProcessorId.get(right.id) ?? 0;
+      if (leftCount !== rightCount) return leftCount - rightCount;
+      return String(left.name || left.email || left.id).localeCompare(String(right.name || right.email || right.id));
+    })[0];
+
+  return {
+    processorId: selected.id,
+    processorName: cleanOptional(selected.name),
+    processorEmail: cleanOptional(selected.email),
+    assignedAt: new Date(),
+  };
 }
 
 function getCommissionForSale(
@@ -1025,6 +1155,7 @@ export function presentAgentSale(
   sale: AgentSaleRecord,
   commission: AgentSaleCommission | null,
 ) {
+  const assignment = parseAssignmentMetadata(sale.internalAgentNotes);
   const normalizedSaleStatus = String(sale.status).toLowerCase();
   const isCompleted = normalizedSaleStatus === "completed";
   const isRejected = normalizedSaleStatus === "rejected";
@@ -1099,7 +1230,11 @@ export function presentAgentSale(
     deliveryMethod: sale.deliveryMethod,
     deliveryNotes: sale.deliveryNotes,
     customerNotes: sale.customerNotes,
-    internalAgentNotes: sale.internalAgentNotes,
+    internalAgentNotes: assignment.publicNotes,
+    assignedProcessorId: assignment.processorId,
+    assignedProcessorName: assignment.processorName,
+    assignedProcessorEmail: assignment.processorEmail,
+    assignedAt: assignment.assignedAt,
     status: sale.status,
     statusMeta: getAgentSaleStatusMeta(sale.status),
     commissionPct: Number(sale.commissionPct ?? AGENT_COMMISSION_RATE),
@@ -1131,6 +1266,7 @@ export async function createAgentSale(agentId: string, body: unknown) {
   let sale;
   try {
     sale = await prisma.$transaction(async (tx) => {
+      const assignedProcessor = await chooseAssignedProcessor(tx);
       const created = await tx.agentSale.create({
         data: {
           agentId,
@@ -1150,7 +1286,7 @@ export async function createAgentSale(agentId: string, body: unknown) {
           deliveryMethod: cleanOptional(input.deliveryMethod),
           deliveryNotes: cleanOptional(input.deliveryNotes),
           customerNotes: cleanOptional(input.customerNotes),
-          internalAgentNotes: cleanOptional(input.internalAgentNotes),
+          internalAgentNotes: serializeInternalAgentNotes(input.internalAgentNotes, assignedProcessor),
           status: "pending_review",
           commissionPct: AGENT_COMMISSION_RATE,
           potentialCommission: calculatePotentialCommission(totalAmount),
@@ -1189,6 +1325,9 @@ export async function createAgentSale(agentId: string, body: unknown) {
             totalAmount,
             customerIdentitySource: customerIdentity.matchedBy,
             customerEmailConflict: customerIdentity.emailConflict,
+            assignedProcessorId: assignedProcessor?.processorId ?? null,
+            assignedProcessorName: assignedProcessor?.processorName ?? null,
+            assignedProcessorEmail: assignedProcessor?.processorEmail ?? null,
           } as Prisma.InputJsonValue,
         },
         tx,

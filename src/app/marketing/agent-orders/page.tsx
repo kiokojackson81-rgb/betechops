@@ -28,7 +28,12 @@ function canAccessAgentOrdersDesk(role: string | null | undefined, attendantCate
 
 export default async function MarketingAgentOrdersPage() {
   const session = await auth();
-  const user = session?.user as { role?: string | null; attendantCategory?: string | null } | undefined;
+  const user = session?.user as {
+    id?: string | null;
+    email?: string | null;
+    role?: string | null;
+    attendantCategory?: string | null;
+  } | undefined;
 
   if (!session) redirect("/admin/login");
   if (!canAccessAgentOrdersDesk(user?.role, user?.attendantCategory)) {
@@ -36,11 +41,22 @@ export default async function MarketingAgentOrdersPage() {
   }
 
   const sales = await getAdminAgentSales({ statuses: [...OPEN_AGENT_ORDER_STATUSES] });
-  const preparedSales = sales.map((sale) => ({
+  const visibleSales =
+    user?.role === "ADMIN"
+      ? sales
+      : sales.filter(
+          (sale) =>
+            sale.assignedProcessorId === (user?.id ?? null) ||
+            (sale.assignedProcessorEmail &&
+              user?.email &&
+              sale.assignedProcessorEmail.toLowerCase() === user.email.toLowerCase()),
+        );
+  const preparedSales = visibleSales.map((sale) => ({
     ...sale,
     createdAt: sale.createdAt.toISOString(),
     updatedAt: sale.updatedAt.toISOString(),
     completedAt: sale.completedAt ? sale.completedAt.toISOString() : null,
+    assignedAt: sale.assignedAt ? sale.assignedAt.toISOString() : null,
     ownershipWindowEndsAt: sale.ownershipWindowEndsAt ? sale.ownershipWindowEndsAt.toISOString() : null,
   }));
 

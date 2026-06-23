@@ -74,6 +74,7 @@ export default async function AdminAgentPendingSalesPage({
     createdAt: sale.createdAt.toISOString(),
     updatedAt: sale.updatedAt.toISOString(),
     completedAt: sale.completedAt ? sale.completedAt.toISOString() : null,
+    assignedAt: sale.assignedAt ? sale.assignedAt.toISOString() : null,
     ownershipWindowEndsAt: sale.ownershipWindowEndsAt ? sale.ownershipWindowEndsAt.toISOString() : null,
   }));
   const preparedBaseSales = baseSales.map((sale) => ({
@@ -81,6 +82,7 @@ export default async function AdminAgentPendingSalesPage({
     createdAt: sale.createdAt.toISOString(),
     updatedAt: sale.updatedAt.toISOString(),
     completedAt: sale.completedAt ? sale.completedAt.toISOString() : null,
+    assignedAt: sale.assignedAt ? sale.assignedAt.toISOString() : null,
     ownershipWindowEndsAt: sale.ownershipWindowEndsAt ? sale.ownershipWindowEndsAt.toISOString() : null,
   }));
   const queueCounts = {
