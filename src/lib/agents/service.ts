@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { generateReferralCode } from "@/lib/agents/generateReferralCode";
 import { getAgentsBaseUrl } from "@/lib/runtimeUrls";
 import { getAgentSalesDashboardSummary } from "@/lib/agents/sales";
+import { listAgentReferralLeadsByAgent } from "@/lib/agents/referralLeads";
+import { normalizeKenyanPhone } from "@/lib/phone";
 
 function getPrismaErrorDetails(error: unknown) {
   if (!error || typeof error !== "object") return null;
@@ -30,6 +32,7 @@ function isAgentSalesSchemaError(error: unknown) {
     "AgentCommission",
     "AgentPayout",
     "AgentActivityLog",
+    "AgentReferralLead",
     "WebsiteOrder",
     "AgentLeadOwnership",
     "AgentDuplicateReview",
@@ -86,7 +89,7 @@ export async function getAgentDashboardData(userId: string) {
 
   if (!profile) return null;
 
-  const [{ sales, summary: salesSummary }, commissions, payouts, activities, referredWebsiteOrders] = await Promise.all([
+  const [{ sales, summary: salesSummary }, commissions, payouts, activities, referredWebsiteOrders, referralLeads] = await Promise.all([
     withAgentDashboardFallback(
       "sales-summary",
       getAgentSalesDashboardSummary(userId),
@@ -154,6 +157,13 @@ export async function getAgentDashboardData(userId: string) {
       }),
       [],
     ),
+    listAgentReferralLeadsByAgent(userId).catch((error) => {
+      if (isAgentSalesSchemaError(error)) {
+        console.info("[agents.dashboard] legacy schema fallback", { label: "agent-referral-leads" });
+        return [];
+      }
+      throw error;
+    }),
   ]);
 
   const adjustedCommissions = applyPaidPayoutsToCommissions(commissions, payouts);
@@ -185,6 +195,54 @@ export async function getAgentDashboardData(userId: string) {
     { totalOrders: 0, totalRevenue: 0, completedOrders: 0, openOrders: 0, cancelledOrders: 0 },
   );
 
+  const mappedReferredWebsiteOrders = referredWebsiteOrders.map((order) => ({
+    id: order.id,
+    orderRef: order.orderRef,
+    customerName: order.customerName,
+    customerPhone: order.customerPhone,
+    customerLocation: order.customerLocation,
+    paymentMethod: order.paymentMethod,
+    orderType: order.orderType,
+    status: String(order.status),
+    totalAmount: Number(order.total ?? 0),
+    createdAt: order.createdAt,
+    items: order.items.map((item) => ({
+      id: item.id,
+      productName: item.productName,
+      quantity: Number(item.quantity ?? 0),
+      totalAmount: Number(item.total ?? 0),
+    })),
+  }));
+
+  const referralLeadsWithStatus = referralLeads.map((lead) => {
+    const normalizedLeadPhone = normalizeKenyanPhone(lead.customerPhone);
+    const matchedOrder = mappedReferredWebsiteOrders.find((order) => {
+      const normalizedOrderPhone = normalizeKenyanPhone(order.customerPhone || "");
+      if (!normalizedLeadPhone || !normalizedOrderPhone) return false;
+      return normalizedLeadPhone === normalizedOrderPhone && order.createdAt.getTime() >= lead.createdAt.getTime();
+    });
+
+    return {
+      ...lead,
+      effectiveStatus: matchedOrder ? "PURCHASED" : String(lead.status || "PENDING"),
+      matchedOrderRef: matchedOrder?.orderRef || null,
+      matchedOrderId: matchedOrder?.id || null,
+      matchedOrderAmount: matchedOrder?.totalAmount ?? null,
+      matchedOrderCreatedAt: matchedOrder?.createdAt ?? null,
+    };
+  });
+
+  const referralLeadSummary = referralLeadsWithStatus.reduce(
+    (acc, lead) => {
+      acc.total += 1;
+      if (lead.effectiveStatus === "PURCHASED" || lead.effectiveStatus === "CONVERTED") acc.purchased += 1;
+      else if (lead.effectiveStatus === "CANCELLED") acc.cancelled += 1;
+      else acc.pending += 1;
+      return acc;
+    },
+    { total: 0, pending: 0, purchased: 0, cancelled: 0 },
+  );
+
   return {
     profile,
     displayName: getAgentDisplayName(profile),
@@ -200,24 +258,9 @@ export async function getAgentDashboardData(userId: string) {
     salesSummary,
     sales,
     websiteReferralSummary,
-    referredWebsiteOrders: referredWebsiteOrders.map((order) => ({
-      id: order.id,
-      orderRef: order.orderRef,
-      customerName: order.customerName,
-      customerPhone: order.customerPhone,
-      customerLocation: order.customerLocation,
-      paymentMethod: order.paymentMethod,
-      orderType: order.orderType,
-      status: String(order.status),
-      totalAmount: Number(order.total ?? 0),
-      createdAt: order.createdAt,
-      items: order.items.map((item) => ({
-        id: item.id,
-        productName: item.productName,
-        quantity: Number(item.quantity ?? 0),
-        totalAmount: Number(item.total ?? 0),
-      })),
-    })),
+    referralLeadSummary,
+    referralLeads: referralLeadsWithStatus,
+    referredWebsiteOrders: mappedReferredWebsiteOrders,
     commissions: adjustedCommissions,
     payouts,
     activities,

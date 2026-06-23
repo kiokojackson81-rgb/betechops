@@ -31,10 +31,17 @@ function maskPhoneNumber(value?: string | null) {
 
 function statusBadge(status: string) {
   const normalized = String(status || "").toLowerCase();
-  if (["delivered", "payment_confirmed"].includes(normalized)) return "bg-[#edf9f0] text-[#136233]";
+  if (["delivered", "payment_confirmed", "purchased", "converted"].includes(normalized)) return "bg-[#edf9f0] text-[#136233]";
   if (normalized === "cancelled") return "bg-[#fdecec] text-[#8d1f1f]";
   if (["processing", "confirmed", "receipt_issued", "dispatched"].includes(normalized)) return "bg-[#eef6ff] text-[#174c7a]";
   return "bg-[#fffaf5] text-slate-700";
+}
+
+function referralLeadStatusLabel(status: string) {
+  const normalized = String(status || "").toUpperCase();
+  if (normalized === "PURCHASED" || normalized === "CONVERTED") return "Purchased";
+  if (normalized === "CANCELLED") return "Cancelled";
+  return "Pending purchase";
 }
 
 export default async function AgentReferralsPage({ useRootPaths = false }: AgentReferralsPageProps) {
@@ -65,9 +72,27 @@ export default async function AgentReferralsPage({ useRootPaths = false }: Agent
       <div className="space-y-5 sm:space-y-6">
         <section className="grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-[26px] border border-[#e4d4cb] bg-white p-5 shadow-[0_12px_40px_rgba(64,32,18,0.06)]">
+            <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">Referral leads</div>
+            <div className="mt-3 text-3xl font-black tracking-tight text-[#210505]">
+              {dashboard.referralLeadSummary.total}
+            </div>
+          </div>
+          <div className="rounded-[26px] border border-[#e4d4cb] bg-white p-5 shadow-[0_12px_40px_rgba(64,32,18,0.06)]">
+            <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">Pending referrals</div>
+            <div className="mt-3 text-3xl font-black tracking-tight text-[#210505]">
+              {dashboard.referralLeadSummary.pending}
+            </div>
+          </div>
+          <div className="rounded-[26px] border border-[#e4d4cb] bg-white p-5 shadow-[0_12px_40px_rgba(64,32,18,0.06)]">
             <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">Referral orders</div>
             <div className="mt-3 text-3xl font-black tracking-tight text-[#210505]">
               {dashboard.websiteReferralSummary.totalOrders}
+            </div>
+          </div>
+          <div className="rounded-[26px] border border-[#e4d4cb] bg-white p-5 shadow-[0_12px_40px_rgba(64,32,18,0.06)]">
+            <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">Converted leads</div>
+            <div className="mt-3 text-3xl font-black tracking-tight text-[#210505]">
+              {dashboard.referralLeadSummary.purchased}
             </div>
           </div>
           <div className="rounded-[26px] border border-[#e4d4cb] bg-white p-5 shadow-[0_12px_40px_rgba(64,32,18,0.06)]">
@@ -87,6 +112,66 @@ export default async function AgentReferralsPage({ useRootPaths = false }: Agent
             <div className="mt-3 text-3xl font-black tracking-tight text-[#210505]">
               {money(dashboard.websiteReferralSummary.totalRevenue)}
             </div>
+          </div>
+        </section>
+
+        <section className="rounded-[28px] border border-[#e4d4cb] bg-white p-4 shadow-[0_12px_40px_rgba(64,32,18,0.08)] sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">Pending referral leads</p>
+              <h2 className="mt-2 text-xl font-black tracking-tight text-[#210505] sm:text-2xl">Customers you referred before they purchase</h2>
+              <p className="mt-2 text-sm text-slate-600">
+                As soon as you open the WhatsApp or SMS referral, the customer is saved here so you can track who you already referred.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-6 space-y-4">
+            {dashboard.referralLeads.length ? (
+              dashboard.referralLeads.map((lead) => (
+                <article key={lead.id} className="rounded-[26px] border border-[#ece1d9] bg-[#fffaf5] p-4 sm:p-5">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <h3 className="text-lg font-semibold text-[#210505] sm:text-xl">
+                          {lead.customerName || "Unnamed customer"}
+                        </h3>
+                        <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${statusBadge(lead.effectiveStatus)}`}>
+                          {referralLeadStatusLabel(lead.effectiveStatus)}
+                        </span>
+                      </div>
+                      <div className="grid gap-2 text-sm text-slate-600 sm:grid-cols-2 xl:grid-cols-4">
+                        <div>Phone: {maskPhoneNumber(lead.customerPhone)}</div>
+                        <div>Product: {lead.productName}</div>
+                        <div>Channel: {String(lead.channel).toUpperCase()}</div>
+                        <div>Date referred: {new Intl.DateTimeFormat("en-KE", { dateStyle: "medium" }).format(lead.createdAt)}</div>
+                        <div>Status: {referralLeadStatusLabel(lead.effectiveStatus)}</div>
+                        <div>Referral code: {lead.referralCode || "Not captured"}</div>
+                        <div>Link: <a href={lead.referralUrl} target="_blank" rel="noreferrer" className="font-medium text-[#7a0000] underline">Open product</a></div>
+                        <div>
+                          Purchase match: {lead.matchedOrderRef ? lead.matchedOrderRef : "Waiting for purchase"}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="w-full rounded-[24px] border border-[#f1b81d]/25 bg-[#fff3cf] p-4 xl:min-w-[260px] xl:max-w-[320px]">
+                      <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">Referral progress</div>
+                      <div className="mt-3 text-lg font-black tracking-tight text-[#210505]">
+                        {lead.matchedOrderAmount != null ? money(lead.matchedOrderAmount) : "Awaiting customer purchase"}
+                      </div>
+                      <div className="mt-2 text-sm text-[#6e5500]">
+                        {lead.matchedOrderRef
+                          ? `Matched to order ${lead.matchedOrderRef}.`
+                          : "This lead is saved and waiting for the customer to place an order."}
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <div className="rounded-[24px] border border-dashed border-[#d9c6ba] bg-[#fffaf5] p-10 text-center text-slate-500">
+                No pending referral leads have been captured yet.
+              </div>
+            )}
           </div>
         </section>
 

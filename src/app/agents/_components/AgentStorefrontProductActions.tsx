@@ -397,7 +397,7 @@ export default function AgentStorefrontProductActions({
     await submitOrder();
   }
 
-  function openReferralAction() {
+  async function openReferralAction() {
     resetFeedback();
 
     const normalizedPhone = normalizeKenyanPhone(referForm.customerPhone);
@@ -412,6 +412,40 @@ export default function AgentStorefrontProductActions({
     const message = buildReferralMessage();
     const digits = normalizedPhone.replace(/^\+/, "");
     const encoded = encodeURIComponent(message);
+    const referralUrl = buildPublicProductUrl(product, referralCode);
+
+    setBusy(true);
+
+    try {
+      const response = await fetch("/api/agents/referral-leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId: product.id,
+          opsProductId: product.opsProductId,
+          productName: product.name,
+          productSlug: product.slug,
+          customerName: referForm.customerName.trim() || null,
+          customerPhone: normalizedPhone,
+          referralCode,
+          referralUrl,
+          channel: referForm.channel,
+        }),
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.ok) {
+        showError(payload?.error || "Unable to save this referral right now.");
+        setBusy(false);
+        return;
+      }
+    } catch {
+      showError("Unable to save this referral right now.");
+      setBusy(false);
+      return;
+    }
+
+    setBusy(false);
 
     if (referForm.channel === "whatsapp") {
       const whatsappUrl = `https://wa.me/${digits}?text=${encoded}`;
@@ -424,10 +458,10 @@ export default function AgentStorefrontProductActions({
     showSuccess("SMS referral message prepared. Send it from your phone to complete the referral.");
   }
 
-  function handleRefer(event: React.FormEvent<HTMLFormElement>) {
+  async function handleRefer(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     event.stopPropagation();
-    openReferralAction();
+    await openReferralAction();
   }
 
   return (
@@ -704,9 +738,14 @@ export default function AgentStorefrontProductActions({
                   <div className="flex flex-col gap-3 sm:flex-row">
                     <button
                       type="submit"
+                      disabled={busy}
                       className="inline-flex min-h-[3rem] flex-1 items-center justify-center gap-2 rounded-2xl bg-[#7a0000] px-5 py-3 text-sm font-bold text-white shadow-[0_16px_34px_rgba(122,0,0,0.18)] transition hover:-translate-y-0.5"
                     >
-                      {referForm.channel === "whatsapp" ? "Open WhatsApp referral" : "Open SMS referral"}
+                      {busy
+                        ? "Preparing referral..."
+                        : referForm.channel === "whatsapp"
+                          ? "Open WhatsApp referral"
+                          : "Open SMS referral"}
                       <ArrowRight className="h-4 w-4" />
                     </button>
                     <button
