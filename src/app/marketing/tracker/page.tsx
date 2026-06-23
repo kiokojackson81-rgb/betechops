@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Prisma, WebsiteOrderStatus } from "@prisma/client";
+import MarketingTrackerLegacySections from "@/app/marketing/tracker/MarketingTrackerLegacySections";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
@@ -840,6 +841,8 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
             </div>
           </div>
         </section>
+
+        <MarketingTrackerLegacySections />
 
         <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
