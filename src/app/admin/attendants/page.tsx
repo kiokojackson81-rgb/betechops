@@ -1,15 +1,22 @@
 import { prisma } from "@/lib/prisma";
 import AttendantsClient from "./AttendantsClient";
 import { getCategoryLabel } from "@/lib/getLandingPage";
+import { buildStaffAttendantWhere } from "@/lib/staffUsers";
+
+type AttendantRow = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  attendantCategory: string | null;
+  isActive: boolean;
+  createdAt: Date;
+};
 
 export default async function AdminAttendantsPage() {
-  let attendantsRaw: any[] = [];
+  let attendantsRaw: AttendantRow[] = [];
   try {
     attendantsRaw = await prisma.user.findMany({
-      where: {
-        role: { in: ["ATTENDANT", "SUPERVISOR"] },
-        agentProfile: { is: null },
-      },
+      where: buildStaffAttendantWhere(),
       orderBy: [{ attendantCategory: "asc" }, { name: "asc" }],
       select: {
         id: true,
@@ -22,10 +29,6 @@ export default async function AdminAttendantsPage() {
     });
   } catch (err) {
     // Log full error server-side so host logs capture stack and details.
-    // Keep the client-facing response safe in production but show details in dev.
-    // This prevents the Server Component render from throwing an uncaught error
-    // and gives a clearer failure UI for operators to act on.
-    // eslint-disable-next-line no-console
     console.error("AdminAttendantsPage: failed to query attendants:", err);
 
     if (process.env.NODE_ENV !== "production") {

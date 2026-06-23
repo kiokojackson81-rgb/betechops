@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/api";
 import { AttendantCategory, Role } from "@prisma/client";
 import { categoryValues, sanitizeCategories, shapeUser, syncUserCategories } from "./utils";
+import { buildStaffAttendantWhere, STAFF_ATTENDANT_ROLES } from "@/lib/staffUsers";
 
 export async function GET(request: Request) {
   const auth = await requireRole("ADMIN");
@@ -21,7 +22,9 @@ export async function GET(request: Request) {
 
   const users = await prisma.user.findMany({
     where: {
-      role: { in: roles },
+      ...(roles.every((role) => STAFF_ATTENDANT_ROLES.includes(role))
+        ? buildStaffAttendantWhere()
+        : { role: { in: roles } }),
       ...(includeInactive ? {} : { isActive: true }),
       ...(categoryFilter
         ? {
@@ -66,9 +69,11 @@ export async function POST(request: Request) {
 
   const normalizedEmail = email.toLowerCase().trim();
   const primaryCandidate = body.category?.toUpperCase();
-  const fallbackPrimary = primaryCandidate && categoryValues.has(primaryCandidate as AttendantCategory) ? (primaryCandidate as AttendantCategory) : ("DIRECT_SALES_OPS" as any);
+  const fallbackPrimary = primaryCandidate && categoryValues.has(primaryCandidate as AttendantCategory)
+    ? (primaryCandidate as AttendantCategory)
+    : AttendantCategory.DIRECT_SALES_OPS;
   const desiredCategories = sanitizeCategories(body.categories ?? (primaryCandidate ? [primaryCandidate] : []), fallbackPrimary);
-  const primaryCategory = desiredCategories[0] ?? ("DIRECT_SALES_OPS" as any);
+  const primaryCategory = desiredCategories[0] ?? AttendantCategory.DIRECT_SALES_OPS;
 
   const user = await prisma.$transaction(async (tx) => {
     const saved = await tx.user.upsert({

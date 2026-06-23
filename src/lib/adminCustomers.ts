@@ -1,4 +1,4 @@
-import { WebsiteOrderStatus } from "@prisma/client";
+import { Prisma, WebsiteOrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { formatPhoneForDisplay, normalizePhone } from "@/lib/phone";
 
@@ -130,6 +130,71 @@ function moneyLabel(value: number) {
     currency: "KES",
     maximumFractionDigits: 0,
   }).format(value || 0);
+}
+
+function isMissingOptionalColumn(error: unknown) {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
+  if (error.code !== "P2022" && error.code !== "P2021") return false;
+  const message = String(error.message || "");
+  return message.includes("User.referredByAgentId") || message.includes("User.attributionCodeUsed");
+}
+
+async function findWebsiteOrdersForAdmin(where: Prisma.WebsiteOrderWhereInput) {
+  try {
+    const rows = await prisma.websiteOrder.findMany({
+      where,
+      include: {
+        items: true,
+        receipt: {
+          select: {
+            id: true,
+            receiptNumber: true,
+            generatedAt: true,
+          },
+        },
+        confirmedBy: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+        customerUser: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+          },
+        },
+      },
+      orderBy: [{ createdAt: "desc" }],
+    });
+    return rows.map((row) => ({ ...row, customerUser: row.customerUser ?? null }));
+  } catch (error) {
+    if (!isMissingOptionalColumn(error)) throw error;
+    console.warn("[adminCustomers] website orders fallback without customerUser relation fields", error);
+    const rows = await prisma.websiteOrder.findMany({
+      where,
+      include: {
+        items: true,
+        receipt: {
+          select: {
+            id: true,
+            receiptNumber: true,
+            generatedAt: true,
+          },
+        },
+        confirmedBy: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: [{ createdAt: "desc" }],
+    });
+    return rows.map((row) => ({ ...row, customerUser: null }));
+  }
 }
 
 function buildGroupId(args: {
@@ -294,59 +359,30 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
     orderBy: [{ createdAt: "desc" }],
   });
 
-  const websiteOrders = await prisma.websiteOrder.findMany({
-    where: {
-      AND: [
-        {
-          OR: [
-            { customerName: { not: "" } },
-            { customerPhone: { not: "" } },
-            { customerEmail: { not: null } },
-          ],
-        },
-        query
-          ? {
-              OR: [
-                { customerName: { contains: query, mode: "insensitive" } },
-                { customerPhone: { contains: query, mode: "insensitive" } },
-                { customerEmail: { contains: query, mode: "insensitive" } },
-                { customerLocation: { contains: query, mode: "insensitive" } },
-                { orderRef: { contains: query, mode: "insensitive" } },
-                { deliveryMethod: { contains: query, mode: "insensitive" } },
-                { paymentMethod: { contains: query, mode: "insensitive" } },
-                { items: { some: { productName: { contains: query, mode: "insensitive" } } } },
-              ],
-            }
-          : {},
-      ],
-    },
-    include: {
-      items: true,
-      receipt: {
-        select: {
-          id: true,
-          receiptNumber: true,
-          generatedAt: true,
-        },
+  const websiteOrders = await findWebsiteOrdersForAdmin({
+    AND: [
+      {
+        OR: [
+          { customerName: { not: "" } },
+          { customerPhone: { not: "" } },
+          { customerEmail: { not: null } },
+        ],
       },
-      confirmedBy: {
-        select: {
-          name: true,
-          email: true,
-        },
-      },
-      customerUser: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          phone: true,
-          referredByAgentId: true,
-          attributionCodeUsed: true,
-        },
-      },
-    },
-    orderBy: [{ createdAt: "desc" }],
+      query
+        ? {
+            OR: [
+              { customerName: { contains: query, mode: "insensitive" } },
+              { customerPhone: { contains: query, mode: "insensitive" } },
+              { customerEmail: { contains: query, mode: "insensitive" } },
+              { customerLocation: { contains: query, mode: "insensitive" } },
+              { orderRef: { contains: query, mode: "insensitive" } },
+              { deliveryMethod: { contains: query, mode: "insensitive" } },
+              { paymentMethod: { contains: query, mode: "insensitive" } },
+              { items: { some: { productName: { contains: query, mode: "insensitive" } } } },
+            ],
+          }
+        : {},
+    ],
   });
 
   const agentSales = await prisma.agentSale.findMany({
@@ -525,11 +561,11 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
             : order.source || "Website Orders",
       attendantName: order.confirmedBy?.name ?? null,
       attendantEmail: order.confirmedBy?.email ?? null,
-      referredByAgentId: String(order.referredByAgentId || order.customerUser?.referredByAgentId || "").trim() || null,
+      referredByAgentId: String(order.referredByAgentId || "").trim() || null,
       referredByAgentName: String(websiteMetadata.referredByAgentName || "").trim() || null,
       referredByAgentEmail: String(websiteMetadata.referredByAgentEmail || "").trim() || null,
       attributionCodeUsed:
-        String(order.attributionCodeUsed || order.customerUser?.attributionCodeUsed || websiteMetadata.attributionCodeUsed || "").trim() ||
+        String(order.attributionCodeUsed || websiteMetadata.attributionCodeUsed || "").trim() ||
         null,
       receiptNumber: order.receipt?.receiptNumber ?? null,
       receiptGeneratedAt: order.receipt?.generatedAt ?? null,
