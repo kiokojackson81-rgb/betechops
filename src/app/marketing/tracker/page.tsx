@@ -532,6 +532,12 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
 
   const completedToday = completedWebsiteOrdersToday + completedAgentOrdersToday;
   const chatLeadsPending = 0; // TODO: wire stable chat/lead source when the queue is finalized.
+  const pendingTasks =
+    websiteOrdersPending.length +
+    agentOrders.length +
+    quoteRequests.length +
+    podPendingStats.pendingCount +
+    chatLeadsPending;
 
   const needsAttentionQueue: QueueItem[] = [
     ...websiteOrdersPending.slice(0, 6).map((order) => ({
@@ -627,48 +633,42 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
               </div>
             </div>
 
-            <div className="space-y-3">
-              <div className="flex flex-wrap gap-2">
-              <Link
-                href="/marketing/receipts"
-                className="rounded-full border border-white/15 bg-white/[0.04] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.08]"
-              >
-                POS Receipts
-              </Link>
-              <Link
-                href="/marketing/receipts"
-                className="rounded-full border border-white/15 bg-white/[0.04] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.08]"
-              >
-                Web Orders
-              </Link>
-              <Link
-                href="/marketing/agent-orders"
-                className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-300/30 hover:bg-emerald-400/15"
-              >
-                Agent Orders
-              </Link>
-              <Link
-                href="/marketing/receipts"
-                className="rounded-full border border-white/15 bg-white/[0.04] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.08]"
-              >
-                Quotations
-              </Link>
-              </div>
-              <MarketingTrackerTopActions />
-            </div>
+            <MarketingTrackerTopActions />
           </div>
         </header>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
           {[
-            { label: "POS Receipts Today", value: todayPosSummary.totalReceipts, note: "Paid receipts captured today" },
-            { label: "POS Sales Today", value: formatKes(todayPosSummary.totalSales), note: "From POS receipt totals" },
-            { label: "Web Orders Pending", value: websiteOrdersPending.length, note: "Assigned website queue" },
-            { label: "Agent Orders Assigned", value: agentOrders.length, note: "Open agent-submitted orders" },
-            { label: "Quotation Requests Pending", value: quoteRequests.length, note: "Assigned quotation follow-up" },
-            { label: "POD Pending", value: podPendingStats.pendingCount, note: formatKes(podPendingStats.pendingTotal) },
-            { label: "Chats / Leads Pending", value: chatLeadsPending, note: "TODO: connect stable lead source" },
-            { label: "Completed Today", value: completedToday, note: "Website + agent orders finalized today" },
+            {
+              label: "Sales",
+              value: formatKes(periodSales),
+              note: `${period.label} sales total · ${formatKes(todayPosSummary.totalSales)} today`,
+            },
+            {
+              label: "Receipts",
+              value: periodReceipts,
+              note: `${period.label} receipt count · ${todayPosSummary.totalReceipts} today`,
+            },
+            {
+              label: "Commission",
+              value: formatKes(periodCommission),
+              note: "Current trading-period commission",
+            },
+            {
+              label: "Items Sold",
+              value: periodItems,
+              note: "Current trading-period item volume",
+            },
+            {
+              label: "POD Pending",
+              value: podPendingStats.pendingCount,
+              note: `${formatKes(podPendingStats.pendingTotal)} awaiting closure`,
+            },
+            {
+              label: "Pending Tasks",
+              value: pendingTasks,
+              note: `${websiteOrdersPending.length} web · ${agentOrders.length} agent · ${quoteRequests.length} quotes · ${podPendingStats.pendingCount} POD`,
+            },
           ].map((card) => (
             <div
               key={card.label}

@@ -2,7 +2,6 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import HeaderActions from "@/components/HeaderActions";
 import Card from "@/app/_components/Card";
 import PeriodSwitcher from "@/app/_components/PeriodSwitcher";
 import useTradingPeriodQueryState from "@/app/_components/useTradingPeriodQueryState";
@@ -669,17 +668,62 @@ export function MarketingTrackerTopActions() {
   };
 
   return (
-    <div className="flex flex-wrap gap-2 lg:justify-end">
+    <div className="flex flex-wrap gap-2 lg:max-w-[52rem] lg:justify-end">
+      <Link
+        href={`/receipts?start=${defaultFormDate}&end=${defaultFormDate}`}
+        className="inline-flex items-center rounded-full border-2 border-emerald-400 bg-transparent px-5 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-600/5 hover:shadow-[0_6px_18px_rgba(16,185,129,0.12)]"
+      >
+        Create Receipt
+      </Link>
+      <Link
+        href="/marketing/receipts"
+        className="rounded-full border border-white/10 bg-white/3 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition-colors duration-150 hover:border-white/30 hover:bg-white/5"
+      >
+        Receipts
+      </Link>
+      <Link
+        href="/marketing/receipts"
+        className="rounded-full border border-white/10 bg-white/3 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition-colors duration-150 hover:border-white/30 hover:bg-white/5"
+      >
+        POS Receipts
+      </Link>
+      <Link
+        href="/marketing/receipts"
+        className="rounded-full border border-white/10 bg-white/3 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition-colors duration-150 hover:border-white/30 hover:bg-white/5"
+      >
+        Web Orders
+      </Link>
+      <Link
+        href="/marketing/agent-orders"
+        className="rounded-full border border-white/10 bg-white/3 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition-colors duration-150 hover:border-white/30 hover:bg-white/5"
+      >
+        Agent Orders
+      </Link>
+      <Link
+        href="/marketing/receipts"
+        className="rounded-full border border-white/10 bg-white/3 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition-colors duration-150 hover:border-white/30 hover:bg-white/5"
+      >
+        Quotations
+      </Link>
       <Button type="button" variant="secondary" onClick={downloadPerformancePdf}>
         {downloadingPerformance ? "Preparing…" : "Download report (PDF)"}
       </Button>
-      <HeaderActions
-        receiptsHref="/marketing/receipts"
-        createHref={`/receipts?start=${defaultFormDate}&end=${defaultFormDate}`}
-        wellnessHref={withImpersonateId("/attendant/wellness", impersonateIdFromWindow())}
-        onSignOut={() => signOut({ callbackUrl: "/attendant/login" })}
-        showDot={false}
-      />
+      <Button type="button" variant="secondary" onClick={downloadPerformancePdf}>
+        {downloadingPerformance ? "Preparing…" : "Performance PDF"}
+      </Button>
+      <Link
+        href={withImpersonateId("/attendant/wellness", impersonateIdFromWindow())}
+        className="rounded-full border border-white/10 bg-white/3 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition-colors duration-150 hover:border-white/30 hover:bg-white/5"
+      >
+        Wellness
+      </Link>
+      <button
+        type="button"
+        onClick={() => signOut({ callbackUrl: "/attendant/login" })}
+        className="rounded-full border border-white/10 bg-white/3 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition-colors duration-150 hover:border-white/30 hover:bg-white/5"
+      >
+        Log out
+      </button>
     </div>
   );
 }
@@ -713,8 +757,6 @@ export default function MarketingTrackerLegacySections() {
       commission: { commission: number };
     };
   }>(null);
-  const [downloadingPerformance, setDownloadingPerformance] = useState(false);
-
   // Background authoritative server summary used for Quick stats calculations.
   // We keep this separate from `periodSummary` which controls the visible
   // summary panel. The panel should remain hidden unless the attendant
@@ -1568,20 +1610,6 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
     }
   };
 
-  const downloadPerformancePdf = () => {
-    try {
-      setDownloadingPerformance(true);
-      const params = new URLSearchParams();
-      if (selectedPeriod?.key) params.set("periodKey", selectedPeriod.key);
-      const imp = impersonateIdFromWindow();
-      if (imp) params.set("impersonateId", imp);
-      const url = `/api/attendant/daily-report/performance-receipt/pdf?${params.toString()}`;
-      window.open(url, "_blank", "noopener,noreferrer");
-    } finally {
-      setTimeout(() => setDownloadingPerformance(false), 700);
-    }
-  };
-
   return (
       <form
         onSubmit={handleSubmit}
@@ -1597,26 +1625,6 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
               )}
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={downloadingPerformance}
-                onClick={() => {
-                  try {
-                    setDownloadingPerformance(true);
-                    const params = new URLSearchParams();
-                    if (selectedPeriod?.key) params.set("periodKey", selectedPeriod.key);
-                    const imp = impersonateIdFromWindow();
-                    if (imp) params.set("impersonateId", imp);
-                    const url = `/api/attendant/daily-report/performance-receipt/pdf?${params.toString()}`;
-                    window.open(url, "_blank", "noopener,noreferrer");
-                  } finally {
-                    setTimeout(() => setDownloadingPerformance(false), 700);
-                  }
-                }}
-              >
-                {downloadingPerformance ? "Preparing…" : "Download performance PDF"}
-              </Button>
               <PeriodSwitcher
                 currentPeriod={currentPeriod}
                 selectedPeriod={selectedPeriod}
@@ -1697,7 +1705,7 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
           </Card>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] 2xl:grid-cols-[minmax(0,1fr)_430px] items-start">
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(320px,3fr)] 2xl:grid-cols-[minmax(0,7fr)_minmax(360px,3fr)]">
           <div className="min-w-0 space-y-6">
             <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
               <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
