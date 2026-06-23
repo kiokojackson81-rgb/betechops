@@ -135,12 +135,20 @@ export default function MarketingReceiptsPage() {
               Browse your receipts, filter POD work, and record delivery evidence from the same history screen.
             </p>
           </div>
-          <Link
-            href="/marketing/tracker"
-            className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
-          >
-            Back to dashboard
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/marketing/agent-orders"
+              className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 hover:bg-emerald-500/15"
+            >
+              Agent orders
+            </Link>
+            <Link
+              href="/marketing/tracker"
+              className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
+            >
+              Back to dashboard
+            </Link>
+          </div>
         </header>
 
         <Card className="space-y-5 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
