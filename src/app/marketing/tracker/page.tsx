@@ -7,7 +7,6 @@ import MarketingTrackerLegacySections, {
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
-import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 import { WEBSITE_ORDER_ACTIVE_STATUSES } from "@/lib/websiteOrders";
 import { getAdminAgentSales } from "@/lib/agents/sales";
 import {
@@ -16,12 +15,6 @@ import {
   listAssignedQuoteRequests,
   type SerializedQuoteRequest,
 } from "@/lib/quoteRequests";
-import { getPodPendingStats } from "@/lib/podPendingStats";
-import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
-import { getSupportPeriodAggregates } from "@/lib/supportEntries";
-import { buildPayrollRow } from "@/lib/adminPayroll";
-import { applyCanonicalPayrollOverrides } from "@/lib/payrollCanonical";
-import { mapPayrollToEarningsSummary } from "@/lib/payrollMapping";
 
 export const dynamic = "force-dynamic";
 
@@ -66,18 +59,6 @@ function formatDateOnly(value: string | Date | null | undefined) {
     month: "short",
     year: "numeric",
   });
-}
-
-function startOfToday() {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  return now;
-}
-
-function endOfToday() {
-  const now = new Date();
-  now.setHours(23, 59, 59, 999);
-  return now;
 }
 
 function ageLabel(value: string | Date | null | undefined) {
@@ -177,8 +158,6 @@ type PodReceiptFollowUpRow = {
 };
 
 type TrackerAgentOrder = Awaited<ReturnType<typeof getAdminAgentSales>>[number];
-type TrackerPerformanceSummary = NonNullable<ReturnType<typeof mapPayrollToEarningsSummary>>;
-
 function readWebsiteOrderAssignment(
   metadata: Prisma.JsonValue | null | undefined,
 ): TrackerWebsiteOrder["assignedAttendant"] {
@@ -380,98 +359,12 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
     ? resolvedSearchParams.periodKey[0]
     : resolvedSearchParams.periodKey;
   const period = parseTradingPeriodKey(periodKeyParam) ?? getTradingPeriodFor(new Date());
-  const todayStart = startOfToday();
-  const todayEnd = endOfToday();
-  const emptyPodStats = { pendingCount: 0, pendingTotal: 0, pendingList: "" };
-  const emptyPerformanceSummary: TrackerPerformanceSummary = {
-    periodKey: period.key,
-    periodLabel: period.label,
-    attendantCategory: user.attendantCategory ?? null,
-    totalSales: 0,
-    totalProfit: 0,
-    totalNewProducts: 0,
-    totalEditedProducts: 0,
-    totalCopiedProducts: 0,
-    totalItems: 0,
-    totalReceipts: 0,
-    walkInsServed: 0,
-    walkInsPurchased: 0,
-    baseSalary: 0,
-    transportAllowance: 0,
-    salesCommission: 0,
-    commissionDirect: 0,
-    commissionMarketplaceJumia: 0,
-    commissionMarketplaceKilimall: 0,
-    newProductCommission: 0,
-    copiedCommission: 0,
-    editedCommission: 0,
-    grossCommission: 0,
-    batteryEarnings: 0,
-    bonusTotal: 0,
-    commissionTopUpTotal: 0,
-    chamaTotal: 0,
-    latenessTotal: 0,
-    disciplineTotal: 0,
-    otherDeductionsTotal: 0,
-    totalEarnings: 0,
-    totalDeductions: 0,
-    netPay: 0,
-    ledger: null,
-    adjustmentEntries: [],
-  };
-  const emptyMarketingSummary = { totals: { totalSales: 0, totalReceipts: 0, totalItems: 0 } };
-  const emptySupportSummary = { aggregates: { totalSales: 0, totalReceipts: 0, totalItems: 0 } };
-
   const [
-    todayPosSummary,
-    podPendingStats,
-    performanceSummary,
-    marketingSummary,
-    supportSummary,
     rawWebsiteOrders,
     rawQuoteRequests,
     allAgentOrders,
     podFollowUp,
   ] = await Promise.all([
-    summarizePosReceiptsForPeriod({
-      start: todayStart,
-      end: todayEnd,
-      userId,
-      ownershipMode: "staffDisplay",
-      paymentScope: "paidOnly",
-    }),
-    safeLoad("pod stats", () => getPodPendingStats(5), emptyPodStats),
-    safeLoad(
-      "tracker performance summary",
-      async () => {
-        const payrollRow = await applyCanonicalPayrollOverrides(
-          await buildPayrollRow(
-            {
-              id: userId,
-              name: user.name ?? null,
-              email: user.email ?? null,
-              attendantCategory: user.attendantCategory ?? null,
-              isActive: true,
-            },
-            period,
-          ),
-          period,
-        );
-        return mapPayrollToEarningsSummary(payrollRow, Number(payrollRow.totalReceipts ?? 0)) ?? emptyPerformanceSummary;
-      },
-      emptyPerformanceSummary,
-    ),
-    safeLoad(
-      "marketing performance summary",
-      () =>
-        summarizeMarketingReportsForPeriod({
-          userId,
-          userEmail: user.email ?? null,
-          period,
-        }),
-      emptyMarketingSummary,
-    ),
-    safeLoad("support summary", () => getSupportPeriodAggregates({ userId, period }), emptySupportSummary),
     safeLoad("website orders", () => listTrackerWebsiteOrders(), [] as TrackerWebsiteOrder[]),
     safeLoad("quote requests", () => listVisibleQuoteRequests({ userId, role: user.role }), [] as SerializedQuoteRequest[]),
     safeLoad("agent orders", () => getAdminAgentSales({ statuses: [...AGENT_OPEN_STATUSES] }), [] as TrackerAgentOrder[]),
@@ -502,15 +395,6 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
         );
 
   const quoteRequests = rawQuoteRequests.filter((request) => QUOTE_PENDING_STATUSES.has(request.status));
-
-  const chatLeadsPending = 0; // TODO: wire stable chat/lead source when the queue is finalized.
-  const pendingTasks =
-    websiteOrdersPending.length +
-    agentOrders.length +
-    quoteRequests.length +
-    podPendingStats.pendingCount +
-    chatLeadsPending;
-
   const needsAttentionQueue: QueueItem[] = [
     ...websiteOrdersPending.slice(0, 6).map((order) => ({
       id: `website:${order.id}`,
@@ -564,22 +448,6 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
     })
     .slice(0, 14);
 
-  const periodMarketingSales = Number(marketingSummary.totals.totalSales ?? 0);
-  const periodMarketingReceipts = Number(marketingSummary.totals.totalReceipts ?? 0);
-  const periodMarketingItems = Number(marketingSummary.totals.totalItems ?? 0);
-  const periodSupportSales = Number(supportSummary.aggregates.totalSales ?? 0);
-  const periodSupportReceipts = Number(supportSummary.aggregates.totalReceipts ?? 0);
-  const periodSupportItems = Number(supportSummary.aggregates.totalItems ?? 0);
-  const periodSales =
-    Number(performanceSummary.totalSales ?? 0) || Math.max(periodMarketingSales, periodSupportSales);
-  const periodReceipts =
-    Number(performanceSummary.totalReceipts ?? 0) || Math.max(periodMarketingReceipts, periodSupportReceipts);
-  const periodItems =
-    Number(performanceSummary.totalItems ?? 0) || Math.max(periodMarketingItems, periodSupportItems);
-  const periodCommission =
-    Number(performanceSummary.salesCommission ?? 0) ||
-    Number(performanceSummary.grossCommission ?? 0);
-
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <main className="mx-auto max-w-7xl space-y-6 p-6">
@@ -608,50 +476,6 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
             <MarketingTrackerTopActions />
           </div>
         </header>
-
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-          {[
-            {
-              label: "Sales",
-              value: formatKes(periodSales),
-              note: `${period.label} sales total · ${formatKes(todayPosSummary.totalSales)} today`,
-            },
-            {
-              label: "Receipts",
-              value: periodReceipts,
-              note: `${period.label} receipt count · ${todayPosSummary.totalReceipts} today`,
-            },
-            {
-              label: "Commission",
-              value: formatKes(periodCommission),
-              note: "Current trading-period commission",
-            },
-            {
-              label: "Items Sold",
-              value: periodItems,
-              note: "Current trading-period item volume",
-            },
-            {
-              label: "POD Pending",
-              value: podPendingStats.pendingCount,
-              note: `${formatKes(podPendingStats.pendingTotal)} awaiting closure`,
-            },
-            {
-              label: "Pending Tasks",
-              value: pendingTasks,
-              note: `${websiteOrdersPending.length} web · ${agentOrders.length} agent · ${quoteRequests.length} quotes · ${podPendingStats.pendingCount} POD`,
-            },
-          ].map((card) => (
-            <div
-              key={card.label}
-              className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.28)]"
-            >
-              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{card.label}</div>
-              <div className="mt-3 text-3xl font-semibold text-white">{card.value}</div>
-              <div className="mt-2 text-sm text-slate-400">{card.note}</div>
-            </div>
-          ))}
-        </section>
 
         <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
