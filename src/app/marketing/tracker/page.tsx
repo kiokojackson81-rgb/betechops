@@ -5,11 +5,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
-import {
-  WEBSITE_ORDER_ACTIVE_STATUSES,
-  serializeWebsiteOrders,
-  websiteOrderAdminInclude,
-} from "@/lib/websiteOrders";
+import { WEBSITE_ORDER_ACTIVE_STATUSES } from "@/lib/websiteOrders";
 import { getAdminAgentSales } from "@/lib/agents/sales";
 import {
   ensureQuoteRequestAssignments,
@@ -109,6 +105,23 @@ function websiteStatusLabel(status: string) {
   return status.replace(/_/g, " ").toLowerCase();
 }
 
+function explainTrackerError(error: unknown) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    return `${error.code}: ${error.message}`;
+  }
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+async function safeLoad<T>(label: string, loader: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await loader();
+  } catch (error) {
+    console.warn(`[marketing.tracker] ${label} unavailable: ${explainTrackerError(error)}`);
+    return fallback;
+  }
+}
+
 type QueueItem = {
   id: string;
   type: "Website Order" | "Agent Order" | "Quotation" | "POD";
@@ -130,6 +143,20 @@ type PodFollowUpItem = {
   createdAt: Date | null;
 };
 
+type TrackerWebsiteOrder = {
+  id: string;
+  customerName: string;
+  customerPhone: string | null;
+  total: number;
+  status: WebsiteOrderStatus;
+  createdAt: Date;
+  assignedAttendant: {
+    id: string | null;
+    email: string | null;
+    name: string | null;
+  } | null;
+};
+
 type PodReceiptFollowUpRow = {
   id: string;
   generatedAt: Date | null;
@@ -143,6 +170,47 @@ type PodReceiptFollowUpRow = {
     totalAmount: number | null;
   } | null;
 };
+
+type TrackerAgentOrder = Awaited<ReturnType<typeof getAdminAgentSales>>[number];
+
+function readWebsiteOrderAssignment(
+  metadata: Prisma.JsonValue | null | undefined,
+): TrackerWebsiteOrder["assignedAttendant"] {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+  const source = metadata as Record<string, unknown>;
+  const id = typeof source.assignedAttendantId === "string" ? source.assignedAttendantId : null;
+  const email = typeof source.assignedAttendantEmail === "string" ? source.assignedAttendantEmail : null;
+  const name = typeof source.assignedAttendantName === "string" ? source.assignedAttendantName : null;
+  if (!id && !email && !name) return null;
+  return { id, email, name };
+}
+
+async function listTrackerWebsiteOrders(): Promise<TrackerWebsiteOrder[]> {
+  const rows = await prisma.websiteOrder.findMany({
+    where: { status: { in: WEBSITE_ORDER_ACTIVE_STATUSES } },
+    orderBy: { createdAt: "desc" },
+    take: 60,
+    select: {
+      id: true,
+      customerName: true,
+      customerPhone: true,
+      total: true,
+      status: true,
+      createdAt: true,
+      metadata: true,
+    },
+  });
+
+  return rows.map((row) => ({
+    id: row.id,
+    customerName: row.customerName,
+    customerPhone: row.customerPhone,
+    total: Number(row.total ?? 0),
+    status: row.status,
+    createdAt: row.createdAt,
+    assignedAttendant: readWebsiteOrderAssignment(row.metadata),
+  }));
+}
 
 async function listVisibleQuoteRequests(input: {
   userId: string;
@@ -299,6 +367,7 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
 
   if (!session || !user?.id) redirect("/admin/login");
   if (!canAccessOperationsHub(user.role, user.attendantCategory)) redirect("/not-authorized");
+  const userId = user.id;
 
   const resolvedSearchParams = (await searchParams) ?? {};
   const periodKeyParam = Array.isArray(resolvedSearchParams.periodKey)
@@ -307,6 +376,10 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
   const period = parseTradingPeriodKey(periodKeyParam) ?? getTradingPeriodFor(new Date());
   const todayStart = startOfToday();
   const todayEnd = endOfToday();
+  const emptyPodStats = { pendingCount: 0, pendingTotal: 0, pendingList: "" };
+  const emptyEarningsSummary = { totalSales: 0, totalReceipts: 0, totalItems: 0, commission: 0, grossCommission: 0 };
+  const emptyMarketingSummary = { totals: { totalSales: 0 } };
+  const emptySupportSummary = { aggregates: { totalSales: 0 } };
 
   const [
     todayPosSummary,
@@ -324,49 +397,64 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
     summarizePosReceiptsForPeriod({
       start: todayStart,
       end: todayEnd,
-      userId: user.id,
+      userId,
       ownershipMode: "staffDisplay",
       paymentScope: "paidOnly",
     }),
-    getPodPendingStats(5),
-    getEarningsSummaryForUser({ userId: user.id, asOf: period.start }),
-    summarizeMarketingReportsForPeriod({
-      userId: user.id,
-      userEmail: user.email ?? null,
-      period,
-    }),
-    getSupportPeriodAggregates({ userId: user.id, period }),
-    prisma.websiteOrder.findMany({
-      where: { status: { in: WEBSITE_ORDER_ACTIVE_STATUSES } },
-      include: websiteOrderAdminInclude,
-      orderBy: { createdAt: "desc" },
-      take: 60,
-    }),
-    listVisibleQuoteRequests({ userId: user.id, role: user.role }),
-    getAdminAgentSales({ statuses: [...AGENT_OPEN_STATUSES] }),
-    listPodFollowUp(5),
-    prisma.websiteOrder.count({
-      where: {
-        status: WebsiteOrderStatus.DELIVERED,
-        updatedAt: { gte: todayStart, lte: todayEnd },
-      },
-    }),
-    prisma.agentSale.count({
-      where: {
-        status: "completed",
-        OR: [
-          { completedAt: { gte: todayStart, lte: todayEnd } },
-          { updatedAt: { gte: todayStart, lte: todayEnd } },
-        ],
-      },
-    }),
+    safeLoad("pod stats", () => getPodPendingStats(5), emptyPodStats),
+    safeLoad("earnings summary", () => getEarningsSummaryForUser({ userId, asOf: period.start }), emptyEarningsSummary),
+    safeLoad(
+      "marketing performance summary",
+      () =>
+        summarizeMarketingReportsForPeriod({
+          userId,
+          userEmail: user.email ?? null,
+          period,
+        }),
+      emptyMarketingSummary,
+    ),
+    safeLoad("support summary", () => getSupportPeriodAggregates({ userId, period }), emptySupportSummary),
+    safeLoad("website orders", () => listTrackerWebsiteOrders(), [] as TrackerWebsiteOrder[]),
+    safeLoad("quote requests", () => listVisibleQuoteRequests({ userId, role: user.role }), [] as SerializedQuoteRequest[]),
+    safeLoad("agent orders", () => getAdminAgentSales({ statuses: [...AGENT_OPEN_STATUSES] }), [] as TrackerAgentOrder[]),
+    safeLoad("pod follow-up", () => listPodFollowUp(5), [] as PodFollowUpItem[]),
+    safeLoad(
+      "completed website orders today",
+      () =>
+        prisma.websiteOrder.count({
+          where: {
+            status: WebsiteOrderStatus.DELIVERED,
+            updatedAt: { gte: todayStart, lte: todayEnd },
+          },
+        }),
+      0,
+    ),
+    safeLoad(
+      "completed agent orders today",
+      () =>
+        prisma.agentSale.count({
+          where: {
+            status: "completed",
+            OR: [
+              { completedAt: { gte: todayStart, lte: todayEnd } },
+              { updatedAt: { gte: todayStart, lte: todayEnd } },
+            ],
+          },
+        }),
+      0,
+    ),
   ]);
 
-  const serializedWebsiteOrders = await serializeWebsiteOrders(rawWebsiteOrders);
   const websiteOrders =
     user.role === "ADMIN"
-      ? serializedWebsiteOrders
-      : serializedWebsiteOrders.filter((order) => order.assignedAttendant?.id === user.id);
+      ? rawWebsiteOrders
+      : rawWebsiteOrders.filter(
+          (order) =>
+            order.assignedAttendant?.id === user.id ||
+            (order.assignedAttendant?.email &&
+              user.email &&
+              order.assignedAttendant.email.toLowerCase() === user.email.toLowerCase()),
+        );
   const websiteOrdersPending = websiteOrders.filter((order) => WEBSITE_PENDING_STATUSES.has(order.status));
 
   const agentOrders =
