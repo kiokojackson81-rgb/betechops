@@ -531,37 +531,46 @@ export default function DailyReportReceiptsPanel({
             {receipts.map((receipt) => (
               <div
                 key={receipt.id}
-                className="flex flex-col gap-3 rounded-3xl border border-white/5 bg-slate-900/60 px-6 py-4 shadow-md sm:flex-row sm:items-center sm:justify-between"
+                className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4"
               >
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-lg font-semibold text-white">{receipt.orderRef ?? receipt.receiptNumber ?? receipt.docType ?? receipt.id}</p>
-                    {receipt.isPodDelivery ? (
-                      <span className="rounded-full border border-yellow-400/30 bg-yellow-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-yellow-200">
-                        POD {String(receipt.podDeliveryStatus ?? "pending").replace(/_/g, " ")}
-                      </span>
-                    ) : null}
+                <div className="grid gap-3 lg:grid-cols-[140px_1.3fr_1fr_160px_140px_150px] lg:items-center">
+                  <div>
+                    <span
+                      className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${
+                        receipt.isPodDelivery
+                          ? "border-yellow-400/30 bg-yellow-500/10 text-yellow-200"
+                          : "border-sky-400/25 bg-sky-400/10 text-sky-100"
+                      }`}
+                    >
+                      {receipt.isPodDelivery ? "POD" : "POS"}
+                    </span>
                   </div>
-                  <p className="mt-1 text-[12px] text-slate-400">{receipt.attendantName ?? "Attendant unknown"} · {formatDateTime(receipt.createdAt)}</p>
-                  <p className="mt-1 text-[12px] text-slate-500">{receipt.customerName ?? "-"} · {receipt.docType ?? "Receipt"}</p>
-                  <p className="mt-1 text-[12px] text-slate-500">
-                    {(receipt.customerPhone || "-")}{receipt.customerEmail ? ` · ${receipt.customerEmail}` : ""}
-                  </p>
-                  {receipt.podDeliveryNote ? (
-                    <p className="mt-1 text-[12px] text-yellow-200">{receipt.podDeliveryNote}</p>
-                  ) : null}
-                  {receipt.isPodDelivery && receipt.podDeliveryFee != null ? (
-                    <p className="mt-1 text-[12px] text-emerald-200">Delivery fee: {formatKES(receipt.podDeliveryFee)}</p>
-                  ) : null}
-                  {receipt.podEvidenceUrl ? (
-                    <a href={receipt.podEvidenceUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[12px] text-emerald-300 underline">
-                      View POD evidence
-                    </a>
-                  ) : null}
-                </div>
-                <div className="text-left sm:text-right">
-                  <p className="text-lg font-semibold text-emerald-300">{formatKES(receipt.total)}</p>
-                  <div className="mt-2 flex flex-wrap gap-2 sm:justify-end">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-white">{receipt.customerName ?? "-"}</div>
+                    <div className="mt-1 text-xs text-slate-400">{receipt.customerPhone || "-"}</div>
+                    <div className="mt-1 text-xs text-slate-500">{receipt.orderRef ?? receipt.receiptNumber ?? receipt.docType ?? receipt.id}</div>
+                  </div>
+                  <div className="text-sm text-slate-300">
+                    <div>{receipt.docType ?? "Receipt"}</div>
+                    <div className="mt-1 text-xs text-slate-500">{receipt.attendantName ?? "Attendant unknown"}</div>
+                  </div>
+                  <div>
+                    <div className="font-semibold text-emerald-300">{formatKES(receipt.total)}</div>
+                    {receipt.isPodDelivery && receipt.podDeliveryFee != null ? (
+                      <div className="mt-1 text-xs text-emerald-200">Fee {formatKES(receipt.podDeliveryFee)}</div>
+                    ) : (
+                      <div className="mt-1 text-xs text-slate-500">{receipt.customerEmail || "No email"}</div>
+                    )}
+                  </div>
+                  <div>
+                    <span className="inline-flex rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-200">
+                      {receipt.isPodDelivery
+                        ? `POD ${String(receipt.podDeliveryStatus ?? "pending").replace(/_/g, " ")}`
+                        : String(receipt.paymentStatus ?? receipt.status ?? "open").replace(/_/g, " ")}
+                    </span>
+                    <div className="mt-2 text-xs text-slate-500">{formatDateTime(receipt.createdAt)}</div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 lg:justify-end">
                     {receipt.isPodDelivery && String(receipt.podDeliveryStatus ?? "").toLowerCase() === "pending" && receipt.source === "pos" ? (
                       <button
                         type="button"
@@ -581,14 +590,22 @@ export default function DailyReportReceiptsPanel({
                       </button>
                     ) : null}
                     {receipt.detailUrl ? (
-                      <a href={receipt.detailUrl} target="_blank" rel="noopener noreferrer" className="inline-block text-xs uppercase text-emerald-300 hover:text-emerald-200">View details</a>
+                      <a href={receipt.detailUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/25 hover:bg-white/[0.06]">Open receipt</a>
                     ) : receipt.source === "pos" && receipt.id ? (
-                      <a href={`/receipts/${receipt.id}`} target="_blank" rel="noopener noreferrer" className="inline-block text-xs uppercase text-emerald-300 hover:text-emerald-200">View details</a>
+                      <a href={`/receipts/${receipt.id}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/25 hover:bg-white/[0.06]">Open receipt</a>
                     ) : (
                       <span className="text-xs text-slate-500">Unavailable</span>
                     )}
                   </div>
                 </div>
+                {receipt.podDeliveryNote ? (
+                  <p className="mt-3 text-xs text-yellow-200">{receipt.podDeliveryNote}</p>
+                ) : null}
+                {receipt.podEvidenceUrl ? (
+                  <a href={receipt.podEvidenceUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block text-xs text-emerald-300 underline">
+                    View POD evidence
+                  </a>
+                ) : null}
               </div>
             ))}
           </div>

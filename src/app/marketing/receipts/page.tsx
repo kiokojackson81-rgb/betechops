@@ -346,6 +346,13 @@ export default function MarketingReceiptsPage() {
                 <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-slate-300">
                   {periodRange.label}
                 </span>
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-slate-300">
+                  {viewMode === "receipts"
+                    ? "POS Receipts"
+                    : viewMode === "web-orders"
+                      ? "Web Orders"
+                      : "Quotation Requests"}
+                </span>
                 <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-emerald-100">
                   Default range: active statistics period
                 </span>
@@ -546,6 +553,10 @@ export default function MarketingReceiptsPage() {
               orderListDescription="Process your assigned website orders here using the same lifecycle used in admin."
               emptyMessage="No assigned website orders found right now."
               filterStorageKey="marketing:web-orders:status"
+              q={filters.query}
+              start={filters.start}
+              end={filters.end}
+              compactMode
             />
           ) : (
             <QuotationRequestsDeskClient
@@ -555,6 +566,10 @@ export default function MarketingReceiptsPage() {
               deskTitle="Assigned quotation requests"
               deskDescription="Prepare customer quotations, recommend products, and notify customers from the same desk."
               emptyMessage="No assigned quotation requests found right now."
+              q={filters.query}
+              start={filters.start}
+              end={filters.end}
+              compactMode
             />
           )}
         </Card>

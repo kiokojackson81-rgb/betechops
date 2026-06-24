@@ -34,6 +34,10 @@ type Props = {
   deskTitle?: string;
   deskDescription?: string;
   emptyMessage?: string;
+  q?: string;
+  start?: string;
+  end?: string;
+  compactMode?: boolean;
 };
 
 const QUOTE_REQUEST_STATUSES: QuoteRequestStatus[] = [
@@ -72,6 +76,15 @@ function formatDateTime(value: string | null) {
 
 function formatStatus(value: string) {
   return value.replace(/_/g, " ");
+}
+
+function isWithinRange(value: string | null | undefined, start?: string, end?: string) {
+  if (!value) return false;
+  const timestamp = new Date(value).getTime();
+  if (Number.isNaN(timestamp)) return false;
+  const min = start ? new Date(`${start}T00:00:00`).getTime() : -Infinity;
+  const max = end ? new Date(`${end}T23:59:59.999`).getTime() : Infinity;
+  return timestamp >= min && timestamp <= max;
 }
 
 type QuoteItemDraft = {
@@ -246,10 +259,14 @@ export default function QuotationRequestsDeskClient({
   deskTitle = "Assigned quotation requests",
   deskDescription = "Review customer quote requests, recommend products, and notify customers by email or SMS.",
   emptyMessage = "No quotation requests assigned right now.",
+  q = "",
+  start,
+  end,
+  compactMode = false,
 }: Props) {
   const [requests, setRequests] = useState<SerializedQuoteRequest[]>([]);
   const [statusFilter, setStatusFilter] = useState<QuoteRequestStatusFilter>(defaultStatusFilter);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(q);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
@@ -281,6 +298,30 @@ export default function QuotationRequestsDeskClient({
   const quoteSubtotalPreview = useMemo(
     () => quoteItemsPreview.reduce((sum, item) => sum + item.lineTotal, 0),
     [quoteItemsPreview],
+  );
+
+  const filteredRequests = useMemo(
+    () =>
+      requests.filter((request) => {
+        if (
+          !isWithinRange(request.updatedAt || request.createdAt, start, end) &&
+          !isWithinRange(request.createdAt, start, end)
+        ) {
+          return false;
+        }
+        if (!query.trim()) return true;
+        const value = query.trim().toLowerCase();
+        return [
+          request.quoteRef,
+          request.customerName,
+          request.customerPhone,
+          request.customerEmail || "",
+          request.customerLocation || "",
+          request.town || "",
+          request.county || "",
+        ].some((entry) => entry.toLowerCase().includes(value));
+      }),
+    [end, query, requests, start],
   );
 
   const quoteBalancePreview = useMemo(() => {
@@ -335,6 +376,10 @@ export default function QuotationRequestsDeskClient({
     refreshRequests().catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    setQuery(q);
+  }, [q]);
 
   useEffect(() => {
     if (!expandedRequest) return;
@@ -404,6 +449,7 @@ export default function QuotationRequestsDeskClient({
 
   return (
     <div className="space-y-4">
+      {!compactMode ? (
       <div className="rounded-2xl border border-white/10 bg-[var(--panel,#121723)] p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -462,45 +508,101 @@ export default function QuotationRequestsDeskClient({
             {message}
           </div>
         ) : null}
+      </div>
+      ) : (
+        <>
+          {loadError ? (
+            <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+              {loadError}
+            </div>
+          ) : null}
+          {message ? (
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+              {message}
+            </div>
+          ) : null}
+        </>
+      )}
 
-        <div className="mt-5 space-y-4">
-          {requests.length ? (
-            requests.map((request) => {
+        <div className={compactMode ? "space-y-3" : "mt-5 space-y-4"}>
+          {filteredRequests.length ? (
+            filteredRequests.map((request) => {
               const expanded = request.id === expandedId;
               return (
                 <div
                   key={request.id}
-                  className="rounded-[28px] border border-white/10 bg-slate-950/60 p-5"
+                  className={`rounded-[28px] border border-white/10 ${compactMode ? "bg-white/[0.03] p-4" : "bg-slate-950/60 p-5"}`}
                 >
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <button
-                      type="button"
-                      onClick={() => setExpandedId(expanded ? null : request.id)}
-                      className="flex min-w-0 flex-1 items-start gap-3 text-left"
-                    >
-                      <span className="mt-1 rounded-full border border-white/10 bg-white/5 p-2 text-slate-300">
-                        {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                      </span>
+                  {compactMode ? (
+                    <div className="grid gap-3 lg:grid-cols-[140px_1.3fr_1fr_160px_140px_150px] lg:items-center">
+                      <div>
+                        <span className="rounded-full border border-violet-400/25 bg-violet-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-violet-100">
+                          QUOTATION
+                        </span>
+                      </div>
                       <div className="min-w-0">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                          Open quotation request
-                        </div>
-                        <div className="mt-2 text-2xl font-semibold text-white">{request.customerName}</div>
-                        <div className="mt-1 text-sm text-slate-400">{request.quoteRef}</div>
-                        <div className="mt-2 grid gap-1 text-sm text-slate-300 md:grid-cols-2 xl:grid-cols-3">
-                          <div>{request.customerPhone}</div>
-                          <div>{request.customerEmail || "No email saved yet"}</div>
-                          <div>{request.customerLocation || [request.town, request.county].filter(Boolean).join(" - ") || "Location pending"}</div>
-                        </div>
+                        <div className="font-semibold text-white">{request.customerName}</div>
+                        <div className="mt-1 text-xs text-slate-400">{request.customerPhone}</div>
+                        <div className="mt-1 text-xs text-slate-500">{request.quoteRef}</div>
                       </div>
-                    </button>
-                    <div className="flex flex-col items-start gap-3 lg:items-end">
-                      <div className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-4 py-2 text-sm font-semibold uppercase tracking-[0.16em] text-emerald-300">
-                        {formatStatus(request.status)}
+                      <div className="text-sm text-slate-300">
+                        <div>{request.customerLocation || [request.town, request.county].filter(Boolean).join(" - ") || "Location pending"}</div>
+                        <div className="mt-1 text-xs text-slate-500">{request.assignedAttendant?.name || "Unassigned"}</div>
                       </div>
-                      <div className="text-sm text-slate-400">{formatDateTime(request.createdAt)}</div>
+                      <div>
+                        <div className="font-semibold text-white">
+                          {request.quotationData ? formatQuoteCurrency(parseStoredQuoteProposal(request.quotationData).total) : "-"}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-400">{request.customerEmail || "No email saved"}</div>
+                      </div>
+                      <div>
+                        <span className="inline-flex rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-300">
+                          {formatStatus(request.status)}
+                        </span>
+                        <div className="mt-2 text-xs text-slate-500">{formatDateTime(request.updatedAt || request.createdAt)}</div>
+                      </div>
+                      <div className="flex justify-start lg:justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedId(expanded ? null : request.id)}
+                          className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/25 hover:bg-white/[0.06]"
+                        >
+                          {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          {expanded ? "Close" : "View quotation"}
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedId(expanded ? null : request.id)}
+                        className="flex min-w-0 flex-1 items-start gap-3 text-left"
+                      >
+                        <span className="mt-1 rounded-full border border-white/10 bg-white/5 p-2 text-slate-300">
+                          {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                            Open quotation request
+                          </div>
+                          <div className="mt-2 text-2xl font-semibold text-white">{request.customerName}</div>
+                          <div className="mt-1 text-sm text-slate-400">{request.quoteRef}</div>
+                          <div className="mt-2 grid gap-1 text-sm text-slate-300 md:grid-cols-2 xl:grid-cols-3">
+                            <div>{request.customerPhone}</div>
+                            <div>{request.customerEmail || "No email saved yet"}</div>
+                            <div>{request.customerLocation || [request.town, request.county].filter(Boolean).join(" - ") || "Location pending"}</div>
+                          </div>
+                        </div>
+                      </button>
+                      <div className="flex flex-col items-start gap-3 lg:items-end">
+                        <div className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-4 py-2 text-sm font-semibold uppercase tracking-[0.16em] text-emerald-300">
+                          {formatStatus(request.status)}
+                        </div>
+                        <div className="text-sm text-slate-400">{formatDateTime(request.createdAt)}</div>
+                      </div>
+                    </div>
+                  )}
 
                   {expanded ? (
                     <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_430px]">
@@ -919,7 +1021,6 @@ export default function QuotationRequestsDeskClient({
             </div>
           )}
         </div>
-      </div>
     </div>
   );
 }
