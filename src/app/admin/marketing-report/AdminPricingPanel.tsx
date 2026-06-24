@@ -31,6 +31,7 @@ export default function AdminPricingPanel() {
   const groupedSales = useMemo(() => groupMarketingUnpricedSales(sales), [sales]);
   const [loading, setLoading] = useState(true);
   const [buyingDrafts, setBuyingDrafts] = useState<Record<string, string>>({});
+  const [saveToCatalogDrafts, setSaveToCatalogDrafts] = useState<Record<string, boolean>>({});
   const [pricingKey, setPricingKey] = useState<string | null>(null);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -145,6 +146,10 @@ export default function AdminPricingPanel() {
     setBuyingDrafts((prev) => ({ ...prev, [key]: value }));
   };
 
+  const handleSetSaveToCatalog = (key: string, checked: boolean) => {
+    setSaveToCatalogDrafts((prev) => ({ ...prev, [key]: checked }));
+  };
+
   const allocateReceiptBuyingPrices = (
     total: number,
     items: Array<{ id: string; saleValue?: number }>,
@@ -175,7 +180,7 @@ export default function AdminPricingPanel() {
     sale: GroupedUnpricedSale,
     receiptItemId: string | undefined,
     buyingPrice: number,
-    options?: { overrideSaleId?: string },
+    options?: { overrideSaleId?: string; saveToCatalog?: boolean },
   ) => {
     if (sale.source === "support" && !receiptItemId) {
       throw new Error("Select a receipt item to price");
@@ -184,8 +189,8 @@ export default function AdminPricingPanel() {
     const endpoint = sale.source === "support" ? "/api/support/price-sale" : "/api/marketing/price-sale";
     const payload =
       sale.source === "support"
-        ? { receiptItemId, buyingPrice }
-        : { dailySaleId: targetSaleId, buyingPrice };
+        ? { receiptItemId, buyingPrice, saveToCatalog: Boolean(options?.saveToCatalog) }
+        : { dailySaleId: targetSaleId, buyingPrice, saveToCatalog: Boolean(options?.saveToCatalog) };
     const res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -231,6 +236,7 @@ export default function AdminPricingPanel() {
     }
     const draftKey = getDraftKey(sale, receiptItemId);
     const draft = buyingDrafts[draftKey];
+    const saveToCatalog = Boolean(saveToCatalogDrafts[draftKey]);
     const numeric = Number(draft);
     if (!draft || Number.isNaN(numeric) || numeric <= 0) {
       showToast("Enter a valid buying price", "error");
@@ -238,8 +244,13 @@ export default function AdminPricingPanel() {
     }
     setPricingKey(draftKey);
     try {
-      await submitPrice(sale, receiptItemId, Math.round(numeric));
+      await submitPrice(sale, receiptItemId, Math.round(numeric), { saveToCatalog });
       setBuyingDrafts((prev) => {
+        const next = { ...prev };
+        delete next[draftKey];
+        return next;
+      });
+      setSaveToCatalogDrafts((prev) => {
         const next = { ...prev };
         delete next[draftKey];
         return next;
@@ -255,6 +266,7 @@ export default function AdminPricingPanel() {
   const handlePriceSupportReceipt = async (sale: GroupedUnpricedSale) => {
     const draftKey = getDraftKey(sale);
     const draft = buyingDrafts[draftKey];
+    const saveToCatalog = Boolean(saveToCatalogDrafts[draftKey]);
     const numeric = Number(draft);
     if (!draft || Number.isNaN(numeric) || numeric <= 0) {
       showToast("Enter a valid buying price", "error");
@@ -269,9 +281,14 @@ export default function AdminPricingPanel() {
     setPricingKey(draftKey);
     try {
       for (const { id, value } of allocations) {
-        await submitPrice(sale, id, value);
+        await submitPrice(sale, id, value, { saveToCatalog });
       }
       setBuyingDrafts((prev) => {
+        const next = { ...prev };
+        delete next[draftKey];
+        return next;
+      });
+      setSaveToCatalogDrafts((prev) => {
         const next = { ...prev };
         delete next[draftKey];
         return next;
@@ -287,6 +304,7 @@ export default function AdminPricingPanel() {
   const handlePriceReceiptGroup = async (sale: GroupedUnpricedSale) => {
     const draftKey = getDraftKey(sale);
     const draft = buyingDrafts[draftKey];
+    const saveToCatalog = Boolean(saveToCatalogDrafts[draftKey]);
     const numeric = Number(draft);
     if (!draft || Number.isNaN(numeric) || numeric <= 0) {
       showToast("Enter a valid buying price", "error");
@@ -301,9 +319,14 @@ export default function AdminPricingPanel() {
     setPricingKey(draftKey);
     try {
       for (const { id, value } of allocations) {
-        await submitPrice(sale, undefined, value, { overrideSaleId: id });
+        await submitPrice(sale, undefined, value, { overrideSaleId: id, saveToCatalog });
       }
       setBuyingDrafts((prev) => {
+        const next = { ...prev };
+        delete next[draftKey];
+        return next;
+      });
+      setSaveToCatalogDrafts((prev) => {
         const next = { ...prev };
         delete next[draftKey];
         return next;
@@ -340,6 +363,11 @@ export default function AdminPricingPanel() {
       showToast("Sale removed from queue", "success");
       setSales((prev) => prev.filter((row) => !(sale.groupedSaleIds ?? [sale.id]).includes(row.id)));
       setBuyingDrafts((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      setSaveToCatalogDrafts((prev) => {
         const next = { ...prev };
         delete next[key];
         return next;
@@ -487,6 +515,11 @@ export default function AdminPricingPanel() {
                 const receiptItems = sale.receiptItems as ReceiptGroupingItem[] | undefined;
                 const hasReceiptItems = (receiptItems?.length ?? 0) > 0;
                 const isSupportReceipt = sale.source === "support";
+                const canSaveToCatalog =
+                  isSupportReceipt &&
+                  hasReceiptItems &&
+                  receiptItems!.every((item) => Boolean(item.catalogProductId));
+                const saveToCatalogKey = getDraftKey(sale);
                 return (
                   <tr key={key} className="border-t border-slate-800 bg-slate-950/30">
                     <td className="px-3 py-3 align-top">
@@ -535,20 +568,47 @@ export default function AdminPricingPanel() {
                             type="number"
                             min="0"
                             step="50"
-                            value={buyingDrafts[getDraftKey(sale)] ?? ""}
+                            value={buyingDrafts[saveToCatalogKey] ?? ""}
                             placeholder="Total buying price"
-                            onChange={(e) => handleSetDraft(getDraftKey(sale), e.target.value)}
+                            onChange={(e) => handleSetDraft(saveToCatalogKey, e.target.value)}
                           />
+                          <label className={`flex items-start gap-2 text-xs ${canSaveToCatalog ? "text-slate-300" : "text-slate-500"}`}>
+                            <input
+                              type="checkbox"
+                              checked={Boolean(saveToCatalogDrafts[saveToCatalogKey])}
+                              disabled={!canSaveToCatalog}
+                              onChange={(e) => handleSetSaveToCatalog(saveToCatalogKey, e.target.checked)}
+                              className="mt-0.5"
+                            />
+                            <span>
+                              Save this buying price to product catalog for future profit calculation
+                              {!canSaveToCatalog ? " Catalog product not linked, buying price cannot be saved for future use." : ""}
+                            </span>
+                          </label>
                         </div>
                       ) : (
-                        <Input
-                          type="number"
-                          min="0"
-                          step="50"
-                          value={buyingDrafts[getDraftKey(sale)] ?? ""}
-                          placeholder="Buying price"
-                          onChange={(e) => handleSetDraft(getDraftKey(sale), e.target.value)}
-                        />
+                        <div className="space-y-2">
+                          <Input
+                            type="number"
+                            min="0"
+                            step="50"
+                            value={buyingDrafts[saveToCatalogKey] ?? ""}
+                            placeholder="Buying price"
+                            onChange={(e) => handleSetDraft(saveToCatalogKey, e.target.value)}
+                          />
+                          <label className="flex items-start gap-2 text-xs text-slate-500">
+                            <input
+                              type="checkbox"
+                              checked={false}
+                              disabled
+                              readOnly
+                              className="mt-0.5"
+                            />
+                            <span>
+                              Save this buying price to product catalog for future profit calculation. Catalog product not linked, buying price cannot be saved for future use.
+                            </span>
+                          </label>
+                        </div>
                       )}
                     </td>
                     <td className="px-3 py-3 align-top space-y-2">

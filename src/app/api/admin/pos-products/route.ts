@@ -241,7 +241,7 @@ function sanitizeBrendahProductCreate(data: z.infer<typeof productSchema>): z.in
   return {
     ...data,
     category: "pos",
-    lastBuyingPrice: null,
+    lastBuyingPrice: data.lastBuyingPrice ?? null,
     defaultWarranty: null,
     variableCost: false,
     isActive: true,

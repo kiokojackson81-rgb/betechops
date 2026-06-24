@@ -7,6 +7,7 @@ export type PendingReceiptItem = {
   id: string;
   productName: string;
   buyingPrice: number | null;
+  catalogProductId?: string | null;
 };
 
 export type UnpricedSale = {
@@ -28,12 +29,19 @@ export type UnpricedSale = {
 
 type LinkedReceiptOrderItem = {
   name: string;
+  productId: string | null;
   hasCost: boolean;
 };
 
 type LinkedReceiptContext = {
   items: LinkedReceiptOrderItem[];
   aggregateBuyingTotal: number;
+};
+
+type LinkedReceiptPayloadItem = {
+  name: string;
+  productId: string | null;
+  isDeliveryFee: boolean;
 };
 
 function isMeaningfulProductName(value: string | null | undefined): value is string {
@@ -154,6 +162,7 @@ export async function getUnpricedDailySalesForCurrentPeriod(): Promise<UnpricedS
             },
             items: {
               select: {
+                productId: true,
                 product: { select: { name: true } },
                 orderCosts: { select: { id: true }, take: 1 },
                 profitSnapshots: { select: { id: true }, take: 1 },
@@ -180,43 +189,60 @@ export async function getUnpricedDailySalesForCurrentPeriod(): Promise<UnpricedS
       : [];
 
   const orderItemsByReceiptNumber = new Map<string, LinkedReceiptContext>();
-  const payloadItemNamesByReceiptNumber = new Map<string, string[]>();
+  const payloadItemsByReceiptNumber = new Map<string, LinkedReceiptPayloadItem[]>();
 
-  const registerPayloadNames = (key: string | null | undefined, names: string[]) => {
+  const registerPayloadItems = (
+    key: string | null | undefined,
+    items: LinkedReceiptPayloadItem[],
+  ) => {
     const normalizedKey = String(key ?? "").trim();
-    if (!normalizedKey || !names.length) return;
+    if (!normalizedKey || !items.length) return;
     const canonical = canonicalReceiptNumber(normalizedKey) ?? "";
-    if (!payloadItemNamesByReceiptNumber.has(normalizedKey)) {
-      payloadItemNamesByReceiptNumber.set(normalizedKey, names);
+    if (!payloadItemsByReceiptNumber.has(normalizedKey)) {
+      payloadItemsByReceiptNumber.set(normalizedKey, items);
     }
-    if (canonical && !payloadItemNamesByReceiptNumber.has(canonical)) {
-      payloadItemNamesByReceiptNumber.set(canonical, names);
+    if (canonical && !payloadItemsByReceiptNumber.has(canonical)) {
+      payloadItemsByReceiptNumber.set(canonical, items);
     }
   };
 
   for (const receipt of linkedReceipts) {
     const rawItems = (receipt.data as any)?.items;
     if (!Array.isArray(rawItems)) continue;
-    const names = rawItems
-      .map((item: any) =>
-        String(
+    const payloadItems = rawItems
+      .map((item: any) => {
+        const name = String(
           item?.title ??
             item?.productName ??
             item?.name ??
             item?.product?.name ??
             "",
-        ).trim(),
-      )
-      .filter(isMeaningfulProductName);
-    if (!names.length) continue;
-    registerPayloadNames(receipt.receiptNumber, names);
-    registerPayloadNames(receipt.order?.orderNumber, names);
+        ).trim();
+        const rawProductId =
+          typeof item?.productId === "string"
+            ? item.productId
+            : typeof item?.product?.id === "string"
+              ? item.product.id
+              : typeof item?.product === "string"
+                ? item.product
+                : "";
+        return {
+          name,
+          productId: rawProductId.trim() || null,
+          isDeliveryFee: Boolean(item?.isDeliveryFee),
+        };
+      })
+      .filter((item) => isMeaningfulProductName(item.name));
+    if (!payloadItems.length) continue;
+    registerPayloadItems(receipt.receiptNumber, payloadItems);
+    registerPayloadItems(receipt.order?.orderNumber, payloadItems);
   }
 
   for (const order of receiptOrderItems) {
     const linkedItems = order.items
       .map((item) => ({
         name: String(item.product?.name || "").trim(),
+        productId: item.productId ? String(item.productId).trim() : null,
         hasCost: (item.orderCosts?.length ?? 0) > 0 || (item.profitSnapshots?.length ?? 0) > 0,
       }))
       .filter((item) => isMeaningfulProductName(item.name));
@@ -242,11 +268,27 @@ export async function getUnpricedDailySalesForCurrentPeriod(): Promise<UnpricedS
         orderItemsByReceiptNumber.get(receiptNumber) ??
         orderItemsByReceiptNumber.get(canonicalReceiptNumber(receiptNumber) ?? "") ??
         null;
-      const payloadItemNames =
-        payloadItemNamesByReceiptNumber.get(receiptNumber) ??
-        payloadItemNamesByReceiptNumber.get(canonicalReceiptNumber(receiptNumber) ?? "") ??
+      const payloadItems =
+        payloadItemsByReceiptNumber.get(receiptNumber) ??
+        payloadItemsByReceiptNumber.get(canonicalReceiptNumber(receiptNumber) ?? "") ??
         [];
+      const payloadItemsExcludingDelivery = payloadItems.filter((item) => !item.isDeliveryFee);
+      const payloadItemNames = payloadItemsExcludingDelivery.map((item) => item.name);
       const linkedReceiptItems = linkedReceiptContext?.items ?? [];
+      const receiptItemsOrdered = [...(receipt.items || [])].sort((left, right) => {
+        const byCreatedAt = left.createdAt.getTime() - right.createdAt.getTime();
+        if (byCreatedAt !== 0) return byCreatedAt;
+        return left.id.localeCompare(right.id);
+      });
+      const catalogProductIdByReceiptItemId = new Map<string, string | null>();
+      receiptItemsOrdered.forEach((item, index) => {
+        const payloadItem = payloadItemsExcludingDelivery[index] ?? null;
+        const linkedOrderItem = linkedReceiptItems[index] ?? null;
+        catalogProductIdByReceiptItemId.set(
+          item.id,
+          payloadItem?.productId?.trim() || linkedOrderItem?.productId?.trim() || null,
+        );
+      });
       const pendingItems = (receipt.items || []).filter((item, index) => {
         if (Number(item.buyingPrice ?? 0) > 0) return false;
         const itemName = normalizeProductName(item.productName);
@@ -267,6 +309,7 @@ export async function getUnpricedDailySalesForCurrentPeriod(): Promise<UnpricedS
           id: item.id,
           productName: resolvedName,
           buyingPrice: item.buyingPrice ? Number(item.buyingPrice) : null,
+          catalogProductId: catalogProductIdByReceiptItemId.get(item.id) ?? null,
         };
       });
       return {

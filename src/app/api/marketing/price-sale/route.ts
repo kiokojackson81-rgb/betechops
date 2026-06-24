@@ -13,6 +13,7 @@ export const dynamic = "force-dynamic";
 type PriceSalePayload = {
   dailySaleId: string;
   buyingPrice: number;
+  saveToCatalog?: boolean;
 };
 
 export async function POST(req: Request) {
@@ -39,12 +40,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  const { dailySaleId, buyingPrice } = payload ?? {};
+  const { dailySaleId, buyingPrice, saveToCatalog } = payload ?? {};
   if (!dailySaleId || typeof dailySaleId !== "string") {
     return NextResponse.json({ error: "dailySaleId is required" }, { status: 400 });
   }
   if (!Number.isFinite(buyingPrice) || buyingPrice <= 0) {
     return NextResponse.json({ error: "buyingPrice must be a positive number" }, { status: 400 });
+  }
+  if (saveToCatalog) {
+    return NextResponse.json(
+      { error: "Catalog product not linked, buying price cannot be saved for future use." },
+      { status: 400 },
+    );
   }
 
   const sale = await prisma.dailySale.findUnique({

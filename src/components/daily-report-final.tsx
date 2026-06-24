@@ -1580,12 +1580,19 @@ export default function DailyReportFinal() {
                     Quotations
                   </Link>
                   {isBrendahView ? (
-                    <Link
-                      href={productDeskHref}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentView("product-desk");
+                        if (typeof window !== "undefined") {
+                          window.history.replaceState(null, "", productDeskHref);
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }
+                      }}
                       className={navPillClasses}
                     >
                       Product Desk
-                    </Link>
+                    </button>
                   ) : null}
                 </div>
 

@@ -871,15 +871,21 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
     }
     setSaving(true);
     try {
+      const canSetBuyingPriceOnThisSave = canManagePricing || (isProductDeskMode && !draft.id);
       const payload = {
         sku: draft.sku || undefined,
         name: draft.name,
         category: "pos",
         sellingPrice: Number(draft.sellingPrice || 0),
-        ...(canManagePricing
+        ...(canSetBuyingPriceOnThisSave
           ? {
-              lastBuyingPrice: draft.variableCost ? null : draft.lastBuyingPrice.trim() ? Number(draft.lastBuyingPrice) : null,
-              variableCost: draft.variableCost,
+              lastBuyingPrice:
+                canManagePricing && draft.variableCost
+                  ? null
+                  : draft.lastBuyingPrice.trim()
+                    ? Number(draft.lastBuyingPrice)
+                    : null,
+              variableCost: canManagePricing ? draft.variableCost : false,
             }
           : {}),
         isActive: isProductDeskMode ? true : draft.status === "ACTIVE" && draft.isActive,
@@ -1306,6 +1312,24 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                 Selling price
                 <input className={`${fieldClass} mt-1`} type="number" min="0" value={draft.sellingPrice} onChange={(e) => setDraft((s) => ({ ...s, sellingPrice: e.target.value }))} />
               </label>
+              {isProductDeskMode && !draft.id ? (
+                <div className="space-y-3 rounded-2xl border border-emerald-400/20 bg-emerald-500/5 px-4 py-3">
+                  <label className="block text-sm text-slate-300">
+                    Buying price
+                    <input
+                      className={`${fieldClass} mt-1`}
+                      type="number"
+                      min="0"
+                      value={draft.lastBuyingPrice}
+                      onChange={(e) => setDraft((s) => ({ ...s, lastBuyingPrice: e.target.value }))}
+                      placeholder="Optional during creation"
+                    />
+                  </label>
+                  <div className="text-xs text-emerald-100/80">
+                    You can set buying price while creating a new product. After the product is saved, buying price stays hidden here and can only be reviewed by admin.
+                  </div>
+                </div>
+              ) : null}
               {!isProductDeskMode ? (
                 <>
                   <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">

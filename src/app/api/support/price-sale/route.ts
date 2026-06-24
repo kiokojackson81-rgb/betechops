@@ -16,9 +16,81 @@ export const dynamic = "force-dynamic";
 type SupportPricePayload = {
   receiptItemId: string;
   buyingPrice: number;
+  saveToCatalog?: boolean;
 };
 
 const SPECIAL_EMAIL = "jeniffer@betech.co.ke";
+
+function normalizeLinkedProductId(value: unknown) {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized || null;
+}
+
+function getLinkedReceiptPayloadItems(data: unknown) {
+  if (!data || typeof data !== "object") return [] as Array<{ productId: string | null; isDeliveryFee: boolean }>;
+  const rawItems = (data as { items?: unknown }).items;
+  if (!Array.isArray(rawItems)) return [] as Array<{ productId: string | null; isDeliveryFee: boolean }>;
+  return rawItems.map((item) => {
+    const entry = item as Record<string, unknown>;
+    return {
+      productId:
+        normalizeLinkedProductId(entry.productId) ??
+        normalizeLinkedProductId((entry.product as Record<string, unknown> | undefined)?.id) ??
+        normalizeLinkedProductId(entry.product),
+      isDeliveryFee: Boolean(entry.isDeliveryFee),
+    };
+  });
+}
+
+async function resolveSupportReceiptItemCatalogProductId(
+  receiptItem: {
+    id: string;
+    receipt?: {
+      receiptNumber?: string | null;
+      items?: Array<{ id: string; createdAt: Date }> | null;
+    } | null;
+  },
+) {
+  const receipt = receiptItem.receipt;
+  if (!receipt) return null;
+
+  const orderedSupportItems = [...(receipt.items || [])].sort((left, right) => {
+    const byCreatedAt = left.createdAt.getTime() - right.createdAt.getTime();
+    if (byCreatedAt !== 0) return byCreatedAt;
+    return left.id.localeCompare(right.id);
+  });
+  const supportItemIndex = orderedSupportItems.findIndex((item) => item.id === receiptItem.id);
+  if (supportItemIndex < 0) return null;
+
+  const receiptNumber = String(receipt.receiptNumber ?? "").trim();
+  const canonicalReceipt = canonicalReceiptNumber(receiptNumber) ?? receiptNumber;
+  const candidates = Array.from(new Set([receiptNumber, canonicalReceipt].filter(Boolean)));
+  if (!candidates.length) return null;
+
+  const [linkedReceipt, linkedOrder] = await Promise.all([
+    prisma.receipt.findFirst({
+      where: { receiptNumber: { in: candidates } },
+      select: { data: true },
+    }),
+    prisma.order.findFirst({
+      where: { orderNumber: { in: candidates } },
+      select: {
+        items: {
+          orderBy: { id: "asc" },
+          select: { productId: true },
+        },
+      },
+    }),
+  ]);
+
+  const payloadItems = getLinkedReceiptPayloadItems(linkedReceipt?.data).filter((item) => !item.isDeliveryFee);
+  const payloadProductId = payloadItems[supportItemIndex]?.productId ?? null;
+  if (payloadProductId) return payloadProductId;
+
+  const orderProductId = linkedOrder?.items?.[supportItemIndex]?.productId;
+  return orderProductId ? String(orderProductId).trim() : null;
+}
 
 export async function POST(req: Request) {
   const session = (await getServerSession(authOptions as any)) as any;
@@ -70,6 +142,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Support receipt item not found" }, { status: 404 });
   }
 
+  const saveToCatalog = Boolean(payload.saveToCatalog);
+  const catalogProductId = saveToCatalog
+    ? await resolveSupportReceiptItemCatalogProductId(receiptItem)
+    : null;
+  if (saveToCatalog && !catalogProductId) {
+    return NextResponse.json(
+      { error: "Catalog product not linked, buying price cannot be saved for future use." },
+      { status: 400 },
+    );
+  }
+
   const entryId = receiptItem.receipt.dailyEntry.id;
   const previous = Number(receiptItem.buyingPrice ?? 0);
   const profitDelta = previous - roundedPrice; // negative when buying price increases (reduces profit)
@@ -92,6 +175,13 @@ export async function POST(req: Request) {
       where: { id: receiptItem.id },
       data: { buyingPrice: roundedPrice, pricedAt: now },
     });
+
+    if (saveToCatalog && catalogProductId) {
+      await tx.product.updateMany({
+        where: { id: catalogProductId },
+        data: { lastBuyingPrice: roundedPrice },
+      });
+    }
 
     const refreshedReceipt = await tx.supportReceipt.findUnique({
       where: { id: receipt.id },
@@ -376,5 +466,7 @@ export async function POST(req: Request) {
     saleValue: recognizedSaleValue,
     receiptTotal: sellingTotal,
     paymentMethod: receipt.paymentMethod ?? null,
+    catalogProductId,
+    catalogUpdated: Boolean(saveToCatalog && catalogProductId),
   });
 }
