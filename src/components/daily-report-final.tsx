@@ -1,7 +1,7 @@
 "use client";
 
+import Link from "next/link";
 import { signOut, useSession } from "next-auth/react";
-import HeaderActions from "@/components/HeaderActions";
 import Card from "@/app/_components/Card";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarIcon } from "lucide-react";
@@ -47,6 +47,17 @@ const kenyaTimeZone = "Africa/Nairobi";
 
 const formatKES = (value?: number | null) =>
   `KES ${Number(value ?? 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
+
+const formatDateOnly = (value: string | Date | null | undefined) => {
+  if (!value) return "-";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("en-KE", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
 
 const toLocalIsoDate = (d: Date) => {
   const y = d.getFullYear();
@@ -97,11 +108,15 @@ const shiftIsoDate = (isoDate: string, days: number) => {
   return toKenyaIsoDate(shifted);
 };
 const cardClasses =
-  "rounded-3xl border border-slate-800 bg-slate-800/70 shadow-2xl shadow-black/40";
+  "rounded-[24px] border border-white/10 bg-white/[0.03] shadow-[0_24px_70px_rgba(0,0,0,0.28)]";
 const inputClasses =
   "w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500";
 const textareaClasses =
   "w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500";
+
+function controlCenterCardClasses() {
+  return "rounded-[24px] border border-white/10 bg-white/[0.03] p-5";
+}
 export default function DailyReportFinal() {
   const [currentView, setCurrentView] = useState<
     "dashboard" | "receipts" | "web-orders" | "quote-requests" | "product-desk"
@@ -667,6 +682,30 @@ export default function DailyReportFinal() {
   const displayedWalkInsPurchased = serverStats
     ? clamp0(serverStats.walkInsPurchased)
     : clamp0(walkinsPurchased);
+  const nairobiDate = new Intl.DateTimeFormat("en-KE", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: kenyaTimeZone,
+  }).format(new Date());
+  const effectiveStaffName =
+    effectiveAttendantEmail === "brendah@betech.co.ke"
+      ? "Brendah"
+      : typeof (session?.user as { name?: string } | undefined)?.name === "string" &&
+          (session?.user as { name?: string }).name?.trim()
+        ? (session?.user as { name?: string }).name!.trim()
+        : "Marketing staff";
+  const communicationCompletedCount = [
+    communications.repliedFbComments,
+    communications.repliedFbDms,
+    communications.repliedIgComments,
+    communications.repliedIgDms,
+    communications.clearedFbInbox,
+    communications.clearedIgInbox,
+  ].filter(Boolean).length;
+  const communicationTotalCount = 6;
+  const performanceLockState = useCardLock("dailyreport:control-center-performance");
 
   const downloadPerformanceReceiptPdf = useCallback(() => {
     const periodKey = selectedPeriodKey || currentPeriod.key;
@@ -1171,108 +1210,208 @@ export default function DailyReportFinal() {
   return (
     <div className="min-h-screen bg-slate-950 px-5 py-6 text-slate-50 lg:px-8">
       <div className="mx-auto flex w-full max-w-[1460px] flex-col gap-6">
-      <section className="mb-2 space-y-6">
-        <div className="rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-4 md:px-8 md:py-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <h1 className="text-2xl lg:text-3xl font-semibold">Marketing Operations Dashboard</h1>
-              <p className="text-slate-400 text-sm">
-                Daily tracker for uploads, engagement, walk-ins and live sessions.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-              <button
-                type="button"
-                onClick={downloadPerformanceReceiptPdf}
-                className="rounded-xl border border-white/10 bg-transparent px-4 py-2 text-sm text-slate-200 hover:bg-white/5"
-              >
-                Print performance receipt
-              </button>
-              {/* Header actions extracted to shared component */}
-              <HeaderActions
-                receiptsHref="#my-receipts"
-                webOrdersHref="#web-orders"
-                productDeskHref={isBrendahView ? "#product-desk" : undefined}
-                createHref={`/receipts?view=create`}
-                wellnessHref={withImpersonateId("/attendant/wellness", impersonateId)}
-                onSignOut={() => signOut({ callbackUrl: "/attendant/login" })}
-                onReceiptsClick={() => setCurrentView("receipts")}
-                onWebOrdersClick={() => setCurrentView("web-orders")}
-                onProductDeskClick={isBrendahView ? () => setCurrentView("product-desk") : undefined}
-                showWebOrders={false}
-                showProductDesk={isBrendahView}
-                showDot={true}
-              />
-            </div>
-          </div>
-        </div>
+        <section className="space-y-6">
+          <header className="rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(15,23,42,.98),rgba(2,6,23,.98))] px-6 py-6 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+              <div className="space-y-4">
+                <div className="inline-flex items-center rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
+                  Marketing Ops
+                </div>
+                <div>
+                  <h1 className="max-w-xl text-4xl font-semibold leading-tight text-white">Marketing Daily Dashboard</h1>
+                  <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
+                    Daily checklist, product uploads, customer communication, marketplace review, receipts, and performance tracking in one place.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-slate-300">
+                    {effectiveStaffName}
+                  </span>
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-slate-300">
+                    {selectedPeriodLabel}
+                  </span>
+                  <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-emerald-100">
+                    Today • {nairobiDate} • Nairobi
+                  </span>
+                </div>
+              </div>
 
-        <div className="flex flex-col gap-3 rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-4 md:px-8 md:py-5">
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Statistics period</p>
-              <p className="text-lg font-semibold text-slate-50">{selectedPeriodLabel}</p>
-              {selectedPeriodKey !== currentPeriod.key && (
-                <p className="text-xs text-amber-300">Showing archived period.</p>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={downloadPerformancePdf}
-                disabled={downloadingPerformance}
-                className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 hover:bg-emerald-500/15 disabled:opacity-60"
-              >
-                {downloadingPerformance ? "Preparing PDF..." : "Download PDF"}
-              </button>
-              <PeriodSwitcher
-                currentPeriod={currentPeriod}
-                selectedPeriod={selectedPeriod}
-                onSelectPeriod={setSelectedPeriod}
-              />
-            </div>
-          </div>
-        </div>
+              <div className="flex flex-col gap-3 lg:items-end">
+                <Link
+                  href={withImpersonateId("/receipts?view=create", impersonateId)}
+                  className="rounded-full border-2 border-emerald-400 bg-emerald-400/10 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-400/15"
+                >
+                  Create Receipt
+                </Link>
 
-      <section className="rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-4 md:px-8 md:py-5">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-          <div className="space-y-1">
-            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Reporting day</p>
-            <h2 className="text-xl font-semibold text-slate-100">{dayOfWeek} checklist</h2>
-            <p className="text-sm text-slate-400">
-              Pick the reporting date, confirm the day, then complete the daily checklist on the left.
-            </p>
-          </div>
+                <div className="flex max-w-[46rem] flex-wrap justify-start gap-2 lg:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentView("receipts")}
+                    className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.06]"
+                  >
+                    Receipts
+                  </button>
+                  {isBrendahView ? (
+                    <button
+                      type="button"
+                      onClick={() => setCurrentView("product-desk")}
+                      className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.06]"
+                    >
+                      Product Desk
+                    </button>
+                  ) : null}
+                </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:min-w-[360px] lg:max-w-[440px]">
-            <div className="space-y-2">
-              <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">Date</label>
-              {datePicker}
+                <div className="flex max-w-[46rem] flex-wrap justify-start gap-2 lg:justify-end">
+                  <button
+                    type="button"
+                    onClick={downloadPerformanceReceiptPdf}
+                    className="rounded-full border border-white/10 bg-slate-950/40 px-4 py-2 text-xs font-medium text-slate-200 transition hover:border-white/30 hover:bg-white/[0.06]"
+                  >
+                    Print Performance Receipt
+                  </button>
+                  <button
+                    type="button"
+                    onClick={downloadPerformancePdf}
+                    disabled={downloadingPerformance}
+                    className="rounded-full border border-white/10 bg-slate-950/40 px-4 py-2 text-xs font-medium text-slate-200 transition hover:border-white/30 hover:bg-white/[0.06] disabled:opacity-60"
+                  >
+                    {downloadingPerformance ? "Preparing PDF..." : "Download PDF"}
+                  </button>
+                  <Link
+                    href={withImpersonateId("/attendant/wellness", impersonateId)}
+                    className="rounded-full border border-white/10 bg-slate-950/40 px-4 py-2 text-xs font-medium text-slate-200 transition hover:border-white/30 hover:bg-white/[0.06]"
+                  >
+                    Wellness
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => signOut({ callbackUrl: "/attendant/login" })}
+                    className="rounded-full border border-white/10 bg-slate-950/40 px-4 py-2 text-xs font-medium text-slate-200 transition hover:border-white/30 hover:bg-white/[0.06]"
+                  >
+                    Log out
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className="space-y-2">
-              <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">Day of week</label>
-              {dayOfWeekSelect}
+          </header>
+
+          <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
+            <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Daily Control Center</div>
+                <h2 className="mt-2 text-2xl font-semibold text-white">Today&apos;s marketing checklist</h2>
+                <p className="mt-1 text-sm text-slate-400">
+                  Track uploads, communications, marketplace checks, walk-ins, and promo activity for the selected day.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <PeriodSwitcher
+                  currentPeriod={currentPeriod}
+                  selectedPeriod={selectedPeriod}
+                  onSelectPeriod={setSelectedPeriod}
+                />
+                {selectedPeriodKey !== currentPeriod.key ? (
+                  <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-amber-100">
+                    Archived period
+                  </span>
+                ) : null}
+              </div>
             </div>
-            <div className="sm:col-span-2 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setQuickDate("today")}
-                className="rounded-full border border-white/10 bg-slate-900/60 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-900/80"
-              >
-                Today
-              </button>
-              <button
-                type="button"
-                onClick={() => setQuickDate("yesterday")}
-                className="rounded-full border border-white/10 bg-slate-900/60 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-900/80"
-              >
-                Yesterday
-              </button>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className={controlCenterCardClasses()}>
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Reporting Date</div>
+                <div className="mt-3 text-2xl font-semibold text-white">{formatDateOnly(date)}</div>
+                <div className="mt-1 text-sm text-slate-400">{dayOfWeek}</div>
+                <div className="mt-4 space-y-3">
+                  <div className="space-y-2">
+                    <label className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Date</label>
+                    {datePicker}
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Day of week</label>
+                    {dayOfWeekSelect}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setQuickDate("today")}
+                      className="rounded-full border border-white/10 bg-slate-950/40 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-white/30 hover:bg-white/[0.05]"
+                    >
+                      Today
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuickDate("yesterday")}
+                      className="rounded-full border border-white/10 bg-slate-950/40 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-white/30 hover:bg-white/[0.05]"
+                    >
+                      Yesterday
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className={controlCenterCardClasses()}>
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Product Uploads</div>
+                <div className="mt-3 text-2xl font-semibold text-white">{displayedNewProducts + displayedEditedProducts + displayedCopiedProducts}</div>
+                <div className="mt-1 text-sm text-slate-400">Uploaded, edited, and copied</div>
+                <div className="mt-4 grid gap-2 text-sm text-slate-300">
+                  <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2">
+                    <span>Uploaded</span>
+                    <span className="font-semibold text-white">{displayedNewProducts}</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2">
+                    <span>Edited</span>
+                    <span className="font-semibold text-white">{displayedEditedProducts}</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2">
+                    <span>Copied</span>
+                    <span className="font-semibold text-white">{displayedCopiedProducts}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className={controlCenterCardClasses()}>
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Customer Communication</div>
+                <div className="mt-3 text-2xl font-semibold text-white">{communicationCompletedCount}/{communicationTotalCount}</div>
+                <div className="mt-1 text-sm text-slate-400">FB/IG inbox and comment tasks</div>
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-900/80">
+                  <div
+                    className="h-full rounded-full bg-emerald-400"
+                    style={{ width: `${(communicationCompletedCount / communicationTotalCount) * 100}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className={controlCenterCardClasses()}>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Performance</div>
+                  <LockButton locked={performanceLockState.locked} onToggle={performanceLockState.toggle} />
+                </div>
+                <div className="mt-4 grid gap-2 text-sm text-slate-300">
+                  <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2">
+                    <span>Receipts</span>
+                    <span className="font-semibold text-white">{performanceLockState.locked ? "•••" : displayedReceipts}</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2">
+                    <span>Sales</span>
+                    <span className="font-semibold text-white">
+                      {performanceLockState.locked ? "•••" : formatKES(displayedSalesKes)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2">
+                    <span>Commission</span>
+                    <span className="font-semibold text-white">
+                      {performanceLockState.locked ? "•••" : formatKES(commissionForPeriod)}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      </section>
-      </section>
+          </section>
+        </section>
 
       {currentView === "dashboard" && (
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px] 2xl:grid-cols-[minmax(0,1fr)_430px]">
@@ -1306,11 +1445,11 @@ export default function DailyReportFinal() {
               saturdaySummary={saturdaySummary}
               onSaturdaySummaryChange={setSaturdaySummary}
             />
-            <div className="flex items-center justify-end gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
+            <div className="sticky bottom-4 z-20 flex items-center justify-end gap-3 rounded-2xl border border-white/10 bg-slate-950/90 p-4 backdrop-blur">
               <button
                 type="button"
                 onClick={handleResetDay}
-                className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5"
+                className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 transition hover:border-white/30 hover:bg-white/5"
               >
                 Reset day
               </button>
@@ -1318,7 +1457,7 @@ export default function DailyReportFinal() {
                 type="button"
                 onClick={handleSubmit}
                 disabled={isSubmitting}
-                className="rounded-xl bg-emerald-500 px-6 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:opacity-60"
+                className="rounded-xl bg-emerald-500 px-6 py-2 text-sm font-semibold text-black transition hover:brightness-95 disabled:opacity-60"
               >
                 {isSubmitting ? "Submitting..." : "Submit report"}
               </button>
@@ -1426,7 +1565,10 @@ function WalkInsNeatnessCard(props: {
 
   return (
     <section className={cardClasses + " p-6 space-y-4"}>
-      <h2 className="text-lg font-semibold">Walk-ins & shop neatness</h2>
+      <div>
+        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Shop & Walk-ins</div>
+        <h2 className="mt-2 text-lg font-semibold text-white">Store floor and customer traffic</h2>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="text-xs uppercase tracking-wide text-slate-400">
@@ -1445,31 +1587,22 @@ function WalkInsNeatnessCard(props: {
             <label className="text-xs uppercase tracking-wide text-slate-400">
               Shop condition
             </label>
-            <div className="flex flex-col gap-2 text-sm">
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={neatness.cleaned}
-                  onChange={(e) => onNeatnessChange({ ...neatness, cleaned: e.target.checked })}
-                />
-                <span>Shop cleaned</span>
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={neatness.neat}
-                  onChange={(e) => onNeatnessChange({ ...neatness, neat: e.target.checked })}
-                />
-                <span>Shop neatness</span>
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={neatness.labeled}
-                  onChange={(e) => onNeatnessChange({ ...neatness, labeled: e.target.checked })}
-                />
-                <span>Display labeled</span>
-              </label>
+            <div className="flex flex-wrap gap-2 text-sm">
+              <PillCheckbox
+                label="Shop cleaned"
+                checked={neatness.cleaned}
+                onChange={(next) => onNeatnessChange({ ...neatness, cleaned: next })}
+              />
+              <PillCheckbox
+                label="Shop arranged"
+                checked={neatness.neat}
+                onChange={(next) => onNeatnessChange({ ...neatness, neat: next })}
+              />
+              <PillCheckbox
+                label="Display labeled"
+                checked={neatness.labeled}
+                onChange={(next) => onNeatnessChange({ ...neatness, labeled: next })}
+              />
             </div>
           </div>
         )}
@@ -1485,7 +1618,10 @@ function ProductStockCard(props: {
   const { productTasks, onChange } = props;
   return (
     <section className={cardClasses + " p-6 space-y-4"}>
-      <h2 className="text-lg font-semibold">Product & stock management</h2>
+      <div>
+        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Product & Stock</div>
+        <h2 className="mt-2 text-lg font-semibold text-white">Uploads, edits, and catalogue upkeep</h2>
+      </div>
       <div className="space-y-3">
         <NumberRow label="Products uploaded" value={productTasks.uploaded} onChange={(v) => onChange({ ...productTasks, uploaded: v })} />
         <NumberRow label="Products edited" value={productTasks.edited} onChange={(v) => onChange({ ...productTasks, edited: v })} />
@@ -1510,7 +1646,10 @@ function CustomerCommunicationsCard(props: {
   ];
   return (
     <section className={cardClasses + " p-6 space-y-3"}>
-      <h2 className="text-lg font-semibold">Customer & communications</h2>
+      <div>
+        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Customer Communication</div>
+        <h2 className="mt-2 text-lg font-semibold text-white">Inbox, comments, and direct replies</h2>
+      </div>
       <div className="flex flex-wrap gap-2">
         {entries.map((item) => (
           <PillCheckbox
@@ -1538,7 +1677,10 @@ function MarketplaceReviewCard(props: {
   ];
   return (
     <section className={cardClasses + " p-6 space-y-3"}>
-      <h2 className="text-lg font-semibold">Marketplace review</h2>
+      <div>
+        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Marketplace Review</div>
+        <h2 className="mt-2 text-lg font-semibold text-white">Pricing, stock, and competitor checks</h2>
+      </div>
       <div className="flex flex-wrap gap-2">
         {entries.map((item) => (
           <PillCheckbox
@@ -1815,8 +1957,8 @@ function TogglePill(props: { active: boolean; onClick: () => void; children: Rea
       className={
         "rounded-full px-4 py-2 text-xs sm:text-sm font-medium border transition-colors " +
         (active
-          ? "bg-emerald-500 text-black border-emerald-500 shadow-[0_0_25px_rgba(16,185,129,0.35)]"
-          : "bg-slate-900 text-slate-200 border-slate-700 hover:bg-slate-800")
+          ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-100"
+          : "border-white/10 bg-slate-950/40 text-slate-300 hover:border-white/30 hover:bg-white/[0.05]")
       }
     >
       {children}
@@ -1827,7 +1969,7 @@ function TogglePill(props: { active: boolean; onClick: () => void; children: Rea
 function NumberRow(props: { label: string; value: number | ""; onChange: (v: number | "") => void }) {
   const { label, value, onChange } = props;
   return (
-    <div className="flex items-center justify-between gap-4">
+    <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3">
       <span className="text-sm text-slate-100">{label}</span>
       <input
         type="number"
@@ -1874,7 +2016,7 @@ function QuickStats({
   const mask = (v: React.ReactNode) => (locked ? "•••" : v);
 
   return (
-    <section className="rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-6 md:px-8 md:py-7">
+    <section className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] px-6 py-6 shadow-[0_24px_70px_rgba(0,0,0,0.28)] md:px-8 md:py-7">
       <div className="flex flex-col gap-4 md:flex-row md:items-baseline md:justify-between">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-semibold tracking-tight text-slate-50">Quick stats</h2>
@@ -1884,27 +2026,27 @@ function QuickStats({
       </div>
 
       <div className="mt-5 grid gap-3 grid-cols-1 sm:grid-cols-3">
-        <div className="rounded-2xl bg-slate-900/70 px-3 py-2">
+        <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2">
           <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Receipts</div>
           <div className="mt-1 text-xl font-semibold text-emerald-400">{mask(receipts ?? 0)}</div>
         </div>
-        <div className="rounded-2xl bg-slate-900/70 px-3 py-2">
+        <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2">
           <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Sales (KES)</div>
           <div className="mt-1 text-xl font-semibold text-emerald-400">{mask(salesKes?.toLocaleString() ?? "0")}</div>
         </div>
-        <div className="rounded-2xl bg-slate-900/70 px-3 py-2">
+        <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2">
           <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">New products</div>
           <div className="mt-1 text-xl font-semibold text-emerald-400">{mask(newProducts ?? 0)}</div>
         </div>
-        <div className="rounded-2xl bg-slate-900/70 px-3 py-2">
+        <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2">
           <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Edited products</div>
           <div className="mt-1 text-xl font-semibold text-emerald-400">{mask(editedProducts ?? 0)}</div>
         </div>
-        <div className="rounded-2xl bg-slate-900/70 px-3 py-2">
+        <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2">
           <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Copied products</div>
           <div className="mt-1 text-xl font-semibold text-emerald-400">{mask(copiedProducts ?? 0)}</div>
         </div>
-        <div className="rounded-2xl bg-slate-900/70 px-3 py-2">
+        <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2">
           <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Commission (KES)</div>
           <div className="mt-1 text-xl font-semibold text-emerald-400">
             <SensitiveValue
@@ -1928,8 +2070,8 @@ function PillCheckbox(props: { label: string; checked: boolean; onChange: (next:
       className={
         "inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium border transition-colors " +
         (checked
-          ? "bg-emerald-500 text-black border-emerald-500"
-          : "bg-slate-900 text-slate-200 border-slate-700 hover:bg-slate-800")
+          ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-100"
+          : "border-white/10 bg-slate-950/40 text-slate-300 hover:border-white/30 hover:bg-white/[0.05]")
       }
     >
       <input
