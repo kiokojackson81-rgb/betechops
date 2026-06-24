@@ -91,7 +91,12 @@ END $$;
 
 DO $$
 BEGIN
-  IF NOT EXISTS (
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name = 'Receipt'
+  ) AND NOT EXISTS (
     SELECT 1
     FROM information_schema.table_constraints
     WHERE constraint_name = 'WebsiteOrder_receiptId_fkey'
