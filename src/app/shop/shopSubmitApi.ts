@@ -1,5 +1,10 @@
 "use client";
 
+export type ShopApiError = Error & {
+  status?: number;
+  redirectTo?: string;
+};
+
 export type ShopOrderInput = {
   items: Array<{
     productId: string;
@@ -60,11 +65,18 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
     cache: "no-store",
   });
 
+  const payload = await response.json().catch(() => null);
+
   if (!response.ok) {
-    throw new Error(`Shop API request failed: ${response.status}`);
+    const error = new Error(
+      String(payload?.error || payload?.message || `Shop API request failed: ${response.status}`),
+    ) as ShopApiError;
+    error.status = response.status;
+    error.redirectTo = typeof payload?.redirectTo === "string" ? payload.redirectTo : undefined;
+    throw error;
   }
 
-  return response.json() as Promise<T>;
+  return payload as T;
 }
 
 export async function createShopOrder(input: ShopOrderInput): Promise<ShopOrderResponse> {

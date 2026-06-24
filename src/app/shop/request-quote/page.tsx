@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
 import QuoteRequestClient from "@/app/shop/_components/QuoteRequestClient";
 import ShopBreadcrumbs from "@/app/shop/_components/ShopBreadcrumbs";
@@ -8,7 +9,9 @@ import ShopSupportStrip from "@/app/shop/_components/ShopSupportStrip";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks } from "@/app/shop/shopData";
-import { SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
+import { SHOP_HOME_HREF, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
+import { auth } from "@/lib/auth";
+import { findSafeCustomerProfileByUserId } from "@/lib/customerProfile";
 
 export const metadata: Metadata = buildShopMetadata({
   title: "Request a Solar System Quote",
@@ -21,6 +24,22 @@ export default async function ShopRequestQuotePage({
   searchParams: Promise<{ product?: string }>;
 }) {
   const params = await searchParams;
+  const session = await auth().catch(() => null);
+  const sessionUser = session?.user as { id?: string | null } | undefined;
+  const sessionUserId = sessionUser?.id ?? null;
+
+  const quoteHref = params.product
+    ? `${SHOP_REQUEST_QUOTE_HREF}?product=${encodeURIComponent(params.product)}`
+    : SHOP_REQUEST_QUOTE_HREF;
+
+  if (!sessionUserId) {
+    redirect(`/login/phone?callbackUrl=${encodeURIComponent(quoteHref)}`);
+  }
+
+  const customerProfile = await findSafeCustomerProfileByUserId(sessionUserId);
+  const exactLocation = [customerProfile?.estateLandmark, customerProfile?.locationNotes]
+    .filter((value) => String(value || "").trim())
+    .join(" - ");
 
   return (
     <div className={shopStyles.page}>
@@ -36,7 +55,17 @@ export default async function ShopRequestQuotePage({
             </p>
           </div>
           <div className="mt-6">
-            <QuoteRequestClient preferredProduct={params.product ?? ""} />
+            <QuoteRequestClient
+              preferredProduct={params.product ?? ""}
+              initialProfile={{
+                name: customerProfile?.name || "",
+                phone: customerProfile?.phone || "",
+                email: customerProfile?.email || "",
+                county: customerProfile?.county || "",
+                town: customerProfile?.town || "",
+                exactLocation,
+              }}
+            />
           </div>
           <div className="mt-6">
             <ShopSupportStrip />

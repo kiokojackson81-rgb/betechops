@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { type FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createQuoteRequest } from "@/app/shop/shopSubmitApi";
+import { createQuoteRequest, type ShopApiError } from "@/app/shop/shopSubmitApi";
 import { trackQuoteSubmitted } from "@/app/shop/shopAnalytics";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { getShopQuoteSuccessHref, SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
@@ -11,6 +11,14 @@ import { getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets
 
 type QuoteRequestClientProps = {
   preferredProduct?: string;
+  initialProfile?: {
+    name?: string;
+    phone?: string;
+    email?: string;
+    county?: string;
+    town?: string;
+    exactLocation?: string;
+  };
 };
 
 type ProjectType =
@@ -100,19 +108,22 @@ function projectTypeLabel(value: ProjectType) {
   return PROJECT_TYPE_OPTIONS.find((option) => option.value === value)?.label || value;
 }
 
-export default function QuoteRequestClient({ preferredProduct = "" }: QuoteRequestClientProps) {
+export default function QuoteRequestClient({
+  preferredProduct = "",
+  initialProfile,
+}: QuoteRequestClientProps) {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState<Step>(1);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [form, setForm] = useState({
-    name: "",
-    phone: "",
-    email: "",
-    county: "",
-    town: "",
-    exactLocation: "",
+    name: initialProfile?.name || "",
+    phone: initialProfile?.phone || "",
+    email: initialProfile?.email || "",
+    county: initialProfile?.county || "",
+    town: initialProfile?.town || "",
+    exactLocation: initialProfile?.exactLocation || "",
     projectType: "SOLAR_HOME_SYSTEM" as ProjectType,
     preferredContactMethod: "PHONE_CALL" as ContactMethod,
     bestTimeToContact: "ANYTIME" as ContactTime,
@@ -349,6 +360,11 @@ export default function QuoteRequestClient({ preferredProduct = "" }: QuoteReque
 
       router.push(getShopQuoteSuccessHref(result.quoteRef));
     } catch (submissionError) {
+      const apiError = submissionError as ShopApiError;
+      if (apiError?.status === 401 && apiError.redirectTo) {
+        router.push(apiError.redirectTo);
+        return;
+      }
       setError(
         submissionError instanceof Error
           ? submissionError.message
@@ -378,6 +394,10 @@ export default function QuoteRequestClient({ preferredProduct = "" }: QuoteReque
         Share your project type, location, and technical needs so the Betech quotation desk can
         prepare most of the recommendation before calling you.
       </p>
+      <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/80 px-4 py-3 text-sm leading-6 text-emerald-900">
+        To help us prepare accurate quotations and avoid spam, please verify your phone or email
+        before submitting a quote request.
+      </div>
 
       <div className="mt-5">
         <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-[#7a0000]">
