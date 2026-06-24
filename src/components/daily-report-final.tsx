@@ -170,6 +170,14 @@ const shiftIsoDate = (isoDate: string, days: number) => {
 };
 const cardClasses =
   "rounded-[24px] border border-white/10 bg-white/[0.03] shadow-[0_24px_70px_rgba(0,0,0,0.28)]";
+const sectionPanelClasses =
+  "rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]";
+const navPillClasses =
+  "rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.06]";
+const utilityPillClasses =
+  "rounded-full border border-white/10 bg-slate-950/40 px-4 py-2 text-xs font-medium text-slate-200 transition hover:border-white/30 hover:bg-white/[0.06]";
+const primaryPillClasses =
+  "rounded-full border-2 border-emerald-400 bg-emerald-400/10 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-400/15";
 const inputClasses =
   "w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500";
 const textareaClasses =
@@ -1533,7 +1541,7 @@ export default function DailyReportFinal() {
               <div className="flex flex-col gap-4 xl:items-end">
                 <Link
                   href={createReceiptHref}
-                  className="rounded-full border-2 border-emerald-400 bg-emerald-400/10 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-400/15"
+                  className={primaryPillClasses}
                 >
                   Create Receipt
                 </Link>
@@ -1541,40 +1549,40 @@ export default function DailyReportFinal() {
                 <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
                   <Link
                     href={receiptsHref}
-                    className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.06]"
+                    className={navPillClasses}
                   >
                     Receipts
                   </Link>
                   <Link
                     href={posReceiptsHref}
-                    className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.06]"
+                    className={navPillClasses}
                   >
                     POS Receipts
                   </Link>
                   <Link
                     href={webOrdersHref}
-                    className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.06]"
+                    className={navPillClasses}
                   >
                     Web Orders
                   </Link>
                   {canAccessAgentOrders ? (
                     <Link
                       href={agentOrdersHref}
-                      className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.06]"
+                      className={navPillClasses}
                     >
                       Agent Orders
                     </Link>
                   ) : null}
                   <Link
                     href={quotationsHref}
-                    className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.06]"
+                    className={navPillClasses}
                   >
                     Quotations
                   </Link>
                   {isBrendahView ? (
                     <Link
                       href={productDeskHref}
-                      className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.06]"
+                      className={navPillClasses}
                     >
                       Product Desk
                     </Link>
@@ -1584,7 +1592,7 @@ export default function DailyReportFinal() {
                 <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
                   <Link
                     href={withImpersonateId("/attendant/wellness", impersonateId)}
-                    className="rounded-full border border-white/10 bg-slate-950/40 px-4 py-2 text-xs font-medium text-slate-200 transition hover:border-white/30 hover:bg-white/[0.06]"
+                    className={utilityPillClasses}
                   >
                     Wellness
                   </Link>
@@ -1592,21 +1600,21 @@ export default function DailyReportFinal() {
                     type="button"
                     onClick={downloadPerformancePdf}
                     disabled={downloadingPerformance}
-                    className="rounded-full border border-white/10 bg-slate-950/40 px-4 py-2 text-xs font-medium text-slate-200 transition hover:border-white/30 hover:bg-white/[0.06] disabled:opacity-60"
+                    className={`${utilityPillClasses} disabled:opacity-60`}
                   >
                     {downloadingPerformance ? "Preparing PDF..." : "Download PDF"}
                   </button>
                   <button
                     type="button"
                     onClick={downloadPerformanceReceiptPdf}
-                    className="rounded-full border border-white/10 bg-slate-950/40 px-4 py-2 text-xs font-medium text-slate-200 transition hover:border-white/30 hover:bg-white/[0.06]"
+                    className={utilityPillClasses}
                   >
                     Print Performance Receipt
                   </button>
                   <button
                     type="button"
                     onClick={() => signOut({ callbackUrl: "/attendant/login" })}
-                    className="rounded-full border border-white/10 bg-slate-950/40 px-4 py-2 text-xs font-medium text-slate-200 transition hover:border-white/30 hover:bg-white/[0.06]"
+                    className={utilityPillClasses}
                   >
                     Log out
                   </button>
@@ -1615,12 +1623,12 @@ export default function DailyReportFinal() {
             </div>
           </header>
 
-          <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
+          <section className={sectionPanelClasses}>
             <div className="mb-5">
               <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Sales Action Center</div>
               <h2 className="mt-2 text-2xl font-semibold text-white">Pending customer work assigned to you</h2>
               <p className="mt-1 text-sm text-slate-400">
-                Pending customer work assigned to you for the active period.
+                Live pending counts for web orders, POS receipts, quotations, agent orders, and POD follow-up in the active period.
               </p>
             </div>
 
@@ -1743,7 +1751,7 @@ export default function DailyReportFinal() {
             </div>
           </section>
 
-          <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
+          <section className={sectionPanelClasses}>
             <div className="mb-5">
               <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Staff Report & Payroll</div>
               <h2 className="mt-2 text-2xl font-semibold text-white">Daily reporting, quick stats, and earnings tools</h2>
