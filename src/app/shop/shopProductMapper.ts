@@ -13,6 +13,7 @@ import {
   getProductCheckoutAvailabilityMessage,
   normalizeAvailabilityType,
 } from "@/app/shop/shopAvailability";
+import { sanitizeProductDescription, sanitizeProductSpecificationLines } from "@/lib/productDescriptionFormatting";
 
 type OpsCatalogueProduct = {
   id: string;
@@ -296,7 +297,7 @@ async function queryOpsCatalogueProducts(whereClause = "", params: unknown[] = [
 }
 
 function normalizeOptionalText(value: string | null | undefined) {
-  const normalized = String(value || "").trim();
+  const normalized = sanitizeProductDescription(String(value || ""));
   return normalized || null;
 }
 
@@ -333,7 +334,13 @@ function normalizeStringArray(value: unknown): string[] {
 }
 
 function normalizeSpecificationLines(value: unknown) {
-  return normalizeStringArray(value);
+  const direct = Array.isArray(value) ? normalizeStringArray(value) : [];
+  if (direct.length) {
+    return direct
+      .map((line) => sanitizeProductDescription(line))
+      .filter(Boolean);
+  }
+  return sanitizeProductSpecificationLines(value);
 }
 
 function hasAnyKeyword(haystacks: string[], keywords: readonly string[]) {

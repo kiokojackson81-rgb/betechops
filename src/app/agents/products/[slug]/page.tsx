@@ -6,6 +6,7 @@ import { BadgeCheck, CircleDollarSign, CreditCard, Headphones, Truck } from "luc
 import AgentCatalogueProductCard from "@/app/agents/_components/AgentCatalogueProductCard";
 import AgentProductDetailActions from "@/app/agents/_components/AgentProductDetailActions";
 import AgentWhatsAppFloat from "@/app/agents/_components/AgentWhatsAppFloat";
+import MarkdownRendererClient from "@/components/MarkdownRendererClient";
 import {
   getAgentCommissionValue,
   getAgentPotentialCommissionValue,
@@ -190,7 +191,7 @@ export default async function AgentProductDetailPage({
   const galleryImages = product.galleryImages?.length ? product.galleryImages : [product.image];
   const visualTitle = buildVisualTitle(product);
   const breadcrumbTitle = buildBreadcrumbTitle(product);
-  const detailBullets = buildDetailBullets(product);
+  const detailBullets = buildDetailBullets({ ...product, fullDescription: undefined });
   const tiktokEmbedUrl = getTikTokEmbedUrl(product.tiktokVideoUrl);
   const stockLabelMap = {
     in_stock: "In stock",
@@ -403,6 +404,17 @@ export default async function AgentProductDetailPage({
           </div>
 
           <div className="mt-5 grid gap-5">
+            {product.fullDescription ? (
+              <details className="group overflow-hidden rounded-[20px] border border-[#7a0000]/10 bg-white shadow-[0_12px_30px_rgba(15,23,42,0.05)] sm:rounded-[26px]" open>
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 text-left sm:px-6">
+                  <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">Product details</div>
+                  <div className="text-sm font-semibold text-slate-500 transition group-open:rotate-45">+</div>
+                </summary>
+                <div className="border-t border-[#7a0000]/8 px-4 py-4 sm:px-6 sm:py-5">
+                  <MarkdownRendererClient mdText={product.fullDescription} />
+                </div>
+              </details>
+            ) : null}
             <details className="group overflow-hidden rounded-[20px] border border-[#7a0000]/10 bg-white shadow-[0_12px_30px_rgba(15,23,42,0.05)] sm:rounded-[26px]" open>
               <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 text-left sm:px-6">
                 <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">Key specifications</div>

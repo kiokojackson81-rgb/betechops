@@ -12,6 +12,7 @@ import ShopHeader from "@/app/shop/_components/ShopHeader";
 import ShopProductDetailActions from "@/app/shop/_components/ShopProductDetailActions";
 import ShopProductGallery from "@/app/shop/_components/ShopProductGallery";
 import { formatCurrency, shopStyles } from "@/app/shop/_components/shopStyles";
+import MarkdownRendererClient from "@/components/MarkdownRendererClient";
 import { getShopProductBySlug, getShopProductBySlugOrOpsProductId, getShopProducts } from "@/app/shop/shopApi";
 import { buildProductJsonLd, buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks, type ShopProduct } from "@/app/shop/shopData";
@@ -188,7 +189,7 @@ export default async function ShopProductDetailPage({
   const galleryImages = product.galleryImages?.length ? product.galleryImages : [product.image];
   const visualTitle = buildVisualTitle(product);
   const breadcrumbTitle = buildBreadcrumbTitle(product);
-  const detailBullets = buildDetailBullets(product);
+  const detailBullets = buildDetailBullets({ ...product, fullDescription: undefined });
   const tiktokEmbedUrl = getTikTokEmbedUrl(product.tiktokVideoUrl);
   const supportItems = [
     {
@@ -219,6 +220,14 @@ export default async function ShopProductDetailPage({
     },
   ];
   const detailAccordions = [
+    ...(product.fullDescription
+      ? [
+          {
+            title: "Product details",
+            content: <MarkdownRendererClient mdText={product.fullDescription} />,
+          },
+        ]
+      : []),
     {
       title: "Key specifications",
       content: (

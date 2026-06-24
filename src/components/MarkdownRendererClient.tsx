@@ -70,6 +70,16 @@ export default function MarkdownRendererClient({ mdText, enabled = true }: { mdT
       }
       continue;
     }
+    const headingMatch = line.match(/^\s*#{1,3}\s+(.*)$/);
+    if (headingMatch) {
+      if (inList) {
+        html += "</ul>";
+        inList = false;
+      }
+      const content = escapeHtml(headingMatch[1].trim());
+      html += `<h3>${renderInline(content)}</h3>`;
+      continue;
+    }
     const listMatch = line.match(/^\s*[-*+]\s+(.*)$/);
     if (listMatch) {
       if (!inList) {
