@@ -5,7 +5,7 @@ import { signOut, useSession } from "next-auth/react";
 import Card from "@/app/_components/Card";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarIcon } from "lucide-react";
-import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
+import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import EarningsCard from "@/app/_components/EarningsCard";
 import type { EarningsSummary } from "@/lib/earningsSummary";
 import { showToast } from "@/lib/ui/toast";
@@ -120,17 +120,6 @@ const kenyaTimeZone = "Africa/Nairobi";
 const formatKES = (value?: number | null) =>
   `KES ${Number(value ?? 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
 
-const formatDateOnly = (value: string | Date | null | undefined) => {
-  if (!value) return "-";
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleDateString("en-KE", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-};
-
 const toLocalIsoDate = (d: Date) => {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -186,10 +175,6 @@ const inputClasses =
 const textareaClasses =
   "w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500";
 
-function controlCenterCardClasses() {
-  return "rounded-[24px] border border-white/10 bg-white/[0.03] p-5";
-}
-
 function pendingToneClasses(count: number) {
   if (count === 0) return "border-emerald-400/20 bg-emerald-400/10 text-emerald-100";
   if (count <= 5) return "border-amber-400/20 bg-amber-400/10 text-amber-100";
@@ -221,6 +206,15 @@ function ageLabel(value: string | null | undefined) {
   const diffDays = Math.floor(diffHours / 24);
   return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
 }
+
+function withImpersonateHash(
+  href: string,
+  hash: string,
+  impersonateId: string | null | undefined,
+) {
+  return `${withImpersonateId(href, impersonateId)}${hash.startsWith("#") ? hash : `#${hash}`}`;
+}
+
 export default function DailyReportFinal() {
   const [currentView, setCurrentView] = useState<
     "dashboard" | "receipts" | "web-orders" | "quote-requests" | "product-desk"
@@ -442,6 +436,13 @@ export default function DailyReportFinal() {
   const { currentPeriod, selectedPeriod, selectedPeriodKey, setSelectedPeriod } =
     useTradingPeriodQueryState();
   const selectedPeriodLabel = selectedPeriod.label;
+  const receiptsHref = withImpersonateId("/marketing/receipts?tab=pos", impersonateId);
+  const posReceiptsHref = withImpersonateId("/marketing/receipts?tab=pos", impersonateId);
+  const webOrdersHref = withImpersonateId("/marketing/receipts?tab=web-orders", impersonateId);
+  const agentOrdersHref = withImpersonateId("/marketing/agent-orders", impersonateId);
+  const quotationsHref = withImpersonateId("/marketing/receipts?tab=quotations", impersonateId);
+  const createReceiptHref = withImpersonateId("/receipts?view=create", impersonateId);
+  const productDeskHref = withImpersonateHash("/attendant/daily-report", "product-desk", impersonateId);
   const payslipHref = useMemo(() => {
     const params = new URLSearchParams({ periodKey: selectedPeriodKey });
     if (impersonateId) params.set("impersonateId", impersonateId);
@@ -744,7 +745,7 @@ export default function DailyReportFinal() {
     }
   }, [impersonateId, selectedPeriodKey]);
 
-  const { totalReceipts, totalSales, totalItems, totalNewProducts } = useMemo(() => {
+  const { totalReceipts, totalSales, totalItems } = useMemo(() => {
     let totalReceipts = 0;
     let totalSales = 0;
     let totalItems = 0;
@@ -764,18 +765,11 @@ export default function DailyReportFinal() {
       totalItems += (r.products ?? []).filter((p) => String(p?.name ?? "").trim().length > 0).length;
     });
 
-    const totalNewProducts = clamp0(productsUploaded);
-    return { totalReceipts, totalSales, totalItems, totalNewProducts };
-  }, [receipts, productsUploaded]);
-
-  const totalEditedProducts = clamp0(productsEdited);
-  const totalCopiedProducts = clamp0(productsCopied);
-  const totalWalkinsServed = Number(walkinsServed || 0);
-  const totalWalkinsPurchased = Number(walkinsPurchased || 0);
+    return { totalReceipts, totalSales, totalItems };
+  }, [receipts]);
 
   const serverStats = serverQuickStats;
   const displayedSalesKes = serverStats ? clamp0(serverStats.totalSales) : totalSales;
-  const displayedItems = serverStats ? clamp0(serverStats.totalItems) : totalItems;
   const displayedReceipts = serverStats ? clamp0(serverStats.totalReceipts) : totalReceipts;
   const displayedNewProducts = serverStats
     ? clamp0(serverStats.totalNewProducts)
@@ -806,17 +800,6 @@ export default function DailyReportFinal() {
           (session?.user as { name?: string }).name?.trim()
         ? (session?.user as { name?: string }).name!.trim()
         : "Marketing staff";
-  const communicationCompletedCount = [
-    communications.repliedFbComments,
-    communications.repliedFbDms,
-    communications.repliedIgComments,
-    communications.repliedIgDms,
-    communications.clearedFbInbox,
-    communications.clearedIgInbox,
-  ].filter(Boolean).length;
-  const communicationTotalCount = 6;
-  const performanceLockState = useCardLock("dailyreport:control-center-performance");
-
   const downloadPerformanceReceiptPdf = useCallback(() => {
     const periodKey = selectedPeriodKey || currentPeriod.key;
     const params = new URLSearchParams({ periodKey });
@@ -1547,39 +1530,62 @@ export default function DailyReportFinal() {
 
               <div className="flex flex-col gap-3 lg:items-end">
                 <Link
-                  href={withImpersonateId("/receipts?view=create", impersonateId)}
+                  href={createReceiptHref}
                   className="rounded-full border-2 border-emerald-400 bg-emerald-400/10 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-400/15"
                 >
                   Create Receipt
                 </Link>
 
                 <div className="flex max-w-[46rem] flex-wrap justify-start gap-2 lg:justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setCurrentView("receipts")}
+                  <Link
+                    href={receiptsHref}
                     className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.06]"
                   >
                     Receipts
-                  </button>
+                  </Link>
+                  <Link
+                    href={posReceiptsHref}
+                    className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.06]"
+                  >
+                    POS Receipts
+                  </Link>
+                  <Link
+                    href={webOrdersHref}
+                    className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.06]"
+                  >
+                    Web Orders
+                  </Link>
+                  {canAccessAgentOrders ? (
+                    <Link
+                      href={agentOrdersHref}
+                      className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.06]"
+                    >
+                      Agent Orders
+                    </Link>
+                  ) : null}
+                  <Link
+                    href={quotationsHref}
+                    className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.06]"
+                  >
+                    Quotations
+                  </Link>
                   {isBrendahView ? (
-                    <button
-                      type="button"
-                      onClick={() => setCurrentView("product-desk")}
+                    <Link
+                      href={productDeskHref}
                       className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.06]"
                     >
                       Product Desk
-                    </button>
+                    </Link>
                   ) : null}
                 </div>
 
                 <div className="flex max-w-[46rem] flex-wrap justify-start gap-2 lg:justify-end">
-                  <button
-                    type="button"
-                    onClick={downloadPerformanceReceiptPdf}
+                  <Link
+                    href={withImpersonateId("/attendant/wellness", impersonateId)}
                     className="rounded-full border border-white/10 bg-slate-950/40 px-4 py-2 text-xs font-medium text-slate-200 transition hover:border-white/30 hover:bg-white/[0.06]"
                   >
-                    Print Performance Receipt
-                  </button>
+                    Wellness
+                  </Link>
                   <button
                     type="button"
                     onClick={downloadPerformancePdf}
@@ -1588,12 +1594,13 @@ export default function DailyReportFinal() {
                   >
                     {downloadingPerformance ? "Preparing PDF..." : "Download PDF"}
                   </button>
-                  <Link
-                    href={withImpersonateId("/attendant/wellness", impersonateId)}
+                  <button
+                    type="button"
+                    onClick={downloadPerformanceReceiptPdf}
                     className="rounded-full border border-white/10 bg-slate-950/40 px-4 py-2 text-xs font-medium text-slate-200 transition hover:border-white/30 hover:bg-white/[0.06]"
                   >
-                    Wellness
-                  </Link>
+                    Print Performance Receipt
+                  </button>
                   <button
                     type="button"
                     onClick={() => signOut({ callbackUrl: "/attendant/login" })}
@@ -1735,43 +1742,58 @@ export default function DailyReportFinal() {
           </section>
 
           <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
-            <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Daily Control Center</div>
-                <h2 className="mt-2 text-2xl font-semibold text-white">Today&apos;s marketing checklist</h2>
-                <p className="mt-1 text-sm text-slate-400">
-                  Track uploads, communications, marketplace checks, walk-ins, and promo activity for the selected day.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <PeriodSwitcher
-                  currentPeriod={currentPeriod}
-                  selectedPeriod={selectedPeriod}
-                  onSelectPeriod={setSelectedPeriod}
-                />
-                {selectedPeriodKey !== currentPeriod.key ? (
-                  <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-amber-100">
-                    Archived period
-                  </span>
-                ) : null}
+            <div className="mb-5">
+              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Staff Report & Payroll</div>
+              <h2 className="mt-2 text-2xl font-semibold text-white">Daily reporting, quick stats, and earnings tools</h2>
+              <p className="mt-1 text-sm text-slate-400">
+                Complete the daily checklist, review your period stats, and download payroll documents from one integrated section.
+              </p>
+            </div>
+
+            <div className="rounded-[24px] border border-white/10 bg-slate-950/40 p-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Statistics Period</div>
+                  <div className="mt-2 text-3xl font-semibold text-white">{selectedPeriodLabel}</div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <PeriodSwitcher
+                    currentPeriod={currentPeriod}
+                    selectedPeriod={selectedPeriod}
+                    onSelectPeriod={setSelectedPeriod}
+                  />
+                  {selectedPeriodKey !== currentPeriod.key ? (
+                    <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-amber-100">
+                      Archived period
+                    </span>
+                  ) : null}
+                </div>
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <div className={controlCenterCardClasses()}>
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Reporting Date</div>
-                <div className="mt-3 text-2xl font-semibold text-white">{formatDateOnly(date)}</div>
-                <div className="mt-1 text-sm text-slate-400">{dayOfWeek}</div>
-                <div className="mt-4 space-y-3">
-                  <div className="space-y-2">
-                    <label className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Date</label>
-                    {datePicker}
+            <div className="mt-5 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px] 2xl:grid-cols-[minmax(0,1fr)_430px]">
+              <div className="min-w-0 space-y-5">
+                <section className={cardClasses + " p-5"}>
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Reporting Day</div>
+                      <h3 className="mt-2 text-2xl font-semibold text-white">{dayOfWeek} checklist</h3>
+                      <p className="mt-1 max-w-2xl text-sm text-slate-400">
+                        Choose the date, confirm the auto-loaded day, then complete the checklist on the left.
+                      </p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[540px]">
+                      <div className="space-y-2">
+                        <label className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Date</label>
+                        {datePicker}
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Day of week</label>
+                        {dayOfWeekSelect}
+                      </div>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Day of week</label>
-                    {dayOfWeekSelect}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="mt-4 flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={() => setQuickDate("today")}
@@ -1786,142 +1808,94 @@ export default function DailyReportFinal() {
                     >
                       Yesterday
                     </button>
+                    <div className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-xs font-semibold text-emerald-100">
+                      Auto-loaded from selected day
+                    </div>
                   </div>
+                </section>
+
+                <section className={cardClasses + " p-5"}>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Day Checklist</div>
+                      <h3 className="mt-2 text-2xl font-semibold text-white">{dayOfWeek}</h3>
+                    </div>
+                    <div className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-xs font-semibold text-emerald-100">
+                      Marketing checklist
+                    </div>
+                  </div>
+                  <div className="mt-5">
+                    <DaySpecificBlocks
+                      selectedDay={dayOfWeek}
+                      walkIns={Number(walkinsServed || 0)}
+                      onWalkInsChange={(val) => setWalkinsServed(val)}
+                      neatness={shopNeatness}
+                      onNeatnessChange={setShopNeatness}
+                      productTasks={{
+                        uploaded: productsUploaded,
+                        edited: productsEdited,
+                        copied: productsCopied,
+                      }}
+                      onProductTasksChange={(next) => {
+                        setProductsUploaded(next.uploaded);
+                        setProductsEdited(next.edited);
+                        setProductsCopied(next.copied);
+                      }}
+                      communications={communications}
+                      onCommunicationsChange={setCommunications}
+                      marketplace={marketplace}
+                      onMarketplaceChange={setMarketplace}
+                      liveSession={liveSession}
+                      onLiveSessionChange={setLiveSession}
+                      thursdayActivities={thursdayActivities}
+                      onThursdayActivitiesChange={setThursdayActivities}
+                      fridayTasks={fridayTasks}
+                      onFridayTasksChange={setFridayTasks}
+                      saturdaySummary={saturdaySummary}
+                      onSaturdaySummaryChange={setSaturdaySummary}
+                    />
+                  </div>
+                </section>
+
+                <div className="flex flex-wrap items-center justify-end gap-3 rounded-[24px] border border-white/10 bg-slate-950/70 p-4">
+                  <button
+                    type="button"
+                    onClick={handleResetDay}
+                    className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 transition hover:border-white/30 hover:bg-white/5"
+                  >
+                    Reset
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSubmit}
+                    disabled={isSubmitting}
+                    className="rounded-xl bg-emerald-500 px-6 py-2 text-sm font-semibold text-black transition hover:brightness-95 disabled:opacity-60"
+                  >
+                    {isSubmitting ? "Submitting..." : "Submit report"}
+                  </button>
                 </div>
               </div>
 
-              <div className={controlCenterCardClasses()}>
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Product Uploads</div>
-                <div className="mt-3 text-2xl font-semibold text-white">{displayedNewProducts + displayedEditedProducts + displayedCopiedProducts}</div>
-                <div className="mt-1 text-sm text-slate-400">Uploaded, edited, and copied</div>
-                <div className="mt-4 grid gap-2 text-sm text-slate-300">
-                  <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2">
-                    <span>Uploaded</span>
-                    <span className="font-semibold text-white">{displayedNewProducts}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2">
-                    <span>Edited</span>
-                    <span className="font-semibold text-white">{displayedEditedProducts}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2">
-                    <span>Copied</span>
-                    <span className="font-semibold text-white">{displayedCopiedProducts}</span>
-                  </div>
-                </div>
-              </div>
+              <aside className="space-y-5 lg:sticky lg:top-6">
+                <QuickStats
+                  receipts={displayedReceipts}
+                  salesKes={displayedSalesKes}
+                  newProducts={displayedNewProducts}
+                  editedProducts={displayedEditedProducts}
+                  copiedProducts={displayedCopiedProducts}
+                  commissionKes={commissionForPeriod}
+                  periodLabel={selectedPeriodLabel}
+                />
 
-              <div className={controlCenterCardClasses()}>
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Customer Communication</div>
-                <div className="mt-3 text-2xl font-semibold text-white">{communicationCompletedCount}/{communicationTotalCount}</div>
-                <div className="mt-1 text-sm text-slate-400">FB/IG inbox and comment tasks</div>
-                <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-900/80">
-                  <div
-                    className="h-full rounded-full bg-emerald-400"
-                    style={{ width: `${(communicationCompletedCount / communicationTotalCount) * 100}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className={controlCenterCardClasses()}>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Performance</div>
-                  <LockButton locked={performanceLockState.locked} onToggle={performanceLockState.toggle} />
-                </div>
-                <div className="mt-4 grid gap-2 text-sm text-slate-300">
-                  <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2">
-                    <span>Receipts</span>
-                    <span className="font-semibold text-white">{performanceLockState.locked ? "•••" : displayedReceipts}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2">
-                    <span>Sales</span>
-                    <span className="font-semibold text-white">
-                      {performanceLockState.locked ? "•••" : formatKES(displayedSalesKes)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2">
-                    <span>Commission</span>
-                    <span className="font-semibold text-white">
-                      {performanceLockState.locked ? "•••" : formatKES(commissionForPeriod)}
-                    </span>
-                  </div>
-                </div>
-              </div>
+                <EarningsCard
+                  summary={earningsSummary ?? publicFallbackSummary}
+                  lockKey="dailyreport:earnings"
+                  downloadHref={payslipHref}
+                />
+              </aside>
             </div>
           </section>
         </section>
-
-      {currentView === "dashboard" && (
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px] 2xl:grid-cols-[minmax(0,1fr)_430px]">
-          <div className="min-w-0 space-y-6">
-            <DaySpecificBlocks
-              selectedDay={dayOfWeek}
-              walkIns={Number(walkinsServed || 0)}
-              onWalkInsChange={(val) => setWalkinsServed(val)}
-              neatness={shopNeatness}
-              onNeatnessChange={setShopNeatness}
-              productTasks={{
-                uploaded: productsUploaded,
-                edited: productsEdited,
-                copied: productsCopied,
-              }}
-              onProductTasksChange={(next) => {
-                setProductsUploaded(next.uploaded);
-                setProductsEdited(next.edited);
-                setProductsCopied(next.copied);
-              }}
-              communications={communications}
-              onCommunicationsChange={setCommunications}
-              marketplace={marketplace}
-              onMarketplaceChange={setMarketplace}
-              liveSession={liveSession}
-              onLiveSessionChange={setLiveSession}
-              thursdayActivities={thursdayActivities}
-              onThursdayActivitiesChange={setThursdayActivities}
-              fridayTasks={fridayTasks}
-              onFridayTasksChange={setFridayTasks}
-              saturdaySummary={saturdaySummary}
-              onSaturdaySummaryChange={setSaturdaySummary}
-            />
-            <div className="sticky bottom-4 z-20 flex items-center justify-end gap-3 rounded-2xl border border-white/10 bg-slate-950/90 p-4 backdrop-blur">
-              <button
-                type="button"
-                onClick={handleResetDay}
-                className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 transition hover:border-white/30 hover:bg-white/5"
-              >
-                Reset day
-              </button>
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-                className="rounded-xl bg-emerald-500 px-6 py-2 text-sm font-semibold text-black transition hover:brightness-95 disabled:opacity-60"
-              >
-                {isSubmitting ? "Submitting..." : "Submit report"}
-              </button>
-            </div>
-          </div>
-
-          <aside className="space-y-6 lg:sticky lg:top-6">
-            <QuickStats
-              receipts={displayedReceipts}
-              salesKes={displayedSalesKes}
-              newProducts={displayedNewProducts}
-              editedProducts={displayedEditedProducts}
-              copiedProducts={displayedCopiedProducts}
-              walkInsServed={displayedWalkInsServed}
-              walkInsPurchased={displayedWalkInsPurchased}
-              commissionKes={commissionForPeriod}
-              periodLabel={selectedPeriodLabel}
-            />
-
-            <EarningsCard
-              summary={earningsSummary ?? publicFallbackSummary}
-              lockKey="dailyreport:earnings"
-              downloadHref={payslipHref}
-            />
-          </aside>
-        </div>
-      )}
 
       </div>
     </div>
@@ -2432,8 +2406,6 @@ type QuickStatsProps = {
   newProducts: number;
   editedProducts: number;
   copiedProducts: number;
-  walkInsServed: number;
-  walkInsPurchased: number;
   commissionKes: number;
   periodLabel?: string;
 };
@@ -2444,8 +2416,6 @@ function QuickStats({
   newProducts,
   editedProducts,
   copiedProducts,
-  walkInsServed,
-  walkInsPurchased,
   commissionKes,
   periodLabel,
 }: QuickStatsProps) {
