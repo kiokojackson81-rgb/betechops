@@ -32,12 +32,11 @@ export const NAV: AdminNavItem[] = [
     icon: Package,
     children: [
       { href: "/admin/orders", label: "Jumia Orders" },
-      { href: "/admin/orders/website", label: "Pending Website Orders" },
     ],
   },
   {
     href: "/admin/receipts",
-    label: "POS Management",
+    label: "Receipts",
     icon: WalletCards,
     children: [
       { href: "/admin/receipts", label: "Receipts" },
@@ -47,9 +46,10 @@ export const NAV: AdminNavItem[] = [
       { href: "/admin/marketing-report?impersonateId=cmimxqf9t0003v5mcjdq8x61p", label: "SalesOps" },
       { href: "/admin/pending-pricing", label: "Pricing" },
       { href: "/admin/returns", label: "Returns" },
+      { href: "/admin/receipts?tab=website-orders", label: "Website Orders" },
     ],
   },
-  { href: "/admin/returns/jumia", label: "Jumia Returns", icon: Truck },
+  { href: "/admin/online/summary", label: "Jumia Activities", icon: Truck },
   { href: "/admin/catalog", label: "Catalog", icon: Layers },
   { href: "/admin/marketing-report", label: "Marketing report", icon: BarChart3 },
   { href: "/admin/support-report", label: "Support report", icon: LifeBuoy },

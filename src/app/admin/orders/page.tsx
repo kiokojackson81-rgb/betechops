@@ -341,11 +341,11 @@ export default async function OrdersPage(props: unknown) {
         </div>
         <div className="pt-1 flex items-center gap-4">
           <Link
-            href="/admin/orders/website"
+            href="/admin/receipts?tab=website-orders"
             className="px-3 py-1 rounded border border-emerald-400/20 bg-emerald-500/10 hover:bg-emerald-500/20 text-sm text-emerald-300"
-            title="Review pending website orders before routing them into the receipts desk"
+            title="Review pending website orders from the receipts operations area"
           >
-            Pending Website Orders{typeof websitePendingCount === "number" ? ` (${websitePendingCount})` : ""}
+            Website Orders{typeof websitePendingCount === "number" ? ` (${websitePendingCount})` : ""}
           </Link>
           <SyncNowButton />
           <OrdersSSE

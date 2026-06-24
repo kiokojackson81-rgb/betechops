@@ -302,7 +302,7 @@ export async function getAdminAgentsData(
   if (!rows.length) return [];
 
   const userIds = rows.map((row) => row.userId);
-  const [commissions, payouts, sales, activities] = await Promise.all([
+  const [commissions, payouts, sales, activities, websiteReferralCounts] = await Promise.all([
     prisma.agentCommission.findMany({
       where: { agentId: { in: userIds } },
       orderBy: { createdAt: "desc" },
@@ -325,8 +325,25 @@ export async function getAdminAgentsData(
       where: { agentId: { in: userIds } },
       orderBy: { createdAt: "desc" },
     }),
+    prisma.websiteOrder
+      .groupBy({
+        by: ["referredByAgentId"],
+        where: {
+          referredByAgentId: { in: userIds },
+        },
+        _count: { _all: true },
+      })
+      .catch((error) => {
+        if (isAgentSalesSchemaError(error)) return [];
+        throw error;
+      }),
   ]);
   const adjustedCommissions = applyPaidPayoutsToCommissions(commissions, payouts);
+  const websiteReferralCountMap = new Map(
+    websiteReferralCounts
+      .filter((row) => row.referredByAgentId)
+      .map((row) => [row.referredByAgentId as string, row._count._all]),
+  );
 
   const phoneOwnerCounts = new Map<string, Set<string>>();
   for (const sale of sales) {
@@ -342,6 +359,12 @@ export async function getAdminAgentsData(
     const agentPayouts = payouts.filter((item) => item.agentId === row.userId);
     const agentSales = sales.filter((item) => item.agentId === row.userId);
     const agentActivities = activities.filter((item) => item.agentId === row.userId).slice(0, 10);
+    const distinctReferralPhones = new Set(
+      agentSales
+        .map((sale) => String(sale.customerPhone || "").replace(/\D/g, ""))
+        .filter(Boolean),
+    ).size;
+    const referralCount = Math.max(distinctReferralPhones, websiteReferralCountMap.get(row.userId) ?? 0);
     const totalSales = agentCommissions.reduce((sum, item) => sum + Number(item.saleAmount ?? 0), 0);
     const totalCommission = agentCommissions.reduce((sum, item) => sum + Number(item.commissionAmt ?? 0), 0);
     const paidCommission = agentCommissions
@@ -393,6 +416,7 @@ export async function getAdminAgentsData(
       paidCommission,
       pendingCommission,
       totalPayouts,
+      referralCount,
       commissionCount: agentCommissions.length,
       payoutCount: agentPayouts.length,
       saleCount: agentSales.length,

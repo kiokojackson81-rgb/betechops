@@ -35,6 +35,7 @@ type AgentRow = {
   paidCommission: number;
   pendingCommission: number;
   totalPayouts: number;
+  referralCount?: number;
   commissionCount: number;
   payoutCount: number;
   saleCount?: number;
@@ -198,7 +199,7 @@ export default function AgentsAdminClient({ agents }: { agents: AgentRow[] }) {
       ) : null}
 
       <div className="hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.96))] lg:block">
-        <div className="sticky top-0 z-10 grid grid-cols-[56px_56px_minmax(220px,1.5fr)_140px_130px_160px_140px_140px_120px_150px_150px] items-center gap-3 border-b border-white/10 bg-slate-950/95 px-4 py-4 text-[11px] uppercase tracking-[0.18em] text-slate-500 backdrop-blur">
+        <div className="sticky top-0 z-10 grid grid-cols-[56px_56px_minmax(220px,1.45fr)_120px_120px_150px_90px_90px_130px_130px_140px_150px] items-center gap-3 border-b border-white/10 bg-slate-950/95 px-4 py-4 text-[11px] uppercase tracking-[0.18em] text-slate-500 backdrop-blur">
           <div className="flex justify-center">
             <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} />
           </div>
@@ -207,10 +208,12 @@ export default function AgentsAdminClient({ agents }: { agents: AgentRow[] }) {
           <div className="whitespace-nowrap">Status</div>
           <div className="whitespace-nowrap">County</div>
           <div className="whitespace-nowrap">Phone</div>
+          <div className="whitespace-nowrap">Referrals</div>
+          <div className="whitespace-nowrap">Orders</div>
           <div className="whitespace-nowrap">Sales</div>
           <div className="whitespace-nowrap">Pending</div>
           <div className="whitespace-nowrap">Paid</div>
-          <div className="whitespace-nowrap">Risk</div>
+          <div className="whitespace-nowrap">Fraud / Risk</div>
           <div className="whitespace-nowrap">Quick Action</div>
         </div>
 
@@ -221,7 +224,7 @@ export default function AgentsAdminClient({ agents }: { agents: AgentRow[] }) {
             const nextSuspendLabel = agent.profile.status === "suspended" ? "Reactivate" : "Suspend";
             return (
               <div key={agent.profile.id} className="transition hover:bg-white/[0.02]">
-                <div className="grid grid-cols-[56px_56px_minmax(220px,1.5fr)_140px_130px_160px_140px_140px_120px_150px_150px] items-center gap-3 px-4 py-4">
+                <div className="grid grid-cols-[56px_56px_minmax(220px,1.45fr)_120px_120px_150px_90px_90px_130px_130px_140px_150px] items-center gap-3 px-4 py-4">
                   <div className="flex justify-center">
                     <input
                       type="checkbox"
@@ -245,7 +248,7 @@ export default function AgentsAdminClient({ agents }: { agents: AgentRow[] }) {
                       <div className="min-w-0">
                         <div className="truncate whitespace-nowrap font-semibold text-white">{agent.displayName}</div>
                         <div className="truncate whitespace-nowrap text-xs text-slate-500">
-                          {agent.profile.referralCode} · {agent.performanceLabel}
+                          Code {agent.profile.referralCode} · {agent.performanceLabel}
                         </div>
                       </div>
                     </div>
@@ -257,12 +260,14 @@ export default function AgentsAdminClient({ agents }: { agents: AgentRow[] }) {
                   </div>
                   <div className="truncate whitespace-nowrap text-slate-300">{agent.profile.county || "No county"}</div>
                   <div className="truncate whitespace-nowrap text-slate-300">{agent.profile.phone || "No phone"}</div>
+                  <div className="whitespace-nowrap text-cyan-200">{agent.referralCount ?? 0}</div>
+                  <div className="whitespace-nowrap text-sky-200">{agent.saleCount ?? 0}</div>
                   <div className="whitespace-nowrap text-slate-100">{money(agent.totalSales)}</div>
                   <div className="whitespace-nowrap text-amber-200">{money(agent.pendingCommission)}</div>
                   <div className="whitespace-nowrap text-emerald-200">{money(agent.paidCommission)}</div>
                   <div>
                     <span className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${riskBadge(agent.riskLevel)}`}>
-                      {agent.riskLevel}
+                      {agent.riskLevel} {agent.duplicateLeadCount > 0 ? `· ${agent.duplicateLeadCount} dupes` : ""}
                     </span>
                   </div>
                   <div>
@@ -280,9 +285,10 @@ export default function AgentsAdminClient({ agents }: { agents: AgentRow[] }) {
                   <div className="border-t border-white/5 bg-slate-950/55 px-4 py-5">
                     <div className="grid gap-4 xl:grid-cols-4">
                       <InfoCard label="Referral code" value={agent.profile.referralCode} />
+                      <InfoCard label="Total referrals" value={String(agent.referralCount ?? 0)} />
+                      <InfoCard label="Total orders" value={String(agent.saleCount ?? 0)} />
                       <InfoCard label="Success rate" value={`${agent.successRate}%`} />
                       <InfoCard label="Pending sales" value={String(agent.openSaleCount ?? 0)} />
-                      <InfoCard label="Completed sales" value={String(agent.completedSaleCount ?? 0)} />
                     </div>
 
                     <div className="mt-4 grid gap-4 xl:grid-cols-2">
@@ -417,6 +423,8 @@ export default function AgentsAdminClient({ agents }: { agents: AgentRow[] }) {
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <InfoCard label="Status" value={agent.profile.status} />
                 <InfoCard label="Risk" value={agent.riskLevel} />
+                <InfoCard label="Referrals" value={String(agent.referralCount ?? 0)} />
+                <InfoCard label="Orders" value={String(agent.saleCount ?? 0)} />
                 <InfoCard label="Pending" value={money(agent.pendingCommission)} />
                 <InfoCard label="Paid" value={money(agent.paidCommission)} />
               </div>

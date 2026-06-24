@@ -64,8 +64,11 @@ export default async function AdminAgentsPage({
       if (agent.profile.status === "pending") acc.pendingAgents += 1;
       if (agent.profile.status === "suspended") acc.suspendedAgents += 1;
       acc.totalSales += agent.totalSales;
+      acc.totalReferrals += agent.referralCount ?? 0;
+      acc.totalOrders += agent.saleCount ?? 0;
       acc.pendingCommission += agent.pendingCommission;
       acc.paidCommission += agent.paidCommission;
+      if (agent.riskLevel !== "low") acc.fraudAlerts += 1;
       return acc;
     },
     {
@@ -74,8 +77,11 @@ export default async function AdminAgentsPage({
       pendingAgents: 0,
       suspendedAgents: 0,
       totalSales: 0,
+      totalReferrals: 0,
+      totalOrders: 0,
       pendingCommission: 0,
       paidCommission: 0,
+      fraudAlerts: 0,
     },
   );
   const viewCounts = {
@@ -90,6 +96,9 @@ export default async function AdminAgentsPage({
     { label: "Approved Agents", value: String(totals.approvedAgents), tone: "text-emerald-200" },
     { label: "Pending Approval", value: String(totals.pendingAgents), tone: "text-amber-200" },
     { label: "Suspended Agents", value: String(totals.suspendedAgents), tone: "text-slate-300" },
+    { label: "Fraud / Risk Alerts", value: String(totals.fraudAlerts), tone: "text-rose-200" },
+    { label: "Total Referrals", value: String(totals.totalReferrals), tone: "text-cyan-200" },
+    { label: "Total Orders", value: String(totals.totalOrders), tone: "text-sky-200" },
     {
       label: "Total Sales",
       value: new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 }).format(totals.totalSales),
@@ -166,7 +175,7 @@ export default async function AdminAgentsPage({
           <AgentOpsSectionNav activeHref="/admin/agents" secondaryItems={secondaryItems} />
         </div>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-7">
+        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-10">
           {summaryCards.map((card) => (
             <div key={card.label} className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
               <div className="text-xs uppercase tracking-[0.22em] text-slate-500">{card.label}</div>
