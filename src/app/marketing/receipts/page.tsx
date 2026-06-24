@@ -124,9 +124,6 @@ function FilterPill({
   );
 }
 
-const crmSectionClass =
-  "rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]";
-
 async function fetchJson<T>(url: string): Promise<T | null> {
   try {
     const response = await fetch(url, {
@@ -326,44 +323,28 @@ export default function MarketingReceiptsPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
-      <main className="mx-auto max-w-7xl space-y-6 p-6">
-        <header className="rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(15,23,42,.98),rgba(2,6,23,.98))] px-6 py-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
-          <div className="space-y-3">
-            <div className="inline-flex items-center rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
-              Direct Sales Ops
-            </div>
-            <div className="space-y-3">
-              <div>
-                <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-[2rem]">
-                  Receipts Operations Dashboard
-                </h1>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
-                  Review POS receipts, web orders, quotations, POD work, and agent orders from one
-                  place.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-slate-300">
+      <main className="mx-auto max-w-7xl space-y-4 p-4">
+        <header className="rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(15,23,42,.98),rgba(2,6,23,.98))] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
+                  Direct Sales Ops
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-slate-300">
                   {periodRange.label}
                 </span>
-                <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-slate-300">
-                  {viewMode === "receipts"
-                    ? "POS Receipts"
-                    : viewMode === "web-orders"
-                      ? "Web Orders"
-                      : "Quotation Requests"}
-                </span>
-                <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-emerald-100">
-                  Default range: active statistics period
-                </span>
+              </div>
+              <div>
+                <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-[1.8rem]">
+                  Receipts Operations Dashboard
+                </h1>
+                <p className="mt-1 max-w-3xl text-sm text-slate-300">
+                  Review POS receipts, web orders, quotations, POD work, and agent orders from one place.
+                </p>
               </div>
             </div>
-          </div>
-        </header>
-
-        <section className={crmSectionClass}>
-          <div className="space-y-4">
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 xl:justify-end">
               <button
                 type="button"
                 onClick={() => setReceiptViewMode("receipts")}
@@ -410,33 +391,33 @@ export default function MarketingReceiptsPage() {
                 Operations Overview
               </Link>
             </div>
+          </div>
+        </header>
 
-            <div className="flex flex-wrap gap-2">
-              {PERIOD_FILTERS.map((option) => (
-                <FilterPill
-                  key={option.key}
-                  active={rangeKey === option.key}
-                  onClick={() => applyRange(option.key)}
-                >
-                  {option.label}
-                </FilterPill>
-              ))}
-            </div>
-
-            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_180px]">
-              <label className="text-xs uppercase tracking-wide text-slate-400">
-                Search
-                <input
+        <section className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.7),rgba(2,6,23,.78))] p-3">
+          <div className="flex flex-wrap gap-2">
+            {PERIOD_FILTERS.map((option) => (
+              <FilterPill
+                key={option.key}
+                active={rangeKey === option.key}
+                onClick={() => applyRange(option.key)}
+              >
+                {option.label}
+              </FilterPill>
+            ))}
+          </div>
+          <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_170px_170px]">
+            <label className="text-[11px] uppercase tracking-wide text-slate-400">
+              Search
+              <input
                 type="search"
                 placeholder="Customer, attendant, receipt..."
                 value={filters.query}
-                onChange={(event) =>
-                  setFilters((prev) => ({ ...prev, query: event.target.value }))
-                }
+                onChange={(event) => setFilters((prev) => ({ ...prev, query: event.target.value }))}
                 className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
               />
             </label>
-            <label className="text-xs uppercase tracking-wide text-slate-400">
+            <label className="text-[11px] uppercase tracking-wide text-slate-400">
               Start Date
               <input
                 type="date"
@@ -445,54 +426,53 @@ export default function MarketingReceiptsPage() {
                 className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
               />
             </label>
-            <label className="text-xs uppercase tracking-wide text-slate-400">
+            <label className="text-[11px] uppercase tracking-wide text-slate-400">
               End Date
               <input
                 type="date"
                 value={filters.end}
                 onChange={(event) => handleEndChange(event.target.value)}
                 className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                />
-              </label>
-            </div>
+              />
+            </label>
           </div>
         </section>
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-[24px] border border-white/10 bg-slate-900/80 p-4">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+          <div className="rounded-[20px] border border-white/10 bg-slate-900/80 p-3">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
               Total Sales
             </div>
-            <div className="mt-3 text-2xl font-semibold text-white">{formatKES(summary.totalSales)}</div>
+            <div className="mt-2 text-xl font-semibold text-white">{formatKES(summary.totalSales)}</div>
             <div className="mt-1 text-xs text-slate-400">{selectedRangeLabel}</div>
           </div>
-          <div className="rounded-[24px] border border-white/10 bg-slate-900/80 p-4">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+          <div className="rounded-[20px] border border-white/10 bg-slate-900/80 p-3">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
               Receipts
             </div>
-            <div className="mt-3 text-3xl font-semibold text-white">{summary.receiptsCount}</div>
+            <div className="mt-2 text-2xl font-semibold text-white">{summary.receiptsCount}</div>
             <div className="mt-1 text-xs text-slate-400">POS receipts in selected range</div>
           </div>
-          <div className="rounded-[24px] border border-white/10 bg-slate-900/80 p-4">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+          <div className="rounded-[20px] border border-white/10 bg-slate-900/80 p-3">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
               POD Pending
             </div>
-            <div className="mt-3 text-3xl font-semibold text-amber-300">{dashboardCounts.podPending}</div>
+            <div className="mt-2 text-2xl font-semibold text-amber-300">{dashboardCounts.podPending}</div>
             <div className="mt-1 text-xs text-slate-400">Pending delivery follow-up</div>
           </div>
-          <div className="rounded-[24px] border border-white/10 bg-slate-900/80 p-4">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+          <div className="rounded-[20px] border border-white/10 bg-slate-900/80 p-3">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
               Pending Work
             </div>
-            <div className="mt-3 text-3xl font-semibold text-cyan-200">
+            <div className="mt-2 text-2xl font-semibold text-cyan-200">
               {dashboardCounts.podPending + dashboardCounts.webOrders + dashboardCounts.quotations}
             </div>
             <div className="mt-1 text-xs text-slate-400">Web orders, quotations, and POD follow-up</div>
           </div>
         </section>
 
-        <Card className="space-y-5 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Operations Desk</p>
               <h2 className="text-lg font-semibold text-slate-100">
@@ -513,7 +493,7 @@ export default function MarketingReceiptsPage() {
           </div>
 
           {viewMode === "receipts" ? (
-            <div className="flex flex-wrap gap-2 border-t border-white/10 pt-4">
+            <div className="flex flex-wrap gap-2 border-t border-white/10 pt-3">
               {RECEIPT_STATUS_FILTERS.map((option) => (
                 <FilterPill
                   key={option.key}
