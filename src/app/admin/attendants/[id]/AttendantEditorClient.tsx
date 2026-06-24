@@ -11,11 +11,19 @@ type Attendant = {
   attendantCategory: string | null;
   categoryLabel?: string;
   isActive: boolean;
+  bankName?: string | null;
+  bankAccountNumber?: string | null;
 };
 
 export default function AttendantEditorClient({ attendant }: { attendant: Attendant }) {
   const router = useRouter();
-  const [state, setState] = useState({ category: attendant.attendantCategory ?? "", isActive: attendant.isActive, password: "" });
+  const [state, setState] = useState({
+    category: attendant.attendantCategory ?? "",
+    isActive: attendant.isActive,
+    password: "",
+    bankName: attendant.bankName ?? "",
+    bankAccountNumber: attendant.bankAccountNumber ?? "",
+  });
   const [commission, setCommission] = useState<{
     posTotalsMode: "NONE" | "USER" | "GLOBAL";
     salesCommissionMode: "DEFAULT_TIERS" | "JENIFFER_PRORATED" | "BRENDAH_DIRECT" | "POS_PROFIT_10";
@@ -53,7 +61,16 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
   async function save() {
     setSaving(true);
     try {
-      const res = await fetch(`/api/users/${attendant.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ attendantCategory: state.category || undefined, isActive: state.isActive }) });
+      const res = await fetch(`/api/users/${attendant.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          attendantCategory: state.category || undefined,
+          isActive: state.isActive,
+          bankName: state.bankName.trim() || null,
+          bankAccountNumber: state.bankAccountNumber.trim() || null,
+        }),
+      });
       if (!res.ok) throw new Error("save_failed");
 
       const resCommission = await fetch(`/api/admin/attendants/${attendant.id}/commission-config`, {
@@ -102,6 +119,29 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
         </label>
 
         <input type="password" placeholder="New password (optional)" value={state.password} onChange={(e) => setState((s) => ({ ...s, password: e.target.value }))} className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm" />
+      </div>
+
+      <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4 mb-4">
+        <h3 className="text-sm font-semibold mb-2">Banking details</h3>
+        <p className="text-xs text-slate-400 mb-3">
+          Admin-only banking details for payroll and future payout exports.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <input
+            type="text"
+            placeholder="Bank name"
+            value={state.bankName}
+            onChange={(e) => setState((s) => ({ ...s, bankName: e.target.value }))}
+            className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
+          />
+          <input
+            type="text"
+            placeholder="Account number"
+            value={state.bankAccountNumber}
+            onChange={(e) => setState((s) => ({ ...s, bankAccountNumber: e.target.value }))}
+            className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
+          />
+        </div>
       </div>
 
       <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4 mb-4">

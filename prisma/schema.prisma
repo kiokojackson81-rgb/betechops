@@ -21,6 +21,8 @@ model User {
   town                                 String?
   estateLandmark                       String?
   locationNotes                        String?
+  bankName                             String?
+  bankAccountNumber                    String?
   image                                String?
   role                                 Role                            @default(ATTENDANT)
   isActive                             Boolean                         @default(true)

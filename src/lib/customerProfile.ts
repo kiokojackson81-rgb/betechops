@@ -6,6 +6,8 @@ const OPTIONAL_USER_PROFILE_COLUMNS = [
   "town",
   "estateLandmark",
   "locationNotes",
+  "bankName",
+  "bankAccountNumber",
   "referredByAgentId",
   "attributionCodeUsed",
   "referredAt",
@@ -38,6 +40,8 @@ type CustomerProfileInput = {
   town?: string | null;
   estateLandmark?: string | null;
   locationNotes?: string | null;
+  bankName?: string | null;
+  bankAccountNumber?: string | null;
   referredByAgentId?: string | null;
   attributionCodeUsed?: string | null;
   referredAt?: string | Date | null;
@@ -53,6 +57,8 @@ type SafeCustomerProfile = {
   town?: string | null;
   estateLandmark?: string | null;
   locationNotes?: string | null;
+  bankName?: string | null;
+  bankAccountNumber?: string | null;
   referredByAgentId?: string | null;
   attributionCodeUsed?: string | null;
   referredAt?: string | Date | null;
@@ -74,6 +80,8 @@ function defaultColumnMap(): UserProfileColumnMap {
     town: false,
     estateLandmark: false,
     locationNotes: false,
+    bankName: false,
+    bankAccountNumber: false,
     referredByAgentId: false,
     attributionCodeUsed: false,
     referredAt: false,
@@ -94,7 +102,7 @@ export async function getUserProfileColumnMap(forceRefresh = false): Promise<Use
         FROM information_schema.columns
         WHERE table_schema = current_schema()
           AND table_name = 'User'
-          AND column_name IN ('whatsappNumber', 'county', 'town', 'estateLandmark', 'locationNotes', 'referredByAgentId', 'attributionCodeUsed', 'referredAt')
+          AND column_name IN ('whatsappNumber', 'county', 'town', 'estateLandmark', 'locationNotes', 'bankName', 'bankAccountNumber', 'referredByAgentId', 'attributionCodeUsed', 'referredAt')
       `,
     );
 
@@ -169,6 +177,12 @@ export async function updateSafeCustomerProfile(userId: string, input: CustomerP
   if (columns.locationNotes && typeof input.locationNotes !== "undefined") {
     updates.push(["locationNotes", input.locationNotes]);
   }
+  if (columns.bankName && typeof input.bankName !== "undefined") {
+    updates.push(["bankName", input.bankName]);
+  }
+  if (columns.bankAccountNumber && typeof input.bankAccountNumber !== "undefined") {
+    updates.push(["bankAccountNumber", input.bankAccountNumber]);
+  }
   if (columns.referredByAgentId && typeof input.referredByAgentId !== "undefined") {
     updates.push(["referredByAgentId", input.referredByAgentId]);
   }
@@ -204,6 +218,8 @@ export async function updateSafeCustomerProfile(userId: string, input: CustomerP
     town: columns.town ? (typeof input.town === "undefined" ? null : input.town) : null,
     estateLandmark: columns.estateLandmark ? (typeof input.estateLandmark === "undefined" ? null : input.estateLandmark) : null,
     locationNotes: columns.locationNotes ? (typeof input.locationNotes === "undefined" ? null : input.locationNotes) : null,
+    bankName: columns.bankName ? (typeof input.bankName === "undefined" ? null : input.bankName) : null,
+    bankAccountNumber: columns.bankAccountNumber ? (typeof input.bankAccountNumber === "undefined" ? null : input.bankAccountNumber) : null,
     referredByAgentId: columns.referredByAgentId ? (typeof input.referredByAgentId === "undefined" ? null : input.referredByAgentId) : null,
     attributionCodeUsed: columns.attributionCodeUsed ? (typeof input.attributionCodeUsed === "undefined" ? null : input.attributionCodeUsed) : null,
     referredAt: columns.referredAt ? (typeof input.referredAt === "undefined" ? null : input.referredAt) : null,

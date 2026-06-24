@@ -23,7 +23,15 @@ export default async function AttendantEditPage({ params }: { params: { id: stri
 
   const attendant = await prisma.user.findUnique({
     where: { id },
-    select: { id: true, name: true, email: true, attendantCategory: true, isActive: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      attendantCategory: true,
+      isActive: true,
+      bankName: true,
+      bankAccountNumber: true,
+    },
   });
   if (!attendant) return <div className="p-8">Attendant not found</div>;
 

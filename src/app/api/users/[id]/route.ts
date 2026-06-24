@@ -19,11 +19,18 @@ export async function PATCH(request: Request) {
     role?: Role;
     isActive?: boolean;
     name?: string;
+    bankName?: string | null;
+    bankAccountNumber?: string | null;
     categories?: string[];
   };
 
   const hasPrimitiveUpdate =
-    typeof body.isActive === "boolean" || Boolean(body.role) || Boolean(body.name) || Boolean(body.attendantCategory);
+    typeof body.isActive === "boolean" ||
+    Boolean(body.role) ||
+    Boolean(body.name) ||
+    Boolean(body.attendantCategory) ||
+    typeof body.bankName !== "undefined" ||
+    typeof body.bankAccountNumber !== "undefined";
   const includesCategoryUpdate = Array.isArray(body.categories);
   if (!hasPrimitiveUpdate && !includesCategoryUpdate) {
     return NextResponse.json({ error: "no_updates" }, { status: 400 });
@@ -70,6 +77,12 @@ export async function PATCH(request: Request) {
       if (body.name) {
         data.name = body.name;
         safeUserUpdate.name = body.name;
+      }
+      if (typeof body.bankName !== "undefined") {
+        safeUserUpdate.bankName = body.bankName;
+      }
+      if (typeof body.bankAccountNumber !== "undefined") {
+        safeUserUpdate.bankAccountNumber = body.bankAccountNumber;
       }
       if (desiredAssignments && desiredAssignments.length) {
         data.attendantCategory = desiredAssignments[0];
