@@ -230,6 +230,23 @@ function isOptionalUserProfileColumn(column: SafeUserUpdateColumn): column is Op
   return (OPTIONAL_USER_PROFILE_COLUMNS as readonly string[]).includes(column);
 }
 
+function getSafeUserUpdateAssignment(column: SafeUserUpdateColumn, parameterIndex: number) {
+  const paramRef = `$${parameterIndex}`;
+
+  switch (column) {
+    case "role":
+      return `"${column}" = ${paramRef}::"Role"`;
+    case "attendantCategory":
+      return `"${column}" = ${paramRef}::"AttendantCategory"`;
+    case "phoneVerifiedAt":
+    case "emailVerifiedAt":
+    case "referredAt":
+      return `"${column}" = ${paramRef}::TIMESTAMP`;
+    default:
+      return `"${column}" = ${paramRef}`;
+  }
+}
+
 export async function updateSafeUserById(userId: string, input: SafeUserUpdateInput) {
   const columns = await getUserProfileColumnMap();
   const updates: Array<[SafeUserUpdateColumn, string | boolean | Date | null]> = [];
@@ -244,7 +261,9 @@ export async function updateSafeUserById(userId: string, input: SafeUserUpdateIn
     return;
   }
 
-  const assignments = updates.map(([column], index) => `"${column}" = $${index + 2}`).join(", ");
+  const assignments = updates
+    .map(([column], index) => getSafeUserUpdateAssignment(column, index + 2))
+    .join(", ");
   const values = updates.map(([, value]) => value);
 
   await prisma.$executeRawUnsafe(
