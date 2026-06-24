@@ -51,6 +51,72 @@ export function isPendingPodStatus(status: string | null | undefined) {
   return new Set(["pending", "follow_up", "delivery_failed", "failed"]).has(normalized);
 }
 
+export function isOpenAgentOrderStatus(status: string | null | undefined) {
+  return isOpenWorkItemStatus(status);
+}
+
+export function isPendingPosReceiptStatus(
+  status: string | null | undefined,
+  paymentStatus?: string | null | undefined,
+) {
+  const normalizedStatus = normalizeStatus(status);
+  const normalizedPaymentStatus = normalizeStatus(paymentStatus);
+
+  if (
+    new Set([
+      "completed",
+      "delivered",
+      "settled",
+      "cancelled",
+      "canceled",
+      "closed",
+      "paid",
+      "fully_paid",
+      "fully paid",
+    ]).has(normalizedStatus)
+  ) {
+    return false;
+  }
+
+  if (new Set(["paid", "settled", "completed", "closed"]).has(normalizedPaymentStatus)) {
+    return false;
+  }
+
+  return (
+    new Set([
+      "pending",
+      "unpaid",
+      "awaiting_payment",
+      "awaiting payment",
+      "balance_pending",
+      "balance pending",
+      "payment_pending",
+      "payment pending",
+      "delivery_pending",
+      "delivery pending",
+      "settlement_pending",
+      "settlement pending",
+      "released",
+    ]).has(normalizedStatus) ||
+    new Set([
+      "pending",
+      "unpaid",
+      "awaiting_payment",
+      "awaiting payment",
+      "balance_pending",
+      "balance pending",
+      "payment_pending",
+      "payment pending",
+      "delivery_pending",
+      "delivery pending",
+      "settlement_pending",
+      "settlement pending",
+      "partial",
+      "deposit",
+    ]).has(normalizedPaymentStatus)
+  );
+}
+
 export function isOpenWorkItemStatus(status: string | null | undefined) {
   const normalized = normalizeStatus(status);
   if (!normalized) return false;

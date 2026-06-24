@@ -19,6 +19,14 @@ import useTradingPeriodQueryState from "@/app/_components/useTradingPeriodQueryS
 import { withImpersonateId } from "@/lib/impersonation";
 import { mapPayrollToEarningsSummary } from "@/lib/payrollMapping";
 import PosManagementClient from "@/app/admin/pos-management/PosManagementClient";
+import {
+  isOpenAgentOrderStatus,
+  isOpenQuotationStatus,
+  isPendingPodStatus,
+  isPendingPosReceiptStatus,
+  isPendingWebOrderStatus,
+  wasCreatedOrUpdatedInPeriod,
+} from "@/lib/operationsWorkQueue";
 
 type PaymentMethod = "MPESA" | "CASH";
 
@@ -40,6 +48,70 @@ type SaleEntryPayload = {
   price: number;
   paymentMethod: PaymentMethod;
   receiptNumber: string;
+};
+
+type SalesActionWebsiteOrder = {
+  id: string;
+  customerName: string;
+  customerPhone: string | null;
+  total: number;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  assignedAttendant?: { id: string | null; name: string | null; email: string | null } | null;
+};
+
+type SalesActionQuoteRequest = {
+  id: string;
+  customerName: string;
+  customerPhone: string | null;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  assignedAttendant?: { id: string | null; name: string | null; email: string | null } | null;
+};
+
+type SalesActionAgentOrder = {
+  id: string;
+  customerName: string;
+  customerPhone: string;
+  totalAmount: number;
+  status: string;
+  statusMeta: { label: string; note: string };
+  createdAt: string;
+  updatedAt: string;
+  assignedProcessorName?: string | null;
+  assignedProcessorEmail?: string | null;
+};
+
+type SalesActionReceipt = {
+  id: string;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  total?: number | null;
+  status?: string | null;
+  paymentStatus?: string | null;
+  createdAt: string;
+  detailUrl?: string | null;
+  attendantName?: string | null;
+  isPodDelivery?: boolean;
+  podDeliveryStatus?: string | null;
+  receiptNumber?: string | null;
+};
+
+type SalesActionQueueItem = {
+  id: string;
+  type: "WEB ORDER" | "POS" | "QUOTATION" | "AGENT ORDER" | "POD";
+  customerName: string;
+  phone: string | null;
+  amount: number | null;
+  status: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+  assignedTo: string | null;
+  actionLabel: string;
+  href?: string | null;
+  onClick?: (() => void) | null;
 };
 
 const kenyanLocale = "en-KE";
@@ -116,6 +188,38 @@ const textareaClasses =
 
 function controlCenterCardClasses() {
   return "rounded-[24px] border border-white/10 bg-white/[0.03] p-5";
+}
+
+function pendingToneClasses(count: number) {
+  if (count === 0) return "border-emerald-400/20 bg-emerald-400/10 text-emerald-100";
+  if (count <= 5) return "border-amber-400/20 bg-amber-400/10 text-amber-100";
+  return "border-rose-400/20 bg-rose-400/10 text-rose-100";
+}
+
+function formatQueueDate(value: string | null | undefined) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("en-KE", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function ageLabel(value: string | null | undefined) {
+  if (!value) return "-";
+  const createdAt = new Date(value);
+  if (Number.isNaN(createdAt.getTime())) return "-";
+  const diffMs = Date.now() - createdAt.getTime();
+  const diffHours = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60)));
+  if (diffHours < 1) {
+    const diffMinutes = Math.max(0, Math.floor(diffMs / (1000 * 60)));
+    return `${diffMinutes} min ago`;
+  }
+  if (diffHours < 24) return `${diffHours} hr ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
 }
 export default function DailyReportFinal() {
   const [currentView, setCurrentView] = useState<
@@ -297,6 +401,12 @@ export default function DailyReportFinal() {
   const [earningsError, setEarningsError] = useState<string | null>(null);
   const commissionSourceRef = useRef<"none" | "fallback" | "authoritative">("none");
   const earningsWarningShown = useRef(false);
+  const [salesActionLoading, setSalesActionLoading] = useState(false);
+  const [pendingWebsiteOrders, setPendingWebsiteOrders] = useState<SalesActionWebsiteOrder[]>([]);
+  const [pendingQuoteRequests, setPendingQuoteRequests] = useState<SalesActionQuoteRequest[]>([]);
+  const [pendingAgentOrders, setPendingAgentOrders] = useState<SalesActionAgentOrder[]>([]);
+  const [pendingPosReceipts, setPendingPosReceipts] = useState<SalesActionReceipt[]>([]);
+  const [pendingPodReceipts, setPendingPodReceipts] = useState<SalesActionReceipt[]>([]);
   const [impersonateId, setImpersonateId] = useState<string | null>(null);
   const [impersonationReady, setImpersonationReady] = useState(false);
   const [resolvedAttendantEmail, setResolvedAttendantEmail] = useState<string | null>(null);
@@ -954,6 +1064,205 @@ export default function DailyReportFinal() {
     </select>
   );
 
+  useEffect(() => {
+    if (!impersonationReady || currentView !== "dashboard") return;
+    const controller = new AbortController();
+
+    const loadSalesActionCenter = async () => {
+      setSalesActionLoading(true);
+      try {
+        const params = new URLSearchParams();
+        if (impersonateId) params.set("impersonateId", impersonateId);
+
+        const receiptParams = new URLSearchParams();
+        receiptParams.set("includeItems", "false");
+        receiptParams.set("size", "200");
+        receiptParams.set("scope", "mine");
+        receiptParams.set("summaryView", "all");
+        receiptParams.set("start", toStartOfDayIso(toKenyaIsoDate(selectedPeriod.start)) ?? selectedPeriod.start.toISOString());
+        receiptParams.set("end", toEndOfDayIso(toKenyaIsoDate(selectedPeriod.end)) ?? selectedPeriod.end.toISOString());
+        if (attendantId) receiptParams.set("attendantId", attendantId);
+        if (impersonateId) receiptParams.set("impersonateId", impersonateId);
+        if (isBrendahView) receiptParams.set("onlyPos", "1");
+        if (!isBrendahView) receiptParams.set("includeLedger", "true");
+
+        const [webOrdersRes, quoteRequestsRes, agentOrdersRes, receiptsRes] = await Promise.all([
+          fetch(`/api/attendant/website-orders?${params.toString()}`, {
+            cache: "no-store",
+            credentials: "same-origin",
+            signal: controller.signal,
+          }),
+          fetch(`/api/attendant/quote-requests?${params.toString()}`, {
+            cache: "no-store",
+            credentials: "same-origin",
+            signal: controller.signal,
+          }),
+          fetch(`/api/attendant/agent-orders?${params.toString()}`, {
+            cache: "no-store",
+            credentials: "same-origin",
+            signal: controller.signal,
+          }),
+          fetch(`/api/receipts?${receiptParams.toString()}`, {
+            cache: "no-store",
+            credentials: "same-origin",
+            signal: controller.signal,
+          }),
+        ]);
+
+        const [webOrdersJson, quoteRequestsJson, agentOrdersJson, receiptsJson] = await Promise.all([
+          webOrdersRes.json().catch(() => ({ orders: [] })),
+          quoteRequestsRes.json().catch(() => ({ requests: [] })),
+          agentOrdersRes.json().catch(() => ({ sales: [] })),
+          receiptsRes.json().catch(() => ({ receipts: [] })),
+        ]);
+
+        const websiteOrders = Array.isArray(webOrdersJson?.orders) ? (webOrdersJson.orders as SalesActionWebsiteOrder[]) : [];
+        const quoteRequests = Array.isArray(quoteRequestsJson?.requests) ? (quoteRequestsJson.requests as SalesActionQuoteRequest[]) : [];
+        const agentOrders = Array.isArray(agentOrdersJson?.sales) ? (agentOrdersJson.sales as SalesActionAgentOrder[]) : [];
+        const receipts = Array.isArray(receiptsJson?.receipts) ? (receiptsJson.receipts as SalesActionReceipt[]) : [];
+
+        const periodBounds = { start: selectedPeriod.start, end: selectedPeriod.end };
+
+        setPendingWebsiteOrders(
+          websiteOrders.filter((order) =>
+            isPendingWebOrderStatus(order.status) &&
+            wasCreatedOrUpdatedInPeriod(order.createdAt, order.updatedAt, periodBounds),
+          ),
+        );
+        setPendingQuoteRequests(
+          quoteRequests.filter((request) =>
+            isOpenQuotationStatus(request.status) &&
+            wasCreatedOrUpdatedInPeriod(request.createdAt, request.updatedAt, periodBounds),
+          ),
+        );
+        setPendingAgentOrders(
+          agentOrders.filter((sale) =>
+            isOpenAgentOrderStatus(sale.status) &&
+            wasCreatedOrUpdatedInPeriod(sale.createdAt, sale.updatedAt, periodBounds),
+          ),
+        );
+        setPendingPodReceipts(
+          receipts.filter((receipt) =>
+            Boolean(receipt.isPodDelivery) &&
+            isPendingPodStatus(receipt.podDeliveryStatus) &&
+            wasCreatedOrUpdatedInPeriod(receipt.createdAt, receipt.createdAt, periodBounds),
+          ),
+        );
+        setPendingPosReceipts(
+          receipts.filter((receipt) =>
+            !receipt.isPodDelivery &&
+            isPendingPosReceiptStatus(receipt.status, receipt.paymentStatus) &&
+            wasCreatedOrUpdatedInPeriod(receipt.createdAt, receipt.createdAt, periodBounds),
+          ),
+        );
+      } catch (error) {
+        if ((error as Error).name !== "AbortError") {
+          console.warn("[daily-report] sales action center unavailable", error);
+          setPendingWebsiteOrders([]);
+          setPendingQuoteRequests([]);
+          setPendingAgentOrders([]);
+          setPendingPosReceipts([]);
+          setPendingPodReceipts([]);
+        }
+      } finally {
+        setSalesActionLoading(false);
+      }
+    };
+
+    loadSalesActionCenter();
+    return () => controller.abort();
+  }, [
+    attendantId,
+    currentView,
+    impersonateId,
+    impersonationReady,
+    isBrendahView,
+    selectedPeriod.end,
+    selectedPeriod.start,
+  ]);
+
+  const salesActionQueue = useMemo<SalesActionQueueItem[]>(() => {
+    return [
+      ...pendingWebsiteOrders.map((order) => ({
+        id: `web:${order.id}`,
+        type: "WEB ORDER" as const,
+        customerName: order.customerName,
+        phone: order.customerPhone,
+        amount: order.total,
+        status: String(order.status).replace(/_/g, " ").toLowerCase(),
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+        assignedTo: order.assignedAttendant?.name || order.assignedAttendant?.email || "Assigned web desk",
+        actionLabel: "Open order",
+        onClick: () => setCurrentView("web-orders"),
+      })),
+      ...pendingPosReceipts.map((receipt) => ({
+        id: `pos:${receipt.id}`,
+        type: "POS" as const,
+        customerName: receipt.customerName || receipt.receiptNumber || "POS customer",
+        phone: receipt.customerPhone || null,
+        amount: Number(receipt.total ?? 0),
+        status: String(receipt.paymentStatus || receipt.status || "pending").replace(/_/g, " ").toLowerCase(),
+        createdAt: receipt.createdAt,
+        updatedAt: receipt.createdAt,
+        assignedTo: receipt.attendantName || "POS queue",
+        actionLabel: "Open receipt",
+        href: receipt.detailUrl || "/attendant/daily-report#my-receipts",
+      })),
+      ...pendingQuoteRequests.map((request) => ({
+        id: `quote:${request.id}`,
+        type: "QUOTATION" as const,
+        customerName: request.customerName,
+        phone: request.customerPhone,
+        amount: null,
+        status: String(request.status).replace(/_/g, " ").toLowerCase(),
+        createdAt: request.createdAt,
+        updatedAt: request.updatedAt,
+        assignedTo: request.assignedAttendant?.name || request.assignedAttendant?.email || "Assigned quote desk",
+        actionLabel: "View quotation",
+        onClick: () => setCurrentView("quote-requests"),
+      })),
+      ...pendingAgentOrders.map((sale) => ({
+        id: `agent:${sale.id}`,
+        type: "AGENT ORDER" as const,
+        customerName: sale.customerName,
+        phone: sale.customerPhone,
+        amount: sale.totalAmount,
+        status: sale.statusMeta?.label || String(sale.status).replace(/_/g, " ").toLowerCase(),
+        createdAt: sale.createdAt,
+        updatedAt: sale.updatedAt,
+        assignedTo: sale.assignedProcessorName || sale.assignedProcessorEmail || "Agent order desk",
+        actionLabel: "Open order",
+        href: withImpersonateId(`/marketing/agent-orders?saleId=${encodeURIComponent(sale.id)}`, impersonateId),
+      })),
+      ...pendingPodReceipts.map((receipt) => ({
+        id: `pod:${receipt.id}`,
+        type: "POD" as const,
+        customerName: receipt.customerName || receipt.receiptNumber || "POD customer",
+        phone: receipt.customerPhone || null,
+        amount: Number(receipt.total ?? 0),
+        status: String(receipt.podDeliveryStatus || "pending").replace(/_/g, " ").toLowerCase(),
+        createdAt: receipt.createdAt,
+        updatedAt: receipt.createdAt,
+        assignedTo: receipt.attendantName || "POD queue",
+        actionLabel: "Open POD",
+        href: receipt.detailUrl || "/attendant/daily-report#my-receipts",
+      })),
+    ].sort((left, right) => {
+      const leftCreatedAt = left.createdAt ? new Date(left.createdAt).getTime() : Number.MAX_SAFE_INTEGER;
+      const rightCreatedAt = right.createdAt ? new Date(right.createdAt).getTime() : Number.MAX_SAFE_INTEGER;
+      if (leftCreatedAt !== rightCreatedAt) return leftCreatedAt - rightCreatedAt;
+
+      const leftAmount = Number(left.amount ?? 0);
+      const rightAmount = Number(right.amount ?? 0);
+      if (leftAmount !== rightAmount) return rightAmount - leftAmount;
+
+      const leftUpdatedAt = left.updatedAt ? new Date(left.updatedAt).getTime() : 0;
+      const rightUpdatedAt = right.updatedAt ? new Date(right.updatedAt).getTime() : 0;
+      return rightUpdatedAt - leftUpdatedAt;
+    });
+  }, [impersonateId, pendingAgentOrders, pendingPodReceipts, pendingPosReceipts, pendingQuoteRequests, pendingWebsiteOrders]);
+
   if (currentView === "receipts") {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -1296,6 +1605,134 @@ export default function DailyReportFinal() {
               </div>
             </div>
           </header>
+
+          <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
+            <div className="mb-5">
+              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Sales Action Center</div>
+              <h2 className="mt-2 text-2xl font-semibold text-white">Pending customer work assigned to you</h2>
+              <p className="mt-1 text-sm text-slate-400">
+                Pending customer work assigned to you for the active period.
+              </p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              {[
+                { title: "Web Orders", count: pendingWebsiteOrders.length, onClick: () => setCurrentView("web-orders") },
+                { title: "POS Orders / Receipts", count: pendingPosReceipts.length, onClick: () => setCurrentView("receipts") },
+                { title: "Quotation Requests", count: pendingQuoteRequests.length, onClick: () => setCurrentView("quote-requests") },
+                {
+                  title: "Agent Orders",
+                  count: pendingAgentOrders.length,
+                  href: withImpersonateId("/marketing/agent-orders", impersonateId),
+                },
+                { title: "POD Follow-up", count: pendingPodReceipts.length, onClick: () => setCurrentView("receipts") },
+              ].map((item) => {
+                const tone = pendingToneClasses(item.count);
+                const content = (
+                  <>
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{item.title}</div>
+                    <div className="mt-3 flex items-end justify-between gap-3">
+                      <div>
+                        <div className="text-4xl font-semibold text-white">{salesActionLoading ? "..." : item.count}</div>
+                        <div className="mt-1 text-sm text-slate-400">Pending</div>
+                      </div>
+                      <span className={`rounded-full border px-3 py-1 text-xs font-medium ${tone}`}>Open</span>
+                    </div>
+                  </>
+                );
+
+                if (item.href) {
+                  return (
+                    <Link
+                      key={item.title}
+                      href={item.href}
+                      className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition hover:border-emerald-400/30 hover:bg-white/[0.05]"
+                    >
+                      {content}
+                    </Link>
+                  );
+                }
+
+                return (
+                  <button
+                    key={item.title}
+                    type="button"
+                    onClick={item.onClick}
+                    className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left transition hover:border-emerald-400/30 hover:bg-white/[0.05]"
+                  >
+                    {content}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">My Work Queue</div>
+                <p className="mt-1 text-sm text-slate-400">
+                  Only actual action-needed items are shown here for the active period.
+                </p>
+              </div>
+              <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-slate-300">
+                {salesActionQueue.length} pending item{salesActionQueue.length === 1 ? "" : "s"}
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-3">
+              {salesActionQueue.length ? (
+                salesActionQueue.map((item) => (
+                  <div
+                    key={item.id}
+                    className="grid gap-3 rounded-[22px] border border-white/10 bg-white/[0.03] p-4 lg:grid-cols-[130px_1.3fr_1fr_160px_150px_150px]"
+                  >
+                    <div className="flex items-center">
+                      <span className="inline-flex rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-100">
+                        {item.type}
+                      </span>
+                    </div>
+                    <div>
+                      <div className="font-semibold text-white">{item.customerName}</div>
+                      <div className="mt-1 text-sm text-slate-400">{item.phone || "No phone captured"}</div>
+                    </div>
+                    <div className="text-sm text-slate-300">
+                      <div className="font-medium text-white">{item.amount != null ? formatKES(item.amount) : "Amount pending"}</div>
+                      <div className="mt-1 capitalize text-slate-400">{item.status}</div>
+                    </div>
+                    <div className="text-sm text-slate-400">
+                      <div>{formatQueueDate(item.createdAt)}</div>
+                      <div className="mt-1">{ageLabel(item.createdAt)}</div>
+                    </div>
+                    <div className="text-sm text-slate-400">
+                      <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Assigned</div>
+                      <div className="mt-1 text-slate-200">{item.assignedTo || "Shared queue"}</div>
+                    </div>
+                    <div className="flex items-center justify-start lg:justify-end">
+                      {item.href ? (
+                        <Link
+                          href={item.href}
+                          className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-300/30 hover:bg-emerald-400/15"
+                        >
+                          {item.actionLabel}
+                        </Link>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={item.onClick ?? undefined}
+                          className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-300/30 hover:bg-emerald-400/15"
+                        >
+                          {item.actionLabel}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-5 text-sm text-slate-400">
+                  No pending customer work right now.
+                </div>
+              )}
+            </div>
+          </section>
 
           <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
             <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
