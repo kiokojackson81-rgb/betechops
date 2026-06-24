@@ -9,11 +9,31 @@ import WebsiteOrdersDeskClient from "@/components/WebsiteOrdersDeskClient";
 import QuotationRequestsDeskClient from "@/components/QuotationRequestsDeskClient";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 
-type ReceiptRangeKey = "today" | "yesterday" | "this-week" | "period" | "custom";
+type ReceiptRangeKey =
+  | "today"
+  | "yesterday"
+  | "this-week"
+  | "this-month"
+  | "period"
+  | "custom";
+type PodFilterValue =
+  | "all"
+  | "normal_only"
+  | "settled"
+  | "pod_pending"
+  | "pod_delivered"
+  | "pod_failed";
+type ViewMode = "receipts" | "web-orders" | "quote-requests";
 
 type MarketingReceiptSummary = {
   totalSales: number;
   receiptsCount: number;
+};
+
+type DashboardCounts = {
+  podPending: number;
+  webOrders: number;
+  quotations: number;
 };
 
 const toDateInput = (value: Date) => {
@@ -40,18 +60,101 @@ const getWeekBounds = (reference: Date) => {
   return { start, end };
 };
 
-const ReceiptRangeOptions: { key: ReceiptRangeKey; label: string }[] = [
+const getMonthBounds = (reference: Date) => {
+  const start = new Date(reference.getFullYear(), reference.getMonth(), 1);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(reference.getFullYear(), reference.getMonth() + 1, 0);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+};
+
+const MODULE_TABS: Array<{
+  key: "pos" | ViewMode | "agent-orders";
+  label: string;
+  href?: string;
+}> = [
+  { key: "pos", label: "POS Receipts" },
+  { key: "web-orders", label: "Web Orders" },
+  { key: "quote-requests", label: "Quotation Requests" },
+  { key: "agent-orders", label: "Agent Orders", href: "/marketing/agent-orders" },
+];
+
+const PERIOD_FILTERS: Array<{ key: ReceiptRangeKey; label: string }> = [
   { key: "today", label: "Today" },
   { key: "yesterday", label: "Yesterday" },
-  { key: "this-week", label: "This week" },
-  { key: "period", label: "This period" },
+  { key: "this-week", label: "This Week" },
+  { key: "this-month", label: "This Month" },
+  { key: "period", label: "This Period" },
+  { key: "custom", label: "Custom Range" },
 ];
+
+const RECEIPT_STATUS_FILTERS: Array<{ key: PodFilterValue; label: string }> = [
+  { key: "all", label: "All POS Receipts" },
+  { key: "normal_only", label: "Normal Only" },
+  { key: "settled", label: "Settled Receipts" },
+  { key: "pod_pending", label: "POD Pending" },
+  { key: "pod_delivered", label: "POD Delivered" },
+  { key: "pod_failed", label: "POD Failed" },
+];
+
+function formatRangeLabel(args: {
+  rangeKey: ReceiptRangeKey;
+  start: string;
+  end: string;
+  periodLabel: string;
+}) {
+  if (args.rangeKey === "today") return "Today";
+  if (args.rangeKey === "yesterday") return "Yesterday";
+  if (args.rangeKey === "this-week") return "This Week";
+  if (args.rangeKey === "this-month") return "This Month";
+  if (args.rangeKey === "period") return args.periodLabel;
+  return `${args.start} - ${args.end}`;
+}
+
+function FilterPill({
+  active,
+  children,
+  onClick,
+}: {
+  active?: boolean;
+  children: React.ReactNode;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+        active
+          ? "border-emerald-500 bg-emerald-500/15 text-emerald-200"
+          : "border-white/10 bg-white/[0.03] text-slate-200 hover:border-white/25 hover:bg-white/[0.06]"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+async function fetchJson<T>(url: string): Promise<T | null> {
+  try {
+    const response = await fetch(url, {
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) return null;
+    return payload as T;
+  } catch {
+    return null;
+  }
+}
 
 export default function MarketingReceiptsPage() {
   const router = useRouter();
   const pathname = usePathname();
-  const defaultDate = toDateInput(new Date());
-  const tradingPeriod = useMemo(() => getTradingPeriodFor(new Date()), []);
+  const today = useMemo(() => new Date(), []);
+  const defaultDate = useMemo(() => toDateInput(today), [today]);
+  const tradingPeriod = useMemo(() => getTradingPeriodFor(today), [today]);
   const periodRange = useMemo(
     () => ({
       start: toDateInput(tradingPeriod.start),
@@ -62,18 +165,23 @@ export default function MarketingReceiptsPage() {
   );
 
   const [filters, setFilters] = useState({
-    start: defaultDate,
-    end: defaultDate,
+    start: periodRange.start,
+    end: periodRange.end,
     query: "",
   });
-  const [rangeKey, setRangeKey] = useState<ReceiptRangeKey>("today");
+  const [rangeKey, setRangeKey] = useState<ReceiptRangeKey>("period");
   const [summary, setSummary] = useState<MarketingReceiptSummary>({
     totalSales: 0,
     receiptsCount: 0,
   });
+  const [dashboardCounts, setDashboardCounts] = useState<DashboardCounts>({
+    podPending: 0,
+    webOrders: 0,
+    quotations: 0,
+  });
   const [currentSearch, setCurrentSearch] = useState("");
-  const [initialPodFilter, setInitialPodFilter] = useState<"all" | "pod_pending">("all");
-  const [viewMode, setViewMode] = useState<"receipts" | "web-orders" | "quote-requests">("receipts");
+  const [podFilter, setPodFilter] = useState<PodFilterValue>("all");
+  const [viewMode, setViewMode] = useState<ViewMode>("receipts");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -91,7 +199,7 @@ export default function MarketingReceiptsPage() {
             ? "quote-requests"
             : "receipts";
       setViewMode((current) => (current === resolvedViewMode ? current : resolvedViewMode));
-      setInitialPodFilter(params.get("pod") === "pending" ? "pod_pending" : "all");
+      setPodFilter(params.get("pod") === "pending" ? "pod_pending" : "all");
     };
 
     syncFromLocation();
@@ -99,7 +207,7 @@ export default function MarketingReceiptsPage() {
     return () => window.removeEventListener("popstate", syncFromLocation);
   }, []);
 
-  function setReceiptViewMode(nextMode: "receipts" | "web-orders" | "quote-requests") {
+  function setReceiptViewMode(nextMode: ViewMode) {
     setViewMode(nextMode);
     const params = new URLSearchParams(currentSearch);
     if (nextMode === "receipts") {
@@ -118,36 +226,32 @@ export default function MarketingReceiptsPage() {
     router.replace(`${pathname}${nextQuery ? `?${nextQuery}` : ""}`, { scroll: false });
   }
 
-  const rangeLabel = (() => {
-    if (rangeKey === "today") return "Today";
-    if (rangeKey === "yesterday") return "Yesterday";
-    if (rangeKey === "this-week") return "This week";
-    if (rangeKey === "period") return periodRange.label;
-    return "Custom range";
-  })();
-
   const applyRange = (key: ReceiptRangeKey) => {
-    const { start, end } = (() => {
-      if (key === "today") {
-        return { start: defaultDate, end: defaultDate };
-      }
+    if (key === "custom") {
+      setRangeKey("custom");
+      return;
+    }
+
+    const nextRange = (() => {
+      if (key === "today") return { start: defaultDate, end: defaultDate };
       if (key === "yesterday") {
-        const today = new Date(defaultDate);
         const yesterday = new Date(today);
         yesterday.setDate(today.getDate() - 1);
         const yesterdayInput = toDateInput(yesterday);
         return { start: yesterdayInput, end: yesterdayInput };
       }
       if (key === "this-week") {
-        const { start: weekStart, end: weekEnd } = getWeekBounds(new Date());
-        return { start: toDateInput(weekStart), end: toDateInput(weekEnd) };
+        const bounds = getWeekBounds(today);
+        return { start: toDateInput(bounds.start), end: toDateInput(bounds.end) };
       }
-      if (key === "period") {
-        return { start: periodRange.start, end: periodRange.end };
+      if (key === "this-month") {
+        const bounds = getMonthBounds(today);
+        return { start: toDateInput(bounds.start), end: toDateInput(bounds.end) };
       }
-      return { start: defaultDate, end: defaultDate };
+      return { start: periodRange.start, end: periodRange.end };
     })();
-    setFilters((prev) => ({ ...prev, start, end }));
+
+    setFilters((prev) => ({ ...prev, ...nextRange }));
     setRangeKey(key);
   };
 
@@ -155,9 +259,7 @@ export default function MarketingReceiptsPage() {
     setRangeKey("custom");
     setFilters((prev) => {
       const next = { ...prev, start: value };
-      if (next.end && next.start > next.end) {
-        next.end = next.start;
-      }
+      if (next.end && next.start > next.end) next.end = next.start;
       return next;
     });
   };
@@ -166,63 +268,233 @@ export default function MarketingReceiptsPage() {
     setRangeKey("custom");
     setFilters((prev) => {
       const next = { ...prev, end: value };
-      if (next.start && next.end && next.end < next.start) {
-        next.start = next.end;
-      }
+      if (next.start && next.end && next.end < next.start) next.start = next.end;
       return next;
     });
   };
 
+  const selectedRangeLabel = formatRangeLabel({
+    rangeKey,
+    start: filters.start,
+    end: filters.end,
+    periodLabel: periodRange.label,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const syncCounts = async () => {
+      const podParams = new URLSearchParams({
+        includeItems: "false",
+        size: "200",
+        scope: "mine",
+        onlyPos: "1",
+        customerType: "pod",
+        status: "pending",
+      });
+      if (filters.start) podParams.set("start", `${filters.start}T00:00:00.000Z`);
+      if (filters.end) podParams.set("end", `${filters.end}T23:59:59.999Z`);
+
+      const [podPayload, webPayload, quotePayload] = await Promise.all([
+        fetchJson<{ receipts?: Array<{ id: string }> }>(`/api/receipts?${podParams.toString()}`),
+        fetchJson<{ orders?: Array<{ id: string; createdAt?: string | null; updatedAt?: string | null }> }>(
+          "/api/attendant/website-orders?status=ALL",
+        ),
+        fetchJson<{ requests?: Array<{ id: string; createdAt?: string | null; updatedAt?: string | null }> }>(
+          "/api/attendant/quote-requests?status=ALL",
+        ),
+      ]);
+
+      if (cancelled) return;
+
+      const inSelectedWindow = (value?: string | null) => {
+        if (!value) return false;
+        const timestamp = new Date(value).getTime();
+        const start = filters.start ? new Date(`${filters.start}T00:00:00`).getTime() : -Infinity;
+        const end = filters.end ? new Date(`${filters.end}T23:59:59.999`).getTime() : Infinity;
+        return timestamp >= start && timestamp <= end;
+      };
+
+      setDashboardCounts({
+        podPending: Array.isArray(podPayload?.receipts) ? podPayload.receipts.length : 0,
+        webOrders: Array.isArray(webPayload?.orders)
+          ? webPayload.orders.filter((order) => inSelectedWindow(order.updatedAt || order.createdAt)).length
+          : 0,
+        quotations: Array.isArray(quotePayload?.requests)
+          ? quotePayload.requests.filter((request) => inSelectedWindow(request.updatedAt || request.createdAt)).length
+          : 0,
+      });
+    };
+
+    void syncCounts();
+    return () => {
+      cancelled = true;
+    };
+  }, [filters.end, filters.start]);
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
-      <main className="mx-auto max-w-5xl space-y-6 p-6">
-        <header className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-semibold">Receipts history</h1>
-            <p className="text-sm text-slate-300">
-              Browse your receipts, filter POD work, and record delivery evidence from the same history screen.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href="/marketing/agent-orders"
-              className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 hover:bg-emerald-500/15"
-            >
-              Agent orders
-            </Link>
-            <Link
-              href="/marketing/tracker"
-              className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
-            >
-              Operations overview
-            </Link>
+      <main className="mx-auto max-w-7xl space-y-6 p-6">
+        <header className="rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(15,23,42,.98),rgba(2,6,23,.98))] px-6 py-6 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
+          <div className="grid gap-6 xl:grid-cols-[minmax(320px,0.8fr)_minmax(0,1fr)] xl:items-start">
+            <div className="space-y-4">
+              <div className="inline-flex items-center rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
+                Direct Sales Ops
+              </div>
+              <div>
+                <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                  Receipts Operations Dashboard
+                </h1>
+                <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">
+                  Review POS receipts, web orders, quotations, POD work, and agent orders from one
+                  place.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-slate-300">
+                  {periodRange.label}
+                </span>
+                <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-emerald-100">
+                  Default range: active statistics period
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-start justify-start gap-2 xl:justify-end">
+              <Link
+                href="/marketing/tracker"
+                className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.06]"
+              >
+                Operations Overview
+              </Link>
+              <Link
+                href="/marketing/agent-orders"
+                className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.06]"
+              >
+                Agent Orders
+              </Link>
+              <button
+                type="button"
+                onClick={() => setReceiptViewMode("web-orders")}
+                className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.06]"
+              >
+                Web Orders
+              </button>
+              <button
+                type="button"
+                onClick={() => setReceiptViewMode("quote-requests")}
+                className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.06]"
+              >
+                Quotation Requests
+              </button>
+              <button
+                type="button"
+                onClick={() => setReceiptViewMode("receipts")}
+                className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 hover:bg-emerald-500/15"
+              >
+                POS Receipts
+              </button>
+            </div>
           </div>
         </header>
 
-        <Card className="space-y-5 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts list</p>
-              <h2 className="text-lg font-semibold text-slate-100">
-                {viewMode === "receipts"
-                  ? "My POS receipts"
-                  : viewMode === "web-orders"
-                    ? "My web orders"
-                    : "My quotation requests"}
-              </h2>
-              <p className="text-sm text-slate-400">
-                {viewMode === "receipts"
-                  ? "Filter your own receipts by date, search term, or POD status. Pending PODs can be marked delivered with proof here."
-                  : viewMode === "web-orders"
-                    ? "Process your assigned website orders here using the same lifecycle used in admin."
-                    : "Review assigned quotation requests and prepare product recommendations from the same desk."}
-              </p>
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+          <div className="rounded-[24px] border border-white/10 bg-slate-900/80 p-4">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+              Selected Range
+            </div>
+            <div className="mt-3 text-lg font-semibold text-white">{selectedRangeLabel}</div>
+            <div className="mt-1 text-xs text-slate-400">
+              {filters.start} to {filters.end}
             </div>
           </div>
+          <div className="rounded-[24px] border border-white/10 bg-slate-900/80 p-4">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+              Receipts Count
+            </div>
+            <div className="mt-3 text-3xl font-semibold text-white">{summary.receiptsCount}</div>
+            <div className="mt-1 text-xs text-slate-400">POS receipts in selected range</div>
+          </div>
+          <div className="rounded-[24px] border border-white/10 bg-slate-900/80 p-4">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+              Total Sales
+            </div>
+            <div className="mt-3 text-2xl font-semibold text-white">{formatKES(summary.totalSales)}</div>
+            <div className="mt-1 text-xs text-slate-400">Selected POS receipt totals</div>
+          </div>
+          <div className="rounded-[24px] border border-white/10 bg-slate-900/80 p-4">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+              POD Pending
+            </div>
+            <div className="mt-3 text-3xl font-semibold text-amber-300">{dashboardCounts.podPending}</div>
+            <div className="mt-1 text-xs text-slate-400">Pending delivery follow-up</div>
+          </div>
+          <div className="rounded-[24px] border border-white/10 bg-slate-900/80 p-4">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+              Web Orders
+            </div>
+            <div className="mt-3 text-3xl font-semibold text-cyan-200">{dashboardCounts.webOrders}</div>
+            <div className="mt-1 text-xs text-slate-400">Assigned orders in selected window</div>
+          </div>
+          <div className="rounded-[24px] border border-white/10 bg-slate-900/80 p-4">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+              Quotations
+            </div>
+            <div className="mt-3 text-3xl font-semibold text-violet-200">{dashboardCounts.quotations}</div>
+            <div className="mt-1 text-xs text-slate-400">Assigned requests in selected window</div>
+          </div>
+        </section>
 
-          {viewMode === "receipts" ? (
-            <>
-              <div className="grid gap-3 lg:grid-cols-4">
+        <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] p-5">
+          <div className="space-y-5">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                Main Module
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {MODULE_TABS.map((tab) =>
+                  tab.href ? (
+                    <Link
+                      key={tab.key}
+                      href={tab.href}
+                      className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.06]"
+                    >
+                      {tab.label}
+                    </Link>
+                  ) : (
+                    <FilterPill
+                      key={tab.key}
+                      active={
+                        (tab.key === "pos" && viewMode === "receipts") ||
+                        (tab.key !== "pos" && tab.key === viewMode)
+                      }
+                      onClick={() =>
+                        setReceiptViewMode(tab.key === "pos" ? "receipts" : (tab.key as ViewMode))
+                      }
+                    >
+                      {tab.label}
+                    </FilterPill>
+                  ),
+                )}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                Period
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {PERIOD_FILTERS.map((option) => (
+                  <FilterPill
+                    key={option.key}
+                    active={rangeKey === option.key}
+                    onClick={() => applyRange(option.key)}
+                  >
+                    {option.label}
+                  </FilterPill>
+                ))}
+              </div>
+              <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_180px]">
                 <label className="text-xs uppercase tracking-wide text-slate-400">
                   Search
                   <input
@@ -236,7 +508,7 @@ export default function MarketingReceiptsPage() {
                   />
                 </label>
                 <label className="text-xs uppercase tracking-wide text-slate-400">
-                  Start date
+                  Start Date
                   <input
                     type="date"
                     value={filters.start}
@@ -245,7 +517,7 @@ export default function MarketingReceiptsPage() {
                   />
                 </label>
                 <label className="text-xs uppercase tracking-wide text-slate-400">
-                  End date
+                  End Date
                   <input
                     type="date"
                     value={filters.end}
@@ -254,136 +526,87 @@ export default function MarketingReceiptsPage() {
                   />
                 </label>
               </div>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
-                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Range</p>
-                  <p className="text-sm font-semibold text-slate-100">{rangeLabel}</p>
-                  <p className="text-xs text-slate-400">
-                    Showing receipts from {filters.start} to {filters.end}
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
-                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Receipts</p>
-                  <p className="text-2xl font-semibold text-emerald-300">
-                    {summary.receiptsCount}
-                  </p>
-                  <p className="text-xs text-slate-400">Your receipts in the selected window</p>
-                </div>
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
-                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Total sales</p>
-                  <p className="text-2xl font-semibold text-emerald-300">
-                    {formatKES(summary.totalSales)}
-                  </p>
-                  <p className="text-xs text-slate-400">Aggregated from the receipts below</p>
-                </div>
-              </div>
+            </div>
 
-              <DailyReportReceiptsPanel
-                key={`pos:${initialPodFilter}`}
-                start={filters.start}
-                end={filters.end}
-                q={filters.query}
-                attendantId={undefined}
-                onlyPos
-                hideHeader
-                showPodFilters
-                initialPodFilter={initialPodFilter}
-                extraFilterActions={[
-                  {
-                    key: "web-orders",
-                    label: "Web orders",
-                    active: false,
-                    onClick: () => setReceiptViewMode("web-orders"),
-                  },
-                  {
-                    key: "quote-requests",
-                    label: "Quotation requests",
-                    active: false,
-                    onClick: () => setReceiptViewMode("quote-requests"),
-                  },
-                  ...ReceiptRangeOptions.map((option) => ({
-                    key: option.key,
-                    label: option.label,
-                    active: rangeKey === option.key,
-                    onClick: () => applyRange(option.key),
-                  })),
-                ]}
-                emptyMessage="No receipts found for this range."
-                onSummary={(panelSummary) =>
-                  setSummary({
-                    totalSales: panelSummary.totalSales,
-                    receiptsCount: panelSummary.count,
-                  })
-                }
-              />
-            </>
+            {viewMode === "receipts" ? (
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                  Receipt Status
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {RECEIPT_STATUS_FILTERS.map((option) => (
+                    <FilterPill
+                      key={option.key}
+                      active={podFilter === option.key}
+                      onClick={() => setPodFilter(option.key)}
+                    >
+                      {option.label}
+                    </FilterPill>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </section>
+
+        <Card className="space-y-5 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Operations Desk</p>
+              <h2 className="text-lg font-semibold text-slate-100">
+                {viewMode === "receipts"
+                  ? "POS receipts"
+                  : viewMode === "web-orders"
+                    ? "Web orders"
+                    : "Quotation requests"}
+              </h2>
+              <p className="text-sm text-slate-400">
+                {viewMode === "receipts"
+                  ? "Search receipts, manage POD updates, and capture delivery fees inside the selected range."
+                  : viewMode === "web-orders"
+                    ? "Process assigned website orders using the same lifecycle used in admin."
+                    : "Review assigned quotation requests and prepare customer quotations from one desk."}
+              </p>
+            </div>
+          </div>
+
+          {viewMode === "receipts" ? (
+            <DailyReportReceiptsPanel
+              key={`pos:${podFilter}`}
+              start={filters.start}
+              end={filters.end}
+              q={filters.query}
+              attendantId={undefined}
+              onlyPos
+              hideHeader
+              initialPodFilter={podFilter}
+              emptyMessage="No receipts found for this range."
+              onSummary={(panelSummary) =>
+                setSummary({
+                  totalSales: panelSummary.totalSales,
+                  receiptsCount: panelSummary.count,
+                })
+              }
+            />
           ) : viewMode === "web-orders" ? (
-            <div className="space-y-4">
-              <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
-                <button
-                  type="button"
-                  onClick={() => setReceiptViewMode("receipts")}
-                  className="rounded-full border border-white/15 px-4 py-1 text-slate-200 transition hover:border-emerald-500 hover:text-white"
-                >
-                  POS receipts
-                </button>
-                <button
-                  type="button"
-                  className="rounded-full border border-emerald-500 bg-emerald-500/20 px-4 py-1 text-emerald-200 transition"
-                >
-                  Web orders
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setReceiptViewMode("quote-requests")}
-                  className="rounded-full border border-white/15 px-4 py-1 text-slate-200 transition hover:border-emerald-500 hover:text-white"
-                >
-                  Quotation requests
-                </button>
-              </div>
-              <WebsiteOrdersDeskClient
-                apiBasePath="/api/attendant/website-orders"
-                defaultStatusFilter="PENDING"
-                orderListLabel="Website orders"
-                orderListTitle="Assigned web orders"
-                orderListDescription="Process direct website orders assigned to your customer-service desk."
-                emptyMessage="No assigned website orders found right now."
-                filterStorageKey="marketing:web-orders:status"
-              />
-            </div>
+            <WebsiteOrdersDeskClient
+              apiBasePath="/api/attendant/website-orders"
+              defaultStatusFilter="PENDING"
+              orderListLabel="Website orders"
+              orderListTitle="Assigned web orders"
+              orderListDescription="Process your assigned website orders here using the same lifecycle used in admin."
+              emptyMessage="No assigned website orders found right now."
+              filterStorageKey="marketing:web-orders:status"
+            />
           ) : (
-            <div className="space-y-4">
-              <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
-                <button
-                  type="button"
-                  onClick={() => setReceiptViewMode("receipts")}
-                  className="rounded-full border border-white/15 px-4 py-1 text-slate-200 transition hover:border-emerald-500 hover:text-white"
-                >
-                  POS receipts
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setReceiptViewMode("web-orders")}
-                  className="rounded-full border border-white/15 px-4 py-1 text-slate-200 transition hover:border-emerald-500 hover:text-white"
-                >
-                  Web orders
-                </button>
-                <button
-                  type="button"
-                  className="rounded-full border border-emerald-500 bg-emerald-500/20 px-4 py-1 text-emerald-200 transition"
-                >
-                  Quotation requests
-                </button>
-              </div>
-              <QuotationRequestsDeskClient
-                apiBasePath="/api/attendant/quote-requests"
-                defaultStatusFilter="NEW"
-                filterStorageKey="marketing:quote-requests:status"
-                deskTitle="Assigned quotation requests"
-                deskDescription="Prepare customer quotations, recommend products, and notify customers from the same follow-up desk."
-                emptyMessage="No assigned quotation requests found right now."
-              />
-            </div>
+            <QuotationRequestsDeskClient
+              apiBasePath="/api/attendant/quote-requests"
+              defaultStatusFilter="NEW"
+              filterStorageKey="marketing:quote-requests:status"
+              deskTitle="Assigned quotation requests"
+              deskDescription="Prepare customer quotations, recommend products, and notify customers from the same desk."
+              emptyMessage="No assigned quotation requests found right now."
+            />
           )}
         </Card>
       </main>
