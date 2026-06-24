@@ -71,7 +71,10 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
           bankAccountNumber: state.bankAccountNumber.trim() || null,
         }),
       });
-      if (!res.ok) throw new Error("save_failed");
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(payload?.detail || payload?.error || "save_failed");
+      }
 
       const resCommission = await fetch(`/api/admin/attendants/${attendant.id}/commission-config`, {
         method: "PATCH",
@@ -81,11 +84,17 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
           salesCommissionMode: commission.salesCommissionMode,
         }),
       });
-      if (!resCommission.ok) throw new Error("commission_save_failed");
+      if (!resCommission.ok) {
+        const payload = await resCommission.json().catch(() => null);
+        throw new Error(payload?.detail || payload?.error || "commission_save_failed");
+      }
 
       if (state.password) {
         const r2 = await fetch(`/api/users/${attendant.id}/password`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: state.password }) });
-        if (!r2.ok) throw new Error("password_failed");
+        if (!r2.ok) {
+          const payload = await r2.json().catch(() => null);
+          throw new Error(payload?.detail || payload?.error || "password_failed");
+        }
       }
       router.refresh();
       alert("Saved");

@@ -36,6 +36,11 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "no_updates" }, { status: 400 });
   }
 
+  const actorUserId =
+    ((auth.session?.user as { id?: string | null } | undefined)?.id ?? null);
+  const actorEmail =
+    ((auth.session?.user as { email?: string | null } | undefined)?.email ?? null);
+
   const attendantCategoryUpdate = body.attendantCategory
     ? (categoryValues.has(body.attendantCategory.toUpperCase() as AttendantCategory)
         ? (body.attendantCategory.toUpperCase() as AttendantCategory)
@@ -46,17 +51,48 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "invalid_category" }, { status: 400 });
   }
 
+  console.log("[attendant.update]", {
+    actorUserId,
+    actorEmail,
+    targetUserId: id,
+    updates: {
+      isActive: typeof body.isActive === "boolean",
+      role: body.role ?? null,
+      name: typeof body.name === "string",
+      attendantCategory: attendantCategoryUpdate ?? null,
+      bankName: typeof body.bankName !== "undefined",
+      bankAccountNumber: typeof body.bankAccountNumber !== "undefined",
+      categories: includesCategoryUpdate ? (body.categories?.length ?? 0) : null,
+    },
+  });
+
   try {
     const updated = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const existing = await tx.user.findUnique({
         where: { id },
         select: {
           id: true,
+          role: true,
+          email: true,
           attendantCategory: true,
+          categoryAssignments: {
+            select: { category: true },
+          },
         },
       });
       if (!existing) {
         throw new Error("not_found");
+      }
+
+      const isTargetStaff =
+        existing.role === Role.ADMIN ||
+        existing.role === Role.SUPERVISOR ||
+        existing.role === Role.ATTENDANT ||
+        Boolean(existing.attendantCategory) ||
+        existing.categoryAssignments.length > 0;
+
+      if (!isTargetStaff) {
+        throw new Error("not_attendant");
       }
 
       const fallbackPrimary = attendantCategoryUpdate ?? existing.attendantCategory ?? (Array.from(categoryValues)[0] as AttendantCategory);
@@ -123,11 +159,29 @@ export async function PATCH(request: Request) {
       });
     });
 
+    console.log("[attendant.update.success]", {
+      actorUserId,
+      actorEmail,
+      targetUserId: id,
+    });
+
     return NextResponse.json({ ok: true, user: shapeUser(updated) });
   } catch (err) {
     if (err instanceof Error && err.message === "not_found") {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
-    return NextResponse.json({ error: "update_failed", detail: err instanceof Error ? err.message : String(err) }, { status: 500 });
+    if (err instanceof Error && err.message === "not_attendant") {
+      return NextResponse.json({ error: "not_attendant" }, { status: 400 });
+    }
+    console.error("[attendant.update.failed]", {
+      actorUserId,
+      actorEmail,
+      targetUserId: id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return NextResponse.json(
+      { error: "update_failed", detail: err instanceof Error ? err.message : String(err) },
+      { status: 500 },
+    );
   }
 }
