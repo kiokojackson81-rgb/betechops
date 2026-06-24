@@ -2,6 +2,7 @@ import Link from "next/link";
 import { endOfDay, format, startOfDay, subDays } from "date-fns";
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
+import { Prisma } from "@prisma/client";
 import {
   Activity,
   ArrowRight,
@@ -19,6 +20,7 @@ import {
   ShieldCheck,
   ShoppingBag,
   Store,
+  UserRound,
   TrendingUp,
   TriangleAlert,
   Truck,
@@ -27,6 +29,16 @@ import {
 } from "lucide-react";
 import AutoRefresh from "@/app/_components/AutoRefresh";
 import AdminPrivacyToggle from "@/app/admin/_components/AdminPrivacyToggle";
+import { getAdminAgentSales } from "@/lib/agents/sales";
+import {
+  ensureQuoteRequestsSchema,
+} from "@/lib/quoteRequests";
+import {
+  isOpenQuotationStatus,
+  isPendingPodStatus,
+  isPendingWebOrderStatus,
+  wasCreatedOrUpdatedInPeriod,
+} from "@/lib/operationsWorkQueue";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { buildPayrollRow } from "@/lib/adminPayroll";
@@ -34,8 +46,18 @@ import { applyCanonicalPayrollOverrides } from "@/lib/payrollCanonical";
 import { payrollEligibleUserWhere } from "@/lib/payrollEligibility";
 import { getUnpricedDailySalesForCurrentPeriod } from "@/lib/marketingUnpricedSales";
 import { groupMarketingUnpricedSales } from "@/lib/unpricedReceiptGrouping";
+import { buildStaffAttendantWhere } from "@/lib/staffUsers";
 
 export const dynamic = "force-dynamic";
+
+const AGENT_OPEN_STATUSES = [
+  "pending_review",
+  "awaiting_payment",
+  "payment_confirmed",
+  "processing",
+  "dispatched",
+  "delivered_pending_balance",
+] as const;
 
 type ReceiptSnapshot = {
   generatedAt: Date;
@@ -51,14 +73,6 @@ type DeskReceiptSnapshot = {
   paymentMethod?: string | null;
 };
 
-type MarketplaceSnapshot = {
-  orderedAt: Date;
-  platform: string;
-  sellingPrice: unknown;
-  profit: unknown;
-  status: string;
-};
-
 type TrendPoint = {
   key: string;
   label: string;
@@ -66,6 +80,10 @@ type TrendPoint = {
   pos: number;
   desk: number;
   online: number;
+  webOrders: number;
+  agentOrders: number;
+  quotations: number;
+  marketplaceOrders: number;
 };
 
 type LinkItem = {
@@ -147,6 +165,10 @@ function buildTrendSeed() {
       pos: 0,
       desk: 0,
       online: 0,
+      webOrders: 0,
+      agentOrders: 0,
+      quotations: 0,
+      marketplaceOrders: 0,
     } satisfies TrendPoint;
   });
 }
@@ -294,6 +316,17 @@ function ActionItem({
 
 function TrendCard({ points }: { points: TrendPoint[] }) {
   const maxValue = Math.max(...points.map((point) => point.total), 1);
+  const summary = points.reduce(
+    (acc, point) => {
+      acc.pos += point.pos;
+      acc.webOrders += point.webOrders;
+      acc.agentOrders += point.agentOrders;
+      acc.quotations += point.quotations;
+      acc.marketplaceOrders += point.marketplaceOrders;
+      return acc;
+    },
+    { pos: 0, webOrders: 0, agentOrders: 0, quotations: 0, marketplaceOrders: 0 },
+  );
 
   return (
     <div className={`${subtleCard} p-5`}>
@@ -326,8 +359,242 @@ function TrendCard({ points }: { points: TrendPoint[] }) {
           );
         })}
       </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+          <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">POS sales</div>
+          <div className={`mt-1 text-lg font-semibold text-white ${sensitiveClass}`}>{formatCompactKES(summary.pos)}</div>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+          <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Web orders</div>
+          <div className="mt-1 text-lg font-semibold text-white">{summary.webOrders}</div>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+          <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Agent orders</div>
+          <div className="mt-1 text-lg font-semibold text-white">{summary.agentOrders}</div>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+          <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Quotations</div>
+          <div className="mt-1 text-lg font-semibold text-white">{summary.quotations}</div>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+          <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Marketplace orders</div>
+          <div className="mt-1 text-lg font-semibold text-white">{summary.marketplaceOrders}</div>
+        </div>
+      </div>
     </div>
   );
+}
+
+function ControlCenterCard({
+  title,
+  count,
+  amount,
+  pending,
+  href,
+  note,
+}: {
+  title: string;
+  count: number;
+  amount?: number | null;
+  pending?: number | null;
+  href: string;
+  note: string;
+}) {
+  return (
+    <Link href={href} className={`${subtleCard} group block p-5 transition hover:border-emerald-400/40`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">{title}</div>
+          <div className="mt-3 text-3xl font-semibold text-white">{count}</div>
+          <div className="mt-2 text-sm text-slate-400">{note}</div>
+        </div>
+        <ArrowRight className="mt-1 h-4 w-4 text-slate-500 transition group-hover:text-emerald-300" />
+      </div>
+      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        <div>
+          <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Sales amount</div>
+          <div className={`mt-1 text-lg font-semibold text-white ${sensitiveClass}`}>{formatCompactKES(amount ?? 0)}</div>
+        </div>
+        <div>
+          <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Pending</div>
+          <div className="mt-1 text-lg font-semibold text-white">{pending ?? count}</div>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function QueueRow({
+  badge,
+  title,
+  note,
+  amount,
+  status,
+  age,
+  href,
+}: {
+  badge: string;
+  title: string;
+  note: string;
+  amount?: number | null;
+  status: string;
+  age: string;
+  href: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="grid gap-3 rounded-[22px] border border-white/10 bg-white/[0.03] p-4 transition hover:border-emerald-400/30 lg:grid-cols-[120px_minmax(0,1.4fr)_180px_140px_120px]"
+    >
+      <div className="flex items-center">
+        <span className="inline-flex rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-100">
+          {badge}
+        </span>
+      </div>
+      <div>
+        <div className="font-semibold text-white">{title}</div>
+        <div className="mt-1 text-sm text-slate-400">{note}</div>
+      </div>
+      <div>
+        <div className={`text-sm font-semibold text-white ${sensitiveClass}`}>{amount != null ? formatKES(amount) : "Action needed"}</div>
+      </div>
+      <div className="text-sm capitalize text-slate-300">{status}</div>
+      <div className="text-sm text-slate-400">{age}</div>
+    </Link>
+  );
+}
+
+function safeDate(value: string | Date | null | undefined) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function ageLabel(value: string | Date | null | undefined) {
+  const date = safeDate(value);
+  if (!date) return "-";
+  const diffMs = Date.now() - date.getTime();
+  const diffHours = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60)));
+  if (diffHours < 1) {
+    return `${Math.max(0, Math.floor(diffMs / (1000 * 60)))} min ago`;
+  }
+  if (diffHours < 24) return `${diffHours} hr ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+}
+
+function queueSort<T extends { createdAt?: string | Date | null; updatedAt?: string | Date | null; amount?: number | null }>(rows: T[]) {
+  return rows.sort((left, right) => {
+    const leftCreatedAt = safeDate(left.createdAt)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+    const rightCreatedAt = safeDate(right.createdAt)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+    if (leftCreatedAt !== rightCreatedAt) return leftCreatedAt - rightCreatedAt;
+
+    const amountDelta = Number(right.amount ?? 0) - Number(left.amount ?? 0);
+    if (amountDelta !== 0) return amountDelta;
+
+    const leftUpdatedAt = safeDate(left.updatedAt)?.getTime() ?? 0;
+    const rightUpdatedAt = safeDate(right.updatedAt)?.getTime() ?? 0;
+    return rightUpdatedAt - leftUpdatedAt;
+  });
+}
+
+type AdminQuoteRow = {
+  id: string;
+  quoteRef: string;
+  customerName: string;
+  customerPhone: string;
+  customerLocation: string | null;
+  status: string;
+  quoteTitle: string | null;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+};
+
+type AdminPodItem = {
+  id: string;
+  customerName: string;
+  customerPhone: string | null;
+  total: number;
+  status: string;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+};
+
+async function safeLoad<T>(loader: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await loader();
+  } catch (error) {
+    console.warn("[admin.dashboard] optional block unavailable", error);
+    return fallback;
+  }
+}
+
+async function listAdminQuoteRequests() {
+  await ensureQuoteRequestsSchema();
+  return prisma.$queryRaw<AdminQuoteRow[]>(Prisma.sql`
+    SELECT "id", "quoteRef", "customerName", "customerPhone", "customerLocation", "status", "quoteTitle", "createdAt", "updatedAt"
+    FROM "QuoteRequest"
+    ORDER BY "updatedAt" DESC
+    LIMIT 120
+  `);
+}
+
+async function listAdminPodFollowUp() {
+  const receipts = await prisma.receipt.findMany({
+    where: { data: { path: ["podDelivery"], not: Prisma.JsonNull } },
+    orderBy: { generatedAt: "desc" },
+    take: 80,
+    select: {
+      id: true,
+      generatedAt: true,
+      createdAt: true,
+      totals: true,
+      data: true,
+      order: {
+        select: {
+          customerName: true,
+          customerPhone: true,
+          totalAmount: true,
+        },
+      },
+    },
+  });
+
+  const items: AdminPodItem[] = [];
+  for (const receipt of receipts) {
+    const data =
+      receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
+        ? (receipt.data as Record<string, unknown>)
+        : null;
+    const podDelivery =
+      data?.podDelivery && typeof data.podDelivery === "object" && !Array.isArray(data.podDelivery)
+        ? (data.podDelivery as Record<string, unknown>)
+        : null;
+    const status = String(podDelivery?.status ?? "pending");
+    if (!isPendingPodStatus(status)) continue;
+    items.push({
+      id: receipt.id,
+      customerName: String(receipt.order?.customerName ?? data?.customerName ?? "POD customer"),
+      customerPhone: receipt.order?.customerPhone ?? (typeof data?.customerPhone === "string" ? data.customerPhone : null),
+      total:
+        Number(
+          ((receipt.totals as Record<string, unknown> | null)?.total ??
+            receipt.order?.totalAmount ??
+            (typeof data?.amount === "number" ? data.amount : 0)) as number,
+        ) || 0,
+      status,
+      createdAt: receipt.generatedAt ?? receipt.createdAt,
+      updatedAt:
+        typeof podDelivery?.updatedAt === "string"
+          ? new Date(podDelivery.updatedAt)
+          : typeof podDelivery?.createdAt === "string"
+            ? new Date(podDelivery.createdAt)
+            : receipt.generatedAt ?? receipt.createdAt,
+    });
+  }
+
+  return items;
 }
 
 function LinkGroupCard({ title, tone, items }: LinkGroup) {
@@ -360,6 +627,7 @@ async function getDashboardData() {
   const todayEnd = endOfDay(now);
   const tradingPeriod = getTradingPeriodFor(now);
   const trendStart = startOfDay(subDays(now, 6));
+  const periodBounds = { start: tradingPeriod.start, end: tradingPeriod.end };
 
   const [
     productsCount,
@@ -384,11 +652,23 @@ async function getDashboardData() {
     marketplaceOrdersToday,
     marketplaceTrendOrders,
     payrollUsers,
+    dailyReportsToday,
+    websiteOrdersRecent,
+    websiteOrdersToday,
+    websiteOrdersPendingCount,
+    websiteOrdersCompletedCount,
+    quoteRows,
+    podFollowUpRows,
+    openAgentOrders,
+    periodAgentOrders,
+    lowStockItems,
   ] = await Promise.all([
     prisma.product.count(),
     prisma.shop.count(),
     prisma.user.count({
-      where: { role: { in: ["ATTENDANT", "SUPERVISOR", "ADMIN"] }, isActive: true },
+      where: {
+        AND: [buildStaffAttendantWhere(), { isActive: true }],
+      },
     }),
     prisma.returnCase.count(),
     prisma.product
@@ -471,6 +751,52 @@ async function getDashboardData() {
       where: payrollEligibleUserWhere({ isActive: true }),
       orderBy: [{ attendantCategory: "asc" }, { name: "asc" }],
       select: { id: true, name: true, email: true, attendantCategory: true, isActive: true },
+    }),
+    prisma.dailyReport.count({
+      where: {
+        date: { gte: todayStart, lte: todayEnd },
+        user: { is: { AND: [buildStaffAttendantWhere(), { isActive: true }] } },
+      },
+    }),
+    prisma.websiteOrder.findMany({
+      orderBy: [{ updatedAt: "desc" }],
+      take: 120,
+      select: {
+        id: true,
+        orderRef: true,
+        customerName: true,
+        customerPhone: true,
+        total: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    }),
+    prisma.websiteOrder.count({
+      where: { createdAt: { gte: todayStart, lte: todayEnd } },
+    }),
+    prisma.websiteOrder.count({
+      where: { status: { in: ["PENDING", "CONFIRMED", "PROCESSING", "RECEIPT_ISSUED", "DISPATCHED", "PAYMENT_CONFIRMED"] } },
+    }),
+    prisma.websiteOrder.count({
+      where: { status: "DELIVERED" },
+    }),
+    safeLoad(() => listAdminQuoteRequests(), [] as AdminQuoteRow[]),
+    safeLoad(() => listAdminPodFollowUp(), [] as AdminPodItem[]),
+    safeLoad(() => getAdminAgentSales({ statuses: [...AGENT_OPEN_STATUSES] }), [] as Awaited<ReturnType<typeof getAdminAgentSales>>),
+    safeLoad(
+      () =>
+        getAdminAgentSales({
+          start: format(tradingPeriod.start, "yyyy-MM-dd"),
+          end: format(tradingPeriod.end, "yyyy-MM-dd"),
+        }),
+      [] as Awaited<ReturnType<typeof getAdminAgentSales>>,
+    ),
+    prisma.product.findMany({
+      where: { isActive: true },
+      orderBy: [{ stockQuantity: "asc" }],
+      take: 8,
+      select: { id: true, name: true, stockQuantity: true, minStockLevel: true },
     }),
   ]);
 
@@ -595,6 +921,83 @@ async function getDashboardData() {
     const sales = toNumber(row.sellingPrice);
     point.online += sales;
     point.total += sales;
+    point.marketplaceOrders += 1;
+  }
+
+  const periodWebsiteOrders = websiteOrdersRecent.filter((order) =>
+    wasCreatedOrUpdatedInPeriod(order.createdAt, order.updatedAt, periodBounds),
+  );
+  const pendingWebsiteOrders = periodWebsiteOrders.filter((order) => isPendingWebOrderStatus(order.status));
+  const webOrderValue = periodWebsiteOrders.reduce((sum, order) => sum + toNumber(order.total), 0);
+  const pendingWebOrderValue = pendingWebsiteOrders.reduce((sum, order) => sum + toNumber(order.total), 0);
+
+  const openQuoteRows = quoteRows.filter((row) => isOpenQuotationStatus(row.status));
+  const periodQuoteRows = openQuoteRows.filter((row) => wasCreatedOrUpdatedInPeriod(row.createdAt, row.updatedAt, periodBounds));
+  const newQuoteRows = periodQuoteRows.filter((row) => String(row.status).toLowerCase() === "new");
+
+  const pendingPodRows = podFollowUpRows.filter((row) => wasCreatedOrUpdatedInPeriod(row.createdAt, row.updatedAt, periodBounds));
+  const pendingPodValue = pendingPodRows.reduce((sum, row) => sum + row.total, 0);
+
+  const periodOpenAgentOrders = openAgentOrders.filter((sale) =>
+    wasCreatedOrUpdatedInPeriod(sale.createdAt, sale.updatedAt, periodBounds),
+  );
+  const periodAgentOrderValue = periodOpenAgentOrders.reduce((sum, sale) => sum + Number(sale.totalAmount ?? 0), 0);
+
+  const agentPerformance = periodAgentOrders.reduce<
+    Map<string, { agentName: string; orders: number; sales: number }>
+  >((acc, sale) => {
+    const key = sale.agentId;
+    const current = acc.get(key) ?? { agentName: sale.agentName, orders: 0, sales: 0 };
+    current.orders += 1;
+    current.sales += Number(sale.totalAmount ?? 0);
+    acc.set(key, current);
+    return acc;
+  }, new Map());
+  const rankedAgents = Array.from(agentPerformance.values());
+  const topAgentByOrders = rankedAgents.slice().sort((a, b) => b.orders - a.orders)[0] ?? null;
+  const topAgentBySales = rankedAgents.slice().sort((a, b) => b.sales - a.sales)[0] ?? null;
+
+  const recentAgentActivity = queueSort(
+    periodOpenAgentOrders.slice(0, 12).map((sale) => ({
+      id: sale.id,
+      agentName: sale.agentName,
+      customerName: sale.customerName,
+      amount: Number(sale.totalAmount ?? 0),
+      status: sale.statusMeta.label,
+      createdAt: sale.createdAt,
+      updatedAt: sale.updatedAt,
+      href: `/marketing/agent-orders?saleId=${encodeURIComponent(sale.id)}`,
+    })),
+  ).slice(0, 6);
+
+  const webRecentRows = queueSort(
+    periodWebsiteOrders.map((order) => ({
+      id: order.id,
+      customerName: order.customerName,
+      phone: order.customerPhone,
+      amount: toNumber(order.total),
+      status: String(order.status).replace(/_/g, " ").toLowerCase(),
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+      href: `/marketing/receipts?tab=web-orders&orderId=${encodeURIComponent(order.id)}`,
+      ref: order.orderRef,
+    })),
+  ).slice(0, 6);
+
+  for (const order of websiteOrdersRecent) {
+    const key = dayKey(order.updatedAt);
+    const point = trendMap.get(key);
+    if (point && isPendingWebOrderStatus(order.status)) point.webOrders += 1;
+  }
+  for (const sale of periodAgentOrders) {
+    const key = dayKey(sale.updatedAt);
+    const point = trendMap.get(key);
+    if (point) point.agentOrders += 1;
+  }
+  for (const quote of quoteRows) {
+    const key = dayKey(new Date(quote.updatedAt));
+    const point = trendMap.get(key);
+    if (point && isOpenQuotationStatus(quote.status)) point.quotations += 1;
   }
 
   const unpricedSales = await getUnpricedDailySalesForCurrentPeriod();
@@ -634,6 +1037,18 @@ async function getDashboardData() {
       pendingCashAdvance: pendingCashAdvanceCount,
       pendingPosCommission: pendingPosCommissionCount,
     },
+    livePulse: {
+      todaySales,
+      currentPeriodSales: combinedPeriodSales,
+      currentPeriodProfit: combinedPeriodProfit,
+      posReceipts: posReceiptsPeriod.length + marketingReceiptsPeriod.length + supportReceiptsPeriod.length,
+      webOrders: pendingWebsiteOrders.length,
+      agentOrders: periodOpenAgentOrders.length,
+      quotations: periodQuoteRows.length,
+      podPending: pendingPodRows.length,
+      jumiaPending: pendingJumiaOrders,
+      lowStockItems: lowStockCount,
+    },
     pos: {
       sales: posPeriod.sales,
       profit: posPeriod.profit,
@@ -665,6 +1080,69 @@ async function getDashboardData() {
       topSalesRow,
       topCommissionRow,
       topNetRow,
+    },
+    salesActivity: {
+      pos: {
+        count: posReceiptsPeriod.length,
+        sales: posPeriod.sales,
+        pending: pendingPodRows.length,
+      },
+      web: {
+        count: periodWebsiteOrders.length,
+        sales: webOrderValue,
+        pending: pendingWebsiteOrders.length,
+      },
+      agent: {
+        count: periodOpenAgentOrders.length,
+        sales: periodAgentOrderValue,
+        pending: periodOpenAgentOrders.length,
+      },
+      quotations: {
+        count: periodQuoteRows.length,
+        sales: 0,
+        pending: newQuoteRows.length,
+      },
+      pod: {
+        count: pendingPodRows.length,
+        sales: pendingPodValue,
+        pending: pendingPodRows.length,
+      },
+      marketplace: {
+        count: marketplaceOrdersPeriod.length,
+        sales: marketplacePeriod.totalSales,
+        pending: pendingJumiaOrders,
+      },
+    },
+    agents: {
+      activeAgents: rankedAgents.length,
+      pendingOrders: periodOpenAgentOrders.length,
+      orderValue: periodAgentOrderValue,
+      topByOrders: topAgentByOrders,
+      topBySales: topAgentBySales,
+      recentActivity: recentAgentActivity,
+    },
+    web: {
+      newOrders: websiteOrdersToday,
+      pendingOrders: websiteOrdersPendingCount,
+      completedOrders: websiteOrdersCompletedCount,
+      orderValue: webOrderValue,
+      pendingOrderValue: pendingWebOrderValue,
+      recentOrders: webRecentRows,
+      quoteRequests: periodQuoteRows.slice(0, 6),
+    },
+    staffSnapshot: {
+      topSalesPerformer: topSalesRow,
+      topCommissionPerformer: topCommissionRow,
+      activeStaffToday: activeStaffCount,
+      submittedDailyReports: dailyReportsToday,
+      missingDailyReports: Math.max(0, activeStaffCount - dailyReportsToday),
+      payrollDue: payrollTotals.net,
+    },
+    lowStockItems,
+    queues: {
+      websiteOrders: pendingWebsiteOrders,
+      quotations: periodQuoteRows,
+      pod: pendingPodRows,
     },
     pricingQueue,
     trends: Array.from(trendMap.values()),
@@ -734,12 +1212,12 @@ export default async function AdminOverviewPage() {
             </div>
 
             <div className="space-y-4">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.34em] text-emerald-300">Unified Admin Dashboard</div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.34em] text-emerald-300">Business Control Center</div>
               <h1 className="max-w-4xl text-4xl font-semibold tracking-tight text-white md:text-5xl">
-                One home page for company money, operations, people, and control links.
+                One control center for live business activity, staff performance, money flow, and urgent work.
               </h1>
               <p className="max-w-3xl text-base text-slate-400">
-                Watch POS, marketing, support, Jumia, and payroll from one screen. The layout is grouped so you can scan cash, pending work, staff impact, and the main company pages without hunting through menus.
+                Watch POS, web orders, agent activity, quotations, POD follow-up, marketplace movement, and payroll from one screen. The layout is grouped so management can scan live work and jump into the right operating page quickly.
               </p>
             </div>
 
@@ -805,6 +1283,251 @@ export default async function AdminOverviewPage() {
                 icon={Package}
                 danger={dashboard.counts.lowStock > 0}
               />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <SectionHeader
+          eyebrow="Live business pulse"
+          title="Today, current period, and pending workload"
+          description="This strip is the first management scan: what sold today, what the current period looks like, and where the active workload is building up."
+        />
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5 2xl:grid-cols-10">
+          <StatCard title="Today sales" value={formatKES(dashboard.livePulse.todaySales)} sub="Clearly labeled today-only total" icon={Wallet} />
+          <StatCard title="Current period sales" value={formatKES(dashboard.livePulse.currentPeriodSales)} sub={dashboard.periodLabel} icon={TrendingUp} accent="from-cyan-500/20 via-emerald-500/10 to-transparent" />
+          <StatCard title="Current period profit" value={formatKES(dashboard.livePulse.currentPeriodProfit)} sub="Recorded margin across major channels" icon={ChartColumnBig} accent="from-sky-500/20 via-cyan-500/10 to-transparent" />
+          <StatCard title="POS receipts" value={`${dashboard.livePulse.posReceipts}`} sub="POS, marketing, and support receipts" icon={Receipt} accent="from-indigo-500/20 via-cyan-500/10 to-transparent" />
+          <StatCard title="Web orders" value={`${dashboard.livePulse.webOrders}`} sub="Pending/action-needed web orders" icon={ShoppingBag} accent="from-emerald-500/20 via-teal-500/10 to-transparent" />
+          <StatCard title="Agent orders" value={`${dashboard.livePulse.agentOrders}`} sub="Open agent workflow orders" icon={Users} accent="from-violet-500/20 via-fuchsia-500/10 to-transparent" />
+          <StatCard title="Quotations" value={`${dashboard.livePulse.quotations}`} sub="Active quote requests in period" icon={ClipboardCheck} accent="from-cyan-500/20 via-sky-500/10 to-transparent" />
+          <StatCard title="POD pending" value={`${dashboard.livePulse.podPending}`} sub="Pending POD follow-up items" icon={Truck} accent="from-amber-500/20 via-orange-500/10 to-transparent" />
+          <StatCard title="Jumia pending" value={`${dashboard.livePulse.jumiaPending}`} sub="Marketplace pending order backlog" icon={Store} accent="from-amber-500/20 via-yellow-500/10 to-transparent" />
+          <StatCard title="Low stock items" value={`${dashboard.livePulse.lowStockItems}`} sub="Items at or below minimum stock" icon={Boxes} accent="from-rose-500/20 via-orange-500/10 to-transparent" />
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <SectionHeader
+          eyebrow="Unified queue"
+          title="Urgent action queue"
+          description="Closed, delivered, cancelled, settled, and completed work is excluded. This is the live queue that still needs attention."
+        />
+        <div className="grid gap-3">
+          {queueSort([
+            ...dashboard.queues.websiteOrders.map((order) => ({
+              id: `web-${order.id}`,
+              badge: "WEB ORDER",
+              title: `${order.customerName} · ${order.orderRef}`,
+              note: order.customerPhone || "No phone captured",
+              amount: toNumber(order.total),
+              status: String(order.status).replace(/_/g, " ").toLowerCase(),
+              createdAt: order.createdAt,
+              updatedAt: order.updatedAt,
+              href: `/marketing/receipts?tab=web-orders&orderId=${encodeURIComponent(order.id)}`,
+            })),
+            ...dashboard.agents.recentActivity.map((row) => ({
+              id: `agent-${row.id}`,
+              badge: "AGENT ORDER",
+              title: `${row.agentName} · ${row.customerName}`,
+              note: "Pending customer order",
+              amount: row.amount,
+              status: row.status,
+              createdAt: row.createdAt,
+              updatedAt: row.updatedAt,
+              href: row.href,
+            })),
+            ...dashboard.queues.quotations.map((quote) => ({
+              id: `quote-${quote.id}`,
+              badge: "QUOTATION",
+              title: `${quote.customerName} · ${quote.quoteRef}`,
+              note: quote.customerPhone || "No phone captured",
+              amount: null,
+              status: String(quote.status).replace(/_/g, " ").toLowerCase(),
+              createdAt: quote.createdAt,
+              updatedAt: quote.updatedAt,
+              href: `/marketing/receipts?tab=quotations&quoteId=${encodeURIComponent(quote.id)}`,
+            })),
+            ...dashboard.queues.pod.map((row) => ({
+              id: `pod-${row.id}`,
+              badge: "POD",
+              title: row.customerName,
+              note: row.customerPhone || "No phone captured",
+              amount: row.total,
+              status: row.status.replace(/_/g, " ").toLowerCase(),
+              createdAt: row.createdAt,
+              updatedAt: row.updatedAt,
+              href: `/marketing/receipts?tab=pos&podStatus=pending&receiptId=${encodeURIComponent(row.id)}`,
+            })),
+            {
+              id: "pricing-queue",
+              badge: "PRICING",
+              title: "Missing pricing queue",
+              note: `${dashboard.pricingQueue.items} items still need buying prices`,
+              amount: null,
+              status: `${dashboard.pricingQueue.receipts} receipts`,
+              createdAt: null,
+              updatedAt: null,
+              href: "/admin/pending-pricing",
+            },
+            {
+              id: "low-stock",
+              badge: "STOCK",
+              title: "Low stock risk",
+              note: dashboard.lowStockItems.slice(0, 3).map((item) => item.name).join(" · ") || "Inventory threshold alert",
+              amount: null,
+              status: `${dashboard.counts.lowStock} items`,
+              createdAt: null,
+              updatedAt: null,
+              href: "/admin/pos-management",
+            },
+            {
+              id: "returns",
+              badge: "RETURNS",
+              title: "Returns waiting resolution",
+              note: "Open return cases that still need handling",
+              amount: null,
+              status: `${dashboard.counts.returns} open`,
+              createdAt: null,
+              updatedAt: null,
+              href: "/admin/returns",
+            },
+            {
+              id: "jumia-pending",
+              badge: "JUMIA",
+              title: "Jumia pending orders",
+              note: "Marketplace queue still pending in vendor sync tables",
+              amount: null,
+              status: `${dashboard.counts.pendingJumiaOrders} pending`,
+              createdAt: null,
+              updatedAt: null,
+              href: "/admin/online/summary",
+            },
+          ]).slice(0, 14).map((item) => (
+            <QueueRow
+              key={item.id}
+              badge={item.badge}
+              title={item.title}
+              note={item.note}
+              amount={item.amount}
+              status={item.status}
+              age={ageLabel(item.createdAt)}
+              href={item.href}
+            />
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <SectionHeader
+          eyebrow="Sales activity center"
+          title="Channel control boards"
+          description="Each revenue lane shows its live volume, value, pending pressure, and direct entry point into the operating page."
+        />
+        <div className="grid gap-4 xl:grid-cols-3">
+          <ControlCenterCard title="POS / Direct Sales" count={dashboard.salesActivity.pos.count} amount={dashboard.salesActivity.pos.sales} pending={dashboard.salesActivity.pos.pending} href="/admin/receipts" note="Direct POS receipts and desk-recorded sales." />
+          <ControlCenterCard title="Web Orders" count={dashboard.salesActivity.web.count} amount={dashboard.salesActivity.web.sales} pending={dashboard.salesActivity.web.pending} href="/marketing/receipts?tab=web-orders" note="Website orders that still need action." />
+          <ControlCenterCard title="Agent Orders" count={dashboard.salesActivity.agent.count} amount={dashboard.salesActivity.agent.sales} pending={dashboard.salesActivity.agent.pending} href="/marketing/agent-orders" note="Affiliate/agent order workflow still open." />
+          <ControlCenterCard title="Quotations" count={dashboard.salesActivity.quotations.count} amount={dashboard.salesActivity.quotations.sales} pending={dashboard.salesActivity.quotations.pending} href="/marketing/receipts?tab=quotations" note="Customer quote requests awaiting response." />
+          <ControlCenterCard title="POD Follow-up" count={dashboard.salesActivity.pod.count} amount={dashboard.salesActivity.pod.sales} pending={dashboard.salesActivity.pod.pending} href="/marketing/receipts?tab=pos&podStatus=pending" note="Pending POD delivery closure and collections." />
+          <ControlCenterCard title="Marketplace Orders" count={dashboard.salesActivity.marketplace.count} amount={dashboard.salesActivity.marketplace.sales} pending={dashboard.salesActivity.marketplace.pending} href="/admin/online/summary" note="Jumia and Kilimall order movement." />
+        </div>
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-2">
+        <div className="space-y-4">
+          <SectionHeader
+            eyebrow="Agent activity"
+            title="Affiliate and agent movement"
+            description="Track active agents, pending order value, top performers, and the most recent agent activity without leaving the home page."
+          />
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard title="Active agents" value={`${dashboard.agents.activeAgents}`} sub="Agents with period activity" icon={Users} accent="from-cyan-500/20 via-slate-500/10 to-transparent" />
+            <StatCard title="Pending agent orders" value={`${dashboard.agents.pendingOrders}`} sub="Open agent order workload" icon={ShoppingBag} accent="from-violet-500/20 via-fuchsia-500/10 to-transparent" />
+            <StatCard title="Agent order value" value={formatKES(dashboard.agents.orderValue)} sub="Current open order amount" icon={BadgeDollarSign} accent="from-emerald-500/20 via-lime-500/10 to-transparent" />
+            <StatCard title="Top agent by sales" value={dashboard.agents.topBySales?.agentName || "No data"} sub={dashboard.agents.topBySales ? formatKES(dashboard.agents.topBySales.sales) : "Waiting for period activity"} icon={UserRound} accent="from-amber-500/20 via-orange-500/10 to-transparent" />
+          </div>
+          <div className={`${subtleCard} p-5`}>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Top agent by orders</div>
+                <div className="mt-2 text-xl font-semibold text-white">{dashboard.agents.topByOrders?.agentName || "No data"}</div>
+                <div className="mt-1 text-sm text-slate-400">{dashboard.agents.topByOrders ? `${dashboard.agents.topByOrders.orders} orders this period` : "Waiting for period activity."}</div>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Recent agent activity</div>
+                <div className="mt-2 text-xl font-semibold text-white">{dashboard.agents.recentActivity.length}</div>
+                <div className="mt-1 text-sm text-slate-400">Latest open agent-order movements in the current period.</div>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-3">
+              {dashboard.agents.recentActivity.length ? dashboard.agents.recentActivity.map((row) => (
+                <QueueRow
+                  key={row.id}
+                  badge="AGENT"
+                  title={`${row.agentName} · ${row.customerName}`}
+                  note="Customer / order activity"
+                  amount={row.amount}
+                  status={row.status}
+                  age={ageLabel(row.updatedAt)}
+                  href={row.href}
+                />
+              )) : (
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-400">No recent agent activity in the current period.</div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <SectionHeader
+            eyebrow="Web activity"
+            title="Website orders and quote requests"
+            description="Monitor website order flow, pending order value, and website-origin quotations from one panel."
+          />
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard title="New web orders" value={`${dashboard.web.newOrders}`} sub="Created today" icon={ShoppingBag} accent="from-cyan-500/20 via-sky-500/10 to-transparent" />
+            <StatCard title="Pending web orders" value={`${dashboard.web.pendingOrders}`} sub="Action-needed web orders" icon={CircleAlert} accent="from-emerald-500/20 via-teal-500/10 to-transparent" />
+            <StatCard title="Completed web orders" value={`${dashboard.web.completedOrders}`} sub="Delivered web orders in view" icon={ClipboardCheck} accent="from-indigo-500/20 via-cyan-500/10 to-transparent" />
+            <StatCard title="Web order value" value={formatKES(dashboard.web.orderValue)} sub={`Pending value ${formatCompactKES(dashboard.web.pendingOrderValue)}`} icon={Wallet} accent="from-amber-500/20 via-orange-500/10 to-transparent" />
+          </div>
+          <div className={`${subtleCard} p-5`}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-lg font-semibold text-white">Recent web customers and orders</div>
+                <div className="mt-1 text-sm text-slate-400">Most recent website orders plus website quote activity for the active statistics period.</div>
+              </div>
+              <Link href="/marketing/receipts?tab=web-orders" className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-emerald-400/30 hover:text-emerald-200">Open web orders</Link>
+            </div>
+            <div className="mt-4 grid gap-3">
+              {dashboard.web.recentOrders.map((row) => (
+                <QueueRow
+                  key={row.id}
+                  badge="WEB"
+                  title={`${row.customerName} · ${row.ref}`}
+                  note={row.phone || "No phone captured"}
+                  amount={row.amount}
+                  status={row.status}
+                  age={ageLabel(row.updatedAt)}
+                  href={row.href}
+                />
+              ))}
+              {dashboard.web.quoteRequests.map((quote) => (
+                <QueueRow
+                  key={quote.id}
+                  badge="QUOTE"
+                  title={`${quote.customerName} · ${quote.quoteRef}`}
+                  note={quote.customerLocation || quote.customerPhone}
+                  amount={null}
+                  status={String(quote.status).replace(/_/g, " ").toLowerCase()}
+                  age={ageLabel(quote.updatedAt)}
+                  href={`/marketing/receipts?tab=quotations&quoteId=${encodeURIComponent(quote.id)}`}
+                />
+              ))}
+              {!dashboard.web.recentOrders.length && !dashboard.web.quoteRequests.length ? (
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-400">No recent website order or quotation activity in the current period.</div>
+              ) : null}
             </div>
           </div>
         </div>
@@ -920,6 +1643,15 @@ export default async function AdminOverviewPage() {
           title="Staff cost, payouts, and performance"
           description="Put salaries, commissions, deductions, and staff leaders in one lane so admin can connect sales movement to real payroll impact."
         />
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+          <StatCard title="Top sales performer" value={dashboard.staffSnapshot.topSalesPerformer?.name || "No data"} sub={dashboard.staffSnapshot.topSalesPerformer ? formatKES(Number(dashboard.staffSnapshot.topSalesPerformer.totalSales ?? 0)) : "Waiting for linked sales"} icon={TrendingUp} accent="from-cyan-500/20 via-sky-500/10 to-transparent" />
+          <StatCard title="Top commission" value={dashboard.staffSnapshot.topCommissionPerformer?.name || "No data"} sub={dashboard.staffSnapshot.topCommissionPerformer ? formatKES(Number(dashboard.staffSnapshot.topCommissionPerformer.commissionTotal ?? 0)) : "Waiting for commission summary"} icon={BadgeDollarSign} accent="from-emerald-500/20 via-lime-500/10 to-transparent" />
+          <StatCard title="Active staff today" value={`${dashboard.staffSnapshot.activeStaffToday}`} sub="Filtered to real attendants/staff only" icon={Users} accent="from-fuchsia-500/20 via-violet-500/10 to-transparent" />
+          <StatCard title="Submitted daily reports" value={`${dashboard.staffSnapshot.submittedDailyReports}`} sub="Daily reports received today" icon={ClipboardCheck} accent="from-emerald-500/20 via-teal-500/10 to-transparent" />
+          <StatCard title="Missing daily reports" value={`${dashboard.staffSnapshot.missingDailyReports}`} sub="Expected staff still missing a report today" icon={TriangleAlert} accent="from-amber-500/20 via-orange-500/10 to-transparent" />
+          <StatCard title="Payroll due" value={formatKES(dashboard.staffSnapshot.payrollDue)} sub="Current net payroll exposure" icon={Briefcase} accent="from-indigo-500/20 via-sky-500/10 to-transparent" />
+        </div>
+
         <div className="grid gap-4 lg:grid-cols-4">
           <StatCard title="Base salary + transport" value={formatKES(dashboard.payroll.base)} sub="Fixed cost for the active payroll sheet" icon={Briefcase} accent="from-indigo-500/20 via-sky-500/10 to-transparent" />
           <StatCard title="Commissions" value={formatKES(dashboard.payroll.commission)} sub="Direct, marketplace, and POS product commission totals" icon={BadgeDollarSign} accent="from-emerald-500/20 via-teal-500/10 to-transparent" />
