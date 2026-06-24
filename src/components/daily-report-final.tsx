@@ -1504,14 +1504,16 @@ export default function DailyReportFinal() {
       <div className="mx-auto flex w-full max-w-[1460px] flex-col gap-6">
         <section className="space-y-6">
           <header className="rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(15,23,42,.98),rgba(2,6,23,.98))] px-6 py-6 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+            <div className="grid gap-6 xl:grid-cols-[minmax(420px,0.85fr)_minmax(520px,1fr)] xl:items-start">
               <div className="space-y-4">
                 <div className="inline-flex items-center rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
                   Marketing Ops
                 </div>
                 <div>
-                  <h1 className="max-w-xl text-4xl font-semibold leading-tight text-white">Marketing Daily Dashboard</h1>
-                  <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
+                  <h1 className="max-w-xl text-3xl font-semibold leading-tight text-white sm:text-4xl xl:whitespace-nowrap">
+                    Marketing Daily Dashboard
+                  </h1>
+                  <p className="mt-3 max-w-xl text-sm leading-6 text-slate-300">
                     Daily checklist, product uploads, customer communication, marketplace review, receipts, and performance tracking in one place.
                   </p>
                 </div>
@@ -1528,7 +1530,7 @@ export default function DailyReportFinal() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-3 lg:items-end">
+              <div className="flex flex-col gap-4 xl:items-end">
                 <Link
                   href={createReceiptHref}
                   className="rounded-full border-2 border-emerald-400 bg-emerald-400/10 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-400/15"
@@ -1536,7 +1538,7 @@ export default function DailyReportFinal() {
                   Create Receipt
                 </Link>
 
-                <div className="flex max-w-[46rem] flex-wrap justify-start gap-2 lg:justify-end">
+                <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
                   <Link
                     href={receiptsHref}
                     className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.06]"
@@ -1579,7 +1581,7 @@ export default function DailyReportFinal() {
                   ) : null}
                 </div>
 
-                <div className="flex max-w-[46rem] flex-wrap justify-start gap-2 lg:justify-end">
+                <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
                   <Link
                     href={withImpersonateId("/attendant/wellness", impersonateId)}
                     className="rounded-full border border-white/10 bg-slate-950/40 px-4 py-2 text-xs font-medium text-slate-200 transition hover:border-white/30 hover:bg-white/[0.06]"
