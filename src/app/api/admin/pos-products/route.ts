@@ -1,6 +1,7 @@
 import { noStoreJson, requireRoleOrBrendah, getActorId } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { getProductTableCapabilities } from "@/lib/productTableCapabilities";
+import { resolveCanonicalProductBrand } from "@/lib/productBrands";
 import { Prisma } from "@prisma/client";
 import { randomUUID } from "crypto";
 import { z } from "zod";
@@ -120,7 +121,11 @@ async function findExistingSku(capabilities: Awaited<ReturnType<typeof getProduc
   return rows[0] ?? null;
 }
 
-function buildShopInsertFragments(capabilities: Awaited<ReturnType<typeof getProductTableCapabilities>>, data: z.infer<typeof productSchema>) {
+function buildShopInsertFragments(
+  capabilities: Awaited<ReturnType<typeof getProductTableCapabilities>>,
+  data: z.infer<typeof productSchema>,
+  brands?: { brand: string | null; shopBrand: string | null },
+) {
   const columns: string[] = [];
   const values: unknown[] = [];
   const casts: string[] = [];
@@ -134,7 +139,7 @@ function buildShopInsertFragments(capabilities: Awaited<ReturnType<typeof getPro
   const pickupDelayDays = normalizedAvailabilityType === "WAREHOUSE" ? 1 : 0;
 
   if (capabilities.brand) {
-    pushColumn("brand", normalizeOptionalText(data.brand));
+    pushColumn("brand", brands?.brand ?? normalizeOptionalText(data.brand));
   }
   if (capabilities.shortDescription) {
     pushColumn("shortDescription", normalizeOptionalText(data.shortDescription));
@@ -201,7 +206,7 @@ function buildShopInsertFragments(capabilities: Awaited<ReturnType<typeof getPro
     pushColumn("shopImageUrl", normalizeOptionalText(data.mainImageUrl ?? data.shopImageUrl));
   }
   if (capabilities.shopBrand) {
-    pushColumn("shopBrand", normalizeOptionalText(data.brand ?? data.shopBrand));
+    pushColumn("shopBrand", brands?.shopBrand ?? normalizeOptionalText(data.brand ?? data.shopBrand));
   }
 
   return { columns, values, casts };
@@ -424,6 +429,8 @@ export async function POST(req: Request) {
   const capabilities = await getProductTableCapabilities(prisma);
   const actorId = (auth.session?.user as { id?: string } | undefined)?.id ?? (await getActorId());
   const data = auth.isBrendah ? sanitizeBrendahProductCreate(parsed.data) : parsed.data;
+  const canonicalBrand = await resolveCanonicalProductBrand(prisma, capabilities, data.brand);
+  const canonicalShopBrand = await resolveCanonicalProductBrand(prisma, capabilities, data.brand ?? data.shopBrand);
   const normalizedStatus = data.status ?? (data.isActive ? "ACTIVE" : "INACTIVE");
   const normalizedIsActive = normalizedStatus === "ACTIVE" && Boolean(data.isActive);
   const skuBase = slugifySku(data.sku || data.name);
@@ -435,7 +442,10 @@ export async function POST(req: Request) {
     suffix += 1;
   }
 
-  const shopFragments = buildShopInsertFragments(capabilities, data);
+  const shopFragments = buildShopInsertFragments(capabilities, data, {
+    brand: canonicalBrand,
+    shopBrand: canonicalShopBrand,
+  });
   const systemFragments = capabilities.schemaMode === "modern" ? buildModernSystemInsertFragments(capabilities) : null;
   const created = capabilities.schemaMode === "modern"
     ? (await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(

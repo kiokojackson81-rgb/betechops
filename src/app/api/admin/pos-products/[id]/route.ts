@@ -1,6 +1,7 @@
 import { noStoreJson, requireRoleOrBrendah, getActorId } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { getProductTableCapabilities } from "@/lib/productTableCapabilities";
+import { resolveCanonicalProductBrand } from "@/lib/productBrands";
 import { recomputeOrderEconomics } from "@/lib/recomputeOrderEconomics";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
@@ -268,6 +269,12 @@ export async function PATCH(req: Request, context: ParamsContext) {
 
   const actorId = (auth.session?.user as { id?: string } | undefined)?.id ?? (await getActorId());
   const data = auth.isBrendah ? sanitizeBrendahProductUpdate(parsed.data) : parsed.data;
+  const canonicalBrand =
+    data.brand !== undefined ? await resolveCanonicalProductBrand(prisma, capabilities, data.brand) : undefined;
+  const canonicalShopBrand =
+    data.shopBrand !== undefined || data.brand !== undefined
+      ? await resolveCanonicalProductBrand(prisma, capabilities, data.brand ?? data.shopBrand)
+      : undefined;
   const nextVariableCost = data.variableCost ?? Boolean(existing.variableCost);
   const nextLastBuyingPrice = data.lastBuyingPrice !== undefined ? data.lastBuyingPrice : Number(existing.lastBuyingPrice ?? 0) || null;
   const nextStatus = data.status ?? String(existing.status || (Boolean(existing.isActive) ? "ACTIVE" : "INACTIVE")).toUpperCase();
@@ -313,7 +320,7 @@ export async function PATCH(req: Request, context: ParamsContext) {
     if (data.isActive !== undefined || data.status !== undefined) pushSet("active", nextStatus === "ACTIVE" && Boolean(data.isActive ?? existing.isActive));
   }
 
-  if (capabilities.brand && data.brand !== undefined) pushSet("brand", normalizeOptionalText(data.brand));
+  if (capabilities.brand && data.brand !== undefined) pushSet("brand", canonicalBrand ?? null);
   if (capabilities.shortDescription && data.shortDescription !== undefined) pushSet("shortDescription", normalizeOptionalText(data.shortDescription));
   if (capabilities.description && data.description !== undefined) pushSet("description", normalizeOptionalText(data.description));
   if (capabilities.specifications && data.specifications !== undefined) pushSet("specifications", normalizeSpecifications(data.specifications));
@@ -349,7 +356,7 @@ export async function PATCH(req: Request, context: ParamsContext) {
     pushSet("shopImageUrl", normalizeOptionalText(data.mainImageUrl ?? data.shopImageUrl));
   }
   if (capabilities.shopBrand && (data.shopBrand !== undefined || data.brand !== undefined)) {
-    pushSet("shopBrand", normalizeOptionalText(data.brand ?? data.shopBrand));
+    pushSet("shopBrand", canonicalShopBrand ?? null);
   }
 
   if (!setClauses.length) {

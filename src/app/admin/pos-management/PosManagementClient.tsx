@@ -141,6 +141,10 @@ type AiProductPrefill = {
   specifications: string[];
 };
 
+type BrandOption = {
+  name: string;
+};
+
 type PosManagementClientProps = {
   mode?: "admin" | "product-desk";
   initialEditProductId?: string | null;
@@ -387,11 +391,16 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
   const [buyingPriceFilter, setBuyingPriceFilter] = useState<"all" | "missing" | "set">("all");
   const [commissionFilter, setCommissionFilter] = useState<"all" | "enabled" | "disabled">("all");
   const [warrantyFilter, setWarrantyFilter] = useState<"all" | "with" | "without">("all");
+  const [brandOptions, setBrandOptions] = useState<BrandOption[]>([]);
+  const [brandOpen, setBrandOpen] = useState(false);
+  const [brandLoading, setBrandLoading] = useState(false);
+  const [brandSaving, setBrandSaving] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const initialEditHandledRef = useRef(false);
   const formSectionRef = useRef<HTMLElement | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   const catalogueTableRef = useRef<HTMLDivElement | null>(null);
+  const brandBoxRef = useRef<HTMLDivElement | null>(null);
   const productApiBase = "/api/admin/pos-products";
   const imageUploadAccept = getAcceptedImageUploadValue();
   const imageUploadFormats = getAcceptedImageUploadHint();
@@ -452,6 +461,50 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
     });
   }, [products]);
 
+  useEffect(() => {
+    if (!editorOpen || !(capabilities.brand || capabilities.shopBrand)) return;
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setBrandLoading(true);
+      try {
+        const response = await fetch(`/api/admin/brands?search=${encodeURIComponent(draft.brand)}&limit=12`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const json = await response.json().catch(() => ({ items: [] }));
+        if (!response.ok) throw new Error(getApiErrorMessage(json, "Failed to load brands"));
+
+        const items = Array.isArray(json?.items)
+          ? json.items
+              .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+              .map((name) => ({ name }))
+          : [];
+        setBrandOptions(items);
+      } catch {
+        if (!controller.signal.aborted) setBrandOptions([]);
+      } finally {
+        if (!controller.signal.aborted) setBrandLoading(false);
+      }
+    }, 150);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
+  }, [capabilities.brand, capabilities.shopBrand, draft.brand, editorOpen]);
+
+  useEffect(() => {
+    const onMouseDown = (event: MouseEvent) => {
+      if (!brandBoxRef.current?.contains(event.target as Node)) {
+        setBrandOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, []);
+
   const filteredProducts = products.filter((product) => {
     const hasBuyingPrice = Number(product.lastBuyingPrice ?? 0) > 0;
     const hasWarranty = Boolean((product.warrantyPeriod ?? product.shopWarranty)?.trim());
@@ -501,6 +554,12 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
   );
   const shopSubcategoryOptions = useMemo(() => getShopSubcategoryOptions(draft.shopCategory), [draft.shopCategory]);
   const availabilityPreview = useMemo(() => getAvailabilityPreviewMessage(draft.availabilityType), [draft.availabilityType]);
+  const normalizedDraftBrand = useMemo(() => draft.brand.replace(/\s+/g, " ").trim(), [draft.brand]);
+  const exactBrandMatch = useMemo(
+    () => brandOptions.find((option) => option.name.trim().toLowerCase() === normalizedDraftBrand.toLowerCase()) ?? null,
+    [brandOptions, normalizedDraftBrand],
+  );
+  const canAddBrand = Boolean(normalizedDraftBrand) && !exactBrandMatch;
   const suggestedShopTaxonomy = useMemo(
     () =>
       detectShopCategoryAndSubcategory({
@@ -641,6 +700,42 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
       shopSubcategory: suggestedShopTaxonomy.shopSubcategory,
     }));
   }, [suggestedShopTaxonomy.shopCategory, suggestedShopTaxonomy.shopSubcategory]);
+
+  const applyBrandValue = useCallback((brandName: string) => {
+    setDraft((current) => ({ ...current, brand: brandName, shopBrand: brandName }));
+    setBrandOpen(false);
+  }, []);
+
+  const createBrandOption = useCallback(async () => {
+    if (!canAddBrand) return;
+    setBrandSaving(true);
+    try {
+      const response = await fetch("/api/admin/brands", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: normalizedDraftBrand }),
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(getApiErrorMessage(json, "Failed to add brand"));
+
+      const nextBrand = typeof json?.item?.name === "string" ? json.item.name.trim() : normalizedDraftBrand;
+      applyBrandValue(nextBrand);
+      setBrandOptions((current) => {
+        const items = [...current, { name: nextBrand }];
+        const deduped = new Map<string, BrandOption>();
+        for (const item of items) {
+          const key = item.name.trim().toLowerCase();
+          if (!deduped.has(key)) deduped.set(key, item);
+        }
+        return Array.from(deduped.values()).sort((a, b) => a.name.localeCompare(b.name));
+      });
+      showToast(`Brand ready: ${nextBrand}`, "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to add brand", "error");
+    } finally {
+      setBrandSaving(false);
+    }
+  }, [applyBrandValue, canAddBrand, normalizedDraftBrand]);
 
   const applyQuickEcommerceDefaults = useCallback(() => {
     setDraft((current) => {
@@ -1494,13 +1589,69 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
 
                 <label className="text-sm text-slate-300">
                   Brand
-                  <input
-                    className={`${fieldClass} mt-1 disabled:cursor-not-allowed disabled:opacity-60`}
-                    value={draft.brand}
-                    disabled={!(capabilities.brand || capabilities.shopBrand)}
-                    onChange={(e) => setDraft((s) => ({ ...s, brand: e.target.value, shopBrand: e.target.value }))}
-                    placeholder="Optional ecommerce brand label"
-                  />
+                  <div className="relative mt-1" ref={brandBoxRef}>
+                    <input
+                      className={`${fieldClass} disabled:cursor-not-allowed disabled:opacity-60`}
+                      value={draft.brand}
+                      disabled={!(capabilities.brand || capabilities.shopBrand)}
+                      onFocus={() => setBrandOpen(true)}
+                      onChange={(e) => {
+                        setDraft((s) => ({ ...s, brand: e.target.value, shopBrand: e.target.value }));
+                        setBrandOpen(true);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && canAddBrand) {
+                          e.preventDefault();
+                          void createBrandOption();
+                        }
+                      }}
+                      placeholder="Search or select brand"
+                    />
+                    {brandOpen && (capabilities.brand || capabilities.shopBrand) ? (
+                      <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl">
+                        <div className="border-b border-slate-800 px-3 py-2 text-xs text-slate-500">
+                          Select an existing brand or add a new one if it is missing.
+                        </div>
+                        <div className="max-h-64 overflow-y-auto p-2">
+                          {brandLoading ? (
+                            <div className="px-3 py-2 text-sm text-slate-400">Loading brands...</div>
+                          ) : null}
+                          {!brandLoading && brandOptions.map((option) => (
+                            <button
+                              key={option.name}
+                              type="button"
+                              className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-slate-100 hover:bg-white/5"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => applyBrandValue(option.name)}
+                            >
+                              <span>{option.name}</span>
+                              {exactBrandMatch?.name === option.name ? (
+                                <span className="text-xs text-emerald-300">Selected</span>
+                              ) : null}
+                            </button>
+                          ))}
+                          {!brandLoading && canAddBrand ? (
+                            <button
+                              type="button"
+                              className="mt-1 flex w-full items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-left text-sm text-emerald-100 hover:bg-emerald-500/15"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => void createBrandOption()}
+                              disabled={brandSaving}
+                            >
+                              <span>+ Add new brand: "{normalizedDraftBrand}"</span>
+                              <span className="text-xs">{brandSaving ? "Saving..." : "Add"}</span>
+                            </button>
+                          ) : null}
+                          {!brandLoading && !brandOptions.length && !canAddBrand ? (
+                            <div className="px-3 py-2 text-sm text-slate-400">No matching brands found.</div>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    Select an existing brand or add a new one if it is missing.
+                  </div>
                 </label>
 
                 <label className="text-sm text-slate-300 md:col-span-2">

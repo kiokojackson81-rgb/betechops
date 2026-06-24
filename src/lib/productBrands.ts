@@ -1,13 +1,34 @@
 import type { PrismaClient } from "@prisma/client";
 import type { ProductTableCapabilities } from "@/lib/productTableCapabilities";
 
-function normalizeBrandKey(value: string) {
-  return value.trim().toLowerCase();
+const UPPERCASE_BRAND_TOKENS = new Set(["SRNE", "MUST", "SOK", "UPS", "DC", "AC", "PWM", "MPPT"]);
+
+function collapseBrandWhitespace(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+export function normalizeBrandKey(value: string) {
+  return collapseBrandWhitespace(value).toLowerCase();
+}
+
+export function toCanonicalBrandName(value: string | null | undefined) {
+  const normalized = collapseBrandWhitespace(String(value || ""));
+  if (!normalized) return null;
+
+  return normalized
+    .split(" ")
+    .map((token) => {
+      if (!token) return token;
+      const upper = token.toUpperCase();
+      if (UPPERCASE_BRAND_TOKENS.has(upper)) return upper;
+      if (/^[A-Z0-9-]{2,6}$/.test(token)) return upper;
+      return token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
+    })
+    .join(" ");
 }
 
 function normalizeOptionalText(value: string | null | undefined) {
-  const normalized = String(value || "").trim();
-  return normalized || null;
+  return toCanonicalBrandName(value);
 }
 
 function dedupeBrands(values: Array<string | null | undefined>) {
