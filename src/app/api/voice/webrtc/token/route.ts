@@ -10,6 +10,8 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const DEFAULT_TOKEN_EXPIRY_SECONDS = 3600;
+const PROVIDER_TIMEOUT_MS = 10000;
+const CAPABILITY_TOKEN_ENDPOINT = "https://webrtc.africastalking.com/capability-token/request";
 
 function isVoiceWebrtcEnabled() {
   return String(process.env.NEXT_PUBLIC_VOICE_WEBRTC_ENABLED || "").trim().toLowerCase() === "true";
@@ -28,6 +30,25 @@ function buildConfigDebug(input: {
     username: input.username || null,
     phoneNumber: input.phoneNumber || null,
     webRtcEnabled: input.webRtcEnabled,
+  };
+}
+
+function buildProviderRequestDebug(input: {
+  username: string;
+  phoneNumber: string;
+  clientName: string;
+  hasApiKey: boolean;
+  timeoutMs: number;
+  elapsedMs?: number;
+}) {
+  return {
+    endpoint: CAPABILITY_TOKEN_ENDPOINT,
+    username: input.username,
+    phoneNumber: input.phoneNumber,
+    clientName: input.clientName,
+    hasApiKey: input.hasApiKey,
+    timeoutMs: input.timeoutMs,
+    elapsedMs: input.elapsedMs ?? 0,
   };
 }
 
@@ -98,37 +119,111 @@ export async function GET(request: Request) {
       username,
       clientName,
       phoneNumber,
-      incoming: true,
-      outgoing: true,
-      expire,
+      incoming: "true",
+      outgoing: "true",
+      expire: String(expire),
     };
-    const tokenResponse = await fetch("https://webrtc.africastalking.com/capability-token/request", {
-      method: "POST",
-      headers: {
-        apiKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(tokenRequestPayload),
-      cache: "no-store",
+    const tokenRequestDebug = buildProviderRequestDebug({
+      username,
+      phoneNumber,
+      clientName,
+      hasApiKey: Boolean(apiKey),
+      timeoutMs: PROVIDER_TIMEOUT_MS,
     });
+    console.info("[voice.webrtc.token.provider_request_started]", tokenRequestDebug);
 
-    const payload = (await tokenResponse.json().catch(() => ({}))) as {
+    const searchParams = new URLSearchParams(tokenRequestPayload);
+    const controller = new AbortController();
+    const startedAt = Date.now();
+    const timeout = setTimeout(() => controller.abort("voice_webrtc_provider_timeout"), PROVIDER_TIMEOUT_MS);
+
+    let tokenResponse: Response;
+    try {
+      tokenResponse = await fetch(CAPABILITY_TOKEN_ENDPOINT, {
+        method: "POST",
+        headers: {
+          apiKey,
+          "Content-Type": "application/x-www-form-urlencoded",
+          Accept: "application/json",
+        },
+        body: searchParams.toString(),
+        cache: "no-store",
+        signal: controller.signal,
+      });
+    } catch (error) {
+      const elapsedMs = Date.now() - startedAt;
+      if (
+        error instanceof Error &&
+        (error.name === "AbortError" || error.message === "voice_webrtc_provider_timeout")
+      ) {
+        console.error(
+          "[voice.webrtc.token.provider_timeout]",
+          buildProviderRequestDebug({
+            ...tokenRequestDebug,
+            elapsedMs,
+          }),
+        );
+        return NextResponse.json(
+          {
+            error: "voice_webrtc_provider_timeout",
+            message: "Africa's Talking WebRTC token request timed out.",
+          },
+          { status: 504 },
+        );
+      }
+
+      console.error("[voice.webrtc.token.provider_request_failed]", {
+        ...tokenRequestDebug,
+        elapsedMs,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return NextResponse.json(
+        {
+          error: "voice_webrtc_provider_request_failed",
+        },
+        { status: 502 },
+      );
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    const elapsedMs = Date.now() - startedAt;
+    console.info(
+      "[voice.webrtc.token.provider_response_received]",
+      buildProviderRequestDebug({
+        ...tokenRequestDebug,
+        elapsedMs,
+      }),
+    );
+
+    const rawBody = await tokenResponse.text().catch(() => "");
+    const payload = (rawBody
+      ? ((() => {
+          try {
+            return JSON.parse(rawBody);
+          } catch {
+            return {};
+          }
+        })())
+      : {}) as {
       token?: string;
       lifeTimeSec?: string | number;
       clientName?: string;
+      [key: string]: unknown;
     };
 
     if (!tokenResponse.ok || !payload.token) {
       console.error("[voice.webrtc.token.provider_failed]", {
         status: tokenResponse.status,
         request: tokenRequestPayload,
-        response: payload,
+        elapsedMs,
+        response: rawBody || payload,
       });
       return NextResponse.json(
         {
-          error: "voice_webrtc_token_failed",
+          error: "voice_webrtc_provider_rejected",
           status: tokenResponse.status,
-          detail: payload,
+          providerBody: rawBody || payload,
         },
         { status: 502 },
       );
