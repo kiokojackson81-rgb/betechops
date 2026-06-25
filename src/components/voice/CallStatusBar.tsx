@@ -24,22 +24,22 @@ export default function CallStatusBar() {
   }, [softphone.currentCall?.startedAt]);
 
   return (
-    <div className="rounded-[22px] border border-white/10 bg-slate-950/80 px-4 py-3">
+    <div className="rounded-[22px] border border-slate-800/80 bg-slate-950/92 px-4 py-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Current call state</div>
+          <div className="text-xs font-medium text-slate-400">Current call state</div>
           <div className="mt-1 truncate text-sm font-semibold text-white">
             {softphone.currentCall ? `${softphone.currentCall.displayName} · ${softphone.currentCall.remoteIdentity}` : "Idle"}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
-          <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 uppercase tracking-[0.18em]">
+          <span className="rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1">
             {softphone.stateLabel}
           </span>
-          <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">
+          <span className="rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1">
             {elapsed}
           </span>
-          <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">
+          <span className="rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1">
             {softphone.currentCall?.muted ? "Muted" : "Mic live"}
           </span>
         </div>
