@@ -145,6 +145,83 @@ function buildVoiceHref(path: string, impersonateId?: string | null) {
   return `${url.pathname}${url.searchParams.toString() ? `?${url.searchParams.toString()}` : ""}`;
 }
 
+type RoutingAgentDefinition = {
+  key: "BRENDAH" | "JENNIFER" | "ADMIN";
+  displayName: string;
+  roleLabel: string;
+  phone: string | null;
+  match: (agent: {
+    name: string | null;
+    email: string | null;
+    role: string | null;
+    attendantCategory: string | null;
+    phone?: string | null;
+  }) => boolean;
+};
+
+function normalizeCompareValue(value: string | null | undefined) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function buildRoutingAgentDefinitions(): RoutingAgentDefinition[] {
+  const brendahPhone = process.env.BETECH_VOICE_BRENDAH_NUMBER ?? null;
+  const jenniferPhone = process.env.BETECH_VOICE_JENNIFER_NUMBER ?? null;
+  const adminPhone = process.env.BETECH_VOICE_ADMIN_NUMBER ?? null;
+
+  return [
+    {
+      key: "BRENDAH",
+      displayName: "Brendah Owino",
+      roleLabel: "Marketing / Sales Agent",
+      phone: brendahPhone,
+      match: (agent) =>
+        normalizeCompareValue(agent.email).includes("brendah") ||
+        normalizeCompareValue(agent.name).includes("brendah") ||
+        normalizeCompareValue(agent.phone) === normalizeCompareValue(brendahPhone),
+    },
+    {
+      key: "JENNIFER",
+      displayName: "Jennifer",
+      roleLabel: "Direct Sales Agent",
+      phone: jenniferPhone,
+      match: (agent) =>
+        normalizeCompareValue(agent.email).includes("jen") ||
+        normalizeCompareValue(agent.name).includes("jen") ||
+        normalizeCompareValue(agent.phone) === normalizeCompareValue(jenniferPhone),
+    },
+    {
+      key: "ADMIN",
+      displayName: "Jackson Kioko",
+      roleLabel: "Admin / Fallback Line",
+      phone: adminPhone,
+      match: (agent) =>
+        normalizeCompareValue(agent.email).includes("jackson") ||
+        normalizeCompareValue(agent.name).includes("jackson") ||
+        normalizeCompareValue(agent.phone) === normalizeCompareValue(adminPhone) ||
+        normalizeCompareValue(agent.role) === "admin",
+    },
+  ];
+}
+
+function getCategoryLabel(category: string | null | undefined, role: string | null | undefined) {
+  const normalizedCategory = String(category || "").trim().toUpperCase();
+  if (normalizedCategory === "MARKETING_OPS") return "Marketing / Sales Agent";
+  if (normalizedCategory === "DIRECT_SALES_OPS") return "Direct Sales Agent";
+  if (String(role || "").trim().toUpperCase() === "ADMIN") return "Admin / Fallback Line";
+  return String(category || role || "Voice Agent").replace(/_/g, " ");
+}
+
+function getVoiceRoutingLabel(phone: string | null | undefined) {
+  const normalized = normalizeCompareValue(phone);
+  const routeMatch = buildRoutingAgentDefinitions().find(
+    (definition) => definition.phone && normalizeCompareValue(definition.phone) === normalized,
+  );
+  if (routeMatch) {
+    return `${routeMatch.displayName} / ${routeMatch.phone}`;
+  }
+  return phone || "-";
+}
+
 export async function resolveVoiceViewer(options?: ViewerOptions): Promise<VoiceViewer | null> {
   const session = await auth();
   const user = session?.user as {
@@ -209,6 +286,7 @@ async function listVoiceAgents() {
       id: true,
       name: true,
       email: true,
+      phone: true,
       role: true,
       attendantCategory: true,
       voicePresence: {
@@ -297,12 +375,29 @@ function serializePresenceRow(
   activeCallCount: number,
   waitingCallCount: number,
 ) {
+  const routingDefinition = buildRoutingAgentDefinitions().find((definition) => definition.match(agent));
+  const phone = routingDefinition?.phone ?? agent.phone ?? null;
+  const displayName = routingDefinition?.displayName ?? agent.name ?? agent.email ?? "Unnamed agent";
+  const displayRoleLabel = routingDefinition?.roleLabel ?? getCategoryLabel(agent.attendantCategory, agent.role);
+
   return {
     id: agent.id,
     name: agent.name,
     email: agent.email,
+    phone,
     role: agent.role,
     attendantCategory: agent.attendantCategory,
+    displayName,
+    displayRoleLabel,
+    isRoutingAgent: Boolean(routingDefinition),
+    routingPriority:
+      routingDefinition?.key === "BRENDAH"
+        ? 1
+        : routingDefinition?.key === "JENNIFER"
+          ? 2
+          : routingDefinition?.key === "ADMIN"
+            ? 3
+            : 99,
     status: String(agent.voicePresence?.status || "OFFLINE").toUpperCase(),
     lastSeenAt: toIso(agent.voicePresence?.lastSeenAt),
     updatedAt: toIso(agent.voicePresence?.updatedAt),
@@ -448,6 +543,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
         linkedSummaryText: `${contextSummary.linkedRecords.receipts} receipts · ${contextSummary.linkedRecords.webOrders} web orders · ${contextSummary.linkedRecords.quotations} quotes`,
         lastActivityTitle: lastActivity?.title ?? null,
         lastActivityAt: lastActivity?.at ?? null,
+        routedToDisplay: getVoiceRoutingLabel(call.routedTo),
         links: {
           customer: buildPhoneSearchHref(contextSummary.normalizedPhone || call.callerNumber, viewer.impersonateId),
           receipt: buildReceiptHref(contextSummary.latestReceiptId, viewer.impersonateId),
@@ -490,6 +586,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
         linkedSummaryText: `${contextSummary.linkedRecords.receipts} receipts · ${contextSummary.linkedRecords.webOrders} web orders · ${contextSummary.linkedRecords.quotations} quotes`,
         lastActivityTitle: lastActivity?.title ?? null,
         lastActivityAt: lastActivity?.at ?? null,
+        routedToDisplay: getVoiceRoutingLabel(call.routedTo),
         links: {
           customer: buildPhoneSearchHref(contextSummary.normalizedPhone || call.callerNumber, viewer.impersonateId),
           receipt: buildReceiptHref(contextSummary.latestReceiptId, viewer.impersonateId),
@@ -577,13 +674,16 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     }
   }
 
-  const agents = voiceAgentsRaw.map((agent) =>
-    serializePresenceRow(
-      agent,
-      activeCallIdsByAgent.get(agent.id) ?? 0,
-      waitingCallIdsByAgent.get(agent.id) ?? 0,
-    ),
-  );
+  const agents = voiceAgentsRaw
+    .map((agent) =>
+      serializePresenceRow(
+        agent,
+        activeCallIdsByAgent.get(agent.id) ?? 0,
+        waitingCallIdsByAgent.get(agent.id) ?? 0,
+      ),
+    )
+    .filter((agent) => (viewer.isAdmin ? agent.isRoutingAgent : true))
+    .sort((left, right) => left.routingPriority - right.routingPriority || left.displayName.localeCompare(right.displayName));
 
   const activeCallsCount = activeCalls.filter((call) => call.isActive).length;
   const waitingCallsCount = activeCalls.filter((call) => isWaitingStatus(call.status)).length;
