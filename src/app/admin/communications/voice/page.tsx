@@ -1,6 +1,10 @@
 import { redirect } from "next/navigation";
 import VoiceConsoleClient from "@/components/voice/VoiceConsoleClient";
-import { resolveVoiceViewer, getVoiceLiveSnapshot } from "@/lib/voiceOperations";
+import {
+  getVoiceLiveSnapshot,
+  isVoiceOperationsSchemaMissingError,
+  resolveVoiceViewer,
+} from "@/lib/voiceOperations";
 
 export const dynamic = "force-dynamic";
 
@@ -9,17 +13,35 @@ export default async function AdminVoiceDashboardPage() {
   if (!viewer) redirect("/admin/login");
   if (!viewer.isAdmin) redirect("/not-authorized");
 
-  const initialData = await getVoiceLiveSnapshot({ viewer });
+  try {
+    const initialData = await getVoiceLiveSnapshot({ viewer });
 
-  return (
-    <VoiceConsoleClient
-      mode="admin"
-      initialData={initialData}
-      backHref="/admin"
-      pollBaseHref="/api/voice/live"
-      badge="Communication Center"
-      title="Live Voice Operations Center"
-      subtitle="Monitor incoming sessions, active routing, customer history, missed-call follow-ups, notes, and recordings from one CRM-style console."
-    />
-  );
+    return (
+      <VoiceConsoleClient
+        mode="admin"
+        initialData={initialData}
+        backHref="/admin"
+        pollBaseHref="/api/voice/live"
+        badge="Communication Center"
+        title="Live Voice Operations Center"
+        subtitle="Monitor incoming sessions, active routing, customer history, missed-call follow-ups, notes, and recordings from one CRM-style console."
+      />
+    );
+  } catch (error) {
+    if (!isVoiceOperationsSchemaMissingError(error)) throw error;
+
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100">
+        <main className="mx-auto max-w-4xl p-6">
+          <div className="rounded-[28px] border border-amber-500/25 bg-amber-500/10 p-6">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-amber-200">Voice Setup Required</div>
+            <h1 className="mt-3 text-3xl font-semibold text-white">Voice operations migration is not applied yet.</h1>
+            <p className="mt-3 text-sm text-amber-100/90">
+              Apply migration <code>20260625150000_add_voice_operations_center</code> to this database, then refresh the page.
+            </p>
+          </div>
+        </main>
+      </div>
+    );
+  }
 }

@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { listVoiceCallsSnapshot, resolveVoiceViewer } from "@/lib/voiceOperations";
+import {
+  isVoiceOperationsSchemaMissingError,
+  listVoiceCallsSnapshot,
+  resolveVoiceViewer,
+} from "@/lib/voiceOperations";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +27,15 @@ export async function GET(request: Request) {
     return NextResponse.json(snapshot, { status: 200 });
   } catch (error) {
     console.error("[voice.calls.failed]", error);
+    if (isVoiceOperationsSchemaMissingError(error)) {
+      return NextResponse.json(
+        {
+          error: "voice_operations_migration_missing",
+          message: "Voice operations migration is not applied yet.",
+        },
+        { status: 503 },
+      );
+    }
     return NextResponse.json({ error: "voice_calls_failed" }, { status: 500 });
   }
 }
-

@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { resolveVoiceViewer, saveVoiceFollowUp } from "@/lib/voiceOperations";
+import {
+  isVoiceOperationsSchemaMissingError,
+  resolveVoiceViewer,
+  saveVoiceFollowUp,
+} from "@/lib/voiceOperations";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +55,15 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("[voice.followups.failed]", error);
+    if (isVoiceOperationsSchemaMissingError(error)) {
+      return NextResponse.json(
+        {
+          error: "voice_operations_migration_missing",
+          message: "Voice operations migration is not applied yet.",
+        },
+        { status: 503 },
+      );
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "voice_followups_failed" },
       { status: 400 },

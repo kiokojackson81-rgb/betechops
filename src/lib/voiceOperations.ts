@@ -22,6 +22,18 @@ export type VoiceViewer = {
   impersonateId: string | null;
 };
 
+export function isVoiceOperationsSchemaMissingError(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const maybeError = error as { code?: string; message?: string };
+  if (maybeError.code !== "P2021") return false;
+  const message = String(maybeError.message || "");
+  return (
+    message.includes("VoiceAgentPresence") ||
+    message.includes("VoiceCallNote") ||
+    message.includes("VoiceFollowUp")
+  );
+}
+
 export type VoiceLiveSnapshotInput = {
   viewer: VoiceViewer;
   selectedCallId?: string | null;
