@@ -1268,6 +1268,7 @@ export default async function AdminOverviewPage() {
       items: [
         { href: "/admin/orders", label: "Orders", meta: "Dispatch, pack, payment, and order status flow" },
         { href: "/admin/receipts", label: "Receipts", meta: "POS receipts, PDFs, downloads, and direct-sale history" },
+        { href: "/admin/communications/voice", label: "Voice calls", meta: "Live incoming calls, agent availability, and missed-call follow-up" },
         { href: "/admin/pending-pricing", label: "Pending pricing", meta: "Clear missing buying prices and unblock profits" },
         { href: "/admin/returns", label: "Returns", meta: "Pickup, receive, approve, and resolve return cases" },
       ],

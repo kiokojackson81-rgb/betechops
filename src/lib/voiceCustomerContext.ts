@@ -125,6 +125,30 @@ export type VoiceLeadContext = {
   createdAt: Date;
 };
 
+export type VoiceCallNoteContext = {
+  id: string;
+  note: string;
+  createdAt: Date;
+  authorName: string | null;
+  authorEmail: string | null;
+  voiceCallId: string;
+};
+
+export type VoiceTaskFollowUpContext = {
+  id: string;
+  phone: string;
+  title: string;
+  status: string;
+  dueAt: Date | null;
+  notes: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  assignedToName: string | null;
+  assignedToEmail: string | null;
+  voiceCallId: string | null;
+  voiceLeadId: string | null;
+};
+
 export type VoiceRecentCallContext = {
   id: string;
   sessionId: string;
@@ -139,7 +163,7 @@ export type VoiceRecentCallContext = {
 
 export type VoiceTimelineItem = {
   id: string;
-  type: "CALL" | "RECEIPT" | "WEB_ORDER" | "QUOTATION" | "AGENT_ORDER" | "POD" | "FOLLOW_UP";
+  type: "CALL" | "RECEIPT" | "WEB_ORDER" | "QUOTATION" | "AGENT_ORDER" | "POD" | "FOLLOW_UP" | "NOTE" | "TASK";
   title: string;
   detail: string;
   at: Date;
@@ -157,6 +181,8 @@ export type VoiceCustomerContext = {
   pendingPodReceipts: VoiceReceiptContext[];
   recentCalls: VoiceRecentCallContext[];
   followUps: VoiceLeadContext[];
+  recentNotes: VoiceCallNoteContext[];
+  taskFollowUps: VoiceTaskFollowUpContext[];
   notes: string[];
   assignedAgent: {
     id: string | null;
@@ -347,6 +373,8 @@ export async function getVoiceCustomerContext(rawPhone: string | null | undefine
       pendingPodReceipts: [],
       recentCalls: [],
       followUps: [],
+      recentNotes: [],
+      taskFollowUps: [],
       notes: [],
       assignedAgent: null,
       summary: {
@@ -363,7 +391,7 @@ export async function getVoiceCustomerContext(rawPhone: string | null | undefine
     } satisfies VoiceCustomerContext;
   }
 
-  const [receiptRows, webOrderRows, agentSaleRows, quoteRows, voiceCallRows, voiceLeadRows] =
+  const [receiptRows, webOrderRows, agentSaleRows, quoteRows, voiceCallRows, voiceLeadRows, voiceNoteRows, voiceTaskRows] =
     await Promise.all([
       prisma.receipt.findMany({
         where: {
@@ -474,6 +502,42 @@ export async function getVoiceCustomerContext(rawPhone: string | null | undefine
         orderBy: [{ updatedAt: "desc" }],
         take,
       }),
+      prisma.voiceCallNote.findMany({
+        where: {
+          OR: [
+            ...(link.matchedCustomer?.id ? [{ customerId: link.matchedCustomer.id }] : []),
+            { voiceCall: { callerNumber: { in: link.phoneVariants } } },
+          ],
+        },
+        include: {
+          author: {
+            select: {
+              name: true,
+              email: true,
+            },
+          },
+        },
+        orderBy: [{ createdAt: "desc" }],
+        take,
+      }),
+      prisma.voiceFollowUp.findMany({
+        where: {
+          OR: [
+            { phone: { in: link.phoneVariants } },
+            ...(link.matchedCustomer?.id ? [{ customerId: link.matchedCustomer.id }] : []),
+          ],
+        },
+        include: {
+          assignedTo: {
+            select: {
+              name: true,
+              email: true,
+            },
+          },
+        },
+        orderBy: [{ updatedAt: "desc" }],
+        take,
+      }),
     ]);
 
   const recentReceipts: VoiceReceiptContext[] = receiptRows.map((receipt) => {
@@ -561,11 +625,37 @@ export async function getVoiceCustomerContext(rawPhone: string | null | undefine
     createdAt: lead.createdAt,
   }));
 
+  const recentNotes: VoiceCallNoteContext[] = voiceNoteRows.map((note) => ({
+    id: note.id,
+    note: note.note,
+    createdAt: note.createdAt,
+    authorName: note.author?.name ?? null,
+    authorEmail: note.author?.email ?? null,
+    voiceCallId: note.voiceCallId,
+  }));
+
+  const taskFollowUps: VoiceTaskFollowUpContext[] = voiceTaskRows.map((task) => ({
+    id: task.id,
+    phone: task.phone,
+    title: task.title,
+    status: task.status,
+    dueAt: task.dueAt,
+    notes: task.notes,
+    createdAt: task.createdAt,
+    updatedAt: task.updatedAt,
+    assignedToName: task.assignedTo?.name ?? null,
+    assignedToEmail: task.assignedTo?.email ?? null,
+    voiceCallId: task.voiceCallId,
+    voiceLeadId: task.voiceLeadId,
+  }));
+
   const notes = uniqueStrings([
     ...recentAgentOrders.flatMap((sale) => [sale.customerNotes, sale.internalAgentNotes]),
     ...recentWebOrders.map((order) => order.customerLocation || order.customerEmail || null),
     ...quoteRows.flatMap((quote) => [quote.notes, quote.quoteMessage]),
     ...followUps.map((lead) => lead.name),
+    ...recentNotes.map((note) => note.note),
+    ...taskFollowUps.flatMap((task) => [task.title, task.notes]),
   ]).slice(0, 8);
 
   const assignedAgent =
@@ -657,6 +747,22 @@ export async function getVoiceCustomerContext(rawPhone: string | null | undefine
       at: lead.lastCallAt ?? lead.createdAt,
       href: "/admin/communications/voice",
     })),
+    ...recentNotes.map((note) => ({
+      id: `note-${note.id}`,
+      type: "NOTE" as const,
+      title: `Call note${note.authorName ? ` · ${note.authorName}` : ""}`,
+      detail: note.note,
+      at: note.createdAt,
+      href: "/admin/communications/voice",
+    })),
+    ...taskFollowUps.map((task) => ({
+      id: `task-${task.id}`,
+      type: "TASK" as const,
+      title: task.title,
+      detail: task.status.replace(/_/g, " "),
+      at: task.updatedAt,
+      href: "/admin/communications/voice",
+    })),
   ]
     .sort((a, b) => b.at.getTime() - a.at.getTime())
     .slice(0, 12);
@@ -672,6 +778,8 @@ export async function getVoiceCustomerContext(rawPhone: string | null | undefine
     pendingPodReceipts,
     recentCalls,
     followUps,
+    recentNotes,
+    taskFollowUps,
     notes,
     assignedAgent,
     summary: {

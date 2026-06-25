@@ -97,6 +97,11 @@ model User {
   customerVoiceCalls                   VoiceCall[]                     @relation("VoiceCallCustomer")
   assignedVoiceLeads                   VoiceLead[]                     @relation("VoiceLeadAssignedTo")
   customerVoiceLeads                   VoiceLead[]                     @relation("VoiceLeadCustomer")
+  voicePresence                        VoiceAgentPresence?             @relation("VoicePresenceUser")
+  authoredVoiceCallNotes               VoiceCallNote[]                 @relation("VoiceCallNoteAuthor")
+  customerVoiceCallNotes               VoiceCallNote[]                 @relation("VoiceCallNoteCustomer")
+  assignedVoiceFollowUps               VoiceFollowUp[]                 @relation("VoiceFollowUpAssignee")
+  customerVoiceFollowUps               VoiceFollowUp[]                 @relation("VoiceFollowUpCustomer")
 }
 
 model OtpCode {
@@ -1545,6 +1550,9 @@ model VoiceCall {
   assignedTo        User?     @relation("VoiceCallAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
   customer          User?     @relation("VoiceCallCustomer", fields: [customerId], references: [id], onDelete: SetNull)
   events            VoiceEvent[]
+  callNotes         VoiceCallNote[]
+  followUps         VoiceFollowUp[]
+  presenceAssignments VoiceAgentPresence[] @relation("VoicePresenceCurrentCall")
 
   @@index([status, createdAt])
   @@index([isActive, createdAt])
@@ -1578,10 +1586,69 @@ model VoiceLead {
   updatedAt    DateTime  @updatedAt
   assignedTo   User?     @relation("VoiceLeadAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
   customer     User?     @relation("VoiceLeadCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  followUps    VoiceFollowUp[]
 
   @@index([phone, createdAt])
   @@index([status, createdAt])
   @@index([assignedToId, status])
+}
+
+model VoiceAgentPresence {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  status        String    @default("OFFLINE")
+  lastSeenAt    DateTime  @default(now())
+  currentCallId String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  user          User      @relation("VoicePresenceUser", fields: [userId], references: [id], onDelete: Cascade)
+  currentCall   VoiceCall? @relation("VoicePresenceCurrentCall", fields: [currentCallId], references: [id], onDelete: SetNull)
+
+  @@index([status, updatedAt])
+  @@index([currentCallId])
+}
+
+model VoiceCallNote {
+  id         String    @id @default(cuid())
+  voiceCallId String
+  customerId String?
+  authorId   String
+  note       String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  voiceCall  VoiceCall @relation(fields: [voiceCallId], references: [id], onDelete: Cascade)
+  customer   User?     @relation("VoiceCallNoteCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  author     User      @relation("VoiceCallNoteAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([voiceCallId, createdAt])
+  @@index([customerId, createdAt])
+  @@index([authorId, createdAt])
+}
+
+model VoiceFollowUp {
+  id           String     @id @default(cuid())
+  voiceCallId  String?
+  voiceLeadId  String?
+  customerId   String?
+  assignedToId String?
+  phone        String
+  title        String
+  status       String     @default("pending")
+  dueAt        DateTime?
+  notes        String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  voiceCall    VoiceCall? @relation(fields: [voiceCallId], references: [id], onDelete: SetNull)
+  voiceLead    VoiceLead? @relation(fields: [voiceLeadId], references: [id], onDelete: SetNull)
+  customer     User?      @relation("VoiceFollowUpCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  assignedTo   User?      @relation("VoiceFollowUpAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  @@index([status, updatedAt])
+  @@index([assignedToId, status])
+  @@index([voiceCallId, updatedAt])
+  @@index([voiceLeadId, updatedAt])
+  @@index([customerId, updatedAt])
+  @@index([phone, updatedAt])
 }
 
 model Branding {
