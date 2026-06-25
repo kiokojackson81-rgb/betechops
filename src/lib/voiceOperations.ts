@@ -1,9 +1,11 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getVoiceCustomerContext } from "@/lib/voiceCustomerContext";
+import { publishVoiceLiveEvent } from "@/lib/voiceLiveEvents";
 
 export const VOICE_ALLOWED_ATTENDANT_CATEGORIES = ["DIRECT_SALES_OPS", "MARKETING_OPS"] as const;
-export const VOICE_PRESENCE_STATUSES = ["AVAILABLE", "BUSY", "BREAK", "OFFLINE"] as const;
+export const VOICE_PRESENCE_STATUSES = ["AVAILABLE", "AWAY", "BUSY", "BREAK", "OFFLINE"] as const;
+const VOICE_PRESENCE_STALE_MS = 90 * 1000;
 
 type VoicePresenceStatus = (typeof VOICE_PRESENCE_STATUSES)[number];
 
@@ -80,6 +82,12 @@ function isMissedStatus(status: string | null | undefined) {
     "not answered",
     "aborted",
   ].includes(normalizeStatus(status));
+}
+
+function isAgentAvailableForRouting(status: string | null | undefined, lastSeenAt: Date | null | undefined) {
+  if (String(status || "").trim().toUpperCase() !== "AVAILABLE") return false;
+  if (!lastSeenAt) return false;
+  return Date.now() - lastSeenAt.getTime() <= VOICE_PRESENCE_STALE_MS;
 }
 
 function formatStatusLabel(status: string | null | undefined) {
@@ -220,6 +228,14 @@ function getVoiceRoutingLabel(phone: string | null | undefined) {
     return `${routeMatch.displayName} / ${routeMatch.phone}`;
   }
   return phone || "-";
+}
+
+function effectivePresenceStatus(status: string | null | undefined, lastSeenAt: Date | null | undefined) {
+  const normalized = String(status || "OFFLINE").trim().toUpperCase();
+  if (normalized === "AVAILABLE" && lastSeenAt && Date.now() - lastSeenAt.getTime() > VOICE_PRESENCE_STALE_MS) {
+    return "AWAY";
+  }
+  return normalized || "OFFLINE";
 }
 
 export async function resolveVoiceViewer(options?: ViewerOptions): Promise<VoiceViewer | null> {
@@ -380,6 +396,8 @@ function serializePresenceRow(
   const displayName = routingDefinition?.displayName ?? agent.name ?? agent.email ?? "Unnamed agent";
   const displayRoleLabel = routingDefinition?.roleLabel ?? getCategoryLabel(agent.attendantCategory, agent.role);
 
+  const effectiveStatus = effectivePresenceStatus(agent.voicePresence?.status, agent.voicePresence?.lastSeenAt);
+
   return {
     id: agent.id,
     name: agent.name,
@@ -398,12 +416,13 @@ function serializePresenceRow(
           : routingDefinition?.key === "ADMIN"
             ? 3
             : 99,
-    status: String(agent.voicePresence?.status || "OFFLINE").toUpperCase(),
+    status: effectiveStatus,
     lastSeenAt: toIso(agent.voicePresence?.lastSeenAt),
     updatedAt: toIso(agent.voicePresence?.updatedAt),
     currentCallId: agent.voicePresence?.currentCallId ?? null,
     activeCallCount,
     waitingCallCount,
+    isAvailableForRouting: isAgentAvailableForRouting(effectiveStatus, agent.voicePresence?.lastSeenAt),
   };
 }
 
@@ -626,6 +645,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
           receipt: buildReceiptHref(contextSummary.latestReceiptId, viewer.impersonateId),
           callBack: `tel:${task.phone}`,
         },
+        assignedAgentLabel: task.assignedTo?.name ?? task.assignedTo?.email ?? contextSummary.assignedAgent?.name ?? "Unassigned",
       };
     }),
   );
@@ -654,14 +674,15 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
           voiceCallId: null,
           voiceLeadId: lead.id,
           customer: contextSummary,
-          links: {
-            customer: buildPhoneSearchHref(contextSummary.normalizedPhone || lead.phone, viewer.impersonateId),
-            quote: buildQuoteHref(contextSummary.latestQuotationId, viewer.impersonateId),
-            receipt: buildReceiptHref(contextSummary.latestReceiptId, viewer.impersonateId),
-            callBack: `tel:${lead.phone}`,
-          },
-        };
-      }),
+        links: {
+          customer: buildPhoneSearchHref(contextSummary.normalizedPhone || lead.phone, viewer.impersonateId),
+          quote: buildQuoteHref(contextSummary.latestQuotationId, viewer.impersonateId),
+          receipt: buildReceiptHref(contextSummary.latestReceiptId, viewer.impersonateId),
+          callBack: `tel:${lead.phone}`,
+        },
+        assignedAgentLabel: lead.assignedTo?.name ?? lead.assignedTo?.email ?? contextSummary.assignedAgent?.name ?? "Unassigned",
+      };
+    }),
   );
 
   const activeCallIdsByAgent = new Map<string, number>();
@@ -701,6 +722,31 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
 
   const selectedPhone = input.selectedPhone || selectedCall?.callerNumber || followUps[0]?.phone || missedLeads[0]?.phone || null;
   const selectedContext = selectedPhone ? serializeCustomerContextSummary(await getContextForPhone(selectedPhone)) : null;
+  const selectedCallDetail = selectedCall
+    ? await prisma.voiceCall.findUnique({
+        where: { id: selectedCall.id },
+        include: {
+          events: {
+            orderBy: [{ createdAt: "asc" }],
+            take: 24,
+          },
+          callNotes: {
+            include: {
+              author: { select: { id: true, name: true, email: true } },
+            },
+            orderBy: [{ createdAt: "desc" }],
+            take: 12,
+          },
+          followUps: {
+            include: {
+              assignedTo: { select: { id: true, name: true, email: true } },
+            },
+            orderBy: [{ updatedAt: "desc" }],
+            take: 12,
+          },
+        },
+      })
+    : null;
 
   return {
     generatedAt: new Date().toISOString(),
@@ -747,6 +793,63 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     selectedCallId: selectedCall?.id ?? null,
     selectedPhone,
     selectedContext,
+    selectedCallDetail: selectedCallDetail
+      ? {
+          id: selectedCallDetail.id,
+          sessionId: selectedCallDetail.sessionId,
+          callerNumber: selectedCallDetail.callerNumber,
+          direction: selectedCallDetail.direction,
+          status: selectedCallDetail.status,
+          routedTo: selectedCallDetail.routedTo,
+          recordingUrl: selectedCallDetail.recordingUrl,
+          durationInSeconds: selectedCallDetail.durationInSeconds ?? 0,
+          amount: Number(selectedCallDetail.amount ?? 0),
+          currencyCode: selectedCallDetail.currencyCode ?? "KES",
+          startedAt: toIso(selectedCallDetail.startedAt),
+          endedAt: toIso(selectedCallDetail.endedAt),
+          timeline: [
+            ...selectedCallDetail.events.map((event) => ({
+              id: `event-${event.id}`,
+              type: "EVENT",
+              title: event.eventType.replace(/_/g, " "),
+              detail: event.payloadJson && typeof event.payloadJson === "object"
+                ? String((event.payloadJson as Record<string, unknown>).status || (event.payloadJson as Record<string, unknown>).callSessionState || "")
+                : "",
+              at: event.createdAt.toISOString(),
+            })),
+            ...selectedCallDetail.followUps.map((task) => ({
+              id: `followup-${task.id}`,
+              type: "FOLLOW_UP",
+              title: task.title,
+              detail: `${task.status.replace(/_/g, " ")}${task.assignedTo?.name ? ` · ${task.assignedTo.name}` : ""}`,
+              at: task.updatedAt.toISOString(),
+            })),
+            ...selectedCallDetail.callNotes.map((note) => ({
+              id: `note-${note.id}`,
+              type: "NOTE",
+              title: `Note${note.author?.name ? ` · ${note.author.name}` : ""}`,
+              detail: note.note,
+              at: note.createdAt.toISOString(),
+            })),
+          ].sort((left, right) => new Date(left.at).getTime() - new Date(right.at).getTime()),
+          notes: selectedCallDetail.callNotes.map((note) => ({
+            id: note.id,
+            note: note.note,
+            createdAt: note.createdAt.toISOString(),
+            authorName: note.author?.name ?? null,
+            authorEmail: note.author?.email ?? null,
+          })),
+          followUps: selectedCallDetail.followUps.map((task) => ({
+            id: task.id,
+            title: task.title,
+            status: task.status,
+            dueAt: toIso(task.dueAt),
+            notes: task.notes,
+            assignedToName: task.assignedTo?.name ?? null,
+            assignedToEmail: task.assignedTo?.email ?? null,
+          })),
+        }
+      : null,
   };
 }
 
@@ -773,7 +876,7 @@ export async function updateVoicePresence(input: {
     throw new Error("invalid_presence_status");
   }
 
-  return prisma.voiceAgentPresence.upsert({
+  const presence = await prisma.voiceAgentPresence.upsert({
     where: { userId: input.userId },
     create: {
       userId: input.userId,
@@ -787,6 +890,71 @@ export async function updateVoicePresence(input: {
       lastSeenAt: new Date(),
     },
   });
+  publishVoiceLiveEvent({
+    type: "presence",
+    reason: "presence_updated",
+    userId: presence.userId,
+    callId: presence.currentCallId,
+  });
+  return presence;
+}
+
+export async function reassignVoiceWork(input: {
+  callId?: string | null;
+  queueId?: string | null;
+  queueType?: "task" | "lead" | null;
+  assignedToId: string;
+}) {
+  if (input.callId) {
+    const call = await prisma.voiceCall.update({
+      where: { id: input.callId },
+      data: {
+        assignedToId: input.assignedToId,
+      },
+    });
+
+    await prisma.voiceFollowUp.updateMany({
+      where: { voiceCallId: input.callId, status: { in: ["pending", "contacted"] } },
+      data: { assignedToId: input.assignedToId },
+    });
+
+    publishVoiceLiveEvent({
+      type: "queue",
+      reason: "voice_call_reassigned",
+      callId: call.id,
+      userId: call.assignedToId,
+    });
+    return { type: "call" as const, id: call.id, assignedToId: call.assignedToId };
+  }
+
+  if (input.queueId && input.queueType === "task") {
+    const followUp = await prisma.voiceFollowUp.update({
+      where: { id: input.queueId },
+      data: { assignedToId: input.assignedToId },
+    });
+    publishVoiceLiveEvent({
+      type: "queue",
+      reason: "voice_task_reassigned",
+      callId: followUp.voiceCallId,
+      userId: followUp.assignedToId,
+    });
+    return { type: "task" as const, id: followUp.id, assignedToId: followUp.assignedToId };
+  }
+
+  if (input.queueId && input.queueType === "lead") {
+    const lead = await prisma.voiceLead.update({
+      where: { id: input.queueId },
+      data: { assignedToId: input.assignedToId },
+    });
+    publishVoiceLiveEvent({
+      type: "queue",
+      reason: "voice_lead_reassigned",
+      userId: lead.assignedToId,
+    });
+    return { type: "lead" as const, id: lead.id, assignedToId: lead.assignedToId };
+  }
+
+  throw new Error("reassign_target_required");
 }
 
 export async function addVoiceCallNote(input: {
@@ -807,7 +975,7 @@ export async function addVoiceCallNote(input: {
 
   if (!call) throw new Error("voice_call_not_found");
 
-  return prisma.voiceCallNote.create({
+  const note = await prisma.voiceCallNote.create({
     data: {
       voiceCallId: call.id,
       customerId: call.customerId,
@@ -815,6 +983,13 @@ export async function addVoiceCallNote(input: {
       note: trimmedNote,
     },
   });
+  publishVoiceLiveEvent({
+    type: "note",
+    reason: "voice_call_note_created",
+    callId: call.id,
+    userId: input.authorId,
+  });
+  return note;
 }
 
 export async function saveVoiceFollowUp(input: {
@@ -840,7 +1015,7 @@ export async function saveVoiceFollowUp(input: {
   }
 
   if (input.id) {
-    return prisma.voiceFollowUp.update({
+    const followUp = await prisma.voiceFollowUp.update({
       where: { id: input.id },
       data: {
         title: input.title?.trim() || undefined,
@@ -850,6 +1025,13 @@ export async function saveVoiceFollowUp(input: {
         assignedToId: input.assignedToId ?? undefined,
       },
     });
+    publishVoiceLiveEvent({
+      type: "follow_up",
+      reason: "voice_follow_up_updated",
+      callId: followUp.voiceCallId,
+      userId: followUp.assignedToId,
+    });
+    return followUp;
   }
 
   let phone = String(input.phone || "").trim();
@@ -888,7 +1070,7 @@ export async function saveVoiceFollowUp(input: {
   if (!phone) throw new Error("phone_required");
   if (!input.title?.trim()) throw new Error("title_required");
 
-  return prisma.voiceFollowUp.create({
+  const followUp = await prisma.voiceFollowUp.create({
     data: {
       voiceCallId: input.voiceCallId ?? null,
       voiceLeadId: input.voiceLeadId ?? null,
@@ -901,4 +1083,11 @@ export async function saveVoiceFollowUp(input: {
       notes: input.notes?.trim() || null,
     },
   });
+  publishVoiceLiveEvent({
+    type: "follow_up",
+    reason: "voice_follow_up_created",
+    callId: followUp.voiceCallId,
+    userId: followUp.assignedToId,
+  });
+  return followUp;
 }

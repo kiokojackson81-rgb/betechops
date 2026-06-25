@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import {
   buildEmptyVoiceXmlResponse,
+  buildVoiceMessageXmlResponse,
   buildVoiceXmlResponse,
   createOrUpdateMissedVoiceLead,
+  createVoiceEventFromPayload,
   ensureVoiceLeadForCaller,
   getVoiceRouteTargets,
   isVoiceCallActive,
@@ -11,8 +13,10 @@ import {
   safeString,
   upsertVoiceCallFromPayload,
 } from "@/lib/voice";
+import { publishVoiceLiveEvent } from "@/lib/voiceLiveEvents";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 function xmlResponse(body: string) {
   return new Response(body, {
@@ -32,11 +36,25 @@ function buildAdminFallbackXml() {
   });
 }
 
+function isTrustedVoiceCallback(payload: Record<string, string>) {
+  const configuredUsername = safeString(process.env.AFRICASTALKING_USERNAME).toLowerCase();
+  if (!configuredUsername) return true;
+  const payloadUsername = safeString(payload.username || payload.userName || payload.Username).toLowerCase();
+  if (!payloadUsername) return true;
+  return payloadUsername === configuredUsername;
+}
+
 export async function POST(request: Request) {
   let payload: Record<string, string> = {};
   try {
     payload = await parseVoicePayloadFromRequest(request);
     console.info("[voice.callback] inbound", payload);
+    if (!isTrustedVoiceCallback(payload)) {
+      console.warn("[voice.callback.untrusted_username]", {
+        configured: safeString(process.env.AFRICASTALKING_USERNAME),
+        payloadUsername: safeString(payload.username || payload.userName || payload.Username),
+      });
+    }
 
     const status = normalizeVoiceStatus(payload);
     const isActive = isVoiceCallActive(payload);
@@ -50,6 +68,13 @@ export async function POST(request: Request) {
       routedTo,
       assignedToId: primaryTarget?.userId ?? null,
     });
+    await createVoiceEventFromPayload(
+      {
+        ...payload,
+        eventType: isActive ? "CALL_CREATED" : "CALL_COMPLETED",
+      },
+      voiceCall.id,
+    );
 
     await ensureVoiceLeadForCaller({
       callerNumber: voiceCall.callerNumber,
@@ -68,6 +93,17 @@ export async function POST(request: Request) {
       return xmlResponse(buildEmptyVoiceXmlResponse());
     }
 
+    if (!route.hasAvailableTarget) {
+      await createVoiceEventFromPayload(
+        {
+          ...payload,
+          eventType: "NO_AGENT_AVAILABLE",
+        },
+        voiceCall.id,
+      );
+      return xmlResponse(buildVoiceMessageXmlResponse("No agents are currently available. Please try again shortly."));
+    }
+
     if (route.routeType === "AFTER_HOURS") {
       return xmlResponse(
         buildVoiceXmlResponse({
@@ -77,6 +113,14 @@ export async function POST(request: Request) {
         }),
       );
     }
+
+    publishVoiceLiveEvent({
+      type: "call",
+      reason: "voice_callback_active",
+      callId: voiceCall.id,
+      sessionId: voiceCall.sessionId,
+      userId: voiceCall.assignedToId,
+    });
 
     return xmlResponse(
       buildVoiceXmlResponse({

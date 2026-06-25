@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getKenyanPhoneVariants, normalizeKenyanPhone } from "@/lib/phone";
 import { resolveVoiceCustomerLinkByPhone } from "@/lib/voiceCustomerContext";
+import { publishVoiceLiveEvent } from "@/lib/voiceLiveEvents";
 
 const NAIROBI_TIMEZONE = "Africa/Nairobi";
 
@@ -11,7 +12,12 @@ type VoiceRouteTarget = {
   label: "BRENDAH" | "JENNIFER" | "ADMIN";
   phoneNumber: string;
   userId: string | null;
+  presenceStatus: string;
+  isAvailable: boolean;
+  lastSeenAt: Date | null;
 };
+
+const VOICE_PRESENCE_ROUTING_WINDOW_MS = 90 * 1000;
 
 export function safeString(value: unknown) {
   return typeof value === "string" ? value.trim() : value == null ? "" : String(value).trim();
@@ -89,58 +95,78 @@ async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], Vo
   const brendahPhone = getConfiguredPhone("BRENDAH");
   const jenniferPhone = getConfiguredPhone("JENNIFER");
   const adminPhone = getConfiguredPhone("ADMIN");
+  const [brendahUserId, jenniferUserId, adminUserId] = await Promise.all([
+    brendahPhone ? resolveUserIdByPhone(brendahPhone) : Promise.resolve(null),
+    jenniferPhone ? resolveUserIdByPhone(jenniferPhone) : Promise.resolve(null),
+    adminPhone ? resolveUserIdByPhone(adminPhone) : Promise.resolve(null),
+  ]);
+
+  const userIds = [brendahUserId, jenniferUserId, adminUserId].filter((value): value is string => Boolean(value));
+  const presences = userIds.length
+    ? await prisma.voiceAgentPresence.findMany({
+        where: { userId: { in: userIds } },
+        select: {
+          userId: true,
+          status: true,
+          lastSeenAt: true,
+        },
+      })
+    : [];
+  const presenceByUserId = new Map(presences.map((presence) => [presence.userId, presence]));
+  const now = Date.now();
+
+  const toTarget = (label: VoiceRouteTarget["label"], phoneNumber: string, userId: string | null): VoiceRouteTarget => {
+    const presence = userId ? presenceByUserId.get(userId) : null;
+    const presenceStatus = safeString(presence?.status).toUpperCase() || "OFFLINE";
+    const lastSeenAt = presence?.lastSeenAt ?? null;
+    const isAvailable =
+      presenceStatus === "AVAILABLE" &&
+      Boolean(lastSeenAt) &&
+      now - (lastSeenAt?.getTime() ?? 0) <= VOICE_PRESENCE_ROUTING_WINDOW_MS;
+
+    return {
+      label,
+      phoneNumber,
+      userId,
+      presenceStatus,
+      isAvailable,
+      lastSeenAt,
+    };
+  };
 
   return {
-    BRENDAH: {
-      label: "BRENDAH",
-      phoneNumber: brendahPhone,
-      userId: brendahPhone ? await resolveUserIdByPhone(brendahPhone) : null,
-    },
-    JENNIFER: {
-      label: "JENNIFER",
-      phoneNumber: jenniferPhone,
-      userId: jenniferPhone ? await resolveUserIdByPhone(jenniferPhone) : null,
-    },
-    ADMIN: {
-      label: "ADMIN",
-      phoneNumber: adminPhone,
-      userId: adminPhone ? await resolveUserIdByPhone(adminPhone) : null,
-    },
+    BRENDAH: toTarget("BRENDAH", brendahPhone, brendahUserId),
+    JENNIFER: toTarget("JENNIFER", jenniferPhone, jenniferUserId),
+    ADMIN: toTarget("ADMIN", adminPhone, adminUserId),
   };
 }
 
 export async function getVoiceRouteTargets(date = new Date()) {
   const targets = await buildVoiceTargets();
-  const adminOnly = [targets.ADMIN].filter((target) => target.phoneNumber);
+  const adminOnly = [targets.ADMIN].filter((target) => target.phoneNumber && target.isAvailable);
+  const allConfiguredTargets = [targets.BRENDAH, targets.JENNIFER, targets.ADMIN].filter((target) => target.phoneNumber);
   if (!isWithinVoiceWorkingHours(date)) {
+    const fallbackTargets = adminOnly.length ? adminOnly : [targets.ADMIN].filter((target) => target.phoneNumber);
     return {
       routeType: "AFTER_HOURS",
-      orderedTargets: adminOnly,
-      primaryTarget: adminOnly[0] ?? null,
+      orderedTargets: fallbackTargets,
+      primaryTarget: fallbackTargets[0] ?? null,
+      availableTargets: fallbackTargets.filter((target) => target.isAvailable),
+      unavailableTargets: allConfiguredTargets.filter((target) => !fallbackTargets.includes(target)),
+      hasAvailableTarget: fallbackTargets.some((target) => target.isAvailable),
     };
   }
 
-  const latestWorkingCall = await prisma.voiceCall.findFirst({
-    where: {
-      routeType: "WORKING_HOURS",
-      direction: "INBOUND",
-      routedTo: { not: null },
-    },
-    orderBy: { createdAt: "desc" },
-    select: { routedTo: true },
-  });
-
-  const latestPrimary = String(latestWorkingCall?.routedTo || "").split(",")[0]?.trim();
-  const startWithJennifer = latestPrimary === targets.BRENDAH.phoneNumber;
-  const workingTargets = startWithJennifer
-    ? [targets.JENNIFER, targets.BRENDAH, targets.ADMIN]
-    : [targets.BRENDAH, targets.JENNIFER, targets.ADMIN];
-
-  const orderedTargets = workingTargets.filter((target) => target.phoneNumber);
+  const workingTargets = [targets.BRENDAH, targets.JENNIFER, targets.ADMIN];
+  const availableTargets = workingTargets.filter((target) => target.phoneNumber && target.isAvailable);
+  const orderedTargets = availableTargets.length ? availableTargets : [];
   return {
     routeType: "WORKING_HOURS",
     orderedTargets,
     primaryTarget: orderedTargets[0] ?? null,
+    availableTargets,
+    unavailableTargets: workingTargets.filter((target) => target.phoneNumber && !target.isAvailable),
+    hasAvailableTarget: availableTargets.length > 0,
   };
 }
 
@@ -157,6 +183,10 @@ export function buildVoiceXmlResponse(input: {
 
 export function buildEmptyVoiceXmlResponse() {
   return `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`;
+}
+
+export function buildVoiceMessageXmlResponse(message: string) {
+  return `<?xml version="1.0" encoding="UTF-8"?><Response><Say>${escapeXml(message)}</Say></Response>`;
 }
 
 function escapeXml(value: string) {
@@ -243,7 +273,7 @@ export async function upsertVoiceCallFromPayload(payload: VoicePayload, input?: 
   const customerLink = callerNumber ? await resolveVoiceCustomerLinkByPhone(callerNumber) : null;
   const customerId = customerLink?.matchedCustomer?.id ?? null;
 
-  return prisma.voiceCall.upsert({
+  const voiceCall = await prisma.voiceCall.upsert({
     where: { sessionId },
     create: {
       sessionId,
@@ -286,6 +316,16 @@ export async function upsertVoiceCallFromPayload(payload: VoicePayload, input?: 
       rawPayloadJson: payload,
     },
   });
+
+  publishVoiceLiveEvent({
+    type: voiceCall.recordingUrl ? "recording" : "call",
+    reason: "voice_call_upserted",
+    callId: voiceCall.id,
+    sessionId: voiceCall.sessionId,
+    userId: voiceCall.assignedToId,
+  });
+
+  return voiceCall;
 }
 
 export async function createVoiceEventFromPayload(payload: VoicePayload, voiceCallId?: string | null) {
@@ -294,7 +334,7 @@ export async function createVoiceEventFromPayload(payload: VoicePayload, voiceCa
     throw new Error("missing_session_id");
   }
 
-  return prisma.voiceEvent.create({
+  const event = await prisma.voiceEvent.create({
     data: {
       voiceCallId: voiceCallId ?? null,
       sessionId,
@@ -302,6 +342,15 @@ export async function createVoiceEventFromPayload(payload: VoicePayload, voiceCa
       payloadJson: payload,
     },
   });
+
+  publishVoiceLiveEvent({
+    type: "call",
+    reason: `voice_event_${event.eventType}`,
+    callId: voiceCallId ?? null,
+    sessionId,
+  });
+
+  return event;
 }
 
 function shouldCreateMissedLead(status: string) {
@@ -336,7 +385,7 @@ export async function createOrUpdateMissedVoiceLead(call: {
   });
 
   if (existing) {
-    return prisma.voiceLead.update({
+    const lead = await prisma.voiceLead.update({
       where: { id: existing.id },
       data: {
         name: callerName ?? existing.name,
@@ -347,9 +396,15 @@ export async function createOrUpdateMissedVoiceLead(call: {
         lastCallAt: call.startedAt ?? new Date(),
       },
     });
+    publishVoiceLiveEvent({
+      type: "queue",
+      reason: "voice_lead_updated",
+      userId: lead.assignedToId,
+    });
+    return lead;
   }
 
-  return prisma.voiceLead.create({
+  const lead = await prisma.voiceLead.create({
     data: {
       phone,
       name: callerName,
@@ -360,6 +415,12 @@ export async function createOrUpdateMissedVoiceLead(call: {
       lastCallAt: call.startedAt ?? new Date(),
     },
   });
+  publishVoiceLiveEvent({
+    type: "queue",
+    reason: "voice_lead_created",
+    userId: lead.assignedToId,
+  });
+  return lead;
 }
 
 export async function ensureVoiceLeadForCaller(call: {
@@ -381,7 +442,7 @@ export async function ensureVoiceLeadForCaller(call: {
   });
 
   if (existing) {
-    return prisma.voiceLead.update({
+    const lead = await prisma.voiceLead.update({
       where: { id: existing.id },
       data: {
         name: existing.name ?? customerLink?.matchedCustomer?.name ?? null,
@@ -393,9 +454,15 @@ export async function ensureVoiceLeadForCaller(call: {
             : existing.status,
       },
     });
+    publishVoiceLiveEvent({
+      type: "queue",
+      reason: "voice_inbound_lead_updated",
+      userId: lead.assignedToId,
+    });
+    return lead;
   }
 
-  return prisma.voiceLead.create({
+  const lead = await prisma.voiceLead.create({
     data: {
       phone,
       name: customerLink?.matchedCustomer?.name ?? null,
@@ -406,4 +473,10 @@ export async function ensureVoiceLeadForCaller(call: {
       lastCallAt: call.startedAt ?? new Date(),
     },
   });
+  publishVoiceLiveEvent({
+    type: "queue",
+    reason: "voice_inbound_lead_created",
+    userId: lead.assignedToId,
+  });
+  return lead;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { VoiceLiveSnapshot } from "@/lib/voiceOperations";
 
 type VoiceConsoleClientProps = {
@@ -14,7 +14,7 @@ type VoiceConsoleClientProps = {
   subtitle: string;
 };
 
-const PRESENCE_STATUSES = ["AVAILABLE", "BUSY", "BREAK", "OFFLINE"] as const;
+const PRESENCE_STATUSES = ["AVAILABLE", "AWAY", "BUSY", "BREAK", "OFFLINE"] as const;
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "-";
@@ -125,6 +125,14 @@ export default function VoiceConsoleClient({
   const [submittingFollowUp, setSubmittingFollowUp] = useState(false);
   const [presencePending, setPresencePending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [liveStatus, setLiveStatus] = useState<"connecting" | "live" | "offline">("connecting");
+  const [manualPresence, setManualPresence] = useState<string | null>(null);
+  const [dismissedIncomingIds, setDismissedIncomingIds] = useState<string[]>([]);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const lastInteractionAtRef = useRef(Date.now());
+  const availabilityTimerRef = useRef<number | null>(null);
+  const lastAnnouncedCallIdRef = useRef<string | null>(null);
 
   const refreshSnapshot = async (nextCallId?: string | null, nextPhone?: string | null) => {
     const params = new URLSearchParams();
@@ -148,13 +156,42 @@ export default function VoiceConsoleClient({
   };
 
   useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      refreshSnapshot(selectedCallId, selectedPhone).catch((pollError) => {
-        console.error("[voice.console.poll_failed]", pollError);
-      });
-    }, 15_000);
+    const params = new URLSearchParams();
+    params.set("stream", "1");
+    if (selectedCallId) params.set("selectedCallId", selectedCallId);
+    if (selectedPhone) params.set("selectedPhone", selectedPhone);
+    const separator = pollBaseHref.includes("?") ? "&" : "?";
+    const eventSource = new EventSource(`${pollBaseHref}${separator}${params.toString()}`);
+    eventSourceRef.current = eventSource;
+    setLiveStatus("connecting");
 
-    return () => window.clearInterval(intervalId);
+    eventSource.onopen = () => {
+      setLiveStatus("live");
+      setError(null);
+    };
+    eventSource.onerror = () => {
+      setLiveStatus("offline");
+    };
+    eventSource.addEventListener("snapshot", (event) => {
+      try {
+        const payload = JSON.parse((event as MessageEvent).data) as { snapshot?: VoiceLiveSnapshot };
+        if (!payload.snapshot) return;
+        setData(payload.snapshot);
+        setSelectedCallId(payload.snapshot.selectedCallId);
+        setSelectedPhone(payload.snapshot.selectedPhone);
+        setLastRefreshAt(payload.snapshot.generatedAt);
+      } catch (snapshotError) {
+        console.error("[voice.console.sse_parse_failed]", snapshotError);
+      }
+    });
+
+    return () => {
+      try {
+        eventSource.close();
+      } catch {}
+      eventSourceRef.current = null;
+      setLiveStatus("offline");
+    };
   }, [pollBaseHref, selectedCallId, selectedPhone]);
 
   const selectedCall = useMemo(() => {
@@ -170,6 +207,20 @@ export default function VoiceConsoleClient({
   const myPresence = useMemo(() => {
     return data.agents.find((agent) => agent.id === data.viewer.targetUserId) || null;
   }, [data.agents, data.viewer.targetUserId]);
+
+  const incomingCall = useMemo(() => {
+    const calls = mode === "staff"
+      ? data.waitingCalls.filter((call) => call.assignedToId === data.viewer.targetUserId)
+      : data.waitingCalls;
+    return calls.find((call) => !dismissedIncomingIds.includes(call.id)) || null;
+  }, [data.viewer.targetUserId, data.waitingCalls, dismissedIncomingIds, mode]);
+
+  useEffect(() => {
+    if (!incomingCall) return;
+    if (lastAnnouncedCallIdRef.current === incomingCall.id) return;
+    lastAnnouncedCallIdRef.current = incomingCall.id;
+    setDrawerOpen(true);
+  }, [incomingCall]);
 
   const selectedCustomerLinks = useMemo(() => {
     const phone = data.selectedContext?.normalizedPhone || selectedPhone || selectedCall?.callerNumber || "";
@@ -199,6 +250,7 @@ export default function VoiceConsoleClient({
   const handleSelectCall = (callId: string, phone: string) => {
     setSelectedCallId(callId);
     setSelectedPhone(phone);
+    setDrawerOpen(true);
     setError(null);
     refreshSnapshot(callId, phone).catch((selectionError) => {
       console.error("[voice.console.select_failed]", selectionError);
@@ -209,6 +261,7 @@ export default function VoiceConsoleClient({
   const handlePresenceUpdate = async (status: (typeof PRESENCE_STATUSES)[number]) => {
     setPresencePending(true);
     setError(null);
+    setManualPresence(status === "AVAILABLE" || status === "AWAY" ? null : status);
     try {
       const response = await fetch(`${pollBaseHref.replace("/live", "/presence")}`, {
         method: "POST",
@@ -234,6 +287,68 @@ export default function VoiceConsoleClient({
       setPresencePending(false);
     }
   };
+
+  useEffect(() => {
+    const markInteraction = () => {
+      lastInteractionAtRef.current = Date.now();
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        lastInteractionAtRef.current = Date.now();
+      }
+    };
+
+    window.addEventListener("mousemove", markInteraction);
+    window.addEventListener("keydown", markInteraction);
+    window.addEventListener("touchstart", markInteraction, { passive: true });
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      window.removeEventListener("mousemove", markInteraction);
+      window.removeEventListener("keydown", markInteraction);
+      window.removeEventListener("touchstart", markInteraction);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (mode !== "staff") return;
+
+    const pushAutoPresence = async () => {
+      if (manualPresence && !["AVAILABLE", "AWAY"].includes(manualPresence)) return;
+      const inactiveForMs = Date.now() - lastInteractionAtRef.current;
+      const nextStatus = document.visibilityState === "hidden" || inactiveForMs > 60_000 ? "AWAY" : "AVAILABLE";
+      if (myPresence?.status === nextStatus && inactiveForMs < 90_000) return;
+      try {
+        await fetch(`${pollBaseHref.replace("/live", "/presence")}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            status: nextStatus,
+            currentCallId: selectedCall?.id ?? null,
+          }),
+          keepalive: true,
+        });
+      } catch (presenceError) {
+        console.error("[voice.console.auto_presence_failed]", presenceError);
+      }
+    };
+
+    void pushAutoPresence();
+    availabilityTimerRef.current = window.setInterval(() => {
+      void pushAutoPresence();
+    }, 45_000);
+
+    return () => {
+      if (availabilityTimerRef.current) {
+        window.clearInterval(availabilityTimerRef.current);
+        availabilityTimerRef.current = null;
+      }
+    };
+  }, [manualPresence, mode, myPresence?.status, pollBaseHref, selectedCall?.id]);
 
   const handleAddNote = async () => {
     if (!selectedCall?.id || !noteDraft.trim()) return;
@@ -322,6 +437,32 @@ export default function VoiceConsoleClient({
     }
   };
 
+  const handleReassign = async (input: {
+    callId?: string | null;
+    queueId?: string | null;
+    queueType?: "task" | "lead";
+    assignedToId: string;
+  }) => {
+    setError(null);
+    try {
+      const response = await fetch(`${pollBaseHref.replace("/live", "/calls")}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(input),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(String(payload.error || "reassign_failed"));
+      }
+      await refreshSnapshot(selectedCallId, selectedPhone);
+    } catch (reassignError) {
+      console.error("[voice.console.reassign_failed]", reassignError);
+      setError("Could not reassign the voice work item.");
+    }
+  };
+
   const summaryCards =
     mode === "admin"
       ? [
@@ -362,6 +503,17 @@ export default function VoiceConsoleClient({
               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
                 <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
                   {formatRefreshStamp(lastRefreshAt)}
+                </span>
+                <span
+                  className={`rounded-full border px-3 py-1 ${
+                    liveStatus === "live"
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
+                      : liveStatus === "connecting"
+                        ? "border-amber-500/30 bg-amber-500/10 text-amber-100"
+                        : "border-rose-500/30 bg-rose-500/10 text-rose-100"
+                  }`}
+                >
+                  {liveStatus === "live" ? "Live updates" : liveStatus === "connecting" ? "Connecting live feed" : "Live feed offline"}
                 </span>
                 {selectedPhone ? (
                   <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
@@ -419,6 +571,53 @@ export default function VoiceConsoleClient({
           <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
             {error}
           </div>
+        ) : null}
+
+        {incomingCall ? (
+          <section className="rounded-[26px] border border-cyan-400/30 bg-[linear-gradient(135deg,rgba(8,145,178,0.18),rgba(15,23,42,0.95))] p-5 shadow-[0_18px_50px_rgba(8,145,178,0.15)]">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-100">Incoming Call</div>
+                <div className="mt-2 text-2xl font-semibold text-white">
+                  {incomingCall.customer.customerName || incomingCall.callerNumber}
+                </div>
+                <div className="mt-1 whitespace-nowrap text-sm text-cyan-50/90">{incomingCall.callerNumber}</div>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-200">
+                  <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1">
+                    {incomingCall.customer.matchedCustomerId ? "Returning Customer" : "New Caller"}
+                  </span>
+                  <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1">
+                    Spent {formatMoney(incomingCall.customer.totalPurchasesValue)}
+                  </span>
+                  <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1">
+                    {incomingCall.customer.location || "Location not captured"}
+                  </span>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleSelectCall(incomingCall.id, incomingCall.callerNumber)}
+                  className="rounded-full border border-emerald-400/40 bg-emerald-500/15 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-300"
+                >
+                  Answer
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDismissedIncomingIds((current) => [...current, incomingCall.id])}
+                  className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30"
+                >
+                  Decline
+                </button>
+                <Link
+                  href={incomingCall.links.customer}
+                  className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-300"
+                >
+                  Open CRM
+                </Link>
+              </div>
+            </div>
+          </section>
         ) : null}
 
         <section className={`grid gap-3 ${mode === "admin" ? "md:grid-cols-2 xl:grid-cols-4" : "md:grid-cols-2 xl:grid-cols-5"}`}>
@@ -650,16 +849,17 @@ export default function VoiceConsoleClient({
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center justify-between gap-2">
                                 <div className="min-w-0">
-                                  <div className="truncate font-semibold text-white">{(agent as any).displayName || agent.name || "Unnamed agent"}</div>
-                                  <div className="truncate text-sm text-slate-400">{(agent as any).displayRoleLabel || agent.attendantCategory || agent.role}</div>
-                                </div>
-                                <span className={`whitespace-nowrap rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(agent.status)}`}>
-                                  {agent.status}
+                                <div className="truncate font-semibold text-white">{(agent as any).displayName || agent.name || "Unnamed agent"}</div>
+                                <div className="truncate text-sm text-slate-400">{(agent as any).displayRoleLabel || agent.attendantCategory || agent.role}</div>
+                              </div>
+                              <span className={`whitespace-nowrap rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(agent.status)}`}>
+                                {agent.status}
                                 </span>
                               </div>
                               <div className="mt-3 grid gap-2 text-sm text-slate-300">
                                 <div className="whitespace-nowrap">{(agent as any).phone || "—"}</div>
                                 <div className="text-slate-400">Active {agent.activeCallCount} · Waiting {agent.waitingCallCount}</div>
+                                <div className="text-xs text-slate-500">{agent.isAvailableForRouting ? "Eligible for routing" : "Not currently routable"}</div>
                                 <div className="text-slate-400">Last seen {formatDateTime(agent.lastSeenAt)}</div>
                               </div>
                             </div>
@@ -708,12 +908,13 @@ export default function VoiceConsoleClient({
                             <div className="whitespace-nowrap text-sm text-slate-200">{agent.waitingCallCount}</div>
                             <div className="whitespace-nowrap text-sm text-slate-400">{formatDateTime(agent.lastSeenAt)}</div>
                             <div>
-                              <button
-                                type="button"
-                                className="inline-flex whitespace-nowrap rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
-                              >
-                                Review
-                              </button>
+                              <span className={`inline-flex whitespace-nowrap rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-wide ${
+                                agent.isAvailableForRouting
+                                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
+                                  : "border-white/10 bg-white/[0.03] text-slate-300"
+                              }`}>
+                                {agent.isAvailableForRouting ? "Ready" : "Review"}
+                              </span>
                             </div>
                           </div>
                         ))}
@@ -892,50 +1093,125 @@ export default function VoiceConsoleClient({
           <div className={cardShell("p-5")}>
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Call Queue</div>
-                <h2 className="mt-2 text-2xl font-semibold text-white">Missed calls and follow-up tasks</h2>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Waiting Queue</div>
+                <h2 className="mt-2 text-2xl font-semibold text-white">Supervisor callback and reassignment queue</h2>
               </div>
               <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-slate-300">
                 {data.callQueue.length} open
               </div>
             </div>
 
-            <div className="mt-4 grid gap-3">
+            <div className="mt-4 space-y-3 lg:hidden">
               {data.callQueue.length ? data.callQueue.map((item) => (
                 <div key={item.id} className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <div className="font-semibold text-white">{item.customer.customerName || item.phone}</div>
-                      <div className="mt-1 text-sm text-slate-400">
-                        {item.title} · {item.phone}
-                      </div>
-                      <div className="mt-2 text-xs text-slate-500">
-                        Due {formatDateTime(item.dueAt)} · Updated {formatDateTime(item.updatedAt)}
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <span className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(item.status)}`}>
-                        {item.statusLabel}
-                      </span>
-                      <Link href={item.links.customer} className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/20">
-                        Open customer
-                      </Link>
-                      <a href={item.links.callBack} className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-400">
-                        Call back
-                      </a>
-                      {item.type === "task" ? (
-                        <button
-                          type="button"
-                          onClick={() => handleResolveTask(item.id)}
-                          className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-100 transition hover:border-emerald-400"
-                        >
-                          Resolve
-                        </button>
-                      ) : null}
-                    </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-semibold text-white">{item.customer.customerName || item.phone}</div>
+                    <span className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(item.status)}`}>
+                      {item.statusLabel}
+                    </span>
+                  </div>
+                  <div className="mt-2 whitespace-nowrap text-sm text-slate-300">{item.phone}</div>
+                  <div className="mt-2 text-sm text-slate-400">{item.assignedAgentLabel}</div>
+                  <div className="mt-2 text-xs text-slate-500">
+                    Waiting {formatDateTime(item.dueAt || item.updatedAt)} · Priority {item.type === "task" ? "Task" : "Lead"}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <a href={item.links.callBack} className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-400">
+                      Callback
+                    </a>
+                    <Link href={item.links.customer} className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/20">
+                      Open CRM
+                    </Link>
+                    {item.type === "task" ? (
+                      <button
+                        type="button"
+                        onClick={() => handleResolveTask(item.id)}
+                        className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-100 transition hover:border-emerald-400"
+                      >
+                        Resolve
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               )) : (
+                <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-5 text-sm text-slate-400">
+                  No pending queue items right now.
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 hidden overflow-x-auto lg:block">
+              {data.callQueue.length ? (
+                <div className="min-w-[1120px] space-y-3">
+                  <div className="grid grid-cols-[140px_220px_160px_180px_100px_120px_220px] gap-3 px-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    <div>Waiting Time</div>
+                    <div>Customer</div>
+                    <div>Phone</div>
+                    <div>Assigned Agent</div>
+                    <div>Priority</div>
+                    <div>Callback</div>
+                    <div>Reassign</div>
+                  </div>
+                  {data.callQueue.map((item) => (
+                    <div
+                      key={item.id}
+                      className="grid grid-cols-[140px_220px_160px_180px_100px_120px_220px] items-center gap-3 rounded-[22px] border border-white/10 bg-white/[0.03] px-4 py-4"
+                    >
+                      <div className="whitespace-nowrap text-sm text-slate-300">{formatDateTime(item.dueAt || item.updatedAt)}</div>
+                      <div className="min-w-0">
+                        <div className="truncate font-semibold text-white">{item.customer.customerName || item.phone}</div>
+                        <div className="truncate text-xs text-slate-500">{item.title}</div>
+                      </div>
+                      <div className="whitespace-nowrap text-sm text-slate-300">{item.phone}</div>
+                      <div className="min-w-0">
+                        <div className="truncate text-sm text-slate-200">{item.assignedAgentLabel}</div>
+                        <div className="truncate text-xs text-slate-500">{item.customer.assignedAgent?.name || item.customer.assignedAgent?.email || "Supervisor queue"}</div>
+                      </div>
+                      <div>
+                        <span className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(item.status)}`}>
+                          {item.type === "task" ? "Task" : "Lead"}
+                        </span>
+                      </div>
+                      <div className="flex justify-start">
+                        <a href={item.links.callBack} className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400">
+                          Callback
+                        </a>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <select
+                          defaultValue={item.assignedToId || ""}
+                          onChange={(event) => {
+                            const assignedToId = event.target.value;
+                            if (!assignedToId) return;
+                            void handleReassign({
+                              queueId: item.id,
+                              queueType: item.type,
+                              assignedToId,
+                            });
+                          }}
+                          className="w-full rounded-full border border-white/10 bg-slate-950/80 px-3 py-2 text-xs text-slate-100 outline-none"
+                        >
+                          <option value="">Select agent</option>
+                          {data.agents.map((agent) => (
+                            <option key={agent.id} value={agent.id}>
+                              {(agent as any).displayName || agent.name}
+                            </option>
+                          ))}
+                        </select>
+                        {item.type === "task" ? (
+                          <button
+                            type="button"
+                            onClick={() => handleResolveTask(item.id)}
+                            className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400"
+                          >
+                            Resolve
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
                 <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-5 text-sm text-slate-400">
                   No pending queue items right now.
                 </div>
@@ -957,26 +1233,50 @@ export default function VoiceConsoleClient({
             <div className="mt-4 grid gap-3">
               {data.recentRecordings.length ? data.recentRecordings.map((call) => (
                 <div key={call.id} className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="font-semibold text-white">{call.customer.customerName || call.callerNumber}</div>
-                      <div className="mt-1 text-sm text-slate-400">
-                        {call.callerNumber} · {formatDateTime(call.startedAt || call.createdAt)}
+                  <div className="flex flex-col gap-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="font-semibold text-white">{call.customer.customerName || call.callerNumber}</div>
+                        <div className="mt-1 text-sm text-slate-400">
+                          {call.callerNumber} · {formatDateTime(call.startedAt || call.createdAt)}
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
+                          <span className="rounded-full border border-white/10 bg-slate-950/60 px-3 py-1">
+                            {formatDuration(call.durationInSeconds)}
+                          </span>
+                          <span className="rounded-full border border-white/10 bg-slate-950/60 px-3 py-1">
+                            {formatMoney(call.amount, call.currencyCode)}
+                          </span>
+                          <span className="rounded-full border border-white/10 bg-slate-950/60 px-3 py-1">
+                            {call.assignedToName || call.assignedToEmail || call.routedToDisplay || "Unassigned"}
+                          </span>
+                        </div>
                       </div>
-                      <div className="mt-2 text-xs text-slate-500">
-                        {formatDuration(call.durationInSeconds)} · {formatMoney(call.amount, call.currencyCode)}
-                      </div>
+                      {call.recordingUrl ? (
+                        <div className="flex flex-wrap gap-2">
+                          <a
+                            href={call.recordingUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400"
+                          >
+                            Download
+                          </a>
+                        </div>
+                      ) : null}
                     </div>
-                    {call.recordingUrl ? (
-                      <a
-                        href={call.recordingUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400"
-                      >
-                        Open
-                      </a>
-                    ) : null}
+                    <div>
+                      {call.recordingUrl ? (
+                        <audio
+                          controls
+                          preload="none"
+                          className="w-full"
+                          src={call.recordingUrl}
+                        />
+                      ) : (
+                        <div className="text-sm text-slate-500">Recording URL is not available.</div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )) : (
@@ -987,6 +1287,125 @@ export default function VoiceConsoleClient({
             </div>
           </div>
         </section>
+
+        {drawerOpen && selectedCall ? (
+          <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm">
+            <div className="ml-auto flex h-full w-full max-w-2xl flex-col overflow-y-auto border-l border-white/10 bg-slate-950 p-5 shadow-[-24px_0_80px_rgba(0,0,0,0.45)]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-300">Call Detail Drawer</div>
+                  <h2 className="mt-2 text-2xl font-semibold text-white">
+                    {selectedCall.customer.customerName || selectedCall.callerNumber}
+                  </h2>
+                  <div className="mt-1 whitespace-nowrap text-sm text-slate-400">
+                    {selectedCall.callerNumber} · {selectedCall.statusLabel}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDrawerOpen(false)}
+                  className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="mt-5 grid gap-5">
+                <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Customer</div>
+                      <div className="mt-2 text-sm text-white">{selectedCall.customer.customerName || "Unknown caller"}</div>
+                      <div className="mt-1 text-sm text-slate-400">{selectedCall.customer.email || "No email saved"}</div>
+                      <div className="mt-1 text-sm text-slate-400">{selectedCall.customer.location || "No location saved"}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs uppercase tracking-[0.18em] text-slate-500">CRM</div>
+                      <div className="mt-2 text-sm text-slate-200">{selectedCall.linkedSummaryText}</div>
+                      <div className="mt-1 text-sm text-slate-400">
+                        Quotes {selectedCall.customer.openQuotations} · Web orders {selectedCall.customer.pendingWebOrders} · POD {selectedCall.customer.pendingPod}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Link href={selectedCall.links.customer} className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20">
+                      Open customer
+                    </Link>
+                    <Link href={selectedCall.links.quote} className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400">
+                      Open quote
+                    </Link>
+                    <Link href={selectedCall.links.receipt} className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400">
+                      Open receipt
+                    </Link>
+                  </div>
+                </div>
+
+                <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
+                  <div className="text-sm font-semibold text-white">Voice Event Timeline</div>
+                  <div className="mt-3 space-y-2">
+                    {data.selectedCallDetail?.timeline?.length ? data.selectedCallDetail.timeline.map((item: any) => (
+                      <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3">
+                        <div className="text-sm font-medium text-white">{item.title}</div>
+                        <div className="mt-1 text-xs text-slate-400">
+                          {item.detail || "No extra detail"} · {formatDateTime(item.at)}
+                        </div>
+                      </div>
+                    )) : (
+                      <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-sm text-slate-400">
+                        No timeline entries yet.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid gap-5 lg:grid-cols-2">
+                  <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
+                    <div className="text-sm font-semibold text-white">Notes</div>
+                    <div className="mt-3 space-y-2">
+                      {data.selectedCallDetail?.notes?.length ? data.selectedCallDetail.notes.map((note: any) => (
+                        <div key={note.id} className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3">
+                          <div className="text-sm text-slate-100">{note.note}</div>
+                          <div className="mt-1 text-xs text-slate-500">
+                            {note.authorName || note.authorEmail || "Unknown author"} · {formatDateTime(note.createdAt)}
+                          </div>
+                        </div>
+                      )) : (
+                        <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-sm text-slate-400">
+                          No notes attached to this call yet.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
+                    <div className="text-sm font-semibold text-white">Follow-ups</div>
+                    <div className="mt-3 space-y-2">
+                      {data.selectedCallDetail?.followUps?.length ? data.selectedCallDetail.followUps.map((task: any) => (
+                        <div key={task.id} className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3">
+                          <div className="text-sm text-slate-100">{task.title}</div>
+                          <div className="mt-1 text-xs text-slate-500">
+                            {task.status.replace(/_/g, " ")} · {task.assignedToName || task.assignedToEmail || "Unassigned"} · {formatDateTime(task.dueAt)}
+                          </div>
+                        </div>
+                      )) : (
+                        <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-sm text-slate-400">
+                          No follow-ups linked to this call yet.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {selectedCall.recordingUrl ? (
+                  <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
+                    <div className="text-sm font-semibold text-white">Recording</div>
+                    <audio controls preload="none" className="mt-3 w-full" src={selectedCall.recordingUrl} />
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
       </main>
     </div>
   );
