@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import CallStatusBar from "@/components/voice/CallStatusBar";
 import RegistrationBadge from "@/components/voice/RegistrationBadge";
@@ -18,6 +19,8 @@ type VoiceConsoleClientProps = {
 };
 
 const PRESENCE_STATUSES = ["AVAILABLE", "AWAY", "BUSY", "BREAK", "OFFLINE"] as const;
+const VOICE_CONSOLE_TABS = ["operations", "recent", "recordings", "followups", "agents"] as const;
+type VoiceConsoleTab = (typeof VOICE_CONSOLE_TABS)[number];
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "-";
@@ -122,6 +125,10 @@ function getInitials(value: string | null | undefined) {
   return text || "VC";
 }
 
+function normalizeVoiceTab(value: string | null): VoiceConsoleTab {
+  return VOICE_CONSOLE_TABS.includes(value as VoiceConsoleTab) ? (value as VoiceConsoleTab) : "operations";
+}
+
 export default function VoiceConsoleClient({
   mode,
   initialData,
@@ -132,6 +139,9 @@ export default function VoiceConsoleClient({
   subtitle,
 }: VoiceConsoleClientProps) {
   const softphone = useSoftphone();
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [data, setData] = useState(initialData);
   const [selectedCallId, setSelectedCallId] = useState(initialData.selectedCallId);
   const [selectedPhone, setSelectedPhone] = useState(initialData.selectedPhone);
@@ -155,6 +165,13 @@ export default function VoiceConsoleClient({
   const lastInteractionAtRef = useRef(Date.now());
   const availabilityTimerRef = useRef<number | null>(null);
   const lastAnnouncedCallIdRef = useRef<string | null>(null);
+  const activeTab = useMemo(() => normalizeVoiceTab(searchParams.get("tab")), [searchParams]);
+
+  const switchTab = (tab: VoiceConsoleTab) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", tab);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
 
   const refreshSnapshot = async (nextCallId?: string | null, nextPhone?: string | null) => {
     const params = new URLSearchParams();
@@ -592,21 +609,21 @@ export default function VoiceConsoleClient({
         ];
 
   return (
-    <div className="bg-slate-950 text-slate-100">
+    <div className="overflow-x-hidden bg-slate-950 text-slate-100">
       <main
-        className={`mx-auto max-w-7xl space-y-5 px-3 pb-10 sm:px-4 lg:px-6 ${
-          mode === "admin" ? "pt-28 sm:pt-32 lg:pt-36" : "pt-5 sm:pt-6 lg:pt-8"
+        className={`mx-auto max-w-7xl space-y-4 px-3 pb-10 sm:px-4 lg:px-6 ${
+          mode === "admin" ? "pt-24 sm:pt-28 lg:pt-28" : "pt-4 sm:pt-5 lg:pt-6"
         }`}
       >
-        <header className={cardShell("p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]")}>
+        <header className={cardShell("p-4 shadow-[0_20px_60px_rgba(0,0,0,0.32)] sm:p-5")}>
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="space-y-3">
               <div className="inline-flex rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
                 {badge}
               </div>
               <div>
-                <h1 className="text-3xl font-semibold text-white">{title}</h1>
-                <p className="mt-2 max-w-3xl text-sm text-slate-300">{subtitle}</p>
+                <h1 className="text-2xl font-semibold text-white sm:text-3xl">{title}</h1>
+                <p className="mt-1.5 max-w-3xl text-sm text-slate-300">{subtitle}</p>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
                 <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
@@ -684,15 +701,48 @@ export default function VoiceConsoleClient({
           </div>
         </header>
 
+        <div className="overflow-x-auto pb-1">
+          <div className="flex min-w-max items-center gap-2">
+            {[
+              ["operations", "Operations Center"],
+              ["recent", "Recent Calls"],
+              ["recordings", "Recordings"],
+              ["followups", "Follow-ups"],
+              ["agents", "Agents"],
+            ].map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => switchTab(key as VoiceConsoleTab)}
+                className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
+                  activeTab === key
+                    ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
+                    : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+            {mode === "admin" ? (
+              <Link
+                href="/admin/communications/voice/settings"
+                className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-300 transition hover:border-white/20"
+              >
+                Softphone Settings
+              </Link>
+            ) : null}
+          </div>
+        </div>
+
         {error ? (
           <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
             {error}
           </div>
         ) : null}
 
-        <CallStatusBar />
+        {activeTab === "operations" ? <CallStatusBar /> : null}
 
-        {incomingCall ? (
+        {activeTab === "operations" && incomingCall ? (
           <section className="rounded-[26px] border border-cyan-400/30 bg-[linear-gradient(135deg,rgba(8,145,178,0.18),rgba(15,23,42,0.95))] p-5 shadow-[0_18px_50px_rgba(8,145,178,0.15)]">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
@@ -739,6 +789,7 @@ export default function VoiceConsoleClient({
           </section>
         ) : null}
 
+        {activeTab === "operations" ? (
         <section className={`grid gap-3 ${mode === "admin" ? "md:grid-cols-2 xl:grid-cols-4" : "md:grid-cols-2 xl:grid-cols-5"}`}>
           {summaryCards.map((card) => (
             <div key={card.label} className={cardShell("p-4")}>
@@ -748,8 +799,10 @@ export default function VoiceConsoleClient({
             </div>
           ))}
         </section>
+        ) : null}
 
-        <section className="grid gap-5 xl:grid-cols-[minmax(0,1.12fr)_minmax(340px,0.88fr)] xl:items-start">
+        {activeTab === "operations" ? (
+        <section className="grid gap-5 overflow-hidden xl:grid-cols-[minmax(0,1.12fr)_minmax(340px,0.88fr)] xl:items-start">
           <div className={cardShell("p-5 xl:sticky xl:top-32")}>
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -937,8 +990,10 @@ export default function VoiceConsoleClient({
             )}
           </div>
         </section>
+        ) : null}
 
-        <section className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr] xl:items-start">
+        {(activeTab === "operations" || activeTab === "agents" || activeTab === "recent") ? (
+        <section className={`grid gap-5 overflow-hidden ${activeTab === "operations" ? "" : "xl:grid-cols-[0.95fr_1.05fr] xl:items-start"}`}>
           <div className={cardShell("p-5")}>
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -1083,6 +1138,7 @@ export default function VoiceConsoleClient({
             </div>
           </div>
 
+          {activeTab !== "operations" ? (
           <div className={cardShell("p-5")}>
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -1261,9 +1317,13 @@ export default function VoiceConsoleClient({
               )}
             </div>
           </div>
+          ) : null}
         </section>
+        ) : null}
 
-        <section className="grid gap-5 xl:grid-cols-[1fr_0.9fr]">
+        {(activeTab === "operations" || activeTab === "followups" || activeTab === "recordings") ? (
+        <section className={`grid gap-5 overflow-hidden ${activeTab === "operations" ? "" : "xl:grid-cols-[1fr_0.9fr]"}`}>
+          {activeTab !== "recordings" ? (
           <div className={cardShell("p-5")}>
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -1392,7 +1452,9 @@ export default function VoiceConsoleClient({
               )}
             </div>
           </div>
+          ) : null}
 
+          {activeTab !== "followups" ? (
           <div className={cardShell("p-5")}>
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -1460,7 +1522,9 @@ export default function VoiceConsoleClient({
               )}
             </div>
           </div>
+          ) : null}
         </section>
+        ) : null}
 
         {drawerOpen && selectedCall ? (
           <div className="fixed inset-0 z-[60] bg-slate-950/70 backdrop-blur-sm">
@@ -1470,7 +1534,7 @@ export default function VoiceConsoleClient({
               className="absolute inset-0 h-full w-full cursor-default"
               aria-label="Close call detail drawer backdrop"
             />
-            <aside className="relative ml-auto flex h-full w-full flex-col border-l border-white/10 bg-slate-950 shadow-[-24px_0_80px_rgba(0,0,0,0.45)] md:w-[420px] lg:w-[480px] xl:w-[520px]">
+            <aside className="relative ml-auto flex h-full w-full max-w-full flex-col overflow-hidden border-l border-white/10 bg-slate-950 shadow-[-24px_0_80px_rgba(0,0,0,0.45)] md:w-[420px] lg:w-[480px] xl:w-[520px]">
               <div className="sticky top-0 z-10 border-b border-white/10 bg-[linear-gradient(180deg,rgba(2,6,23,0.98),rgba(2,6,23,0.94))] px-5 py-4 backdrop-blur">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -1509,7 +1573,8 @@ export default function VoiceConsoleClient({
                   </Link>
                 </div>
 
-                <div className="mt-4 flex flex-wrap gap-2">
+                <div className="mt-4 flex overflow-x-auto pb-1">
+                  <div className="flex min-w-max gap-2">
                   {[
                     ["overview", "Overview"],
                     ["timeline", "Timeline"],
@@ -1530,6 +1595,7 @@ export default function VoiceConsoleClient({
                       {label}
                     </button>
                   ))}
+                  </div>
                 </div>
               </div>
 

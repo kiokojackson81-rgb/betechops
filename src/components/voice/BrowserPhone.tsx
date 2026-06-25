@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronUp, Headset, Phone, RefreshCw, RadioTower, Settings2, TestTube2, X } from "lucide-react";
+import { ChevronDown, Headset, Phone, RefreshCw, RadioTower, Settings2, TestTube2, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -10,24 +10,7 @@ import DialPad from "@/components/voice/DialPad";
 import RegistrationBadge from "@/components/voice/RegistrationBadge";
 import { useSoftphone } from "@/components/voice/SoftphoneProvider";
 
-function MockEventButton({
-  label,
-  event,
-}: {
-  label: string;
-  event: Parameters<ReturnType<typeof useSoftphone>["triggerMockEvent"]>[0];
-}) {
-  const softphone = useSoftphone();
-  return (
-    <button
-      type="button"
-      onClick={() => softphone.triggerMockEvent(event)}
-      className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-white/20"
-    >
-      {label}
-    </button>
-  );
-}
+const SHOW_DEBUG_TOOLS = process.env.NODE_ENV !== "production";
 
 export default function BrowserPhone() {
   const softphone = useSoftphone();
@@ -46,6 +29,29 @@ export default function BrowserPhone() {
     }
     return "bg-slate-400";
   }, [softphone.availability, softphone.connectionStatus, softphone.state]);
+
+  const widgetStatusLabel = useMemo(() => {
+    if (softphone.connectionStatus === "error") return "Error";
+    if (softphone.transportMode === "webrtc" && softphone.connectionStatus === "ready") return "WebRTC ready";
+    if (softphone.availability === "TALKING") return "On call";
+    if (softphone.availability === "AVAILABLE") return "Available";
+    if (softphone.transportMode === "unavailable") return "Offline";
+    if (softphone.transportMode === "mock") return "Mobile fallback active";
+    return softphone.availabilityLabel;
+  }, [softphone.availability, softphone.availabilityLabel, softphone.connectionStatus, softphone.transportMode]);
+
+  const connectionSummary = useMemo(() => {
+    if (softphone.transportMode === "webrtc" && softphone.connectionStatus === "ready") {
+      return "WebRTC ready";
+    }
+    if (softphone.transportMode === "webrtc") {
+      return "WebRTC connecting";
+    }
+    if (softphone.transportMode === "mock") {
+      return "Mobile fallback active";
+    }
+    return "Offline";
+  }, [softphone.connectionStatus, softphone.transportMode]);
 
   useEffect(() => {
     const handleDrawerState = (event: Event) => {
@@ -139,7 +145,7 @@ export default function BrowserPhone() {
                 <div>
                   <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Connection + devices</div>
                   <div className="mt-1 text-sm text-white">
-                    Mic {softphone.microphonePermission} · Heartbeat {softphone.lastHeartbeatAt ? "live" : "pending"} · Mode {softphone.transportMode}
+                    Mic {softphone.microphonePermission} · Heartbeat {softphone.lastHeartbeatAt ? "live" : "pending"} · {connectionSummary}
                   </div>
                   {softphone.statusMessage ? (
                     <div className="mt-2 text-xs text-amber-200">{softphone.statusMessage}</div>
@@ -189,7 +195,7 @@ export default function BrowserPhone() {
               </div>
             </div>
 
-            {softphone.transportMode === "mock" ? (
+            {SHOW_DEBUG_TOOLS ? (
               <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
                 <button
                   type="button"
@@ -197,22 +203,33 @@ export default function BrowserPhone() {
                   className="flex w-full items-center justify-between gap-3 text-left"
                 >
                   <div>
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Testing tools</div>
-                    <div className="mt-1 text-sm text-white">Mock event harness for development and QA.</div>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Debug tools</div>
+                    <div className="mt-1 text-sm text-white">Internal call-state controls for development and diagnostics.</div>
                   </div>
-                  {showTestingTools ? <ChevronUp className="h-4 w-4 text-slate-300" /> : <ChevronDown className="h-4 w-4 text-slate-300" />}
+                  <ChevronDown className={`h-4 w-4 text-slate-300 transition ${showTestingTools ? "rotate-180" : ""}`} />
                 </button>
                 {showTestingTools ? (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <MockEventButton label="Incoming" event="incoming" />
-                    <MockEventButton label="Answered" event="answered" />
-                    <MockEventButton label="Reject" event="rejected" />
-                    <MockEventButton label="End" event="ended" />
-                    <MockEventButton label="Hold" event="hold" />
-                    <MockEventButton label="Resume" event="resume" />
-                    <MockEventButton label="Disconnect" event="disconnect" />
-                    <MockEventButton label="Reconnect" event="reconnect" />
-                    <MockEventButton label="Transfer" event="transfer" />
+                    {[
+                      ["Incoming", "incoming"],
+                      ["Answered", "answered"],
+                      ["Reject", "rejected"],
+                      ["End", "ended"],
+                      ["Hold", "hold"],
+                      ["Resume", "resume"],
+                      ["Disconnect", "disconnect"],
+                      ["Reconnect", "reconnect"],
+                      ["Transfer", "transfer"],
+                    ].map(([label, event]) => (
+                      <button
+                        key={event}
+                        type="button"
+                        onClick={() => softphone.triggerMockEvent(event as Parameters<typeof softphone.triggerMockEvent>[0])}
+                        className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-white/20"
+                      >
+                        {label}
+                      </button>
+                    ))}
                   </div>
                 ) : null}
               </div>
@@ -221,15 +238,15 @@ export default function BrowserPhone() {
                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">WebRTC control plane</div>
                 <div className="mt-1 text-sm text-white">
                   {softphone.transportMode === "webrtc"
-                    ? "Africa's Talking WebRTC is active through the adapter layer."
-                    : "WebRTC is enabled but not currently available."}
+                    ? "Africa's Talking WebRTC is connected to the browser phone."
+                    : "Mobile fallback remains active while browser calling is unavailable."}
                 </div>
               </div>
             )}
 
             {pathname !== "/admin/communications/voice/settings" ? (
               <div className="text-[11px] text-slate-500">
-                Settings, SIP configuration placeholders, and device testing live under <code>/admin/communications/voice/settings</code>.
+                Device controls and call preferences live under <code>/admin/communications/voice/settings</code>.
               </div>
             ) : null}
           </div>
@@ -249,7 +266,7 @@ export default function BrowserPhone() {
           <span className="hidden min-w-0 text-left sm:block">
             <span className="block text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Phone</span>
             <span className="block max-w-[140px] truncate text-sm font-semibold text-white">
-              {softphone.currentCall ? softphone.currentCall.displayName : softphone.stateLabel}
+              {softphone.currentCall ? softphone.currentCall.displayName : widgetStatusLabel}
             </span>
           </span>
         </button>

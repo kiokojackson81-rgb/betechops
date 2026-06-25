@@ -90,7 +90,8 @@ type SoftphoneContextValue = {
 
 const SoftphoneContext = createContext<SoftphoneContextValue | null>(null);
 const NEXT_PUBLIC_VOICE_WEBRTC_ENABLED =
-  String(process.env.NEXT_PUBLIC_VOICE_WEBRTC_ENABLED || "").trim().toLowerCase() === "true";
+  String(process.env.NEXT_PUBLIC_VOICE_WEBRTC_ENABLED || "").trim().toLowerCase() === "true" ||
+  String(process.env.NEXT_PUBLIC_RTC_ENABLED || "").trim().toLowerCase() === "true";
 
 function readStoredPreferences() {
   if (typeof window === "undefined") return DEFAULT_SOFTPHONE_PREFERENCES;

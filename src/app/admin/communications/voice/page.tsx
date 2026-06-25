@@ -17,16 +17,16 @@ export default async function AdminVoiceDashboardPage() {
     const initialData = await getVoiceLiveSnapshot({ viewer });
 
     return (
-      <VoiceConsoleClient
-        mode="admin"
-        initialData={initialData}
-        backHref="/admin"
-        pollBaseHref="/api/voice/live"
-        badge="Communication Center"
-        title="Live Voice Operations Center"
-        subtitle="Monitor incoming sessions, active routing, customer history, missed-call follow-ups, notes, and recordings from one CRM-style console."
-      />
-    );
+        <VoiceConsoleClient
+          mode="admin"
+          initialData={initialData}
+          backHref="/admin"
+          pollBaseHref="/api/voice/live"
+          badge="Communication Center"
+          title="Live Voice Operations Center"
+          subtitle="Manage browser calls, mobile fallback, call history, recordings, and follow-ups from one CRM console."
+        />
+      );
   } catch (error) {
     if (!isVoiceOperationsSchemaMissingError(error)) throw error;
 
