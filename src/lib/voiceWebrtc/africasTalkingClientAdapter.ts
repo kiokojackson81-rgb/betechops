@@ -28,6 +28,7 @@ declare global {
 
 const AFRICASTALKING_WEBRTC_BUNDLE_URL =
   "https://unpkg.com/africastalking-client@1.0.7/build/africastalking.js";
+let warnedAboutDeprecatedSdk = false;
 
 type ListenerMap = {
   [K in VoiceWebrtcEventName]: Set<(payload: VoiceWebrtcAdapterEventMap[K]) => void>;
@@ -61,6 +62,13 @@ function normalizeCallSession(raw: unknown, fallback: Partial<VoiceWebrtcCallSes
 async function ensureBrowserBundle() {
   if (typeof window === "undefined") throw new Error("browser_only");
   if (window.Africastalking?.Client) return window.Africastalking;
+
+  if (!warnedAboutDeprecatedSdk) {
+    console.warn(
+      "[voice.webrtc] africastalking-client is deprecated. It remains behind the adapter layer because current provider docs still reference it.",
+    );
+    warnedAboutDeprecatedSdk = true;
+  }
 
   await new Promise<void>((resolve, reject) => {
     const existing = document.querySelector<HTMLScriptElement>('script[data-africastalking-webrtc="1"]');

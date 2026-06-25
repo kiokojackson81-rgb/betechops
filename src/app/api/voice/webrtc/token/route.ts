@@ -17,10 +17,7 @@ function isVoiceWebrtcEnabled() {
 
 export async function GET(request: Request) {
   try {
-    const url = new URL(request.url);
-    const viewer = await resolveVoiceViewer({
-      impersonateId: url.searchParams.get("impersonateId"),
-    });
+    const viewer = await resolveVoiceViewer();
 
     if (!viewer) {
       return NextResponse.json({ error: "not_authorized" }, { status: 401 });

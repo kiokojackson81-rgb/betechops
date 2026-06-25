@@ -99,7 +99,10 @@ export async function POST(request: Request) {
     }
 
     const route = await getVoiceRouteTargets(new Date());
-    const routedTo = route.orderedTargets.map((target) => target.dialValue || target.phoneNumber).join(",");
+    const routeDialValues = route.orderedTargets.flatMap((target) =>
+      target.dialValues?.length ? target.dialValues : [target.dialValue || target.phoneNumber],
+    );
+    const routedTo = routeDialValues.join(",");
     const primaryTarget = route.primaryTarget;
 
     const voiceCall = await upsertVoiceCallFromPayload(normalizedPayload, {
@@ -148,7 +151,9 @@ export async function POST(request: Request) {
         buildVoiceXmlResponse({
           preDialMessage:
             "Thank you for calling Betech Solar Solutions. Our sales team is currently outside working hours. Please hold as we connect you to the admin line.",
-          phoneNumbers: route.orderedTargets.map((target) => target.dialValue || target.phoneNumber),
+          phoneNumbers: route.orderedTargets.flatMap((target) =>
+            target.dialValues?.length ? target.dialValues : [target.dialValue || target.phoneNumber],
+          ),
         }),
       );
     }
@@ -163,7 +168,9 @@ export async function POST(request: Request) {
 
     return xmlResponse(
       buildVoiceXmlResponse({
-        phoneNumbers: route.orderedTargets.map((target) => target.dialValue || target.phoneNumber),
+        phoneNumbers: route.orderedTargets.flatMap((target) =>
+          target.dialValues?.length ? target.dialValues : [target.dialValue || target.phoneNumber],
+        ),
       }),
     );
   } catch (error) {

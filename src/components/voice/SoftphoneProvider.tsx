@@ -39,6 +39,8 @@ type SoftphoneContextValue = {
   stateLabel: string;
   availability: SoftphoneAvailabilityState;
   availabilityLabel: string;
+  transportMode: "mock" | "webrtc" | "unavailable";
+  statusMessage: string | null;
   connectionStatus: "idle" | "ready" | "warning" | "error";
   registrationStatus: "unregistered" | "registering" | "registered" | "disconnected" | "error";
   isRegistered: boolean;
@@ -180,14 +182,18 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const activityTimerRef = useRef<number | null>(null);
+  const microphoneTestTimeoutRef = useRef<number | null>(null);
+  const speakerTestTimeoutRef = useRef<number | null>(null);
   const stateRef = useRef<SoftphoneState>("NOT_REGISTERED");
   const availabilityRef = useRef<SoftphoneAvailabilityState>("OFFLINE");
   const currentCallRef = useRef<SoftphoneCall | null>(null);
   const selectedCustomerRef = useRef<SoftphoneCustomerSummary | null>(null);
   const adapterRef = useRef<VoiceWebrtcAdapter | null>(null);
   const webRtcRegistrationRef = useRef<VoiceWebrtcRegistration | null>(null);
-  const webRtcModeRef = useRef<"mock" | "webrtc">("mock");
+  const webRtcModeRef = useRef<"mock" | "webrtc" | "unavailable">("mock");
   const adapterCleanupRef = useRef<(() => void) | null>(null);
+  const [transportMode, setTransportMode] = useState<"mock" | "webrtc" | "unavailable">("mock");
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   useEffect(() => {
     stateRef.current = state;
@@ -322,8 +328,10 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
     await requestMicrophoneAccess();
     stopMeter();
     beginMeter();
-    window.setTimeout(() => {
+    if (microphoneTestTimeoutRef.current) window.clearTimeout(microphoneTestTimeoutRef.current);
+    microphoneTestTimeoutRef.current = window.setTimeout(() => {
       stopMeter();
+      microphoneTestTimeoutRef.current = null;
     }, 3000);
   };
 
@@ -339,9 +347,11 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
     gain.connect(context.destination);
     oscillator.start();
     setOutputLevel(preferences.outputVolume);
-    window.setTimeout(() => {
+    if (speakerTestTimeoutRef.current) window.clearTimeout(speakerTestTimeoutRef.current);
+    speakerTestTimeoutRef.current = window.setTimeout(() => {
       oscillator.stop();
       setOutputLevel(0);
+      speakerTestTimeoutRef.current = null;
     }, 1200);
   };
 
@@ -395,9 +405,12 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
       adapter.on("ready", ({ registration }) => {
         webRtcRegistrationRef.current = registration;
         webRtcModeRef.current = "webrtc";
+        setTransportMode("webrtc");
+        setStatusMessage(null);
         applyWebrtcDerivedState("ready");
       }),
       adapter.on("notready", () => {
+        setStatusMessage("Africa's Talking WebRTC client is not ready.");
         applyWebrtcDerivedState("notready");
       }),
       adapter.on("incomingcall", ({ call }) => {
@@ -428,6 +441,7 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
         applyWebrtcDerivedState("hangup");
       }),
       adapter.on("offline", () => {
+        setStatusMessage("Africa's Talking WebRTC client went offline.");
         applyWebrtcDerivedState("offline");
       }),
       adapter.on("closed", () => {
@@ -436,9 +450,11 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
           pushRecentCall({ ...existing, state: "DISCONNECTED" });
           return null;
         });
+        setStatusMessage("Africa's Talking WebRTC client session closed.");
         applyWebrtcDerivedState("closed");
       }),
-      adapter.on("error", () => {
+      adapter.on("error", ({ error }) => {
+        setStatusMessage(error || "Africa's Talking WebRTC client failed.");
         setState("ERROR");
         setAvailabilityState("OFFLINE");
       }),
@@ -453,7 +469,7 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
     setAvailabilityState(next);
   };
 
-  const registerMockAdapter = async () => {
+  const registerMockAdapter = async (options?: { statusMessage?: string | null }) => {
     const adapter = new MockWebrtcAdapter();
     adapterRef.current = adapter;
     adapterCleanupRef.current?.();
@@ -469,10 +485,26 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
     await adapter.register(registration);
     webRtcRegistrationRef.current = registration;
     webRtcModeRef.current = "mock";
+    setTransportMode("mock");
+    setStatusMessage(options?.statusMessage ?? null);
+  };
+
+  const setWebrtcUnavailable = (message: string) => {
+    adapterCleanupRef.current?.();
+    adapterCleanupRef.current = null;
+    adapterRef.current = null;
+    webRtcRegistrationRef.current = null;
+    webRtcModeRef.current = "unavailable";
+    setTransportMode("unavailable");
+    setStatusMessage(message);
+    setCurrentCall(null);
+    setAvailability("OFFLINE");
+    setState("ERROR");
   };
 
   const register = async () => {
     setState("REGISTERING");
+    setStatusMessage(null);
 
     if (!NEXT_PUBLIC_VOICE_WEBRTC_ENABLED) {
       await registerMockAdapter();
@@ -485,11 +517,20 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
         cache: "no-store",
       });
       const payload = (await response.json().catch(() => ({}))) as
-        | (VoiceWebrtcTokenResponse & { error?: string })
+        | (VoiceWebrtcTokenResponse & { error?: string; reason?: string })
         | { error?: string };
 
-      if (!response.ok || !("mode" in payload) || payload.mode !== "webrtc" || !payload.token) {
-        await registerMockAdapter();
+      if (!response.ok) {
+        setWebrtcUnavailable(
+          "Voice WebRTC token request failed. Confirm Africa's Talking credentials and feature flags.",
+        );
+        return;
+      }
+
+      if (!("mode" in payload) || payload.mode !== "webrtc" || !payload.token) {
+        setWebrtcUnavailable(
+          "Voice WebRTC is enabled in the browser but not configured on the server yet.",
+        );
         return;
       }
 
@@ -510,8 +551,11 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
       webRtcRegistrationRef.current = registration;
       webRtcModeRef.current = "webrtc";
     } catch {
-      await registerMockAdapter().catch(() => {
-        webRtcModeRef.current = "mock";
+      await registerMockAdapter({
+        statusMessage: "Africa's Talking WebRTC SDK failed to load. Falling back to mock mode.",
+      }).catch(() => {
+        webRtcModeRef.current = "unavailable";
+        setTransportMode("unavailable");
         adapterRef.current = null;
         setState("ERROR");
         setAvailability("OFFLINE");
@@ -528,6 +572,8 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
     }
     webRtcRegistrationRef.current = null;
     webRtcModeRef.current = "mock";
+    setTransportMode("mock");
+    setStatusMessage(null);
     setCurrentCall(null);
     setAvailability("OFFLINE");
     setState("NOT_REGISTERED");
@@ -831,6 +877,16 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     return () => {
+      if (microphoneTestTimeoutRef.current) window.clearTimeout(microphoneTestTimeoutRef.current);
+      if (speakerTestTimeoutRef.current) window.clearTimeout(speakerTestTimeoutRef.current);
+      if (activityTimerRef.current) window.clearTimeout(activityTimerRef.current);
+      stopMeter();
+      localStreamRef.current?.getTracks().forEach((track) => track.stop());
+      localStreamRef.current = null;
+      if (audioContextRef.current) {
+        void audioContextRef.current.close().catch(() => {});
+        audioContextRef.current = null;
+      }
       adapterCleanupRef.current?.();
       adapterCleanupRef.current = null;
       void adapterRef.current?.unregister().catch(() => {});
@@ -863,6 +919,8 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
       stateLabel: getSoftphoneStateLabel(state),
       availability,
       availabilityLabel: getAvailabilityLabel(availability),
+      transportMode,
+      statusMessage,
       connectionStatus,
       registrationStatus,
       isRegistered: registrationStatus === "registered",
@@ -930,6 +988,8 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
       sipConfig,
       speakers,
       state,
+      statusMessage,
+      transportMode,
     ],
   );
 

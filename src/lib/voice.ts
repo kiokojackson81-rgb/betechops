@@ -20,6 +20,7 @@ type VoiceRouteTarget = {
   webRtcIdentity: string | null;
   isWebrtcRegistered: boolean;
   dialValue: string;
+  dialValues: string[];
 };
 
 const VOICE_PRESENCE_ROUTING_WINDOW_MS = 90 * 1000;
@@ -141,6 +142,9 @@ async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], Vo
       now - (lastSeenAt?.getTime() ?? 0) <= VOICE_PRESENCE_ROUTING_WINDOW_MS;
     const webRtcIdentity = webRtcRegistration?.identity ?? buildVoiceWebrtcIdentity(getDefaultWebrtcClientName(label)) ?? null;
     const shouldUseWebrtc = isVoiceWebrtcEnabled() && Boolean(webRtcRegistration?.identity) && isAvailable;
+    const dialValues = shouldUseWebrtc
+      ? [String(webRtcRegistration?.identity || ""), phoneNumber].filter(Boolean)
+      : [phoneNumber].filter(Boolean);
 
     return {
       label,
@@ -151,7 +155,8 @@ async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], Vo
       lastSeenAt,
       webRtcIdentity,
       isWebrtcRegistered: Boolean(webRtcRegistration?.identity),
-      dialValue: shouldUseWebrtc ? String(webRtcRegistration?.identity || "") : phoneNumber,
+      dialValue: dialValues[0] || phoneNumber,
+      dialValues,
     };
   };
 

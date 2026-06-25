@@ -66,8 +66,11 @@ export default function BrowserPhone() {
                 <div>
                   <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Connection + devices</div>
                   <div className="mt-1 text-sm text-white">
-                    Mic {softphone.microphonePermission} · Heartbeat {softphone.lastHeartbeatAt ? "live" : "pending"}
+                    Mic {softphone.microphonePermission} · Heartbeat {softphone.lastHeartbeatAt ? "live" : "pending"} · Mode {softphone.transportMode}
                   </div>
+                  {softphone.statusMessage ? (
+                    <div className="mt-2 text-xs text-amber-200">{softphone.statusMessage}</div>
+                  ) : null}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -104,32 +107,54 @@ export default function BrowserPhone() {
               </div>
             </div>
 
-            <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Mock event harness</div>
-                  <div className="mt-1 text-sm text-white">Test inbound, hold, disconnect, and call-state transitions before SIP credentials arrive.</div>
+            {softphone.transportMode === "mock" ? (
+              <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Mock event harness</div>
+                    <div className="mt-1 text-sm text-white">Test inbound, hold, disconnect, and call-state transitions before live WebRTC credentials arrive.</div>
+                  </div>
+                  <Link
+                    href="/admin/communications/voice/settings"
+                    className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-400"
+                  >
+                    <Settings2 className="h-3.5 w-3.5" />
+                    Settings
+                  </Link>
                 </div>
-                <Link
-                  href="/admin/communications/voice/settings"
-                  className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-400"
-                >
-                  <Settings2 className="h-3.5 w-3.5" />
-                  Settings
-                </Link>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <MockEventButton label="Incoming" event="incoming" />
+                  <MockEventButton label="Answered" event="answered" />
+                  <MockEventButton label="Reject" event="rejected" />
+                  <MockEventButton label="End" event="ended" />
+                  <MockEventButton label="Hold" event="hold" />
+                  <MockEventButton label="Resume" event="resume" />
+                  <MockEventButton label="Disconnect" event="disconnect" />
+                  <MockEventButton label="Reconnect" event="reconnect" />
+                  <MockEventButton label="Transfer" event="transfer" />
+                </div>
               </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <MockEventButton label="Incoming" event="incoming" />
-                <MockEventButton label="Answered" event="answered" />
-                <MockEventButton label="Reject" event="rejected" />
-                <MockEventButton label="End" event="ended" />
-                <MockEventButton label="Hold" event="hold" />
-                <MockEventButton label="Resume" event="resume" />
-                <MockEventButton label="Disconnect" event="disconnect" />
-                <MockEventButton label="Reconnect" event="reconnect" />
-                <MockEventButton label="Transfer" event="transfer" />
+            ) : (
+              <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">WebRTC control plane</div>
+                    <div className="mt-1 text-sm text-white">
+                      {softphone.transportMode === "webrtc"
+                        ? "Africa's Talking WebRTC is active through the adapter layer."
+                        : "WebRTC is enabled but not currently available."}
+                    </div>
+                  </div>
+                  <Link
+                    href="/admin/communications/voice/settings"
+                    className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-400"
+                  >
+                    <Settings2 className="h-3.5 w-3.5" />
+                    Settings
+                  </Link>
+                </div>
               </div>
-            </div>
+            )}
 
             {pathname !== "/admin/communications/voice/settings" ? (
               <div className="text-[11px] text-slate-500">
