@@ -11,6 +11,11 @@ import {
 } from "lucide-react";
 import type { SerializedWebsiteOrder } from "@/lib/websiteOrders";
 import { getShopProductHref } from "@/app/shop/storefrontPaths";
+import {
+  isCarriedForwardPendingItem,
+  isPendingWebOrderStatus,
+  shouldShowPendingWorkItem,
+} from "@/lib/operationsWorkQueue";
 
 type WebsiteOrderStatusFilter =
   | "ALL"
@@ -79,6 +84,18 @@ function isWithinRange(value: string | null | undefined, start?: string, end?: s
   return timestamp >= min && timestamp <= max;
 }
 
+function isCarriedForwardOrder(
+  order: Pick<SerializedWebsiteOrder, "status" | "createdAt">,
+  start?: string,
+) {
+  if (!start) return false;
+  return isCarriedForwardPendingItem({
+    status: order.status,
+    createdAt: order.createdAt,
+    periodStart: new Date(`${start}T00:00:00`),
+  });
+}
+
 function slugifyProductName(value: string) {
   return String(value || "")
     .toLowerCase()
@@ -125,10 +142,19 @@ export default function WebsiteOrdersDeskClient({
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
       if (statusFilter !== "ALL" && order.status !== statusFilter) return false;
-      if (
+      const outsideSelectedWindow =
         !isWithinRange(order.updatedAt || order.createdAt, start, end) &&
-        !isWithinRange(order.createdAt, start, end)
-      ) {
+        !isWithinRange(order.createdAt, start, end);
+      const shouldKeepVisible =
+        isPendingWebOrderStatus(order.status) &&
+        shouldShowPendingWorkItem({
+          status: order.status,
+          createdAt: order.createdAt,
+          updatedAt: order.updatedAt,
+          periodStart: start ? new Date(`${start}T00:00:00`) : new Date(-8640000000000000),
+          periodEnd: end ? new Date(`${end}T23:59:59.999`) : new Date(8640000000000000),
+        });
+      if (outsideSelectedWindow && !shouldKeepVisible) {
         return false;
       }
       if (!query.trim()) return true;
@@ -345,6 +371,11 @@ export default function WebsiteOrdersDeskClient({
                       <span className="rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
                         WEB ORDER
                       </span>
+                      {isCarriedForwardOrder(order, start) ? (
+                        <span className="rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-100">
+                          Carried forward
+                        </span>
+                      ) : null}
                     </div>
                     <div className="min-w-0">
                       <div className="font-semibold text-white">{order.customerName}</div>

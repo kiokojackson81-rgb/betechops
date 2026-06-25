@@ -20,11 +20,13 @@ import { withImpersonateId } from "@/lib/impersonation";
 import { mapPayrollToEarningsSummary } from "@/lib/payrollMapping";
 import PosManagementClient from "@/app/admin/pos-management/PosManagementClient";
 import {
+  isCarriedForwardPendingItem,
   isOpenAgentOrderStatus,
   isOpenQuotationStatus,
   isPendingPodStatus,
   isPendingPosReceiptStatus,
   isPendingWebOrderStatus,
+  shouldShowPendingWorkItem,
   wasCreatedOrUpdatedInPeriod,
 } from "@/lib/operationsWorkQueue";
 
@@ -112,6 +114,7 @@ type SalesActionQueueItem = {
   actionLabel: string;
   href?: string | null;
   onClick?: (() => void) | null;
+  carriedForward?: boolean;
 };
 
 const kenyanLocale = "en-KE";
@@ -1070,8 +1073,7 @@ export default function DailyReportFinal() {
         receiptParams.set("size", "200");
         receiptParams.set("scope", "mine");
         receiptParams.set("summaryView", "all");
-        receiptParams.set("start", toStartOfDayIso(toKenyaIsoDate(selectedPeriod.start)) ?? selectedPeriod.start.toISOString());
-        receiptParams.set("end", toEndOfDayIso(toKenyaIsoDate(selectedPeriod.end)) ?? selectedPeriod.end.toISOString());
+        receiptParams.set("carryForwardPending", "1");
         if (attendantId) receiptParams.set("attendantId", attendantId);
         if (impersonateId) receiptParams.set("impersonateId", impersonateId);
         if (isBrendahView) receiptParams.set("onlyPos", "1");
@@ -1117,33 +1119,63 @@ export default function DailyReportFinal() {
         setPendingWebsiteOrders(
           websiteOrders.filter((order) =>
             isPendingWebOrderStatus(order.status) &&
-            wasCreatedOrUpdatedInPeriod(order.createdAt, order.updatedAt, periodBounds),
+            shouldShowPendingWorkItem({
+              status: order.status,
+              createdAt: order.createdAt,
+              updatedAt: order.updatedAt,
+              periodStart: periodBounds.start,
+              periodEnd: periodBounds.end,
+            }),
           ),
         );
         setPendingQuoteRequests(
           quoteRequests.filter((request) =>
             isOpenQuotationStatus(request.status) &&
-            wasCreatedOrUpdatedInPeriod(request.createdAt, request.updatedAt, periodBounds),
+            shouldShowPendingWorkItem({
+              status: request.status,
+              createdAt: request.createdAt,
+              updatedAt: request.updatedAt,
+              periodStart: periodBounds.start,
+              periodEnd: periodBounds.end,
+            }),
           ),
         );
         setPendingAgentOrders(
           agentOrders.filter((sale) =>
             isOpenAgentOrderStatus(sale.status) &&
-            wasCreatedOrUpdatedInPeriod(sale.createdAt, sale.updatedAt, periodBounds),
+            shouldShowPendingWorkItem({
+              status: sale.status,
+              createdAt: sale.createdAt,
+              updatedAt: sale.updatedAt,
+              periodStart: periodBounds.start,
+              periodEnd: periodBounds.end,
+            }),
           ),
         );
         setPendingPodReceipts(
           receipts.filter((receipt) =>
             Boolean(receipt.isPodDelivery) &&
             isPendingPodStatus(receipt.podDeliveryStatus) &&
-            wasCreatedOrUpdatedInPeriod(receipt.createdAt, receipt.createdAt, periodBounds),
+            shouldShowPendingWorkItem({
+              status: receipt.podDeliveryStatus,
+              createdAt: receipt.createdAt,
+              updatedAt: receipt.createdAt,
+              periodStart: periodBounds.start,
+              periodEnd: periodBounds.end,
+            }),
           ),
         );
         setPendingPosReceipts(
           receipts.filter((receipt) =>
             !receipt.isPodDelivery &&
             isPendingPosReceiptStatus(receipt.status, receipt.paymentStatus) &&
-            wasCreatedOrUpdatedInPeriod(receipt.createdAt, receipt.createdAt, periodBounds),
+            shouldShowPendingWorkItem({
+              status: receipt.paymentStatus || receipt.status,
+              createdAt: receipt.createdAt,
+              updatedAt: receipt.createdAt,
+              periodStart: periodBounds.start,
+              periodEnd: periodBounds.end,
+            }),
           ),
         );
       } catch (error) {
@@ -1173,6 +1205,7 @@ export default function DailyReportFinal() {
   ]);
 
   const salesActionQueue = useMemo<SalesActionQueueItem[]>(() => {
+    const periodStart = selectedPeriod.start;
     return [
       ...pendingWebsiteOrders.map((order) => ({
         id: `web:${order.id}`,
@@ -1186,6 +1219,11 @@ export default function DailyReportFinal() {
         assignedTo: order.assignedAttendant?.name || order.assignedAttendant?.email || "Assigned web desk",
         actionLabel: "Open order",
         onClick: () => setCurrentView("web-orders"),
+        carriedForward: isCarriedForwardPendingItem({
+          status: order.status,
+          createdAt: order.createdAt,
+          periodStart,
+        }),
       })),
       ...pendingPosReceipts.map((receipt) => ({
         id: `pos:${receipt.id}`,
@@ -1199,6 +1237,11 @@ export default function DailyReportFinal() {
         assignedTo: receipt.attendantName || "POS queue",
         actionLabel: "Open receipt",
         href: receipt.detailUrl || "/attendant/daily-report#my-receipts",
+        carriedForward: isCarriedForwardPendingItem({
+          status: receipt.paymentStatus || receipt.status,
+          createdAt: receipt.createdAt,
+          periodStart,
+        }),
       })),
       ...pendingQuoteRequests.map((request) => ({
         id: `quote:${request.id}`,
@@ -1212,6 +1255,11 @@ export default function DailyReportFinal() {
         assignedTo: request.assignedAttendant?.name || request.assignedAttendant?.email || "Assigned quote desk",
         actionLabel: "View quotation",
         onClick: () => setCurrentView("quote-requests"),
+        carriedForward: isCarriedForwardPendingItem({
+          status: request.status,
+          createdAt: request.createdAt,
+          periodStart,
+        }),
       })),
       ...pendingAgentOrders.map((sale) => ({
         id: `agent:${sale.id}`,
@@ -1225,6 +1273,11 @@ export default function DailyReportFinal() {
         assignedTo: sale.assignedProcessorName || sale.assignedProcessorEmail || "Agent order desk",
         actionLabel: "Open order",
         href: withImpersonateId(`/marketing/agent-orders?saleId=${encodeURIComponent(sale.id)}`, impersonateId),
+        carriedForward: isCarriedForwardPendingItem({
+          status: sale.status,
+          createdAt: sale.createdAt,
+          periodStart,
+        }),
       })),
       ...pendingPodReceipts.map((receipt) => ({
         id: `pod:${receipt.id}`,
@@ -1238,6 +1291,11 @@ export default function DailyReportFinal() {
         assignedTo: receipt.attendantName || "POD queue",
         actionLabel: "Open POD",
         href: receipt.detailUrl || "/attendant/daily-report#my-receipts",
+        carriedForward: isCarriedForwardPendingItem({
+          status: receipt.podDeliveryStatus,
+          createdAt: receipt.createdAt,
+          periodStart,
+        }),
       })),
     ].sort((left, right) => {
       const leftCreatedAt = left.createdAt ? new Date(left.createdAt).getTime() : Number.MAX_SAFE_INTEGER;
@@ -1252,7 +1310,59 @@ export default function DailyReportFinal() {
       const rightUpdatedAt = right.updatedAt ? new Date(right.updatedAt).getTime() : 0;
       return rightUpdatedAt - leftUpdatedAt;
     });
-  }, [impersonateId, pendingAgentOrders, pendingPodReceipts, pendingPosReceipts, pendingQuoteRequests, pendingWebsiteOrders]);
+  }, [impersonateId, pendingAgentOrders, pendingPodReceipts, pendingPosReceipts, pendingQuoteRequests, pendingWebsiteOrders, selectedPeriod.start]);
+
+  const salesActionBreakdown = useMemo(() => {
+    const periodBounds = { start: selectedPeriod.start, end: selectedPeriod.end };
+    const countCurrentPeriod = (items: Array<{ createdAt: string | null; updatedAt?: string | null }>) =>
+      items.filter((item) => wasCreatedOrUpdatedInPeriod(item.createdAt, item.updatedAt ?? item.createdAt, periodBounds)).length;
+    const countCarriedForward = (items: Array<{ createdAt: string | null; updatedAt?: string | null; status?: string | null }>) =>
+      items.filter(
+        (item) =>
+          isCarriedForwardPendingItem({
+            status: item.status,
+            createdAt: item.createdAt,
+            periodStart: periodBounds.start,
+          }) && !wasCreatedOrUpdatedInPeriod(item.createdAt, item.updatedAt ?? item.createdAt, periodBounds),
+      ).length;
+
+    return {
+      web: {
+        current: countCurrentPeriod(pendingWebsiteOrders),
+        carried: countCarriedForward(pendingWebsiteOrders),
+      },
+      pos: {
+        current: countCurrentPeriod(pendingPosReceipts),
+        carried: countCarriedForward(
+          pendingPosReceipts.map((receipt) => ({
+            createdAt: receipt.createdAt,
+            updatedAt: receipt.createdAt,
+            status: receipt.paymentStatus || receipt.status,
+          })),
+        ),
+      },
+      quotation: {
+        current: countCurrentPeriod(pendingQuoteRequests),
+        carried: countCarriedForward(pendingQuoteRequests),
+      },
+      agent: {
+        current: countCurrentPeriod(pendingAgentOrders),
+        carried: countCarriedForward(pendingAgentOrders),
+      },
+      pod: {
+        current: countCurrentPeriod(
+          pendingPodReceipts.map((receipt) => ({ createdAt: receipt.createdAt, updatedAt: receipt.createdAt })),
+        ),
+        carried: countCarriedForward(
+          pendingPodReceipts.map((receipt) => ({
+            createdAt: receipt.createdAt,
+            updatedAt: receipt.createdAt,
+            status: receipt.podDeliveryStatus,
+          })),
+        ),
+      },
+    };
+  }, [pendingAgentOrders, pendingPodReceipts, pendingPosReceipts, pendingQuoteRequests, pendingWebsiteOrders, selectedPeriod.end, selectedPeriod.start]);
 
   if (currentView === "receipts") {
     return (
@@ -1635,21 +1745,47 @@ export default function DailyReportFinal() {
               <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Sales Action Center</div>
               <h2 className="mt-2 text-2xl font-semibold text-white">Pending customer work assigned to you</h2>
               <p className="mt-1 text-sm text-slate-400">
-                Live pending counts for web orders, POS receipts, quotations, agent orders, and POD follow-up in the active period.
+                Live pending counts for web orders, POS receipts, quotations, agent orders, and POD follow-up, including unresolved carried-forward work.
               </p>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
               {[
-                { title: "Web Orders", count: pendingWebsiteOrders.length, onClick: () => setCurrentView("web-orders") },
-                { title: "POS Orders / Receipts", count: pendingPosReceipts.length, onClick: () => setCurrentView("receipts") },
-                { title: "Quotation Requests", count: pendingQuoteRequests.length, onClick: () => setCurrentView("quote-requests") },
+                {
+                  title: "Web Orders",
+                  count: pendingWebsiteOrders.length,
+                  currentPeriod: salesActionBreakdown.web.current,
+                  carriedForward: salesActionBreakdown.web.carried,
+                  onClick: () => setCurrentView("web-orders"),
+                },
+                {
+                  title: "POS Orders / Receipts",
+                  count: pendingPosReceipts.length,
+                  currentPeriod: salesActionBreakdown.pos.current,
+                  carriedForward: salesActionBreakdown.pos.carried,
+                  onClick: () => setCurrentView("receipts"),
+                },
+                {
+                  title: "Quotation Requests",
+                  count: pendingQuoteRequests.length,
+                  currentPeriod: salesActionBreakdown.quotation.current,
+                  carriedForward: salesActionBreakdown.quotation.carried,
+                  onClick: () => setCurrentView("quote-requests"),
+                },
                 {
                   title: "Agent Orders",
                   count: pendingAgentOrders.length,
+                  currentPeriod: salesActionBreakdown.agent.current,
+                  carriedForward: salesActionBreakdown.agent.carried,
                   href: withImpersonateId("/marketing/agent-orders", impersonateId),
                 },
-                { title: "POD Follow-up", count: pendingPodReceipts.length, onClick: () => setCurrentView("receipts") },
+                {
+                  title: "POD Follow-up",
+                  count: pendingPodReceipts.length,
+                  currentPeriod: salesActionBreakdown.pod.current,
+                  carriedForward: salesActionBreakdown.pod.carried,
+                  onClick: () => setCurrentView("receipts"),
+                },
               ].map((item) => {
                 const tone = pendingToneClasses(item.count);
                 const content = (
@@ -1659,6 +1795,9 @@ export default function DailyReportFinal() {
                       <div>
                         <div className="text-4xl font-semibold text-white">{salesActionLoading ? "..." : item.count}</div>
                         <div className="mt-1 text-sm text-slate-400">Pending</div>
+                        <div className="mt-2 text-[11px] text-slate-500">
+                          Current period {item.currentPeriod} · Carried forward {item.carriedForward}
+                        </div>
                       </div>
                       <span className={`rounded-full border px-3 py-1 text-xs font-medium ${tone}`}>Open</span>
                     </div>
@@ -1692,9 +1831,9 @@ export default function DailyReportFinal() {
 
             <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">My Work Queue</div>
-                <p className="mt-1 text-sm text-slate-400">
-                  Only actual action-needed items are shown here for the active period.
+              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">My Work Queue</div>
+              <p className="mt-1 text-sm text-slate-400">
+                  Only actual action-needed items are shown here. Older unresolved items stay visible until they are closed.
                 </p>
               </div>
               <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-slate-300">
@@ -1709,10 +1848,15 @@ export default function DailyReportFinal() {
                     key={item.id}
                     className="grid gap-3 rounded-[22px] border border-white/10 bg-white/[0.03] p-4 lg:grid-cols-[130px_1.3fr_1fr_160px_150px_150px]"
                   >
-                    <div className="flex items-center">
+                    <div className="flex flex-col items-start gap-2">
                       <span className="inline-flex rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-100">
                         {item.type}
                       </span>
+                      {item.carriedForward ? (
+                        <span className="inline-flex rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-100">
+                          Carried forward
+                        </span>
+                      ) : null}
                     </div>
                     <div>
                       <div className="font-semibold text-white">{item.customerName}</div>

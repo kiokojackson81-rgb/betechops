@@ -7,6 +7,13 @@ import Card from "@/app/_components/Card";
 import DailyReportReceiptsPanel from "@/components/daily-report-receipts";
 import WebsiteOrdersDeskClient from "@/components/WebsiteOrdersDeskClient";
 import QuotationRequestsDeskClient from "@/components/QuotationRequestsDeskClient";
+import {
+  isCarriedForwardPendingItem,
+  isOpenQuotationStatus,
+  isPendingPodStatus,
+  isPendingWebOrderStatus,
+  wasCreatedOrUpdatedInPeriod,
+} from "@/lib/operationsWorkQueue";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 
 type ReceiptRangeKey =
@@ -34,6 +41,12 @@ type DashboardCounts = {
   podPending: number;
   webOrders: number;
   quotations: number;
+  podPendingCurrentPeriod: number;
+  webOrdersCurrentPeriod: number;
+  quotationsCurrentPeriod: number;
+  podPendingCarriedForward: number;
+  webOrdersCarriedForward: number;
+  quotationsCarriedForward: number;
 };
 
 const toDateInput = (value: Date) => {
@@ -167,6 +180,12 @@ export default function MarketingReceiptsPage() {
     podPending: 0,
     webOrders: 0,
     quotations: 0,
+    podPendingCurrentPeriod: 0,
+    webOrdersCurrentPeriod: 0,
+    quotationsCurrentPeriod: 0,
+    podPendingCarriedForward: 0,
+    webOrdersCarriedForward: 0,
+    quotationsCarriedForward: 0,
   });
   const [currentSearch, setCurrentSearch] = useState("");
   const [podFilter, setPodFilter] = useState<PodFilterValue>("all");
@@ -280,16 +299,17 @@ export default function MarketingReceiptsPage() {
         onlyPos: "1",
         customerType: "pod",
         status: "pending",
+        carryForwardPending: "1",
       });
-      if (filters.start) podParams.set("start", `${filters.start}T00:00:00.000Z`);
-      if (filters.end) podParams.set("end", `${filters.end}T23:59:59.999Z`);
 
       const [podPayload, webPayload, quotePayload] = await Promise.all([
-        fetchJson<{ receipts?: Array<{ id: string }> }>(`/api/receipts?${podParams.toString()}`),
-        fetchJson<{ orders?: Array<{ id: string; createdAt?: string | null; updatedAt?: string | null }> }>(
+        fetchJson<{ receipts?: Array<{ id: string; createdAt?: string | null; podDeliveryStatus?: string | null }> }>(
+          `/api/receipts?${podParams.toString()}`,
+        ),
+        fetchJson<{ orders?: Array<{ id: string; status?: string | null; createdAt?: string | null; updatedAt?: string | null }> }>(
           "/api/attendant/website-orders?status=ALL",
         ),
-        fetchJson<{ requests?: Array<{ id: string; createdAt?: string | null; updatedAt?: string | null }> }>(
+        fetchJson<{ requests?: Array<{ id: string; status?: string | null; createdAt?: string | null; updatedAt?: string | null }> }>(
           "/api/attendant/quote-requests?status=ALL",
         ),
       ]);
@@ -304,14 +324,47 @@ export default function MarketingReceiptsPage() {
         return timestamp >= start && timestamp <= end;
       };
 
+      const periodBounds = {
+        start: filters.start ? new Date(`${filters.start}T00:00:00`) : new Date(-8640000000000000),
+        end: filters.end ? new Date(`${filters.end}T23:59:59.999`) : new Date(8640000000000000),
+      };
+
+      const podReceipts = Array.isArray(podPayload?.receipts) ? podPayload.receipts.filter((receipt) => isPendingPodStatus(receipt.podDeliveryStatus)) : [];
+      const openWebOrders = Array.isArray(webPayload?.orders)
+        ? webPayload.orders.filter((order) => isPendingWebOrderStatus(order.status))
+        : [];
+      const openQuoteRequests = Array.isArray(quotePayload?.requests)
+        ? quotePayload.requests.filter((request) => isOpenQuotationStatus(request.status))
+        : [];
+
       setDashboardCounts({
-        podPending: Array.isArray(podPayload?.receipts) ? podPayload.receipts.length : 0,
-        webOrders: Array.isArray(webPayload?.orders)
-          ? webPayload.orders.filter((order) => inSelectedWindow(order.updatedAt || order.createdAt)).length
-          : 0,
-        quotations: Array.isArray(quotePayload?.requests)
-          ? quotePayload.requests.filter((request) => inSelectedWindow(request.updatedAt || request.createdAt)).length
-          : 0,
+        podPending: podReceipts.length,
+        webOrders: openWebOrders.length,
+        quotations: openQuoteRequests.length,
+        podPendingCurrentPeriod: podReceipts.filter((receipt) => inSelectedWindow(receipt.createdAt)).length,
+        webOrdersCurrentPeriod: openWebOrders.filter((order) => wasCreatedOrUpdatedInPeriod(order.createdAt, order.updatedAt, periodBounds)).length,
+        quotationsCurrentPeriod: openQuoteRequests.filter((request) => wasCreatedOrUpdatedInPeriod(request.createdAt, request.updatedAt, periodBounds)).length,
+        podPendingCarriedForward: podReceipts.filter((receipt) =>
+          isCarriedForwardPendingItem({
+            status: receipt.podDeliveryStatus,
+            createdAt: receipt.createdAt,
+            periodStart: periodBounds.start,
+          }),
+        ).length,
+        webOrdersCarriedForward: openWebOrders.filter((order) =>
+          isCarriedForwardPendingItem({
+            status: order.status,
+            createdAt: order.createdAt,
+            periodStart: periodBounds.start,
+          }) && !wasCreatedOrUpdatedInPeriod(order.createdAt, order.updatedAt, periodBounds),
+        ).length,
+        quotationsCarriedForward: openQuoteRequests.filter((request) =>
+          isCarriedForwardPendingItem({
+            status: request.status,
+            createdAt: request.createdAt,
+            periodStart: periodBounds.start,
+          }) && !wasCreatedOrUpdatedInPeriod(request.createdAt, request.updatedAt, periodBounds),
+        ).length,
       });
     };
 
@@ -459,6 +512,9 @@ export default function MarketingReceiptsPage() {
             </div>
             <div className="mt-2 text-2xl font-semibold text-amber-300">{dashboardCounts.podPending}</div>
             <div className="mt-1 text-xs text-slate-400">Pending delivery follow-up</div>
+            <div className="mt-1 text-[11px] text-slate-500">
+              Current period {dashboardCounts.podPendingCurrentPeriod} · Carried forward {dashboardCounts.podPendingCarriedForward}
+            </div>
           </div>
           <div className="rounded-[20px] border border-white/10 bg-slate-900/80 p-3">
             <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -468,6 +524,11 @@ export default function MarketingReceiptsPage() {
               {dashboardCounts.podPending + dashboardCounts.webOrders + dashboardCounts.quotations}
             </div>
             <div className="mt-1 text-xs text-slate-400">Web orders, quotations, and POD follow-up</div>
+            <div className="mt-1 text-[11px] text-slate-500">
+              Current period {dashboardCounts.podPendingCurrentPeriod + dashboardCounts.webOrdersCurrentPeriod + dashboardCounts.quotationsCurrentPeriod}
+              {" · "}
+              Carried forward {dashboardCounts.podPendingCarriedForward + dashboardCounts.webOrdersCarriedForward + dashboardCounts.quotationsCarriedForward}
+            </div>
           </div>
         </section>
 
@@ -523,6 +584,7 @@ export default function MarketingReceiptsPage() {
                   receiptsCount: panelSummary.count,
                 })
               }
+              carryForwardPending={podFilter === "pod_pending"}
             />
           ) : viewMode === "web-orders" ? (
             <WebsiteOrdersDeskClient

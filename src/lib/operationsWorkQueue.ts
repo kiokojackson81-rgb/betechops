@@ -48,7 +48,16 @@ export function isPendingWebOrderStatus(status: string | null | undefined) {
 
 export function isPendingPodStatus(status: string | null | undefined) {
   const normalized = normalizeStatus(status);
-  return new Set(["pending", "follow_up", "delivery_failed", "failed"]).has(normalized);
+  return new Set([
+    "pending",
+    "follow_up",
+    "delivery_failed",
+    "failed",
+    "pod_pending",
+    "delivery_pending",
+    "payment_pending",
+    "balance_pending",
+  ]).has(normalized);
 }
 
 export function isOpenAgentOrderStatus(status: string | null | undefined) {
@@ -128,10 +137,37 @@ export function isOpenWorkItemStatus(status: string | null | undefined) {
     "closed",
     "settled",
     "delivered",
+    "fulfilled",
     "failed_closed",
     "lost",
     "converted",
   ]).has(normalized);
+}
+
+export function shouldShowPendingWorkItem({
+  status,
+}: {
+  status?: string | null;
+  createdAt?: DateLike;
+  updatedAt?: DateLike;
+  periodStart: Date;
+  periodEnd: Date;
+}) {
+  return isOpenWorkItemStatus(status);
+}
+
+export function isCarriedForwardPendingItem({
+  status,
+  createdAt,
+  periodStart,
+}: {
+  status?: string | null;
+  createdAt?: DateLike;
+  periodStart: Date;
+}) {
+  const created = toDate(createdAt);
+  if (!created) return false;
+  return isOpenWorkItemStatus(status) && created < periodStart;
 }
 
 export function wasCreatedOrUpdatedInPeriod(

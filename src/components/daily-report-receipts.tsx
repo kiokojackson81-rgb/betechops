@@ -50,6 +50,7 @@ type Props = {
   initialPodFilter?: PodFilterValue;
   extraFilterActions?: ExtraFilterAction[];
   onSummary?: (s: { totalSales: number; count: number }) => void;
+  carryForwardPending?: boolean;
 };
 
 const formatKES = (value?: number | null) =>
@@ -129,6 +130,7 @@ export default function DailyReportReceiptsPanel({
   initialPodFilter = "all",
   extraFilterActions = [],
   onSummary,
+  carryForwardPending = false,
 }: Props) {
   const [receipts, setReceipts] = useState<DailyReportReceiptRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -201,10 +203,11 @@ export default function DailyReportReceiptsPanel({
         params.set("size", "80");
         const startIso = toStartOfDayIso(start ?? undefined);
         const endIso = toEndOfDayIso(end ?? undefined);
-        if (startIso) params.set("start", startIso);
-        if (endIso) params.set("end", endIso);
+        if (startIso && !carryForwardPending) params.set("start", startIso);
+        if (endIso && !carryForwardPending) params.set("end", endIso);
         if (debouncedQuery) params.set("q", debouncedQuery);
         params.set("scope", "mine");
+        if (carryForwardPending) params.set("carryForwardPending", "1");
         const settledOnly = podFilter === "settled";
         if (onlyPos) params.set("onlyPos", "1");
         if (paidOnly || settledOnly) params.set("paidOnly", "1");
@@ -268,7 +271,7 @@ export default function DailyReportReceiptsPanel({
       cancelled = true;
       controller.abort();
     };
-  }, [attendantId, debouncedQuery, includeLedger, onlyPos, paidOnly, podFilter, reloadKey, resolvedAttendantId, start, end]);
+  }, [attendantId, carryForwardPending, debouncedQuery, includeLedger, onlyPos, paidOnly, podFilter, reloadKey, resolvedAttendantId, start, end]);
 
   // If we don't have an attendantId prop, try fetching the session to determine the logged-in user id
   useEffect(() => {

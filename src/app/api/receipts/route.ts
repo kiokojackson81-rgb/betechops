@@ -51,6 +51,7 @@ export async function GET(req: NextRequest) {
   const includeLedgerParam = url.searchParams.get("includeLedger");
   const includeLedger = includeLedgerParam === null ? true : includeLedgerParam !== "false";
   const paidOnly = ["1", "true", "yes"].includes((url.searchParams.get("paidOnly") || "").toLowerCase());
+  const carryForwardPending = ["1", "true", "yes"].includes((url.searchParams.get("carryForwardPending") || "").toLowerCase());
   const start = url.searchParams.get("start");
   const end = url.searchParams.get("end");
   const paymentMethodParam = normalizePaymentMethod(url.searchParams.get("paymentMethod"));
@@ -135,7 +136,9 @@ export async function GET(req: NextRequest) {
   };
 
   const and: Prisma.ReceiptWhereInput[] = [];
-  and.push({ generatedAt: { gte: startDate, lte: endDate } });
+  if (!carryForwardPending) {
+    and.push({ generatedAt: { gte: startDate, lte: endDate } });
+  }
 
   if (normalizedDocType && !isMarketingDocType && !isSupportDocType) {
     and.push({ docType: normalizedDocType as any });

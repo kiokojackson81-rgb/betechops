@@ -10,10 +10,12 @@ import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod"
 import { WEBSITE_ORDER_ACTIVE_STATUSES } from "@/lib/websiteOrders";
 import { getAdminAgentSales } from "@/lib/agents/sales";
 import {
+  isCarriedForwardPendingItem,
   isOpenQuotationStatus,
-  isPendingWebOrderStatus,
   isOpenWorkItemStatus,
   isPendingPodStatus,
+  isPendingWebOrderStatus,
+  shouldShowPendingWorkItem,
   wasCreatedOrUpdatedInPeriod,
 } from "@/lib/operationsWorkQueue";
 import {
@@ -125,15 +127,20 @@ type QueueItem = {
   updatedAt: string | Date | null;
   assignedTo?: string | null;
   href: string;
+  carriedForward?: boolean;
 };
 
 function PendingKpiCard({
   title,
   count,
+  currentPeriodCount,
+  carriedForwardCount,
   href,
 }: {
   title: string;
   count: number;
+  currentPeriodCount: number;
+  carriedForwardCount: number;
   href: string;
 }) {
   const tone = pendingToneClasses(count);
@@ -148,6 +155,9 @@ function PendingKpiCard({
         <div>
           <div className="text-4xl font-semibold text-white">{count}</div>
           <div className="mt-1 text-sm text-slate-400">Pending</div>
+          <div className="mt-2 text-[11px] text-slate-500">
+            Current period {currentPeriodCount} · Carried forward {carriedForwardCount}
+          </div>
         </div>
         <span className={`rounded-full border px-3 py-1 text-xs font-medium ${tone}`}>Open</span>
       </div>
@@ -446,9 +456,26 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
               user.email &&
               order.assignedAttendant.email.toLowerCase() === user.email.toLowerCase()),
         );
-  const websiteOrdersPending = websiteOrders.filter((order) => isPendingWebOrderStatus(order.status));
+  const websiteOrdersPending = websiteOrders.filter(
+    (order) =>
+      isPendingWebOrderStatus(order.status) &&
+      shouldShowPendingWorkItem({
+        status: order.status,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+        periodStart: period.start,
+        periodEnd: period.end,
+      }),
+  );
   const websiteOrdersInPeriod = websiteOrdersPending.filter((order) =>
     wasCreatedOrUpdatedInPeriod(order.createdAt, order.updatedAt, period),
+  );
+  const websiteOrdersCarriedForward = websiteOrdersPending.filter((order) =>
+    isCarriedForwardPendingItem({
+      status: order.status,
+      createdAt: order.createdAt,
+      periodStart: period.start,
+    }) && !wasCreatedOrUpdatedInPeriod(order.createdAt, order.updatedAt, period),
   );
 
   const agentOrders =
@@ -463,19 +490,67 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
         );
   const openAgentOrders = agentOrders.filter((sale) =>
     isOpenWorkItemStatus(sale.status) &&
+    shouldShowPendingWorkItem({
+      status: sale.status,
+      createdAt: sale.createdAt,
+      updatedAt: sale.updatedAt,
+      periodStart: period.start,
+      periodEnd: period.end,
+    }),
+  );
+  const openAgentOrdersInPeriod = openAgentOrders.filter((sale) =>
     wasCreatedOrUpdatedInPeriod(sale.createdAt, sale.updatedAt, period),
+  );
+  const openAgentOrdersCarriedForward = openAgentOrders.filter((sale) =>
+    isCarriedForwardPendingItem({
+      status: sale.status,
+      createdAt: sale.createdAt,
+      periodStart: period.start,
+    }) && !wasCreatedOrUpdatedInPeriod(sale.createdAt, sale.updatedAt, period),
   );
 
   const quoteRequests = rawQuoteRequests.filter((request) =>
     isOpenQuotationStatus(request.status) &&
+    shouldShowPendingWorkItem({
+      status: request.status,
+      createdAt: request.createdAt,
+      updatedAt: request.updatedAt,
+      periodStart: period.start,
+      periodEnd: period.end,
+    }),
+  );
+  const quoteRequestsInPeriod = quoteRequests.filter((request) =>
     wasCreatedOrUpdatedInPeriod(request.createdAt, request.updatedAt, period),
+  );
+  const quoteRequestsCarriedForward = quoteRequests.filter((request) =>
+    isCarriedForwardPendingItem({
+      status: request.status,
+      createdAt: request.createdAt,
+      periodStart: period.start,
+    }) && !wasCreatedOrUpdatedInPeriod(request.createdAt, request.updatedAt, period),
   );
   const pendingPodFollowUp = podFollowUp.filter((item) =>
     isPendingPodStatus(item.status) &&
+    shouldShowPendingWorkItem({
+      status: item.status,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+      periodStart: period.start,
+      periodEnd: period.end,
+    }),
+  );
+  const pendingPodFollowUpInPeriod = pendingPodFollowUp.filter((item) =>
     wasCreatedOrUpdatedInPeriod(item.createdAt, item.updatedAt, period),
   );
+  const pendingPodFollowUpCarriedForward = pendingPodFollowUp.filter((item) =>
+    isCarriedForwardPendingItem({
+      status: item.status,
+      createdAt: item.createdAt,
+      periodStart: period.start,
+    }) && !wasCreatedOrUpdatedInPeriod(item.createdAt, item.updatedAt, period),
+  );
   const needsAttentionQueue: QueueItem[] = [
-    ...websiteOrdersInPeriod.slice(0, 6).map((order) => ({
+    ...websiteOrdersPending.slice(0, 6).map((order) => ({
       id: `website:${order.id}`,
       type: "Web Order" as const,
       customerName: order.customerName,
@@ -486,6 +561,11 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
       updatedAt: order.updatedAt,
       assignedTo: order.assignedAttendant?.name || order.assignedAttendant?.email || null,
       href: `/marketing/receipts?tab=web-orders&orderId=${encodeURIComponent(order.id)}`,
+      carriedForward: isCarriedForwardPendingItem({
+        status: order.status,
+        createdAt: order.createdAt,
+        periodStart: period.start,
+      }),
     })),
     ...openAgentOrders.slice(0, 6).map((sale) => ({
       id: `agent:${sale.id}`,
@@ -498,6 +578,11 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
       updatedAt: sale.updatedAt,
       assignedTo: sale.assignedProcessorName || sale.assignedProcessorEmail || null,
       href: `/marketing/agent-orders?saleId=${encodeURIComponent(sale.id)}`,
+      carriedForward: isCarriedForwardPendingItem({
+        status: sale.status,
+        createdAt: sale.createdAt,
+        periodStart: period.start,
+      }),
     })),
     ...quoteRequests.slice(0, 6).map((request) => ({
       id: `quote:${request.id}`,
@@ -510,6 +595,11 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
       updatedAt: request.updatedAt,
       assignedTo: request.assignedAttendant?.name || request.assignedAttendant?.email || null,
       href: `/marketing/receipts?tab=quotations&quoteId=${encodeURIComponent(request.id)}`,
+      carriedForward: isCarriedForwardPendingItem({
+        status: request.status,
+        createdAt: request.createdAt,
+        periodStart: period.start,
+      }),
     })),
     ...pendingPodFollowUp.map((item) => ({
       id: `pod:${item.id}`,
@@ -522,6 +612,11 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
       updatedAt: item.updatedAt,
       assignedTo: null,
       href: `/marketing/receipts?tab=pos&pod=pending&receiptId=${encodeURIComponent(item.id)}`,
+      carriedForward: isCarriedForwardPendingItem({
+        status: item.status,
+        createdAt: item.createdAt,
+        periodStart: period.start,
+      }),
     })),
   ]
     .sort((left, right) => {
@@ -576,22 +671,46 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
             <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Needs Attention</div>
             <h2 className="mt-2 text-2xl font-semibold text-white">Sales Control Center</h2>
             <p className="mt-1 text-sm text-slate-400">
-              Live pending counts for web orders, agent orders, quotations, and POD follow-up.
+              Live pending counts for web orders, agent orders, quotations, and POD follow-up, including unresolved carried-forward work.
             </p>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <PendingKpiCard title="Web Orders" count={websiteOrdersInPeriod.length} href="/marketing/receipts?tab=web-orders" />
-            <PendingKpiCard title="Agent Orders" count={openAgentOrders.length} href="/marketing/agent-orders" />
-            <PendingKpiCard title="Quotations" count={quoteRequests.length} href="/marketing/receipts?tab=quotations" />
-            <PendingKpiCard title="POD Follow-up" count={pendingPodFollowUp.length} href="/marketing/receipts?tab=pos&pod=pending" />
+            <PendingKpiCard
+              title="Web Orders"
+              count={websiteOrdersPending.length}
+              currentPeriodCount={websiteOrdersInPeriod.length}
+              carriedForwardCount={websiteOrdersCarriedForward.length}
+              href="/marketing/receipts?tab=web-orders"
+            />
+            <PendingKpiCard
+              title="Agent Orders"
+              count={openAgentOrders.length}
+              currentPeriodCount={openAgentOrdersInPeriod.length}
+              carriedForwardCount={openAgentOrdersCarriedForward.length}
+              href="/marketing/agent-orders"
+            />
+            <PendingKpiCard
+              title="Quotations"
+              count={quoteRequests.length}
+              currentPeriodCount={quoteRequestsInPeriod.length}
+              carriedForwardCount={quoteRequestsCarriedForward.length}
+              href="/marketing/receipts?tab=quotations"
+            />
+            <PendingKpiCard
+              title="POD Follow-up"
+              count={pendingPodFollowUp.length}
+              currentPeriodCount={pendingPodFollowUpInPeriod.length}
+              carriedForwardCount={pendingPodFollowUpCarriedForward.length}
+              href="/marketing/receipts?tab=pos&pod=pending"
+            />
           </div>
 
           <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Unified Work Queue</div>
               <p className="mt-1 text-sm text-slate-400">
-                Only actual action-needed items appear here, ordered by oldest pending first.
+                Only actual action-needed items appear here, ordered by oldest pending first. Unresolved older work stays visible until it is closed.
               </p>
             </div>
             <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-slate-300">
@@ -606,10 +725,15 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
                   key={item.id}
                   className="grid gap-3 rounded-[22px] border border-white/10 bg-white/[0.03] p-4 lg:grid-cols-[140px_1.3fr_1fr_160px_140px_150px]"
                 >
-                  <div className="flex items-center">
+                  <div className="flex flex-col items-start gap-2">
                     <span className="inline-flex rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-100">
                       {item.type}
                     </span>
+                    {item.carriedForward ? (
+                      <span className="inline-flex rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-100">
+                        Carried forward
+                      </span>
+                    ) : null}
                   </div>
                   <div>
                     <div className="font-semibold text-white">{item.customerName}</div>
