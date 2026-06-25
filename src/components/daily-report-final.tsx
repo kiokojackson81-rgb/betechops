@@ -453,6 +453,7 @@ export default function DailyReportFinal() {
   const agentOrdersHref = withImpersonateId("/marketing/agent-orders", impersonateId);
   const quotationsHref = withImpersonateId("/marketing/receipts?tab=quotations", impersonateId);
   const createReceiptHref = withImpersonateId("/receipts?view=create", impersonateId);
+  const voiceDashboardHref = withImpersonateId("/attendant/voice", impersonateId);
   const productDeskHref = withImpersonateHash("/attendant/daily-report", "product-desk", impersonateId);
   const payslipHref = useMemo(() => {
     const params = new URLSearchParams({ periodKey: selectedPeriodKey });
@@ -1707,6 +1708,12 @@ export default function DailyReportFinal() {
                 </div>
 
                 <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
+                  <Link
+                    href={voiceDashboardHref}
+                    className={utilityPillClasses}
+                  >
+                    Voice Calls
+                  </Link>
                   <Link
                     href={withImpersonateId("/attendant/wellness", impersonateId)}
                     className={utilityPillClasses}

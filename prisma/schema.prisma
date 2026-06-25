@@ -93,6 +93,10 @@ model User {
   agentAuditTargets                    AgentAuditLog[]                 @relation("AgentAuditTargetAgent")
   agentSaleTimelineActions             AgentSaleTimeline[]             @relation("AgentSaleTimelineActor")
   customerWebsiteOrders                WebsiteOrder[]                  @relation("customerWebsiteOrders")
+  assignedVoiceCalls                   VoiceCall[]                     @relation("VoiceCallAssignedTo")
+  customerVoiceCalls                   VoiceCall[]                     @relation("VoiceCallCustomer")
+  assignedVoiceLeads                   VoiceLead[]                     @relation("VoiceLeadAssignedTo")
+  customerVoiceLeads                   VoiceLead[]                     @relation("VoiceLeadCustomer")
 }
 
 model OtpCode {
@@ -1513,6 +1517,71 @@ model ReceiptFile {
   receipt     Receipt   @relation(fields: [receiptId], references: [id], onDelete: Cascade)
 
   @@index([receiptId])
+}
+
+model VoiceCall {
+  id                String    @id @default(cuid())
+  sessionId         String    @unique
+  direction         String
+  callerNumber      String
+  destinationNumber String?
+  isActive          Boolean   @default(true)
+  status            String    @default("queued")
+  routedTo          String?
+  routeType         String?
+  assignedToId      String?
+  customerId        String?
+  startedAt         DateTime?
+  endedAt           DateTime?
+  durationInSeconds Int?
+  currencyCode      String?
+  amount            Decimal?  @db.Decimal(12, 2)
+  recordingUrl      String?
+  menuOption        String?
+  notes             String?
+  rawPayloadJson    Json?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  assignedTo        User?     @relation("VoiceCallAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  customer          User?     @relation("VoiceCallCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  events            VoiceEvent[]
+
+  @@index([status, createdAt])
+  @@index([isActive, createdAt])
+  @@index([assignedToId, createdAt])
+  @@index([callerNumber, createdAt])
+}
+
+model VoiceEvent {
+  id          String    @id @default(cuid())
+  voiceCallId String?
+  sessionId   String
+  eventType   String
+  payloadJson Json?
+  createdAt   DateTime  @default(now())
+  voiceCall   VoiceCall? @relation(fields: [voiceCallId], references: [id], onDelete: SetNull)
+
+  @@index([sessionId, createdAt])
+  @@index([voiceCallId, createdAt])
+}
+
+model VoiceLead {
+  id           String    @id @default(cuid())
+  phone        String
+  name         String?
+  source       String
+  status       String    @default("open")
+  assignedToId String?
+  customerId   String?
+  lastCallAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  assignedTo   User?     @relation("VoiceLeadAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  customer     User?     @relation("VoiceLeadCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([phone, createdAt])
+  @@index([status, createdAt])
+  @@index([assignedToId, status])
 }
 
 model Branding {

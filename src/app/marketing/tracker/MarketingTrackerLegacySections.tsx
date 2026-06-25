@@ -701,6 +701,12 @@ export function MarketingTrackerTopActions() {
         >
           Quotations
         </Link>
+        <Link
+          href={withImpersonateId("/attendant/voice", impersonateIdFromWindow())}
+          className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 hover:border-white/30 hover:bg-white/[0.06]"
+        >
+          Voice Calls
+        </Link>
       </div>
 
       <div className="flex max-w-[46rem] flex-wrap justify-start gap-2 lg:justify-end">
