@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   createOrUpdateMissedVoiceLead,
   createVoiceEventFromPayload,
+  ensureVoiceLeadForCaller,
   normalizeVoiceStatus,
   parseVoicePayloadFromRequest,
   upsertVoiceCallFromPayload,
@@ -17,6 +18,12 @@ export async function POST(request: Request) {
 
     const voiceCall = await upsertVoiceCallFromPayload(payload);
     await createVoiceEventFromPayload(payload, voiceCall.id);
+    await ensureVoiceLeadForCaller({
+      callerNumber: voiceCall.callerNumber,
+      startedAt: voiceCall.startedAt,
+      assignedToId: voiceCall.assignedToId,
+      customerId: voiceCall.customerId,
+    });
 
     await createOrUpdateMissedVoiceLead({
       callerNumber: voiceCall.callerNumber,

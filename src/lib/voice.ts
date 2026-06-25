@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getKenyanPhoneVariants, normalizeKenyanPhone } from "@/lib/phone";
+import { resolveVoiceCustomerLinkByPhone } from "@/lib/voiceCustomerContext";
 
 const NAIROBI_TIMEZONE = "Africa/Nairobi";
 
@@ -80,18 +81,8 @@ function getConfiguredPhone(label: "BRENDAH" | "JENNIFER" | "ADMIN") {
 }
 
 async function resolveUserIdByPhone(phoneNumber: string) {
-  const variants = getKenyanPhoneVariants(phoneNumber);
-  if (!variants.length) return null;
-  const user = await prisma.user.findFirst({
-    where: {
-      OR: [
-        { phone: { in: variants } },
-        { whatsappNumber: { in: variants } },
-      ],
-    },
-    select: { id: true },
-  });
-  return user?.id ?? null;
+  const linked = await resolveVoiceCustomerLinkByPhone(phoneNumber);
+  return linked.matchedCustomer?.id ?? null;
 }
 
 async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], VoiceRouteTarget>> {
@@ -249,7 +240,8 @@ export async function upsertVoiceCallFromPayload(payload: VoicePayload, input?: 
   const destinationNumber = normalizeVoiceNumber(payload.destinationNumber || payload.to || payload.calledNumber);
   const status = normalizeVoiceStatus(payload);
   const isActive = isVoiceCallActive(payload);
-  const customerId = callerNumber ? await resolveUserIdByPhone(callerNumber) : null;
+  const customerLink = callerNumber ? await resolveVoiceCustomerLinkByPhone(callerNumber) : null;
+  const customerId = customerLink?.matchedCustomer?.id ?? null;
 
   return prisma.voiceCall.upsert({
     where: { sessionId },
@@ -335,7 +327,9 @@ export async function createOrUpdateMissedVoiceLead(call: {
   if (!shouldCreateMissedLead(call.status) || !call.callerNumber) return null;
 
   const phone = normalizeVoiceNumber(call.callerNumber) || call.callerNumber;
-  const customerId = phone ? await resolveUserIdByPhone(phone) : null;
+  const customerLink = phone ? await resolveVoiceCustomerLinkByPhone(phone) : null;
+  const customerId = customerLink?.matchedCustomer?.id ?? null;
+  const callerName = customerLink?.matchedCustomer?.name ?? null;
   const existing = await prisma.voiceLead.findFirst({
     where: { phone, status: { in: ["open", "pending_follow_up"] } },
     orderBy: { updatedAt: "desc" },
@@ -345,6 +339,7 @@ export async function createOrUpdateMissedVoiceLead(call: {
     return prisma.voiceLead.update({
       where: { id: existing.id },
       data: {
+        name: callerName ?? existing.name,
         source: "VOICE_MISSED_CALL",
         status: "pending_follow_up",
         assignedToId: call.assignedToId ?? existing.assignedToId,
@@ -357,10 +352,57 @@ export async function createOrUpdateMissedVoiceLead(call: {
   return prisma.voiceLead.create({
     data: {
       phone,
+      name: callerName,
       source: "VOICE_MISSED_CALL",
       status: "pending_follow_up",
       assignedToId: call.assignedToId ?? null,
       customerId,
+      lastCallAt: call.startedAt ?? new Date(),
+    },
+  });
+}
+
+export async function ensureVoiceLeadForCaller(call: {
+  callerNumber: string;
+  startedAt?: Date | null;
+  assignedToId?: string | null;
+  customerId?: string | null;
+}) {
+  if (!call.callerNumber) return null;
+
+  const phone = normalizeVoiceNumber(call.callerNumber) || call.callerNumber;
+  const customerLink = call.customerId ? null : await resolveVoiceCustomerLinkByPhone(phone);
+  const customerId = call.customerId ?? customerLink?.matchedCustomer?.id ?? null;
+  if (customerId) return null;
+
+  const existing = await prisma.voiceLead.findFirst({
+    where: { phone },
+    orderBy: { updatedAt: "desc" },
+  });
+
+  if (existing) {
+    return prisma.voiceLead.update({
+      where: { id: existing.id },
+      data: {
+        name: existing.name ?? customerLink?.matchedCustomer?.name ?? null,
+        assignedToId: call.assignedToId ?? existing.assignedToId,
+        lastCallAt: call.startedAt ?? new Date(),
+        status:
+          existing.status === "closed" || existing.status === "resolved"
+            ? "open"
+            : existing.status,
+      },
+    });
+  }
+
+  return prisma.voiceLead.create({
+    data: {
+      phone,
+      name: customerLink?.matchedCustomer?.name ?? null,
+      source: "VOICE_INBOUND_CALL",
+      status: "open",
+      assignedToId: call.assignedToId ?? null,
+      customerId: null,
       lastCallAt: call.startedAt ?? new Date(),
     },
   });

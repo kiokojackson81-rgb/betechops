@@ -3,6 +3,7 @@ import {
   buildEmptyVoiceXmlResponse,
   buildVoiceXmlResponse,
   createOrUpdateMissedVoiceLead,
+  ensureVoiceLeadForCaller,
   getVoiceRouteTargets,
   isVoiceCallActive,
   normalizeVoiceStatus,
@@ -48,6 +49,13 @@ export async function POST(request: Request) {
       routeType: route.routeType,
       routedTo,
       assignedToId: primaryTarget?.userId ?? null,
+    });
+
+    await ensureVoiceLeadForCaller({
+      callerNumber: voiceCall.callerNumber,
+      startedAt: voiceCall.startedAt,
+      assignedToId: voiceCall.assignedToId,
+      customerId: voiceCall.customerId,
     });
 
     if (!isActive) {
