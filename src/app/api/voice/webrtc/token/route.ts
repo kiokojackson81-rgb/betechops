@@ -15,6 +15,22 @@ function isVoiceWebrtcEnabled() {
   return String(process.env.NEXT_PUBLIC_VOICE_WEBRTC_ENABLED || "").trim().toLowerCase() === "true";
 }
 
+function buildConfigDebug(input: {
+  username: string;
+  apiKey: string;
+  phoneNumber: string;
+  webRtcEnabled: boolean;
+}) {
+  return {
+    hasUsername: Boolean(input.username),
+    hasApiKey: Boolean(input.apiKey),
+    hasPhoneNumber: Boolean(input.phoneNumber),
+    username: input.username || null,
+    phoneNumber: input.phoneNumber || null,
+    webRtcEnabled: input.webRtcEnabled,
+  };
+}
+
 export async function GET(request: Request) {
   try {
     const viewer = await resolveVoiceViewer();
@@ -42,6 +58,7 @@ export async function GET(request: Request) {
     const username = String(process.env.AFRICASTALKING_USERNAME || "").trim();
     const apiKey = String(process.env.AFRICASTALKING_API_KEY || "").trim();
     const phoneNumber = String(process.env.AFRICASTALKING_VOICE_PHONE_NUMBER || "").trim();
+    const webRtcEnabled = isVoiceWebrtcEnabled();
     const expire = DEFAULT_TOKEN_EXPIRY_SECONDS;
     const clientName = resolveVoiceWebrtcClientName({
       userId: user.id,
@@ -53,32 +70,45 @@ export async function GET(request: Request) {
     });
     const identity = buildVoiceWebrtcIdentity(clientName, username) ?? clientName;
     const expiresAt = new Date(Date.now() + expire * 1000).toISOString();
+    const configDebug = buildConfigDebug({
+      username,
+      apiKey,
+      phoneNumber,
+      webRtcEnabled,
+    });
 
-    if (!isVoiceWebrtcEnabled() || !username || !apiKey || !phoneNumber) {
-      return NextResponse.json({
-        token: "",
-        clientName,
-        identity,
-        expiresAt,
-        phoneNumber,
-        mode: "mock" as const,
-      });
+    console.info("[voice.webrtc.token.config]", configDebug);
+
+    if (!webRtcEnabled || !username || !apiKey || !phoneNumber) {
+      return NextResponse.json(
+        {
+          error: "voice_webrtc_server_not_configured",
+          clientName,
+          identity,
+          expiresAt,
+          phoneNumber,
+          mode: "mock" as const,
+          config: configDebug,
+        },
+        { status: 503 },
+      );
     }
 
+    const tokenRequestPayload = {
+      username,
+      clientName,
+      phoneNumber,
+      incoming: true,
+      outgoing: true,
+      expire,
+    };
     const tokenResponse = await fetch("https://webrtc.africastalking.com/capability-token/request", {
       method: "POST",
       headers: {
         apiKey,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        username,
-        clientName,
-        phoneNumber,
-        incoming: true,
-        outgoing: true,
-        expire,
-      }),
+      body: JSON.stringify(tokenRequestPayload),
       cache: "no-store",
     });
 
@@ -89,9 +119,15 @@ export async function GET(request: Request) {
     };
 
     if (!tokenResponse.ok || !payload.token) {
+      console.error("[voice.webrtc.token.provider_failed]", {
+        status: tokenResponse.status,
+        request: tokenRequestPayload,
+        response: payload,
+      });
       return NextResponse.json(
         {
           error: "voice_webrtc_token_failed",
+          status: tokenResponse.status,
           detail: payload,
         },
         { status: 502 },
