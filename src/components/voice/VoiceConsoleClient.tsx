@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import CallStatusBar from "@/components/voice/CallStatusBar";
+import RegistrationBadge from "@/components/voice/RegistrationBadge";
+import { useSoftphone } from "@/components/voice/SoftphoneProvider";
 import type { VoiceLiveSnapshot } from "@/lib/voiceOperations";
 
 type VoiceConsoleClientProps = {
@@ -75,6 +78,21 @@ function formatRefreshStamp(value: string | null | undefined) {
   })}`;
 }
 
+function getRecentCallBucket(value: string | null | undefined) {
+  if (!value) return "Earlier";
+  const callDate = new Date(value);
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfYesterday = new Date(startOfToday);
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+  const startOfWeek = new Date(startOfToday);
+  startOfWeek.setDate(startOfWeek.getDate() - 7);
+  if (callDate >= startOfToday) return "Today";
+  if (callDate >= startOfYesterday) return "Yesterday";
+  if (callDate >= startOfWeek) return "This Week";
+  return "Earlier";
+}
+
 function statusTone(status: string | null | undefined) {
   const normalized = String(status || "").toLowerCase();
   if (["available", "answered", "completed", "resolved", "contacted"].includes(normalized)) {
@@ -113,6 +131,7 @@ export default function VoiceConsoleClient({
   badge,
   subtitle,
 }: VoiceConsoleClientProps) {
+  const softphone = useSoftphone();
   const [data, setData] = useState(initialData);
   const [selectedCallId, setSelectedCallId] = useState(initialData.selectedCallId);
   const [selectedPhone, setSelectedPhone] = useState(initialData.selectedPhone);
@@ -129,6 +148,8 @@ export default function VoiceConsoleClient({
   const [manualPresence, setManualPresence] = useState<string | null>(null);
   const [dismissedIncomingIds, setDismissedIncomingIds] = useState<string[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [recentSearch, setRecentSearch] = useState("");
+  const [recentFilter, setRecentFilter] = useState<"all" | "INBOUND" | "OUTBOUND" | "with_recording">("all");
   const eventSourceRef = useRef<EventSource | null>(null);
   const lastInteractionAtRef = useRef(Date.now());
   const availabilityTimerRef = useRef<number | null>(null);
@@ -204,6 +225,35 @@ export default function VoiceConsoleClient({
     );
   }, [data.activeCalls, data.recentCalls, selectedCallId]);
 
+  const filteredRecentCalls = useMemo(() => {
+    const query = recentSearch.trim().toLowerCase();
+    return data.recentCalls.filter((call) => {
+      const matchesFilter =
+        recentFilter === "all" ||
+        (recentFilter === "with_recording" ? Boolean(call.recordingUrl) : call.direction === recentFilter);
+      if (!matchesFilter) return false;
+      if (!query) return true;
+      return [
+        call.callerNumber,
+        call.customer.customerName,
+        call.routedToDisplay,
+        call.statusLabel,
+        call.assignedToName,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query));
+    });
+  }, [data.recentCalls, recentFilter, recentSearch]);
+
+  const groupedRecentCalls = useMemo(() => {
+    const groups = new Map<string, typeof filteredRecentCalls>();
+    for (const call of filteredRecentCalls) {
+      const bucket = getRecentCallBucket(call.startedAt || call.createdAt);
+      groups.set(bucket, [...(groups.get(bucket) || []), call]);
+    }
+    return Array.from(groups.entries());
+  }, [filteredRecentCalls]);
+
   const myPresence = useMemo(() => {
     return data.agents.find((agent) => agent.id === data.viewer.targetUserId) || null;
   }, [data.agents, data.viewer.targetUserId]);
@@ -247,6 +297,23 @@ export default function VoiceConsoleClient({
     };
   }, [data.selectedContext, data.viewer.impersonateId, selectedCall, selectedPhone]);
 
+  useEffect(() => {
+    if (selectedCall?.customer) {
+      softphone.seedCustomerContext({
+        name: selectedCall.customer.customerName || selectedCall.callerNumber,
+        phone: selectedCall.callerNumber,
+        location: selectedCall.customer.location || "Unknown",
+        totalSpent: selectedCall.customer.totalPurchasesValue || 0,
+        recentOrders: selectedCall.customer.linkedRecords.webOrders || 0,
+        recentQuotes: selectedCall.customer.linkedRecords.quotations || 0,
+        recentReceipts: selectedCall.customer.linkedRecords.receipts || 0,
+        notes: data.selectedContext?.recentNotes?.slice(0, 2).map((note) => note.note) || [],
+      });
+      return;
+    }
+    softphone.seedCustomerContext(null);
+  }, [data.selectedContext?.recentNotes, selectedCall, softphone]);
+
   const handleSelectCall = (callId: string, phone: string) => {
     setSelectedCallId(callId);
     setSelectedPhone(phone);
@@ -256,6 +323,34 @@ export default function VoiceConsoleClient({
       console.error("[voice.console.select_failed]", selectionError);
       setError("Failed to load the selected customer context.");
     });
+  };
+
+  const handleExportRecentCalls = () => {
+    if (typeof window === "undefined") return;
+    const rows = [
+      ["Bucket", "Time", "Caller", "Direction", "Routed To", "Status", "Duration Seconds", "Cost", "Recording Url"],
+      ...filteredRecentCalls.map((call) => [
+        getRecentCallBucket(call.startedAt || call.createdAt),
+        call.startedAt || call.createdAt,
+        call.callerNumber,
+        call.direction,
+        call.routedToDisplay || "",
+        call.statusLabel,
+        String(call.durationInSeconds || 0),
+        String(call.amount || 0),
+        call.recordingUrl || "",
+      ]),
+    ];
+    const csv = rows
+      .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = `voice-recent-calls-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(href);
   };
 
   const handlePresenceUpdate = async (status: (typeof PRESENCE_STATUSES)[number]) => {
@@ -525,6 +620,7 @@ export default function VoiceConsoleClient({
                     {myPresence.status}
                   </span>
                 ) : null}
+                <RegistrationBadge />
               </div>
             </div>
 
@@ -543,6 +639,14 @@ export default function VoiceConsoleClient({
                 >
                   Refresh
                 </button>
+                {mode === "admin" ? (
+                  <Link
+                    href="/admin/communications/voice/settings"
+                    className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400 hover:bg-cyan-500/15"
+                  >
+                    Softphone settings
+                  </Link>
+                ) : null}
               </div>
               {mode === "staff" ? (
                 <div className="flex flex-wrap justify-end gap-2">
@@ -572,6 +676,8 @@ export default function VoiceConsoleClient({
             {error}
           </div>
         ) : null}
+
+        <CallStatusBar />
 
         {incomingCall ? (
           <section className="rounded-[26px] border border-cyan-400/30 bg-[linear-gradient(135deg,rgba(8,145,178,0.18),rgba(15,23,42,0.95))] p-5 shadow-[0_18px_50px_rgba(8,145,178,0.15)]">
@@ -971,12 +1077,42 @@ export default function VoiceConsoleClient({
                 <h2 className="mt-2 text-2xl font-semibold text-white">Compact CRM call history</h2>
               </div>
               <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-slate-300">
-                {data.recentCalls.length} rows
+                {filteredRecentCalls.length} rows
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-col gap-3 rounded-[22px] border border-white/10 bg-white/[0.03] p-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-1 flex-col gap-3 sm:flex-row">
+                <input
+                  value={recentSearch}
+                  onChange={(event) => setRecentSearch(event.target.value)}
+                  placeholder="Search caller, phone, route, or status"
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500"
+                />
+                <select
+                  value={recentFilter}
+                  onChange={(event) => setRecentFilter(event.target.value as typeof recentFilter)}
+                  className="rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-white outline-none sm:w-56"
+                >
+                  <option value="all">All directions</option>
+                  <option value="INBOUND">Inbound only</option>
+                  <option value="OUTBOUND">Outbound only</option>
+                  <option value="with_recording">With recording</option>
+                </select>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleExportRecentCalls}
+                  className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
+                >
+                  Export CSV
+                </button>
               </div>
             </div>
 
             <div className="mt-4 space-y-3 lg:hidden">
-              {data.recentCalls.length ? data.recentCalls.map((call) => (
+              {filteredRecentCalls.length ? filteredRecentCalls.map((call) => (
                 <button
                   key={call.id}
                   type="button"
@@ -1008,6 +1144,9 @@ export default function VoiceConsoleClient({
                     <span className="whitespace-nowrap rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-300">
                       {formatMoney(call.amount, call.currencyCode)}
                     </span>
+                    <span className="whitespace-nowrap rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-300">
+                      {getRecentCallBucket(call.startedAt || call.createdAt)}
+                    </span>
                   </div>
                 </button>
               )) : (
@@ -1018,66 +1157,88 @@ export default function VoiceConsoleClient({
             </div>
 
             <div className="mt-4 hidden overflow-x-auto lg:block">
-              {data.recentCalls.length ? (
-                <div className="min-w-[1100px] space-y-3">
-                  <div className="grid grid-cols-[110px_200px_110px_240px_120px_110px_120px_140px] gap-3 px-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    <div>Time</div>
-                    <div>Caller</div>
-                    <div>Direction</div>
-                    <div>Routed To</div>
-                    <div>Status</div>
-                    <div>Duration</div>
-                    <div>Cost</div>
-                    <div>Recording</div>
-                  </div>
-                  {data.recentCalls.map((call) => (
-                    <button
-                      key={call.id}
-                      type="button"
-                      onClick={() => handleSelectCall(call.id, call.callerNumber)}
-                      className={`grid w-full grid-cols-[110px_200px_110px_240px_120px_110px_120px_140px] items-center gap-3 rounded-[22px] border px-4 py-4 text-left transition ${
-                        selectedCall?.id === call.id
-                          ? "border-cyan-400/50 bg-cyan-500/10"
-                          : "border-white/10 bg-white/[0.03] hover:border-white/20"
-                      }`}
-                    >
-                      <div className="whitespace-nowrap text-sm text-slate-200">{formatTimeOnly(call.startedAt || call.createdAt)}</div>
-                      <div className="min-w-0">
-                        <div className="truncate font-semibold text-white">{call.customer.customerName || call.callerNumber}</div>
-                        <div className="whitespace-nowrap text-sm text-slate-400">{call.callerNumber}</div>
+              {groupedRecentCalls.length ? (
+                <div className="min-w-[1100px] space-y-5">
+                  {groupedRecentCalls.map(([bucket, calls]) => (
+                    <div key={bucket} className="space-y-3">
+                      <div className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+                        {bucket}
                       </div>
-                      <div>
-                        <span className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(call.direction)}`}>
-                          {call.direction}
-                        </span>
+                      <div className="grid grid-cols-[110px_220px_110px_240px_120px_110px_120px_180px] gap-3 px-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        <div>Time</div>
+                        <div>Caller</div>
+                        <div>Direction</div>
+                        <div>Routed To</div>
+                        <div>Status</div>
+                        <div>Duration</div>
+                        <div>Cost</div>
+                        <div>Action</div>
                       </div>
-                      <div className="min-w-0">
-                        <div className="truncate text-sm text-slate-200">{call.routedToDisplay || call.customer.assignedAgent?.name || call.assignedToName || "-"}</div>
-                        <div className="truncate text-xs text-slate-500">{call.lastActivityTitle || "No recent activity"}</div>
-                      </div>
-                      <div>
-                        <span className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(call.status)}`}>
-                          {call.statusLabel}
-                        </span>
-                      </div>
-                      <div className="whitespace-nowrap text-sm text-slate-200">{formatDuration(call.durationInSeconds)}</div>
-                      <div className="whitespace-nowrap text-sm text-slate-200">{formatMoney(call.amount, call.currencyCode)}</div>
-                      <div className="flex justify-start">
-                        {call.recordingUrl ? (
-                          <a
-                            href={call.recordingUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            onClick={(event) => event.stopPropagation()}
-                            className="inline-flex whitespace-nowrap rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400"
-                          >
-                            Recording
-                          </a>
-                        ) : (
-                          <span className="text-sm text-slate-500">—</span>
-                        )}
-                      </div>
-                    </button>
+                      {calls.map((call) => (
+                        <button
+                          key={call.id}
+                          type="button"
+                          onClick={() => handleSelectCall(call.id, call.callerNumber)}
+                          className={`grid w-full grid-cols-[110px_220px_110px_240px_120px_110px_120px_180px] items-center gap-3 rounded-[22px] border px-4 py-4 text-left transition ${
+                            selectedCall?.id === call.id
+                              ? "border-cyan-400/50 bg-cyan-500/10"
+                              : "border-white/10 bg-white/[0.03] hover:border-white/20"
+                          }`}
+                        >
+                          <div className="whitespace-nowrap text-sm text-slate-200">{formatTimeOnly(call.startedAt || call.createdAt)}</div>
+                          <div className="min-w-0">
+                            <div className="truncate font-semibold text-white">{call.customer.customerName || call.callerNumber}</div>
+                            <div className="whitespace-nowrap text-sm text-slate-400">{call.callerNumber}</div>
+                          </div>
+                          <div>
+                            <span className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(call.direction)}`}>
+                              {call.direction}
+                            </span>
+                          </div>
+                          <div className="min-w-0">
+                            <div className="truncate text-sm text-slate-200">{call.routedToDisplay || call.customer.assignedAgent?.name || call.assignedToName || "-"}</div>
+                            <div className="truncate text-xs text-slate-500">{call.lastActivityTitle || "No recent activity"}</div>
+                          </div>
+                          <div>
+                            <span className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(call.status)}`}>
+                              {call.statusLabel}
+                            </span>
+                          </div>
+                          <div className="whitespace-nowrap text-sm text-slate-200">{formatDuration(call.durationInSeconds)}</div>
+                          <div className="whitespace-nowrap text-sm text-slate-200">{formatMoney(call.amount, call.currencyCode)}</div>
+                          <div className="flex items-center gap-2">
+                            {call.recordingUrl ? (
+                              <>
+                                <a
+                                  href={call.recordingUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  onClick={(event) => event.stopPropagation()}
+                                  className="inline-flex whitespace-nowrap rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400"
+                                >
+                                  Playback
+                                </a>
+                                <a
+                                  href={call.recordingUrl}
+                                  download
+                                  onClick={(event) => event.stopPropagation()}
+                                  className="inline-flex whitespace-nowrap rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
+                                >
+                                  Download
+                                </a>
+                              </>
+                            ) : null}
+                            <Link
+                              href={call.links.customer}
+                              onClick={(event) => event.stopPropagation()}
+                              className="inline-flex whitespace-nowrap rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
+                            >
+                              CRM
+                            </Link>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
                   ))}
                 </div>
               ) : (

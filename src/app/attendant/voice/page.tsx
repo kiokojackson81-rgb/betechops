@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import VoiceConsoleClient from "@/components/voice/VoiceConsoleClient";
+import VoiceSoftphoneShell from "@/components/voice/VoiceSoftphoneShell";
 import { withImpersonateId } from "@/lib/impersonation";
 import {
   getVoiceLiveSnapshot,
@@ -31,15 +32,17 @@ export default async function AttendantVoicePage({ searchParams }: PageProps) {
     const pollBaseHref = withImpersonateId("/api/voice/live", viewer.impersonateId);
 
     return (
-      <VoiceConsoleClient
-        mode="staff"
-        initialData={initialData}
-        backHref={backHref}
-        pollBaseHref={pollBaseHref}
-        badge="Voice Calls"
-        title="Agent Voice Console"
-        subtitle="See only the calls, follow-ups, and customer context assigned to you, then turn each voice session into a quote, receipt, or resolved task."
-      />
+      <VoiceSoftphoneShell>
+        <VoiceConsoleClient
+          mode="staff"
+          initialData={initialData}
+          backHref={backHref}
+          pollBaseHref={pollBaseHref}
+          badge="Voice Calls"
+          title="Agent Voice Console"
+          subtitle="See only the calls, follow-ups, and customer context assigned to you, then turn each voice session into a quote, receipt, or resolved task."
+        />
+      </VoiceSoftphoneShell>
     );
   } catch (error) {
     if (!isVoiceOperationsSchemaMissingError(error)) throw error;

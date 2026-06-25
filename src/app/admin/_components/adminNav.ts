@@ -50,7 +50,15 @@ export const NAV: AdminNavItem[] = [
     ],
   },
   { href: "/admin/online/summary", label: "Jumia Activities", icon: Truck },
-  { href: "/admin/communications/voice", label: "Voice Calls", icon: PhoneCall },
+  {
+    href: "/admin/communications/voice",
+    label: "Voice Calls",
+    icon: PhoneCall,
+    children: [
+      { href: "/admin/communications/voice", label: "Operations Center" },
+      { href: "/admin/communications/voice/settings", label: "Softphone Settings" },
+    ],
+  },
   { href: "/admin/catalog", label: "Catalog", icon: Layers },
   { href: "/admin/marketing-report", label: "Marketing report", icon: BarChart3 },
   { href: "/admin/support-report", label: "Support report", icon: LifeBuoy },
