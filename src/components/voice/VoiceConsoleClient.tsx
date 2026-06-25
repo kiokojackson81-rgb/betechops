@@ -129,6 +129,20 @@ function normalizeVoiceTab(value: string | null): VoiceConsoleTab {
   return VOICE_CONSOLE_TABS.includes(value as VoiceConsoleTab) ? (value as VoiceConsoleTab) : "operations";
 }
 
+function isFreshIncomingCall(value: string | null | undefined, maxAgeMs = 5 * 60 * 1000) {
+  if (!value) return false;
+  const timestamp = new Date(value).getTime();
+  if (Number.isNaN(timestamp)) return false;
+  return Date.now() - timestamp <= maxAgeMs;
+}
+
+function isDeveloperPlaceholderPhone(phone: string | null | undefined) {
+  const normalized = String(phone || "").replace(/\s+/g, "");
+  if (!normalized) return false;
+  if (["+254711111111", "0711111111", "+254700000001", "0700000001"].includes(normalized)) return true;
+  return /^(\+254|0)7(\d)\2{7,}$/.test(normalized);
+}
+
 export default function VoiceConsoleClient({
   mode,
   initialData,
@@ -280,7 +294,13 @@ export default function VoiceConsoleClient({
     const calls = mode === "staff"
       ? data.waitingCalls.filter((call) => call.assignedToId === data.viewer.targetUserId)
       : data.waitingCalls;
-    return calls.find((call) => !dismissedIncomingIds.includes(call.id)) || null;
+    return (
+      calls.find((call) => {
+        if (dismissedIncomingIds.includes(call.id)) return false;
+        if (isDeveloperPlaceholderPhone(call.callerNumber)) return false;
+        return isFreshIncomingCall(call.startedAt || call.createdAt);
+      }) || null
+    );
   }, [data.viewer.targetUserId, data.waitingCalls, dismissedIncomingIds, mode]);
 
   useEffect(() => {
