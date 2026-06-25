@@ -12,6 +12,34 @@ type VoiceRouteTarget = {
   userId: string | null;
 };
 
+export function safeString(value: unknown) {
+  return typeof value === "string" ? value.trim() : value == null ? "" : String(value).trim();
+}
+
+export function safeNumber(value: unknown, fallback = 0) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const parsed = Number(safeString(value).replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+export function isVoiceCallActive(payload: VoicePayload) {
+  const rawIsActive = safeString(payload.isActive).toLowerCase();
+  if (["1", "true", "yes"].includes(rawIsActive)) return true;
+  if (["0", "false", "no"].includes(rawIsActive)) return false;
+
+  const sessionState = safeString(payload.callSessionState).toLowerCase();
+  if (["completed", "ended", "terminated", "aborted", "failed"].includes(sessionState)) {
+    return false;
+  }
+
+  const status = safeString(payload.status).toLowerCase();
+  if (["completed", "aborted", "failed", "busy", "no answer", "no_answer"].includes(status)) {
+    return false;
+  }
+
+  return false;
+}
+
 function formatNairobiParts(date: Date) {
   const formatter = new Intl.DateTimeFormat("en-GB", {
     timeZone: NAIROBI_TIMEZONE,
@@ -150,33 +178,54 @@ function escapeXml(value: string) {
 }
 
 export async function parseVoicePayloadFromRequest(request: Request) {
-  const formData = await request.formData();
-  const payload: VoicePayload = {};
-  for (const [key, value] of formData.entries()) {
-    payload[key] = typeof value === "string" ? value : value.name;
+  const contentType = safeString(request.headers.get("content-type")).toLowerCase();
+
+  if (contentType.includes("application/json")) {
+    const json = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const payload: VoicePayload = {};
+    for (const [key, value] of Object.entries(json)) {
+      payload[key] = safeString(value);
+    }
+    return payload;
   }
-  return payload;
+
+  const payload: VoicePayload = {};
+  try {
+    const formData = await request.formData();
+    for (const [key, value] of formData.entries()) {
+      payload[key] = typeof value === "string" ? value : value.name;
+    }
+    return payload;
+  } catch {
+    const rawBody = await request.text().catch(() => "");
+    const params = new URLSearchParams(rawBody);
+    for (const [key, value] of params.entries()) {
+      payload[key] = value;
+    }
+    return payload;
+  }
 }
 
 export function normalizeVoiceStatus(payload: VoicePayload) {
   return (
     payload.status ||
+    payload.callSessionState ||
     payload.callStatus ||
     payload.state ||
-    (payload.isActive === "1" || payload.isActive?.toLowerCase() === "true" ? "in_progress" : "completed")
+    (isVoiceCallActive(payload) ? "in_progress" : "completed")
   );
 }
 
 function parseMoney(value: string | undefined) {
   if (!value) return null;
-  const parsed = Number(String(value).replace(/[^0-9.-]/g, ""));
+  const parsed = safeNumber(value, Number.NaN);
   if (!Number.isFinite(parsed)) return null;
   return new Prisma.Decimal(parsed.toFixed(2));
 }
 
 function parseInteger(value: string | undefined) {
   if (!value) return null;
-  const parsed = Number(value);
+  const parsed = safeNumber(value, Number.NaN);
   return Number.isFinite(parsed) ? Math.round(parsed) : null;
 }
 
@@ -191,7 +240,7 @@ export async function upsertVoiceCallFromPayload(payload: VoicePayload, input?: 
   routedTo?: string | null;
   assignedToId?: string | null;
 }) {
-  const sessionId = String(payload.sessionId || payload.SessionId || "").trim();
+  const sessionId = safeString(payload.sessionId || payload.SessionId);
   if (!sessionId) {
     throw new Error("missing_session_id");
   }
@@ -199,15 +248,15 @@ export async function upsertVoiceCallFromPayload(payload: VoicePayload, input?: 
   const callerNumber = normalizeVoiceNumber(payload.callerNumber || payload.caller || payload.from);
   const destinationNumber = normalizeVoiceNumber(payload.destinationNumber || payload.to || payload.calledNumber);
   const status = normalizeVoiceStatus(payload);
-  const isActive = ["1", "true", "yes"].includes(String(payload.isActive || "").toLowerCase());
+  const isActive = isVoiceCallActive(payload);
   const customerId = callerNumber ? await resolveUserIdByPhone(callerNumber) : null;
 
   return prisma.voiceCall.upsert({
     where: { sessionId },
     create: {
       sessionId,
-      direction: String(payload.direction || "INBOUND").toUpperCase(),
-      callerNumber: callerNumber || String(payload.callerNumber || payload.caller || "unknown"),
+      direction: safeString(payload.direction || "INBOUND").toUpperCase() || "INBOUND",
+      callerNumber: callerNumber || safeString(payload.callerNumber || payload.caller || "unknown") || "unknown",
       destinationNumber: destinationNumber || null,
       isActive,
       status,
@@ -218,16 +267,16 @@ export async function upsertVoiceCallFromPayload(payload: VoicePayload, input?: 
       startedAt: parseDate(payload.startTime) ?? new Date(),
       endedAt: parseDate(payload.endTime),
       durationInSeconds: parseInteger(payload.durationInSeconds || payload.duration),
-      currencyCode: payload.currencyCode || null,
-      amount: parseMoney(payload.amount),
-      recordingUrl: payload.recordingUrl || null,
-      menuOption: payload.menuOption || null,
-      notes: payload.notes || null,
+      currencyCode: safeString(payload.currencyCode) || null,
+      amount: parseMoney(payload.amount ?? "0"),
+      recordingUrl: safeString(payload.recordingUrl) || null,
+      menuOption: safeString(payload.menuOption) || null,
+      notes: safeString(payload.notes) || null,
       rawPayloadJson: payload,
     },
     update: {
-      direction: String(payload.direction || "INBOUND").toUpperCase(),
-      callerNumber: callerNumber || String(payload.callerNumber || payload.caller || "unknown"),
+      direction: safeString(payload.direction || "INBOUND").toUpperCase() || "INBOUND",
+      callerNumber: callerNumber || safeString(payload.callerNumber || payload.caller || "unknown") || "unknown",
       destinationNumber: destinationNumber || null,
       isActive,
       status,
@@ -237,18 +286,18 @@ export async function upsertVoiceCallFromPayload(payload: VoicePayload, input?: 
       customerId: customerId ?? undefined,
       endedAt: parseDate(payload.endTime) ?? undefined,
       durationInSeconds: parseInteger(payload.durationInSeconds || payload.duration) ?? undefined,
-      currencyCode: payload.currencyCode || undefined,
+      currencyCode: safeString(payload.currencyCode) || undefined,
       amount: parseMoney(payload.amount) ?? undefined,
-      recordingUrl: payload.recordingUrl || undefined,
-      menuOption: payload.menuOption || undefined,
-      notes: payload.notes || undefined,
+      recordingUrl: safeString(payload.recordingUrl) || undefined,
+      menuOption: safeString(payload.menuOption) || undefined,
+      notes: safeString(payload.notes) || undefined,
       rawPayloadJson: payload,
     },
   });
 }
 
 export async function createVoiceEventFromPayload(payload: VoicePayload, voiceCallId?: string | null) {
-  const sessionId = String(payload.sessionId || payload.SessionId || "").trim();
+  const sessionId = safeString(payload.sessionId || payload.SessionId);
   if (!sessionId) {
     throw new Error("missing_session_id");
   }
@@ -257,7 +306,7 @@ export async function createVoiceEventFromPayload(payload: VoicePayload, voiceCa
     data: {
       voiceCallId: voiceCallId ?? null,
       sessionId,
-      eventType: String(payload.eventType || payload.status || payload.callStatus || "unknown"),
+      eventType: safeString(payload.eventType || payload.status || payload.callStatus || payload.callSessionState || "unknown"),
       payloadJson: payload,
     },
   });
