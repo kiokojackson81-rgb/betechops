@@ -24,6 +24,15 @@ import {
   type SoftphoneSipConfig,
   type SoftphoneState,
 } from "@/lib/voiceSoftphone";
+import { AfricasTalkingClientAdapter } from "@/lib/voiceWebrtc/africasTalkingClientAdapter";
+import { MockWebrtcAdapter } from "@/lib/voiceWebrtc/mockWebrtcAdapter";
+import type {
+  VoiceWebrtcAdapter,
+  VoiceWebrtcCallSession,
+  VoiceWebrtcRegistration,
+  VoiceWebrtcTokenResponse,
+} from "@/lib/voiceWebrtc/types";
+import { deriveVoiceWebrtcState } from "@/lib/voiceWebrtc/webRtcStateMachine";
 
 type SoftphoneContextValue = {
   state: SoftphoneState;
@@ -77,6 +86,8 @@ type SoftphoneContextValue = {
 };
 
 const SoftphoneContext = createContext<SoftphoneContextValue | null>(null);
+const NEXT_PUBLIC_VOICE_WEBRTC_ENABLED =
+  String(process.env.NEXT_PUBLIC_VOICE_WEBRTC_ENABLED || "").trim().toLowerCase() === "true";
 
 function readStoredPreferences() {
   if (typeof window === "undefined") return DEFAULT_SOFTPHONE_PREFERENCES;
@@ -136,6 +147,15 @@ function makeFavoriteNumbers(sessionName: string | null | undefined) {
   ];
 }
 
+function mapSoftphoneStateToWebrtcRegistryState(state: SoftphoneState) {
+  if (["AVAILABLE", "REGISTERED", "RINGING_INBOUND", "RINGING_OUTBOUND", "TALKING", "ON_HOLD", "BUSY"].includes(state)) {
+    return "ready" as const;
+  }
+  if (state === "ERROR") return "error" as const;
+  if (state === "DISCONNECTED") return "offline" as const;
+  return "notready" as const;
+}
+
 export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
   const pathname = usePathname();
@@ -160,6 +180,30 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const activityTimerRef = useRef<number | null>(null);
+  const stateRef = useRef<SoftphoneState>("NOT_REGISTERED");
+  const availabilityRef = useRef<SoftphoneAvailabilityState>("OFFLINE");
+  const currentCallRef = useRef<SoftphoneCall | null>(null);
+  const selectedCustomerRef = useRef<SoftphoneCustomerSummary | null>(null);
+  const adapterRef = useRef<VoiceWebrtcAdapter | null>(null);
+  const webRtcRegistrationRef = useRef<VoiceWebrtcRegistration | null>(null);
+  const webRtcModeRef = useRef<"mock" | "webrtc">("mock");
+  const adapterCleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  useEffect(() => {
+    availabilityRef.current = availability;
+  }, [availability]);
+
+  useEffect(() => {
+    currentCallRef.current = currentCall;
+  }, [currentCall]);
+
+  useEffect(() => {
+    selectedCustomerRef.current = selectedCustomer;
+  }, [selectedCustomer]);
 
   useEffect(() => {
     setPreferences(readStoredPreferences());
@@ -305,26 +349,196 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
     setRecentCalls((current) => [call, ...current].slice(0, 24));
   };
 
+  const applyWebrtcDerivedState = (
+    event: "ready" | "notready" | "incomingcall" | "calling" | "callaccepted" | "hangup" | "offline" | "closed" | "error",
+  ) => {
+    const next = deriveVoiceWebrtcState(
+      {
+        softphoneState: stateRef.current,
+        availability: availabilityRef.current,
+      },
+      event,
+    );
+    setAvailabilityState(next.availability);
+    setState(next.softphoneState);
+  };
+
+  const buildCallFromWebrtcSession = (
+    session: VoiceWebrtcCallSession,
+    nextState: SoftphoneState,
+  ): SoftphoneCall => {
+    const remoteIdentity =
+      session.direction === "INBOUND"
+        ? String(session.from || "")
+        : String(session.to || session.from || "");
+    const customer =
+      selectedCustomerRef.current && selectedCustomerRef.current.phone === remoteIdentity
+        ? selectedCustomerRef.current
+        : buildDefaultMockCustomer(remoteIdentity || undefined);
+    return {
+      id: session.id,
+      direction: session.direction ?? "OUTBOUND",
+      displayName: customer.name || remoteIdentity || "Voice caller",
+      remoteIdentity: remoteIdentity || customer.phone,
+      startedAt:
+        nextState === "TALKING" || nextState === "ON_HOLD" ? new Date().toISOString() : null,
+      state: nextState,
+      muted: false,
+      held: false,
+      dtmfHistory: [],
+      customer,
+    };
+  };
+
+  const attachAdapterListeners = (adapter: VoiceWebrtcAdapter) => {
+    const unsubs = [
+      adapter.on("ready", ({ registration }) => {
+        webRtcRegistrationRef.current = registration;
+        webRtcModeRef.current = "webrtc";
+        applyWebrtcDerivedState("ready");
+      }),
+      adapter.on("notready", () => {
+        applyWebrtcDerivedState("notready");
+      }),
+      adapter.on("incomingcall", ({ call }) => {
+        setCurrentCall(buildCallFromWebrtcSession({ ...call, direction: "INBOUND" }, "RINGING_INBOUND"));
+        applyWebrtcDerivedState("incomingcall");
+      }),
+      adapter.on("calling", ({ call }) => {
+        setCurrentCall(buildCallFromWebrtcSession({ ...call, direction: "OUTBOUND" }, "RINGING_OUTBOUND"));
+        applyWebrtcDerivedState("calling");
+      }),
+      adapter.on("callaccepted", ({ call }) => {
+        setCurrentCall((existing) => {
+          const nextCall = existing ?? buildCallFromWebrtcSession(call, "TALKING");
+          return {
+            ...nextCall,
+            startedAt: nextCall.startedAt || new Date().toISOString(),
+            state: "TALKING",
+          };
+        });
+        applyWebrtcDerivedState("callaccepted");
+      }),
+      adapter.on("hangup", () => {
+        setCurrentCall((existing) => {
+          if (!existing) return null;
+          pushRecentCall({ ...existing, state: "DISCONNECTED" });
+          return null;
+        });
+        applyWebrtcDerivedState("hangup");
+      }),
+      adapter.on("offline", () => {
+        applyWebrtcDerivedState("offline");
+      }),
+      adapter.on("closed", () => {
+        setCurrentCall((existing) => {
+          if (!existing) return null;
+          pushRecentCall({ ...existing, state: "DISCONNECTED" });
+          return null;
+        });
+        applyWebrtcDerivedState("closed");
+      }),
+      adapter.on("error", () => {
+        setState("ERROR");
+        setAvailabilityState("OFFLINE");
+      }),
+    ];
+
+    return () => {
+      unsubs.forEach((unsubscribe) => unsubscribe());
+    };
+  };
+
   const setAvailability = (next: SoftphoneAvailabilityState) => {
     setAvailabilityState(next);
   };
 
+  const registerMockAdapter = async () => {
+    const adapter = new MockWebrtcAdapter();
+    adapterRef.current = adapter;
+    adapterCleanupRef.current?.();
+    adapterCleanupRef.current = attachAdapterListeners(adapter);
+    const registration: VoiceWebrtcRegistration = {
+      token: "mock-token",
+      clientName: "mock",
+      identity: "mock.client",
+      phoneNumber: "",
+      username: "mock",
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    };
+    await adapter.register(registration);
+    webRtcRegistrationRef.current = registration;
+    webRtcModeRef.current = "mock";
+  };
+
   const register = async () => {
     setState("REGISTERING");
-    window.setTimeout(() => {
-      setState("REGISTERED");
-      setAvailability("AVAILABLE");
-      setState("AVAILABLE");
-    }, 800);
+
+    if (!NEXT_PUBLIC_VOICE_WEBRTC_ENABLED) {
+      await registerMockAdapter();
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/voice/webrtc/token", {
+        method: "GET",
+        cache: "no-store",
+      });
+      const payload = (await response.json().catch(() => ({}))) as
+        | (VoiceWebrtcTokenResponse & { error?: string })
+        | { error?: string };
+
+      if (!response.ok || !("mode" in payload) || payload.mode !== "webrtc" || !payload.token) {
+        await registerMockAdapter();
+        return;
+      }
+
+      const adapter = new AfricasTalkingClientAdapter();
+      adapterRef.current = adapter;
+      adapterCleanupRef.current?.();
+      adapterCleanupRef.current = attachAdapterListeners(adapter);
+      const username = payload.identity.split(".")[0] || "";
+      const registration: VoiceWebrtcRegistration = {
+        token: payload.token,
+        clientName: payload.clientName,
+        identity: payload.identity,
+        phoneNumber: payload.phoneNumber,
+        username,
+        expiresAt: payload.expiresAt,
+      };
+      await adapter.register(registration);
+      webRtcRegistrationRef.current = registration;
+      webRtcModeRef.current = "webrtc";
+    } catch {
+      await registerMockAdapter().catch(() => {
+        webRtcModeRef.current = "mock";
+        adapterRef.current = null;
+        setState("ERROR");
+        setAvailability("OFFLINE");
+      });
+    }
   };
 
   const unregister = async () => {
+    adapterCleanupRef.current?.();
+    adapterCleanupRef.current = null;
+    if (adapterRef.current) {
+      await adapterRef.current.unregister().catch(() => {});
+      adapterRef.current = null;
+    }
+    webRtcRegistrationRef.current = null;
+    webRtcModeRef.current = "mock";
     setCurrentCall(null);
     setAvailability("OFFLINE");
     setState("NOT_REGISTERED");
   };
 
   const answerCall = () => {
+    if (adapterRef.current && webRtcModeRef.current === "webrtc") {
+      void adapterRef.current.answer().catch(() => {
+        setState("ERROR");
+      });
+    }
     setCurrentCall((call) => {
       if (!call) return call;
       return {
@@ -338,6 +552,11 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
   };
 
   const rejectCall = () => {
+    if (adapterRef.current && webRtcModeRef.current === "webrtc") {
+      void adapterRef.current.reject().catch(() => {
+        setState("ERROR");
+      });
+    }
     setCurrentCall((call) => {
       if (!call) return call;
       pushRecentCall({ ...call, state: "DISCONNECTED" });
@@ -348,6 +567,11 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
   };
 
   const hangUp = () => {
+    if (adapterRef.current && webRtcModeRef.current === "webrtc") {
+      void adapterRef.current.hangup().catch(() => {
+        setState("ERROR");
+      });
+    }
     setCurrentCall((call) => {
       if (!call) return call;
       pushRecentCall({ ...call, state: "DISCONNECTED" });
@@ -358,10 +582,22 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
   };
 
   const toggleMute = () => {
+    const nextMuted = !Boolean(currentCallRef.current?.muted);
+    if (adapterRef.current && webRtcModeRef.current === "webrtc") {
+      void (nextMuted ? adapterRef.current.mute() : adapterRef.current.unmute()).catch(() => {
+        setState("ERROR");
+      });
+    }
     setCurrentCall((call) => (call ? { ...call, muted: !call.muted } : call));
   };
 
   const toggleHold = () => {
+    const nextHeld = !Boolean(currentCallRef.current?.held);
+    if (adapterRef.current && webRtcModeRef.current === "webrtc") {
+      void (nextHeld ? adapterRef.current.hold() : adapterRef.current.unhold()).catch(() => {
+        setState("ERROR");
+      });
+    }
     setCurrentCall((call) => {
       if (!call) return call;
       const nextHeld = !call.held;
@@ -376,6 +612,11 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
   };
 
   const sendDtmf = (digit: string) => {
+    if (adapterRef.current && webRtcModeRef.current === "webrtc") {
+      void adapterRef.current.sendDtmf(digit).catch(() => {
+        setState("ERROR");
+      });
+    }
     setCurrentCall((call) =>
       call
         ? {
@@ -405,6 +646,11 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
     setAvailability("BUSY");
     setState("RINGING_OUTBOUND");
     setDialedDigits("");
+    if (adapterRef.current && webRtcModeRef.current === "webrtc") {
+      void adapterRef.current.call(phone).catch(() => {
+        setState("ERROR");
+      });
+    }
   };
 
   const triggerMockEvent = (event: SoftphoneMockEvent) => {
@@ -547,12 +793,22 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
     const syncPresence = async () => {
       setLastHeartbeatAt(new Date().toISOString());
       try {
+        const registration = webRtcRegistrationRef.current;
         await fetch("/api/voice/presence", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             status: mapAvailabilityToPresenceStatus(availability),
             currentCallId: currentCall?.id ?? null,
+            webrtc: registration
+              ? {
+                  clientName: registration.clientName,
+                  identity: registration.identity,
+                  state: mapSoftphoneStateToWebrtcRegistryState(stateRef.current),
+                }
+              : {
+                  state: mapSoftphoneStateToWebrtcRegistryState(stateRef.current),
+                },
           }),
         });
       } catch {}
@@ -562,7 +818,7 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
       void syncPresence();
     }, 45000);
     return () => window.clearInterval(interval);
-  }, [availability, currentCall?.id, session?.user]);
+  }, [availability, currentCall?.id, session?.user, state]);
 
   useEffect(() => {
     const audio = remoteAudioRef.current as (HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> }) | null;
@@ -572,6 +828,15 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
       void audio.setSinkId(preferences.speakerId).catch(() => {});
     }
   }, [preferences.outputVolume, preferences.speakerId]);
+
+  useEffect(() => {
+    return () => {
+      adapterCleanupRef.current?.();
+      adapterCleanupRef.current = null;
+      void adapterRef.current?.unregister().catch(() => {});
+      adapterRef.current = null;
+    };
+  }, []);
 
   const connectionStatus = useMemo<SoftphoneContextValue["connectionStatus"]>(() => {
     if (state === "ERROR") return "error";

@@ -36,6 +36,10 @@ function buildAdminFallbackXml() {
   });
 }
 
+function getBrowserDialedNumber(payload: Record<string, string>) {
+  return safeString(payload.clientDialedNumber || payload.ClientDialedNumber || payload.dialedNumber || payload.DialedNumber);
+}
+
 function isTrustedVoiceCallback(payload: Record<string, string>) {
   const configuredUsername = safeString(process.env.AFRICASTALKING_USERNAME).toLowerCase();
   if (!configuredUsername) return true;
@@ -56,21 +60,56 @@ export async function POST(request: Request) {
       });
     }
 
-    const status = normalizeVoiceStatus(payload);
-    const isActive = isVoiceCallActive(payload);
+    const browserDialedNumber = getBrowserDialedNumber(payload);
+    const normalizedPayload =
+      browserDialedNumber
+        ? {
+            ...payload,
+            direction: "OUTBOUND",
+            destinationNumber: browserDialedNumber,
+          }
+        : payload;
+
+    const status = normalizeVoiceStatus(normalizedPayload);
+    const isActive = isVoiceCallActive(normalizedPayload);
+
+    if (browserDialedNumber) {
+      const voiceCall = await upsertVoiceCallFromPayload(normalizedPayload, {
+        routeType: "WEBRTC_OUTBOUND",
+        routedTo: browserDialedNumber,
+        assignedToId: null,
+      });
+      await createVoiceEventFromPayload(
+        {
+          ...normalizedPayload,
+          eventType: isActive ? "WEBRTC_OUTBOUND_CREATED" : "WEBRTC_OUTBOUND_COMPLETED",
+        },
+        voiceCall.id,
+      );
+
+      if (!isActive) {
+        return xmlResponse(buildEmptyVoiceXmlResponse());
+      }
+
+      return xmlResponse(
+        buildVoiceXmlResponse({
+          phoneNumbers: [browserDialedNumber],
+        }),
+      );
+    }
 
     const route = await getVoiceRouteTargets(new Date());
-    const routedTo = route.orderedTargets.map((target) => target.phoneNumber).join(",");
+    const routedTo = route.orderedTargets.map((target) => target.dialValue || target.phoneNumber).join(",");
     const primaryTarget = route.primaryTarget;
 
-    const voiceCall = await upsertVoiceCallFromPayload(payload, {
+    const voiceCall = await upsertVoiceCallFromPayload(normalizedPayload, {
       routeType: route.routeType,
       routedTo,
       assignedToId: primaryTarget?.userId ?? null,
     });
     await createVoiceEventFromPayload(
       {
-        ...payload,
+        ...normalizedPayload,
         eventType: isActive ? "CALL_CREATED" : "CALL_COMPLETED",
       },
       voiceCall.id,
@@ -96,7 +135,7 @@ export async function POST(request: Request) {
     if (!route.hasAvailableTarget) {
       await createVoiceEventFromPayload(
         {
-          ...payload,
+          ...normalizedPayload,
           eventType: "NO_AGENT_AVAILABLE",
         },
         voiceCall.id,
@@ -109,7 +148,7 @@ export async function POST(request: Request) {
         buildVoiceXmlResponse({
           preDialMessage:
             "Thank you for calling Betech Solar Solutions. Our sales team is currently outside working hours. Please hold as we connect you to the admin line.",
-          phoneNumbers: route.orderedTargets.map((target) => target.phoneNumber),
+          phoneNumbers: route.orderedTargets.map((target) => target.dialValue || target.phoneNumber),
         }),
       );
     }
@@ -124,7 +163,7 @@ export async function POST(request: Request) {
 
     return xmlResponse(
       buildVoiceXmlResponse({
-        phoneNumbers: route.orderedTargets.map((target) => target.phoneNumber),
+        phoneNumbers: route.orderedTargets.map((target) => target.dialValue || target.phoneNumber),
       }),
     );
   } catch (error) {

@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getVoiceCustomerContext } from "@/lib/voiceCustomerContext";
 import { publishVoiceLiveEvent } from "@/lib/voiceLiveEvents";
+import { getVoiceWebrtcRegistryEntry } from "@/lib/voiceWebrtc/registry";
 
 export const VOICE_ALLOWED_ATTENDANT_CATEGORIES = ["DIRECT_SALES_OPS", "MARKETING_OPS"] as const;
 export const VOICE_PRESENCE_STATUSES = ["AVAILABLE", "AWAY", "BUSY", "BREAK", "OFFLINE"] as const;
@@ -158,6 +159,7 @@ type RoutingAgentDefinition = {
   displayName: string;
   roleLabel: string;
   phone: string | null;
+  webRtcClientName: string;
   match: (agent: {
     name: string | null;
     email: string | null;
@@ -182,6 +184,7 @@ function buildRoutingAgentDefinitions(): RoutingAgentDefinition[] {
       displayName: "Brendah Owino",
       roleLabel: "Marketing / Sales Agent",
       phone: brendahPhone,
+      webRtcClientName: "brendah",
       match: (agent) =>
         normalizeCompareValue(agent.email).includes("brendah") ||
         normalizeCompareValue(agent.name).includes("brendah") ||
@@ -192,6 +195,7 @@ function buildRoutingAgentDefinitions(): RoutingAgentDefinition[] {
       displayName: "Jennifer",
       roleLabel: "Direct Sales Agent",
       phone: jenniferPhone,
+      webRtcClientName: "jennifer",
       match: (agent) =>
         normalizeCompareValue(agent.email).includes("jen") ||
         normalizeCompareValue(agent.name).includes("jen") ||
@@ -202,6 +206,7 @@ function buildRoutingAgentDefinitions(): RoutingAgentDefinition[] {
       displayName: "Jackson Kioko",
       roleLabel: "Admin / Fallback Line",
       phone: adminPhone,
+      webRtcClientName: "jackson",
       match: (agent) =>
         normalizeCompareValue(agent.email).includes("jackson") ||
         normalizeCompareValue(agent.name).includes("jackson") ||
@@ -209,6 +214,53 @@ function buildRoutingAgentDefinitions(): RoutingAgentDefinition[] {
         normalizeCompareValue(agent.role) === "admin",
     },
   ];
+}
+
+export function sanitizeVoiceWebrtcClientName(value: string | null | undefined) {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized.replace(/-/g, "").slice(0, 32);
+}
+
+export function resolveVoiceWebrtcClientName(input: {
+  userId?: string | null;
+  name?: string | null;
+  email?: string | null;
+  role?: string | null;
+  attendantCategory?: string | null;
+  phone?: string | null;
+}) {
+  const routeMatch = buildRoutingAgentDefinitions().find((definition) =>
+    definition.match({
+      name: input.name ?? null,
+      email: input.email ?? null,
+      role: input.role ?? null,
+      attendantCategory: input.attendantCategory ?? null,
+      phone: input.phone ?? null,
+    }),
+  );
+  if (routeMatch?.webRtcClientName) return routeMatch.webRtcClientName;
+
+  const emailLocalPart = sanitizeVoiceWebrtcClientName(String(input.email || "").split("@")[0] || "");
+  if (emailLocalPart) return emailLocalPart;
+
+  const nameSlug = sanitizeVoiceWebrtcClientName(input.name);
+  if (nameSlug) return nameSlug;
+
+  const userSlug = sanitizeVoiceWebrtcClientName(input.userId);
+  if (userSlug) return userSlug;
+
+  return "voiceuser";
+}
+
+export function buildVoiceWebrtcIdentity(clientName: string, username = process.env.AFRICASTALKING_USERNAME) {
+  const normalizedUsername = String(username || "").trim();
+  const normalizedClientName = sanitizeVoiceWebrtcClientName(clientName);
+  if (!normalizedUsername || !normalizedClientName) return null;
+  return `${normalizedUsername}.${normalizedClientName}`;
 }
 
 function getCategoryLabel(category: string | null | undefined, role: string | null | undefined) {
@@ -395,6 +447,18 @@ function serializePresenceRow(
   const phone = routingDefinition?.phone ?? agent.phone ?? null;
   const displayName = routingDefinition?.displayName ?? agent.name ?? agent.email ?? "Unnamed agent";
   const displayRoleLabel = routingDefinition?.roleLabel ?? getCategoryLabel(agent.attendantCategory, agent.role);
+  const webRtcClientName =
+    routingDefinition?.webRtcClientName ??
+    resolveVoiceWebrtcClientName({
+      userId: agent.id,
+      name: agent.name,
+      email: agent.email,
+      role: agent.role,
+      attendantCategory: agent.attendantCategory,
+      phone: agent.phone,
+    });
+  const webRtcIdentity = buildVoiceWebrtcIdentity(webRtcClientName) ?? null;
+  const webRtcRegistry = getVoiceWebrtcRegistryEntry(agent.id);
 
   const effectiveStatus = effectivePresenceStatus(agent.voicePresence?.status, agent.voicePresence?.lastSeenAt);
 
@@ -423,6 +487,10 @@ function serializePresenceRow(
     activeCallCount,
     waitingCallCount,
     isAvailableForRouting: isAgentAvailableForRouting(effectiveStatus, agent.voicePresence?.lastSeenAt),
+    webRtcClientName,
+    webRtcIdentity,
+    isWebrtcRegistered: Boolean(webRtcRegistry),
+    webRtcState: webRtcRegistry?.state ?? "offline",
   };
 }
 

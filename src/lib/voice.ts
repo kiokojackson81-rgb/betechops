@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { getKenyanPhoneVariants, normalizeKenyanPhone } from "@/lib/phone";
 import { resolveVoiceCustomerLinkByPhone } from "@/lib/voiceCustomerContext";
 import { publishVoiceLiveEvent } from "@/lib/voiceLiveEvents";
+import { buildVoiceWebrtcIdentity } from "@/lib/voiceOperations";
+import { isVoiceWebrtcClientReady } from "@/lib/voiceWebrtc/registry";
 
 const NAIROBI_TIMEZONE = "Africa/Nairobi";
 
@@ -15,9 +17,22 @@ type VoiceRouteTarget = {
   presenceStatus: string;
   isAvailable: boolean;
   lastSeenAt: Date | null;
+  webRtcIdentity: string | null;
+  isWebrtcRegistered: boolean;
+  dialValue: string;
 };
 
 const VOICE_PRESENCE_ROUTING_WINDOW_MS = 90 * 1000;
+
+function isVoiceWebrtcEnabled() {
+  return String(process.env.NEXT_PUBLIC_VOICE_WEBRTC_ENABLED || "").trim().toLowerCase() === "true";
+}
+
+function getDefaultWebrtcClientName(label: VoiceRouteTarget["label"]) {
+  if (label === "BRENDAH") return "brendah";
+  if (label === "JENNIFER") return "jennifer";
+  return "jackson";
+}
 
 export function safeString(value: unknown) {
   return typeof value === "string" ? value.trim() : value == null ? "" : String(value).trim();
@@ -117,12 +132,15 @@ async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], Vo
 
   const toTarget = (label: VoiceRouteTarget["label"], phoneNumber: string, userId: string | null): VoiceRouteTarget => {
     const presence = userId ? presenceByUserId.get(userId) : null;
+    const webRtcRegistration = userId ? isVoiceWebrtcClientReady(userId) : null;
     const presenceStatus = safeString(presence?.status).toUpperCase() || "OFFLINE";
     const lastSeenAt = presence?.lastSeenAt ?? null;
     const isAvailable =
       presenceStatus === "AVAILABLE" &&
       Boolean(lastSeenAt) &&
       now - (lastSeenAt?.getTime() ?? 0) <= VOICE_PRESENCE_ROUTING_WINDOW_MS;
+    const webRtcIdentity = webRtcRegistration?.identity ?? buildVoiceWebrtcIdentity(getDefaultWebrtcClientName(label)) ?? null;
+    const shouldUseWebrtc = isVoiceWebrtcEnabled() && Boolean(webRtcRegistration?.identity) && isAvailable;
 
     return {
       label,
@@ -131,6 +149,9 @@ async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], Vo
       presenceStatus,
       isAvailable,
       lastSeenAt,
+      webRtcIdentity,
+      isWebrtcRegistered: Boolean(webRtcRegistration?.identity),
+      dialValue: shouldUseWebrtc ? String(webRtcRegistration?.identity || "") : phoneNumber,
     };
   };
 

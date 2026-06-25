@@ -29,8 +29,19 @@ export async function POST(request: Request) {
       console.warn("[voice.events.untrusted_username]", payload.username || payload.userName || payload.Username || null);
     }
 
-    const voiceCall = await upsertVoiceCallFromPayload(payload);
-    const voiceEvent = await createVoiceEventFromPayload(payload, voiceCall.id);
+    const browserDialedNumber = String(
+      payload.clientDialedNumber || payload.ClientDialedNumber || payload.dialedNumber || payload.DialedNumber || "",
+    ).trim();
+    const normalizedPayload = browserDialedNumber
+      ? {
+          ...payload,
+          direction: "OUTBOUND",
+          destinationNumber: browserDialedNumber,
+        }
+      : payload;
+
+    const voiceCall = await upsertVoiceCallFromPayload(normalizedPayload);
+    const voiceEvent = await createVoiceEventFromPayload(normalizedPayload, voiceCall.id);
     await ensureVoiceLeadForCaller({
       callerNumber: voiceCall.callerNumber,
       startedAt: voiceCall.startedAt,
@@ -40,7 +51,7 @@ export async function POST(request: Request) {
 
     await createOrUpdateMissedVoiceLead({
       callerNumber: voiceCall.callerNumber,
-      status: normalizeVoiceStatus(payload),
+      status: normalizeVoiceStatus(normalizedPayload),
       startedAt: voiceCall.startedAt,
       assignedToId: voiceCall.assignedToId,
     });

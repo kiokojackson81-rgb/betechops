@@ -4,6 +4,10 @@ import {
   resolveVoiceViewer,
   updateVoicePresence,
 } from "@/lib/voiceOperations";
+import {
+  clearVoiceWebrtcRegistry,
+  updateVoiceWebrtcRegistry,
+} from "@/lib/voiceWebrtc/registry";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +25,11 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => ({}))) as {
       status?: string | null;
       currentCallId?: string | null;
+      webrtc?: {
+        clientName?: string | null;
+        identity?: string | null;
+        state?: "ready" | "notready" | "offline" | "closed" | "error" | null;
+      } | null;
     };
 
     const presence = await updateVoicePresence({
@@ -28,6 +37,17 @@ export async function POST(request: Request) {
       status: body.status || "",
       currentCallId: body.currentCallId ?? null,
     });
+
+    if (body.webrtc?.clientName && body.webrtc?.identity && body.webrtc?.state) {
+      updateVoiceWebrtcRegistry({
+        userId: viewer.targetUserId,
+        clientName: body.webrtc.clientName,
+        identity: body.webrtc.identity,
+        state: body.webrtc.state,
+      });
+    } else if (body.webrtc?.state && ["offline", "closed", "error", "notready"].includes(body.webrtc.state)) {
+      clearVoiceWebrtcRegistry(viewer.targetUserId);
+    }
 
     return NextResponse.json({
       ok: true,
