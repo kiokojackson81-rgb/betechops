@@ -135,7 +135,7 @@ export async function POST(request: Request) {
       return xmlResponse(buildEmptyVoiceXmlResponse());
     }
 
-    if (!route.hasAvailableTarget) {
+    if (!("hasRoutableTarget" in route ? route.hasRoutableTarget : route.orderedTargets.length > 0)) {
       await createVoiceEventFromPayload(
         {
           ...normalizedPayload,
@@ -144,6 +144,14 @@ export async function POST(request: Request) {
         voiceCall.id,
       );
       return xmlResponse(buildVoiceMessageXmlResponse("No agents are currently available. Please try again shortly."));
+    }
+
+    if ("usedMobileFallback" in route && route.usedMobileFallback) {
+      console.warn("[voice.callback.mobile_fallback]", {
+        sessionId: voiceCall.sessionId,
+        callerNumber: voiceCall.callerNumber,
+        routedTo,
+      });
     }
 
     if (route.routeType === "AFTER_HOURS") {

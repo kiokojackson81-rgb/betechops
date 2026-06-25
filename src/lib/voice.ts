@@ -21,6 +21,7 @@ type VoiceRouteTarget = {
   isWebrtcRegistered: boolean;
   dialValue: string;
   dialValues: string[];
+  skipReasons: string[];
 };
 
 const VOICE_PRESENCE_ROUTING_WINDOW_MS = 90 * 1000;
@@ -102,20 +103,76 @@ function getConfiguredPhone(label: "BRENDAH" | "JENNIFER" | "ADMIN") {
   return normalizeVoiceNumber(process.env[envKey]);
 }
 
-async function resolveUserIdByPhone(phoneNumber: string) {
-  const linked = await resolveVoiceCustomerLinkByPhone(phoneNumber);
-  return linked.matchedCustomer?.id ?? null;
+function normalizeCompareValue(value: string | null | undefined) {
+  return String(value || "").trim().toLowerCase();
+}
+
+async function resolveRoutingUsers() {
+  const brendahPhone = getConfiguredPhone("BRENDAH");
+  const jenniferPhone = getConfiguredPhone("JENNIFER");
+  const adminPhone = getConfiguredPhone("ADMIN");
+
+  const users = await prisma.user.findMany({
+    where: {
+      isActive: true,
+      OR: [
+        { role: "ADMIN" },
+        { phone: { in: [brendahPhone, jenniferPhone, adminPhone].filter(Boolean) } },
+        { email: { contains: "brendah", mode: "insensitive" } },
+        { email: { contains: "jen", mode: "insensitive" } },
+        { email: { contains: "jackson", mode: "insensitive" } },
+        { name: { contains: "Brendah", mode: "insensitive" } },
+        { name: { contains: "Jennifer", mode: "insensitive" } },
+        { name: { contains: "Jackson", mode: "insensitive" } },
+      ],
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      role: true,
+    },
+    orderBy: [{ role: "asc" }, { name: "asc" }],
+  });
+
+  const findUserId = (label: VoiceRouteTarget["label"], phoneNumber: string | null) => {
+    const matched = users.find((user) => {
+      const normalizedPhone = normalizeCompareValue(user.phone);
+      const normalizedEmail = normalizeCompareValue(user.email);
+      const normalizedName = normalizeCompareValue(user.name);
+      if (phoneNumber && normalizedPhone === normalizeCompareValue(phoneNumber)) return true;
+      if (label === "BRENDAH") {
+        return normalizedEmail.includes("brendah") || normalizedName.includes("brendah");
+      }
+      if (label === "JENNIFER") {
+        return normalizedEmail.includes("jen") || normalizedName.includes("jennifer") || normalizedName.includes("jeniffer");
+      }
+      return (
+        normalizedEmail.includes("jackson") ||
+        normalizedName.includes("jackson") ||
+        normalizeCompareValue(user.role) === "admin"
+      );
+    });
+
+    return matched?.id ?? null;
+  };
+
+  return {
+    BRENDAH: findUserId("BRENDAH", brendahPhone),
+    JENNIFER: findUserId("JENNIFER", jenniferPhone),
+    ADMIN: findUserId("ADMIN", adminPhone),
+  };
 }
 
 async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], VoiceRouteTarget>> {
   const brendahPhone = getConfiguredPhone("BRENDAH");
   const jenniferPhone = getConfiguredPhone("JENNIFER");
   const adminPhone = getConfiguredPhone("ADMIN");
-  const [brendahUserId, jenniferUserId, adminUserId] = await Promise.all([
-    brendahPhone ? resolveUserIdByPhone(brendahPhone) : Promise.resolve(null),
-    jenniferPhone ? resolveUserIdByPhone(jenniferPhone) : Promise.resolve(null),
-    adminPhone ? resolveUserIdByPhone(adminPhone) : Promise.resolve(null),
-  ]);
+  const routingUsers = await resolveRoutingUsers();
+  const brendahUserId = routingUsers.BRENDAH;
+  const jenniferUserId = routingUsers.JENNIFER;
+  const adminUserId = routingUsers.ADMIN;
 
   const userIds = [brendahUserId, jenniferUserId, adminUserId].filter((value): value is string => Boolean(value));
   const presences = userIds.length
@@ -136,17 +193,37 @@ async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], Vo
     const webRtcRegistration = userId ? isVoiceWebrtcClientReady(userId) : null;
     const presenceStatus = safeString(presence?.status).toUpperCase() || "OFFLINE";
     const lastSeenAt = presence?.lastSeenAt ?? null;
+    const skipReasons: string[] = [];
+    if (!phoneNumber) skipReasons.push("missing_mobile_fallback");
+    if (!userId) skipReasons.push("missing_routing_user");
+    if (!presence) {
+      skipReasons.push("missing_presence");
+    } else {
+      if (presenceStatus !== "AVAILABLE") {
+        skipReasons.push(`status_${presenceStatus.toLowerCase()}`);
+      }
+      if (lastSeenAt && now - lastSeenAt.getTime() > VOICE_PRESENCE_ROUTING_WINDOW_MS) {
+        skipReasons.push("stale_presence");
+      }
+      if (!lastSeenAt) {
+        skipReasons.push("missing_last_seen");
+      }
+    }
     const isAvailable =
       presenceStatus === "AVAILABLE" &&
       Boolean(lastSeenAt) &&
       now - (lastSeenAt?.getTime() ?? 0) <= VOICE_PRESENCE_ROUTING_WINDOW_MS;
     const webRtcIdentity = webRtcRegistration?.identity ?? buildVoiceWebrtcIdentity(getDefaultWebrtcClientName(label)) ?? null;
+    if (isVoiceWebrtcEnabled()) {
+      if (!webRtcRegistration?.identity) skipReasons.push("missing_browser_identity");
+      if (!webRtcRegistration) skipReasons.push("browser_not_registered");
+    }
     const shouldUseWebrtc = isVoiceWebrtcEnabled() && Boolean(webRtcRegistration?.identity) && isAvailable;
     const dialValues = shouldUseWebrtc
       ? [String(webRtcRegistration?.identity || ""), phoneNumber].filter(Boolean)
       : [phoneNumber].filter(Boolean);
 
-    return {
+    const target = {
       label,
       phoneNumber,
       userId,
@@ -157,7 +234,24 @@ async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], Vo
       isWebrtcRegistered: Boolean(webRtcRegistration?.identity),
       dialValue: dialValues[0] || phoneNumber,
       dialValues,
+      skipReasons,
     };
+
+    console.info("[voice.routing.target]", {
+      label,
+      phoneNumber,
+      userId,
+      presenceStatus,
+      lastSeenAt: lastSeenAt?.toISOString() ?? null,
+      isAvailable,
+      isWebrtcRegistered: Boolean(webRtcRegistration?.identity),
+      webRtcIdentity,
+      dialValues,
+      skipped: !isAvailable,
+      skipReasons,
+    });
+
+    return target;
   };
 
   return {
@@ -185,7 +279,28 @@ export async function getVoiceRouteTargets(date = new Date()) {
 
   const workingTargets = [targets.BRENDAH, targets.JENNIFER, targets.ADMIN];
   const availableTargets = workingTargets.filter((target) => target.phoneNumber && target.isAvailable);
-  const orderedTargets = availableTargets.length ? availableTargets : [];
+  const fallbackTargets = availableTargets.length
+    ? []
+    : [targets.ADMIN].filter((target) => target.phoneNumber);
+  const orderedTargets = availableTargets.length ? availableTargets : fallbackTargets;
+  const hasRoutableTarget = orderedTargets.length > 0;
+
+  if (!availableTargets.length) {
+    console.warn("[voice.routing.fallback]", {
+      routeType: "WORKING_HOURS",
+      reason: fallbackTargets.length ? "using_admin_mobile_fallback" : "no_targets_configured",
+      candidates: workingTargets.map((target) => ({
+        label: target.label,
+        phoneNumber: target.phoneNumber,
+        userId: target.userId,
+        presenceStatus: target.presenceStatus,
+        isAvailable: target.isAvailable,
+        skipReasons: target.skipReasons,
+        dialValues: target.dialValues,
+      })),
+    });
+  }
+
   return {
     routeType: "WORKING_HOURS",
     orderedTargets,
@@ -193,6 +308,8 @@ export async function getVoiceRouteTargets(date = new Date()) {
     availableTargets,
     unavailableTargets: workingTargets.filter((target) => target.phoneNumber && !target.isAvailable),
     hasAvailableTarget: availableTargets.length > 0,
+    hasRoutableTarget,
+    usedMobileFallback: !availableTargets.length && fallbackTargets.length > 0,
   };
 }
 
