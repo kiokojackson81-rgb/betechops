@@ -174,7 +174,7 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
   const [microphoneLevel, setMicrophoneLevel] = useState(0);
   const [outputLevel, setOutputLevel] = useState(0);
   const [selectedCustomer, setSelectedCustomer] = useState<SoftphoneCustomerSummary | null>(null);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(true);
   const [lastHeartbeatAt, setLastHeartbeatAt] = useState<string | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -779,7 +779,7 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const stored = window.localStorage.getItem(SOFTPHONE_COLLAPSED_STORAGE_KEY);
-    setIsCollapsed(stored === "1");
+    setIsCollapsed(stored == null ? true : stored === "1");
   }, []);
 
   useEffect(() => {

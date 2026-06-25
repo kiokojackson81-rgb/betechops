@@ -5,11 +5,20 @@ import { useSoftphone } from "@/components/voice/SoftphoneProvider";
 
 const DIGITS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"];
 
-export default function DialPad() {
+export default function DialPad({ compact = false }: { compact?: boolean }) {
   const softphone = useSoftphone();
+  return <DialPadInner compact={compact} softphone={softphone} />;
+}
 
+function DialPadInner({
+  compact,
+  softphone,
+}: {
+  compact: boolean;
+  softphone: ReturnType<typeof useSoftphone>;
+}) {
   return (
-    <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+    <div className={`rounded-[24px] border border-white/10 bg-white/[0.03] p-4 ${compact ? "space-y-4" : ""}`}>
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Dial pad</div>
@@ -41,7 +50,7 @@ export default function DialPad() {
         ))}
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <div className={`mt-4 grid gap-3 ${compact ? "grid-cols-1" : "sm:grid-cols-2"}`}>
         <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-3">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
             <Star className="h-3.5 w-3.5" />

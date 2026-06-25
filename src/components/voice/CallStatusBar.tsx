@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useSoftphone } from "@/components/voice/SoftphoneProvider";
 
 function formatElapsed(startedAt: string | null) {
@@ -13,7 +13,15 @@ function formatElapsed(startedAt: string | null) {
 
 export default function CallStatusBar() {
   const softphone = useSoftphone();
-  const elapsed = useMemo(() => formatElapsed(softphone.currentCall?.startedAt ?? null), [softphone.currentCall?.startedAt, softphone.state]);
+  const [elapsed, setElapsed] = useState(() => formatElapsed(softphone.currentCall?.startedAt ?? null));
+
+  useEffect(() => {
+    setElapsed(formatElapsed(softphone.currentCall?.startedAt ?? null));
+    const interval = window.setInterval(() => {
+      setElapsed(formatElapsed(softphone.currentCall?.startedAt ?? null));
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [softphone.currentCall?.startedAt]);
 
   return (
     <div className="rounded-[22px] border border-white/10 bg-slate-950/80 px-4 py-3">

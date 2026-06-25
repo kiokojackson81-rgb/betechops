@@ -148,6 +148,7 @@ export default function VoiceConsoleClient({
   const [manualPresence, setManualPresence] = useState<string | null>(null);
   const [dismissedIncomingIds, setDismissedIncomingIds] = useState<string[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerTab, setDrawerTab] = useState<"overview" | "timeline" | "notes" | "followUps" | "recordings">("overview");
   const [recentSearch, setRecentSearch] = useState("");
   const [recentFilter, setRecentFilter] = useState<"all" | "INBOUND" | "OUTBOUND" | "with_recording">("all");
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -272,6 +273,17 @@ export default function VoiceConsoleClient({
     setDrawerOpen(true);
   }, [incomingCall]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new CustomEvent("voice-console-drawer", { detail: { open: drawerOpen } }));
+    if (drawerOpen) {
+      softphone.setCollapsed(true);
+    }
+    return () => {
+      window.dispatchEvent(new CustomEvent("voice-console-drawer", { detail: { open: false } }));
+    };
+  }, [drawerOpen, softphone]);
+
   const selectedCustomerLinks = useMemo(() => {
     const phone = data.selectedContext?.normalizedPhone || selectedPhone || selectedCall?.callerNumber || "";
     const params = new URLSearchParams();
@@ -318,6 +330,7 @@ export default function VoiceConsoleClient({
     setSelectedCallId(callId);
     setSelectedPhone(phone);
     setDrawerOpen(true);
+    setDrawerTab("overview");
     setError(null);
     refreshSnapshot(callId, phone).catch((selectionError) => {
       console.error("[voice.console.select_failed]", selectionError);
@@ -1450,76 +1463,141 @@ export default function VoiceConsoleClient({
         </section>
 
         {drawerOpen && selectedCall ? (
-          <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm">
-            <div className="ml-auto flex h-full w-full max-w-2xl flex-col overflow-y-auto border-l border-white/10 bg-slate-950 p-5 shadow-[-24px_0_80px_rgba(0,0,0,0.45)]">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-300">Call Detail Drawer</div>
-                  <h2 className="mt-2 text-2xl font-semibold text-white">
-                    {selectedCall.customer.customerName || selectedCall.callerNumber}
-                  </h2>
-                  <div className="mt-1 whitespace-nowrap text-sm text-slate-400">
-                    {selectedCall.callerNumber} · {selectedCall.statusLabel}
+          <div className="fixed inset-0 z-[60] bg-slate-950/70 backdrop-blur-sm">
+            <button
+              type="button"
+              onClick={() => setDrawerOpen(false)}
+              className="absolute inset-0 h-full w-full cursor-default"
+              aria-label="Close call detail drawer backdrop"
+            />
+            <aside className="relative ml-auto flex h-full w-full flex-col border-l border-white/10 bg-slate-950 shadow-[-24px_0_80px_rgba(0,0,0,0.45)] md:w-[420px] lg:w-[480px] xl:w-[520px]">
+              <div className="sticky top-0 z-10 border-b border-white/10 bg-[linear-gradient(180deg,rgba(2,6,23,0.98),rgba(2,6,23,0.94))] px-5 py-4 backdrop-blur">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-300">Call Detail</div>
+                    <h2 className="mt-2 truncate text-xl font-semibold text-white">{selectedCall.callerNumber}</h2>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(selectedCall.status)}`}>
+                        {selectedCall.statusLabel}
+                      </span>
+                      <span className="truncate text-sm text-slate-400">
+                        {selectedCall.customer.customerName || selectedCall.callerNumber}
+                      </span>
+                    </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setDrawerOpen(false)}
+                    className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30"
+                  >
+                    Close
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setDrawerOpen(false)}
-                  className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30"
-                >
-                  Close
-                </button>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <a href={selectedCustomerLinks.callBack} className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20">
+                    Call back
+                  </a>
+                  <Link href={selectedCustomerLinks.customer} className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20">
+                    Open customer
+                  </Link>
+                  <Link href={selectedCustomerLinks.quote} className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400">
+                    Create quote
+                  </Link>
+                  <Link href={selectedCustomerLinks.receipt} className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400">
+                    Create receipt
+                  </Link>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {[
+                    ["overview", "Overview"],
+                    ["timeline", "Timeline"],
+                    ["notes", "Notes"],
+                    ["followUps", "Follow-ups"],
+                    ["recordings", "Recordings"],
+                  ].map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setDrawerTab(key as typeof drawerTab)}
+                      className={`rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                        drawerTab === key
+                          ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
+                          : "border-white/10 bg-white/[0.03] text-slate-200 hover:border-white/20"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div className="mt-5 grid gap-5">
-                <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Customer</div>
-                      <div className="mt-2 text-sm text-white">{selectedCall.customer.customerName || "Unknown caller"}</div>
-                      <div className="mt-1 text-sm text-slate-400">{selectedCall.customer.email || "No email saved"}</div>
-                      <div className="mt-1 text-sm text-slate-400">{selectedCall.customer.location || "No location saved"}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs uppercase tracking-[0.18em] text-slate-500">CRM</div>
-                      <div className="mt-2 text-sm text-slate-200">{selectedCall.linkedSummaryText}</div>
-                      <div className="mt-1 text-sm text-slate-400">
-                        Quotes {selectedCall.customer.openQuotations} · Web orders {selectedCall.customer.pendingWebOrders} · POD {selectedCall.customer.pendingPod}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Link href={selectedCall.links.customer} className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20">
-                      Open customer
-                    </Link>
-                    <Link href={selectedCall.links.quote} className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400">
-                      Open quote
-                    </Link>
-                    <Link href={selectedCall.links.receipt} className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400">
-                      Open receipt
-                    </Link>
-                  </div>
-                </div>
-
-                <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
-                  <div className="text-sm font-semibold text-white">Voice Event Timeline</div>
-                  <div className="mt-3 space-y-2">
-                    {data.selectedCallDetail?.timeline?.length ? data.selectedCallDetail.timeline.map((item: any) => (
-                      <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3">
-                        <div className="text-sm font-medium text-white">{item.title}</div>
-                        <div className="mt-1 text-xs text-slate-400">
-                          {item.detail || "No extra detail"} · {formatDateTime(item.at)}
+              <div className="flex-1 overflow-y-auto px-5 py-5">
+                {drawerTab === "overview" ? (
+                  <div className="grid gap-5">
+                    <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Customer</div>
+                          <div className="mt-2 text-sm text-white">{selectedCall.customer.customerName || "Unknown caller"}</div>
+                          <div className="mt-1 text-sm text-slate-400">{selectedCall.customer.email || "No email saved"}</div>
+                          <div className="mt-1 text-sm text-slate-400">{selectedCall.customer.location || "No location saved"}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs uppercase tracking-[0.18em] text-slate-500">CRM</div>
+                          <div className="mt-2 text-sm text-slate-200">{selectedCall.linkedSummaryText}</div>
+                          <div className="mt-1 text-sm text-slate-400">
+                            Quotes {selectedCall.customer.openQuotations} · Web orders {selectedCall.customer.pendingWebOrders} · POD {selectedCall.customer.pendingPod}
+                          </div>
                         </div>
                       </div>
-                    )) : (
-                      <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-sm text-slate-400">
-                        No timeline entries yet.
+                    </div>
+                    <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
+                      <div className="text-sm font-semibold text-white">Current call</div>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3">
+                          <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Direction</div>
+                          <div className="mt-1 text-sm text-white">{selectedCall.direction}</div>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3">
+                          <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Routed To</div>
+                          <div className="mt-1 text-sm text-white">{selectedCall.routedToDisplay}</div>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3">
+                          <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Started</div>
+                          <div className="mt-1 text-sm text-white">{formatDateTime(selectedCall.startedAt || selectedCall.createdAt)}</div>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3">
+                          <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Duration / Cost</div>
+                          <div className="mt-1 text-sm text-white">{formatDuration(selectedCall.durationInSeconds)} · {formatMoney(selectedCall.amount, selectedCall.currencyCode)}</div>
+                        </div>
                       </div>
-                    )}
+                    </div>
                   </div>
-                </div>
+                ) : null}
 
-                <div className="grid gap-5 lg:grid-cols-2">
+                {drawerTab === "timeline" ? (
+                  <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
+                    <div className="text-sm font-semibold text-white">Voice Event Timeline</div>
+                    <div className="mt-3 space-y-2">
+                      {data.selectedCallDetail?.timeline?.length ? data.selectedCallDetail.timeline.map((item: any) => (
+                        <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3">
+                          <div className="text-sm font-medium text-white">{item.title}</div>
+                          <div className="mt-1 text-xs text-slate-400">
+                            {item.detail || "No extra detail"} · {formatDateTime(item.at)}
+                          </div>
+                        </div>
+                      )) : (
+                        <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-sm text-slate-400">
+                          No timeline entries yet.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+
+                {drawerTab === "notes" ? (
                   <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
                     <div className="text-sm font-semibold text-white">Notes</div>
                     <div className="mt-3 space-y-2">
@@ -1537,7 +1615,9 @@ export default function VoiceConsoleClient({
                       )}
                     </div>
                   </div>
+                ) : null}
 
+                {drawerTab === "followUps" ? (
                   <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
                     <div className="text-sm font-semibold text-white">Follow-ups</div>
                     <div className="mt-3 space-y-2">
@@ -1555,16 +1635,22 @@ export default function VoiceConsoleClient({
                       )}
                     </div>
                   </div>
-                </div>
+                ) : null}
 
-                {selectedCall.recordingUrl ? (
+                {drawerTab === "recordings" ? (
                   <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
                     <div className="text-sm font-semibold text-white">Recording</div>
-                    <audio controls preload="none" className="mt-3 w-full" src={selectedCall.recordingUrl} />
+                    {selectedCall.recordingUrl ? (
+                      <audio controls preload="none" className="mt-3 w-full" src={selectedCall.recordingUrl} />
+                    ) : (
+                      <div className="mt-3 rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-sm text-slate-400">
+                        Recording not available for this call.
+                      </div>
+                    )}
                   </div>
                 ) : null}
               </div>
-            </div>
+            </aside>
           </div>
         ) : null}
       </main>
