@@ -9,12 +9,15 @@ import {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const DEFAULT_TOKEN_EXPIRY_SECONDS = 3600;
+const DEFAULT_TOKEN_EXPIRY_SECONDS = 7200;
 const PROVIDER_TIMEOUT_MS = 10000;
 const CAPABILITY_TOKEN_ENDPOINT = "https://webrtc.africastalking.com/capability-token/request";
 
 function isVoiceWebrtcEnabled() {
-  return String(process.env.NEXT_PUBLIC_VOICE_WEBRTC_ENABLED || "").trim().toLowerCase() === "true";
+  return (
+    String(process.env.NEXT_PUBLIC_VOICE_WEBRTC_ENABLED || "").trim().toLowerCase() === "true" ||
+    String(process.env.NEXT_PUBLIC_RTC_ENABLED || "").trim().toLowerCase() === "true"
+  );
 }
 
 function buildConfigDebug(input: {
@@ -30,6 +33,8 @@ function buildConfigDebug(input: {
     username: input.username || null,
     phoneNumber: input.phoneNumber || null,
     webRtcEnabled: input.webRtcEnabled,
+    featureFlagVoiceWebrtc: String(process.env.NEXT_PUBLIC_VOICE_WEBRTC_ENABLED || "").trim() || null,
+    featureFlagRtc: String(process.env.NEXT_PUBLIC_RTC_ENABLED || "").trim() || null,
   };
 }
 
@@ -80,7 +85,7 @@ export async function GET(request: Request) {
     const apiKey = String(process.env.AFRICASTALKING_API_KEY || "").trim();
     const phoneNumber = String(process.env.AFRICASTALKING_VOICE_PHONE_NUMBER || "").trim();
     const webRtcEnabled = isVoiceWebrtcEnabled();
-    const expire = DEFAULT_TOKEN_EXPIRY_SECONDS;
+    const expire = `${DEFAULT_TOKEN_EXPIRY_SECONDS}s`;
     const clientName = resolveVoiceWebrtcClientName({
       userId: user.id,
       name: user.name,
@@ -90,7 +95,7 @@ export async function GET(request: Request) {
       phone: user.phone,
     });
     const identity = buildVoiceWebrtcIdentity(clientName, username) ?? clientName;
-    const expiresAt = new Date(Date.now() + expire * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + DEFAULT_TOKEN_EXPIRY_SECONDS * 1000).toISOString();
     const configDebug = buildConfigDebug({
       username,
       apiKey,
@@ -117,11 +122,11 @@ export async function GET(request: Request) {
 
     const tokenRequestPayload = {
       username,
-      clientName,
       phoneNumber,
+      clientName,
       incoming: "true",
       outgoing: "true",
-      expire: String(expire),
+      expire,
     };
     const tokenRequestDebug = buildProviderRequestDebug({
       username,
@@ -132,7 +137,6 @@ export async function GET(request: Request) {
     });
     console.info("[voice.webrtc.token.provider_request_started]", tokenRequestDebug);
 
-    const searchParams = new URLSearchParams(tokenRequestPayload);
     const controller = new AbortController();
     const startedAt = Date.now();
     const timeout = setTimeout(() => controller.abort("voice_webrtc_provider_timeout"), PROVIDER_TIMEOUT_MS);
@@ -142,11 +146,11 @@ export async function GET(request: Request) {
       tokenResponse = await fetch(CAPABILITY_TOKEN_ENDPOINT, {
         method: "POST",
         headers: {
-          apiKey,
-          "Content-Type": "application/x-www-form-urlencoded",
+          APIKEY: apiKey,
+          "Content-Type": "application/json",
           Accept: "application/json",
         },
-        body: searchParams.toString(),
+        body: JSON.stringify(tokenRequestPayload),
         cache: "no-store",
         signal: controller.signal,
       });
@@ -229,8 +233,10 @@ export async function GET(request: Request) {
       );
     }
 
-    const effectiveLifetime = Number(payload.lifeTimeSec || expire);
+    const lifetimeSource = String(payload.lifeTimeSec || expire);
+    const effectiveLifetime = Number.parseInt(lifetimeSource, 10) || DEFAULT_TOKEN_EXPIRY_SECONDS;
     return NextResponse.json({
+      ...payload,
       token: payload.token,
       clientName,
       identity,
