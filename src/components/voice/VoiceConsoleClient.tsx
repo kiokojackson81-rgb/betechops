@@ -54,6 +54,18 @@ function formatStatus(value: string | null | undefined) {
   return String(value || "unknown").replace(/_/g, " ");
 }
 
+function formatRefreshStamp(value: string | null | undefined) {
+  if (!value) return "Not refreshed yet";
+  return `Last refreshed ${new Date(value).toLocaleString("en-KE", {
+    timeZone: "Africa/Nairobi",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
+}
+
 function statusTone(status: string | null | undefined) {
   const normalized = String(status || "").toLowerCase();
   if (["available", "answered", "completed", "resolved", "contacted"].includes(normalized)) {
@@ -84,6 +96,7 @@ export default function VoiceConsoleClient({
   const [data, setData] = useState(initialData);
   const [selectedCallId, setSelectedCallId] = useState(initialData.selectedCallId);
   const [selectedPhone, setSelectedPhone] = useState(initialData.selectedPhone);
+  const [lastRefreshAt, setLastRefreshAt] = useState(initialData.generatedAt);
   const [noteDraft, setNoteDraft] = useState("");
   const [followUpTitle, setFollowUpTitle] = useState("");
   const [followUpDueAt, setFollowUpDueAt] = useState("");
@@ -110,6 +123,7 @@ export default function VoiceConsoleClient({
     setData(nextData);
     setSelectedCallId(nextData.selectedCallId);
     setSelectedPhone(nextData.selectedPhone);
+    setLastRefreshAt(nextData.generatedAt);
     return nextData;
   };
 
@@ -309,8 +323,12 @@ export default function VoiceConsoleClient({
         ];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <main className="mx-auto max-w-7xl space-y-5 p-5">
+    <div className="bg-slate-950 text-slate-100">
+      <main
+        className={`mx-auto max-w-7xl space-y-5 px-3 pb-10 sm:px-4 lg:px-6 ${
+          mode === "admin" ? "pt-28 sm:pt-32 lg:pt-36" : "pt-5 sm:pt-6 lg:pt-8"
+        }`}
+      >
         <header className={cardShell("p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]")}>
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="space-y-3">
@@ -322,7 +340,9 @@ export default function VoiceConsoleClient({
                 <p className="mt-2 max-w-3xl text-sm text-slate-300">{subtitle}</p>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">Updated {formatDateTime(data.generatedAt)}</span>
+                <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
+                  {formatRefreshStamp(lastRefreshAt)}
+                </span>
                 {selectedPhone ? (
                   <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
                     Context phone {selectedPhone}
@@ -391,8 +411,8 @@ export default function VoiceConsoleClient({
           ))}
         </section>
 
-        <section className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
-          <div className={cardShell("p-5")}>
+        <section className="grid gap-5 xl:grid-cols-[minmax(0,1.12fr)_minmax(340px,0.88fr)] xl:items-start">
+          <div className={cardShell("p-5 xl:sticky xl:top-32")}>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300">Live Incoming Calls</div>
@@ -409,13 +429,13 @@ export default function VoiceConsoleClient({
                   key={call.id}
                   type="button"
                   onClick={() => handleSelectCall(call.id, call.callerNumber)}
-                  className={`grid gap-3 rounded-[22px] border p-4 text-left transition lg:grid-cols-[1.1fr_170px_150px] ${
+                  className={`grid gap-3 rounded-[22px] border p-4 text-left transition sm:p-4 lg:grid-cols-[minmax(0,1.1fr)_180px_170px] ${
                     selectedCall?.id === call.id
                       ? "border-emerald-400/50 bg-emerald-500/10"
                       : "border-white/10 bg-white/[0.03] hover:border-white/20"
                   }`}
                 >
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(call.direction)}`}>
                         {call.direction}
@@ -424,13 +444,13 @@ export default function VoiceConsoleClient({
                         {call.statusLabel}
                       </span>
                     </div>
-                    <div className="mt-3 text-lg font-semibold text-white">
+                    <div className="mt-3 break-words text-lg font-semibold text-white">
                       {call.customer.customerName || call.callerNumber}
                     </div>
-                    <div className="mt-1 text-sm text-slate-400">
+                    <div className="mt-1 break-words text-sm text-slate-400">
                       {call.callerNumber} · {call.customer.matchedCustomerId ? "Existing customer" : "New caller / unlinked lead"}
                     </div>
-                    <div className="mt-3 text-xs text-slate-400">
+                    <div className="mt-3 break-words text-xs text-slate-400">
                       {call.linkedSummaryText}
                     </div>
                   </div>
@@ -453,7 +473,7 @@ export default function VoiceConsoleClient({
             </div>
           </div>
 
-          <div className={cardShell("p-5")}>
+          <div className={cardShell("p-5 xl:sticky xl:top-32 xl:self-start")}>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-300">Customer Context</div>
@@ -580,7 +600,7 @@ export default function VoiceConsoleClient({
           </div>
         </section>
 
-        <section className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
+        <section className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr] xl:items-start">
           <div className={cardShell("p-5")}>
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -596,14 +616,14 @@ export default function VoiceConsoleClient({
               </div>
             </div>
 
-            <div className="mt-4 grid gap-3">
+            <div className={`mt-4 grid gap-3 ${mode === "admin" ? "md:grid-cols-2" : ""}`}>
               {mode === "admin"
                 ? data.agents.map((agent) => (
                     <div key={agent.id} className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
                       <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="font-semibold text-white">{agent.name || agent.email || "Unnamed agent"}</div>
-                          <div className="mt-1 text-sm text-slate-400">
+                        <div className="min-w-0">
+                          <div className="break-words font-semibold text-white">{agent.name || agent.email || "Unnamed agent"}</div>
+                          <div className="mt-1 break-words text-sm text-slate-400">
                             {agent.email || agent.role} · {agent.attendantCategory || agent.role}
                           </div>
                         </div>
@@ -677,7 +697,7 @@ export default function VoiceConsoleClient({
                   key={call.id}
                   type="button"
                   onClick={() => handleSelectCall(call.id, call.callerNumber)}
-                  className={`grid gap-3 rounded-[22px] border p-4 text-left transition lg:grid-cols-[110px_1.2fr_1fr_180px] ${
+                  className={`grid gap-3 rounded-[22px] border p-4 text-left transition xl:grid-cols-[120px_minmax(0,1.25fr)_minmax(220px,0.95fr)_minmax(210px,0.9fr)] ${
                     selectedCall?.id === call.id
                       ? "border-cyan-400/50 bg-cyan-500/10"
                       : "border-white/10 bg-white/[0.03] hover:border-white/20"
@@ -688,20 +708,20 @@ export default function VoiceConsoleClient({
                       {call.direction}
                     </span>
                   </div>
-                  <div>
-                    <div className="font-semibold text-white">{call.customer.customerName || call.callerNumber}</div>
-                    <div className="mt-1 text-sm text-slate-400">
+                  <div className="min-w-0">
+                    <div className="break-words font-semibold text-white">{call.customer.customerName || call.callerNumber}</div>
+                    <div className="mt-1 break-words text-sm text-slate-400">
                       {call.callerNumber} · {call.statusLabel}
                     </div>
-                    <div className="mt-2 text-xs text-slate-500">{call.linkedSummaryText}</div>
+                    <div className="mt-2 break-words text-xs text-slate-500">{call.linkedSummaryText}</div>
                   </div>
-                  <div className="text-sm text-slate-300">
-                    <div>Assigned: {call.customer.assignedAgent?.name || call.assignedToName || call.routedTo || "-"}</div>
-                    <div className="mt-1 text-xs text-slate-500">
+                  <div className="min-w-0 text-sm text-slate-300">
+                    <div className="break-words">Assigned: {call.customer.assignedAgent?.name || call.assignedToName || call.routedTo || "-"}</div>
+                    <div className="mt-1 break-words text-xs text-slate-500">
                       Last activity: {call.lastActivityTitle || "-"}
                     </div>
                   </div>
-                  <div className="flex flex-wrap content-start gap-2">
+                  <div className="flex flex-wrap content-start gap-2 xl:justify-end">
                     <span className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(call.status)}`}>
                       {call.statusLabel}
                     </span>
