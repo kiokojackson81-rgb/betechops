@@ -90,6 +90,37 @@ export default function BrowserPhone() {
 
             <div className="max-h-[calc(70vh-72px)] space-y-4 overflow-y-auto p-4">
             <CallStatusBar />
+            <div className="rounded-[22px] border border-white/10 bg-white/[0.03] px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Presence</div>
+                  <div className="mt-1 text-sm font-semibold text-white">{softphone.availabilityLabel}</div>
+                  <div className="mt-1 text-xs text-slate-400">
+                    Last heartbeat{" "}
+                    {softphone.lastHeartbeatAt
+                      ? new Date(softphone.lastHeartbeatAt).toLocaleTimeString("en-KE", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          second: "2-digit",
+                          hour12: false,
+                          timeZone: "Africa/Nairobi",
+                        })
+                      : "pending"}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    softphone.setAvailability("AVAILABLE");
+                    void softphone.syncPresenceNow("AVAILABLE");
+                  }}
+                  disabled={softphone.availability === "AVAILABLE"}
+                  className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-100 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Go Available
+                </button>
+              </div>
+            </div>
             <div className="flex flex-wrap gap-2">
               <CallControls />
               <button

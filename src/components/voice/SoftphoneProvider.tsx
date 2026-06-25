@@ -63,6 +63,7 @@ type SoftphoneContextValue = {
   selectedCustomer: SoftphoneCustomerSummary | null;
   hasSpeakerSelection: boolean;
   lastHeartbeatAt: string | null;
+  syncPresenceNow: (nextAvailability?: SoftphoneAvailabilityState) => Promise<void>;
   register: () => Promise<void>;
   unregister: () => Promise<void>;
   requestMicrophoneAccess: () => Promise<void>;
@@ -194,6 +195,32 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
   const adapterCleanupRef = useRef<(() => void) | null>(null);
   const [transportMode, setTransportMode] = useState<"mock" | "webrtc" | "unavailable">("mock");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  const syncPresenceNow = async (nextAvailability?: SoftphoneAvailabilityState) => {
+    if (!session?.user) return;
+    const targetAvailability = nextAvailability ?? availabilityRef.current;
+    setLastHeartbeatAt(new Date().toISOString());
+    try {
+      const registration = webRtcRegistrationRef.current;
+      await fetch("/api/voice/presence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: mapAvailabilityToPresenceStatus(targetAvailability),
+          currentCallId: currentCallRef.current?.id ?? null,
+          webrtc: registration
+            ? {
+                clientName: registration.clientName,
+                identity: registration.identity,
+                state: mapSoftphoneStateToWebrtcRegistryState(stateRef.current),
+              }
+            : {
+                state: mapSoftphoneStateToWebrtcRegistryState(stateRef.current),
+              },
+        }),
+      });
+    } catch {}
+  };
 
   useEffect(() => {
     stateRef.current = state;
@@ -836,32 +863,9 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!session?.user) return;
-    const syncPresence = async () => {
-      setLastHeartbeatAt(new Date().toISOString());
-      try {
-        const registration = webRtcRegistrationRef.current;
-        await fetch("/api/voice/presence", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            status: mapAvailabilityToPresenceStatus(availability),
-            currentCallId: currentCall?.id ?? null,
-            webrtc: registration
-              ? {
-                  clientName: registration.clientName,
-                  identity: registration.identity,
-                  state: mapSoftphoneStateToWebrtcRegistryState(stateRef.current),
-                }
-              : {
-                  state: mapSoftphoneStateToWebrtcRegistryState(stateRef.current),
-                },
-          }),
-        });
-      } catch {}
-    };
-    void syncPresence();
+    void syncPresenceNow();
     const interval = window.setInterval(() => {
-      void syncPresence();
+      void syncPresenceNow();
     }, 45000);
     return () => window.clearInterval(interval);
   }, [availability, currentCall?.id, session?.user, state]);
@@ -942,6 +946,7 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
       outputLevel,
       selectedCustomer,
       lastHeartbeatAt,
+      syncPresenceNow,
       hasSpeakerSelection:
         typeof window !== "undefined" &&
         typeof (HTMLMediaElement.prototype as HTMLMediaElement & { setSinkId?: unknown }).setSinkId === "function",
@@ -989,6 +994,7 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
       speakers,
       state,
       statusMessage,
+      syncPresenceNow,
       transportMode,
     ],
   );
