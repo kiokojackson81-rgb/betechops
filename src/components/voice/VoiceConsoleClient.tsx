@@ -7,6 +7,7 @@ import CallStatusBar from "@/components/voice/CallStatusBar";
 import DialPad from "@/components/voice/DialPad";
 import RegistrationBadge from "@/components/voice/RegistrationBadge";
 import VoiceSettingsClient from "@/components/voice/VoiceSettingsClient";
+import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { useSoftphone } from "@/components/voice/SoftphoneProvider";
 import type { VoiceLiveSnapshot } from "@/lib/voiceOperations";
 
@@ -23,6 +24,8 @@ type VoiceConsoleClientProps = {
 const PRESENCE_STATUSES = ["AVAILABLE", "AWAY", "BUSY", "BREAK", "OFFLINE"] as const;
 const VOICE_CONSOLE_TABS = ["operations", "recent", "recordings", "followups", "agents", "settings"] as const;
 type VoiceConsoleTab = (typeof VOICE_CONSOLE_TABS)[number];
+const VOICE_DATE_FILTERS = ["today", "yesterday", "week", "period"] as const;
+type VoiceDateFilter = (typeof VOICE_DATE_FILTERS)[number];
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "-";
@@ -127,6 +130,55 @@ function normalizeVoiceTab(value: string | null): VoiceConsoleTab {
   return VOICE_CONSOLE_TABS.includes(value as VoiceConsoleTab) ? (value as VoiceConsoleTab) : "operations";
 }
 
+function normalizeVoiceDateFilter(value: string | null): VoiceDateFilter {
+  return VOICE_DATE_FILTERS.includes(value as VoiceDateFilter) ? (value as VoiceDateFilter) : "today";
+}
+
+function getVoiceDateFilterMeta(
+  filter: VoiceDateFilter,
+  now = new Date(),
+): { label: string; start: Date; end: Date; detail?: string } {
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayEnd = new Date(todayStart);
+  todayEnd.setHours(23, 59, 59, 999);
+
+  if (filter === "today") {
+    return { label: "Today", start: todayStart, end: todayEnd };
+  }
+
+  if (filter === "yesterday") {
+    const start = new Date(todayStart);
+    start.setDate(start.getDate() - 1);
+    const end = new Date(start);
+    end.setHours(23, 59, 59, 999);
+    return { label: "Yesterday", start, end };
+  }
+
+  if (filter === "week") {
+    const dayOfWeek = todayStart.getDay();
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const start = new Date(todayStart);
+    start.setDate(start.getDate() + diffToMonday);
+    return { label: "This Week", start, end: todayEnd };
+  }
+
+  const tradingPeriod = getTradingPeriodFor(now);
+  return {
+    label: "This Trading Period",
+    start: tradingPeriod.start,
+    end: tradingPeriod.end,
+    detail: tradingPeriod.label,
+  };
+}
+
+function isWithinVoiceDateFilter(value: string | null | undefined, filter: VoiceDateFilter) {
+  if (!value) return false;
+  const timestamp = new Date(value).getTime();
+  if (Number.isNaN(timestamp)) return false;
+  const range = getVoiceDateFilterMeta(filter);
+  return timestamp >= range.start.getTime() && timestamp <= range.end.getTime();
+}
+
 function isFreshIncomingCall(value: string | null | undefined, maxAgeMs = 5 * 60 * 1000) {
   if (!value) return false;
   const timestamp = new Date(value).getTime();
@@ -179,9 +231,11 @@ export default function VoiceConsoleClient({
   const [recentSearch, setRecentSearch] = useState("");
   const [recentFilter, setRecentFilter] = useState<"all" | "INBOUND" | "OUTBOUND" | "with_recording">("all");
   const [activeTab, setActiveTab] = useState<VoiceConsoleTab>(() => normalizeVoiceTab(searchParams.get("tab")));
+  const [dateFilter, setDateFilter] = useState<VoiceDateFilter>(() => normalizeVoiceDateFilter(searchParams.get("range")));
   const lastInteractionAtRef = useRef(Date.now());
   const availabilityTimerRef = useRef<number | null>(null);
   const lastAnnouncedCallIdRef = useRef<string | null>(null);
+  const liveStatusTimeoutRef = useRef<number | null>(null);
 
   const visibleActiveCalls = useMemo(
     () => data.activeCalls.filter((call) => isMeaningfulVoicePhone(call.callerNumber)),
@@ -202,15 +256,58 @@ export default function VoiceConsoleClient({
       ),
     [data.callQueue, data.selectedPhone],
   );
+  const dateFilterMeta = useMemo(() => getVoiceDateFilterMeta(dateFilter), [dateFilter]);
+  const filteredRecentCalls = useMemo(() => {
+    const query = recentSearch.trim().toLowerCase();
+    return visibleRecentCalls.filter((call) => {
+      if (!isWithinVoiceDateFilter(call.startedAt || call.createdAt, dateFilter)) return false;
+      const matchesFilter =
+        recentFilter === "all" ||
+        (recentFilter === "with_recording" ? Boolean(call.recordingUrl) : call.direction === recentFilter);
+      if (!matchesFilter) return false;
+      if (!query) return true;
+      return [
+        call.callerNumber,
+        call.customer.customerName,
+        call.routedToDisplay,
+        call.statusLabel,
+        call.assignedToName,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query));
+    });
+  }, [dateFilter, recentFilter, recentSearch, visibleRecentCalls]);
+  const filteredRecordings = useMemo(
+    () =>
+      data.recentRecordings.filter((call) =>
+        isWithinVoiceDateFilter(call.startedAt || call.createdAt, dateFilter),
+      ),
+    [data.recentRecordings, dateFilter],
+  );
+  const filteredFollowUps = useMemo(
+    () =>
+      visibleCallQueue.filter((item: any) =>
+        isWithinVoiceDateFilter(item.dueAt || item.updatedAt || item.createdAt, dateFilter),
+      ),
+    [dateFilter, visibleCallQueue],
+  );
 
   useEffect(() => {
     setActiveTab(normalizeVoiceTab(searchParams.get("tab")));
+    setDateFilter(normalizeVoiceDateFilter(searchParams.get("range")));
   }, [searchParams]);
 
   const switchTab = (tab: VoiceConsoleTab) => {
     setActiveTab(tab);
     const params = new URLSearchParams(searchParams.toString());
     params.set("tab", tab);
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  };
+
+  const switchDateFilter = (nextFilter: VoiceDateFilter) => {
+    setDateFilter(nextFilter);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("range", nextFilter);
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
@@ -242,13 +339,27 @@ export default function VoiceConsoleClient({
     if (selectedPhone) params.set("selectedPhone", selectedPhone);
     const separator = pollBaseHref.includes("?") ? "&" : "?";
     const eventSource = new EventSource(`${pollBaseHref}${separator}${params.toString()}`);
-    setLiveStatus("connecting");
+    if (liveStatusTimeoutRef.current) {
+      window.clearTimeout(liveStatusTimeoutRef.current);
+      liveStatusTimeoutRef.current = null;
+    }
+    liveStatusTimeoutRef.current = window.setTimeout(() => {
+      setLiveStatus((current) => (current === "live" ? current : "connecting"));
+    }, 1200);
 
     eventSource.onopen = () => {
+      if (liveStatusTimeoutRef.current) {
+        window.clearTimeout(liveStatusTimeoutRef.current);
+        liveStatusTimeoutRef.current = null;
+      }
       setLiveStatus("live");
       setError(null);
     };
     eventSource.onerror = () => {
+      if (liveStatusTimeoutRef.current) {
+        window.clearTimeout(liveStatusTimeoutRef.current);
+        liveStatusTimeoutRef.current = null;
+      }
       setLiveStatus("offline");
     };
     eventSource.addEventListener("snapshot", (event) => {
@@ -265,10 +376,13 @@ export default function VoiceConsoleClient({
     });
 
     return () => {
+      if (liveStatusTimeoutRef.current) {
+        window.clearTimeout(liveStatusTimeoutRef.current);
+        liveStatusTimeoutRef.current = null;
+      }
       try {
         eventSource.close();
       } catch {}
-      setLiveStatus("offline");
     };
   }, [pollBaseHref, selectedCallId, selectedPhone]);
 
@@ -280,26 +394,6 @@ export default function VoiceConsoleClient({
       null
     );
   }, [activeTab, selectedCallId, visibleActiveCalls, visibleRecentCalls]);
-
-  const filteredRecentCalls = useMemo(() => {
-    const query = recentSearch.trim().toLowerCase();
-    return visibleRecentCalls.filter((call) => {
-      const matchesFilter =
-        recentFilter === "all" ||
-        (recentFilter === "with_recording" ? Boolean(call.recordingUrl) : call.direction === recentFilter);
-      if (!matchesFilter) return false;
-      if (!query) return true;
-      return [
-        call.callerNumber,
-        call.customer.customerName,
-        call.routedToDisplay,
-        call.statusLabel,
-        call.assignedToName,
-      ]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(query));
-    });
-  }, [recentFilter, recentSearch, visibleRecentCalls]);
 
   const groupedRecentCalls = useMemo(() => {
     const groups = new Map<string, typeof filteredRecentCalls>();
@@ -633,22 +727,33 @@ export default function VoiceConsoleClient({
     }
   };
 
+  const filteredAnsweredCount = filteredRecentCalls.filter((call) =>
+    ["answered", "in progress", "completed"].includes(String(call.statusLabel || "").trim().toLowerCase()),
+  ).length;
+  const filteredMissedCount =
+    filteredRecentCalls.filter((call) =>
+      ["missed", "no answer", "busy", "failed", "aborted"].includes(String(call.statusLabel || "").trim().toLowerCase()),
+    ).length + filteredFollowUps.length;
+  const filteredAverageTalkTime =
+    filteredRecentCalls.reduce((sum, call) => sum + Number(call.durationInSeconds || 0), 0) /
+    Math.max(1, filteredRecentCalls.filter((call) => Number(call.durationInSeconds || 0) > 0).length);
+
   const summaryCards =
     mode === "admin"
       ? [
-          { label: "Calls Today", value: String((data.summary as any).callsToday), sub: "All recorded calls today" },
-          { label: "Waiting", value: String((data.summary as any).waitingCalls), sub: "Queued or still ringing" },
-          { label: "Missed", value: String((data.summary as any).missedCalls), sub: "Needs callback" },
-          { label: "Active", value: String((data.summary as any).activeCalls), sub: "Live or in progress" },
-          { label: "Answered", value: String((data.summary as any).answeredCalls), sub: "Answered or completed" },
-          { label: "Avg Talk", value: formatDuration((data.summary as any).averageTalkTimeSeconds), sub: "Current day average" },
+          { label: dateFilter === "today" ? "Calls Today" : dateFilterMeta.label, value: String(filteredRecentCalls.length), sub: "Recorded calls in range" },
+          { label: "Waiting", value: String(visibleWaitingCalls.length), sub: "Queued or still ringing" },
+          { label: "Missed", value: String(filteredMissedCount), sub: "Needs callback in range" },
+          { label: "Active", value: String(visibleActiveCalls.length), sub: "Live or in progress" },
+          { label: "Answered", value: String(filteredAnsweredCount), sub: "Answered or completed in range" },
+          { label: "Avg Talk", value: formatDuration(Number.isFinite(filteredAverageTalkTime) ? Math.round(filteredAverageTalkTime) : 0), sub: "Average in selected range" },
         ]
       : [
-          { label: "My Calls", value: String((data.summary as any).myCallsToday), sub: "Calls routed to you today" },
-          { label: "My Active", value: String((data.summary as any).myActiveCalls), sub: "Live or ringing" },
-          { label: "My Missed", value: String((data.summary as any).myMissedCalls), sub: "Needs action" },
-          { label: "My Follow-ups", value: String((data.summary as any).myFollowUps), sub: "Open tasks" },
-          { label: "My Answered", value: String((data.summary as any).myAnsweredCalls), sub: "Answered or completed" },
+          { label: dateFilter === "today" ? "My Calls" : `My ${dateFilterMeta.label}`, value: String(filteredRecentCalls.length), sub: "Calls routed to you in range" },
+          { label: "My Active", value: String(visibleActiveCalls.length), sub: "Live or ringing" },
+          { label: "My Missed", value: String(filteredMissedCount), sub: "Needs action in range" },
+          { label: "My Follow-ups", value: String(filteredFollowUps.length), sub: "Open tasks in range" },
+          { label: "My Answered", value: String(filteredAnsweredCount), sub: "Answered or completed in range" },
         ];
 
   const visibleAgents = useMemo(() => {
@@ -699,7 +804,7 @@ export default function VoiceConsoleClient({
 
   const queueItems = useMemo(() => {
     const query = queueSearch.trim().toLowerCase();
-    const allItems = [...visibleWaitingCalls, ...visibleCallQueue] as Array<any>;
+    const allItems = [...visibleWaitingCalls, ...filteredFollowUps] as Array<any>;
     return allItems.filter((item) => {
       if (!query) return true;
       return [
@@ -714,7 +819,7 @@ export default function VoiceConsoleClient({
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(query));
     });
-  }, [queueSearch, visibleCallQueue, visibleWaitingCalls]);
+  }, [filteredFollowUps, queueSearch, visibleWaitingCalls]);
 
   const activeCallPreview = useMemo(() => visibleActiveCalls.slice(0, 8), [visibleActiveCalls]);
   const selectedAgent =
@@ -784,6 +889,27 @@ export default function VoiceConsoleClient({
                 </button>
               </div>
               <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+                <div className="flex flex-wrap items-center gap-2 rounded-full border border-slate-800 bg-slate-900/70 p-1">
+                  {([
+                    ["today", "Today"],
+                    ["yesterday", "Yesterday"],
+                    ["week", "This Week"],
+                    ["period", "Trading Period"],
+                  ] as Array<[VoiceDateFilter, string]>).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => switchDateFilter(key)}
+                      className={`rounded-full px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] transition ${
+                        dateFilter === key
+                          ? "bg-cyan-500/15 text-cyan-100"
+                          : "text-slate-400 hover:bg-white/[0.04] hover:text-slate-200"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
                 <RegistrationBadge />
                 <span
                   className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${
@@ -817,6 +943,10 @@ export default function VoiceConsoleClient({
                 <p className="mt-1 text-sm text-slate-400">
                   Live queue, active call handling, recordings, follow-ups, and routing visibility in one console.
                 </p>
+                <div className="mt-2 inline-flex rounded-full border border-slate-800 bg-slate-900/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
+                  {dateFilterMeta.label}
+                  {dateFilterMeta.detail ? <span className="ml-2 text-slate-500 normal-case tracking-normal">{dateFilterMeta.detail}</span> : null}
+                </div>
               </div>
               <div className="text-xs text-slate-500 xl:text-right">{formatRefreshStamp(lastRefreshAt)}</div>
             </div>
@@ -1523,12 +1653,12 @@ export default function VoiceConsoleClient({
                 <h2 className="mt-1 text-2xl font-semibold text-white">Saved call recordings</h2>
               </div>
               <span className="rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1 text-xs text-slate-300">
-                {data.recentRecordings.length}
+                {filteredRecordings.length}
               </span>
             </div>
             <div className="mt-4 grid gap-4 xl:grid-cols-2">
-              {data.recentRecordings.length ? (
-                data.recentRecordings.map((call) => (
+              {filteredRecordings.length ? (
+                filteredRecordings.map((call) => (
                   <div key={call.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -1577,12 +1707,12 @@ export default function VoiceConsoleClient({
                 <h2 className="mt-1 text-2xl font-semibold text-white">Callback and reassignment queue</h2>
               </div>
               <span className="rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1 text-xs text-slate-300">
-                {data.callQueue.length}
+                {filteredFollowUps.length}
               </span>
             </div>
             <div className="mt-4 space-y-3">
-              {data.callQueue.length ? (
-                data.callQueue.map((item) => (
+              {filteredFollowUps.length ? (
+                filteredFollowUps.map((item) => (
                   <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0">
