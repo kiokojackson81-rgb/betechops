@@ -153,6 +153,16 @@ function mapSoftphoneStateToWebrtcRegistryState(state: SoftphoneState) {
   return "notready" as const;
 }
 
+function getOutboundFailureStatus(reason?: string | null) {
+  const normalized = String(reason || "").trim().toLowerCase();
+  if (!normalized) return "disconnected";
+  if (normalized.includes("reject")) return "failed";
+  if (normalized.includes("busy")) return "busy";
+  if (normalized.includes("no answer") || normalized.includes("no_answer") || normalized.includes("timeout")) return "no_answer";
+  if (normalized.includes("fail") || normalized.includes("error")) return "failed";
+  return "disconnected";
+}
+
 export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
   const pathname = usePathname();
@@ -209,6 +219,27 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
                 state: mapSoftphoneStateToWebrtcRegistryState(stateRef.current),
               },
         }),
+      });
+    } catch {}
+  };
+
+  const reportOutboundCall = async (input: {
+    sessionId: string;
+    phone: string;
+    status: string;
+    eventType?: string;
+    startedAt?: string | null;
+    endedAt?: string | null;
+    durationInSeconds?: number | null;
+    recordingUrl?: string | null;
+    notes?: string | null;
+  }) => {
+    if (!session?.user || !input.sessionId || !input.phone) return;
+    try {
+      await fetch("/api/voice/outbound", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
       });
     } catch {}
   };
@@ -436,21 +467,52 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
         applyWebrtcDerivedState("incomingcall");
       }),
       adapter.on("calling", ({ call }) => {
+        void reportOutboundCall({
+          sessionId: call.id,
+          phone: String(call.to || call.from || ""),
+          status: "dialing",
+          eventType: "calling",
+        });
         setCurrentCall(buildCallFromWebrtcSession({ ...call, direction: "OUTBOUND" }, "RINGING_OUTBOUND"));
         applyWebrtcDerivedState("calling");
       }),
       adapter.on("callaccepted", ({ call }) => {
+        const startedAt = new Date().toISOString();
+        void reportOutboundCall({
+          sessionId: call.id,
+          phone: String(call.to || call.from || ""),
+          status: "answered",
+          eventType: "callaccepted",
+          startedAt,
+        });
         setCurrentCall((existing) => {
           const nextCall = existing ?? buildCallFromWebrtcSession(call, "TALKING");
           return {
             ...nextCall,
-            startedAt: nextCall.startedAt || new Date().toISOString(),
+            startedAt: nextCall.startedAt || startedAt,
             state: "TALKING",
           };
         });
         applyWebrtcDerivedState("callaccepted");
       }),
-      adapter.on("hangup", () => {
+      adapter.on("hangup", ({ call, cause }) => {
+        const current = currentCallRef.current;
+        const targetCall = current ?? (call ? buildCallFromWebrtcSession(call, "DISCONNECTED") : null);
+        if (targetCall?.direction === "OUTBOUND") {
+          const endedAt = new Date().toISOString();
+          const durationInSeconds = targetCall.startedAt
+            ? Math.max(0, Math.floor((Date.now() - new Date(targetCall.startedAt).getTime()) / 1000))
+            : 0;
+          void reportOutboundCall({
+            sessionId: targetCall.id,
+            phone: targetCall.remoteIdentity,
+            status: targetCall.startedAt ? "completed" : getOutboundFailureStatus(cause?.reason),
+            eventType: "hangup",
+            startedAt: targetCall.startedAt,
+            endedAt,
+            durationInSeconds,
+          });
+        }
         setCurrentCall((existing) => {
           if (!existing) return null;
           pushRecentCall({ ...existing, state: "DISCONNECTED" });
@@ -463,6 +525,22 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
         applyWebrtcDerivedState("offline");
       }),
       adapter.on("closed", () => {
+        const current = currentCallRef.current;
+        if (current?.direction === "OUTBOUND") {
+          const endedAt = new Date().toISOString();
+          const durationInSeconds = current.startedAt
+            ? Math.max(0, Math.floor((Date.now() - new Date(current.startedAt).getTime()) / 1000))
+            : 0;
+          void reportOutboundCall({
+            sessionId: current.id,
+            phone: current.remoteIdentity,
+            status: current.startedAt ? "completed" : "disconnected",
+            eventType: "closed",
+            startedAt: current.startedAt,
+            endedAt,
+            durationInSeconds,
+          });
+        }
         setCurrentCall((existing) => {
           if (!existing) return null;
           pushRecentCall({ ...existing, state: "DISCONNECTED" });
@@ -472,6 +550,18 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
         applyWebrtcDerivedState("closed");
       }),
       adapter.on("error", ({ error }) => {
+        const current = currentCallRef.current;
+        if (current?.direction === "OUTBOUND") {
+          void reportOutboundCall({
+            sessionId: current.id,
+            phone: current.remoteIdentity,
+            status: "failed",
+            eventType: "error",
+            startedAt: current.startedAt,
+            endedAt: new Date().toISOString(),
+            notes: error,
+          });
+        }
         setStatusMessage(error || "Africa's Talking WebRTC client failed.");
         setState("ERROR");
         setAvailabilityState("OFFLINE");
@@ -710,8 +800,24 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
     setAvailability("BUSY");
     setState("RINGING_OUTBOUND");
     setDialedDigits("");
+    if (webRtcModeRef.current !== "webrtc") {
+      void reportOutboundCall({
+        sessionId: call.id,
+        phone,
+        status: "dialing",
+        eventType: "calling",
+      });
+    }
     if (adapterRef.current && webRtcModeRef.current === "webrtc") {
       void adapterRef.current.call(phone).catch(() => {
+        void reportOutboundCall({
+          sessionId: call.id,
+          phone,
+          status: "failed",
+          eventType: "error",
+          endedAt: new Date().toISOString(),
+          notes: "adapter_call_failed",
+        });
         setState("ERROR");
       });
     }
