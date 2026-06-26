@@ -3,6 +3,7 @@ import {
   isVoiceOperationsSchemaMissingError,
   resolveVoiceViewer,
   saveVoiceFollowUp,
+  updateVoiceQueueStatus,
 } from "@/lib/voiceOperations";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +30,18 @@ export async function POST(request: Request) {
       status?: string | null;
       dueAt?: string | null;
       notes?: string | null;
+      queueType?: "task" | "lead" | null;
     };
+
+    if (body.status && ((body.id && body.queueType === "task") || (body.voiceLeadId && body.queueType === "lead"))) {
+      const result = await updateVoiceQueueStatus({
+        followUpId: body.queueType === "task" ? body.id ?? null : null,
+        voiceLeadId: body.queueType === "lead" ? body.voiceLeadId ?? null : null,
+        status: body.status,
+      });
+
+      return NextResponse.json({ ok: true, result });
+    }
 
     const followUp = await saveVoiceFollowUp({
       ...body,

@@ -116,7 +116,7 @@ export function getSoftphoneStateLabel(state: SoftphoneState) {
 }
 
 export function getAvailabilityLabel(state: SoftphoneAvailabilityState) {
-  return state.replace(/_/g, " ");
+  return state === "AVAILABLE" ? "Available" : "Offline";
 }
 
 export function normalizeSoftphoneVolume(value: number) {

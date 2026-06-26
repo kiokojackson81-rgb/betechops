@@ -190,6 +190,7 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
   const speakerTestTimeoutRef = useRef<number | null>(null);
   const stateRef = useRef<SoftphoneState>("NOT_REGISTERED");
   const availabilityRef = useRef<SoftphoneAvailabilityState>("OFFLINE");
+  const didBootstrapAvailabilityRef = useRef(false);
   const currentCallRef = useRef<SoftphoneCall | null>(null);
   const selectedCustomerRef = useRef<SoftphoneCustomerSummary | null>(null);
   const adapterRef = useRef<VoiceWebrtcAdapter | null>(null);
@@ -208,6 +209,7 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          status: _nextAvailability ?? availabilityRef.current,
           currentCallId: currentCallRef.current?.id ?? null,
           webrtc: registration
             ? {
@@ -913,13 +915,24 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!session?.user || !preferences.autoRegister) return;
-    if (!pathname.startsWith("/admin") && !pathname.startsWith("/attendant")) return;
+    if (!pathname.startsWith("/admin") && !pathname.startsWith("/attendant") && !pathname.startsWith("/marketing")) return;
     if (state !== "NOT_REGISTERED") return;
     void register();
   }, [pathname, preferences.autoRegister, session?.user, state]);
 
   useEffect(() => {
+    if (!session?.user) return;
+    if (didBootstrapAvailabilityRef.current) return;
+    if (!["REGISTERED", "AVAILABLE"].includes(state)) return;
+    if (availability !== "OFFLINE") return;
+    didBootstrapAvailabilityRef.current = true;
+    setAvailability("AVAILABLE");
+    void syncPresenceNow("AVAILABLE");
+  }, [availability, session?.user, state]);
+
+  useEffect(() => {
     if (!session?.user) {
+      didBootstrapAvailabilityRef.current = false;
       setAvailability("OFFLINE");
       setState("NOT_REGISTERED");
     }

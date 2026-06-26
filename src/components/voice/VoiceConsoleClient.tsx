@@ -21,7 +21,6 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import DialPad from "@/components/voice/DialPad";
-import RegistrationBadge from "@/components/voice/RegistrationBadge";
 import VoiceSettingsClient from "@/components/voice/VoiceSettingsClient";
 import { useSoftphone } from "@/components/voice/SoftphoneProvider";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
@@ -37,11 +36,20 @@ type VoiceConsoleClientProps = {
   subtitle: string;
 };
 
-const MANUAL_PRESENCE_STATUSES = ["AVAILABLE", "BUSY", "BREAK", "OFFLINE"] as const;
+const MANUAL_PRESENCE_STATUSES = ["AVAILABLE", "OFFLINE"] as const;
 const VOICE_CONSOLE_TABS = ["operations", "recent", "recordings", "followups", "agents", "settings"] as const;
 type VoiceConsoleTab = (typeof VOICE_CONSOLE_TABS)[number];
 const VOICE_DATE_FILTERS = ["today", "yesterday", "week", "period"] as const;
 type VoiceDateFilter = (typeof VOICE_DATE_FILTERS)[number];
+
+function getNairobiReportDate() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Nairobi",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "-";
@@ -211,6 +219,10 @@ function isDeveloperPlaceholderPhone(phone: string | null | undefined) {
 
 function isMeaningfulVoicePhone(phone: string | null | undefined) {
   return Boolean(phone) && !isDeveloperPlaceholderPhone(phone);
+}
+
+function formatPresenceChoiceLabel(status: (typeof MANUAL_PRESENCE_STATUSES)[number]) {
+  return status === "AVAILABLE" ? "Available" : "Offline";
 }
 
 export default function VoiceConsoleClient({
@@ -581,6 +593,8 @@ export default function VoiceConsoleClient({
     setPresencePending(true);
     setError(null);
     try {
+      softphone.setAvailability(status);
+      await softphone.syncPresenceNow(status);
       const response = await fetch(`${pollBaseHref.replace("/live", "/presence")}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -792,6 +806,31 @@ export default function VoiceConsoleClient({
     return queueItems;
   }, [queueItems, queueView]);
 
+  const voiceHomeHref = useMemo(() => {
+    if (data.viewer.isAdmin) {
+      return "/admin";
+    }
+
+    if (data.viewer.targetAttendantCategory === "DIRECT_SALES_OPS") {
+      return `/marketing/tracker?reportDate=${getNairobiReportDate()}`;
+    }
+
+    if (data.viewer.targetAttendantCategory === "MARKETING_OPS") {
+      return "/marketing/receipts?tab=pos";
+    }
+
+    return "/attendant/daily-report";
+  }, [data.viewer.isAdmin, data.viewer.targetAttendantCategory]);
+
+  const followUpsHref = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set("tab", "followups");
+    if (data.viewer.impersonateId) {
+      params.set("impersonateId", data.viewer.impersonateId);
+    }
+    return `${pathname}?${params.toString()}`;
+  }, [data.viewer.impersonateId, pathname]);
+
   const activeCallPreview = useMemo(() => visibleActiveCalls.slice(0, 6), [visibleActiveCalls]);
 
   const selectedAgent =
@@ -827,7 +866,7 @@ export default function VoiceConsoleClient({
       ? [
           { label: "Calls Today", value: String(filteredRecentCalls.length) },
           { label: "Waiting", value: String(visibleWaitingCalls.length) },
-          { label: "Missed", value: String(filteredMissedCount) },
+          { label: "Missed Calls", value: String(filteredMissedCount), action: () => switchTab("followups") },
           {
             label: "Avg Talk Time",
             value: formatDuration(Number.isFinite(filteredAverageTalkTime) ? Math.round(filteredAverageTalkTime) : 0),
@@ -836,7 +875,7 @@ export default function VoiceConsoleClient({
       : [
           { label: "My Calls", value: String(filteredRecentCalls.length) },
           { label: "My Waiting", value: String(visibleWaitingCalls.length) },
-          { label: "My Missed", value: String(filteredMissedCount) },
+          { label: "Missed Calls", value: String(filteredMissedCount), action: () => switchTab("followups") },
           {
             label: "Avg Talk Time",
             value: formatDuration(Number.isFinite(filteredAverageTalkTime) ? Math.round(filteredAverageTalkTime) : 0),
@@ -872,6 +911,37 @@ export default function VoiceConsoleClient({
       ? (myPresence.status as (typeof MANUAL_PRESENCE_STATUSES)[number])
       : "AVAILABLE";
 
+  const handleCallback = (phone: string | null | undefined) => {
+    const normalizedPhone = String(phone || "").trim();
+    if (!normalizedPhone) return;
+    switchTab("operations");
+    softphone.startOutgoingCall(normalizedPhone);
+  };
+
+  const handleMarkContacted = async (input: { id?: string | null; voiceLeadId?: string | null; queueType: "task" | "lead" }) => {
+    setError(null);
+    try {
+      const response = await fetch(`${pollBaseHref.replace("/live", "/follow-ups")}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: input.id ?? null,
+          voiceLeadId: input.voiceLeadId ?? null,
+          queueType: input.queueType,
+          status: "contacted",
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(String(payload.error || "mark_contacted_failed"));
+      }
+      await refreshSnapshot(selectedCallId, selectedPhone);
+    } catch (markError) {
+      console.error("[voice.console.mark_contacted_failed]", markError);
+      setError("Could not mark the customer as contacted.");
+    }
+  };
+
   return (
     <div className="w-full overflow-x-hidden bg-slate-950 text-slate-100">
       <main className="mx-auto box-border h-auto max-w-[1500px] overflow-x-hidden px-3 py-3 sm:px-4 lg:px-5">
@@ -890,7 +960,9 @@ export default function VoiceConsoleClient({
                 </div>
                 <div>
                   <div className="text-base font-semibold text-white">BetechOps</div>
-                  <div className="text-xs text-slate-400">Voice Ops</div>
+                  <Link href={voiceHomeHref} className="text-xs text-cyan-200 transition hover:text-cyan-100">
+                    Go Home
+                  </Link>
                 </div>
               </div>
 
@@ -936,19 +1008,20 @@ export default function VoiceConsoleClient({
                     </button>
                     <button
                       type="button"
-                      onClick={() => switchTab("followups")}
+                      onClick={() => router.push(followUpsHref)}
                       className="flex w-full items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-left text-slate-300 transition hover:border-white/10 hover:bg-white/[0.03]"
                     >
                       <ClipboardList className="h-4 w-4 shrink-0" />
                       <span className="text-[13px] font-medium">Follow-up</span>
                     </button>
-                    <a
-                      href={selectedCustomerLinks.callBack}
+                    <button
+                      type="button"
+                      onClick={() => router.push(followUpsHref)}
                       className="flex w-full items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-left text-slate-300 transition hover:border-white/10 hover:bg-white/[0.03]"
                     >
                       <PhoneOff className="h-4 w-4 shrink-0" />
-                      <span className="text-[13px] font-medium">Call Back</span>
-                    </a>
+                      <span className="text-[13px] font-medium">Missed Calls</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -988,9 +1061,6 @@ export default function VoiceConsoleClient({
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-                      <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-sm">
-                        <RegistrationBadge />
-                      </div>
                       <span className={`rounded-full border px-3 py-1.5 text-sm font-semibold ${statusTone(liveStatus)}`}>
                         {liveStatus === "live" ? "Live" : liveStatus === "connecting" ? "Connecting" : "Offline"}
                       </span>
@@ -1000,11 +1070,15 @@ export default function VoiceConsoleClient({
                           handlePresenceUpdate(event.target.value as (typeof MANUAL_PRESENCE_STATUSES)[number])
                         }
                         disabled={presencePending}
-                        className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-1.5 text-sm font-semibold text-emerald-100 outline-none"
+                        className={`rounded-full px-4 py-1.5 text-sm font-semibold outline-none ${
+                          statusSelectValue === "AVAILABLE"
+                            ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
+                            : "border border-rose-500/30 bg-rose-500/10 text-rose-100"
+                        }`}
                       >
                         {MANUAL_PRESENCE_STATUSES.map((status) => (
                           <option key={status} value={status}>
-                            {status}
+                            {formatPresenceChoiceLabel(status)}
                           </option>
                         ))}
                       </select>
@@ -1050,10 +1124,18 @@ export default function VoiceConsoleClient({
 
                     <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                       {topMetrics.map((metric) => (
-                        <div key={metric.label} className="min-w-[96px] rounded-xl border border-slate-800/90 bg-slate-950/85 px-3 py-2.5">
+                        <button
+                          key={metric.label}
+                          type="button"
+                          onClick={metric.action}
+                          disabled={!metric.action}
+                          className={`min-w-[96px] rounded-xl border border-slate-800/90 bg-slate-950/85 px-3 py-2.5 text-left ${
+                            metric.action ? "transition hover:border-cyan-500/30 hover:bg-cyan-500/10" : ""
+                          }`}
+                        >
                           <div className="text-xs text-slate-500">{metric.label}</div>
                           <div className="mt-1 text-xl font-semibold text-white">{metric.value}</div>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -1135,12 +1217,13 @@ export default function VoiceConsoleClient({
                           >
                             End Call
                           </button>
-                          <a
-                            href={selectedCustomerLinks.callBack}
+                          <button
+                            type="button"
+                            onClick={() => handleCallback(selectedCall?.callerNumber || selectedPhone)}
                             className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-2.5 text-sm font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-400"
                           >
                             Call Back
-                          </a>
+                          </button>
                         </div>
 
                         {showWorkspaceDialPad ? (
@@ -1287,7 +1370,7 @@ export default function VoiceConsoleClient({
                         <div className="mt-4 grid gap-2">
                           <button
                             type="button"
-                            onClick={() => switchTab("followups")}
+                            onClick={() => router.push(followUpsHref)}
                             className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-semibold text-slate-100 transition hover:border-white/20"
                           >
                             Open Follow-ups
@@ -1668,9 +1751,26 @@ export default function VoiceConsoleClient({
                                 <span className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(item.status)}`}>
                                   {item.statusLabel}
                                 </span>
-                                <a href={item.links.callBack} className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400">
+                                <button
+                                  type="button"
+                                  onClick={() => handleCallback(item.phone)}
+                                  className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
+                                >
                                   Callback
-                                </a>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleMarkContacted({
+                                      id: item.type === "task" ? item.id : null,
+                                      voiceLeadId: item.type === "lead" ? item.voiceLeadId : null,
+                                      queueType: item.type,
+                                    })
+                                  }
+                                  className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400"
+                                >
+                                  Mark Contacted
+                                </button>
                                 <select
                                   defaultValue={item.assignedToId || ""}
                                   onChange={(event) => {
@@ -1743,12 +1843,12 @@ export default function VoiceConsoleClient({
                                 <div className="flex items-center justify-between gap-3">
                                   <span>Status</span>
                                   <span className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(row.status)}`}>
-                                    {row.status}
+                                    {row.status === "AVAILABLE" ? "Available" : "Offline"}
                                   </span>
                                 </div>
                                 <div className="flex items-center justify-between gap-3">
                                   <span>Browser</span>
-                                  <span className="text-right text-slate-400">{row.isWebrtcRegistered ? "Registered" : "Offline"}</span>
+                                  <span className="text-right text-slate-400">{row.isWebrtcRegistered ? "Ready" : "Offline"}</span>
                                 </div>
                                 <div className="flex items-center justify-between gap-3">
                                   <span>Active calls</span>

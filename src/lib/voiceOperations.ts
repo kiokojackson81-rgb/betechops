@@ -284,7 +284,7 @@ function getVoiceRoutingLabel(phone: string | null | undefined) {
 
 function effectivePresenceStatus(status: string | null | undefined) {
   const normalized = String(status || "OFFLINE").trim().toUpperCase();
-  return normalized || "OFFLINE";
+  return normalized === "AVAILABLE" ? "AVAILABLE" : "OFFLINE";
 }
 
 export async function resolveVoiceViewer(options?: ViewerOptions): Promise<VoiceViewer | null> {
@@ -1155,4 +1155,56 @@ export async function saveVoiceFollowUp(input: {
     userId: followUp.assignedToId,
   });
   return followUp;
+}
+
+export async function updateVoiceQueueStatus(input: {
+  followUpId?: string | null;
+  voiceLeadId?: string | null;
+  status: string;
+}) {
+  const normalizedStatus = String(input.status || "").trim().toLowerCase();
+  if (!normalizedStatus) {
+    throw new Error("status_required");
+  }
+
+  if (input.followUpId) {
+    if (!["pending", "contacted", "resolved", "closed"].includes(normalizedStatus)) {
+      throw new Error("invalid_follow_up_status");
+    }
+
+    const followUp = await prisma.voiceFollowUp.update({
+      where: { id: input.followUpId },
+      data: { status: normalizedStatus },
+    });
+
+    publishVoiceLiveEvent({
+      type: "follow_up",
+      reason: "voice_follow_up_status_updated",
+      callId: followUp.voiceCallId,
+      userId: followUp.assignedToId,
+    });
+
+    return { type: "follow_up" as const, id: followUp.id, status: followUp.status };
+  }
+
+  if (input.voiceLeadId) {
+    if (!["open", "pending_follow_up", "contacted", "closed"].includes(normalizedStatus)) {
+      throw new Error("invalid_voice_lead_status");
+    }
+
+    const lead = await prisma.voiceLead.update({
+      where: { id: input.voiceLeadId },
+      data: { status: normalizedStatus },
+    });
+
+    publishVoiceLiveEvent({
+      type: "queue",
+      reason: "voice_lead_status_updated",
+      userId: lead.assignedToId,
+    });
+
+    return { type: "lead" as const, id: lead.id, status: lead.status };
+  }
+
+  throw new Error("queue_status_target_required");
 }

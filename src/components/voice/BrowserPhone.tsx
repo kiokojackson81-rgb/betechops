@@ -17,7 +17,6 @@ import {
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import RegistrationBadge from "@/components/voice/RegistrationBadge";
 import { useSoftphone } from "@/components/voice/SoftphoneProvider";
 import type { SoftphoneCall, SoftphoneState } from "@/lib/voiceSoftphone";
 
@@ -359,7 +358,7 @@ export default function BrowserPhone() {
   return (
     <div className={`fixed bottom-3 right-3 sm:bottom-6 sm:right-6 ${drawerOpen ? "z-[30]" : "z-[40]"}`}>
       <div className="relative flex flex-col items-end gap-3">
-        {!softphone.isCollapsed ? (
+      {!softphone.isCollapsed ? (
           <div className="max-h-[calc(100vh-80px)] w-[calc(100vw-24px)] max-w-[420px] overflow-y-auto overflow-x-hidden rounded-[24px] border border-slate-800/90 bg-slate-950/98 shadow-[0_18px_54px_rgba(0,0,0,0.42)] sm:max-h-[calc(100vh-120px)] sm:w-[min(420px,calc(100vw-32px))]">
             <div className="flex items-start justify-between gap-3 border-b border-slate-800 px-4 py-4">
               <div className="min-w-0">
@@ -380,7 +379,6 @@ export default function BrowserPhone() {
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <RegistrationBadge />
                 <Link
                   href={voiceDashboardHref}
                   className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-800 bg-slate-900/80 text-slate-100 transition hover:border-slate-700"
@@ -405,11 +403,21 @@ export default function BrowserPhone() {
                   type="button"
                   onClick={handleToggleAvailability}
                   disabled={!online}
-                  className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  className={`inline-flex items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                    isAvailableForCalls
+                      ? "border-rose-500/30 bg-rose-500/10 text-rose-100 hover:border-rose-400"
+                      : "border-emerald-500/30 bg-emerald-500/10 text-emerald-100 hover:border-emerald-400"
+                  }`}
                 >
                   {readinessActionLabel}
                 </button>
-                <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
+                <span
+                  className={`rounded-full border px-3 py-2 text-xs ${
+                    isAvailableForCalls
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
+                      : "border-rose-500/30 bg-rose-500/10 text-rose-100"
+                  }`}
+                >
                   {readinessLabel}
                 </span>
               </div>
@@ -622,14 +630,24 @@ export default function BrowserPhone() {
             </span>
 
             <div className="hidden items-center gap-2 sm:flex">
-              <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[11px] text-slate-300">
+              <span
+                className={`rounded-full border px-2.5 py-1 text-[11px] ${
+                  isAvailableForCalls
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
+                    : "border-rose-500/30 bg-rose-500/10 text-rose-100"
+                }`}
+              >
                 {readinessLabel}
               </span>
               <button
                 type="button"
                 onClick={handleToggleAvailability}
                 disabled={!online}
-                className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-100 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+                className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                  isAvailableForCalls
+                    ? "border-rose-500/30 bg-rose-500/10 text-rose-100 hover:border-rose-400"
+                    : "border-emerald-500/30 bg-emerald-500/10 text-emerald-100 hover:border-emerald-400"
+                }`}
               >
                 {readinessActionLabel}
               </button>
