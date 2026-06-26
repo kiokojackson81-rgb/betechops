@@ -1,7 +1,6 @@
 // src/app/admin/layout.tsx
 import React from "react";
 import Link from "next/link";
-import AdminStatusBanner from "./_components/AdminStatusBanner";
 import AdminNavContainer from "./_components/AdminNavContainer";
 import AdminHeaderShell from "./_components/AdminHeaderShell";
 import AdminTips from "./_components/AdminTips";
@@ -18,7 +17,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <div className="min-h-screen bg-[var(--bg,#0f131b)] text-slate-100">
         {/* Sticky top system status + nav bar */}
         <AdminHeaderShell>
-          <AdminStatusBanner />
           <div className="border-b border-white/10 bg-[var(--panel,#121723)] backdrop-blur supports-[backdrop-filter]:bg-[color-mix(in_srgb,var(--panel)#121723,transparent_15%)]">
             <AdminNavContainer />
           </div>
