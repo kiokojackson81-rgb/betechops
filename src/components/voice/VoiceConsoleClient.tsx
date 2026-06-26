@@ -443,6 +443,10 @@ export default function VoiceConsoleClient({
     );
   }, [activeTab, selectedCallId, visibleActiveCalls, visibleRecentCalls]);
 
+  const activeInteractionCall = useMemo(() => {
+    return visibleActiveCalls.find((call) => call.id === selectedCallId) || visibleActiveCalls[0] || null;
+  }, [selectedCallId, visibleActiveCalls]);
+
   const groupedRecentCalls = useMemo(() => {
     const groups = new Map<string, typeof filteredRecentCalls>();
     for (const call of filteredRecentCalls) {
@@ -904,6 +908,9 @@ export default function VoiceConsoleClient({
   const selectedCallLabel =
     selectedCall?.customer.customerName || selectedContextData?.customerName || selectedCall?.callerNumber || "No active call";
 
+  const activeCallLabel =
+    activeInteractionCall?.customer.customerName || activeInteractionCall?.callerNumber || "No active call";
+
   const selectedCallSubLabel = selectedCall
     ? `${selectedCall.direction === "INBOUND" ? "Inbound call" : "Outbound call"} · ${
         selectedCall.routedToDisplay || selectedCall.assignedToName || selectedCall.assignedToEmail || "Route pending"
@@ -1158,7 +1165,7 @@ export default function VoiceConsoleClient({
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
                               <span>Active Call</span>
-                              {selectedCall ? (
+                              {activeInteractionCall ? (
                                 <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] text-emerald-100">
                                   Live
                                 </span>
@@ -1169,14 +1176,14 @@ export default function VoiceConsoleClient({
                                 <PhoneCall className="h-7 w-7" />
                               </div>
                               <div className="min-w-0">
-                                <div className="truncate text-2xl font-semibold tracking-tight text-white">{selectedCallLabel}</div>
+                                <div className="truncate text-2xl font-semibold tracking-tight text-white">{activeCallLabel}</div>
                                 <div className="mt-1 text-sm text-slate-400">
-                                  {selectedContextData?.location || selectedCall?.customer.location || "Customer location not captured"}
+                                  {activeInteractionCall?.customer.location || "Customer location not captured"}
                                 </div>
-                                {selectedCall ? (
+                                {activeInteractionCall ? (
                                   <div className="mt-1.5">
                                     <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100">
-                                      {selectedCall.direction === "INBOUND" ? "Inbound Call" : "Outbound Call"}
+                                      {activeInteractionCall.direction === "INBOUND" ? "Inbound Call" : "Outbound Call"}
                                     </span>
                                   </div>
                                 ) : null}
@@ -1184,9 +1191,9 @@ export default function VoiceConsoleClient({
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="text-lg font-medium text-slate-300">{selectedCall ? formatDuration(selectedCall.durationInSeconds) : "00:00"}</div>
+                            <div className="text-lg font-medium text-slate-300">{activeInteractionCall ? formatDuration(activeInteractionCall.durationInSeconds) : "00:00"}</div>
                             <div className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">
-                              {selectedCall ? formatDateTime(selectedCall.startedAt || selectedCall.createdAt) : "No active interaction"}
+                              {activeInteractionCall ? formatDateTime(activeInteractionCall.startedAt || activeInteractionCall.createdAt) : "No active interaction"}
                             </div>
                           </div>
                         </div>
@@ -1205,7 +1212,7 @@ export default function VoiceConsoleClient({
                                 key={action.label}
                                 type="button"
                                 onClick={action.onClick}
-                                disabled={!selectedCall && action.label !== "Keypad"}
+                                disabled={!activeInteractionCall && action.label !== "Keypad"}
                                 className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2.5 text-center text-xs font-medium text-slate-100 transition hover:border-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
                               >
                                 <Icon className="h-4 w-4" />
@@ -1219,7 +1226,7 @@ export default function VoiceConsoleClient({
                           <button
                             type="button"
                             onClick={softphone.hangUp}
-                            disabled={!selectedCall}
+                            disabled={!activeInteractionCall}
                             className="min-w-[150px] rounded-full border border-rose-500/40 bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             End Call
