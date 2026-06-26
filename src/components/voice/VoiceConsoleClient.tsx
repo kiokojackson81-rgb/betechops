@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronDown, ChevronUp } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -230,6 +231,7 @@ export default function VoiceConsoleClient({
   const [showWorkspaceDialPad, setShowWorkspaceDialPad] = useState(false);
   const [recentSearch, setRecentSearch] = useState("");
   const [recentFilter, setRecentFilter] = useState<"all" | "INBOUND" | "OUTBOUND" | "with_recording">("all");
+  const [expandedRecentCallId, setExpandedRecentCallId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<VoiceConsoleTab>(() => normalizeVoiceTab(searchParams.get("tab")));
   const [dateFilter, setDateFilter] = useState<VoiceDateFilter>(() => normalizeVoiceDateFilter(searchParams.get("range")));
   const lastInteractionAtRef = useRef(Date.now());
@@ -492,6 +494,14 @@ export default function VoiceConsoleClient({
       console.error("[voice.console.select_failed]", selectionError);
       setError("Failed to load the selected customer context.");
     });
+  };
+
+  const handleToggleRecentCall = (callId: string, phone: string) => {
+    const nextExpanded = expandedRecentCallId === callId ? null : callId;
+    setExpandedRecentCallId(nextExpanded);
+    if (!nextExpanded) return;
+    if (selectedCallId === callId && selectedPhone === phone) return;
+    handleSelectCall(callId, phone);
   };
 
   const handleExportRecentCalls = () => {
@@ -1568,8 +1578,9 @@ export default function VoiceConsoleClient({
                   <div key={bucket} className="space-y-3">
                     <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">{bucket}</div>
                     <div className="overflow-x-auto">
-                      <div className="min-w-[980px] rounded-2xl border border-slate-800 bg-slate-900/60">
-                        <div className="grid grid-cols-[110px_220px_100px_220px_110px_100px_110px_190px] gap-3 border-b border-slate-800 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      <div className="min-w-[1080px] rounded-2xl border border-slate-800 bg-slate-900/60">
+                        <div className="grid grid-cols-[72px_110px_220px_100px_220px_110px_100px_110px_190px] gap-3 border-b border-slate-800 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                          <div>View</div>
                           <div>Time</div>
                           <div>Caller</div>
                           <div>Direction</div>
@@ -1579,59 +1590,251 @@ export default function VoiceConsoleClient({
                           <div>Cost</div>
                           <div>Actions</div>
                         </div>
-                        {calls.map((call) => (
-                          <button
-                            key={call.id}
-                            type="button"
-                            onClick={() => {
-                              handleSelectCall(call.id, call.callerNumber);
-                              switchTab("operations");
-                            }}
-                            className="grid w-full grid-cols-[110px_220px_100px_220px_110px_100px_110px_190px] gap-3 border-b border-slate-800/80 px-4 py-4 text-left transition last:border-b-0 hover:bg-white/[0.02]"
-                          >
-                            <div className="whitespace-nowrap text-sm text-slate-200">{formatTimeOnly(call.startedAt || call.createdAt)}</div>
-                            <div className="min-w-0">
-                              <div className="truncate font-semibold text-white">{call.customer.customerName || call.callerNumber}</div>
-                              <div className="whitespace-nowrap text-sm text-slate-400">{call.callerNumber}</div>
-                            </div>
-                            <div>
-                              <span className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(call.direction)}`}>
-                                {call.direction}
-                              </span>
-                            </div>
-                            <div className="min-w-0">
-                              <div className="truncate text-sm text-slate-200">{call.routedToDisplay || call.assignedToName || call.assignedToEmail || "-"}</div>
-                              <div className="truncate text-xs text-slate-500">{call.lastActivityTitle || "No recent activity"}</div>
-                            </div>
-                            <div>
-                              <span className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(call.status)}`}>
-                                {call.statusLabel}
-                              </span>
-                            </div>
-                            <div className="whitespace-nowrap text-sm text-slate-200">{formatDuration(call.durationInSeconds)}</div>
-                            <div className="whitespace-nowrap text-sm text-slate-200">{formatMoney(call.amount, call.currencyCode)}</div>
-                            <div className="flex items-center gap-2">
-                              {call.recordingUrl ? (
-                                <a
-                                  href={call.recordingUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  onClick={(event) => event.stopPropagation()}
-                                  className="inline-flex whitespace-nowrap rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400"
-                                >
-                                  Recording
-                                </a>
+                        {calls.map((call) => {
+                          const isExpanded = expandedRecentCallId === call.id;
+                          const expandedDetail = isExpanded && selectedCallId === call.id ? data.selectedCallDetail : null;
+                          return (
+                            <div key={call.id} className="border-b border-slate-800/80 last:border-b-0">
+                              <div className="grid grid-cols-[72px_110px_220px_100px_220px_110px_100px_110px_190px] gap-3 px-4 py-4 transition hover:bg-white/[0.02]">
+                                <div className="flex items-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleRecentCall(call.id, call.callerNumber)}
+                                    className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-slate-100 transition hover:border-cyan-400/40 hover:bg-cyan-500/10"
+                                    aria-expanded={isExpanded}
+                                    aria-label={isExpanded ? "Hide call details" : "Show call details"}
+                                  >
+                                    {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                  </button>
+                                </div>
+                                <div className="whitespace-nowrap text-sm text-slate-200">{formatTimeOnly(call.startedAt || call.createdAt)}</div>
+                                <div className="min-w-0">
+                                  <div className="truncate font-semibold text-white">{call.customer.customerName || call.callerNumber}</div>
+                                  <div className="whitespace-nowrap text-sm text-slate-400">{call.callerNumber}</div>
+                                </div>
+                                <div>
+                                  <span className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(call.direction)}`}>
+                                    {call.direction}
+                                  </span>
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="truncate text-sm text-slate-200">{call.routedToDisplay || call.assignedToName || call.assignedToEmail || "-"}</div>
+                                  <div className="truncate text-xs text-slate-500">{call.lastActivityTitle || "No recent activity"}</div>
+                                </div>
+                                <div>
+                                  <span className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(call.status)}`}>
+                                    {call.statusLabel}
+                                  </span>
+                                </div>
+                                <div className="whitespace-nowrap text-sm text-slate-200">{formatDuration(call.durationInSeconds)}</div>
+                                <div className="whitespace-nowrap text-sm text-slate-200">{formatMoney(call.amount, call.currencyCode)}</div>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleRecentCall(call.id, call.callerNumber)}
+                                    className="inline-flex whitespace-nowrap rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
+                                  >
+                                    Review
+                                  </button>
+                                </div>
+                              </div>
+
+                              {isExpanded ? (
+                                <div className="border-t border-slate-800 bg-slate-950/80 px-5 py-5">
+                                  <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+                                    <div className="space-y-4">
+                                      <div className="flex flex-wrap items-start justify-between gap-3">
+                                        <div>
+                                          <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Call review</div>
+                                          <div className="mt-1 text-xl font-semibold text-white">{call.customer.customerName || call.callerNumber}</div>
+                                          <div className="mt-1 text-sm text-slate-400">
+                                            {call.callerNumber} · {call.direction} · {call.statusLabel}
+                                          </div>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                          <a
+                                            href={call.links.callBack}
+                                            className="inline-flex whitespace-nowrap rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
+                                          >
+                                            Call back
+                                          </a>
+                                          <a
+                                            href={`sms:${call.callerNumber}`}
+                                            className="inline-flex whitespace-nowrap rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
+                                          >
+                                            Send SMS
+                                          </a>
+                                          <Link
+                                            href={call.links.customer}
+                                            className="inline-flex whitespace-nowrap rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
+                                          >
+                                            Open customer
+                                          </Link>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              handleSelectCall(call.id, call.callerNumber);
+                                              switchTab("operations");
+                                            }}
+                                            className="inline-flex whitespace-nowrap rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400"
+                                          >
+                                            Open live desk
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                                        <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Who received</div>
+                                          <div className="mt-2 text-sm font-semibold text-white">{call.assignedToName || call.assignedToEmail || call.routedToDisplay || "Unassigned"}</div>
+                                          <div className="mt-1 text-xs text-slate-500">{call.routeType || "Direct route"}</div>
+                                        </div>
+                                        <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Orders</div>
+                                          <div className="mt-2 text-lg font-semibold text-white">{call.customer.linkedRecords.webOrders}</div>
+                                          <div className="mt-1 text-xs text-slate-500">Previous orders linked to caller</div>
+                                        </div>
+                                        <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Previous calls</div>
+                                          <div className="mt-2 text-lg font-semibold text-white">{call.customer.linkedRecords.recentCalls}</div>
+                                          <div className="mt-1 text-xs text-slate-500">CRM voice history</div>
+                                        </div>
+                                        <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Open quotes</div>
+                                          <div className="mt-2 text-lg font-semibold text-white">{call.customer.openQuotations}</div>
+                                          <div className="mt-1 text-xs text-slate-500">Quotations still pending</div>
+                                        </div>
+                                      </div>
+
+                                      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
+                                        <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                                          <div className="flex items-center justify-between gap-3">
+                                            <div>
+                                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Customer activity</div>
+                                              <div className="mt-1 text-sm text-white">{call.linkedSummaryText}</div>
+                                            </div>
+                                            <div className="text-xs text-slate-500">{formatDateTime(call.startedAt || call.createdAt)}</div>
+                                          </div>
+                                          <div className="mt-4 space-y-3">
+                                            {(expandedDetail?.timeline?.length ? expandedDetail.timeline : call.customer.recentTimeline).slice(0, 5).map((item: any) => (
+                                              <div key={item.id} className="rounded-2xl border border-slate-800/80 bg-slate-950/70 px-3 py-3">
+                                                <div className="text-sm font-semibold text-white">{item.title}</div>
+                                                <div className="mt-1 text-xs text-slate-400">
+                                                  {item.detail || "No extra detail"} · {formatDateTime(item.at)}
+                                                </div>
+                                              </div>
+                                            ))}
+                                            {!(expandedDetail?.timeline?.length || call.customer.recentTimeline.length) ? (
+                                              <div className="rounded-2xl border border-dashed border-slate-800 px-3 py-6 text-sm text-slate-500">
+                                                No customer activity found yet.
+                                              </div>
+                                            ) : null}
+                                          </div>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                                            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Reassign</div>
+                                            <div className="mt-2 text-sm text-slate-300">Move this call to another agent for ownership and follow-up.</div>
+                                            <select
+                                              defaultValue={call.assignedToId || ""}
+                                              onChange={(event) => {
+                                                const assignedToId = event.target.value;
+                                                if (!assignedToId) return;
+                                                void handleReassign({
+                                                  callId: call.id,
+                                                  assignedToId,
+                                                });
+                                              }}
+                                              className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-slate-100 outline-none"
+                                            >
+                                              <option value="">Select agent</option>
+                                              {visibleAgents.map((agent) => (
+                                                <option key={agent.id} value={agent.id}>
+                                                  {(agent as any).displayName || agent.name}
+                                                </option>
+                                              ))}
+                                            </select>
+                                          </div>
+
+                                          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                                            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Recording</div>
+                                            {call.recordingUrl ? (
+                                              <div className="mt-3 space-y-3">
+                                                <audio controls preload="none" className="w-full" src={call.recordingUrl} />
+                                                <a
+                                                  href={call.recordingUrl}
+                                                  target="_blank"
+                                                  rel="noreferrer"
+                                                  className="inline-flex whitespace-nowrap rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400"
+                                                >
+                                                  Play / download
+                                                </a>
+                                              </div>
+                                            ) : (
+                                              <div className="mt-3 rounded-2xl border border-dashed border-slate-800 px-3 py-6 text-sm text-slate-500">
+                                                No recording attached to this call.
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                      <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Customer account</div>
+                                        <div className="mt-2 text-lg font-semibold text-white">
+                                          {call.customer.customerName || call.callerNumber}
+                                        </div>
+                                        <div className="mt-1 text-sm text-slate-400">
+                                          {call.customer.email || "No email"} · {call.customer.location || "No location"}
+                                        </div>
+                                        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                                          <div className="rounded-2xl border border-slate-800/80 bg-slate-950/70 p-3">
+                                            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Total spent</div>
+                                            <div className="mt-2 text-lg font-semibold text-white">{formatMoney(call.customer.totalPurchasesValue)}</div>
+                                          </div>
+                                          <div className="rounded-2xl border border-slate-800/80 bg-slate-950/70 p-3">
+                                            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Assigned agent</div>
+                                            <div className="mt-2 text-sm font-semibold text-white">{call.customer.assignedAgent?.name || call.customer.assignedAgent?.email || "Unassigned"}</div>
+                                          </div>
+                                          <div className="rounded-2xl border border-slate-800/80 bg-slate-950/70 p-3">
+                                            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Receipts</div>
+                                            <div className="mt-2 text-lg font-semibold text-white">{call.customer.linkedRecords.receipts}</div>
+                                          </div>
+                                          <div className="rounded-2xl border border-slate-800/80 bg-slate-950/70 p-3">
+                                            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Notes</div>
+                                            <div className="mt-2 text-lg font-semibold text-white">{call.customer.linkedRecords.notes}</div>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Recent notes and follow-ups</div>
+                                        <div className="mt-3 space-y-3">
+                                          {(expandedDetail?.notes || call.customer.recentNotes || []).slice(0, 3).map((note: any) => (
+                                            <div key={note.id} className="rounded-2xl border border-slate-800/80 bg-slate-950/70 px-3 py-3">
+                                              <div className="text-sm text-white">{note.note}</div>
+                                              <div className="mt-1 text-xs text-slate-500">
+                                                {note.authorName || "Voice note"} · {formatDateTime(note.createdAt)}
+                                              </div>
+                                            </div>
+                                          ))}
+                                          {!((expandedDetail?.notes || call.customer.recentNotes || []).length) ? (
+                                            <div className="rounded-2xl border border-dashed border-slate-800 px-3 py-6 text-sm text-slate-500">
+                                              No notes or recent follow-ups for this caller.
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
                               ) : null}
-                              <Link
-                                href={call.links.customer}
-                                onClick={(event) => event.stopPropagation()}
-                                className="inline-flex whitespace-nowrap rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
-                              >
-                                CRM
-                              </Link>
                             </div>
-                          </button>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
