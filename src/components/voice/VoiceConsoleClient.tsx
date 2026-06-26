@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import CallStatusBar from "@/components/voice/CallStatusBar";
 import DialPad from "@/components/voice/DialPad";
 import RegistrationBadge from "@/components/voice/RegistrationBadge";
+import VoiceSettingsClient from "@/components/voice/VoiceSettingsClient";
 import { useSoftphone } from "@/components/voice/SoftphoneProvider";
 import type { VoiceLiveSnapshot } from "@/lib/voiceOperations";
 
@@ -20,7 +21,7 @@ type VoiceConsoleClientProps = {
 };
 
 const PRESENCE_STATUSES = ["AVAILABLE", "AWAY", "BUSY", "BREAK", "OFFLINE"] as const;
-const VOICE_CONSOLE_TABS = ["operations", "recent", "recordings", "followups", "agents"] as const;
+const VOICE_CONSOLE_TABS = ["operations", "recent", "recordings", "followups", "agents", "settings"] as const;
 type VoiceConsoleTab = (typeof VOICE_CONSOLE_TABS)[number];
 
 function formatDateTime(value: string | null | undefined) {
@@ -140,6 +141,10 @@ function isDeveloperPlaceholderPhone(phone: string | null | undefined) {
   return /^(\+254|0)7(\d)\2{7,}$/.test(normalized);
 }
 
+function isMeaningfulVoicePhone(phone: string | null | undefined) {
+  return Boolean(phone) && !isDeveloperPlaceholderPhone(phone);
+}
+
 export default function VoiceConsoleClient({
   mode,
   initialData,
@@ -154,8 +159,8 @@ export default function VoiceConsoleClient({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [data, setData] = useState(initialData);
-  const [selectedCallId, setSelectedCallId] = useState(initialData.selectedCallId);
-  const [selectedPhone, setSelectedPhone] = useState(initialData.selectedPhone);
+  const [selectedCallId, setSelectedCallId] = useState<string | null>(initialData.selectedCallId ?? null);
+  const [selectedPhone, setSelectedPhone] = useState<string | null>(initialData.selectedPhone ?? null);
   const [lastRefreshAt, setLastRefreshAt] = useState(initialData.generatedAt);
   const [noteDraft, setNoteDraft] = useState("");
   const [followUpTitle, setFollowUpTitle] = useState("");
@@ -177,6 +182,26 @@ export default function VoiceConsoleClient({
   const availabilityTimerRef = useRef<number | null>(null);
   const lastAnnouncedCallIdRef = useRef<string | null>(null);
   const activeTab = useMemo(() => normalizeVoiceTab(searchParams.get("tab")), [searchParams]);
+
+  const visibleActiveCalls = useMemo(
+    () => data.activeCalls.filter((call) => isMeaningfulVoicePhone(call.callerNumber)),
+    [data.activeCalls],
+  );
+  const visibleRecentCalls = useMemo(
+    () => data.recentCalls.filter((call) => isMeaningfulVoicePhone(call.callerNumber)),
+    [data.recentCalls],
+  );
+  const visibleWaitingCalls = useMemo(
+    () => data.waitingCalls.filter((call) => isMeaningfulVoicePhone(call.callerNumber)),
+    [data.waitingCalls],
+  );
+  const visibleCallQueue = useMemo(
+    () =>
+      data.callQueue.filter((item: any) =>
+        isMeaningfulVoicePhone(item.callerNumber || item.phone || data.selectedPhone),
+      ),
+    [data.callQueue, data.selectedPhone],
+  );
 
   const switchTab = (tab: VoiceConsoleTab) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -244,17 +269,17 @@ export default function VoiceConsoleClient({
 
   const selectedCall = useMemo(() => {
     return (
-      data.activeCalls.find((call) => call.id === selectedCallId) ||
-      data.recentCalls.find((call) => call.id === selectedCallId) ||
-      data.activeCalls[0] ||
-      data.recentCalls[0] ||
+      visibleActiveCalls.find((call) => call.id === selectedCallId) ||
+      visibleRecentCalls.find((call) => call.id === selectedCallId) ||
+      visibleActiveCalls[0] ||
+      visibleRecentCalls[0] ||
       null
     );
-  }, [data.activeCalls, data.recentCalls, selectedCallId]);
+  }, [selectedCallId, visibleActiveCalls, visibleRecentCalls]);
 
   const filteredRecentCalls = useMemo(() => {
     const query = recentSearch.trim().toLowerCase();
-    return data.recentCalls.filter((call) => {
+    return visibleRecentCalls.filter((call) => {
       const matchesFilter =
         recentFilter === "all" ||
         (recentFilter === "with_recording" ? Boolean(call.recordingUrl) : call.direction === recentFilter);
@@ -270,7 +295,7 @@ export default function VoiceConsoleClient({
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(query));
     });
-  }, [data.recentCalls, recentFilter, recentSearch]);
+  }, [recentFilter, recentSearch, visibleRecentCalls]);
 
   const groupedRecentCalls = useMemo(() => {
     const groups = new Map<string, typeof filteredRecentCalls>();
@@ -287,16 +312,15 @@ export default function VoiceConsoleClient({
 
   const incomingCall = useMemo(() => {
     const calls = mode === "staff"
-      ? data.waitingCalls.filter((call) => call.assignedToId === data.viewer.targetUserId)
-      : data.waitingCalls;
+      ? visibleWaitingCalls.filter((call) => call.assignedToId === data.viewer.targetUserId)
+      : visibleWaitingCalls;
     return (
       calls.find((call) => {
         if (dismissedIncomingIds.includes(call.id)) return false;
-        if (isDeveloperPlaceholderPhone(call.callerNumber)) return false;
         return isFreshIncomingCall(call.startedAt || call.createdAt);
       }) || null
     );
-  }, [data.viewer.targetUserId, data.waitingCalls, dismissedIncomingIds, mode]);
+  }, [data.viewer.targetUserId, dismissedIncomingIds, mode, visibleWaitingCalls]);
 
   useEffect(() => {
     if (!incomingCall) return;
@@ -307,8 +331,15 @@ export default function VoiceConsoleClient({
     setContextTab("customer");
   }, [incomingCall]);
 
+  useEffect(() => {
+    if (!selectedPhone || isMeaningfulVoicePhone(selectedPhone)) return;
+    if (selectedCall) return;
+    setSelectedCallId(null);
+    setSelectedPhone(null);
+  }, [selectedCall, selectedPhone]);
+
   const selectedCustomerLinks = useMemo(() => {
-    const phone = data.selectedContext?.normalizedPhone || selectedPhone || selectedCall?.callerNumber || "";
+    const phone = selectedCall?.callerNumber || (isMeaningfulVoicePhone(selectedPhone) ? selectedPhone : "") || "";
     const params = new URLSearchParams();
     if (phone) params.set("q", phone);
     if (data.viewer.impersonateId) params.set("impersonateId", data.viewer.impersonateId);
@@ -332,8 +363,13 @@ export default function VoiceConsoleClient({
     };
   }, [data.selectedContext, data.viewer.impersonateId, selectedCall, selectedPhone]);
 
+  const selectedContextData = useMemo(() => {
+    if (!selectedCall || !isMeaningfulVoicePhone(selectedCall.callerNumber)) return null;
+    return data.selectedContext;
+  }, [data.selectedContext, selectedCall]);
+
   useEffect(() => {
-    if (selectedCall?.customer) {
+    if (selectedCall?.customer && isMeaningfulVoicePhone(selectedCall.callerNumber)) {
       softphone.seedCustomerContext({
         name: selectedCall.customer.customerName || selectedCall.callerNumber,
         phone: selectedCall.callerNumber,
@@ -342,12 +378,12 @@ export default function VoiceConsoleClient({
         recentOrders: selectedCall.customer.linkedRecords.webOrders || 0,
         recentQuotes: selectedCall.customer.linkedRecords.quotations || 0,
         recentReceipts: selectedCall.customer.linkedRecords.receipts || 0,
-        notes: data.selectedContext?.recentNotes?.slice(0, 2).map((note) => note.note) || [],
+        notes: selectedContextData?.recentNotes?.slice(0, 2).map((note) => note.note) || [],
       });
       return;
     }
     softphone.seedCustomerContext(null);
-  }, [data.selectedContext?.recentNotes, selectedCall, softphone]);
+  }, [selectedCall, selectedContextData?.recentNotes, softphone]);
 
   const handleSelectCall = (callId: string, phone: string) => {
     setSelectedCallId(callId);
@@ -659,7 +695,7 @@ export default function VoiceConsoleClient({
 
   const queueItems = useMemo(() => {
     const query = queueSearch.trim().toLowerCase();
-    const allItems = [...data.waitingCalls, ...data.callQueue] as Array<any>;
+    const allItems = [...visibleWaitingCalls, ...visibleCallQueue] as Array<any>;
     return allItems.filter((item) => {
       if (!query) return true;
       return [
@@ -674,9 +710,9 @@ export default function VoiceConsoleClient({
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(query));
     });
-  }, [data.callQueue, data.waitingCalls, queueSearch]);
+  }, [queueSearch, visibleCallQueue, visibleWaitingCalls]);
 
-  const activeCallPreview = useMemo(() => data.activeCalls.slice(0, 8), [data.activeCalls]);
+  const activeCallPreview = useMemo(() => visibleActiveCalls.slice(0, 8), [visibleActiveCalls]);
   const selectedAgent =
     visibleAgents.find((agent) => agent.id === selectedCall?.assignedToId) ||
     visibleAgents.find((agent) => agent.currentCallId === selectedCall?.id) ||
@@ -685,7 +721,7 @@ export default function VoiceConsoleClient({
 
   const timelineItems = (data.selectedCallDetail?.timeline?.length
     ? data.selectedCallDetail.timeline
-    : data.selectedContext?.recentTimeline || []) as Array<any>;
+    : selectedContextData?.recentTimeline || []) as Array<any>;
 
   return (
     <div className="overflow-x-hidden bg-slate-950 text-slate-100">
@@ -695,12 +731,54 @@ export default function VoiceConsoleClient({
         }`}
       >
         <header className={cardShell("px-4 py-4 shadow-[0_18px_48px_rgba(0,0,0,0.28)] sm:px-5")}>
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div className="min-w-0 space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-100">
-                  {badge}
+                  Voice Calls
                 </span>
+                <Link
+                  href="/admin/communications/voice"
+                  className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
+                    activeTab === "operations"
+                      ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
+                      : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20"
+                  }`}
+                >
+                  Operations Center
+                </Link>
+                {[
+                  ["recent", "Call History"],
+                  ["recordings", "Recordings"],
+                  ["followups", "Follow-ups"],
+                  ["agents", "Agents"],
+                ].map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => switchTab(key as VoiceConsoleTab)}
+                    className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
+                      activeTab === key
+                        ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
+                        : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => switchTab("settings")}
+                  className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
+                    activeTab === "settings"
+                      ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
+                      : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20"
+                  }`}
+                >
+                  Softphone Settings
+                </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 xl:justify-end">
                 <RegistrationBadge />
                 <span
                   className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${
@@ -718,103 +796,56 @@ export default function VoiceConsoleClient({
                     {myPresence.status}
                   </span>
                 ) : null}
-              </div>
-              <div>
-                <h1 className="text-2xl font-semibold text-white">{title}</h1>
-                <p className="mt-1 text-sm text-slate-400">{subtitle}</p>
+                <button
+                  type="button"
+                  onClick={() => refreshSnapshot(selectedCallId, selectedPhone).catch(() => setError("Refresh failed."))}
+                  className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400"
+                >
+                  Refresh
+                </button>
               </div>
             </div>
 
-            <div className="grid gap-3 xl:min-w-[760px] xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
-              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                {summaryCards.map((card) => (
-                  <div key={card.label} className="rounded-2xl border border-slate-800 bg-slate-900/75 px-3 py-3">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{card.label}</div>
-                    <div className="mt-2 text-xl font-semibold text-white">{card.value}</div>
-                  </div>
+            <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+              <div>
+                <h1 className="text-2xl font-semibold text-white">Voice Operations Center</h1>
+                <p className="mt-1 text-sm text-slate-400">
+                  Live queue, active call handling, recordings, follow-ups, and routing visibility in one console.
+                </p>
+              </div>
+              <div className="text-xs text-slate-500 xl:text-right">{formatRefreshStamp(lastRefreshAt)}</div>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
+              {summaryCards.map((card) => (
+                <div key={card.label} className="rounded-2xl border border-slate-800 bg-slate-900/75 px-3 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{card.label}</div>
+                  <div className="mt-2 text-xl font-semibold text-white">{card.value}</div>
+                </div>
+              ))}
+            </div>
+
+            {mode === "staff" ? (
+              <div className="flex flex-wrap gap-2">
+                {PRESENCE_STATUSES.map((status) => (
+                  <button
+                    key={status}
+                    type="button"
+                    disabled={presencePending}
+                    onClick={() => handlePresenceUpdate(status)}
+                    className={`rounded-full border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] transition ${
+                      myPresence?.status === status
+                        ? "border-emerald-400 bg-emerald-500/15 text-emerald-100"
+                        : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20"
+                    }`}
+                  >
+                    {status}
+                  </button>
                 ))}
               </div>
-              <div className="flex flex-col items-stretch gap-2 xl:items-end">
-                <div className="flex flex-wrap gap-2 xl:justify-end">
-                  <Link
-                    href={backHref}
-                    className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
-                  >
-                    Back
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => refreshSnapshot(selectedCallId, selectedPhone).catch(() => setError("Refresh failed."))}
-                    className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400"
-                  >
-                    Refresh
-                  </button>
-                  {mode === "admin" ? (
-                    <Link
-                      href="/admin/communications/voice/settings"
-                      className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
-                    >
-                      Settings
-                    </Link>
-                  ) : null}
-                </div>
-                <div className="text-xs text-slate-500">{formatRefreshStamp(lastRefreshAt)}</div>
-                {mode === "staff" ? (
-                  <div className="flex flex-wrap gap-2 xl:justify-end">
-                    {PRESENCE_STATUSES.map((status) => (
-                      <button
-                        key={status}
-                        type="button"
-                        disabled={presencePending}
-                        onClick={() => handlePresenceUpdate(status)}
-                        className={`rounded-full border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] transition ${
-                          myPresence?.status === status
-                            ? "border-emerald-400 bg-emerald-500/15 text-emerald-100"
-                            : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20"
-                        }`}
-                      >
-                        {status}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <div className={cardShell("px-4 py-3")}>
-          <div className="flex flex-wrap gap-2">
-            {[
-              ["operations", "Live Desk"],
-              ["recent", "Call History"],
-              ["recordings", "Recordings"],
-              ["followups", "Follow-ups"],
-              ["agents", "Agents"],
-            ].map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => switchTab(key as VoiceConsoleTab)}
-                className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
-                  activeTab === key
-                    ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
-                    : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-            {mode === "admin" ? (
-              <Link
-                href="/admin/communications/voice/settings"
-                className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-300 transition hover:border-white/20"
-              >
-                Settings
-              </Link>
             ) : null}
           </div>
-        </div>
+        </header>
 
         {error ? (
           <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
@@ -972,14 +1003,19 @@ export default function VoiceConsoleClient({
                   <div className="min-w-0">
                     <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Active workspace</div>
                     <div className="mt-1 text-xl font-semibold text-white">
-                      {selectedCall?.customer.customerName || selectedCall?.callerNumber || "No active call selected"}
+                      {selectedCall?.customer.customerName || selectedCall?.callerNumber || "No active interaction selected"}
                     </div>
                     <div className="mt-1 text-sm text-slate-400">
-                      {selectedCall ? `${selectedCall.callerNumber} · ${selectedCall.routedToDisplay || "No route label"}` : "Select a queue item or active call to begin work."}
+                      {selectedCall
+                        ? [
+                            selectedCall.direction === "INBOUND" ? "Inbound call" : "Outbound call",
+                            selectedCall.routedToDisplay || selectedCall.assignedToName || "Route pending",
+                          ].join(" · ")
+                        : "Choose a live caller or callback task to begin work."}
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {selectedPhone ? (
+                    {selectedCall?.callerNumber ? (
                       <a
                         href={selectedCustomerLinks.callBack}
                         className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
@@ -1167,10 +1203,10 @@ export default function VoiceConsoleClient({
               <div className={cardShell("p-4")}>
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Context</div>
-                    <div className="mt-1 text-lg font-semibold text-white">Customer and agent view</div>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Customer</div>
+                    <div className="mt-1 text-lg font-semibold text-white">Customer details and timeline</div>
                   </div>
-                  {selectedPhone ? (
+                  {selectedCall?.callerNumber ? (
                     <Link
                       href={selectedCustomerLinks.customer}
                       className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-200 transition hover:border-white/20"
@@ -1203,34 +1239,34 @@ export default function VoiceConsoleClient({
 
                 <div className="mt-4">
                   {contextTab === "customer" ? (
-                    data.selectedContext ? (
+                    selectedContextData ? (
                       <div className="space-y-4">
                         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                           <div className="text-xl font-semibold text-white">
-                            {data.selectedContext.customerName || data.selectedPhone || "Unknown caller"}
+                            {selectedContextData.customerName || selectedCall?.callerNumber || "Unknown caller"}
                           </div>
                           <div className="mt-1 text-sm text-slate-400">
-                            {data.selectedPhone || "-"} · {data.selectedContext.email || "No email"} · {data.selectedContext.location || "No location"}
+                            {selectedCall?.callerNumber || "-"} · {selectedContextData.email || "No email"} · {selectedContextData.location || "No location"}
                           </div>
                         </div>
                         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
                           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                             <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Total sales</div>
-                            <div className="mt-2 text-lg font-semibold text-white">{formatMoney(data.selectedContext.totalPurchasesValue)}</div>
+                            <div className="mt-2 text-lg font-semibold text-white">{formatMoney(selectedContextData.totalPurchasesValue)}</div>
                           </div>
                           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                             <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Assigned agent</div>
                             <div className="mt-2 text-sm font-semibold text-white">
-                              {data.selectedContext.assignedAgent?.name || data.selectedContext.assignedAgent?.email || "-"}
+                              {selectedContextData.assignedAgent?.name || selectedContextData.assignedAgent?.email || "-"}
                             </div>
                           </div>
                           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                             <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Open quotations</div>
-                            <div className="mt-2 text-lg font-semibold text-white">{data.selectedContext.openQuotations}</div>
+                            <div className="mt-2 text-lg font-semibold text-white">{selectedContextData.openQuotations}</div>
                           </div>
                           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                             <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Pending web orders</div>
-                            <div className="mt-2 text-lg font-semibold text-white">{data.selectedContext.pendingWebOrders}</div>
+                            <div className="mt-2 text-lg font-semibold text-white">{selectedContextData.pendingWebOrders}</div>
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-2">
@@ -1247,7 +1283,7 @@ export default function VoiceConsoleClient({
                       </div>
                     ) : (
                       <div className="rounded-2xl border border-dashed border-slate-800 px-3 py-6 text-sm text-slate-500">
-                        Select a call to pin customer context.
+                        Select a real live call or callback to load customer context.
                       </div>
                     )
                   ) : null}
@@ -1659,6 +1695,12 @@ export default function VoiceConsoleClient({
                 </div>
               )}
             </div>
+          </section>
+        ) : null}
+
+        {activeTab === "settings" ? (
+          <section className={cardShell("p-5")}>
+            <VoiceSettingsClient />
           </section>
         ) : null}
       </main>
