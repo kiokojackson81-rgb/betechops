@@ -844,10 +844,10 @@ export default function VoiceConsoleClient({
   return (
     <div className="overflow-x-hidden bg-slate-950 text-slate-100">
       <main
-        className={`mx-auto box-border max-w-[1880px] overflow-hidden px-3 pb-4 sm:px-4 lg:px-6 xl:px-8 2xl:px-10 ${
+        className={`mx-auto box-border max-w-[1880px] overflow-x-hidden overflow-y-visible px-3 pb-4 sm:px-4 lg:px-6 xl:px-8 2xl:px-10 ${
           mode === "admin"
-            ? "h-[calc(100vh-3.5rem)] pt-24 sm:h-[calc(100vh-4rem)] sm:pt-28"
-            : "h-[calc(100vh-1rem)] pt-4 sm:h-[calc(100vh-1.25rem)] sm:pt-5"
+            ? "min-h-[calc(100vh-3.5rem)] pt-24 sm:min-h-[calc(100vh-4rem)] sm:pt-28"
+            : "min-h-[calc(100vh-1rem)] pt-4 sm:min-h-[calc(100vh-1.25rem)] sm:pt-5"
         }`}
       >
         {error ? (
@@ -856,8 +856,8 @@ export default function VoiceConsoleClient({
           </div>
         ) : null}
 
-        <section className={cardShell("h-full overflow-hidden shadow-[0_30px_90px_rgba(0,0,0,0.35)]")}>
-          <div className="grid h-full min-h-0 lg:grid-cols-[240px_minmax(0,1fr)]">
+        <section className={cardShell("min-h-full overflow-visible shadow-[0_30px_90px_rgba(0,0,0,0.35)]")}>
+          <div className="grid min-h-full lg:grid-cols-[240px_minmax(0,1fr)]">
             <aside className="overflow-y-auto overflow-x-hidden border-b border-slate-800/90 bg-[linear-gradient(180deg,rgba(12,18,32,0.98),rgba(7,13,24,0.98))] lg:border-b-0 lg:border-r">
               <div className="flex items-center gap-3 border-b border-slate-800/90 px-5 py-5">
                 <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-400/20 bg-cyan-500/10">
@@ -929,7 +929,7 @@ export default function VoiceConsoleClient({
               </div>
             </aside>
 
-            <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] min-w-0 overflow-hidden bg-[linear-gradient(180deg,rgba(9,16,30,0.98),rgba(4,8,18,1))]">
+            <div className="grid min-h-full grid-rows-[auto_minmax(0,1fr)] min-w-0 overflow-visible bg-[linear-gradient(180deg,rgba(9,16,30,0.98),rgba(4,8,18,1))]">
               <div className="border-b border-slate-800/90 px-4 py-4 sm:px-5 lg:px-6">
                 <div className="flex flex-col gap-4">
                   <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -1021,7 +1021,7 @@ export default function VoiceConsoleClient({
                 </div>
               </div>
 
-              <div className="min-w-0 overflow-hidden px-4 py-5 sm:px-5 lg:px-6">
+              <div className="min-w-0 overflow-visible px-4 py-5 sm:px-5 lg:px-6">
                 {activeTab === "operations" ? (
                   <section className="grid h-full min-h-0 gap-4 overflow-hidden xl:grid-cols-[340px_minmax(0,1fr)_380px] xl:items-start">
                     <aside className="min-w-0 space-y-4 overflow-y-auto overflow-x-hidden pr-1">
