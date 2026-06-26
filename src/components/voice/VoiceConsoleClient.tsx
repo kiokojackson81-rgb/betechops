@@ -8,9 +8,11 @@ import {
   History,
   Mic,
   MoreHorizontal,
+  Plus,
   PhoneCall,
   PhoneOff,
   Radio,
+  Search,
   Settings2,
   Users,
 } from "lucide-react";
@@ -858,12 +860,12 @@ export default function VoiceConsoleClient({
           <div className="grid h-full min-h-0 lg:grid-cols-[240px_minmax(0,1fr)]">
             <aside className="overflow-y-auto overflow-x-hidden border-b border-slate-800/90 bg-[linear-gradient(180deg,rgba(12,18,32,0.98),rgba(7,13,24,0.98))] lg:border-b-0 lg:border-r">
               <div className="flex items-center gap-3 border-b border-slate-800/90 px-5 py-5">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]">
-                  <Grip className="h-5 w-5 text-slate-200" />
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-400/20 bg-cyan-500/10">
+                  <PhoneCall className="h-5 w-5 text-cyan-100" />
                 </div>
                 <div>
                   <div className="text-lg font-semibold text-white">BetechOps</div>
-                  <div className="text-sm text-slate-400">Unified Admin</div>
+                  <div className="text-sm text-slate-400">Voice Operations</div>
                 </div>
               </div>
 
@@ -929,31 +931,44 @@ export default function VoiceConsoleClient({
 
             <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] min-w-0 overflow-hidden bg-[linear-gradient(180deg,rgba(9,16,30,0.98),rgba(4,8,18,1))]">
               <div className="border-b border-slate-800/90 px-4 py-4 sm:px-5 lg:px-6">
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-400/20 bg-cyan-400/10 text-cyan-100">
-                      <PhoneCall className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="truncate text-2xl font-semibold tracking-tight text-white">
-                        {title || "Voice Center"}
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                    <div className="flex min-w-0 flex-1 flex-col gap-3 lg:flex-row lg:items-center">
+                      <div className="flex min-w-0 flex-1 items-center gap-3 rounded-[22px] border border-slate-800/90 bg-slate-950/80 px-4 py-3">
+                        <Search className="h-4.5 w-4.5 shrink-0 text-slate-500" />
+                        <input
+                          value={activeTab === "recent" ? recentSearch : queueSearch}
+                          onChange={(event) =>
+                            activeTab === "recent" ? setRecentSearch(event.target.value) : setQueueSearch(event.target.value)
+                          }
+                          placeholder="Search customer or number..."
+                          className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
+                        />
+                        <span className="hidden rounded-xl border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-slate-400 sm:inline-flex">
+                          Ctrl K
+                        </span>
                       </div>
-                      <div className="truncate text-sm text-slate-400">
-                        {activeTab === "operations" ? subtitle || "Voice operations workspace" : activeTabDescriptionMap[activeTab]}
-                      </div>
-                    </div>
-                  </div>
 
-                  <div className="flex flex-col gap-3 xl:items-end">
-                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          switchTab("operations");
+                          setShowWorkspaceDialPad(true);
+                        }}
+                        className="inline-flex items-center justify-center gap-2 rounded-[22px] border border-cyan-500/40 bg-cyan-500/15 px-5 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400 hover:bg-cyan-500/20"
+                      >
+                        <Plus className="h-4.5 w-4.5" />
+                        Outbound Call
+                      </button>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 xl:justify-end">
                       <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-sm">
-                        <span className="text-slate-500">Browser:</span>
                         <RegistrationBadge />
                       </div>
                       <span className={`rounded-full border px-3 py-2 text-sm font-semibold ${statusTone(liveStatus)}`}>
                         {liveStatus === "live" ? "Live" : liveStatus === "connecting" ? "Connecting" : "Offline"}
                       </span>
-                      <span className="text-sm text-slate-500">Status:</span>
                       <select
                         value={statusSelectValue}
                         onChange={(event) =>
@@ -968,6 +983,30 @@ export default function VoiceConsoleClient({
                           </option>
                         ))}
                       </select>
+                      <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-slate-300">
+                        {new Date(lastRefreshAt || Date.now()).toLocaleTimeString("en-KE", {
+                          timeZone: "Africa/Nairobi",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          second: "2-digit",
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-400/20 bg-cyan-400/10 text-cyan-100">
+                        <Grip className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="truncate text-2xl font-semibold tracking-tight text-white">
+                          {title || "Voice Center"}
+                        </div>
+                        <div className="truncate text-sm text-slate-400">
+                          {activeTab === "operations" ? subtitle || "Voice operations workspace" : activeTabDescriptionMap[activeTab]}
+                        </div>
+                      </div>
                     </div>
 
                     <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
