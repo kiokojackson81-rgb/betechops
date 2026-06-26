@@ -37,13 +37,13 @@ function FloatingActionButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`flex flex-col items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${
+      className={`flex flex-col items-center gap-1.5 rounded-xl border px-2 py-2 text-[11px] font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${
         active
           ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
           : "border-white/10 bg-white/[0.03] text-slate-100 hover:border-white/20"
       }`}
     >
-      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900/90">{icon}</span>
+      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900/90">{icon}</span>
       <span>{label}</span>
     </button>
   );
@@ -101,10 +101,10 @@ export default function BrowserPhone() {
   }, [isIncomingCall, softphone]);
 
   return (
-    <div className={`fixed bottom-6 right-6 ${drawerOpen ? "z-[30]" : "z-[40]"}`}>
+    <div className={`fixed bottom-3 right-3 sm:bottom-6 sm:right-6 ${drawerOpen ? "z-[30]" : "z-[40]"}`}>
       <div className="relative flex flex-col items-end gap-3">
         {!softphone.isCollapsed ? (
-          <div className="max-h-[calc(100vh-80px)] w-[min(calc(100vw-24px),420px)] overflow-hidden rounded-[24px] border border-slate-800/90 bg-slate-950/98 shadow-[0_18px_54px_rgba(0,0,0,0.42)]">
+          <div className="max-h-[calc(100vh-80px)] w-[calc(100vw-24px)] max-w-[420px] overflow-y-auto overflow-x-hidden rounded-[24px] border border-slate-800/90 bg-slate-950/98 shadow-[0_18px_54px_rgba(0,0,0,0.42)] sm:max-h-[calc(100vh-120px)] sm:w-[min(420px,calc(100vw-32px))]">
             <div className="flex items-start justify-between gap-3 border-b border-slate-800 px-4 py-4">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300">
@@ -134,7 +134,7 @@ export default function BrowserPhone() {
               </div>
             </div>
 
-            <div className="max-h-[calc(100vh-160px)] space-y-4 overflow-y-auto p-4">
+            <div className="space-y-4 p-4">
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
@@ -152,52 +152,13 @@ export default function BrowserPhone() {
                 </span>
               </div>
 
-              <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-xs font-medium text-slate-400">Dial</div>
-                    <div className="mt-1 truncate text-2xl font-semibold tracking-[0.18em] text-white">
-                      {softphone.dialedDigits || "Enter number"}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={softphone.backspaceDigit}
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-800 bg-slate-950/80 text-slate-100 transition hover:border-slate-600"
-                    aria-label="Backspace"
-                  >
-                    <Delete className="h-4 w-4" />
-                  </button>
-                </div>
-
-                <div className="mt-4 grid grid-cols-3 gap-2">
-                  {DIGITS.map((digit) => (
-                    <button
-                      key={digit}
-                      type="button"
-                      onClick={() => {
-                        softphone.appendDigit(digit);
-                        if (softphone.currentCall) softphone.sendDtmf(digit);
-                      }}
-                      className="rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-4 text-lg font-semibold text-white transition hover:border-cyan-400/40 hover:bg-cyan-500/10"
-                    >
-                      {digit}
-                    </button>
-                  ))}
-                </div>
-
-                <button
-                  type="button"
+              <div className="grid grid-cols-5 gap-2">
+                <FloatingActionButton
+                  label="Call"
+                  icon={<Phone className="h-4.5 w-4.5" />}
                   onClick={() => softphone.startOutgoingCall()}
                   disabled={!softphone.dialedDigits}
-                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Phone className="h-4.5 w-4.5" />
-                  Call
-                </button>
-              </div>
-
-              <div className="grid grid-cols-4 gap-2">
+                />
                 <FloatingActionButton
                   label={softphone.currentCall?.muted ? "Unmute" : "Mute"}
                   icon={<Mic className="h-4.5 w-4.5" />}
@@ -227,8 +188,58 @@ export default function BrowserPhone() {
               </div>
 
               {showKeypad ? (
-                <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3 text-xs text-slate-400">
-                  Use the keypad above to enter digits or send DTMF during a live call.
+                <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Dial</div>
+                      <div className="mt-1 truncate text-xl font-semibold tracking-[0.14em] text-white">
+                        {softphone.dialedDigits || "Enter number"}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={softphone.backspaceDigit}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-800 bg-slate-950/80 text-slate-100 transition hover:border-slate-600"
+                        aria-label="Backspace"
+                      >
+                        <Delete className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowKeypad(false)}
+                        className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] font-semibold text-slate-300 transition hover:border-white/20 hover:text-white"
+                      >
+                        Hide keypad
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    {DIGITS.map((digit) => (
+                      <button
+                        key={digit}
+                        type="button"
+                        onClick={() => {
+                          softphone.appendDigit(digit);
+                          if (softphone.currentCall) softphone.sendDtmf(digit);
+                        }}
+                        className="flex h-14 items-center justify-center rounded-xl border border-slate-800 bg-slate-950/80 px-3 text-base font-semibold text-white transition hover:border-cyan-400/40 hover:bg-cyan-500/10"
+                      >
+                        {digit}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => softphone.startOutgoingCall()}
+                    disabled={!softphone.dialedDigits}
+                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Phone className="h-4.5 w-4.5" />
+                    Call
+                  </button>
                 </div>
               ) : null}
 
