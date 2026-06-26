@@ -15,9 +15,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <VoiceSoftphoneShell>
       <div className="min-h-screen bg-[var(--bg,#0f131b)] text-slate-100">
-        {/* Sticky top system status + nav bar */}
+        {/* Admin nav in normal document flow */}
         <AdminHeaderShell>
-          <div className="border-b border-white/10 bg-[var(--panel,#121723)] backdrop-blur supports-[backdrop-filter]:bg-[color-mix(in_srgb,var(--panel)#121723,transparent_15%)]">
+          <div className="border-b border-white/10 bg-[var(--panel,#121723)]">
             <AdminNavContainer />
           </div>
         </AdminHeaderShell>

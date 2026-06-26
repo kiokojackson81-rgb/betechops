@@ -11,5 +11,5 @@ export default function AdminHeaderShell({ children }: { children: React.ReactNo
     return null;
   }
 
-  return <div className="sticky top-0 z-50 shadow-lg shadow-black/30">{children}</div>;
+  return <div className="relative shadow-lg shadow-black/30">{children}</div>;
 }
