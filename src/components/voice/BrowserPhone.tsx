@@ -68,10 +68,10 @@ export default function BrowserPhone() {
   }, [softphone]);
 
   return (
-    <div className={`fixed bottom-4 right-4 ${drawerOpen ? "z-[30]" : "z-[40]"}`}>
+    <div className={`fixed bottom-20 right-4 ${drawerOpen ? "z-[30]" : "z-[40]"}`}>
       <div className="relative flex flex-col items-end gap-3">
         {!softphone.isCollapsed ? (
-          <div className="max-h-[70vh] w-[min(calc(100vw-24px),320px)] overflow-hidden rounded-[24px] border border-slate-800/90 bg-slate-950/98 shadow-[0_18px_54px_rgba(0,0,0,0.42)]">
+          <div className="max-h-[65vh] w-[min(calc(100vw-24px),220px)] overflow-hidden rounded-[22px] border border-slate-800/90 bg-slate-950/98 shadow-[0_18px_54px_rgba(0,0,0,0.42)]">
             <div className="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
               <div className="min-w-0">
                 <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Browser Phone</div>
@@ -232,16 +232,16 @@ export default function BrowserPhone() {
         <button
           type="button"
           onClick={() => softphone.setCollapsed(!softphone.isCollapsed)}
-          className="group inline-flex h-12 items-center gap-3 rounded-full border border-slate-800 bg-slate-950/98 px-3.5 text-slate-100 shadow-[0_16px_40px_rgba(0,0,0,0.38)] transition hover:border-slate-700"
+          className="group inline-flex h-11 items-center gap-2 rounded-full border border-slate-800 bg-slate-950/98 px-3 text-slate-100 shadow-[0_16px_40px_rgba(0,0,0,0.38)] transition hover:border-slate-700"
           aria-label={softphone.isCollapsed ? "Open browser softphone" : "Minimize browser softphone"}
         >
-          <span className="relative inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-900/90">
-            {softphone.isCollapsed ? <Headset className="h-5 w-5" /> : <X className="h-4.5 w-4.5" />}
+          <span className="relative inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-900/90">
+            {softphone.isCollapsed ? <Headset className="h-4.5 w-4.5" /> : <X className="h-4 w-4" />}
             <span className={`absolute bottom-0.5 right-0.5 h-2.5 w-2.5 rounded-full border border-slate-950 ${statusTone}`} />
           </span>
           <span className="hidden min-w-0 text-left sm:block">
             <span className="block text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Phone</span>
-            <span className="block max-w-[140px] truncate text-sm font-semibold text-white">
+            <span className="block max-w-[120px] truncate text-sm font-semibold text-white">
               {softphone.currentCall ? softphone.currentCall.displayName : widgetStatusLabel}
             </span>
           </span>

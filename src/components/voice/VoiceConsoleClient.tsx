@@ -884,22 +884,22 @@ export default function VoiceConsoleClient({
         ) : null}
 
         <section className={cardShell("min-h-full overflow-visible shadow-[0_30px_90px_rgba(0,0,0,0.35)]")}>
-          <div className="grid min-h-full lg:grid-cols-[240px_minmax(0,1fr)]">
+          <div className="grid min-h-full lg:grid-cols-[200px_minmax(0,1fr)]">
             <aside className="overflow-y-auto overflow-x-hidden border-b border-slate-800/90 bg-[linear-gradient(180deg,rgba(12,18,32,0.98),rgba(7,13,24,0.98))] lg:border-b-0 lg:border-r">
-              <div className="flex items-center gap-3 border-b border-slate-800/90 px-5 py-5">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-400/20 bg-cyan-500/10">
-                  <PhoneCall className="h-5 w-5 text-cyan-100" />
+              <div className="flex items-center gap-2 border-b border-slate-800/90 px-4 py-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-400/20 bg-cyan-500/10">
+                  <PhoneCall className="h-4.5 w-4.5 text-cyan-100" />
                 </div>
                 <div>
-                  <div className="text-lg font-semibold text-white">BetechOps</div>
-                  <div className="text-sm text-slate-400">Voice Operations</div>
+                  <div className="text-base font-semibold text-white">BetechOps</div>
+                  <div className="text-xs text-slate-400">Voice Ops</div>
                 </div>
               </div>
 
-              <div className="space-y-6 px-4 py-5">
+              <div className="space-y-5 px-3 py-4">
                 <div>
                   <div className="px-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Main</div>
-                  <div className="mt-3 space-y-1.5">
+                  <div className="mt-2 space-y-1">
                     {consoleNav.map((item) => {
                       const Icon = item.icon;
                       const isActive = activeTab === item.key;
@@ -908,48 +908,48 @@ export default function VoiceConsoleClient({
                           key={item.key}
                           type="button"
                           onClick={() => switchTab(item.key)}
-                          className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left transition ${
+                          className={`flex w-full items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition ${
                             isActive
                               ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
                               : "border-transparent text-slate-300 hover:border-white/10 hover:bg-white/[0.03]"
                           }`}
                         >
-                          <Icon className="h-4.5 w-4.5 shrink-0" />
-                          <span className="text-sm font-medium">{item.label}</span>
+                          <Icon className="h-4 w-4 shrink-0" />
+                          <span className="text-[13px] font-medium">{item.label}</span>
                         </button>
                       );
                     })}
                   </div>
                 </div>
 
-                <div className="border-t border-slate-800/90 pt-5">
+                <div className="border-t border-slate-800/90 pt-4">
                   <div className="px-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Quick Actions</div>
-                  <div className="mt-3 space-y-1.5">
+                  <div className="mt-2 space-y-1">
                     <button
                       type="button"
                       onClick={() => {
                         switchTab("operations");
                         setShowWorkspaceDialPad(true);
                       }}
-                      className="flex w-full items-center gap-3 rounded-2xl border border-transparent px-3 py-3 text-left text-slate-300 transition hover:border-white/10 hover:bg-white/[0.03]"
+                      className="flex w-full items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-left text-slate-300 transition hover:border-white/10 hover:bg-white/[0.03]"
                     >
-                      <PhoneCall className="h-4.5 w-4.5 shrink-0" />
-                      <span className="text-sm font-medium">Open Dialer</span>
+                      <PhoneCall className="h-4 w-4 shrink-0" />
+                      <span className="text-[13px] font-medium">Open Dialer</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => switchTab("followups")}
-                      className="flex w-full items-center gap-3 rounded-2xl border border-transparent px-3 py-3 text-left text-slate-300 transition hover:border-white/10 hover:bg-white/[0.03]"
+                      className="flex w-full items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-left text-slate-300 transition hover:border-white/10 hover:bg-white/[0.03]"
                     >
-                      <ClipboardList className="h-4.5 w-4.5 shrink-0" />
-                      <span className="text-sm font-medium">Create Follow-up</span>
+                      <ClipboardList className="h-4 w-4 shrink-0" />
+                      <span className="text-[13px] font-medium">Follow-up</span>
                     </button>
                     <a
                       href={selectedCustomerLinks.callBack}
-                      className="flex w-full items-center gap-3 rounded-2xl border border-transparent px-3 py-3 text-left text-slate-300 transition hover:border-white/10 hover:bg-white/[0.03]"
+                      className="flex w-full items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-left text-slate-300 transition hover:border-white/10 hover:bg-white/[0.03]"
                     >
-                      <PhoneOff className="h-4.5 w-4.5 shrink-0" />
-                      <span className="text-sm font-medium">Call Back</span>
+                      <PhoneOff className="h-4 w-4 shrink-0" />
+                      <span className="text-[13px] font-medium">Call Back</span>
                     </a>
                   </div>
                 </div>
@@ -1064,7 +1064,7 @@ export default function VoiceConsoleClient({
 
               <div className="min-w-0 overflow-visible px-4 py-5 sm:px-5 lg:px-6">
                 {activeTab === "operations" ? (
-                  <section className="grid h-full min-h-0 gap-4 overflow-visible xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
+                  <section className="grid h-full min-h-0 gap-4 overflow-visible xl:grid-cols-[minmax(0,1fr)_312px] xl:items-start">
                     <section className="min-w-0 space-y-4">
                       <div className={cardShell("p-5")}>
                         <div className="flex items-start justify-between gap-4">
@@ -1078,12 +1078,12 @@ export default function VoiceConsoleClient({
                               ) : null}
                             </div>
                             <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-center">
-                              <div className="flex h-24 w-24 items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-500/10 text-emerald-100">
-                                <PhoneCall className="h-10 w-10" />
+                              <div className="flex h-20 w-20 items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-500/10 text-emerald-100">
+                                <PhoneCall className="h-9 w-9" />
                               </div>
                               <div className="min-w-0">
-                                <div className="truncate text-4xl font-semibold tracking-tight text-white">{selectedCallLabel}</div>
-                                <div className="mt-2 text-base text-slate-400">
+                                <div className="truncate text-3xl font-semibold tracking-tight text-white">{selectedCallLabel}</div>
+                                <div className="mt-2 text-sm text-slate-400">
                                   {selectedContextData?.location || selectedCall?.customer.location || "Customer location not captured"}
                                 </div>
                                 {selectedCall ? (
@@ -1097,14 +1097,14 @@ export default function VoiceConsoleClient({
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="text-2xl font-medium text-slate-300">{selectedCall ? formatDuration(selectedCall.durationInSeconds) : "00:00"}</div>
+                            <div className="text-xl font-medium text-slate-300">{selectedCall ? formatDuration(selectedCall.durationInSeconds) : "00:00"}</div>
                             <div className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-500">
                               {selectedCall ? formatDateTime(selectedCall.startedAt || selectedCall.createdAt) : "No active interaction"}
                             </div>
                           </div>
                         </div>
 
-                        <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                           {[
                             { label: softphone.currentCall?.muted ? "Unmute" : "Mute", onClick: softphone.toggleMute, icon: Mic },
                             { label: softphone.currentCall?.held ? "Resume" : "Hold", onClick: softphone.toggleHold, icon: PhoneOff },
@@ -1119,166 +1119,180 @@ export default function VoiceConsoleClient({
                                 type="button"
                                 onClick={action.onClick}
                                 disabled={!selectedCall && action.label !== "Keypad"}
-                                className="flex flex-col items-center justify-center gap-2 rounded-[20px] border border-slate-800 bg-slate-900/70 px-4 py-4 text-center text-sm font-medium text-slate-100 transition hover:border-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="flex flex-col items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-3 text-center text-sm font-medium text-slate-100 transition hover:border-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
                               >
-                                <Icon className="h-5 w-5" />
+                                <Icon className="h-4.5 w-4.5" />
                                 <span>{action.label}</span>
                               </button>
                             );
                           })}
                         </div>
 
-                        <div className="mt-5 flex flex-wrap gap-3">
+                        <div className="mt-4 flex flex-wrap gap-3">
                           <button
                             type="button"
                             onClick={softphone.hangUp}
                             disabled={!selectedCall}
-                            className="min-w-[220px] rounded-full border border-rose-500/40 bg-rose-600 px-6 py-3 text-base font-semibold text-white transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="min-w-[180px] rounded-full border border-rose-500/40 bg-rose-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             End Call
                           </button>
                           <a
                             href={selectedCustomerLinks.callBack}
-                            className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-400"
+                            className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-400"
                           >
                             Call Back
                           </a>
-                          <button
-                            type="button"
-                            onClick={() => switchTab("recent")}
-                            className="rounded-full border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/20"
-                          >
-                            Full History
-                          </button>
                         </div>
 
                         {showWorkspaceDialPad ? (
-                          <div className="mt-5 rounded-[22px] border border-slate-800 bg-slate-900/70 p-4">
+                          <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900/70 p-4">
                             <DialPad compact />
                           </div>
                         ) : null}
+                      </div>
 
-                        <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                          {contextQuickCards.map((item) => (
-                            <div key={item.label} className="rounded-[20px] border border-slate-800 bg-slate-900/55 p-4">
-                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{item.label}</div>
-                              <div className="mt-2 text-sm font-semibold text-white">{item.value}</div>
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="mt-6 rounded-[22px] border border-slate-800 bg-slate-900/55 p-4">
+                      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+                        <section className={cardShell("p-5")}>
                           <div className="flex items-center justify-between gap-3">
                             <div>
-                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Live calls</div>
-                              <div className="mt-1 text-lg font-semibold text-white">Active focus list</div>
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Customer Context</div>
+                              <div className="mt-1 text-lg font-semibold text-white">Selected caller</div>
                             </div>
-                            <span className="rounded-full border border-slate-800 bg-slate-950/80 px-3 py-1 text-xs text-slate-300">
-                              {activeCallPreview.length}
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => openDetailModal("customer")}
+                              disabled={!selectedCall}
+                              className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              Open
+                            </button>
                           </div>
-                          <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                            {activeCallPreview.length ? (
-                              activeCallPreview.map((call) => (
-                                <div
-                                  key={call.id}
-                                  className={`rounded-[20px] border p-4 transition ${
-                                    selectedCall?.id === call.id
-                                      ? "border-cyan-500/35 bg-cyan-500/[0.09]"
-                                      : "border-slate-800 bg-slate-950/60"
-                                  }`}
-                                >
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div className="min-w-0">
-                                      <div className="truncate text-base font-semibold text-white">
-                                        {call.customer.customerName || call.callerNumber}
-                                      </div>
-                                      <div className="mt-1 truncate text-sm text-slate-400">
-                                        {call.callerNumber} · {call.assignedToName || call.routedToDisplay || "Unassigned"}
-                                      </div>
-                                    </div>
-                                    <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusTone(call.status)}`}>
-                                      {call.statusLabel}
-                                    </span>
-                                  </div>
-                                  <div className="mt-3 flex gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleSelectCall(call.id, call.callerNumber)}
-                                      className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
-                                    >
-                                      Select
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => openDetailModal("customer", call.id, call.callerNumber)}
-                                      className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
-                                    >
-                                      Open
-                                    </button>
-                                  </div>
-                                </div>
-                              ))
-                            ) : (
-                              <div className="rounded-2xl border border-dashed border-slate-800 px-4 py-8 text-sm text-slate-500 lg:col-span-2">
-                                No live calls at the moment.
+
+                          <div className="mt-4 grid gap-3 md:grid-cols-2">
+                            {contextQuickCards.map((item) => (
+                              <div key={item.label} className="rounded-xl border border-slate-800 bg-slate-900/55 p-4">
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{item.label}</div>
+                                <div className="mt-2 text-sm font-semibold text-white">{item.value}</div>
                               </div>
-                            )}
+                            ))}
                           </div>
-                        </div>
+
+                          <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900/55 p-4">
+                            <div className="text-sm font-semibold text-white">Recent Activity</div>
+                            <div className="mt-3 space-y-3">
+                              {timelineItems.slice(0, 3).length ? (
+                                timelineItems.slice(0, 3).map((item: any) => (
+                                  <div key={item.id} className="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3">
+                                    <div className="text-sm font-semibold text-white">{item.title}</div>
+                                    <div className="mt-1 text-xs text-slate-400">
+                                      {item.detail || "No extra detail"} · {formatDateTime(item.at)}
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="rounded-xl border border-dashed border-slate-800 px-3 py-6 text-sm text-slate-500">
+                                  No previous interactions. This may be a new customer.
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </section>
+
+                        <section className="space-y-4">
+                          <div className={cardShell("p-5")}>
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Notes</div>
+                            <div className="mt-1 text-lg font-semibold text-white">Quick note</div>
+                            <textarea
+                              value={noteDraft}
+                              onChange={(event) => setNoteDraft(event.target.value)}
+                              rows={5}
+                              placeholder="Add a note about this call..."
+                              className="mt-4 w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/40"
+                            />
+                            <button
+                              type="button"
+                              disabled={!selectedCall?.id || submittingNote || !noteDraft.trim()}
+                              onClick={handleAddNote}
+                              className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {submittingNote ? "Saving..." : "Save Note"}
+                            </button>
+                          </div>
+
+                          <div className={cardShell("p-5")}>
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Follow-up</div>
+                            <div className="mt-1 text-lg font-semibold text-white">Schedule next action</div>
+                            <input
+                              value={followUpTitle}
+                              onChange={(event) => setFollowUpTitle(event.target.value)}
+                              placeholder="Callback customer about quotation"
+                              className="mt-4 w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/40"
+                            />
+                            <input
+                              value={followUpDueAt}
+                              onChange={(event) => setFollowUpDueAt(event.target.value)}
+                              type="datetime-local"
+                              className="mt-3 w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-cyan-500/40"
+                            />
+                            <textarea
+                              value={followUpNotes}
+                              onChange={(event) => setFollowUpNotes(event.target.value)}
+                              rows={4}
+                              placeholder="Follow-up notes or supervisor instruction"
+                              className="mt-3 w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/40"
+                            />
+                            <button
+                              type="button"
+                              disabled={submittingFollowUp || !followUpTitle.trim()}
+                              onClick={handleCreateFollowUp}
+                              className="mt-3 w-full rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {submittingFollowUp ? "Saving..." : "Create Follow-up"}
+                            </button>
+                          </div>
+                        </section>
                       </div>
+
                       <section className={cardShell("p-5")}>
                         <div className="flex items-center justify-between gap-3">
                           <div>
-                            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Recent Call History</div>
-                            <h2 className="mt-1 text-xl font-semibold text-white">Latest interactions</h2>
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Agent Availability</div>
+                            <div className="mt-1 text-lg font-semibold text-white">Routing visibility</div>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => switchTab("recent")}
-                            className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
-                          >
-                            View all
-                          </button>
+                          <div className="text-sm font-semibold text-emerald-300">
+                            {visibleAgents.filter((agent: any) => agent.status === "AVAILABLE").length}/{visibleAgents.length} Online
+                          </div>
                         </div>
-                        <div className="mt-4 overflow-x-auto">
-                          <div className="min-w-[720px] rounded-2xl border border-slate-800 bg-slate-900/60">
-                            <div className="grid grid-cols-[110px_1.4fr_0.9fr_110px_120px] gap-3 border-b border-slate-800 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                              <div>Time</div>
-                              <div>Caller</div>
-                              <div>Agent</div>
-                              <div>Status</div>
-                              <div>Action</div>
-                            </div>
-                            {filteredRecentCalls.slice(0, 6).length ? (
-                              filteredRecentCalls.slice(0, 6).map((call) => (
-                                <div key={call.id} className="grid grid-cols-[110px_1.4fr_0.9fr_110px_120px] gap-3 border-b border-slate-800/80 px-4 py-4 text-sm last:border-b-0">
-                                  <div className="whitespace-nowrap text-slate-300">{formatTimeOnly(call.startedAt || call.createdAt)}</div>
-                                  <div className="min-w-0">
-                                    <div className="truncate font-semibold text-white">{call.customer.customerName || call.callerNumber}</div>
-                                    <div className="truncate text-slate-400">{call.callerNumber}</div>
+                        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                          {visibleAgents.length ? (
+                            visibleAgents.map((agent) => {
+                              const row = agent as any;
+                              return (
+                                <div key={row.id} className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-400/20 bg-cyan-400/10 text-sm font-semibold text-cyan-100">
+                                      {getInitials(row.displayName || row.name)}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="truncate text-sm font-semibold text-white">{row.displayName || row.name}</div>
+                                      <div className="truncate text-xs text-slate-400">{row.displayRoleLabel}</div>
+                                    </div>
                                   </div>
-                                  <div className="truncate text-slate-300">{call.assignedToName || call.routedToDisplay || "Unassigned"}</div>
-                                  <div>
-                                    <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusTone(call.status)}`}>
-                                      {call.statusLabel}
+                                  <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-400">
+                                    <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusTone(row.status)}`}>
+                                      {row.status}
                                     </span>
-                                  </div>
-                                  <div>
-                                    <button
-                                      type="button"
-                                      onClick={() => openDetailModal("customer", call.id, call.callerNumber)}
-                                      className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
-                                    >
-                                      Open
-                                    </button>
+                                    <span>{row.isWebrtcRegistered ? "Browser ready" : "Offline"}</span>
                                   </div>
                                 </div>
-                              ))
-                            ) : (
-                              <div className="px-4 py-8 text-sm text-slate-500">No recent calls match the current filter.</div>
-                            )}
-                          </div>
+                              );
+                            })
+                          ) : (
+                            <div className="rounded-xl border border-dashed border-slate-800 px-4 py-8 text-sm text-slate-500 md:col-span-2 xl:col-span-3">
+                              No routing agents available yet.
+                            </div>
+                          )}
                         </div>
                       </section>
                     </section>
@@ -1287,15 +1301,15 @@ export default function VoiceConsoleClient({
                       <div className={cardShell("p-4")}>
                         <div className="flex items-center justify-between gap-3">
                           <div>
-                            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Incoming Queue</div>
-                            <div className="mt-1 text-lg font-semibold text-white">Compact preview</div>
+                            <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Incoming Queue</div>
+                            <div className="mt-1 text-base font-semibold text-white">Compact preview</div>
                           </div>
-                          <span className="rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1 text-xs text-slate-300">
+                          <span className="rounded-full border border-slate-800 bg-slate-900/80 px-2.5 py-1 text-xs text-slate-300">
                             {queueItemsByView.length}
                           </span>
                         </div>
 
-                        <div className="mt-4 flex flex-wrap gap-2">
+                        <div className="mt-3 flex flex-wrap gap-2">
                           {[
                             { key: "all", label: `All (${queueItems.length})` },
                             { key: "waiting", label: `Waiting (${visibleWaitingCalls.length})` },
@@ -1305,7 +1319,7 @@ export default function VoiceConsoleClient({
                               key={item.key}
                               type="button"
                               onClick={() => setQueueView(item.key as typeof queueView)}
-                              className={`rounded-full border px-3 py-2 text-xs font-medium transition ${
+                              className={`rounded-full border px-3 py-1.5 text-[11px] font-medium transition ${
                                 queueView === item.key
                                   ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
                                   : "border-white/10 bg-white/[0.02] text-slate-400 hover:border-white/20 hover:text-slate-200"
@@ -1316,7 +1330,7 @@ export default function VoiceConsoleClient({
                           ))}
                         </div>
 
-                        <div className="mt-4 space-y-3">
+                        <div className="mt-4 space-y-2.5">
                           {queueItemsByView.slice(0, 6).length ? (
                             queueItemsByView.slice(0, 6).map((item) => {
                               const queueItem = item as any;
@@ -1324,36 +1338,40 @@ export default function VoiceConsoleClient({
                               const phone = String(queueItem.callerNumber || queueItem.phone || "");
                               const isCall = Boolean(queueItem.callerNumber);
                               return (
-                                <div key={`${isCall ? "call" : "queue"}-${id}`} className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
-                                  <div className="flex items-start justify-between gap-3">
+                                <div key={`${isCall ? "call" : "queue"}-${id}`} className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+                                  <div className="flex items-center justify-between gap-2">
                                     <div className="min-w-0">
-                                      <div className="truncate font-semibold text-white">{queueItem.customer?.customerName || phone}</div>
-                                      <div className="mt-1 truncate text-sm text-slate-400">
-                                        {queueItem.assignedToName || queueItem.assignedToEmail || queueItem.routedToDisplay || "Unassigned"}
+                                      <div className="truncate text-sm font-semibold text-white">{queueItem.customer?.customerName || phone}</div>
+                                      <div className="truncate text-xs text-slate-400">
+                                        {(queueItem.assignedToName || queueItem.assignedToEmail || queueItem.routedToDisplay || "Unassigned") +
+                                          " · " +
+                                          (isCall
+                                            ? formatTimeOnly(queueItem.startedAt || queueItem.createdAt)
+                                            : formatTimeOnly(queueItem.dueAt || queueItem.updatedAt))}
                                       </div>
                                     </div>
-                                    <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusTone(queueItem.status || queueItem.direction)}`}>
-                                      {isCall ? queueItem.statusLabel : queueItem.statusLabel || queueItem.type}
-                                    </span>
-                                  </div>
-                                  <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
-                                    <span>{isCall ? formatRelative(queueItem.waitingSeconds) : formatTimeOnly(queueItem.dueAt || queueItem.updatedAt)}</span>
                                     <button
                                       type="button"
                                       onClick={() => {
                                         if (!phone) return;
                                         openDetailModal("customer", id, phone);
                                       }}
-                                      className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
+                                      className="shrink-0 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
                                     >
                                       Open
                                     </button>
+                                  </div>
+                                  <div className="mt-2 flex items-center justify-between gap-2">
+                                    <span className="truncate text-xs text-slate-300">{phone}</span>
+                                    <span className={`inline-flex whitespace-nowrap rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusTone(queueItem.status || queueItem.direction)}`}>
+                                      {isCall ? queueItem.statusLabel : queueItem.statusLabel || queueItem.type}
+                                    </span>
                                   </div>
                                 </div>
                               );
                             })
                           ) : (
-                            <div className="rounded-2xl border border-dashed border-slate-800 px-4 py-8 text-sm text-slate-500">
+                            <div className="rounded-xl border border-dashed border-slate-800 px-4 py-8 text-sm text-slate-500">
                               No queue items for this view.
                             </div>
                           )}
@@ -1363,14 +1381,14 @@ export default function VoiceConsoleClient({
                           <button
                             type="button"
                             onClick={() => switchTab("followups")}
-                            className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-white/20"
+                            className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-semibold text-slate-100 transition hover:border-white/20"
                           >
                             Open Follow-ups
                           </button>
                           <button
                             type="button"
                             onClick={() => switchTab("agents")}
-                            className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-white/20"
+                            className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-semibold text-slate-100 transition hover:border-white/20"
                           >
                             Open Agents
                           </button>
@@ -1449,30 +1467,26 @@ export default function VoiceConsoleClient({
                           groupedRecentCalls.map(([bucket, calls]) => (
                             <div key={bucket} className="space-y-3">
                               <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">{bucket}</div>
-                              <div className="max-w-full overflow-x-auto">
-                                <div className="min-w-full rounded-2xl border border-slate-800 bg-slate-900/60">
-                                  <div className="grid grid-cols-[72px_110px_220px_100px_220px_110px_100px_110px_190px] gap-3 border-b border-slate-800 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                              <div className="rounded-2xl border border-slate-800 bg-slate-900/60">
+                                  <div className="grid grid-cols-[72px_84px_minmax(0,1.1fr)_120px_minmax(0,1fr)_110px] gap-3 border-b border-slate-800 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                                     <div>View</div>
                                     <div>Time</div>
                                     <div>Caller</div>
                                     <div>Direction</div>
                                     <div>Agent</div>
                                     <div>Status</div>
-                                    <div>Duration</div>
-                                    <div>Cost</div>
-                                    <div>Actions</div>
                                   </div>
                                   {calls.map((call) => {
                                     const isExpanded = expandedRecentCallId === call.id;
                                     const expandedDetail = isExpanded && selectedCallId === call.id ? data.selectedCallDetail : null;
                                     return (
                                       <div key={call.id} className="border-b border-slate-800/80 last:border-b-0">
-                                        <div className="grid grid-cols-[72px_110px_220px_100px_220px_110px_100px_110px_190px] gap-3 px-4 py-4 transition hover:bg-white/[0.02]">
+                                        <div className="grid grid-cols-[72px_84px_minmax(0,1.1fr)_120px_minmax(0,1fr)_110px] gap-3 px-4 py-4 transition hover:bg-white/[0.02]">
                                           <div className="flex items-center">
                                             <button
                                               type="button"
                                               onClick={() => handleToggleRecentCall(call.id, call.callerNumber)}
-                                              className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-slate-100 transition hover:border-cyan-400/40 hover:bg-cyan-500/10"
+                                              className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-slate-100 transition hover:border-cyan-400/40 hover:bg-cyan-500/10"
                                               aria-expanded={isExpanded}
                                               aria-label={isExpanded ? "Hide call details" : "Show call details"}
                                             >
@@ -1498,17 +1512,6 @@ export default function VoiceConsoleClient({
                                               {call.statusLabel}
                                             </span>
                                           </div>
-                                          <div className="whitespace-nowrap text-sm text-slate-200">{formatDuration(call.durationInSeconds)}</div>
-                                          <div className="whitespace-nowrap text-sm text-slate-200">{formatMoney(call.amount, call.currencyCode)}</div>
-                                          <div className="flex items-center gap-2">
-                                            <button
-                                              type="button"
-                                              onClick={() => handleToggleRecentCall(call.id, call.callerNumber)}
-                                              className="inline-flex whitespace-nowrap rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
-                                            >
-                                              Review
-                                            </button>
-                                          </div>
                                         </div>
 
                                         {isExpanded ? (
@@ -1524,6 +1527,19 @@ export default function VoiceConsoleClient({
                                                     </div>
                                                   </div>
                                                   <div className="flex flex-wrap gap-2">
+                                                    <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
+                                                      Duration {formatDuration(call.durationInSeconds)}
+                                                    </div>
+                                                    <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
+                                                      Cost {formatMoney(call.amount, call.currencyCode)}
+                                                    </div>
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => openDetailModal("customer", call.id, call.callerNumber)}
+                                                      className="inline-flex whitespace-nowrap rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
+                                                    >
+                                                      Review
+                                                    </button>
                                                     <a
                                                       href={call.links.callBack}
                                                       className="inline-flex whitespace-nowrap rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
@@ -1650,7 +1666,6 @@ export default function VoiceConsoleClient({
                                       </div>
                                     );
                                   })}
-                                </div>
                               </div>
                             </div>
                           ))
