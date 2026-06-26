@@ -127,6 +127,12 @@ function normalizeVoiceTab(value: string | null): VoiceConsoleTab {
   return VOICE_CONSOLE_TABS.includes(value as VoiceConsoleTab) ? (value as VoiceConsoleTab) : "operations";
 }
 
+function buildVoiceTabHref(pathname: string, searchParams: URLSearchParams, tab: VoiceConsoleTab) {
+  const params = new URLSearchParams(searchParams.toString());
+  params.set("tab", tab);
+  return `${pathname}?${params.toString()}`;
+}
+
 function isFreshIncomingCall(value: string | null | undefined, maxAgeMs = 5 * 60 * 1000) {
   if (!value) return false;
   const timestamp = new Date(value).getTime();
@@ -209,6 +215,18 @@ export default function VoiceConsoleClient({
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
+  const tabHrefs = useMemo(
+    () => ({
+      operations: buildVoiceTabHref(pathname, new URLSearchParams(searchParams.toString()), "operations"),
+      recent: buildVoiceTabHref(pathname, new URLSearchParams(searchParams.toString()), "recent"),
+      recordings: buildVoiceTabHref(pathname, new URLSearchParams(searchParams.toString()), "recordings"),
+      followups: buildVoiceTabHref(pathname, new URLSearchParams(searchParams.toString()), "followups"),
+      agents: buildVoiceTabHref(pathname, new URLSearchParams(searchParams.toString()), "agents"),
+      settings: buildVoiceTabHref(pathname, new URLSearchParams(searchParams.toString()), "settings"),
+    }),
+    [pathname, searchParams],
+  );
+
   const refreshSnapshot = async (nextCallId?: string | null, nextPhone?: string | null) => {
     const params = new URLSearchParams();
     if (nextCallId) params.set("selectedCallId", nextCallId);
@@ -271,11 +289,10 @@ export default function VoiceConsoleClient({
     return (
       visibleActiveCalls.find((call) => call.id === selectedCallId) ||
       visibleRecentCalls.find((call) => call.id === selectedCallId) ||
-      visibleActiveCalls[0] ||
-      visibleRecentCalls[0] ||
+      (activeTab === "operations" ? visibleActiveCalls[0] || null : null) ||
       null
     );
-  }, [selectedCallId, visibleActiveCalls, visibleRecentCalls]);
+  }, [activeTab, selectedCallId, visibleActiveCalls, visibleRecentCalls]);
 
   const filteredRecentCalls = useMemo(() => {
     const query = recentSearch.trim().toLowerCase();
@@ -738,7 +755,7 @@ export default function VoiceConsoleClient({
                   Voice Calls
                 </span>
                 <Link
-                  href="/admin/communications/voice"
+                  href={tabHrefs.operations}
                   className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
                     activeTab === "operations"
                       ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
@@ -748,15 +765,14 @@ export default function VoiceConsoleClient({
                   Operations Center
                 </Link>
                 {[
-                  ["recent", "Call History"],
-                  ["recordings", "Recordings"],
-                  ["followups", "Follow-ups"],
-                  ["agents", "Agents"],
-                ].map(([key, label]) => (
-                  <button
+                  ["recent", "Call History", tabHrefs.recent],
+                  ["recordings", "Recordings", tabHrefs.recordings],
+                  ["followups", "Follow-ups", tabHrefs.followups],
+                  ["agents", "Agents", tabHrefs.agents],
+                ].map(([key, label, href]) => (
+                  <Link
                     key={key}
-                    type="button"
-                    onClick={() => switchTab(key as VoiceConsoleTab)}
+                    href={href}
                     className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
                       activeTab === key
                         ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
@@ -764,11 +780,10 @@ export default function VoiceConsoleClient({
                     }`}
                   >
                     {label}
-                  </button>
+                  </Link>
                 ))}
-                <button
-                  type="button"
-                  onClick={() => switchTab("settings")}
+                <Link
+                  href={tabHrefs.settings}
                   className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
                     activeTab === "settings"
                       ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
@@ -776,7 +791,7 @@ export default function VoiceConsoleClient({
                   }`}
                 >
                   Softphone Settings
-                </button>
+                </Link>
               </div>
               <div className="flex flex-wrap items-center gap-2 xl:justify-end">
                 <RegistrationBadge />
@@ -1033,7 +1048,7 @@ export default function VoiceConsoleClient({
                   </div>
                 </div>
 
-                <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_320px]">
+                <div className="mt-4 space-y-4">
                   <div className="space-y-4">
                     <CallStatusBar />
                     <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
@@ -1060,6 +1075,7 @@ export default function VoiceConsoleClient({
                           type="button"
                           onClick={softphone.answerCall}
                           className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400"
+                          disabled={!selectedCall}
                         >
                           Answer
                         </button>
@@ -1067,6 +1083,7 @@ export default function VoiceConsoleClient({
                           type="button"
                           onClick={softphone.rejectCall}
                           className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-200 transition hover:border-white/20"
+                          disabled={!selectedCall}
                         >
                           Decline
                         </button>
@@ -1074,6 +1091,7 @@ export default function VoiceConsoleClient({
                           type="button"
                           onClick={softphone.hangUp}
                           className="rounded-full border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-rose-100 transition hover:border-rose-400"
+                          disabled={!selectedCall}
                         >
                           Hang up
                         </button>
@@ -1081,6 +1099,7 @@ export default function VoiceConsoleClient({
                           type="button"
                           onClick={softphone.toggleMute}
                           className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-200 transition hover:border-white/20"
+                          disabled={!selectedCall}
                         >
                           {softphone.currentCall?.muted ? "Unmute" : "Mute"}
                         </button>
@@ -1088,6 +1107,7 @@ export default function VoiceConsoleClient({
                           type="button"
                           onClick={softphone.toggleHold}
                           className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-200 transition hover:border-white/20"
+                          disabled={!selectedCall}
                         >
                           {softphone.currentCall?.held ? "Resume" : "Hold"}
                         </button>
@@ -1099,7 +1119,7 @@ export default function VoiceConsoleClient({
                       ) : null}
                     </div>
 
-                    <div className="grid gap-4 lg:grid-cols-2">
+                    <div className="grid gap-4 xl:grid-cols-2">
                       <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                         <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Call note</label>
                         <textarea
