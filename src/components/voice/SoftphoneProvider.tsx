@@ -92,6 +92,7 @@ const SoftphoneContext = createContext<SoftphoneContextValue | null>(null);
 const NEXT_PUBLIC_VOICE_WEBRTC_ENABLED =
   String(process.env.NEXT_PUBLIC_VOICE_WEBRTC_ENABLED || "").trim().toLowerCase() === "true" ||
   String(process.env.NEXT_PUBLIC_RTC_ENABLED || "").trim().toLowerCase() === "true";
+const SOFTPHONE_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 
 function readStoredPreferences() {
   if (typeof window === "undefined") return DEFAULT_SOFTPHONE_PREFERENCES;
@@ -193,6 +194,8 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
   const didBootstrapAvailabilityRef = useRef(false);
   const currentCallRef = useRef<SoftphoneCall | null>(null);
   const selectedCustomerRef = useRef<SoftphoneCustomerSummary | null>(null);
+  const userAvailabilityRef = useRef<"AVAILABLE" | "OFFLINE">("OFFLINE");
+  const idleTimeoutRef = useRef<number | null>(null);
   const adapterRef = useRef<VoiceWebrtcAdapter | null>(null);
   const webRtcRegistrationRef = useRef<VoiceWebrtcRegistration | null>(null);
   const webRtcModeRef = useRef<"mock" | "webrtc" | "unavailable">("mock");
@@ -410,6 +413,20 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
     setRecentCalls((current) => [call, ...current].slice(0, 24));
   };
 
+  const getPreferredAvailability = () =>
+    userAvailabilityRef.current === "OFFLINE" ? "OFFLINE" : "AVAILABLE";
+
+  const setUserAvailability = (next: "AVAILABLE" | "OFFLINE") => {
+    userAvailabilityRef.current = next;
+    setAvailabilityState(next);
+  };
+
+  const markUserOffline = () => {
+    userAvailabilityRef.current = "OFFLINE";
+    setAvailabilityState("OFFLINE");
+    void syncPresenceNow("OFFLINE");
+  };
+
   const applyWebrtcDerivedState = (
     event: "ready" | "notready" | "incomingcall" | "calling" | "callaccepted" | "hangup" | "offline" | "closed" | "error",
   ) => {
@@ -420,8 +437,24 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
       },
       event,
     );
-    setAvailabilityState(next.availability);
     setState(next.softphoneState);
+    switch (event) {
+      case "incomingcall":
+        setAvailabilityState("RINGING");
+        break;
+      case "calling":
+        setAvailabilityState("BUSY");
+        break;
+      case "callaccepted":
+        setAvailabilityState("TALKING");
+        break;
+      case "hangup":
+      case "ready":
+        setAvailabilityState(getPreferredAvailability());
+        break;
+      default:
+        break;
+    }
   };
 
   const buildCallFromWebrtcSession = (
@@ -566,7 +599,6 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
         }
         setStatusMessage(error || "Africa's Talking WebRTC client failed.");
         setState("ERROR");
-        setAvailabilityState("OFFLINE");
       }),
     ];
 
@@ -576,6 +608,14 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
   };
 
   const setAvailability = (next: SoftphoneAvailabilityState) => {
+    if (next === "OFFLINE") {
+      setUserAvailability("OFFLINE");
+      return;
+    }
+    if (next === "AVAILABLE") {
+      setUserAvailability("AVAILABLE");
+      return;
+    }
     setAvailabilityState(next);
   };
 
@@ -933,9 +973,40 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!session?.user) {
       didBootstrapAvailabilityRef.current = false;
-      setAvailability("OFFLINE");
+      userAvailabilityRef.current = "OFFLINE";
+      setAvailabilityState("OFFLINE");
       setState("NOT_REGISTERED");
     }
+  }, [session?.user]);
+
+  useEffect(() => {
+    if (!session?.user) return;
+    if (typeof window === "undefined") return;
+
+    const resetIdleTimer = () => {
+      if (idleTimeoutRef.current) {
+        window.clearTimeout(idleTimeoutRef.current);
+      }
+      idleTimeoutRef.current = window.setTimeout(() => {
+        if (currentCallRef.current) {
+          resetIdleTimer();
+          return;
+        }
+        markUserOffline();
+      }, SOFTPHONE_IDLE_TIMEOUT_MS);
+    };
+
+    const events: Array<keyof WindowEventMap> = ["pointerdown", "keydown", "mousemove", "scroll", "focus", "touchstart"];
+    events.forEach((eventName) => window.addEventListener(eventName, resetIdleTimer, { passive: true }));
+    resetIdleTimer();
+
+    return () => {
+      events.forEach((eventName) => window.removeEventListener(eventName, resetIdleTimer));
+      if (idleTimeoutRef.current) {
+        window.clearTimeout(idleTimeoutRef.current);
+        idleTimeoutRef.current = null;
+      }
+    };
   }, [session?.user]);
 
   useEffect(() => {
