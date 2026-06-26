@@ -5,6 +5,7 @@ import {
   ChevronUp,
   Delete,
   Headset,
+  LayoutDashboard,
   Mic,
   PauseCircle,
   Phone,
@@ -13,6 +14,7 @@ import {
   RefreshCw,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import RegistrationBadge from "@/components/voice/RegistrationBadge";
@@ -126,6 +128,13 @@ export default function BrowserPhone() {
   const isOffline = !online || softphone.transportMode === "unavailable";
   const canDial = !isOffline && softphone.connectionStatus !== "error";
   const activeCallNumber = softphone.currentCall?.remoteIdentity || callFeedback?.number || softphone.dialedDigits || "No active call";
+  const voiceDashboardHref =
+    String(sessionUser?.role || "").toUpperCase() === "ADMIN" || String(sessionUser?.role || "").toUpperCase() === "SUPERVISOR"
+      ? "/admin/communications/voice"
+      : "/attendant/voice";
+  const isAvailableForCalls = !isOffline && softphone.availability !== "OFFLINE";
+  const readinessLabel = isAvailableForCalls ? "Available" : "Offline";
+  const readinessActionLabel = isAvailableForCalls ? "Go Offline" : "Go Available";
 
   const statusTone = useMemo(() => {
     if (isOffline) return "bg-slate-500";
@@ -140,13 +149,12 @@ export default function BrowserPhone() {
   }, [isOffline, softphone.availability, softphone.connectionStatus, softphone.state]);
 
   const readyLabel = useMemo(() => {
-    if (isOffline) return "Offline";
-    if (softphone.connectionStatus === "error") return "Connection error";
     if (softphone.transportMode === "webrtc" && softphone.connectionStatus === "ready") return "WebRTC ready";
     if (softphone.transportMode === "webrtc") return "WebRTC connecting";
     if (softphone.transportMode === "mock") return "Mobile fallback";
+    if (softphone.connectionStatus === "error") return "Connection error";
     return "Offline";
-  }, [isOffline, softphone.connectionStatus, softphone.transportMode]);
+  }, [softphone.connectionStatus, softphone.transportMode]);
 
   const uiState = useMemo<PhoneUiState>(() => {
     if (softphone.currentCall?.state === "RINGING_OUTBOUND") return "dialing";
@@ -283,6 +291,13 @@ export default function BrowserPhone() {
     setShowDevices(false);
   };
 
+  const handleToggleAvailability = () => {
+    if (!online) return;
+    const nextAvailability = isAvailableForCalls ? "OFFLINE" : "AVAILABLE";
+    softphone.setAvailability(nextAvailability);
+    void softphone.syncPresenceNow(nextAvailability);
+  };
+
   const keypadPanel = (
     <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
       <div className="flex items-start justify-between gap-3">
@@ -354,16 +369,25 @@ export default function BrowserPhone() {
                 </div>
                 <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-white">
                   <span className={`h-2.5 w-2.5 rounded-full ${statusTone}`} />
-                  {readyLabel}
+                  {readinessLabel}
                 </div>
                 {softphone.currentCall ? (
                   <div className="mt-1 truncate text-xs text-slate-400">
                     {softphone.currentCall.displayName} · {softphone.currentCall.remoteIdentity}
                   </div>
-                ) : null}
+                ) : (
+                  <div className="mt-1 truncate text-xs text-slate-400">{readyLabel}</div>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <RegistrationBadge />
+                <Link
+                  href={voiceDashboardHref}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-800 bg-slate-900/80 text-slate-100 transition hover:border-slate-700"
+                  aria-label="Open voice dashboard"
+                >
+                  <LayoutDashboard className="h-4 w-4" />
+                </Link>
                 <button
                   type="button"
                   onClick={() => softphone.setCollapsed(true)}
@@ -379,18 +403,14 @@ export default function BrowserPhone() {
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    if (isOffline) return;
-                    softphone.setAvailability("AVAILABLE");
-                    void softphone.syncPresenceNow("AVAILABLE");
-                  }}
-                  disabled={softphone.availability === "AVAILABLE" || isOffline}
+                  onClick={handleToggleAvailability}
+                  disabled={!online}
                   className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Go Available
+                  {readinessActionLabel}
                 </button>
                 <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
-                  {isOffline ? "Offline" : softphone.availabilityLabel}
+                  {readinessLabel}
                 </span>
               </div>
 
@@ -597,26 +617,29 @@ export default function BrowserPhone() {
               </span>
               <span className="min-w-0">
                 <span className="block text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Phone</span>
-                <span className="block max-w-[132px] truncate text-sm font-semibold text-white">{uiState === "connected" ? timerValue : readyLabel}</span>
+                <span className="block max-w-[132px] truncate text-sm font-semibold text-white">{uiState === "connected" ? timerValue : readinessLabel}</span>
               </span>
             </span>
 
             <div className="hidden items-center gap-2 sm:flex">
               <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[11px] text-slate-300">
-                {isOffline ? "Offline" : softphone.availabilityLabel}
+                {readinessLabel}
               </span>
               <button
                 type="button"
-                onClick={() => {
-                  if (isOffline) return;
-                  softphone.setAvailability("AVAILABLE");
-                  void softphone.syncPresenceNow("AVAILABLE");
-                }}
-                disabled={softphone.availability === "AVAILABLE" || isOffline}
+                onClick={handleToggleAvailability}
+                disabled={!online}
                 className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-100 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Go Available
+                {readinessActionLabel}
               </button>
+              <Link
+                href={voiceDashboardHref}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-slate-100 transition hover:border-white/20"
+                aria-label="Open voice dashboard"
+              >
+                <LayoutDashboard className="h-4 w-4" />
+              </Link>
             </div>
 
             <button
