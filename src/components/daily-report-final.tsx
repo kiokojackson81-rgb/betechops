@@ -117,6 +117,12 @@ type SalesActionQueueItem = {
   carriedForward?: boolean;
 };
 
+type VoiceDeskSummary = {
+  queueCount: number;
+  missedCount: number;
+  followUpCount: number;
+};
+
 const kenyanLocale = "en-KE";
 const kenyaTimeZone = "Africa/Nairobi";
 
@@ -412,6 +418,11 @@ export default function DailyReportFinal() {
   const [pendingAgentOrders, setPendingAgentOrders] = useState<SalesActionAgentOrder[]>([]);
   const [pendingPosReceipts, setPendingPosReceipts] = useState<SalesActionReceipt[]>([]);
   const [pendingPodReceipts, setPendingPodReceipts] = useState<SalesActionReceipt[]>([]);
+  const [voiceDeskSummary, setVoiceDeskSummary] = useState<VoiceDeskSummary>({
+    queueCount: 0,
+    missedCount: 0,
+    followUpCount: 0,
+  });
   const [impersonateId, setImpersonateId] = useState<string | null>(null);
   const [impersonationReady, setImpersonationReady] = useState(false);
   const [resolvedAttendantEmail, setResolvedAttendantEmail] = useState<string | null>(null);
@@ -454,6 +465,7 @@ export default function DailyReportFinal() {
   const quotationsHref = withImpersonateId("/marketing/receipts?tab=quotations", impersonateId);
   const createReceiptHref = withImpersonateId("/receipts?view=create", impersonateId);
   const voiceDashboardHref = withImpersonateId("/attendant/voice", impersonateId);
+  const voiceFollowUpsHref = withImpersonateId("/attendant/voice?tab=followups", impersonateId);
   const productDeskHref = withImpersonateHash("/attendant/daily-report", "product-desk", impersonateId);
   const payslipHref = useMemo(() => {
     const params = new URLSearchParams({ periodKey: selectedPeriodKey });
@@ -470,6 +482,48 @@ export default function DailyReportFinal() {
     const params = new URLSearchParams(window.location.search);
     setImpersonateId(params.get("impersonateId"));
     setImpersonationReady(true);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const syncVoiceDeskSummary = async () => {
+      try {
+        const response = await fetch("/api/voice/live", {
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || cancelled) return;
+
+        const isAdmin = Boolean(payload?.viewer?.isAdmin);
+        const queueCount = isAdmin
+          ? Number(payload?.summary?.missedCalls ?? 0) + Number(payload?.summary?.newVoiceLeads ?? 0)
+          : Number(payload?.summary?.myFollowUps ?? 0);
+        const missedCount = isAdmin
+          ? Number(payload?.summary?.missedCalls ?? 0)
+          : Number(payload?.summary?.myMissedCalls ?? 0);
+
+        setVoiceDeskSummary({
+          queueCount,
+          missedCount,
+          followUpCount: Math.max(queueCount - missedCount, 0),
+        });
+      } catch {
+        if (!cancelled) {
+          setVoiceDeskSummary({
+            queueCount: 0,
+            missedCount: 0,
+            followUpCount: 0,
+          });
+        }
+      }
+    };
+
+    void syncVoiceDeskSummary();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const fetchSavedReceiptsSummary = useCallback(
@@ -1766,11 +1820,11 @@ export default function DailyReportFinal() {
                   onClick: () => setCurrentView("web-orders"),
                 },
                 {
-                  title: "POS Orders / Receipts",
-                  count: pendingPosReceipts.length,
-                  currentPeriod: salesActionBreakdown.pos.current,
-                  carriedForward: salesActionBreakdown.pos.carried,
-                  onClick: () => setCurrentView("receipts"),
+                  title: "Missed Calls / Follow-ups",
+                  count: voiceDeskSummary.queueCount,
+                  currentPeriod: voiceDeskSummary.missedCount,
+                  carriedForward: voiceDeskSummary.followUpCount,
+                  href: voiceFollowUpsHref,
                 },
                 {
                   title: "Quotation Requests",
