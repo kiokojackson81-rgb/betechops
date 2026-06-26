@@ -841,131 +841,169 @@ export default function VoiceConsoleClient({
   const timelineItems = (data.selectedCallDetail?.timeline?.length
     ? data.selectedCallDetail.timeline
     : selectedContextData?.recentTimeline || []) as Array<any>;
+  const activeTabLabelMap: Record<VoiceConsoleTab, string> = {
+    operations: "Operations Center",
+    recent: "Call History",
+    recordings: "Recordings",
+    followups: "Follow-ups",
+    agents: "Agents",
+    settings: "Softphone Settings",
+  };
+  const activeTabDescriptionMap: Record<VoiceConsoleTab, string> = {
+    operations: "Live queue, active call handling, recordings, follow-ups, and routing visibility in one console.",
+    recent: "Review completed and in-progress calls with detailed history, actions, and CRM-linked context.",
+    recordings: "Monitor saved call recordings, playback, and download access across the selected period.",
+    followups: "Track callback work, pending customer actions, and reassignment across the voice desk.",
+    agents: "Watch routing readiness, browser registration, workload, and fallback lines for each routing agent.",
+    settings: "Control browser calling, devices, registration, and operator preferences from one place.",
+  };
 
   return (
     <div className="overflow-x-hidden bg-slate-950 text-slate-100">
       <main
-        className={`mx-auto max-w-[1600px] space-y-4 px-3 pb-10 sm:px-4 lg:px-6 ${
+        className={`mx-auto max-w-[1880px] space-y-5 px-3 pb-10 sm:px-4 lg:px-6 xl:px-8 2xl:px-10 ${
           mode === "admin" ? "pt-24 sm:pt-28" : "pt-4 sm:pt-5"
         }`}
       >
-        <header className={cardShell("px-4 py-4 shadow-[0_18px_48px_rgba(0,0,0,0.28)] sm:px-5")}>
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-100">
-                  Voice Calls
-                </span>
-                <button
-                  type="button"
-                  onClick={() => switchTab("operations")}
-                  className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
-                    activeTab === "operations"
-                      ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
-                      : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20"
-                  }`}
-                >
-                  Operations Center
-                </button>
-                {[
-                  ["recent", "Call History"],
-                  ["recordings", "Recordings"],
-                  ["followups", "Follow-ups"],
-                  ["agents", "Agents"],
-                ].map(([key, label]) => (
+        <header className={cardShell("relative overflow-hidden px-4 py-5 shadow-[0_24px_60px_rgba(0,0,0,0.3)] sm:px-6 xl:px-7")}>
+          <div className="absolute inset-x-0 top-0 h-32 bg-[radial-gradient(circle_at_top_left,rgba(6,182,212,0.12),transparent_48%),radial-gradient(circle_at_top_right,rgba(16,185,129,0.08),transparent_42%)] pointer-events-none" />
+          <div className="relative flex flex-col gap-5">
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(380px,0.9fr)] xl:items-start">
+              <div className="space-y-5">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-100">
+                    Voice Calls
+                  </span>
+                  <span className="rounded-full border border-slate-800 bg-slate-900/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                    {activeTabLabelMap[activeTab]}
+                  </span>
+                </div>
+
+                <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                  <div className="max-w-3xl">
+                    <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                      {activeTabLabelMap[activeTab]}
+                    </h1>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">
+                      {activeTabDescriptionMap[activeTab]}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 px-4 py-3 text-sm text-slate-300 md:min-w-[250px] md:text-right">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Active range</div>
+                    <div className="mt-1 font-semibold text-white">{dateFilterMeta.label}</div>
+                    {dateFilterMeta.detail ? <div className="mt-1 text-xs text-slate-500">{dateFilterMeta.detail}</div> : null}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
                   <button
-                    key={key}
                     type="button"
-                    onClick={() => switchTab(key as VoiceConsoleTab)}
-                    className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
-                      activeTab === key
+                    onClick={() => switchTab("operations")}
+                    className={`rounded-full border px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] transition ${
+                      activeTab === "operations"
                         ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
                         : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20"
                     }`}
                   >
-                    {label}
+                    Operations Center
                   </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => switchTab("settings")}
-                  className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
-                    activeTab === "settings"
-                      ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
-                      : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20"
-                  }`}
-                >
-                  Softphone Settings
-                </button>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-                <div className="flex flex-wrap items-center gap-2 rounded-full border border-slate-800 bg-slate-900/70 p-1">
-                  {([
-                    ["today", "Today"],
-                    ["yesterday", "Yesterday"],
-                    ["week", "This Week"],
-                    ["period", "Trading Period"],
-                  ] as Array<[VoiceDateFilter, string]>).map(([key, label]) => (
+                  {[
+                    ["recent", "Call History"],
+                    ["recordings", "Recordings"],
+                    ["followups", "Follow-ups"],
+                    ["agents", "Agents"],
+                  ].map(([key, label]) => (
                     <button
                       key={key}
                       type="button"
-                      onClick={() => switchDateFilter(key)}
-                      className={`rounded-full px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] transition ${
-                        dateFilter === key
-                          ? "bg-cyan-500/15 text-cyan-100"
-                          : "text-slate-400 hover:bg-white/[0.04] hover:text-slate-200"
+                      onClick={() => switchTab(key as VoiceConsoleTab)}
+                      className={`rounded-full border px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] transition ${
+                        activeTab === key
+                          ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
+                          : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20"
                       }`}
                     >
                       {label}
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => switchTab("settings")}
+                    className={`rounded-full border px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] transition ${
+                      activeTab === "settings"
+                        ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
+                        : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20"
+                    }`}
+                  >
+                    Softphone Settings
+                  </button>
                 </div>
-                <RegistrationBadge />
-                <span
-                  className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${
-                    liveStatus === "live"
-                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
-                      : liveStatus === "connecting"
-                        ? "border-amber-500/30 bg-amber-500/10 text-amber-100"
-                        : "border-rose-500/30 bg-rose-500/10 text-rose-100"
-                  }`}
-                >
-                  {liveStatus === "live" ? "Live" : liveStatus === "connecting" ? "Connecting" : "Offline"}
-                </span>
-                {myPresence ? (
-                  <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${statusTone(myPresence.status)}`}>
-                    {myPresence.status}
-                  </span>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => refreshSnapshot(selectedCallId, selectedPhone).catch(() => setError("Refresh failed."))}
-                  className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400"
-                >
-                  Refresh
-                </button>
+              </div>
+
+              <div className="rounded-[32px] border border-slate-800 bg-slate-900/55 p-4 sm:p-5">
+                <div className="grid gap-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <RegistrationBadge />
+                    <span
+                      className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${
+                        liveStatus === "live"
+                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
+                          : liveStatus === "connecting"
+                            ? "border-amber-500/30 bg-amber-500/10 text-amber-100"
+                            : "border-rose-500/30 bg-rose-500/10 text-rose-100"
+                      }`}
+                    >
+                      {liveStatus === "live" ? "Live" : liveStatus === "connecting" ? "Connecting" : "Offline"}
+                    </span>
+                    {myPresence ? (
+                      <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${statusTone(myPresence.status)}`}>
+                        {myPresence.status}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {([
+                      ["today", "Today"],
+                      ["yesterday", "Yesterday"],
+                      ["week", "This Week"],
+                      ["period", "Trading Period"],
+                    ] as Array<[VoiceDateFilter, string]>).map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => switchDateFilter(key)}
+                        className={`rounded-2xl border px-4 py-3 text-left text-sm font-semibold uppercase tracking-[0.18em] transition ${
+                          dateFilter === key
+                            ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
+                            : "border-slate-800 bg-slate-950/70 text-slate-400 hover:border-slate-700 hover:text-slate-200"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => refreshSnapshot(selectedCallId, selectedPhone).catch(() => setError("Refresh failed."))}
+                      className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-emerald-100 transition hover:border-emerald-400"
+                    >
+                      Refresh
+                    </button>
+                    <div className="text-xs text-slate-500">{formatRefreshStamp(lastRefreshAt)}</div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
-              <div>
-                <h1 className="text-2xl font-semibold text-white">Voice Operations Center</h1>
-                <p className="mt-1 text-sm text-slate-400">
-                  Live queue, active call handling, recordings, follow-ups, and routing visibility in one console.
-                </p>
-                <div className="mt-2 inline-flex rounded-full border border-slate-800 bg-slate-900/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
-                  {dateFilterMeta.label}
-                  {dateFilterMeta.detail ? <span className="ml-2 text-slate-500 normal-case tracking-normal">{dateFilterMeta.detail}</span> : null}
-                </div>
-              </div>
-              <div className="text-xs text-slate-500 xl:text-right">{formatRefreshStamp(lastRefreshAt)}</div>
-            </div>
-
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
               {summaryCards.map((card) => (
-                <div key={card.label} className="rounded-2xl border border-slate-800 bg-slate-900/75 px-3 py-3">
+                <div key={card.label} className="rounded-[24px] border border-slate-800 bg-slate-900/75 px-4 py-4">
                   <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{card.label}</div>
-                  <div className="mt-2 text-xl font-semibold text-white">{card.value}</div>
+                  <div className="mt-3 text-3xl font-semibold leading-none text-white">{card.value}</div>
+                  <div className="mt-2 text-xs text-slate-500">{card.sub}</div>
                 </div>
               ))}
             </div>
