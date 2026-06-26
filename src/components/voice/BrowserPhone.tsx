@@ -68,7 +68,7 @@ export default function BrowserPhone() {
   }, [softphone]);
 
   return (
-    <div className={`fixed bottom-4 right-4 ${drawerOpen ? "z-[50]" : "z-[80]"}`}>
+    <div className={`fixed bottom-4 right-4 ${drawerOpen ? "z-[30]" : "z-[40]"}`}>
       <div className="relative flex flex-col items-end gap-3">
         {!softphone.isCollapsed ? (
           <div className="max-h-[70vh] w-[min(calc(100vw-24px),320px)] overflow-hidden rounded-[24px] border border-slate-800/90 bg-slate-950/98 shadow-[0_18px_54px_rgba(0,0,0,0.42)]">

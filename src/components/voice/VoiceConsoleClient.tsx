@@ -15,6 +15,7 @@ import {
   Search,
   Settings2,
   Users,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -248,6 +249,7 @@ export default function VoiceConsoleClient({
   const [activeTab, setActiveTab] = useState<VoiceConsoleTab>(() => normalizeVoiceTab(searchParams.get("tab")));
   const [dateFilter, setDateFilter] = useState<VoiceDateFilter>(() => normalizeVoiceDateFilter(searchParams.get("range")));
   const [queueView, setQueueView] = useState<"all" | "waiting" | "missed">("all");
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
   const lastAnnouncedCallIdRef = useRef<string | null>(null);
   const liveStatusTimeoutRef = useRef<number | null>(null);
 
@@ -311,6 +313,23 @@ export default function VoiceConsoleClient({
     setActiveTab(normalizeVoiceTab(searchParams.get("tab")));
     setDateFilter(normalizeVoiceDateFilter(searchParams.get("range")));
   }, [searchParams]);
+
+  useEffect(() => {
+    if (activeTab !== "operations") {
+      setDetailModalOpen(false);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (!detailModalOpen) return;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setDetailModalOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [detailModalOpen]);
 
   const switchTab = (tab: VoiceConsoleTab) => {
     setActiveTab(tab);
@@ -510,6 +529,18 @@ export default function VoiceConsoleClient({
       console.error("[voice.console.select_failed]", selectionError);
       setError("Failed to load the selected customer context.");
     });
+  };
+
+  const openDetailModal = (
+    tab: "customer" | "timeline" | "agent" | "recording" = "customer",
+    nextCallId?: string | null,
+    nextPhone?: string | null,
+  ) => {
+    setContextTab(tab);
+    if (nextCallId && nextPhone && (selectedCallId !== nextCallId || selectedPhone !== nextPhone)) {
+      handleSelectCall(nextCallId, nextPhone);
+    }
+    setDetailModalOpen(true);
   };
 
   const handleToggleRecentCall = (callId: string, phone: string) => {
@@ -844,11 +875,7 @@ export default function VoiceConsoleClient({
   return (
     <div className="overflow-x-hidden bg-slate-950 text-slate-100">
       <main
-        className={`mx-auto box-border max-w-[1880px] overflow-x-hidden overflow-y-visible px-3 pb-4 sm:px-4 lg:px-6 xl:px-8 2xl:px-10 ${
-          mode === "admin"
-            ? "min-h-[calc(100vh-3.5rem)] pt-24 sm:min-h-[calc(100vh-4rem)] sm:pt-28"
-            : "min-h-[calc(100vh-1rem)] pt-4 sm:min-h-[calc(100vh-1.25rem)] sm:pt-5"
-        }`}
+        className="mx-auto box-border min-h-screen max-w-[1880px] overflow-x-hidden overflow-y-visible px-3 pb-6 pt-4 sm:px-4 sm:pt-5 lg:px-6 xl:px-8 2xl:px-10"
       >
         {error ? (
           <div className="mb-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
@@ -996,17 +1023,31 @@ export default function VoiceConsoleClient({
 
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                     <div className="flex min-w-0 items-center gap-3">
+                      <Link
+                        href={backHref}
+                        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-800/90 bg-slate-950/80 text-slate-300 transition hover:border-slate-700 hover:text-white"
+                        aria-label="Back"
+                      >
+                        <ChevronDown className="h-5 w-5 rotate-90" />
+                      </Link>
                       <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-400/20 bg-cyan-400/10 text-cyan-100">
                         <Grip className="h-5 w-5" />
                       </div>
                       <div className="min-w-0">
                         <div className="truncate text-2xl font-semibold tracking-tight text-white">
-                          {title || "Voice Center"}
+                          {activeTab === "operations" ? "Live Operations Center" : title || "Voice Center"}
                         </div>
                         <div className="truncate text-sm text-slate-400">
-                          {activeTab === "operations" ? subtitle || "Voice operations workspace" : activeTabDescriptionMap[activeTab]}
+                          {activeTab === "operations"
+                            ? subtitle || "Clean live view for active calls, queue pressure, and recent voice activity."
+                            : activeTabDescriptionMap[activeTab]}
                         </div>
                       </div>
+                      {badge ? (
+                        <span className="hidden rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100 lg:inline-flex">
+                          {badge}
+                        </span>
+                      ) : null}
                     </div>
 
                     <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
@@ -1023,143 +1064,8 @@ export default function VoiceConsoleClient({
 
               <div className="min-w-0 overflow-visible px-4 py-5 sm:px-5 lg:px-6">
                 {activeTab === "operations" ? (
-                  <section className="grid h-full min-h-0 gap-4 overflow-hidden xl:grid-cols-[340px_minmax(0,1fr)_380px] xl:items-start">
-                    <aside className="min-w-0 space-y-4 overflow-y-auto overflow-x-hidden pr-1">
-                      <div className={cardShell("p-4")}>
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Incoming Queue</div>
-                            <div className="mt-1 text-lg font-semibold text-white">Live work items</div>
-                          </div>
-                          <span className="rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1 text-xs text-slate-300">
-                            {queueItems.length}
-                          </span>
-                        </div>
-
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          {[
-                            { key: "all", label: `All (${queueItems.length})` },
-                            { key: "waiting", label: `Waiting (${visibleWaitingCalls.length})` },
-                            { key: "missed", label: `Missed (${filteredFollowUps.length})` },
-                          ].map((item) => (
-                            <button
-                              key={item.key}
-                              type="button"
-                              onClick={() => setQueueView(item.key as typeof queueView)}
-                              className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
-                                queueView === item.key
-                                  ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
-                                  : "border-white/10 bg-white/[0.02] text-slate-400 hover:border-white/20 hover:text-slate-200"
-                              }`}
-                            >
-                              {item.label}
-                            </button>
-                          ))}
-                        </div>
-
-                        <input
-                          value={queueSearch}
-                          onChange={(event) => setQueueSearch(event.target.value)}
-                          placeholder="Search caller, phone, agent"
-                          className="mt-4 w-full rounded-2xl border border-slate-800 bg-slate-900/75 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500"
-                        />
-
-                        <div className="mt-4 space-y-3">
-                          {queueItemsByView.length ? (
-                            queueItemsByView.map((item) => {
-                              const queueItem = item as any;
-                              const id = String(queueItem.id);
-                              const phone = String(queueItem.callerNumber || queueItem.phone || "");
-                              const isCall = Boolean(queueItem.callerNumber);
-                              const isSelected = selectedCall?.id === id;
-                              return (
-                                <button
-                                  key={`${isCall ? "call" : "queue"}-${id}`}
-                                  type="button"
-                                  onClick={() => phone && handleSelectCall(id, phone)}
-                                  className={`w-full rounded-[20px] border p-4 text-left transition ${
-                                    isSelected
-                                      ? "border-cyan-500/35 bg-cyan-500/[0.09]"
-                                      : "border-slate-800 bg-slate-900/70 hover:border-slate-700"
-                                  }`}
-                                >
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div className="min-w-0">
-                                      <div className="text-lg font-semibold text-white">
-                                        {queueItem.customer?.customerName || phone}
-                                      </div>
-                                      <div className="mt-1 text-sm text-slate-400">
-                                        {queueItem.customer?.location || queueItem.routedToDisplay || queueItem.assignedAgentLabel || "Queue item"}
-                                      </div>
-                                      <div className="mt-2 text-2xl font-semibold text-white">{phone}</div>
-                                    </div>
-                                    <div className="text-right">
-                                      <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusTone(queueItem.status || queueItem.direction)}`}>
-                                        {isCall ? queueItem.statusLabel : queueItem.statusLabel || queueItem.type}
-                                      </span>
-                                      <div className="mt-2 text-sm text-slate-400">
-                                        {isCall ? formatRelative(queueItem.waitingSeconds) : formatTimeOnly(queueItem.dueAt || queueItem.updatedAt)}
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div className="mt-3 flex items-center justify-between gap-3 text-sm text-slate-400">
-                                    <div className="truncate">
-                                      {queueItem.assignedToName || queueItem.assignedToEmail || queueItem.routedToDisplay || "Unassigned"}
-                                    </div>
-                                    <div className="shrink-0">
-                                      {isCall ? formatTimeOnly(queueItem.startedAt || queueItem.createdAt) : queueItem.type === "task" ? "Task" : "Lead"}
-                                    </div>
-                                  </div>
-                                </button>
-                              );
-                            })
-                          ) : (
-                            <div className="rounded-2xl border border-dashed border-slate-800 px-4 py-8 text-sm text-slate-500">
-                              No queue items for this view.
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className={cardShell("p-4")}>
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Agent Availability</div>
-                            <div className="mt-1 text-lg font-semibold text-white">Routing visibility</div>
-                          </div>
-                          <div className="text-sm font-semibold text-emerald-300">
-                            {visibleAgents.filter((agent: any) => agent.status === "AVAILABLE").length}/{visibleAgents.length} Online
-                          </div>
-                        </div>
-
-                        <div className="mt-4 space-y-3">
-                          {visibleAgents.map((agent) => {
-                            const row = agent as any;
-                            return (
-                              <div key={row.id} className="flex items-center gap-3 rounded-[20px] border border-slate-800 bg-slate-900/70 px-4 py-3">
-                                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-cyan-400/20 bg-cyan-400/10 text-sm font-semibold text-cyan-100">
-                                  {getInitials(row.displayName || row.name)}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <div className="truncate font-semibold text-white">{row.displayName || row.name}</div>
-                                  <div className="truncate text-sm text-slate-400">{row.displayRoleLabel}</div>
-                                </div>
-                                <div className="text-right">
-                                  <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusTone(row.status)}`}>
-                                    {row.status}
-                                  </span>
-                                  <div className="mt-2 text-xs text-slate-500">
-                                    {row.isWebrtcRegistered ? "Browser ready" : "Browser offline"}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </aside>
-
-                    <section className="min-w-0 space-y-4 overflow-y-auto overflow-x-hidden pr-1">
+                  <section className="grid h-full min-h-0 gap-4 overflow-visible xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
+                    <section className="min-w-0 space-y-4">
                       <div className={cardShell("p-5")}>
                         <div className="flex items-start justify-between gap-4">
                           <div className="min-w-0">
@@ -1192,16 +1098,19 @@ export default function VoiceConsoleClient({
                           </div>
                           <div className="text-right">
                             <div className="text-2xl font-medium text-slate-300">{selectedCall ? formatDuration(selectedCall.durationInSeconds) : "00:00"}</div>
+                            <div className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-500">
+                              {selectedCall ? formatDateTime(selectedCall.startedAt || selectedCall.createdAt) : "No active interaction"}
+                            </div>
                           </div>
                         </div>
 
-                        <div className="mt-6 grid gap-3 sm:grid-cols-5">
+                        <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                           {[
                             { label: softphone.currentCall?.muted ? "Unmute" : "Mute", onClick: softphone.toggleMute, icon: Mic },
                             { label: softphone.currentCall?.held ? "Resume" : "Hold", onClick: softphone.toggleHold, icon: PhoneOff },
                             { label: showWorkspaceDialPad ? "Hide Keypad" : "Keypad", onClick: () => setShowWorkspaceDialPad((value) => !value), icon: Grip },
                             { label: "Answer", onClick: softphone.answerCall, icon: PhoneCall },
-                            { label: "More", onClick: () => switchTab("recent"), icon: MoreHorizontal },
+                            { label: "Open", onClick: () => openDetailModal("customer"), icon: MoreHorizontal },
                           ].map((action) => {
                             const Icon = action.icon;
                             return (
@@ -1209,7 +1118,7 @@ export default function VoiceConsoleClient({
                                 key={action.label}
                                 type="button"
                                 onClick={action.onClick}
-                                disabled={!selectedCall && action.label !== "Keypad" && action.label !== "More"}
+                                disabled={!selectedCall && action.label !== "Keypad"}
                                 className="flex flex-col items-center justify-center gap-2 rounded-[20px] border border-slate-800 bg-slate-900/70 px-4 py-4 text-center text-sm font-medium text-slate-100 transition hover:border-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
                               >
                                 <Icon className="h-5 w-5" />
@@ -1234,6 +1143,13 @@ export default function VoiceConsoleClient({
                           >
                             Call Back
                           </a>
+                          <button
+                            type="button"
+                            onClick={() => switchTab("recent")}
+                            className="rounded-full border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/20"
+                          >
+                            Full History
+                          </button>
                         </div>
 
                         {showWorkspaceDialPad ? (
@@ -1242,117 +1158,42 @@ export default function VoiceConsoleClient({
                           </div>
                         ) : null}
 
-                        <div className="mt-6 rounded-[22px] border border-slate-800 bg-slate-900/55 p-4">
-                          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-                            <div className="grid gap-4 md:grid-cols-2">
-                              <div className="rounded-[20px] border border-slate-800 bg-slate-950/70 p-4">
-                                <div className="text-sm font-semibold text-white">Customer</div>
-                                <div className="mt-3 text-lg font-semibold text-white">
-                                  {selectedContextData?.customerName || selectedCall?.callerNumber || "Unknown caller"}
-                                </div>
-                                <div className="mt-1 text-sm text-slate-400">{selectedCall?.callerNumber || "No active number"}</div>
-                                <div className="mt-3">
-                                  <span className="rounded-full border border-fuchsia-500/30 bg-fuchsia-500/10 px-3 py-1 text-xs font-semibold text-fuchsia-100">
-                                    {selectedContextData?.matchedCustomerId ? "Known Customer" : "New Customer"}
-                                  </span>
-                                </div>
-                              </div>
-
-                              <div className="rounded-[20px] border border-slate-800 bg-slate-950/70 p-4">
-                                <div className="text-sm font-semibold text-white">Context</div>
-                                <div className="mt-3 space-y-2 text-sm text-slate-400">
-                                  <div>{selectedContextData?.email || "No email saved"}</div>
-                                  <div>{selectedContextData?.location || "No location saved"}</div>
-                                  <div>
-                                    {selectedContextData
-                                      ? `${selectedContextData.linkedRecords.recentCalls} previous calls · ${selectedContextData.linkedRecords.webOrders} orders · ${selectedContextData.linkedRecords.quotations} quotes`
-                                      : "No CRM records found"}
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="rounded-[20px] border border-slate-800 bg-slate-950/70 p-4 md:col-span-2">
-                                <div className="text-sm font-semibold text-white">Quick Note</div>
-                                <textarea
-                                  value={noteDraft}
-                                  onChange={(event) => setNoteDraft(event.target.value)}
-                                  rows={4}
-                                  placeholder="Add a note about this call..."
-                                  className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/40"
-                                />
-                                <button
-                                  type="button"
-                                  disabled={!selectedCall?.id || submittingNote || !noteDraft.trim()}
-                                  onClick={handleAddNote}
-                                  className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                  {submittingNote ? "Saving..." : "Save Note"}
-                                </button>
-                              </div>
+                        <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                          {contextQuickCards.map((item) => (
+                            <div key={item.label} className="rounded-[20px] border border-slate-800 bg-slate-900/55 p-4">
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{item.label}</div>
+                              <div className="mt-2 text-sm font-semibold text-white">{item.value}</div>
                             </div>
-
-                            <div className="rounded-[20px] border border-slate-800 bg-slate-950/70 p-4">
-                              <div className="text-sm font-semibold text-white">Follow-up</div>
-                              <input
-                                value={followUpTitle}
-                                onChange={(event) => setFollowUpTitle(event.target.value)}
-                                placeholder="Callback customer about quotation"
-                                className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/40"
-                              />
-                              <input
-                                value={followUpDueAt}
-                                onChange={(event) => setFollowUpDueAt(event.target.value)}
-                                type="datetime-local"
-                                className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-cyan-500/40"
-                              />
-                              <textarea
-                                value={followUpNotes}
-                                onChange={(event) => setFollowUpNotes(event.target.value)}
-                                rows={5}
-                                placeholder="Follow-up notes or supervisor instruction"
-                                className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/40"
-                              />
-                              <button
-                                type="button"
-                                disabled={submittingFollowUp || !followUpTitle.trim()}
-                                onClick={handleCreateFollowUp}
-                                className="mt-3 w-full rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                {submittingFollowUp ? "Saving..." : "Create Follow-up"}
-                              </button>
-                            </div>
-                          </div>
+                          ))}
                         </div>
 
                         <div className="mt-6 rounded-[22px] border border-slate-800 bg-slate-900/55 p-4">
                           <div className="flex items-center justify-between gap-3">
                             <div>
                               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Live calls</div>
-                              <div className="mt-1 text-lg font-semibold text-white">Focus list</div>
+                              <div className="mt-1 text-lg font-semibold text-white">Active focus list</div>
                             </div>
                             <span className="rounded-full border border-slate-800 bg-slate-950/80 px-3 py-1 text-xs text-slate-300">
                               {activeCallPreview.length}
                             </span>
                           </div>
-                          <div className="mt-4 space-y-3">
+                          <div className="mt-4 grid gap-3 lg:grid-cols-2">
                             {activeCallPreview.length ? (
                               activeCallPreview.map((call) => (
-                                <button
+                                <div
                                   key={call.id}
-                                  type="button"
-                                  onClick={() => handleSelectCall(call.id, call.callerNumber)}
-                                  className={`w-full rounded-[20px] border p-4 text-left transition ${
+                                  className={`rounded-[20px] border p-4 transition ${
                                     selectedCall?.id === call.id
                                       ? "border-cyan-500/35 bg-cyan-500/[0.09]"
-                                      : "border-slate-800 bg-slate-950/60 hover:border-slate-700"
+                                      : "border-slate-800 bg-slate-950/60"
                                   }`}
                                 >
-                                  <div className="flex items-center justify-between gap-3">
+                                  <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0">
-                                      <div className="truncate text-lg font-semibold text-white">
+                                      <div className="truncate text-base font-semibold text-white">
                                         {call.customer.customerName || call.callerNumber}
                                       </div>
-                                      <div className="mt-1 text-sm text-slate-400">
+                                      <div className="mt-1 truncate text-sm text-slate-400">
                                         {call.callerNumber} · {call.assignedToName || call.routedToDisplay || "Unassigned"}
                                       </div>
                                     </div>
@@ -1360,168 +1201,179 @@ export default function VoiceConsoleClient({
                                       {call.statusLabel}
                                     </span>
                                   </div>
-                                </button>
+                                  <div className="mt-3 flex gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSelectCall(call.id, call.callerNumber)}
+                                      className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
+                                    >
+                                      Select
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => openDetailModal("customer", call.id, call.callerNumber)}
+                                      className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
+                                    >
+                                      Open
+                                    </button>
+                                  </div>
+                                </div>
                               ))
                             ) : (
-                              <div className="rounded-2xl border border-dashed border-slate-800 px-4 py-8 text-sm text-slate-500">
+                              <div className="rounded-2xl border border-dashed border-slate-800 px-4 py-8 text-sm text-slate-500 lg:col-span-2">
                                 No live calls at the moment.
                               </div>
                             )}
                           </div>
                         </div>
                       </div>
+                      <section className={cardShell("p-5")}>
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Recent Call History</div>
+                            <h2 className="mt-1 text-xl font-semibold text-white">Latest interactions</h2>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => switchTab("recent")}
+                            className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
+                          >
+                            View all
+                          </button>
+                        </div>
+                        <div className="mt-4 overflow-x-auto">
+                          <div className="min-w-[720px] rounded-2xl border border-slate-800 bg-slate-900/60">
+                            <div className="grid grid-cols-[110px_1.4fr_0.9fr_110px_120px] gap-3 border-b border-slate-800 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                              <div>Time</div>
+                              <div>Caller</div>
+                              <div>Agent</div>
+                              <div>Status</div>
+                              <div>Action</div>
+                            </div>
+                            {filteredRecentCalls.slice(0, 6).length ? (
+                              filteredRecentCalls.slice(0, 6).map((call) => (
+                                <div key={call.id} className="grid grid-cols-[110px_1.4fr_0.9fr_110px_120px] gap-3 border-b border-slate-800/80 px-4 py-4 text-sm last:border-b-0">
+                                  <div className="whitespace-nowrap text-slate-300">{formatTimeOnly(call.startedAt || call.createdAt)}</div>
+                                  <div className="min-w-0">
+                                    <div className="truncate font-semibold text-white">{call.customer.customerName || call.callerNumber}</div>
+                                    <div className="truncate text-slate-400">{call.callerNumber}</div>
+                                  </div>
+                                  <div className="truncate text-slate-300">{call.assignedToName || call.routedToDisplay || "Unassigned"}</div>
+                                  <div>
+                                    <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusTone(call.status)}`}>
+                                      {call.statusLabel}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <button
+                                      type="button"
+                                      onClick={() => openDetailModal("customer", call.id, call.callerNumber)}
+                                      className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
+                                    >
+                                      Open
+                                    </button>
+                                  </div>
+                                </div>
+                              ))
+                            ) : (
+                              <div className="px-4 py-8 text-sm text-slate-500">No recent calls match the current filter.</div>
+                            )}
+                          </div>
+                        </div>
+                      </section>
                     </section>
 
-                    <aside className="min-w-0 space-y-4 overflow-y-auto overflow-x-hidden pr-1">
+                    <aside className="min-w-0 xl:sticky xl:top-4">
                       <div className={cardShell("p-4")}>
-                        <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Incoming Queue</div>
+                            <div className="mt-1 text-lg font-semibold text-white">Compact preview</div>
+                          </div>
+                          <span className="rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1 text-xs text-slate-300">
+                            {queueItemsByView.length}
+                          </span>
+                        </div>
+
+                        <div className="mt-4 flex flex-wrap gap-2">
                           {[
-                            ["customer", "Customer"],
-                            ["timeline", "Timeline"],
-                            ["agent", "Agent"],
-                            ["recording", "Recording"],
-                          ].map(([key, label]) => (
+                            { key: "all", label: `All (${queueItems.length})` },
+                            { key: "waiting", label: `Waiting (${visibleWaitingCalls.length})` },
+                            { key: "missed", label: `Missed (${filteredFollowUps.length})` },
+                          ].map((item) => (
                             <button
-                              key={key}
+                              key={item.key}
                               type="button"
-                              onClick={() => setContextTab(key as typeof contextTab)}
-                              className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
-                                contextTab === key
+                              onClick={() => setQueueView(item.key as typeof queueView)}
+                              className={`rounded-full border px-3 py-2 text-xs font-medium transition ${
+                                queueView === item.key
                                   ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
                                   : "border-white/10 bg-white/[0.02] text-slate-400 hover:border-white/20 hover:text-slate-200"
                               }`}
                             >
-                              {label}
+                              {item.label}
                             </button>
                           ))}
                         </div>
 
-                        <div className="mt-4 space-y-4">
-                          {contextTab === "customer" ? (
-                            <>
-                              <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
-                                <div className="text-lg font-semibold text-white">Customer Information</div>
-                                <div className="mt-4 space-y-4">
-                                  {contextQuickCards.map((item) => (
-                                    <div key={item.label}>
-                                      <div className="text-xs uppercase tracking-[0.18em] text-slate-500">{item.label}</div>
-                                      <div className="mt-1 text-sm text-white">{item.value}</div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-
-                              <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
-                                <div className="text-lg font-semibold text-white">Recent Activity</div>
-                                <div className="mt-4 space-y-3">
-                                  {timelineItems.slice(0, 3).length ? (
-                                    timelineItems.slice(0, 3).map((item: any) => (
-                                      <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-3">
-                                        <div className="text-sm font-semibold text-white">{item.title}</div>
-                                        <div className="mt-1 text-xs text-slate-400">
-                                          {item.detail || "No extra detail"} · {formatDateTime(item.at)}
-                                        </div>
+                        <div className="mt-4 space-y-3">
+                          {queueItemsByView.slice(0, 6).length ? (
+                            queueItemsByView.slice(0, 6).map((item) => {
+                              const queueItem = item as any;
+                              const id = String(queueItem.id);
+                              const phone = String(queueItem.callerNumber || queueItem.phone || "");
+                              const isCall = Boolean(queueItem.callerNumber);
+                              return (
+                                <div key={`${isCall ? "call" : "queue"}-${id}`} className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <div className="truncate font-semibold text-white">{queueItem.customer?.customerName || phone}</div>
+                                      <div className="mt-1 truncate text-sm text-slate-400">
+                                        {queueItem.assignedToName || queueItem.assignedToEmail || queueItem.routedToDisplay || "Unassigned"}
                                       </div>
-                                    ))
-                                  ) : (
-                                    <div className="rounded-2xl border border-dashed border-slate-800 px-3 py-6 text-sm text-slate-500">
-                                      No previous interactions. This may be a new customer.
                                     </div>
-                                  )}
-                                </div>
-                              </div>
-
-                              <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
-                                <div className="text-lg font-semibold text-white">Quick Actions</div>
-                                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                                  <Link href={selectedCustomerLinks.customer} className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-center text-sm font-semibold text-cyan-100 transition hover:border-cyan-400">
-                                    Open CRM
-                                  </Link>
-                                  <Link href={selectedCustomerLinks.quote} className="rounded-xl border border-fuchsia-500/30 bg-fuchsia-500/10 px-4 py-3 text-center text-sm font-semibold text-fuchsia-100 transition hover:border-fuchsia-400">
-                                    Create Quote
-                                  </Link>
-                                  <Link href={selectedCustomerLinks.receipt} className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-center text-sm font-semibold text-emerald-100 transition hover:border-emerald-400">
-                                    Create Receipt
-                                  </Link>
-                                  <button
-                                    type="button"
-                                    onClick={() => switchTab("followups")}
-                                    className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-center text-sm font-semibold text-amber-100 transition hover:border-amber-400"
-                                  >
-                                    Create Follow-up
-                                  </button>
-                                </div>
-                              </div>
-                            </>
-                          ) : null}
-
-                          {contextTab === "timeline" ? (
-                            <div className="space-y-3">
-                              {timelineItems.length ? (
-                                timelineItems.map((item: any) => (
-                                  <div key={item.id} className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
-                                    <div className="text-sm font-semibold text-white">{item.title}</div>
-                                    <div className="mt-1 text-xs text-slate-400">
-                                      {item.detail || "No extra detail"} · {formatDateTime(item.at)}
-                                    </div>
+                                    <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusTone(queueItem.status || queueItem.direction)}`}>
+                                      {isCall ? queueItem.statusLabel : queueItem.statusLabel || queueItem.type}
+                                    </span>
                                   </div>
-                                ))
-                              ) : (
-                                <div className="rounded-2xl border border-dashed border-slate-800 px-3 py-6 text-sm text-slate-500">
-                                  No timeline entries yet.
+                                  <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
+                                    <span>{isCall ? formatRelative(queueItem.waitingSeconds) : formatTimeOnly(queueItem.dueAt || queueItem.updatedAt)}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (!phone) return;
+                                        openDetailModal("customer", id, phone);
+                                      }}
+                                      className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
+                                    >
+                                      Open
+                                    </button>
+                                  </div>
                                 </div>
-                              )}
+                              );
+                            })
+                          ) : (
+                            <div className="rounded-2xl border border-dashed border-slate-800 px-4 py-8 text-sm text-slate-500">
+                              No queue items for this view.
                             </div>
-                          ) : null}
+                          )}
+                        </div>
 
-                          {contextTab === "agent" ? (
-                            selectedAgent ? (
-                              <div className="space-y-3">
-                                <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
-                                  <div className="text-lg font-semibold text-white">{(selectedAgent as any).displayName || selectedAgent.name}</div>
-                                  <div className="mt-1 text-sm text-slate-400">{(selectedAgent as any).displayRoleLabel}</div>
-                                  <div className="mt-4 flex flex-wrap gap-2">
-                                    <span className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(selectedAgent.status)}`}>
-                                      {selectedAgent.status}
-                                    </span>
-                                    <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-300">
-                                      {(selectedAgent as any).isWebrtcRegistered ? "Browser Ready" : "Browser Offline"}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4 text-sm text-slate-300">
-                                  <div>Active Calls: {selectedAgent.activeCallCount}</div>
-                                  <div className="mt-2">Waiting Calls: {selectedAgent.waitingCallCount}</div>
-                                  <div className="mt-2">Fallback: {(selectedAgent as any).phone || "No mobile fallback"}</div>
-                                  <div className="mt-2">Last seen: {formatDateTime(selectedAgent.lastSeenAt)}</div>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="rounded-2xl border border-dashed border-slate-800 px-3 py-6 text-sm text-slate-500">
-                                No agent context available.
-                              </div>
-                            )
-                          ) : null}
-
-                          {contextTab === "recording" ? (
-                            selectedCall?.recordingUrl ? (
-                              <div className="space-y-3">
-                                <audio controls preload="none" className="w-full" src={selectedCall.recordingUrl} />
-                                <a
-                                  href={selectedCall.recordingUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400"
-                                >
-                                  Download Recording
-                                </a>
-                              </div>
-                            ) : (
-                              <div className="rounded-2xl border border-dashed border-slate-800 px-3 py-6 text-sm text-slate-500">
-                                Recording not available for this interaction.
-                              </div>
-                            )
-                          ) : null}
+                        <div className="mt-4 grid gap-2">
+                          <button
+                            type="button"
+                            onClick={() => switchTab("followups")}
+                            className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-white/20"
+                          >
+                            Open Follow-ups
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => switchTab("agents")}
+                            className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-white/20"
+                          >
+                            Open Agents
+                          </button>
                         </div>
                       </div>
                     </aside>
@@ -2014,6 +1866,267 @@ export default function VoiceConsoleClient({
             </div>
           </div>
         </section>
+
+        {detailModalOpen ? (
+          <div
+            className="fixed inset-0 z-[100] flex items-start justify-center bg-slate-950/70 p-4 backdrop-blur-sm"
+            onClick={() => setDetailModalOpen(false)}
+          >
+            <div
+              className="mt-8 w-full max-w-5xl rounded-[28px] border border-slate-800 bg-slate-950 shadow-[0_32px_100px_rgba(0,0,0,0.55)]"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex flex-col gap-4 border-b border-slate-800 px-5 py-5 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Customer Detail</div>
+                  <div className="mt-2 text-2xl font-semibold text-white">{selectedCallLabel}</div>
+                  <div className="mt-1 text-sm text-slate-400">
+                    {selectedCall?.callerNumber || selectedPhone || "No phone selected"} · {selectedCallSubLabel}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
+                    {formatRefreshStamp(lastRefreshAt)}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDetailModalOpen(false)}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-800 bg-slate-900/80 text-slate-100 transition hover:border-slate-700"
+                    aria-label="Close customer detail"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="border-b border-slate-800 px-5 py-4">
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    ["customer", "Customer Information"],
+                    ["timeline", "Timeline"],
+                    ["agent", "Agent"],
+                    ["recording", "Recording"],
+                  ].map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setContextTab(key as typeof contextTab)}
+                      className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
+                        contextTab === key
+                          ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
+                          : "border-white/10 bg-white/[0.02] text-slate-400 hover:border-white/20 hover:text-slate-200"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="max-h-[calc(100vh-220px)] overflow-y-auto px-5 py-5">
+                {contextTab === "customer" ? (
+                  <div className="space-y-4">
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                      {contextQuickCards.map((item) => (
+                        <div key={item.label} className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{item.label}</div>
+                          <div className="mt-2 text-sm font-semibold text-white">{item.value}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                      <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
+                        <div className="text-lg font-semibold text-white">Recent Activity</div>
+                        <div className="mt-4 space-y-3">
+                          {timelineItems.slice(0, 4).length ? (
+                            timelineItems.slice(0, 4).map((item: any) => (
+                              <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-3">
+                                <div className="text-sm font-semibold text-white">{item.title}</div>
+                                <div className="mt-1 text-xs text-slate-400">
+                                  {item.detail || "No extra detail"} · {formatDateTime(item.at)}
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="rounded-2xl border border-dashed border-slate-800 px-3 py-6 text-sm text-slate-500">
+                              No previous interactions. This may be a new customer.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
+                        <div className="text-lg font-semibold text-white">Quick Actions</div>
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <Link href={selectedCustomerLinks.customer} className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-center text-sm font-semibold text-cyan-100 transition hover:border-cyan-400">
+                            Open CRM
+                          </Link>
+                          <Link href={selectedCustomerLinks.quote} className="rounded-xl border border-fuchsia-500/30 bg-fuchsia-500/10 px-4 py-3 text-center text-sm font-semibold text-fuchsia-100 transition hover:border-fuchsia-400">
+                            Create Quote
+                          </Link>
+                          <Link href={selectedCustomerLinks.receipt} className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-center text-sm font-semibold text-emerald-100 transition hover:border-emerald-400">
+                            Create Receipt
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => switchTab("followups")}
+                            className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-center text-sm font-semibold text-amber-100 transition hover:border-amber-400"
+                          >
+                            Open Follow-ups
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                      <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
+                        <div className="text-sm font-semibold text-white">Quick Note</div>
+                        <textarea
+                          value={noteDraft}
+                          onChange={(event) => setNoteDraft(event.target.value)}
+                          rows={4}
+                          placeholder="Add a note about this call..."
+                          className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/40"
+                        />
+                        <button
+                          type="button"
+                          disabled={!selectedCall?.id || submittingNote || !noteDraft.trim()}
+                          onClick={handleAddNote}
+                          className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {submittingNote ? "Saving..." : "Save Note"}
+                        </button>
+                      </div>
+
+                      <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
+                        <div className="text-sm font-semibold text-white">Follow-up</div>
+                        <input
+                          value={followUpTitle}
+                          onChange={(event) => setFollowUpTitle(event.target.value)}
+                          placeholder="Callback customer about quotation"
+                          className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/40"
+                        />
+                        <input
+                          value={followUpDueAt}
+                          onChange={(event) => setFollowUpDueAt(event.target.value)}
+                          type="datetime-local"
+                          className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-cyan-500/40"
+                        />
+                        <textarea
+                          value={followUpNotes}
+                          onChange={(event) => setFollowUpNotes(event.target.value)}
+                          rows={5}
+                          placeholder="Follow-up notes or supervisor instruction"
+                          className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/40"
+                        />
+                        <button
+                          type="button"
+                          disabled={submittingFollowUp || !followUpTitle.trim()}
+                          onClick={handleCreateFollowUp}
+                          className="mt-3 w-full rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {submittingFollowUp ? "Saving..." : "Create Follow-up"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                {contextTab === "timeline" ? (
+                  <div className="space-y-3">
+                    {timelineItems.length ? (
+                      timelineItems.map((item: any) => (
+                        <div key={item.id} className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
+                          <div className="text-sm font-semibold text-white">{item.title}</div>
+                          <div className="mt-1 text-xs text-slate-400">
+                            {item.detail || "No extra detail"} · {formatDateTime(item.at)}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="rounded-2xl border border-dashed border-slate-800 px-3 py-6 text-sm text-slate-500">
+                        No timeline entries yet.
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                {contextTab === "agent" ? (
+                  selectedAgent ? (
+                    <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+                      <div className="space-y-4">
+                        <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
+                          <div className="text-lg font-semibold text-white">{(selectedAgent as any).displayName || selectedAgent.name}</div>
+                          <div className="mt-1 text-sm text-slate-400">{(selectedAgent as any).displayRoleLabel}</div>
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            <span className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(selectedAgent.status)}`}>
+                              {selectedAgent.status}
+                            </span>
+                            <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-300">
+                              {(selectedAgent as any).isWebrtcRegistered ? "Browser Ready" : "Browser Offline"}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4 text-sm text-slate-300">
+                          <div>Active Calls: {selectedAgent.activeCallCount}</div>
+                          <div className="mt-2">Waiting Calls: {selectedAgent.waitingCallCount}</div>
+                          <div className="mt-2">Fallback: {(selectedAgent as any).phone || "No mobile fallback"}</div>
+                          <div className="mt-2">Last seen: {formatDateTime(selectedAgent.lastSeenAt)}</div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
+                        <div className="text-sm font-semibold text-white">Reassign</div>
+                        <div className="mt-2 text-sm text-slate-300">Move this interaction to another agent for ownership and follow-up.</div>
+                        <select
+                          defaultValue={selectedCall?.assignedToId || ""}
+                          onChange={(event) => {
+                            const assignedToId = event.target.value;
+                            if (!assignedToId || !selectedCall?.id) return;
+                            void handleReassign({ callId: selectedCall.id, assignedToId });
+                          }}
+                          className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-slate-100 outline-none"
+                        >
+                          <option value="">Select agent</option>
+                          {visibleAgents.map((agent) => (
+                            <option key={agent.id} value={agent.id}>
+                              {(agent as any).displayName || agent.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-slate-800 px-3 py-6 text-sm text-slate-500">
+                      No agent context available.
+                    </div>
+                  )
+                ) : null}
+
+                {contextTab === "recording" ? (
+                  selectedCall?.recordingUrl ? (
+                    <div className="space-y-3">
+                      <audio controls preload="none" className="w-full" src={selectedCall.recordingUrl} />
+                      <a
+                        href={selectedCall.recordingUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400"
+                      >
+                        Download Recording
+                      </a>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-slate-800 px-3 py-6 text-sm text-slate-500">
+                      Recording not available for this interaction.
+                    </div>
+                  )
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
       </main>
     </div>
   );
