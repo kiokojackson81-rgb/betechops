@@ -216,6 +216,12 @@ export default function BrowserPhone() {
   }, [isIncomingCall, softphone]);
 
   useEffect(() => {
+    if (softphone.currentCall) {
+      softphone.setCollapsed(false);
+    }
+  }, [softphone, softphone.currentCall]);
+
+  useEffect(() => {
     if (!softphone.currentCall?.startedAt || (softphone.currentCall.state !== "TALKING" && softphone.currentCall.state !== "ON_HOLD")) {
       setTimerValue("00:00");
       return;
@@ -285,6 +291,7 @@ export default function BrowserPhone() {
 
   const handleStartCall = () => {
     if (!canDial) return;
+    softphone.setCollapsed(false);
     softphone.startOutgoingCall();
     setShowKeypad(false);
     setShowDevices(false);
