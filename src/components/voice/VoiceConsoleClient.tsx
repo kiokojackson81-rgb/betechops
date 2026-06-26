@@ -811,6 +811,11 @@ export default function VoiceConsoleClient({
       return "/admin";
     }
 
+    const targetEmail = String(myPresence?.email || "").trim().toLowerCase();
+    if (targetEmail === "brendah@betech.co.ke") {
+      return "/attendant/daily-report";
+    }
+
     if (data.viewer.targetAttendantCategory === "DIRECT_SALES_OPS") {
       return `/marketing/tracker?reportDate=${getNairobiReportDate()}`;
     }
@@ -820,7 +825,7 @@ export default function VoiceConsoleClient({
     }
 
     return "/attendant/daily-report";
-  }, [data.viewer.isAdmin, data.viewer.targetAttendantCategory]);
+  }, [data.viewer.isAdmin, data.viewer.targetAttendantCategory, myPresence?.email]);
 
   const followUpsHref = useMemo(() => {
     const params = new URLSearchParams();
