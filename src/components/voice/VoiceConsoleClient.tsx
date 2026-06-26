@@ -127,12 +127,6 @@ function normalizeVoiceTab(value: string | null): VoiceConsoleTab {
   return VOICE_CONSOLE_TABS.includes(value as VoiceConsoleTab) ? (value as VoiceConsoleTab) : "operations";
 }
 
-function buildVoiceTabHref(pathname: string, searchParams: URLSearchParams, tab: VoiceConsoleTab) {
-  const params = new URLSearchParams(searchParams.toString());
-  params.set("tab", tab);
-  return `${pathname}?${params.toString()}`;
-}
-
 function isFreshIncomingCall(value: string | null | undefined, maxAgeMs = 5 * 60 * 1000) {
   if (!value) return false;
   const timestamp = new Date(value).getTime();
@@ -184,10 +178,10 @@ export default function VoiceConsoleClient({
   const [showWorkspaceDialPad, setShowWorkspaceDialPad] = useState(false);
   const [recentSearch, setRecentSearch] = useState("");
   const [recentFilter, setRecentFilter] = useState<"all" | "INBOUND" | "OUTBOUND" | "with_recording">("all");
+  const [activeTab, setActiveTab] = useState<VoiceConsoleTab>(() => normalizeVoiceTab(searchParams.get("tab")));
   const lastInteractionAtRef = useRef(Date.now());
   const availabilityTimerRef = useRef<number | null>(null);
   const lastAnnouncedCallIdRef = useRef<string | null>(null);
-  const activeTab = useMemo(() => normalizeVoiceTab(searchParams.get("tab")), [searchParams]);
 
   const visibleActiveCalls = useMemo(
     () => data.activeCalls.filter((call) => isMeaningfulVoicePhone(call.callerNumber)),
@@ -209,23 +203,16 @@ export default function VoiceConsoleClient({
     [data.callQueue, data.selectedPhone],
   );
 
+  useEffect(() => {
+    setActiveTab(normalizeVoiceTab(searchParams.get("tab")));
+  }, [searchParams]);
+
   const switchTab = (tab: VoiceConsoleTab) => {
+    setActiveTab(tab);
     const params = new URLSearchParams(searchParams.toString());
     params.set("tab", tab);
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
   };
-
-  const tabHrefs = useMemo(
-    () => ({
-      operations: buildVoiceTabHref(pathname, new URLSearchParams(searchParams.toString()), "operations"),
-      recent: buildVoiceTabHref(pathname, new URLSearchParams(searchParams.toString()), "recent"),
-      recordings: buildVoiceTabHref(pathname, new URLSearchParams(searchParams.toString()), "recordings"),
-      followups: buildVoiceTabHref(pathname, new URLSearchParams(searchParams.toString()), "followups"),
-      agents: buildVoiceTabHref(pathname, new URLSearchParams(searchParams.toString()), "agents"),
-      settings: buildVoiceTabHref(pathname, new URLSearchParams(searchParams.toString()), "settings"),
-    }),
-    [pathname, searchParams],
-  );
 
   const refreshSnapshot = async (nextCallId?: string | null, nextPhone?: string | null) => {
     const params = new URLSearchParams();
@@ -754,8 +741,9 @@ export default function VoiceConsoleClient({
                 <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-100">
                   Voice Calls
                 </span>
-                <Link
-                  href={tabHrefs.operations}
+                <button
+                  type="button"
+                  onClick={() => switchTab("operations")}
                   className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
                     activeTab === "operations"
                       ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
@@ -763,16 +751,17 @@ export default function VoiceConsoleClient({
                   }`}
                 >
                   Operations Center
-                </Link>
+                </button>
                 {[
-                  ["recent", "Call History", tabHrefs.recent],
-                  ["recordings", "Recordings", tabHrefs.recordings],
-                  ["followups", "Follow-ups", tabHrefs.followups],
-                  ["agents", "Agents", tabHrefs.agents],
-                ].map(([key, label, href]) => (
-                  <Link
+                  ["recent", "Call History"],
+                  ["recordings", "Recordings"],
+                  ["followups", "Follow-ups"],
+                  ["agents", "Agents"],
+                ].map(([key, label]) => (
+                  <button
                     key={key}
-                    href={href}
+                    type="button"
+                    onClick={() => switchTab(key as VoiceConsoleTab)}
                     className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
                       activeTab === key
                         ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
@@ -780,10 +769,11 @@ export default function VoiceConsoleClient({
                     }`}
                   >
                     {label}
-                  </Link>
+                  </button>
                 ))}
-                <Link
-                  href={tabHrefs.settings}
+                <button
+                  type="button"
+                  onClick={() => switchTab("settings")}
                   className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
                     activeTab === "settings"
                       ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
@@ -791,7 +781,7 @@ export default function VoiceConsoleClient({
                   }`}
                 >
                   Softphone Settings
-                </Link>
+                </button>
               </div>
               <div className="flex flex-wrap items-center gap-2 xl:justify-end">
                 <RegistrationBadge />
