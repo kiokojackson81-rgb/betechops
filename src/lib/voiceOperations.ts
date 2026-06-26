@@ -282,11 +282,8 @@ function getVoiceRoutingLabel(phone: string | null | undefined) {
   return phone || "-";
 }
 
-function effectivePresenceStatus(status: string | null | undefined, lastSeenAt: Date | null | undefined) {
+function effectivePresenceStatus(status: string | null | undefined) {
   const normalized = String(status || "OFFLINE").trim().toUpperCase();
-  if (normalized === "AVAILABLE" && lastSeenAt && Date.now() - lastSeenAt.getTime() > VOICE_PRESENCE_STALE_MS) {
-    return "AWAY";
-  }
   return normalized || "OFFLINE";
 }
 
@@ -460,7 +457,7 @@ function serializePresenceRow(
   const webRtcIdentity = buildVoiceWebrtcIdentity(webRtcClientName) ?? null;
   const webRtcRegistry = getVoiceWebrtcRegistryEntry(agent.id);
 
-  const effectiveStatus = effectivePresenceStatus(agent.voicePresence?.status, agent.voicePresence?.lastSeenAt);
+  const effectiveStatus = effectivePresenceStatus(agent.voicePresence?.status);
 
   return {
     id: agent.id,
@@ -936,11 +933,11 @@ export type VoiceCallsSnapshot = Awaited<ReturnType<typeof listVoiceCallsSnapsho
 
 export async function updateVoicePresence(input: {
   userId: string;
-  status: string;
+  status?: string | null;
   currentCallId?: string | null;
 }) {
-  const normalizedStatus = String(input.status || "").trim().toUpperCase();
-  if (!VOICE_PRESENCE_STATUSES.includes(normalizedStatus as VoicePresenceStatus)) {
+  const normalizedStatus = input.status == null ? null : String(input.status || "").trim().toUpperCase();
+  if (normalizedStatus && !VOICE_PRESENCE_STATUSES.includes(normalizedStatus as VoicePresenceStatus)) {
     throw new Error("invalid_presence_status");
   }
 
@@ -948,12 +945,12 @@ export async function updateVoicePresence(input: {
     where: { userId: input.userId },
     create: {
       userId: input.userId,
-      status: normalizedStatus,
+      status: normalizedStatus || "OFFLINE",
       currentCallId: input.currentCallId ?? null,
       lastSeenAt: new Date(),
     },
     update: {
-      status: normalizedStatus,
+      status: normalizedStatus ?? undefined,
       currentCallId: input.currentCallId ?? null,
       lastSeenAt: new Date(),
     },

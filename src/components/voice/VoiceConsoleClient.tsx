@@ -34,7 +34,7 @@ type VoiceConsoleClientProps = {
   subtitle: string;
 };
 
-const PRESENCE_STATUSES = ["AVAILABLE", "AWAY", "BUSY", "BREAK", "OFFLINE"] as const;
+const MANUAL_PRESENCE_STATUSES = ["AVAILABLE", "BUSY", "BREAK", "OFFLINE"] as const;
 const VOICE_CONSOLE_TABS = ["operations", "recent", "recordings", "followups", "agents", "settings"] as const;
 type VoiceConsoleTab = (typeof VOICE_CONSOLE_TABS)[number];
 const VOICE_DATE_FILTERS = ["today", "yesterday", "week", "period"] as const;
@@ -236,7 +236,6 @@ export default function VoiceConsoleClient({
   const [presencePending, setPresencePending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [liveStatus, setLiveStatus] = useState<"connecting" | "live" | "offline">("connecting");
-  const [manualPresence, setManualPresence] = useState<string | null>(null);
   const [dismissedIncomingIds, setDismissedIncomingIds] = useState<string[]>([]);
   const [contextTab, setContextTab] = useState<"customer" | "timeline" | "agent" | "recording">("customer");
   const [queueSearch, setQueueSearch] = useState("");
@@ -247,8 +246,6 @@ export default function VoiceConsoleClient({
   const [activeTab, setActiveTab] = useState<VoiceConsoleTab>(() => normalizeVoiceTab(searchParams.get("tab")));
   const [dateFilter, setDateFilter] = useState<VoiceDateFilter>(() => normalizeVoiceDateFilter(searchParams.get("range")));
   const [queueView, setQueueView] = useState<"all" | "waiting" | "missed">("all");
-  const lastInteractionAtRef = useRef(Date.now());
-  const availabilityTimerRef = useRef<number | null>(null);
   const lastAnnouncedCallIdRef = useRef<string | null>(null);
   const liveStatusTimeoutRef = useRef<number | null>(null);
 
@@ -547,10 +544,9 @@ export default function VoiceConsoleClient({
     URL.revokeObjectURL(href);
   };
 
-  const handlePresenceUpdate = async (status: (typeof PRESENCE_STATUSES)[number]) => {
+  const handlePresenceUpdate = async (status: (typeof MANUAL_PRESENCE_STATUSES)[number]) => {
     setPresencePending(true);
     setError(null);
-    setManualPresence(status === "AVAILABLE" || status === "AWAY" ? null : status);
     try {
       const response = await fetch(`${pollBaseHref.replace("/live", "/presence")}`, {
         method: "POST",
@@ -572,66 +568,6 @@ export default function VoiceConsoleClient({
       setPresencePending(false);
     }
   };
-
-  useEffect(() => {
-    const markInteraction = () => {
-      lastInteractionAtRef.current = Date.now();
-    };
-
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        lastInteractionAtRef.current = Date.now();
-      }
-    };
-
-    window.addEventListener("mousemove", markInteraction);
-    window.addEventListener("keydown", markInteraction);
-    window.addEventListener("touchstart", markInteraction, { passive: true });
-    document.addEventListener("visibilitychange", onVisibilityChange);
-
-    return () => {
-      window.removeEventListener("mousemove", markInteraction);
-      window.removeEventListener("keydown", markInteraction);
-      window.removeEventListener("touchstart", markInteraction);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (mode !== "staff") return;
-
-    const pushAutoPresence = async () => {
-      if (manualPresence && !["AVAILABLE", "AWAY"].includes(manualPresence)) return;
-      const inactiveForMs = Date.now() - lastInteractionAtRef.current;
-      const nextStatus = document.visibilityState === "hidden" || inactiveForMs > 60_000 ? "AWAY" : "AVAILABLE";
-      if (myPresence?.status === nextStatus && inactiveForMs < 90_000) return;
-      try {
-        await fetch(`${pollBaseHref.replace("/live", "/presence")}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            status: nextStatus,
-            currentCallId: selectedCall?.id ?? null,
-          }),
-          keepalive: true,
-        });
-      } catch (presenceError) {
-        console.error("[voice.console.auto_presence_failed]", presenceError);
-      }
-    };
-
-    void pushAutoPresence();
-    availabilityTimerRef.current = window.setInterval(() => {
-      void pushAutoPresence();
-    }, 45_000);
-
-    return () => {
-      if (availabilityTimerRef.current) {
-        window.clearInterval(availabilityTimerRef.current);
-        availabilityTimerRef.current = null;
-      }
-    };
-  }, [manualPresence, mode, myPresence?.status, pollBaseHref, selectedCall?.id]);
 
   const handleAddNote = async () => {
     if (!selectedCall?.id || !noteDraft.trim()) return;
@@ -898,15 +834,18 @@ export default function VoiceConsoleClient({
     : "Choose a live caller or callback task to begin work.";
 
   const statusSelectValue =
-    myPresence?.status && PRESENCE_STATUSES.includes(myPresence.status as (typeof PRESENCE_STATUSES)[number])
-      ? (myPresence.status as (typeof PRESENCE_STATUSES)[number])
+    myPresence?.status &&
+    MANUAL_PRESENCE_STATUSES.includes(myPresence.status as (typeof MANUAL_PRESENCE_STATUSES)[number])
+      ? (myPresence.status as (typeof MANUAL_PRESENCE_STATUSES)[number])
       : "AVAILABLE";
 
   return (
     <div className="overflow-x-hidden bg-slate-950 text-slate-100">
       <main
-        className={`mx-auto max-w-[1880px] px-3 pb-10 sm:px-4 lg:px-6 xl:px-8 2xl:px-10 ${
-          mode === "admin" ? "pt-24 sm:pt-28" : "pt-4 sm:pt-5"
+        className={`mx-auto box-border max-w-[1880px] overflow-hidden px-3 pb-4 sm:px-4 lg:px-6 xl:px-8 2xl:px-10 ${
+          mode === "admin"
+            ? "h-[calc(100vh-3.5rem)] pt-24 sm:h-[calc(100vh-4rem)] sm:pt-28"
+            : "h-[calc(100vh-1rem)] pt-4 sm:h-[calc(100vh-1.25rem)] sm:pt-5"
         }`}
       >
         {error ? (
@@ -915,9 +854,9 @@ export default function VoiceConsoleClient({
           </div>
         ) : null}
 
-        <section className={cardShell("overflow-hidden shadow-[0_30px_90px_rgba(0,0,0,0.35)]")}>
-          <div className="grid min-h-[calc(100vh-11rem)] lg:grid-cols-[232px_minmax(0,1fr)]">
-            <aside className="border-b border-slate-800/90 bg-[linear-gradient(180deg,rgba(12,18,32,0.98),rgba(7,13,24,0.98))] lg:border-b-0 lg:border-r">
+        <section className={cardShell("h-full overflow-hidden shadow-[0_30px_90px_rgba(0,0,0,0.35)]")}>
+          <div className="grid h-full min-h-0 lg:grid-cols-[240px_minmax(0,1fr)]">
+            <aside className="overflow-y-auto overflow-x-hidden border-b border-slate-800/90 bg-[linear-gradient(180deg,rgba(12,18,32,0.98),rgba(7,13,24,0.98))] lg:border-b-0 lg:border-r">
               <div className="flex items-center gap-3 border-b border-slate-800/90 px-5 py-5">
                 <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]">
                   <Grip className="h-5 w-5 text-slate-200" />
@@ -988,7 +927,7 @@ export default function VoiceConsoleClient({
               </div>
             </aside>
 
-            <div className="min-w-0 bg-[linear-gradient(180deg,rgba(9,16,30,0.98),rgba(4,8,18,1))]">
+            <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] min-w-0 overflow-hidden bg-[linear-gradient(180deg,rgba(9,16,30,0.98),rgba(4,8,18,1))]">
               <div className="border-b border-slate-800/90 px-4 py-4 sm:px-5 lg:px-6">
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                   <div className="flex min-w-0 items-center gap-3">
@@ -1007,19 +946,23 @@ export default function VoiceConsoleClient({
 
                   <div className="flex flex-col gap-3 xl:items-end">
                     <div className="flex flex-wrap items-center gap-2">
-                      <RegistrationBadge />
+                      <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-sm">
+                        <span className="text-slate-500">Browser:</span>
+                        <RegistrationBadge />
+                      </div>
                       <span className={`rounded-full border px-3 py-2 text-sm font-semibold ${statusTone(liveStatus)}`}>
                         {liveStatus === "live" ? "Live" : liveStatus === "connecting" ? "Connecting" : "Offline"}
                       </span>
+                      <span className="text-sm text-slate-500">Status:</span>
                       <select
                         value={statusSelectValue}
                         onChange={(event) =>
-                          handlePresenceUpdate(event.target.value as (typeof PRESENCE_STATUSES)[number])
+                          handlePresenceUpdate(event.target.value as (typeof MANUAL_PRESENCE_STATUSES)[number])
                         }
                         disabled={presencePending}
                         className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-100 outline-none"
                       >
-                        {PRESENCE_STATUSES.map((status) => (
+                        {MANUAL_PRESENCE_STATUSES.map((status) => (
                           <option key={status} value={status}>
                             {status}
                           </option>
@@ -1039,10 +982,10 @@ export default function VoiceConsoleClient({
                 </div>
               </div>
 
-              <div className="min-w-0 px-4 py-5 sm:px-5 lg:px-6">
+              <div className="min-w-0 overflow-hidden px-4 py-5 sm:px-5 lg:px-6">
                 {activeTab === "operations" ? (
-                  <section className="grid gap-4 xl:grid-cols-[370px_minmax(0,1fr)_400px] xl:items-start">
-                    <aside className="min-w-0 space-y-4">
+                  <section className="grid h-full min-h-0 gap-4 overflow-hidden xl:grid-cols-[340px_minmax(0,1fr)_380px] xl:items-start">
+                    <aside className="min-w-0 space-y-4 overflow-y-auto overflow-x-hidden pr-1">
                       <div className={cardShell("p-4")}>
                         <div className="flex items-center justify-between gap-3">
                           <div>
@@ -1082,7 +1025,7 @@ export default function VoiceConsoleClient({
                           className="mt-4 w-full rounded-2xl border border-slate-800 bg-slate-900/75 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500"
                         />
 
-                        <div className="mt-4 space-y-3 xl:max-h-[36rem] xl:overflow-y-auto">
+                        <div className="mt-4 space-y-3">
                           {queueItemsByView.length ? (
                             queueItemsByView.map((item) => {
                               const queueItem = item as any;
@@ -1177,7 +1120,7 @@ export default function VoiceConsoleClient({
                       </div>
                     </aside>
 
-                    <section className="min-w-0 space-y-4">
+                    <section className="min-w-0 space-y-4 overflow-y-auto overflow-x-hidden pr-1">
                       <div className={cardShell("p-5")}>
                         <div className="flex items-start justify-between gap-4">
                           <div className="min-w-0">
@@ -1390,7 +1333,7 @@ export default function VoiceConsoleClient({
                       </div>
                     </section>
 
-                    <aside className="min-w-0 space-y-4">
+                    <aside className="min-w-0 space-y-4 overflow-y-auto overflow-x-hidden pr-1">
                       <div className={cardShell("p-4")}>
                         <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3">
                           {[
@@ -1547,7 +1490,7 @@ export default function VoiceConsoleClient({
                 ) : null}
 
                 {activeTab === "recent" ? (
-                  <section className="space-y-5">
+                  <section className="flex h-full min-h-0 flex-col gap-5 overflow-hidden">
                     <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                       <div>
                         <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Call History</div>
@@ -1556,7 +1499,7 @@ export default function VoiceConsoleClient({
                           Review every voice interaction with drill-down actions and CRM-linked context.
                         </p>
                       </div>
-                      <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[520px]">
+                      <div className="grid max-w-full gap-3 sm:grid-cols-2 xl:w-[min(100%,520px)]">
                         <div className="rounded-[24px] border border-slate-800 bg-slate-900/70 p-4 sm:col-span-2">
                           <div className="grid gap-2 sm:grid-cols-4">
                             {([
@@ -1599,7 +1542,7 @@ export default function VoiceConsoleClient({
                       </div>
                     </div>
 
-                    <section className={cardShell("p-5")}>
+                    <section className={cardShell("flex min-h-0 flex-1 flex-col overflow-hidden p-5")}>
                       <div className="mb-4 flex items-center justify-between gap-3">
                         <div className="text-sm text-slate-400">{formatRefreshStamp(lastRefreshAt)}</div>
                         <button
@@ -1610,13 +1553,13 @@ export default function VoiceConsoleClient({
                           Export
                         </button>
                       </div>
-                      <div className="space-y-5">
+                      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overflow-x-hidden pr-1">
                         {groupedRecentCalls.length ? (
                           groupedRecentCalls.map(([bucket, calls]) => (
                             <div key={bucket} className="space-y-3">
                               <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">{bucket}</div>
-                              <div className="overflow-x-auto">
-                                <div className="min-w-[1080px] rounded-2xl border border-slate-800 bg-slate-900/60">
+                              <div className="max-w-full overflow-x-auto">
+                                <div className="min-w-full rounded-2xl border border-slate-800 bg-slate-900/60">
                                   <div className="grid grid-cols-[72px_110px_220px_100px_220px_110px_100px_110px_190px] gap-3 border-b border-slate-800 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                                     <div>View</div>
                                     <div>Time</div>
@@ -1831,7 +1774,7 @@ export default function VoiceConsoleClient({
                 ) : null}
 
                 {activeTab === "recordings" ? (
-                  <section className={cardShell("p-5")}>
+                  <section className={cardShell("flex h-full min-h-0 flex-col overflow-hidden p-5")}>
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Recordings</div>
@@ -1841,7 +1784,7 @@ export default function VoiceConsoleClient({
                         {filteredRecordings.length}
                       </span>
                     </div>
-                    <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                    <div className="mt-4 grid min-h-0 flex-1 gap-4 overflow-y-auto overflow-x-hidden pr-1 xl:grid-cols-2">
                       {filteredRecordings.length ? (
                         filteredRecordings.map((call) => (
                           <div key={call.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
@@ -1885,7 +1828,7 @@ export default function VoiceConsoleClient({
                 ) : null}
 
                 {activeTab === "followups" ? (
-                  <section className={cardShell("p-5")}>
+                  <section className={cardShell("flex h-full min-h-0 flex-col overflow-hidden p-5")}>
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Follow-ups</div>
@@ -1895,7 +1838,7 @@ export default function VoiceConsoleClient({
                         {filteredFollowUps.length}
                       </span>
                     </div>
-                    <div className="mt-4 space-y-3">
+                    <div className="mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden pr-1">
                       {filteredFollowUps.length ? (
                         filteredFollowUps.map((item) => (
                           <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
@@ -1958,7 +1901,7 @@ export default function VoiceConsoleClient({
                 ) : null}
 
                 {activeTab === "agents" ? (
-                  <section className={cardShell("p-5")}>
+                  <section className={cardShell("flex h-full min-h-0 flex-col overflow-hidden p-5")}>
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Agents</div>
@@ -1968,7 +1911,7 @@ export default function VoiceConsoleClient({
                         {visibleAgents.length}
                       </span>
                     </div>
-                    <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                    <div className="mt-4 grid min-h-0 flex-1 gap-4 overflow-y-auto overflow-x-hidden pr-1 lg:grid-cols-3">
                       {visibleAgents.length ? (
                         visibleAgents.map((agent) => {
                           const row = agent as any;
@@ -2024,7 +1967,7 @@ export default function VoiceConsoleClient({
                 ) : null}
 
                 {activeTab === "settings" ? (
-                  <section className={cardShell("p-5")}>
+                  <section className={cardShell("h-full min-h-0 overflow-y-auto overflow-x-hidden p-5")}>
                     <VoiceSettingsClient />
                   </section>
                 ) : null}

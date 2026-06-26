@@ -34,7 +34,7 @@ export async function POST(request: Request) {
 
     const presence = await updateVoicePresence({
       userId: viewer.targetUserId,
-      status: body.status || "",
+      status: body.status ?? null,
       currentCallId: body.currentCallId ?? null,
     });
 

@@ -136,13 +136,6 @@ function readStoredRecentCalls() {
   }
 }
 
-function mapAvailabilityToPresenceStatus(state: SoftphoneAvailabilityState) {
-  if (state === "AVAILABLE") return "AVAILABLE";
-  if (state === "BUSY" || state === "RINGING" || state === "TALKING") return "BUSY";
-  if (state === "BREAK" || state === "AWAY") return "BREAK";
-  return "OFFLINE";
-}
-
 function makeFavoriteNumbers(sessionName: string | null | undefined) {
   return [
     { label: "Brendah", phone: "+254716722601" },
@@ -183,7 +176,6 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const activityTimerRef = useRef<number | null>(null);
   const microphoneTestTimeoutRef = useRef<number | null>(null);
   const speakerTestTimeoutRef = useRef<number | null>(null);
   const stateRef = useRef<SoftphoneState>("NOT_REGISTERED");
@@ -197,9 +189,8 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
   const [transportMode, setTransportMode] = useState<"mock" | "webrtc" | "unavailable">("mock");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-  const syncPresenceNow = async (nextAvailability?: SoftphoneAvailabilityState) => {
+  const syncPresenceNow = async (_nextAvailability?: SoftphoneAvailabilityState) => {
     if (!session?.user) return;
-    const targetAvailability = nextAvailability ?? availabilityRef.current;
     setLastHeartbeatAt(new Date().toISOString());
     try {
       const registration = webRtcRegistrationRef.current;
@@ -207,7 +198,6 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          status: mapAvailabilityToPresenceStatus(targetAvailability),
           currentCallId: currentCallRef.current?.id ?? null,
           webrtc: registration
             ? {
@@ -831,45 +821,12 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!session?.user) return;
-    if (state === "AVAILABLE" && availability === "OFFLINE") {
-      setAvailability("AVAILABLE");
-    }
-  }, [availability, session?.user, state]);
-
-  useEffect(() => {
-    if (typeof document === "undefined" || !session?.user) return;
-    const markAway = () => {
-      if (currentCall) return;
-      setAvailability(document.visibilityState === "hidden" ? "AWAY" : "AVAILABLE");
-    };
-    const markActive = () => {
-      if (currentCall) return;
-      setAvailability("AVAILABLE");
-      if (activityTimerRef.current) window.clearTimeout(activityTimerRef.current);
-      activityTimerRef.current = window.setTimeout(() => {
-        if (!currentCall) setAvailability("AWAY");
-      }, 60000);
-    };
-    const events: Array<keyof WindowEventMap> = ["pointerdown", "keydown", "focus"];
-    const visibilityHandler = () => markAway();
-    markActive();
-    document.addEventListener("visibilitychange", visibilityHandler);
-    events.forEach((eventName) => window.addEventListener(eventName, markActive));
-    return () => {
-      document.removeEventListener("visibilitychange", visibilityHandler);
-      events.forEach((eventName) => window.removeEventListener(eventName, markActive));
-      if (activityTimerRef.current) window.clearTimeout(activityTimerRef.current);
-    };
-  }, [currentCall, session?.user]);
-
-  useEffect(() => {
-    if (!session?.user) return;
     void syncPresenceNow();
     const interval = window.setInterval(() => {
       void syncPresenceNow();
     }, 45000);
     return () => window.clearInterval(interval);
-  }, [availability, currentCall?.id, session?.user, state]);
+  }, [currentCall?.id, session?.user, state]);
 
   useEffect(() => {
     const audio = remoteAudioRef.current as (HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> }) | null;
@@ -884,7 +841,6 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
     return () => {
       if (microphoneTestTimeoutRef.current) window.clearTimeout(microphoneTestTimeoutRef.current);
       if (speakerTestTimeoutRef.current) window.clearTimeout(speakerTestTimeoutRef.current);
-      if (activityTimerRef.current) window.clearTimeout(activityTimerRef.current);
       stopMeter();
       localStreamRef.current?.getTracks().forEach((track) => track.stop());
       localStreamRef.current = null;
