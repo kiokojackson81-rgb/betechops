@@ -24,6 +24,7 @@ import {
   listAssignedQuoteRequests,
   type SerializedQuoteRequest,
 } from "@/lib/quoteRequests";
+import { getVoiceLiveSnapshot, resolveVoiceViewer } from "@/lib/voiceOperations";
 
 export const dynamic = "force-dynamic";
 
@@ -439,11 +440,17 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
     rawQuoteRequests,
     allAgentOrders,
     podFollowUp,
+    voiceSnapshot,
   ] = await Promise.all([
     safeLoad("website orders", () => listTrackerWebsiteOrders(), [] as TrackerWebsiteOrder[]),
     safeLoad("quote requests", () => listVisibleQuoteRequests({ userId, role: user.role }), [] as SerializedQuoteRequest[]),
     safeLoad("agent orders", () => getAdminAgentSales({ statuses: [...AGENT_OPEN_STATUSES] }), [] as TrackerAgentOrder[]),
     safeLoad("pod follow-up", () => listPodFollowUp(5), [] as PodFollowUpItem[]),
+    safeLoad("voice operations", async () => {
+      const voiceViewer = await resolveVoiceViewer();
+      if (!voiceViewer) return null;
+      return getVoiceLiveSnapshot({ viewer: voiceViewer });
+    }, null as Awaited<ReturnType<typeof getVoiceLiveSnapshot>> | null),
   ]);
 
   const websiteOrders =
@@ -634,6 +641,14 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
     })
     .slice(0, 14);
 
+  const voiceQueueCount = voiceSnapshot?.viewer.isAdmin
+    ? Number(voiceSnapshot?.summary.missedCalls ?? 0) + Number(voiceSnapshot?.summary.newVoiceLeads ?? 0)
+    : Number(voiceSnapshot?.summary.myFollowUps ?? 0);
+  const voiceMissedCount = voiceSnapshot?.viewer.isAdmin
+    ? Number(voiceSnapshot?.summary.missedCalls ?? 0)
+    : Number(voiceSnapshot?.summary.myMissedCalls ?? 0);
+  const voiceFollowUpCount = Math.max(voiceQueueCount - voiceMissedCount, 0);
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <main className="mx-auto max-w-7xl space-y-6 p-6">
@@ -675,7 +690,7 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
             </p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <PendingKpiCard
               title="Web Orders"
               count={websiteOrdersPending.length}
@@ -703,6 +718,13 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
               currentPeriodCount={pendingPodFollowUpInPeriod.length}
               carriedForwardCount={pendingPodFollowUpCarriedForward.length}
               href="/marketing/receipts?tab=pos&pod=pending"
+            />
+            <PendingKpiCard
+              title="Missed Calls / Follow-ups"
+              count={voiceQueueCount}
+              currentPeriodCount={voiceMissedCount}
+              carriedForwardCount={voiceFollowUpCount}
+              href="/attendant/voice?tab=followups"
             />
           </div>
 

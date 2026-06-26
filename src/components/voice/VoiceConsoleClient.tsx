@@ -906,10 +906,12 @@ export default function VoiceConsoleClient({
     : "Choose a live caller or callback task to begin work.";
 
   const statusSelectValue =
-    myPresence?.status &&
-    MANUAL_PRESENCE_STATUSES.includes(myPresence.status as (typeof MANUAL_PRESENCE_STATUSES)[number])
-      ? (myPresence.status as (typeof MANUAL_PRESENCE_STATUSES)[number])
-      : "AVAILABLE";
+    softphone.availability === "AVAILABLE"
+      ? "AVAILABLE"
+      : myPresence?.status &&
+          MANUAL_PRESENCE_STATUSES.includes(myPresence.status as (typeof MANUAL_PRESENCE_STATUSES)[number])
+        ? (myPresence.status as (typeof MANUAL_PRESENCE_STATUSES)[number])
+        : "OFFLINE";
 
   const handleCallback = (phone: string | null | undefined) => {
     const normalizedPhone = String(phone || "").trim();

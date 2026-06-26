@@ -49,6 +49,12 @@ type DashboardCounts = {
   quotationsCarriedForward: number;
 };
 
+type VoiceDeskSummary = {
+  queueCount: number;
+  missedCount: number;
+  followUpCount: number;
+};
+
 const toDateInput = (value: Date) => {
   const year = value.getFullYear();
   const month = String(value.getMonth() + 1).padStart(2, "0");
@@ -186,6 +192,11 @@ export default function MarketingReceiptsPage() {
     podPendingCarriedForward: 0,
     webOrdersCarriedForward: 0,
     quotationsCarriedForward: 0,
+  });
+  const [voiceDeskSummary, setVoiceDeskSummary] = useState<VoiceDeskSummary>({
+    queueCount: 0,
+    missedCount: 0,
+    followUpCount: 0,
   });
   const [currentSearch, setCurrentSearch] = useState("");
   const [podFilter, setPodFilter] = useState<PodFilterValue>("all");
@@ -374,6 +385,43 @@ export default function MarketingReceiptsPage() {
     };
   }, [filters.end, filters.start]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const syncVoiceDeskSummary = async () => {
+      const voicePayload = await fetchJson<{
+        summary?: {
+          missedCalls?: number;
+          myMissedCalls?: number;
+          myFollowUps?: number;
+          newVoiceLeads?: number;
+        };
+        viewer?: { isAdmin?: boolean };
+      }>("/api/voice/live");
+
+      if (cancelled) return;
+
+      const isAdmin = Boolean(voicePayload?.viewer?.isAdmin);
+      const queueCount = isAdmin
+        ? Number(voicePayload?.summary?.missedCalls ?? 0) + Number(voicePayload?.summary?.newVoiceLeads ?? 0)
+        : Number(voicePayload?.summary?.myFollowUps ?? 0);
+      const missedCount = isAdmin
+        ? Number(voicePayload?.summary?.missedCalls ?? 0)
+        : Number(voicePayload?.summary?.myMissedCalls ?? 0);
+
+      setVoiceDeskSummary({
+        queueCount,
+        missedCount,
+        followUpCount: Math.max(queueCount - missedCount, 0),
+      });
+    };
+
+    void syncVoiceDeskSummary();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <main className="mx-auto max-w-7xl space-y-4 p-4">
@@ -516,20 +564,23 @@ export default function MarketingReceiptsPage() {
               Current period {dashboardCounts.podPendingCurrentPeriod} · Carried forward {dashboardCounts.podPendingCarriedForward}
             </div>
           </div>
-          <div className="rounded-[20px] border border-white/10 bg-slate-900/80 p-3">
+          <Link
+            href="/attendant/voice?tab=followups"
+            className="rounded-[20px] border border-white/10 bg-slate-900/80 p-3 transition hover:border-cyan-400/30 hover:bg-slate-900"
+          >
             <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-              Pending Work
+              Missed Calls / Follow-ups
             </div>
             <div className="mt-2 text-2xl font-semibold text-cyan-200">
-              {dashboardCounts.podPending + dashboardCounts.webOrders + dashboardCounts.quotations}
+              {voiceDeskSummary.queueCount}
             </div>
-            <div className="mt-1 text-xs text-slate-400">Web orders, quotations, and POD follow-up</div>
+            <div className="mt-1 text-xs text-slate-400">Actionable voice callbacks and follow-up work</div>
             <div className="mt-1 text-[11px] text-slate-500">
-              Current period {dashboardCounts.podPendingCurrentPeriod + dashboardCounts.webOrdersCurrentPeriod + dashboardCounts.quotationsCurrentPeriod}
+              Missed {voiceDeskSummary.missedCount}
               {" · "}
-              Carried forward {dashboardCounts.podPendingCarriedForward + dashboardCounts.webOrdersCarriedForward + dashboardCounts.quotationsCarriedForward}
+              Follow-ups {voiceDeskSummary.followUpCount}
             </div>
-          </div>
+          </Link>
         </section>
 
         <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
