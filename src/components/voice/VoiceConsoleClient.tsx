@@ -228,6 +228,10 @@ function formatPresenceChoiceLabel(status: (typeof MANUAL_PRESENCE_STATUSES)[num
   return status === "AVAILABLE" ? "Available" : "Offline";
 }
 
+function isInternalVoiceHref(value: string | null | undefined) {
+  return Boolean(value) && String(value).startsWith("/");
+}
+
 export default function VoiceConsoleClient({
   mode,
   initialData,
@@ -366,6 +370,17 @@ export default function VoiceConsoleClient({
     const params = new URLSearchParams(searchParams.toString());
     params.set("range", nextFilter);
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  };
+
+  const openWorkspaceHref = (href: string | null | undefined) => {
+    const nextHref = String(href || "").trim();
+    if (!nextHref || nextHref === "#") return;
+    setDetailModalOpen(false);
+    if (isInternalVoiceHref(nextHref)) {
+      router.push(nextHref);
+      return;
+    }
+    window.location.assign(nextHref);
   };
 
   const refreshSnapshot = async (nextCallId?: string | null, nextPhone?: string | null) => {
@@ -2139,18 +2154,33 @@ export default function VoiceConsoleClient({
                       <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
                         <div className="text-lg font-semibold text-white">Quick Actions</div>
                         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                          <Link href={selectedCustomerLinks.customer} className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-center text-sm font-semibold text-cyan-100 transition hover:border-cyan-400">
-                            Open CRM
-                          </Link>
-                          <Link href={selectedCustomerLinks.quote} className="rounded-xl border border-fuchsia-500/30 bg-fuchsia-500/10 px-4 py-3 text-center text-sm font-semibold text-fuchsia-100 transition hover:border-fuchsia-400">
-                            Create Quote
-                          </Link>
-                          <Link href={selectedCustomerLinks.receipt} className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-center text-sm font-semibold text-emerald-100 transition hover:border-emerald-400">
-                            Create Receipt
-                          </Link>
                           <button
                             type="button"
-                            onClick={() => switchTab("followups")}
+                            onClick={() => openWorkspaceHref(selectedCustomerLinks.customer)}
+                            className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-center text-sm font-semibold text-cyan-100 transition hover:border-cyan-400"
+                          >
+                            Open CRM
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openWorkspaceHref(selectedCustomerLinks.quote)}
+                            className="rounded-xl border border-fuchsia-500/30 bg-fuchsia-500/10 px-4 py-3 text-center text-sm font-semibold text-fuchsia-100 transition hover:border-fuchsia-400"
+                          >
+                            Create Quote
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openWorkspaceHref(selectedCustomerLinks.receipt)}
+                            className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-center text-sm font-semibold text-emerald-100 transition hover:border-emerald-400"
+                          >
+                            Create Receipt
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDetailModalOpen(false);
+                              switchTab("followups");
+                            }}
                             className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-center text-sm font-semibold text-amber-100 transition hover:border-amber-400"
                           >
                             Open Follow-ups
