@@ -70,6 +70,13 @@ export const callFeedbackSchema = z
 
 export type CallFeedbackInput = z.infer<typeof callFeedbackSchema>;
 
+export function isCallFeedbackSchemaMissingError(error: unknown) {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
+  if (error.code !== "P2021") return false;
+  const message = String(error.message || "");
+  return message.includes("CallFeedback") || message.includes("CallFeedbackSmsLog");
+}
+
 export function sanitizeFeedbackText(value: string | null | undefined) {
   return String(value || "")
     .replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, " ")

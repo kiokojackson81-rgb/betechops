@@ -41,7 +41,11 @@ function resolveKnownRolledBackMigrations(envOverrides) {
 }
 
 function runPrismaMigrateDeploy() {
-  const directUrl = (process.env.DIRECT_URL || "").trim();
+  const directUrl =
+    (process.env.DIRECT_URL || "").trim() ||
+    (process.env.DATABASE_URL_UNPOOLED || "").trim() ||
+    (process.env.POSTGRES_URL_NON_POOLING || "").trim() ||
+    (process.env.DATABASE_URL_NON_POOLING || "").trim();
   const databaseUrl = (process.env.DATABASE_URL || "").trim();
   const effectiveDirectUrl = directUrl || databaseUrl;
   const envOverrides = effectiveDirectUrl
@@ -52,7 +56,7 @@ function runPrismaMigrateDeploy() {
     : {};
 
   if (!directUrl) {
-    console.warn("[vercel-build] DIRECT_URL is not set. Skipping prisma migrate deploy to avoid Neon advisory-lock failures on pooled connections. Set DIRECT_URL to a direct non-pooler connection and run migrations separately.");
+    console.warn("[vercel-build] No direct non-pooling database URL is set. Skipping prisma migrate deploy to avoid advisory-lock failures on pooled connections. Set DIRECT_URL, DATABASE_URL_UNPOOLED, or POSTGRES_URL_NON_POOLING and run migrations separately.");
     return;
   }
 
