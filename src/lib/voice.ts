@@ -325,9 +325,9 @@ function buildWorkingHoursSelection(input: {
     (target) => target.userId && target.userId !== input.preferredTarget?.userId,
   );
   const orderedTargets = [
-    ...(input.preferredTarget?.isAvailable ? [input.preferredTarget] : []),
-    ...alternateTargets.filter((target) => target.isAvailable),
-    ...(input.adminTarget.isAvailable ? [input.adminTarget] : []),
+    ...(input.preferredTarget?.phoneNumber ? [input.preferredTarget] : []),
+    ...alternateTargets.filter((target) => Boolean(target.phoneNumber)),
+    ...(input.adminTarget.phoneNumber ? [input.adminTarget] : []),
   ].filter((target, index, array) => array.findIndex((candidate) => candidate.label === target.label) === index);
 
   return {
