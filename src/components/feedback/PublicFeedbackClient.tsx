@@ -39,6 +39,9 @@ type PublicFeedbackClientProps = {
 
 export default function PublicFeedbackClient({ token = "", initialState, popularProducts }: PublicFeedbackClientProps) {
   const router = useRouter();
+  const supportWhatsAppHref = "https://wa.me/254722151083?text=Hello%20Betech%20Solar%20Solution";
+  const referAndEarnHref = "https://agents.betech.co.ke/";
+  const tiktokHref = "https://www.tiktok.com/@betechsolarsolutionske";
   const [form, setForm] = useState({
     rating: 0,
     contactReason: "",
@@ -182,22 +185,26 @@ export default function PublicFeedbackClient({ token = "", initialState, popular
         <div className={shopStyles.shell}>
           <div className="mx-auto max-w-[1320px]">
             <section className={`${shopStyles.softCard} mx-auto max-w-[760px] overflow-hidden p-5 sm:p-7`}>
-              <div className={shopStyles.sectionEyebrow}>Customer Feedback</div>
-              <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-950 sm:text-[2.65rem]">
-                Thank You for Calling Betech Solar Solutions
-              </h1>
-              <h2 className="mt-2 text-xl font-semibold text-[#7a0000] sm:text-2xl">We&apos;d Love Your Feedback</h2>
-              <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base">
-                Thank you for choosing Betech Solar Solutions. Your feedback helps us improve our products and customer service.
-              </p>
+              {!submitted ? (
+                <>
+                  <div className={shopStyles.sectionEyebrow}>Customer Feedback</div>
+                  <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-950 sm:text-[2.65rem]">
+                    Thank You for Calling Betech Solar Solutions
+                  </h1>
+                  <h2 className="mt-2 text-xl font-semibold text-[#7a0000] sm:text-2xl">We&apos;d Love Your Feedback</h2>
+                  <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base">
+                    Thank you for choosing Betech Solar Solutions. Your feedback helps us improve our products and customer service.
+                  </p>
 
-              <div className="mt-4 flex flex-wrap gap-2">
-                {trustBadges.map((badge) => (
-                  <span key={badge.label} className={`rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-[0.14em] ${badge.tone}`}>
-                    {badge.label}
-                  </span>
-                ))}
-              </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {trustBadges.map((badge) => (
+                      <span key={badge.label} className={`rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-[0.14em] ${badge.tone}`}>
+                        {badge.label}
+                      </span>
+                    ))}
+                  </div>
+                </>
+              ) : null}
 
               {isFormActive ? (
                 <form className="mt-6 space-y-6" onSubmit={handleSubmit}>
@@ -361,7 +368,7 @@ Junction of Munyu Road and Sheikh Karume Road`}
                     copy="Talk to Betech Solar on WhatsApp for fast product guidance, pricing help, and the best setup for your home or biashara."
                     cta={
                       <TrackedWhatsAppLink
-                        href="https://wa.me/254722151083"
+                        href={supportWhatsAppHref}
                         className={shopStyles.whatsappButton}
                         label="Feedback page WhatsApp support"
                         context="feedback_page"
@@ -378,15 +385,12 @@ Junction of Munyu Road and Sheikh Karume Road`}
                     title="Refer and earn"
                     copy="You could earn upto Ksh100,000 if you refer customer to us. Share serious solar enquiries and let our team handle product matching, quotation, and closing."
                     cta={
-                      <TrackedWhatsAppLink
-                        href="https://wa.me/254722151083?text=Hello%20Betech%20Solar%2C%20I%20want%20to%20refer%20a%20customer%20and%20learn%20how%20to%20earn."
+                      <Link
+                        href={referAndEarnHref}
                         className={shopStyles.goldButton}
-                        label="Feedback page refer and earn"
-                        context="feedback_refer_earn"
-                        ariaLabel="Ask about refer and earn"
                       >
                         Start referring
-                      </TrackedWhatsAppLink>
+                      </Link>
                     }
                   />
                 ) : null}
@@ -400,7 +404,7 @@ Junction of Munyu Road and Sheikh Karume Road`}
                         <Link href="tel:0722151083" className={shopStyles.primaryButton}>Call 0722151083</Link>
                         <Link href="mailto:info@betech.co.ke" className={shopStyles.secondaryButton}>Email us</Link>
                         <Link
-                          href="https://www.tiktok.com/@betechsolarsolutionske"
+                          href={tiktokHref}
                           target="_blank"
                           rel="noreferrer"
                           className={shopStyles.goldButton}
@@ -449,7 +453,7 @@ Junction of Munyu Road and Sheikh Karume Road`}
 
 function ThankYouCard() {
   return (
-    <div className={`${shopStyles.lightCard} mt-6 p-5 sm:p-6`}>
+    <div className={shopStyles.lightCard + " p-5 sm:p-6"}>
       <div className="flex items-start gap-3">
         <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#effcf4] text-[#0f9d58]">
           <CheckCircle2 className="h-6 w-6" />
@@ -461,12 +465,21 @@ function ThankYouCard() {
           </p>
         </div>
       </div>
-      <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+      <div className="mt-5 grid gap-3 sm:grid-cols-2">
         <Link href={SHOP_HOME_HREF} className={`${shopStyles.primaryButton} flex-1`}>
           Shop Solar Products
         </Link>
         <TrackedWhatsAppLink
-          href="https://wa.me/254722151083"
+          href="https://wa.me/254722151083?text=Hello%20Betech%20Solar%20Solution"
+          className={`${shopStyles.whatsappButton} flex-1`}
+          label="Feedback success shop whatsapp products"
+          context="feedback_success"
+          ariaLabel="Shop Betech Solar products on WhatsApp"
+        >
+          Shop WhatsApp Products
+        </TrackedWhatsAppLink>
+        <TrackedWhatsAppLink
+          href="https://wa.me/254722151083?text=Hello%20Betech%20Solar%20Solution"
           className={`${shopStyles.whatsappButton} flex-1`}
           label="Feedback success WhatsApp support"
           context="feedback_success"
@@ -475,12 +488,28 @@ function ThankYouCard() {
           WhatsApp Support
         </TrackedWhatsAppLink>
         <Link
+          href="https://agents.betech.co.ke/"
+          target="_blank"
+          rel="noreferrer"
+          className={`${shopStyles.secondaryButton} flex-1`}
+        >
+          Refer & Earn
+        </Link>
+        <Link
           href="https://www.tiktok.com/@betechsolarsolutionske"
           target="_blank"
           rel="noreferrer"
           className={`${shopStyles.goldButton} flex-1`}
         >
           Follow us on TikTok
+        </Link>
+        <Link
+          href="https://www.tiktok.com/@betechsolarsolutionske"
+          target="_blank"
+          rel="noreferrer"
+          className={`${shopStyles.goldButton} flex-1 sm:col-span-2`}
+        >
+          See Our Recent Projects
         </Link>
       </div>
     </div>
