@@ -502,6 +502,36 @@ export function normalizeVoiceStatus(payload: VoicePayload) {
   );
 }
 
+export function inferVoiceCompletionStatus(
+  payload: VoicePayload,
+  options?: {
+    treatZeroDurationSuccessAsNoAnswer?: boolean;
+  },
+) {
+  const hangupCause = safeString(payload.lastBridgeHangupCause || payload.bridgeHangupCause || payload.hangupCause).toUpperCase();
+  if (hangupCause === "USER_BUSY" || hangupCause === "BUSY") return "busy";
+  if (hangupCause === "NO_ANSWER" || hangupCause === "NO ANSWER") return "no_answer";
+
+  const normalizedStatus = safeString(payload.status).toLowerCase();
+  const normalizedSessionState = safeString(payload.callSessionState).toLowerCase();
+  const duration = parseInteger(payload.durationInSeconds || payload.duration) ?? 0;
+  const direction = safeString(payload.direction || "INBOUND").toUpperCase() || "INBOUND";
+  const treatZeroDurationSuccessAsNoAnswer = options?.treatZeroDurationSuccessAsNoAnswer !== false;
+  const isProviderTerminalSuccess =
+    ["success", "successful", "completed", "complete"].includes(normalizedStatus) ||
+    ["completed", "complete"].includes(normalizedSessionState);
+
+  if (isProviderTerminalSuccess && treatZeroDurationSuccessAsNoAnswer && duration <= 0) {
+    return "no_answer";
+  }
+
+  if (isProviderTerminalSuccess && direction === "INBOUND" && duration > 0) {
+    return "answered";
+  }
+
+  return normalizeVoiceStatus(payload);
+}
+
 function parseMoney(value: string | undefined) {
   if (!value) return null;
   const parsed = safeNumber(value, Number.NaN);

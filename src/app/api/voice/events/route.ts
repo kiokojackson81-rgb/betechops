@@ -3,6 +3,7 @@ import {
   createOrUpdateMissedVoiceLead,
   createVoiceEventFromPayload,
   ensureVoiceLeadForCaller,
+  inferVoiceCompletionStatus,
   normalizeVoiceStatus,
   parseVoicePayloadFromRequest,
   upsertVoiceCallFromPayload,
@@ -41,8 +42,14 @@ export async function POST(request: Request) {
         }
       : payload;
 
-    const voiceCall = await upsertVoiceCallFromPayload(normalizedPayload);
-    const voiceEvent = await createVoiceEventFromPayload(normalizedPayload, voiceCall.id);
+    const resolvedStatus = inferVoiceCompletionStatus(normalizedPayload);
+    const resolvedPayload =
+      resolvedStatus === normalizeVoiceStatus(normalizedPayload)
+        ? normalizedPayload
+        : { ...normalizedPayload, status: resolvedStatus };
+
+    const voiceCall = await upsertVoiceCallFromPayload(resolvedPayload);
+    const voiceEvent = await createVoiceEventFromPayload(resolvedPayload, voiceCall.id);
     await ensureVoiceLeadForCaller({
       callerNumber: voiceCall.callerNumber,
       startedAt: voiceCall.startedAt,
@@ -52,7 +59,7 @@ export async function POST(request: Request) {
 
     await createOrUpdateMissedVoiceLead({
       callerNumber: voiceCall.callerNumber,
-      status: normalizeVoiceStatus(normalizedPayload),
+      status: resolvedStatus,
       startedAt: voiceCall.startedAt,
       assignedToId: voiceCall.assignedToId,
     });

@@ -7,8 +7,8 @@ import {
   createVoiceEventFromPayload,
   ensureVoiceLeadForCaller,
   getVoiceRouteTargets,
+  inferVoiceCompletionStatus,
   isVoiceCallActive,
-  normalizeVoiceStatus,
   parseVoicePayloadFromRequest,
   safeString,
   upsertVoiceCallFromPayload,
@@ -119,17 +119,9 @@ function buildRedirectUrl(requestUrl: URL, plan: VoiceRoutePlan, hopIndex: numbe
 }
 
 function inferTerminalStatus(payload: Record<string, string>, plan: VoiceRoutePlan | null) {
-  const cause = safeString(payload.lastBridgeHangupCause || payload.bridgeHangupCause || payload.hangupCause).toUpperCase();
-  if (cause === "USER_BUSY" || cause === "BUSY") return "busy";
-  if (cause === "NO_ANSWER" || cause === "NO ANSWER") return "no_answer";
-
-  const rawStatus = safeString(payload.status).toLowerCase();
-  const duration = Number(safeString(payload.durationInSeconds || payload.duration || "0"));
-  if (plan?.hops.length && rawStatus === "success" && (!Number.isFinite(duration) || duration <= 0)) {
-    return "no_answer";
-  }
-
-  return normalizeVoiceStatus(payload);
+  return inferVoiceCompletionStatus(payload, {
+    treatZeroDurationSuccessAsNoAnswer: Boolean(plan?.hops.length),
+  });
 }
 
 export async function POST(request: Request) {

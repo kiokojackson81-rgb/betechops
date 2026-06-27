@@ -8,17 +8,25 @@ import {
 } from "@/lib/callFeedback";
 
 const SUCCESS_STATUSES = new Set(["success", "successful", "completed", "complete", "answered"]);
+const INBOUND_ANSWERED_STATUSES = new Set(["answered"]);
 
-function isSuccessfulFeedbackCall(call: Pick<VoiceCall, "status" | "durationInSeconds">) {
+function isSuccessfulFeedbackCall(call: Pick<VoiceCall, "direction" | "status" | "durationInSeconds">) {
   const normalizedStatus = String(call.status || "").trim().toLowerCase();
   const duration = Number(call.durationInSeconds || 0);
-  return SUCCESS_STATUSES.has(normalizedStatus) && duration > 15;
+  if (!(duration > 15)) return false;
+
+  const direction = String(call.direction || "").trim().toUpperCase();
+  if (direction === "INBOUND") {
+    return INBOUND_ANSWERED_STATUSES.has(normalizedStatus);
+  }
+
+  return SUCCESS_STATUSES.has(normalizedStatus);
 }
 
 export async function maybeSendCallFeedbackSms(
   call: Pick<
     VoiceCall,
-    "id" | "callerNumber" | "destinationNumber" | "status" | "durationInSeconds" | "assignedToId" | "startedAt" | "endedAt"
+    "id" | "direction" | "callerNumber" | "destinationNumber" | "status" | "durationInSeconds" | "assignedToId" | "startedAt" | "endedAt"
   >,
 ) {
   const normalizedPhone = normalizeFeedbackPhone(call.callerNumber || call.destinationNumber || "");
