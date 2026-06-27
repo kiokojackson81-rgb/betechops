@@ -98,7 +98,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const route = await getVoiceRouteTargets(new Date());
+    const route = await getVoiceRouteTargets({
+      date: new Date(),
+      callerNumber:
+        normalizedPayload.callerNumber || normalizedPayload.caller || normalizedPayload.from || "",
+    });
     const routeDialValues = route.orderedTargets.flatMap((target) =>
       target.dialValues?.length ? target.dialValues : [target.dialValue || target.phoneNumber],
     );
@@ -135,7 +139,7 @@ export async function POST(request: Request) {
       return xmlResponse(buildEmptyVoiceXmlResponse());
     }
 
-    if (!("hasRoutableTarget" in route ? route.hasRoutableTarget : route.orderedTargets.length > 0)) {
+    if (!route.hasRoutableTarget) {
       await createVoiceEventFromPayload(
         {
           ...normalizedPayload,
@@ -146,7 +150,7 @@ export async function POST(request: Request) {
       return xmlResponse(buildVoiceMessageXmlResponse("No agents are currently available. Please try again shortly."));
     }
 
-    if ("usedMobileFallback" in route && route.usedMobileFallback) {
+    if (route.usedMobileFallback) {
       console.warn("[voice.callback.mobile_fallback]", {
         sessionId: voiceCall.sessionId,
         callerNumber: voiceCall.callerNumber,

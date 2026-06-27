@@ -261,34 +261,142 @@ async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], Vo
   };
 }
 
-export async function getVoiceRouteTargets(date = new Date()) {
+type VoiceRouteSelection = {
+  preferredTarget: VoiceRouteTarget | null;
+  orderedTargets: VoiceRouteTarget[];
+  routeReason: "after_hours" | "returning_customer" | "round_robin" | "admin_only";
+};
+
+async function findPreviousAgentTarget(
+  callerNumber: string | null,
+  agentTargets: VoiceRouteTarget[],
+): Promise<VoiceRouteTarget | null> {
+  if (!callerNumber) return null;
+  const phoneVariants = getKenyanPhoneVariants(callerNumber);
+  if (!phoneVariants.length) return null;
+
+  const agentUserIds = agentTargets.map((target) => target.userId).filter((value): value is string => Boolean(value));
+  if (!agentUserIds.length) return null;
+
+  const lastCall = await prisma.voiceCall.findFirst({
+    where: {
+      direction: "INBOUND",
+      callerNumber: { in: phoneVariants },
+      assignedToId: { in: agentUserIds },
+    },
+    orderBy: [{ createdAt: "desc" }],
+    select: {
+      assignedToId: true,
+    },
+  });
+
+  if (!lastCall?.assignedToId) return null;
+  return agentTargets.find((target) => target.userId === lastCall.assignedToId) ?? null;
+}
+
+async function findRoundRobinTarget(agentTargets: VoiceRouteTarget[]) {
+  const agentUserIds = agentTargets.map((target) => target.userId).filter((value): value is string => Boolean(value));
+  if (!agentUserIds.length) return agentTargets[0] ?? null;
+
+  const lastAssignedCall = await prisma.voiceCall.findFirst({
+    where: {
+      direction: "INBOUND",
+      assignedToId: { in: agentUserIds },
+    },
+    orderBy: [{ createdAt: "desc" }],
+    select: {
+      assignedToId: true,
+    },
+  });
+
+  if (!lastAssignedCall?.assignedToId) return agentTargets[0] ?? null;
+  const lastIndex = agentTargets.findIndex((target) => target.userId === lastAssignedCall.assignedToId);
+  if (lastIndex < 0) return agentTargets[0] ?? null;
+  return agentTargets[(lastIndex + 1) % agentTargets.length] ?? agentTargets[0] ?? null;
+}
+
+function buildWorkingHoursSelection(input: {
+  preferredTarget: VoiceRouteTarget | null;
+  agentTargets: VoiceRouteTarget[];
+  adminTarget: VoiceRouteTarget;
+  routeReason: VoiceRouteSelection["routeReason"];
+}): VoiceRouteSelection {
+  const alternateTargets = input.agentTargets.filter(
+    (target) => target.userId && target.userId !== input.preferredTarget?.userId,
+  );
+  const orderedTargets = [
+    ...(input.preferredTarget?.isAvailable ? [input.preferredTarget] : []),
+    ...alternateTargets.filter((target) => target.isAvailable),
+    ...(input.adminTarget.isAvailable ? [input.adminTarget] : []),
+  ].filter((target, index, array) => array.findIndex((candidate) => candidate.label === target.label) === index);
+
+  return {
+    preferredTarget: input.preferredTarget,
+    orderedTargets,
+    routeReason: input.routeReason,
+  };
+}
+
+export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerNumber?: string | null }) {
+  const date = input instanceof Date ? input : input?.date ?? new Date();
+  const callerNumber = normalizeVoiceNumber(input instanceof Date ? "" : input?.callerNumber || "");
   const targets = await buildVoiceTargets();
-  const adminOnly = [targets.ADMIN].filter((target) => target.phoneNumber && target.isAvailable);
   const allConfiguredTargets = [targets.BRENDAH, targets.JENNIFER, targets.ADMIN].filter((target) => target.phoneNumber);
+  const agentTargets = [targets.BRENDAH, targets.JENNIFER].filter((target) => target.phoneNumber);
+  const adminTarget = targets.ADMIN;
+
   if (!isWithinVoiceWorkingHours(date)) {
-    const fallbackTargets = adminOnly.length ? adminOnly : [targets.ADMIN].filter((target) => target.phoneNumber);
+    const fallbackTargets = [adminTarget].filter((target) => target.phoneNumber && target.isAvailable);
+    const orderedTargets = fallbackTargets.length ? fallbackTargets : [adminTarget].filter((target) => target.phoneNumber);
     return {
       routeType: "AFTER_HOURS",
-      orderedTargets: fallbackTargets,
-      primaryTarget: fallbackTargets[0] ?? null,
-      availableTargets: fallbackTargets.filter((target) => target.isAvailable),
-      unavailableTargets: allConfiguredTargets.filter((target) => !fallbackTargets.includes(target)),
-      hasAvailableTarget: fallbackTargets.some((target) => target.isAvailable),
+      orderedTargets,
+      primaryTarget: orderedTargets[0] ?? null,
+      availableTargets: orderedTargets.filter((target) => target.isAvailable),
+      unavailableTargets: allConfiguredTargets.filter((target) => !orderedTargets.includes(target)),
+      hasAvailableTarget: orderedTargets.some((target) => target.isAvailable),
+      hasRoutableTarget: orderedTargets.length > 0,
+      usedMobileFallback: false,
+      routeReason: "after_hours" as const,
     };
   }
 
-  const workingTargets = [targets.BRENDAH, targets.JENNIFER, targets.ADMIN];
-  const availableTargets = workingTargets.filter((target) => target.phoneNumber && target.isAvailable);
-  const fallbackTargets = availableTargets.length
-    ? []
-    : [targets.ADMIN].filter((target) => target.phoneNumber);
-  const orderedTargets = availableTargets.length ? availableTargets : fallbackTargets;
-  const hasRoutableTarget = orderedTargets.length > 0;
+  const previousAgentTarget = await findPreviousAgentTarget(callerNumber, agentTargets);
+  const roundRobinTarget = previousAgentTarget ? null : await findRoundRobinTarget(agentTargets);
+  const selection = previousAgentTarget
+    ? buildWorkingHoursSelection({
+        preferredTarget: previousAgentTarget,
+        agentTargets,
+        adminTarget,
+        routeReason: "returning_customer",
+      })
+    : buildWorkingHoursSelection({
+        preferredTarget: roundRobinTarget,
+        agentTargets,
+        adminTarget,
+        routeReason: "round_robin",
+      });
 
-  if (!availableTargets.length) {
+  const workingTargets = [targets.BRENDAH, targets.JENNIFER, targets.ADMIN];
+  const orderedTargets = selection.orderedTargets.length
+    ? selection.orderedTargets
+    : [adminTarget].filter((target) => target.phoneNumber);
+  const availableTargets = workingTargets.filter((target) => target.phoneNumber && target.isAvailable);
+  const hasRoutableTarget = orderedTargets.length > 0;
+  const primaryTarget =
+    selection.preferredTarget?.userId
+      ? selection.preferredTarget
+      : orderedTargets[0] ?? null;
+
+  if (!availableTargets.length || orderedTargets[0]?.label === "ADMIN") {
     console.warn("[voice.routing.fallback]", {
       routeType: "WORKING_HOURS",
-      reason: fallbackTargets.length ? "using_admin_mobile_fallback" : "no_targets_configured",
+      reason: selection.routeReason,
+      callerNumber,
+      previousAgent: previousAgentTarget?.label ?? null,
+      roundRobinTarget: roundRobinTarget?.label ?? null,
+      primaryTarget: primaryTarget?.label ?? null,
+      orderedTargets: orderedTargets.map((target) => target.label),
       candidates: workingTargets.map((target) => ({
         label: target.label,
         phoneNumber: target.phoneNumber,
@@ -304,13 +412,27 @@ export async function getVoiceRouteTargets(date = new Date()) {
   return {
     routeType: "WORKING_HOURS",
     orderedTargets,
-    primaryTarget: orderedTargets[0] ?? null,
+    primaryTarget,
     availableTargets,
     unavailableTargets: workingTargets.filter((target) => target.phoneNumber && !target.isAvailable),
     hasAvailableTarget: availableTargets.length > 0,
     hasRoutableTarget,
-    usedMobileFallback: !availableTargets.length && fallbackTargets.length > 0,
+    usedMobileFallback: Boolean(orderedTargets.length) && orderedTargets[orderedTargets.length - 1]?.label === "ADMIN",
+    routeReason: selection.routeReason,
   };
+}
+
+async function resolveAnsweredAgentAssignment(destinationNumber: string | null) {
+  const normalizedDestination = normalizeVoiceNumber(destinationNumber || "");
+  if (!normalizedDestination) return null;
+
+  const routingUsers = await resolveRoutingUsers();
+  const brendahPhone = getConfiguredPhone("BRENDAH");
+  const jenniferPhone = getConfiguredPhone("JENNIFER");
+
+  if (normalizedDestination === brendahPhone && routingUsers.BRENDAH) return routingUsers.BRENDAH;
+  if (normalizedDestination === jenniferPhone && routingUsers.JENNIFER) return routingUsers.JENNIFER;
+  return null;
 }
 
 export function buildVoiceXmlResponse(input: {
@@ -415,6 +537,7 @@ export async function upsertVoiceCallFromPayload(payload: VoicePayload, input?: 
   const isActive = isVoiceCallActive(payload);
   const customerLink = callerNumber ? await resolveVoiceCustomerLinkByPhone(callerNumber) : null;
   const customerId = customerLink?.matchedCustomer?.id ?? null;
+  const answeredAgentAssignment = input?.assignedToId == null ? await resolveAnsweredAgentAssignment(destinationNumber) : null;
 
   const voiceCall = await prisma.voiceCall.upsert({
     where: { sessionId },
@@ -427,7 +550,7 @@ export async function upsertVoiceCallFromPayload(payload: VoicePayload, input?: 
       status,
       routedTo: input?.routedTo ?? null,
       routeType: input?.routeType ?? null,
-      assignedToId: input?.assignedToId ?? null,
+      assignedToId: input?.assignedToId ?? answeredAgentAssignment ?? null,
       customerId,
       startedAt: parseDate(payload.startTime) ?? new Date(),
       endedAt: parseDate(payload.endTime),
@@ -447,7 +570,7 @@ export async function upsertVoiceCallFromPayload(payload: VoicePayload, input?: 
       status,
       routedTo: input?.routedTo ?? undefined,
       routeType: input?.routeType ?? undefined,
-      assignedToId: input?.assignedToId ?? undefined,
+      assignedToId: input?.assignedToId ?? answeredAgentAssignment ?? undefined,
       customerId: customerId ?? undefined,
       endedAt: parseDate(payload.endTime) ?? undefined,
       durationInSeconds: parseInteger(payload.durationInSeconds || payload.duration) ?? undefined,
