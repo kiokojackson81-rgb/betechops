@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { callFeedbackSchema, isCallFeedbackSchemaMissingError, normalizeFeedbackPhone } from "@/lib/callFeedback";
-import { prisma } from "@/lib/prisma";
+import {
+  callFeedbackSchema,
+  isCallFeedbackSchemaMissingError,
+  submitFeedbackByToken,
+} from "@/lib/callFeedback";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +39,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json().catch(() => null);
     const parsed = callFeedbackSchema.safeParse({
+      token: body?.token,
       rating: Number(body?.rating),
       contactReason: body?.contactReason,
       staffHelpful: body?.staffHelpful,
@@ -46,7 +50,6 @@ export async function POST(req: NextRequest) {
       name: body?.name,
       phone: body?.phone,
       email: body?.email,
-      callId: body?.callId,
     });
 
     if (!parsed.success) {
@@ -60,40 +63,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const input = parsed.data;
-    const feedback = await prisma.callFeedback.create({
-      data: {
-        rating: input.rating,
-        contactReason: input.contactReason,
-        staffHelpful: input.staffHelpful,
-        questionsAnswered: input.questionsAnswered,
-        recommend: input.recommend,
-        comments: input.comments || null,
-        wantsContact: input.wantsContact,
-        name: input.name || null,
-        phone: normalizeFeedbackPhone(input.phone) || null,
-        email: input.email || null,
-        callId: input.callId || null,
-      },
-      select: {
-        id: true,
-        createdAt: true,
-      },
-    });
+    const result = await submitFeedbackByToken(parsed.data);
+    if (!result.ok) {
+      const status =
+        result.error === "invalid_token" ? 404 : result.error === "expired_token" ? 410 : result.error === "already_submitted" ? 409 : 400;
+      return NextResponse.json({ ok: false, error: result.error }, { status });
+    }
 
     return NextResponse.json({
       ok: true,
-      feedback,
+      feedback: result.feedback,
     });
   } catch (error) {
     if (isCallFeedbackSchemaMissingError(error)) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "feedback_setup_required",
-        },
-        { status: 503 },
-      );
+      return NextResponse.json({ ok: false, error: "feedback_setup_required" }, { status: 503 });
     }
     throw error;
   }

@@ -102,6 +102,7 @@ model User {
   customerVoiceCallNotes               VoiceCallNote[]                 @relation("VoiceCallNoteCustomer")
   assignedVoiceFollowUps               VoiceFollowUp[]                 @relation("VoiceFollowUpAssignee")
   customerVoiceFollowUps               VoiceFollowUp[]                 @relation("VoiceFollowUpCustomer")
+  assignedVoiceCallFeedback            VoiceCallFeedback[]             @relation("VoiceCallFeedbackAgent")
 }
 
 model OtpCode {
@@ -1552,6 +1553,7 @@ model VoiceCall {
   events            VoiceEvent[]
   callNotes         VoiceCallNote[]
   followUps         VoiceFollowUp[]
+  feedbackSessions  VoiceCallFeedback[]
   presenceAssignments VoiceAgentPresence[] @relation("VoicePresenceCurrentCall")
 
   @@index([status, createdAt])
@@ -1685,6 +1687,44 @@ model CallFeedbackSmsLog {
   @@index([phone])
   @@index([sentAt])
   @@index([phone, sentAt])
+}
+
+model VoiceCallFeedback {
+  id                String   @id @default(cuid())
+  token             String   @unique
+  phoneNumber       String
+  normalizedPhone   String
+  voiceCallId       String?
+  agentId           String?
+  callStartedAt     DateTime?
+  callEndedAt       DateTime?
+  smsSent           Boolean  @default(false)
+  smsSentAt         DateTime?
+  submitted         Boolean  @default(false)
+  submittedAt       DateTime?
+  expiresAt         DateTime
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  rating            Int?
+  serviceType       String?
+  staffHelpful      String?
+  questionsAnswered String?
+  wouldRecommend    String?
+  comment           String?
+  customerName      String?
+  customerEmail     String?
+  wantsContact      Boolean  @default(false)
+  followUpCreated   Boolean  @default(false)
+  followUpTaskId    String?
+  voiceCall         VoiceCall? @relation(fields: [voiceCallId], references: [id], onDelete: SetNull)
+  agent            User?      @relation("VoiceCallFeedbackAgent", fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@index([phoneNumber])
+  @@index([normalizedPhone])
+  @@index([voiceCallId])
+  @@index([agentId])
+  @@index([token])
+  @@index([submitted, createdAt])
 }
 
 model Branding {

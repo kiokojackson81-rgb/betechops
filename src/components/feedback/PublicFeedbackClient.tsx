@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { CheckCircle2, Headphones, MapPin, ShieldCheck, Star, Truck } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { AlertCircle, CheckCircle2, Headphones, MapPin, ShieldCheck, Star, Truck } from "lucide-react";
 import type { FormEvent, ReactNode } from "react";
 import { useMemo, useState } from "react";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
@@ -25,16 +26,17 @@ const contactReasons = [
   "Other",
 ] as const;
 
-const helpfulOptions = ["Yes, very helpful", "Somewhat helpful", "No"] as const;
+const helpfulOptions = ["Very Helpful", "Somewhat Helpful", "No"] as const;
 const answeredOptions = ["Yes", "Partially", "No"] as const;
 const recommendOptions = ["Definitely", "Maybe", "No"] as const;
 
 type PublicFeedbackClientProps = {
-  initialPhone?: string;
-  initialCallId?: string;
+  token?: string | null;
+  initialState: "active" | "submitted" | "expired" | "invalid";
 };
 
-export default function PublicFeedbackClient({ initialPhone = "", initialCallId = "" }: PublicFeedbackClientProps) {
+export default function PublicFeedbackClient({ token = "", initialState }: PublicFeedbackClientProps) {
+  const router = useRouter();
   const [form, setForm] = useState({
     rating: 0,
     contactReason: "",
@@ -44,16 +46,19 @@ export default function PublicFeedbackClient({ initialPhone = "", initialCallId 
     comments: "",
     wantsContact: "No",
     name: "",
-    phone: initialPhone,
+    phone: "",
     email: "",
-    callId: initialCallId,
   });
+  const [recoveryPhone, setRecoveryPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [submitted, setSubmitted] = useState(initialState === "submitted");
   const [error, setError] = useState<string | null>(null);
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
+  const [recovering, setRecovering] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const wantsContact = form.wantsContact === "Yes";
+  const isFormActive = initialState === "active" && !submitted;
 
   const trustBadges = useMemo(
     () => [
@@ -88,7 +93,7 @@ export default function PublicFeedbackClient({ initialPhone = "", initialCallId 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
-    if (!validate()) return;
+    if (!validate() || !token) return;
     setSubmitting(true);
 
     try {
@@ -96,6 +101,7 @@ export default function PublicFeedbackClient({ initialPhone = "", initialCallId 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          token,
           rating: form.rating,
           contactReason: form.contactReason,
           staffHelpful: form.staffHelpful,
@@ -104,9 +110,8 @@ export default function PublicFeedbackClient({ initialPhone = "", initialCallId 
           comments: form.comments,
           wantsContact,
           name: wantsContact ? form.name : "",
-          phone: wantsContact ? form.phone : form.phone,
+          phone: wantsContact ? form.phone : "",
           email: wantsContact ? form.email : "",
-          callId: form.callId,
         }),
       });
 
@@ -121,6 +126,14 @@ export default function PublicFeedbackClient({ initialPhone = "", initialCallId 
           );
           setFieldErrors(mapped);
         }
+        if (payload?.error === "already_submitted") {
+          setSubmitted(true);
+          return;
+        }
+        if (payload?.error === "expired_token" || payload?.error === "invalid_token") {
+          router.push("/feedback");
+          return;
+        }
         throw new Error(String(payload?.error || "Unable to submit your feedback."));
       }
 
@@ -129,6 +142,36 @@ export default function PublicFeedbackClient({ initialPhone = "", initialCallId 
       setError(submitError instanceof Error ? submitError.message : "Unable to submit your feedback.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleRecovery = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setRecoveryError(null);
+    if (!recoveryPhone.trim()) {
+      setRecoveryError("Enter the phone number you used when calling us.");
+      return;
+    }
+    setRecovering(true);
+    try {
+      const response = await fetch("/api/feedback/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: recoveryPhone }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.url) {
+        throw new Error(
+          payload?.error === "no_recent_call"
+            ? "We could not find a recent completed call for that phone number."
+            : "Unable to create a replacement feedback link.",
+        );
+      }
+      router.push(String(payload.url).replace(/^https?:\/\/[^/]+/, ""));
+    } catch (lookupError) {
+      setRecoveryError(lookupError instanceof Error ? lookupError.message : "Unable to create a replacement feedback link.");
+    } finally {
+      setRecovering(false);
     }
   };
 
@@ -156,7 +199,7 @@ export default function PublicFeedbackClient({ initialPhone = "", initialCallId 
                 ))}
               </div>
 
-              {!submitted ? (
+              {isFormActive ? (
                 <form className="mt-6 space-y-6" onSubmit={handleSubmit}>
                   <section className={`${shopStyles.lightCard} p-4 sm:p-5`}>
                     <div className="text-sm font-bold text-slate-900">1. How would you rate your experience?</div>
@@ -197,7 +240,7 @@ export default function PublicFeedbackClient({ initialPhone = "", initialCallId 
                   />
 
                   <QuestionOptionGroup
-                    title="4. Did we answer all your questions?"
+                    title="4. Did we answer your questions?"
                     options={answeredOptions}
                     value={form.questionsAnswered}
                     onChange={(value) => setForm((current) => ({ ...current, questionsAnswered: value }))}
@@ -205,7 +248,7 @@ export default function PublicFeedbackClient({ initialPhone = "", initialCallId 
                   />
 
                   <QuestionOptionGroup
-                    title="5. Would you recommend Betech Solar Solutions to your friends or family?"
+                    title="5. Would you recommend Betech Solar?"
                     options={recommendOptions}
                     value={form.recommend}
                     onChange={(value) => setForm((current) => ({ ...current, recommend: value }))}
@@ -232,11 +275,7 @@ export default function PublicFeedbackClient({ initialPhone = "", initialCallId 
 
                   {wantsContact ? (
                     <section className={`${shopStyles.lightCard} grid gap-4 p-4 sm:grid-cols-2 sm:p-5`}>
-                      <Field
-                        label="Name"
-                        value={form.name}
-                        onChange={(value) => setForm((current) => ({ ...current, name: value }))}
-                      />
+                      <Field label="Name" value={form.name} onChange={(value) => setForm((current) => ({ ...current, name: value }))} />
                       <Field
                         label="Phone Number"
                         value={form.phone}
@@ -260,42 +299,17 @@ export default function PublicFeedbackClient({ initialPhone = "", initialCallId 
                     {submitting ? "Submitting..." : "Submit Your Feedback"}
                   </button>
                 </form>
+              ) : submitted ? (
+                <ThankYouCard />
               ) : (
-                <div className={`${shopStyles.lightCard} mt-6 p-5 sm:p-6`}>
-                  <div className="flex items-start gap-3">
-                    <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#effcf4] text-[#0f9d58]">
-                      <CheckCircle2 className="h-6 w-6" />
-                    </span>
-                    <div>
-                      <h3 className="text-2xl font-black text-slate-950">Thank you for your feedback!</h3>
-                      <p className="mt-2 text-sm leading-6 text-slate-600">
-                        Your response has been received. Our team will review it and contact you if needed.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-                    <Link href={SHOP_HOME_HREF} className={`${shopStyles.primaryButton} flex-1`}>
-                      Shop Solar Products
-                    </Link>
-                    <TrackedWhatsAppLink
-                      href="https://wa.me/254722151083"
-                      className={`${shopStyles.whatsappButton} flex-1`}
-                      label="Feedback success WhatsApp support"
-                      context="feedback_success"
-                      ariaLabel="Talk to Betech Solar on WhatsApp"
-                    >
-                      WhatsApp Support
-                    </TrackedWhatsAppLink>
-                    <Link
-                      href="https://www.tiktok.com/@betechsolarprojects"
-                      target="_blank"
-                      rel="noreferrer"
-                      className={`${shopStyles.goldButton} flex-1`}
-                    >
-                      See Latest Projects
-                    </Link>
-                  </div>
-                </div>
+                <InvalidCard
+                  isExpired={initialState === "expired"}
+                  recoveryPhone={recoveryPhone}
+                  setRecoveryPhone={setRecoveryPhone}
+                  handleRecovery={handleRecovery}
+                  recovering={recovering}
+                  recoveryError={recoveryError}
+                />
               )}
             </section>
 
@@ -366,6 +380,87 @@ Junction of Munyu Road and Sheikh Karume Road`}
       </main>
       <ShopFooter />
       <FloatingWhatsApp />
+    </div>
+  );
+}
+
+function ThankYouCard() {
+  return (
+    <div className={`${shopStyles.lightCard} mt-6 p-5 sm:p-6`}>
+      <div className="flex items-start gap-3">
+        <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#effcf4] text-[#0f9d58]">
+          <CheckCircle2 className="h-6 w-6" />
+        </span>
+        <div>
+          <h3 className="text-2xl font-black text-slate-950">Thank you for your feedback!</h3>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Your response has been received. Betech Solar Solutions appreciates your time.
+          </p>
+        </div>
+      </div>
+      <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+        <Link href={SHOP_HOME_HREF} className={`${shopStyles.primaryButton} flex-1`}>
+          Shop Solar Products
+        </Link>
+        <TrackedWhatsAppLink
+          href="https://wa.me/254722151083"
+          className={`${shopStyles.whatsappButton} flex-1`}
+          label="Feedback success WhatsApp support"
+          context="feedback_success"
+          ariaLabel="Talk to Betech Solar on WhatsApp"
+        >
+          WhatsApp Support
+        </TrackedWhatsAppLink>
+        <Link
+          href="https://www.tiktok.com/@betechsolarprojects"
+          target="_blank"
+          rel="noreferrer"
+          className={`${shopStyles.goldButton} flex-1`}
+        >
+          Latest Projects
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function InvalidCard({
+  isExpired,
+  recoveryPhone,
+  setRecoveryPhone,
+  handleRecovery,
+  recovering,
+  recoveryError,
+}: {
+  isExpired: boolean;
+  recoveryPhone: string;
+  setRecoveryPhone: (value: string) => void;
+  handleRecovery: (event: FormEvent<HTMLFormElement>) => void;
+  recovering: boolean;
+  recoveryError: string | null;
+}) {
+  return (
+    <div className={`${shopStyles.lightCard} mt-6 p-5 sm:p-6`}>
+      <div className="flex items-start gap-3">
+        <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-100 text-rose-700">
+          <AlertCircle className="h-6 w-6" />
+        </span>
+        <div>
+          <h3 className="text-2xl font-black text-slate-950">
+            {isExpired ? "This feedback link has expired." : "This feedback link is no longer active."}
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            You can still request a secure replacement link by entering the phone number you used when calling us.
+          </p>
+        </div>
+      </div>
+      <form className="mt-5 space-y-4" onSubmit={handleRecovery}>
+        <Field label="Phone Number" value={recoveryPhone} onChange={setRecoveryPhone} />
+        {recoveryError ? <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{recoveryError}</div> : null}
+        <button type="submit" disabled={recovering} className={`${shopStyles.primaryButton} w-full`}>
+          {recovering ? "Checking..." : "Request Secure Feedback Link"}
+        </button>
+      </form>
     </div>
   );
 }

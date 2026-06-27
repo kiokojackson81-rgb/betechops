@@ -6,15 +6,22 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 
 type FeedbackListItem = {
   id: string;
-  rating: number;
+  token: string;
   phone: string | null;
-  contactReason: string;
-  staffHelpful: string;
-  questionsAnswered: string;
-  recommend: string;
+  normalizedPhone: string | null;
+  rating: number | null;
+  contactReason: string | null;
+  staffHelpful: string | null;
+  questionsAnswered: string | null;
+  recommend: string | null;
   wantsContact: boolean;
   reviewed: boolean;
   createdAt: string;
+  submittedAt: string | null;
+  smsSent: boolean;
+  smsSentAt: string | null;
+  submitted: boolean;
+  followUpCreated: boolean;
   statusLabel: string;
   latestCall: {
     id: string;
@@ -31,6 +38,11 @@ type FeedbackListItem = {
       email: string | null;
     } | null;
   } | null;
+  agent: {
+    id: string;
+    name: string | null;
+    email: string | null;
+  } | null;
 };
 
 type FeedbackDetail = {
@@ -39,18 +51,28 @@ type FeedbackDetail = {
     name: string | null;
     email: string | null;
     callId: string | null;
-    normalizedPhone: string | null;
+    followUpTaskId: string | null;
   };
   linkedCall: any | null;
   recentCalls: any[];
+  previousFeedback: Array<{
+    id: string;
+    rating: number | null;
+    serviceType: string | null;
+    comment: string | null;
+    submittedAt: string | null;
+    token: string;
+  }>;
 };
 
 function badgeClass(label: string) {
   const normalized = label.toLowerCase();
+  if (normalized.includes("pending")) return "border-slate-700 bg-slate-900/80 text-slate-200";
   if (normalized.includes("contact")) return "border-amber-500/30 bg-amber-500/10 text-amber-100";
   if (normalized.includes("low")) return "border-rose-500/30 bg-rose-500/10 text-rose-100";
-  if (normalized.includes("review")) return "border-cyan-500/30 bg-cyan-500/10 text-cyan-100";
-  return "border-emerald-500/30 bg-emerald-500/10 text-emerald-100";
+  if (normalized.includes("follow")) return "border-cyan-500/30 bg-cyan-500/10 text-cyan-100";
+  if (normalized.includes("submitted")) return "border-emerald-500/30 bg-emerald-500/10 text-emerald-100";
+  return "border-white/10 bg-white/[0.04] text-slate-200";
 }
 
 function formatDateTime(value: string | null | undefined) {
@@ -60,15 +82,6 @@ function formatDateTime(value: string | null | undefined) {
     day: "2-digit",
     month: "short",
     year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function formatTime(value: string | null | undefined) {
-  if (!value) return "-";
-  return new Date(value).toLocaleTimeString("en-KE", {
-    timeZone: "Africa/Nairobi",
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -111,9 +124,7 @@ export default function VoiceFeedbackPanel() {
         const response = await fetch(`/api/admin/feedback?${params.toString()}`, { cache: "no-store" });
         const payload = await response.json().catch(() => null);
         if (!response.ok) throw new Error(String(payload?.error || "Unable to load feedback."));
-        if (!cancelled) {
-          setItems(Array.isArray(payload?.items) ? payload.items : []);
-        }
+        if (!cancelled) setItems(Array.isArray(payload?.items) ? payload.items : []);
       } catch (loadError) {
         if (!cancelled) setError(loadError instanceof Error ? loadError.message : "Unable to load feedback.");
       } finally {
@@ -130,16 +141,31 @@ export default function VoiceFeedbackPanel() {
   const stats = useMemo(() => {
     const todayKey = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" });
     const feedbackToday = items.filter(
-      (item) => new Date(item.createdAt).toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" }) === todayKey,
+      (item) =>
+        item.submitted &&
+        item.submittedAt &&
+        new Date(item.submittedAt).toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" }) === todayKey,
     ).length;
-    const averageRating = items.length ? items.reduce((sum, item) => sum + Number(item.rating || 0), 0) / items.length : 0;
-    const contactRequests = items.filter((item) => item.wantsContact).length;
-    const lowRatings = items.filter((item) => Number(item.rating || 0) <= 2).length;
+    const submittedItems = items.filter((item) => item.submitted && item.rating != null);
+    const averageRating = submittedItems.length
+      ? submittedItems.reduce((sum, item) => sum + Number(item.rating || 0), 0) / submittedItems.length
+      : 0;
+    const pendingFollowUps = items.filter((item) => item.followUpCreated).length;
+    const lowRatings = submittedItems.filter((item) => Number(item.rating || 0) <= 3).length;
+    const smsSentToday = items.filter(
+      (item) =>
+        item.smsSent &&
+        item.smsSentAt &&
+        new Date(item.smsSentAt).toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" }) === todayKey,
+    ).length;
+    const completionRate = items.length ? Math.round((submittedItems.length / items.length) * 100) : 0;
     return {
       feedbackToday,
       averageRating: averageRating ? averageRating.toFixed(1) : "0.0",
-      contactRequests,
+      pendingFollowUps,
       lowRatings,
+      smsSentToday,
+      completionRate,
     };
   }, [items]);
 
@@ -163,12 +189,14 @@ export default function VoiceFeedbackPanel() {
 
   return (
     <section className="space-y-4">
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
         {[
-          { label: "Feedback Today", value: String(stats.feedbackToday) },
           { label: "Average Rating", value: stats.averageRating },
-          { label: "Contact Requests", value: String(stats.contactRequests) },
+          { label: "Today's Feedback", value: String(stats.feedbackToday) },
+          { label: "Pending Follow-ups", value: String(stats.pendingFollowUps) },
           { label: "Low Ratings", value: String(stats.lowRatings) },
+          { label: "SMS Sent Today", value: String(stats.smsSentToday) },
+          { label: "Completion Rate", value: `${stats.completionRate}%` },
         ].map((card) => (
           <div key={card.label} className="rounded-xl border border-slate-800/90 bg-slate-950/85 px-3 py-3">
             <div className="text-xs text-slate-500">{card.label}</div>
@@ -181,8 +209,8 @@ export default function VoiceFeedbackPanel() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Feedback Center</div>
-            <h2 className="mt-2 text-2xl font-semibold text-white">Customer call feedback</h2>
-            <p className="mt-1 text-sm text-slate-400">Review satisfaction scores, contact requests, and linked call history from completed calls.</p>
+            <h2 className="mt-2 text-2xl font-semibold text-white">Secure customer call feedback</h2>
+            <p className="mt-1 text-sm text-slate-400">Review token sessions, completed surveys, SMS delivery, linked calls, and service recovery follow-ups.</p>
           </div>
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
             <select
@@ -200,7 +228,7 @@ export default function VoiceFeedbackPanel() {
             <input
               value={filters.contactReason === "all" ? "" : filters.contactReason}
               onChange={(event) => setFilters((current) => ({ ...current, contactReason: event.target.value || "all" }))}
-              placeholder="Reason filter"
+              placeholder="Service filter"
               className="rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500"
             />
             <select
@@ -230,12 +258,12 @@ export default function VoiceFeedbackPanel() {
             <thead>
               <tr className="text-left text-[11px] uppercase tracking-[0.18em] text-slate-500">
                 <th className="px-4 py-3">View</th>
-                <th className="px-4 py-3">Time</th>
-                <th className="px-4 py-3">Customer / Phone</th>
+                <th className="px-4 py-3">Call Date</th>
+                <th className="px-4 py-3">Customer</th>
                 <th className="px-4 py-3">Rating</th>
-                <th className="px-4 py-3">Reason</th>
-                <th className="px-4 py-3">Recommend</th>
-                <th className="px-4 py-3">Staff Helpful</th>
+                <th className="px-4 py-3">Agent</th>
+                <th className="px-4 py-3">Duration</th>
+                <th className="px-4 py-3">Recommendation</th>
                 <th className="px-4 py-3">Status</th>
               </tr>
             </thead>
@@ -249,7 +277,7 @@ export default function VoiceFeedbackPanel() {
               ) : !items.length ? (
                 <tr>
                   <td colSpan={8} className="px-4 py-8 text-center text-sm text-slate-400">
-                    No feedback submitted yet.
+                    No feedback sessions found yet.
                   </td>
                 </tr>
               ) : (
@@ -268,20 +296,26 @@ export default function VoiceFeedbackPanel() {
                             {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                           </button>
                         </td>
-                        <td className="px-4 py-4 align-top text-lg text-white">{formatTime(item.createdAt)}</td>
+                        <td className="px-4 py-4 align-top text-white">{formatDateTime(item.latestCall?.startedAt || item.createdAt)}</td>
                         <td className="px-4 py-4 align-top">
-                          <div className="font-semibold text-white">{item.phone || "No phone shared"}</div>
-                          <div className="mt-1 text-sm text-slate-400">{item.latestCall?.assignedTo?.name || item.latestCall?.assignedTo?.email || "No linked call yet"}</div>
+                          <div className="font-semibold text-white">{item.phone || "No phone"}</div>
+                          <div className="mt-1 text-sm text-slate-400">{item.contactReason || "Feedback session only"}</div>
                         </td>
                         <td className="px-4 py-4 align-top">
-                          <div className="inline-flex items-center gap-1 rounded-full border border-[#f2b20f]/30 bg-[#f2b20f]/10 px-3 py-1 text-sm font-semibold text-[#ffe08a]">
-                            <Star className="h-3.5 w-3.5 fill-current" />
-                            {item.rating}/5
-                          </div>
+                          {item.rating != null ? (
+                            <div className="inline-flex items-center gap-1 rounded-full border border-[#f2b20f]/30 bg-[#f2b20f]/10 px-3 py-1 text-sm font-semibold text-[#ffe08a]">
+                              <Star className="h-3.5 w-3.5 fill-current" />
+                              {item.rating}/5
+                            </div>
+                          ) : (
+                            <span className="text-slate-500">Pending</span>
+                          )}
                         </td>
-                        <td className="px-4 py-4 align-top text-white">{item.contactReason}</td>
-                        <td className="px-4 py-4 align-top text-slate-300">{item.recommend}</td>
-                        <td className="px-4 py-4 align-top text-slate-300">{item.staffHelpful}</td>
+                        <td className="px-4 py-4 align-top text-slate-300">
+                          {item.agent?.name || item.latestCall?.assignedTo?.name || item.agent?.email || "Unassigned"}
+                        </td>
+                        <td className="px-4 py-4 align-top text-slate-300">{formatDuration(item.latestCall?.durationInSeconds)}</td>
+                        <td className="px-4 py-4 align-top text-slate-300">{item.recommend || "-"}</td>
                         <td className="px-4 py-4 align-top">
                           <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${badgeClass(item.statusLabel)}`}>
                             {item.statusLabel}
@@ -292,51 +326,66 @@ export default function VoiceFeedbackPanel() {
                         <tr>
                           <td colSpan={8} className="px-4 pb-5">
                             <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-                              <div className="grid gap-3 lg:grid-cols-2">
-                                <InfoCard label="Rating" value={`${detail?.feedback.rating || item.rating}/5`} />
-                                <InfoCard label="Reason" value={detail?.feedback.contactReason || item.contactReason} />
-                                <InfoCard label="Staff Helpful" value={detail?.feedback.staffHelpful || item.staffHelpful} />
-                                <InfoCard label="Questions Answered" value={detail?.feedback.questionsAnswered || item.questionsAnswered} />
-                                <InfoCard label="Recommend" value={detail?.feedback.recommend || item.recommend} />
-                                <InfoCard label="Created At" value={formatDateTime(detail?.feedback.createdAt || item.createdAt)} />
-                                <InfoCard label="Comments" value={detail?.feedback.comments || "No comments shared"} />
-                                <InfoCard
-                                  label="Contact Request"
-                                  value={
-                                    detail?.feedback.wantsContact
-                                      ? `${detail.feedback.name || "No name"} · ${detail.feedback.phone || "No phone"} · ${detail.feedback.email || "No email"}`
-                                      : "No follow-up requested"
-                                  }
-                                />
+                              <div className="grid gap-3 lg:grid-cols-3">
+                                <InfoCard label="Token" value={detail?.feedback.token || item.token} />
+                                <InfoCard label="SMS Sent" value={detail?.feedback.smsSentAt ? formatDateTime(detail.feedback.smsSentAt) : item.smsSent ? "Yes" : "No"} />
+                                <InfoCard label="Submitted" value={detail?.feedback.submittedAt ? formatDateTime(detail.feedback.submittedAt) : item.submitted ? "Yes" : "No"} />
+                                <InfoCard label="Rating" value={detail?.feedback.rating != null ? `${detail.feedback.rating}/5` : "Pending"} />
+                                <InfoCard label="Reason" value={detail?.feedback.contactReason || item.contactReason || "-"} />
+                                <InfoCard label="Recommend" value={detail?.feedback.recommend || item.recommend || "-"} />
+                                <InfoCard label="Staff Helpful" value={detail?.feedback.staffHelpful || item.staffHelpful || "-"} />
+                                <InfoCard label="Questions Answered" value={detail?.feedback.questionsAnswered || item.questionsAnswered || "-"} />
+                                <InfoCard label="Contact Request" value={detail?.feedback.wantsContact ? `${detail.feedback.name || "No name"} · ${detail.feedback.phone || "No phone"} · ${detail.feedback.email || "No email"}` : "No follow-up requested"} />
                               </div>
 
                               <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-                                <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-4">
-                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Linked Call History</div>
-                                  <div className="mt-3 space-y-3">
-                                    {(detail?.recentCalls || []).length ? (
-                                      detail?.recentCalls.map((call) => (
-                                        <div key={call.id} className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-3">
-                                          <div className="flex flex-wrap items-center justify-between gap-2">
-                                            <div className="text-sm font-semibold text-white">{call.callerNumber}</div>
-                                            <span className={`rounded-full border px-2.5 py-1 text-[11px] ${badgeClass(String(call.status || ""))}`}>
-                                              {String(call.status || "").replace(/_/g, " ")}
-                                            </span>
-                                          </div>
-                                          <div className="mt-2 text-sm text-slate-400">
-                                            {formatDateTime(call.startedAt || call.createdAt)} · {call.direction} · {call.assignedTo?.name || call.assignedTo?.email || "Unassigned"}
-                                          </div>
-                                          <div className="mt-1 text-sm text-slate-500">Duration {formatDuration(call.durationInSeconds)}</div>
-                                          {(call.callNotes?.length || call.followUps?.length) ? (
-                                            <div className="mt-2 text-xs text-slate-500">
-                                              Notes {call.callNotes?.length || 0} · Follow-ups {call.followUps?.length || 0}
+                                <div className="space-y-4">
+                                  <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-4">
+                                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Comments</div>
+                                    <div className="mt-2 text-sm text-slate-200">{detail?.feedback.comments || "No comments shared."}</div>
+                                  </div>
+
+                                  <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-4">
+                                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Linked Call History</div>
+                                    <div className="mt-3 space-y-3">
+                                      {(detail?.recentCalls || []).length ? (
+                                        detail?.recentCalls.map((call) => (
+                                          <div key={call.id} className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-3">
+                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                              <div className="text-sm font-semibold text-white">{call.callerNumber}</div>
+                                              <span className={`rounded-full border px-2.5 py-1 text-[11px] ${badgeClass(String(call.status || ""))}`}>
+                                                {String(call.status || "").replace(/_/g, " ")}
+                                              </span>
                                             </div>
-                                          ) : null}
-                                        </div>
-                                      ))
-                                    ) : (
-                                      <div className="text-sm text-slate-500">No linked call history available yet.</div>
-                                    )}
+                                            <div className="mt-2 text-sm text-slate-400">
+                                              {formatDateTime(call.startedAt || call.createdAt)} · {call.direction} · {call.assignedTo?.name || call.assignedTo?.email || "Unassigned"}
+                                            </div>
+                                            <div className="mt-1 text-sm text-slate-500">Duration {formatDuration(call.durationInSeconds)}</div>
+                                          </div>
+                                        ))
+                                      ) : (
+                                        <div className="text-sm text-slate-500">No linked call history available yet.</div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-4">
+                                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Previous Feedback</div>
+                                    <div className="mt-3 space-y-2">
+                                      {(detail?.previousFeedback || []).length ? (
+                                        detail?.previousFeedback.map((entry) => (
+                                          <div key={entry.id} className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-3 text-sm text-slate-200">
+                                            <div className="font-semibold text-white">
+                                              {entry.rating != null ? `${entry.rating}/5` : "Pending"} · {entry.serviceType || "No service type"}
+                                            </div>
+                                            <div className="mt-1 text-xs text-slate-400">{formatDateTime(entry.submittedAt)}</div>
+                                            <div className="mt-2 text-slate-300">{entry.comment || "No comment"}</div>
+                                          </div>
+                                        ))
+                                      ) : (
+                                        <div className="text-sm text-slate-500">No previous submitted feedback for this customer.</div>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
 
