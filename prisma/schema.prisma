@@ -1651,6 +1651,42 @@ model VoiceFollowUp {
   @@index([phone, updatedAt])
 }
 
+model CallFeedback {
+  id                String   @id @default(cuid())
+  phone             String?
+  callId            String?
+  rating            Int
+  contactReason     String
+  staffHelpful      String
+  questionsAnswered String
+  recommend         String
+  comments          String?
+  wantsContact      Boolean  @default(false)
+  name              String?
+  email             String?
+  reviewed          Boolean  @default(false)
+  reviewedAt        DateTime?
+  reviewedBy        String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([phone])
+  @@index([callId])
+  @@index([createdAt])
+  @@index([rating])
+}
+
+model CallFeedbackSmsLog {
+  id        String   @id @default(cuid())
+  phone     String
+  callId    String?
+  sentAt    DateTime @default(now())
+
+  @@index([phone])
+  @@index([sentAt])
+  @@index([phone, sentAt])
+}
+
 model Branding {
   id            String   @id @default(cuid()) @db.Text
   name          String   @unique @db.Text

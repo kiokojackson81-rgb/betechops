@@ -6,6 +6,7 @@ import {
   ensureVoiceLeadForCaller,
   upsertVoiceCallFromPayload,
 } from "@/lib/voice";
+import { maybeSendCallFeedbackSms } from "@/lib/feedbackSms";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +71,9 @@ export async function POST(request: Request) {
       status: voiceCall.status,
       startedAt: voiceCall.startedAt,
       assignedToId: voiceCall.assignedToId,
+    });
+    await maybeSendCallFeedbackSms(voiceCall).catch((smsError) => {
+      console.warn("[voice.outbound.feedback_sms_skipped]", smsError instanceof Error ? smsError.message : smsError);
     });
 
     return NextResponse.json({

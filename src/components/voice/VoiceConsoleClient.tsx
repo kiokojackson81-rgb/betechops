@@ -14,6 +14,7 @@ import {
   Radio,
   Search,
   Settings2,
+  Star,
   Users,
   X,
 } from "lucide-react";
@@ -21,6 +22,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import DialPad from "@/components/voice/DialPad";
+import VoiceFeedbackPanel from "@/components/voice/VoiceFeedbackPanel";
 import VoiceSettingsClient from "@/components/voice/VoiceSettingsClient";
 import { useSoftphone } from "@/components/voice/SoftphoneProvider";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
@@ -37,7 +39,7 @@ type VoiceConsoleClientProps = {
 };
 
 const MANUAL_PRESENCE_STATUSES = ["AVAILABLE", "OFFLINE"] as const;
-const VOICE_CONSOLE_TABS = ["operations", "recent", "recordings", "followups", "agents", "settings"] as const;
+const VOICE_CONSOLE_TABS = ["operations", "recent", "recordings", "followups", "agents", "feedback", "settings"] as const;
 type VoiceConsoleTab = (typeof VOICE_CONSOLE_TABS)[number];
 const VOICE_DATE_FILTERS = ["today", "yesterday", "week", "period"] as const;
 type VoiceDateFilter = (typeof VOICE_DATE_FILTERS)[number];
@@ -258,7 +260,10 @@ export default function VoiceConsoleClient({
   const [recentSearch, setRecentSearch] = useState("");
   const [recentFilter, setRecentFilter] = useState<"all" | "INBOUND" | "OUTBOUND" | "with_recording">("all");
   const [expandedRecentCallId, setExpandedRecentCallId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<VoiceConsoleTab>(() => normalizeVoiceTab(searchParams.get("tab")));
+  const [activeTab, setActiveTab] = useState<VoiceConsoleTab>(() => {
+    const nextTab = normalizeVoiceTab(searchParams.get("tab"));
+    return mode === "admin" || nextTab !== "feedback" ? nextTab : "operations";
+  });
   const [dateFilter, setDateFilter] = useState<VoiceDateFilter>(() => normalizeVoiceDateFilter(searchParams.get("range")));
   const [queueView, setQueueView] = useState<"all" | "waiting" | "missed">("all");
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -322,9 +327,10 @@ export default function VoiceConsoleClient({
   );
 
   useEffect(() => {
-    setActiveTab(normalizeVoiceTab(searchParams.get("tab")));
+    const nextTab = normalizeVoiceTab(searchParams.get("tab"));
+    setActiveTab(mode === "admin" || nextTab !== "feedback" ? nextTab : "operations");
     setDateFilter(normalizeVoiceDateFilter(searchParams.get("range")));
-  }, [searchParams]);
+  }, [mode, searchParams]);
 
   useEffect(() => {
     if (activeTab !== "operations") {
@@ -858,6 +864,7 @@ export default function VoiceConsoleClient({
     { key: "recordings", label: "Recordings", icon: Radio },
     { key: "followups", label: "Follow-ups", icon: ClipboardList },
     { key: "agents", label: "Agents", icon: Users },
+    ...(mode === "admin" ? ([{ key: "feedback", label: "Feedback", icon: Star }] as const) : []),
     { key: "settings", label: "Settings", icon: Settings2 },
   ] as const;
 
@@ -867,6 +874,7 @@ export default function VoiceConsoleClient({
     recordings: "Monitor saved call recordings, playback, and download access across the selected period.",
     followups: "Track callback work, pending customer actions, and reassignment across the voice desk.",
     agents: "Watch routing readiness, browser registration, workload, and fallback lines for each routing agent.",
+    feedback: "Review customer ratings, contact requests, and linked call history after successful calls.",
     settings: "Control browser calling, devices, registration, and operator preferences from one place.",
   };
 
@@ -1890,6 +1898,12 @@ export default function VoiceConsoleClient({
                         </div>
                       )}
                     </div>
+                  </section>
+                ) : null}
+
+                {activeTab === "feedback" ? (
+                  <section className={cardShell("h-full min-h-0 overflow-y-auto overflow-x-hidden p-5")}>
+                    <VoiceFeedbackPanel />
                   </section>
                 ) : null}
 

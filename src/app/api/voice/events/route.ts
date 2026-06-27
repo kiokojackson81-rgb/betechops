@@ -7,6 +7,7 @@ import {
   parseVoicePayloadFromRequest,
   upsertVoiceCallFromPayload,
 } from "@/lib/voice";
+import { maybeSendCallFeedbackSms } from "@/lib/feedbackSms";
 import { publishVoiceLiveEvent } from "@/lib/voiceLiveEvents";
 
 export const dynamic = "force-dynamic";
@@ -54,6 +55,9 @@ export async function POST(request: Request) {
       status: normalizeVoiceStatus(normalizedPayload),
       startedAt: voiceCall.startedAt,
       assignedToId: voiceCall.assignedToId,
+    });
+    await maybeSendCallFeedbackSms(voiceCall).catch((smsError) => {
+      console.warn("[voice.events.feedback_sms_skipped]", smsError instanceof Error ? smsError.message : smsError);
     });
 
     publishVoiceLiveEvent({
