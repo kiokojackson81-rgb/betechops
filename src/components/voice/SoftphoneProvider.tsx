@@ -146,7 +146,7 @@ function readStoredRecentCalls() {
 function makeFavoriteNumbers(sessionName: string | null | undefined) {
   return [
     { label: "Brendah", phone: "+254716722601" },
-    { label: "Jennifer", phone: "+254703241917" },
+    { label: "Jennifer", phone: "0703241917" },
     { label: sessionName || "Admin", phone: "+254705663175" },
   ];
 }
