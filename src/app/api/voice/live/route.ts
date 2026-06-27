@@ -27,8 +27,20 @@ export async function GET(request: Request) {
 
       const stream = new ReadableStream<Uint8Array>({
         async start(controller) {
+          let closed = false;
           const writeEvent = (event: string, data: unknown) => {
             controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+          };
+
+          const safeClose = () => {
+            if (closed) return;
+            closed = true;
+            clearInterval(heartbeat);
+            clearTimeout(recycleTimeout);
+            unsubscribe();
+            try {
+              controller.close();
+            } catch {}
           };
 
           const sendSnapshot = async (reason: string) => {
@@ -49,17 +61,20 @@ export async function GET(request: Request) {
           });
 
           const heartbeat = setInterval(() => {
+            if (closed) return;
             controller.enqueue(encoder.encode(`: ping ${Date.now()}\n\n`));
           }, 15000);
+
+          const recycleTimeout = setTimeout(() => {
+            if (closed) return;
+            writeEvent("reconnect", { reason: "stream_recycle" });
+            safeClose();
+          }, 240000);
 
           request.signal.addEventListener(
             "abort",
             () => {
-              clearInterval(heartbeat);
-              unsubscribe();
-              try {
-                controller.close();
-              } catch {}
+              safeClose();
             },
             { once: true },
           );

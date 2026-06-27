@@ -170,6 +170,15 @@ function getOutboundFailureStatus(reason?: string | null) {
   return "disconnected";
 }
 
+function normalizePresenceStatus(nextAvailability: SoftphoneAvailabilityState) {
+  if (nextAvailability === "AVAILABLE") return "AVAILABLE" as const;
+  if (nextAvailability === "OFFLINE") return "OFFLINE" as const;
+  if (nextAvailability === "BREAK") return "BREAK" as const;
+  if (nextAvailability === "BUSY") return "BUSY" as const;
+  if (nextAvailability === "RINGING" || nextAvailability === "TALKING") return "BUSY" as const;
+  return "OFFLINE" as const;
+}
+
 export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
   const pathname = usePathname();
@@ -220,12 +229,13 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
     setLastHeartbeatAt(new Date().toISOString());
     try {
       const registration = webRtcRegistrationRef.current;
+      const nextPresenceStatus = normalizePresenceStatus(_nextAvailability ?? availabilityRef.current);
       await fetch("/api/voice/presence", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          status: _nextAvailability ?? availabilityRef.current,
-          currentCallId: currentCallRef.current?.id ?? null,
+          status: nextPresenceStatus,
+          currentCallId: null,
           webrtc: registration
             ? {
                 clientName: registration.clientName,

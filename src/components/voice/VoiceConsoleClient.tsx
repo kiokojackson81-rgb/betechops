@@ -1054,15 +1054,15 @@ export default function VoiceConsoleClient({
   };
 
   return (
-    <div className="w-full overflow-x-hidden bg-slate-950 text-slate-100">
-      <main className="mx-auto box-border h-auto max-w-[1500px] overflow-x-hidden px-3 py-3 sm:px-4 lg:px-5">
+    <div className="min-h-screen w-full overflow-x-hidden bg-slate-950 text-slate-100">
+      <main className="mx-auto box-border min-h-screen max-w-[1500px] overflow-x-hidden px-3 py-3 sm:px-4 lg:px-5">
         {error ? (
           <div className="mb-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
             {error}
           </div>
         ) : null}
 
-        <section className={cardShell("overflow-visible shadow-[0_30px_90px_rgba(0,0,0,0.35)]")}>
+        <section className={cardShell("min-h-[calc(100vh-1.5rem)] overflow-visible shadow-[0_30px_90px_rgba(0,0,0,0.35)]")}>
           <div className="grid min-h-0 lg:grid-cols-[220px_minmax(0,1fr)]">
             <aside className="overflow-visible border-b border-slate-800/90 bg-[linear-gradient(180deg,rgba(12,18,32,0.98),rgba(7,13,24,0.98))] lg:border-b-0 lg:border-r">
               <div className="flex items-center gap-2 border-b border-slate-800/90 px-4 py-4">
