@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArrowRightLeft,
   ChevronDown,
   ChevronUp,
   ClipboardList,
@@ -257,6 +258,10 @@ export default function VoiceConsoleClient({
   const [contextTab, setContextTab] = useState<"customer" | "timeline" | "agent" | "recording">("customer");
   const [queueSearch, setQueueSearch] = useState("");
   const [showWorkspaceDialPad, setShowWorkspaceDialPad] = useState(false);
+  const [showTransferPanel, setShowTransferPanel] = useState(false);
+  const [transferAssigneeId, setTransferAssigneeId] = useState("");
+  const [transferPhone, setTransferPhone] = useState("");
+  const [transferPending, setTransferPending] = useState(false);
   const [recentSearch, setRecentSearch] = useState("");
   const [recentFilter, setRecentFilter] = useState<"all" | "INBOUND" | "OUTBOUND" | "with_recording">("all");
   const [expandedRecentCallId, setExpandedRecentCallId] = useState<string | null>(null);
@@ -452,6 +457,13 @@ export default function VoiceConsoleClient({
   const activeInteractionCall = useMemo(() => {
     return visibleActiveCalls.find((call) => call.id === selectedCallId) || visibleActiveCalls[0] || null;
   }, [selectedCallId, visibleActiveCalls]);
+
+  useEffect(() => {
+    if (activeInteractionCall) return;
+    setShowTransferPanel(false);
+    setTransferAssigneeId("");
+    setTransferPhone("");
+  }, [activeInteractionCall]);
 
   const groupedRecentCalls = useMemo(() => {
     const groups = new Map<string, typeof filteredRecentCalls>();
@@ -731,6 +743,48 @@ export default function VoiceConsoleClient({
     }
   };
 
+  const handleTransferCall = async () => {
+    if (!activeInteractionCall?.id) return;
+    const normalizedTransferPhone = transferPhone.trim();
+    if (!transferAssigneeId && !normalizedTransferPhone) {
+      setError("Choose a transfer target or enter a phone number.");
+      return;
+    }
+
+    setTransferPending(true);
+    setError(null);
+    try {
+      const selectedAgent =
+        visibleAgents.find((agent) => agent.id === transferAssigneeId) || null;
+      const response = await fetch(`${pollBaseHref.replace("/live", "/transfer")}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          callId: activeInteractionCall.id,
+          targetUserId: transferAssigneeId || null,
+          targetPhone: normalizedTransferPhone || selectedAgent?.phone || null,
+          targetLabel:
+            selectedAgent
+              ? (selectedAgent as any).displayName || selectedAgent.name || selectedAgent.phone
+              : normalizedTransferPhone || null,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(String(payload.error || "transfer_failed"));
+      }
+      setShowTransferPanel(false);
+      setTransferAssigneeId("");
+      setTransferPhone("");
+      await refreshSnapshot(selectedCallId, selectedPhone);
+    } catch (transferError) {
+      console.error("[voice.console.transfer_failed]", transferError);
+      setError("Could not transfer the active call.");
+    } finally {
+      setTransferPending(false);
+    }
+  };
+
   const filteredAnsweredCount = filteredRecentCalls.filter((call) =>
     ["answered", "in progress", "completed"].includes(String(call.statusLabel || "").trim().toLowerCase()),
   ).length;
@@ -781,15 +835,50 @@ export default function VoiceConsoleClient({
       }
     }
 
-    return Array.from(preferredByAlias.values()).sort(
+    const normalizedCurrentStatus =
+      softphone.availability === "AVAILABLE"
+        ? "AVAILABLE"
+        : softphone.availability === "OFFLINE"
+          ? "OFFLINE"
+          : null;
+
+    return Array.from(preferredByAlias.values())
+      .map((agent) => {
+        if (agent.id !== data.viewer.targetUserId || !normalizedCurrentStatus) return agent;
+        return {
+          ...agent,
+          status: normalizedCurrentStatus,
+          isAvailableForRouting: normalizedCurrentStatus === "AVAILABLE",
+          lastSeenAt: softphone.lastHeartbeatAt || (agent as any).lastSeenAt,
+          isWebrtcRegistered:
+            softphone.transportMode === "webrtc"
+              ? softphone.registrationStatus === "registered"
+              : (agent as any).isWebrtcRegistered,
+          webRtcState:
+            softphone.transportMode === "webrtc"
+              ? softphone.connectionStatus === "ready"
+                ? "ready"
+                : "notready"
+              : (agent as any).webRtcState,
+        };
+      })
+      .sort(
       (left, right) =>
         (((left as any).routingPriority as number | undefined) ?? 99) -
           (((right as any).routingPriority as number | undefined) ?? 99) ||
         String((left as any).displayName || left.name || "").localeCompare(
           String((right as any).displayName || right.name || ""),
         ),
-    );
-  }, [data.agents]);
+      );
+  }, [
+    data.agents,
+    data.viewer.targetUserId,
+    softphone.availability,
+    softphone.connectionStatus,
+    softphone.lastHeartbeatAt,
+    softphone.registrationStatus,
+    softphone.transportMode,
+  ]);
 
   const queueItems = useMemo(() => {
     const query = queueSearch.trim().toLowerCase();
@@ -1212,7 +1301,7 @@ export default function VoiceConsoleClient({
                             { label: softphone.currentCall?.held ? "Resume" : "Hold", onClick: softphone.toggleHold, icon: PhoneOff },
                             { label: showWorkspaceDialPad ? "Hide Keypad" : "Keypad", onClick: () => setShowWorkspaceDialPad((value) => !value), icon: Grip },
                             { label: "Answer", onClick: softphone.answerCall, icon: PhoneCall },
-                            { label: "Open", onClick: () => openDetailModal("customer"), icon: MoreHorizontal },
+                            { label: showTransferPanel ? "Hide Transfer" : "Transfer", onClick: () => setShowTransferPanel((value) => !value), icon: ArrowRightLeft },
                           ].map((action) => {
                             const Icon = action.icon;
                             return (
@@ -1251,6 +1340,47 @@ export default function VoiceConsoleClient({
                         {showWorkspaceDialPad ? (
                           <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
                             <DialPad compact />
+                          </div>
+                        ) : null}
+
+                        {showTransferPanel ? (
+                          <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+                            <div className="flex flex-col gap-3">
+                              <div>
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Transfer Call</div>
+                                <div className="mt-1 text-sm text-slate-300">
+                                  Reassign this live call to admin, another routing agent, or log an external transfer number.
+                                </div>
+                              </div>
+                              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                                <select
+                                  value={transferAssigneeId}
+                                  onChange={(event) => setTransferAssigneeId(event.target.value)}
+                                  className="rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none"
+                                >
+                                  <option value="">Transfer to routing agent / admin</option>
+                                  {visibleAgents.map((agent) => (
+                                    <option key={agent.id} value={agent.id}>
+                                      {(agent as any).displayName || agent.name}
+                                    </option>
+                                  ))}
+                                </select>
+                                <input
+                                  value={transferPhone}
+                                  onChange={(event) => setTransferPhone(event.target.value)}
+                                  placeholder="Or enter external phone number"
+                                  className="rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={handleTransferCall}
+                                  disabled={!activeInteractionCall || transferPending || (!transferAssigneeId && !transferPhone.trim())}
+                                  className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  {transferPending ? "Transferring..." : "Confirm Transfer"}
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         ) : null}
                       </div>
@@ -1864,13 +1994,13 @@ export default function VoiceConsoleClient({
                               <div className="mt-4 space-y-3 text-sm text-slate-300">
                                 <div className="flex items-center justify-between gap-3">
                                   <span>Status</span>
-                                  <span className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(row.status)}`}>
-                                    {row.status === "AVAILABLE" ? "Available" : "Offline"}
+                                  <span className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(row.isAvailableForRouting ? "available" : "offline")}`}>
+                                    {row.isAvailableForRouting ? "Available" : "Offline"}
                                   </span>
                                 </div>
                                 <div className="flex items-center justify-between gap-3">
                                   <span>Browser</span>
-                                  <span className="text-right text-slate-400">{row.isWebrtcRegistered ? "Ready" : "Offline"}</span>
+                                  <span className="text-right text-slate-400">{row.isWebrtcRegistered || row.webRtcState === "ready" ? "Ready" : "Offline"}</span>
                                 </div>
                                 <div className="flex items-center justify-between gap-3">
                                   <span>Active calls</span>
