@@ -103,6 +103,8 @@ export const SOFTPHONE_STORAGE_KEY = "betechops:voice-softphone-preferences";
 export const SOFTPHONE_COLLAPSED_STORAGE_KEY = "betechops:softphone-collapsed";
 export const SOFTPHONE_SIP_CONFIG_STORAGE_KEY = "betechops:voice-softphone-sip-config";
 export const SOFTPHONE_MOCK_HISTORY_STORAGE_KEY = "betechops:voice-softphone-history";
+export const SOFTPHONE_MANUAL_AVAILABILITY_STORAGE_KEY = "betechops:voice-softphone-manual-availability";
+export const SOFTPHONE_SITE_HEARTBEAT_STORAGE_KEY = "betechops:voice-softphone-site-heartbeat";
 
 export const DEFAULT_SOFTPHONE_SIP_CONFIG: SoftphoneSipConfig = {
   username: "",

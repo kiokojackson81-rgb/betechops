@@ -12,8 +12,10 @@ import {
   getSoftphoneStateLabel,
   normalizeSoftphoneVolume,
   SOFTPHONE_COLLAPSED_STORAGE_KEY,
+  SOFTPHONE_MANUAL_AVAILABILITY_STORAGE_KEY,
   SOFTPHONE_MOCK_HISTORY_STORAGE_KEY,
   SOFTPHONE_SIP_CONFIG_STORAGE_KEY,
+  SOFTPHONE_SITE_HEARTBEAT_STORAGE_KEY,
   SOFTPHONE_STORAGE_KEY,
   type SoftphoneAvailabilityState,
   type SoftphoneCall,
@@ -94,6 +96,10 @@ const NEXT_PUBLIC_VOICE_WEBRTC_ENABLED =
   String(process.env.NEXT_PUBLIC_RTC_ENABLED || "").trim().toLowerCase() === "true";
 const SOFTPHONE_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 
+function buildPerUserStorageKey(baseKey: string, userKey: string) {
+  return `${baseKey}:${userKey}`;
+}
+
 function readStoredPreferences() {
   if (typeof window === "undefined") return DEFAULT_SOFTPHONE_PREFERENCES;
   try {
@@ -167,6 +173,7 @@ function getOutboundFailureStatus(reason?: string | null) {
 export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
   const pathname = usePathname();
+  const sessionUser = session?.user as { id?: string | null; email?: string | null; name?: string | null; role?: string | null } | undefined;
   const [state, setState] = useState<SoftphoneState>("NOT_REGISTERED");
   const [availability, setAvailabilityState] = useState<SoftphoneAvailabilityState>("OFFLINE");
   const [currentCall, setCurrentCall] = useState<SoftphoneCall | null>(null);
@@ -192,6 +199,7 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
   const stateRef = useRef<SoftphoneState>("NOT_REGISTERED");
   const availabilityRef = useRef<SoftphoneAvailabilityState>("OFFLINE");
   const didBootstrapAvailabilityRef = useRef(false);
+  const didRestoreManualAvailabilityRef = useRef(false);
   const currentCallRef = useRef<SoftphoneCall | null>(null);
   const selectedCustomerRef = useRef<SoftphoneCustomerSummary | null>(null);
   const userAvailabilityRef = useRef<"AVAILABLE" | "OFFLINE">("OFFLINE");
@@ -202,6 +210,10 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
   const adapterCleanupRef = useRef<(() => void) | null>(null);
   const [transportMode, setTransportMode] = useState<"mock" | "webrtc" | "unavailable">("mock");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const sessionUserKey = useMemo(() => {
+    const raw = sessionUser?.id || sessionUser?.email || sessionUser?.name || null;
+    return raw ? String(raw).trim().toLowerCase() : null;
+  }, [sessionUser?.email, sessionUser?.id, sessionUser?.name]);
 
   const syncPresenceNow = async (_nextAvailability?: SoftphoneAvailabilityState) => {
     if (!session?.user) return;
@@ -413,17 +425,49 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
     setRecentCalls((current) => [call, ...current].slice(0, 24));
   };
 
+  const readStoredManualAvailability = () => {
+    if (typeof window === "undefined" || !sessionUserKey) return "OFFLINE" as const;
+    const raw = window.localStorage.getItem(buildPerUserStorageKey(SOFTPHONE_MANUAL_AVAILABILITY_STORAGE_KEY, sessionUserKey));
+    return raw === "AVAILABLE" ? "AVAILABLE" : "OFFLINE";
+  };
+
+  const writeStoredManualAvailability = (next: "AVAILABLE" | "OFFLINE") => {
+    if (typeof window === "undefined" || !sessionUserKey) return;
+    window.localStorage.setItem(
+      buildPerUserStorageKey(SOFTPHONE_MANUAL_AVAILABILITY_STORAGE_KEY, sessionUserKey),
+      next,
+    );
+  };
+
+  const touchSiteHeartbeat = () => {
+    if (typeof window === "undefined" || !sessionUserKey) return;
+    window.localStorage.setItem(
+      buildPerUserStorageKey(SOFTPHONE_SITE_HEARTBEAT_STORAGE_KEY, sessionUserKey),
+      String(Date.now()),
+    );
+  };
+
+  const readLastSiteHeartbeat = () => {
+    if (typeof window === "undefined" || !sessionUserKey) return 0;
+    const raw = window.localStorage.getItem(buildPerUserStorageKey(SOFTPHONE_SITE_HEARTBEAT_STORAGE_KEY, sessionUserKey));
+    const value = Number(raw || 0);
+    return Number.isFinite(value) ? value : 0;
+  };
+
   const getPreferredAvailability = () =>
     userAvailabilityRef.current === "OFFLINE" ? "OFFLINE" : "AVAILABLE";
 
   const setUserAvailability = (next: "AVAILABLE" | "OFFLINE") => {
     userAvailabilityRef.current = next;
+    writeStoredManualAvailability(next);
+    if (next === "AVAILABLE") {
+      touchSiteHeartbeat();
+    }
     setAvailabilityState(next);
   };
 
   const markUserOffline = () => {
-    userAvailabilityRef.current = "OFFLINE";
-    setAvailabilityState("OFFLINE");
+    setUserAvailability("OFFLINE");
     void syncPresenceNow("OFFLINE");
   };
 
@@ -954,6 +998,36 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
   }, [isCollapsed]);
 
   useEffect(() => {
+    if (!session?.user || !sessionUserKey || typeof window === "undefined") return;
+    const availabilityKey = buildPerUserStorageKey(SOFTPHONE_MANUAL_AVAILABILITY_STORAGE_KEY, sessionUserKey);
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== availabilityKey) return;
+      const nextAvailability = event.newValue === "AVAILABLE" ? "AVAILABLE" : "OFFLINE";
+      userAvailabilityRef.current = nextAvailability;
+      setAvailabilityState((current) => {
+        if (["BUSY", "BREAK", "RINGING", "TALKING"].includes(current)) return current;
+        return nextAvailability;
+      });
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, [session?.user, sessionUserKey]);
+
+  useEffect(() => {
+    if (!session?.user || !sessionUserKey) return;
+    const restoredAvailability = readStoredManualAvailability();
+    userAvailabilityRef.current = restoredAvailability;
+    setAvailabilityState((current) => {
+      if (["BUSY", "BREAK", "RINGING", "TALKING"].includes(current)) return current;
+      return restoredAvailability;
+    });
+    didRestoreManualAvailabilityRef.current = true;
+    if (restoredAvailability === "AVAILABLE") {
+      touchSiteHeartbeat();
+    }
+  }, [session?.user, sessionUserKey]);
+
+  useEffect(() => {
     if (!session?.user || !preferences.autoRegister) return;
     if (!pathname.startsWith("/admin") && !pathname.startsWith("/attendant") && !pathname.startsWith("/marketing")) return;
     if (state !== "NOT_REGISTERED") return;
@@ -963,8 +1037,13 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!session?.user) return;
     if (didBootstrapAvailabilityRef.current) return;
+    if (!didRestoreManualAvailabilityRef.current) return;
     if (!["REGISTERED", "AVAILABLE"].includes(state)) return;
     if (availability !== "OFFLINE") return;
+    if (getPreferredAvailability() !== "AVAILABLE") {
+      didBootstrapAvailabilityRef.current = true;
+      return;
+    }
     didBootstrapAvailabilityRef.current = true;
     setAvailability("AVAILABLE");
     void syncPresenceNow("AVAILABLE");
@@ -973,6 +1052,7 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!session?.user) {
       didBootstrapAvailabilityRef.current = false;
+      didRestoreManualAvailabilityRef.current = false;
       userAvailabilityRef.current = "OFFLINE";
       setAvailabilityState("OFFLINE");
       setState("NOT_REGISTERED");
@@ -984,11 +1064,21 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
     if (typeof window === "undefined") return;
 
     const resetIdleTimer = () => {
+      touchSiteHeartbeat();
       if (idleTimeoutRef.current) {
         window.clearTimeout(idleTimeoutRef.current);
       }
       idleTimeoutRef.current = window.setTimeout(() => {
+        if (document.hidden) {
+          resetIdleTimer();
+          return;
+        }
         if (currentCallRef.current) {
+          resetIdleTimer();
+          return;
+        }
+        const lastHeartbeat = readLastSiteHeartbeat();
+        if (Date.now() - lastHeartbeat <= SOFTPHONE_IDLE_TIMEOUT_MS) {
           resetIdleTimer();
           return;
         }
@@ -998,25 +1088,36 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
 
     const events: Array<keyof WindowEventMap> = ["pointerdown", "keydown", "mousemove", "scroll", "focus", "touchstart"];
     events.forEach((eventName) => window.addEventListener(eventName, resetIdleTimer, { passive: true }));
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        resetIdleTimer();
+      }
+    };
+    window.addEventListener("pageshow", resetIdleTimer);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     resetIdleTimer();
 
     return () => {
       events.forEach((eventName) => window.removeEventListener(eventName, resetIdleTimer));
+      window.removeEventListener("pageshow", resetIdleTimer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (idleTimeoutRef.current) {
         window.clearTimeout(idleTimeoutRef.current);
         idleTimeoutRef.current = null;
       }
     };
-  }, [session?.user]);
+  }, [session?.user, sessionUserKey]);
 
   useEffect(() => {
     if (!session?.user) return;
+    if (!didRestoreManualAvailabilityRef.current) return;
     void syncPresenceNow();
     const interval = window.setInterval(() => {
+      touchSiteHeartbeat();
       void syncPresenceNow();
     }, 45000);
     return () => window.clearInterval(interval);
-  }, [currentCall?.id, session?.user, state]);
+  }, [currentCall?.id, session?.user, sessionUserKey, state]);
 
   useEffect(() => {
     const audio = remoteAudioRef.current as (HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> }) | null;
