@@ -1,0 +1,4 @@
+ALTER TABLE "public"."VoiceCallFeedback"
+ADD COLUMN "openedCount" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "openedAt" TIMESTAMP(3),
+ADD COLUMN "lastOpenedAt" TIMESTAMP(3);

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import PublicFeedbackClient from "@/components/feedback/PublicFeedbackClient";
-import { getPublicFeedbackSessionByToken } from "@/lib/callFeedback";
+import { getPublicFeedbackSessionByToken, markFeedbackSessionOpened } from "@/lib/callFeedback";
 
 export const metadata: Metadata = {
   title: "Betech Solar Feedback",
@@ -18,6 +18,8 @@ export default async function FeedbackTokenPage({ params }: PageProps) {
   if (!result) {
     return <PublicFeedbackClient initialState="invalid" token={null} />;
   }
+
+  await markFeedbackSessionOpened(result.session.token);
 
   return <PublicFeedbackClient initialState={result.state} token={result.session.token} />;
 }

@@ -2,7 +2,7 @@
 
 import { ChevronDown, ChevronUp, ExternalLink, MessageSquareText, PhoneCall, Star } from "lucide-react";
 import Link from "next/link";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 
 type FeedbackListItem = {
   id: string;
@@ -20,6 +20,9 @@ type FeedbackListItem = {
   submittedAt: string | null;
   smsSent: boolean;
   smsSentAt: string | null;
+  openedCount: number;
+  openedAt: string | null;
+  lastOpenedAt: string | null;
   submitted: boolean;
   followUpCreated: boolean;
   statusLabel: string;
@@ -43,6 +46,18 @@ type FeedbackListItem = {
     name: string | null;
     email: string | null;
   } | null;
+};
+
+type FeedbackStats = {
+  smsSentCount: number;
+  clickedCount: number;
+  respondedCount: number;
+  clickRate: number;
+  responseRate: number;
+  averageRating: number;
+  lowRatingsCount: number;
+  pendingFollowUpsCount: number;
+  totalClicks: number;
 };
 
 type FeedbackDetail = {
@@ -97,6 +112,17 @@ function formatDuration(seconds: number | null | undefined) {
 
 export default function VoiceFeedbackPanel() {
   const [items, setItems] = useState<FeedbackListItem[]>([]);
+  const [stats, setStats] = useState<FeedbackStats>({
+    smsSentCount: 0,
+    clickedCount: 0,
+    respondedCount: 0,
+    clickRate: 0,
+    responseRate: 0,
+    averageRating: 0,
+    lowRatingsCount: 0,
+    pendingFollowUpsCount: 0,
+    totalClicks: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -124,7 +150,20 @@ export default function VoiceFeedbackPanel() {
         const response = await fetch(`/api/admin/feedback?${params.toString()}`, { cache: "no-store" });
         const payload = await response.json().catch(() => null);
         if (!response.ok) throw new Error(String(payload?.error || "Unable to load feedback."));
-        if (!cancelled) setItems(Array.isArray(payload?.items) ? payload.items : []);
+        if (!cancelled) {
+          setItems(Array.isArray(payload?.items) ? payload.items : []);
+          setStats({
+            smsSentCount: Number(payload?.stats?.smsSentCount || 0),
+            clickedCount: Number(payload?.stats?.clickedCount || 0),
+            respondedCount: Number(payload?.stats?.respondedCount || 0),
+            clickRate: Number(payload?.stats?.clickRate || 0),
+            responseRate: Number(payload?.stats?.responseRate || 0),
+            averageRating: Number(payload?.stats?.averageRating || 0),
+            lowRatingsCount: Number(payload?.stats?.lowRatingsCount || 0),
+            pendingFollowUpsCount: Number(payload?.stats?.pendingFollowUpsCount || 0),
+            totalClicks: Number(payload?.stats?.totalClicks || 0),
+          });
+        }
       } catch (loadError) {
         if (!cancelled) setError(loadError instanceof Error ? loadError.message : "Unable to load feedback.");
       } finally {
@@ -137,37 +176,6 @@ export default function VoiceFeedbackPanel() {
       cancelled = true;
     };
   }, [filters]);
-
-  const stats = useMemo(() => {
-    const todayKey = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" });
-    const feedbackToday = items.filter(
-      (item) =>
-        item.submitted &&
-        item.submittedAt &&
-        new Date(item.submittedAt).toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" }) === todayKey,
-    ).length;
-    const submittedItems = items.filter((item) => item.submitted && item.rating != null);
-    const averageRating = submittedItems.length
-      ? submittedItems.reduce((sum, item) => sum + Number(item.rating || 0), 0) / submittedItems.length
-      : 0;
-    const pendingFollowUps = items.filter((item) => item.followUpCreated).length;
-    const lowRatings = submittedItems.filter((item) => Number(item.rating || 0) <= 3).length;
-    const smsSentToday = items.filter(
-      (item) =>
-        item.smsSent &&
-        item.smsSentAt &&
-        new Date(item.smsSentAt).toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" }) === todayKey,
-    ).length;
-    const completionRate = items.length ? Math.round((submittedItems.length / items.length) * 100) : 0;
-    return {
-      feedbackToday,
-      averageRating: averageRating ? averageRating.toFixed(1) : "0.0",
-      pendingFollowUps,
-      lowRatings,
-      smsSentToday,
-      completionRate,
-    };
-  }, [items]);
 
   const loadDetail = async (id: string) => {
     if (detailById[id]) return;
@@ -191,12 +199,12 @@ export default function VoiceFeedbackPanel() {
     <section className="space-y-4">
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
         {[
-          { label: "Average Rating", value: stats.averageRating },
-          { label: "Today's Feedback", value: String(stats.feedbackToday) },
-          { label: "Pending Follow-ups", value: String(stats.pendingFollowUps) },
-          { label: "Low Ratings", value: String(stats.lowRatings) },
-          { label: "SMS Sent Today", value: String(stats.smsSentToday) },
-          { label: "Completion Rate", value: `${stats.completionRate}%` },
+          { label: "Average Rating", value: stats.averageRating ? stats.averageRating.toFixed(1) : "0.0" },
+          { label: "SMS Sent", value: String(stats.smsSentCount) },
+          { label: "Links Clicked", value: String(stats.clickedCount) },
+          { label: "Responses", value: String(stats.respondedCount) },
+          { label: "Click Rate", value: `${stats.clickRate}%` },
+          { label: "Response Rate", value: `${stats.responseRate}%` },
         ].map((card) => (
           <div key={card.label} className="rounded-xl border border-slate-800/90 bg-slate-950/85 px-3 py-3">
             <div className="text-xs text-slate-500">{card.label}</div>
@@ -210,7 +218,7 @@ export default function VoiceFeedbackPanel() {
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Feedback Center</div>
             <h2 className="mt-2 text-2xl font-semibold text-white">Secure customer call feedback</h2>
-            <p className="mt-1 text-sm text-slate-400">Review token sessions, completed surveys, SMS delivery, linked calls, and service recovery follow-ups.</p>
+            <p className="mt-1 text-sm text-slate-400">Review secure-link delivery, link opens, completed surveys, linked calls, and service recovery follow-ups.</p>
           </div>
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
             <select
@@ -329,6 +337,8 @@ export default function VoiceFeedbackPanel() {
                               <div className="grid gap-3 lg:grid-cols-3">
                                 <InfoCard label="Token" value={detail?.feedback.token || item.token} />
                                 <InfoCard label="SMS Sent" value={detail?.feedback.smsSentAt ? formatDateTime(detail.feedback.smsSentAt) : item.smsSent ? "Yes" : "No"} />
+                                <InfoCard label="First Click" value={detail?.feedback.openedAt ? formatDateTime(detail.feedback.openedAt) : item.openedAt ? formatDateTime(item.openedAt) : "Not opened"} />
+                                <InfoCard label="Clicks" value={String(detail?.feedback.openedCount ?? item.openedCount)} />
                                 <InfoCard label="Submitted" value={detail?.feedback.submittedAt ? formatDateTime(detail.feedback.submittedAt) : item.submitted ? "Yes" : "No"} />
                                 <InfoCard label="Rating" value={detail?.feedback.rating != null ? `${detail.feedback.rating}/5` : "Pending"} />
                                 <InfoCard label="Reason" value={detail?.feedback.contactReason || item.contactReason || "-"} />

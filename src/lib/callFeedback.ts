@@ -238,6 +238,30 @@ export async function getPublicFeedbackSessionByToken(token: string) {
   } as const;
 }
 
+export async function markFeedbackSessionOpened(token: string) {
+  const trimmedToken = String(token || "").trim();
+  if (!trimmedToken) return null;
+
+  const now = new Date();
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.voiceCallFeedback.findUnique({
+      where: { token: trimmedToken },
+      select: { id: true, openedAt: true, openedCount: true },
+    });
+    if (!existing) return null;
+
+    return tx.voiceCallFeedback.update({
+      where: { token: trimmedToken },
+      data: {
+        openedCount: { increment: 1 },
+        openedAt: existing.openedAt ?? now,
+        lastOpenedAt: now,
+      },
+      select: { id: true },
+    });
+  });
+}
+
 export async function submitFeedbackByToken(input: CallFeedbackInput) {
   const token = String(input.token || "").trim();
   if (!token) {
@@ -367,7 +391,7 @@ export async function listCallFeedback(args: {
   const pageSize = Math.min(50, Math.max(1, Number(args.pageSize || 20)));
   const where = buildFeedbackWhere(args);
 
-  const [total, rows] = await Promise.all([
+  const [total, rows, aggregates] = await Promise.all([
     prisma.voiceCallFeedback.count({ where }),
     prisma.voiceCallFeedback.findMany({
       where,
@@ -403,6 +427,11 @@ export async function listCallFeedback(args: {
         },
       },
     }),
+    prisma.voiceCallFeedback.aggregate({
+      where,
+      _avg: { rating: true },
+      _sum: { openedCount: true },
+    }),
   ]);
 
   const items = rows.map((row) => ({
@@ -421,6 +450,9 @@ export async function listCallFeedback(args: {
     submittedAt: row.submittedAt,
     smsSent: row.smsSent,
     smsSentAt: row.smsSentAt,
+    openedCount: row.openedCount,
+    openedAt: row.openedAt,
+    lastOpenedAt: row.lastOpenedAt,
     statusLabel: getCallFeedbackStatus(row),
     latestCall: row.voiceCall,
     agent: row.agent,
@@ -428,7 +460,31 @@ export async function listCallFeedback(args: {
     followUpCreated: row.followUpCreated,
   }));
 
-  return { total, page, pageSize, items };
+  const [smsSentCount, respondedCount, clickedCount, lowRatingsCount, pendingFollowUpsCount] = await Promise.all([
+    prisma.voiceCallFeedback.count({ where: { ...where, smsSent: true } }),
+    prisma.voiceCallFeedback.count({ where: { ...where, submitted: true } }),
+    prisma.voiceCallFeedback.count({ where: { ...where, openedAt: { not: null } } }),
+    prisma.voiceCallFeedback.count({ where: { ...where, rating: { lte: 3 } } }),
+    prisma.voiceCallFeedback.count({ where: { ...where, followUpCreated: true } }),
+  ]);
+
+  return {
+    total,
+    page,
+    pageSize,
+    items,
+    stats: {
+      smsSentCount,
+      clickedCount,
+      respondedCount,
+      clickRate: smsSentCount ? Math.round((clickedCount / smsSentCount) * 100) : 0,
+      responseRate: smsSentCount ? Math.round((respondedCount / smsSentCount) * 100) : 0,
+      averageRating: Number(aggregates._avg.rating || 0),
+      lowRatingsCount,
+      pendingFollowUpsCount,
+      totalClicks: Number(aggregates._sum.openedCount || 0),
+    },
+  };
 }
 
 export async function getCallFeedbackDetail(id: string) {
@@ -554,6 +610,9 @@ export async function getCallFeedbackDetail(id: string) {
       email: feedback.customerEmail,
       phone: feedback.phoneNumber,
       callId: feedback.voiceCallId,
+      openedCount: feedback.openedCount,
+      openedAt: feedback.openedAt,
+      lastOpenedAt: feedback.lastOpenedAt,
     },
     linkedCall: feedback.voiceCall,
     recentCalls,

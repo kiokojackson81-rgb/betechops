@@ -43,7 +43,7 @@ export async function maybeSendCallFeedbackSms(
   if (session.smsSent) return { sent: false, reason: "already_sent_for_call" } as const;
 
   const feedbackUrl = getFeedbackPublicUrl(session.token);
-  const message = `Thank you for calling Betech Solar Solutions.\n\nWe value your feedback.\n\nPlease tell us how we served you today:\n\n${feedbackUrl}`;
+  const message = `Thank you for calling Betech Solar Solutions. We value your feedback. Please share your experience with us here: ${feedbackUrl}`;
 
   await sendTransactionalSms(normalizedPhone, message);
   await prisma.voiceCallFeedback.update({

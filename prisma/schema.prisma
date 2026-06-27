@@ -1700,6 +1700,9 @@ model VoiceCallFeedback {
   callEndedAt       DateTime?
   smsSent           Boolean  @default(false)
   smsSentAt         DateTime?
+  openedCount       Int      @default(0)
+  openedAt          DateTime?
+  lastOpenedAt      DateTime?
   submitted         Boolean  @default(false)
   submittedAt       DateTime?
   expiresAt         DateTime
