@@ -13,24 +13,21 @@ import {
   safeString,
   upsertVoiceCallFromPayload,
 } from "@/lib/voice";
+import {
+  BETECH_AFTER_HOURS_WELCOME_MESSAGE,
+  BETECH_CONNECTING_PROMPT,
+  VOICE_HOP_MAX_DURATION_SECONDS,
+  type VoiceRoutePlan,
+  buildDialAttemptXml,
+  buildRoutePlanRedirectUrl,
+  buildWorkingHoursIvrXml,
+  decodeRoutePlan,
+  encodeRoutePlan,
+} from "@/lib/voiceIvr";
 import { publishVoiceLiveEvent } from "@/lib/voiceLiveEvents";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-const VOICE_HOP_MAX_DURATION_SECONDS = 15;
-
-type VoiceRouteHop = {
-  label: string;
-  dialValue: string;
-};
-
-type VoiceRoutePlan = {
-  hops: VoiceRouteHop[];
-  primaryTargetUserId: string | null;
-  routeType: string | null;
-  routedTo: string;
-};
 
 function xmlResponse(body: string) {
   return new Response(body, {
@@ -42,34 +39,10 @@ function xmlResponse(body: string) {
   });
 }
 
-function escapeXml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
-function buildDialAttemptXml(input: {
-  phoneNumber: string;
-  redirectUrl?: string | null;
-  preDialMessage?: string | null;
-  maxDurationSeconds?: number;
-}) {
-  const sayPart = input.preDialMessage ? `<Say>${escapeXml(input.preDialMessage)}</Say>` : "";
-  const maxDurationPart = input.maxDurationSeconds ? ` maxDuration="${input.maxDurationSeconds}"` : "";
-  const redirectPart = input.redirectUrl ? `<Redirect>${escapeXml(input.redirectUrl)}</Redirect>` : "";
-  return (
-    `<?xml version="1.0" encoding="UTF-8"?>` +
-    `<Response>${sayPart}<Dial record="true" phoneNumbers="${escapeXml(input.phoneNumber)}"${maxDurationPart} />${redirectPart}</Response>`
-  );
-}
-
 function buildAdminFallbackXml() {
   const adminNumber = safeString(process.env.BETECH_VOICE_ADMIN_NUMBER) || "+254705663175";
   return buildVoiceXmlResponse({
-    preDialMessage: "Thank you for calling Betech Solar Solutions. Please hold as we connect your call.",
+    preDialMessage: BETECH_CONNECTING_PROMPT,
     phoneNumbers: [adminNumber],
   });
 }
@@ -84,38 +57,6 @@ function isTrustedVoiceCallback(payload: Record<string, string>) {
   const payloadUsername = safeString(payload.username || payload.userName || payload.Username).toLowerCase();
   if (!payloadUsername) return true;
   return payloadUsername === configuredUsername;
-}
-
-function encodeRoutePlan(plan: VoiceRoutePlan) {
-  return Buffer.from(JSON.stringify(plan), "utf8").toString("base64url");
-}
-
-function decodeRoutePlan(serialized: string | null) {
-  if (!serialized) return null;
-  try {
-    const parsed = JSON.parse(Buffer.from(serialized, "base64url").toString("utf8")) as Partial<VoiceRoutePlan>;
-    if (!Array.isArray(parsed.hops) || !parsed.hops.length) return null;
-    return {
-      hops: parsed.hops
-        .map((hop) => ({
-          label: safeString(hop?.label),
-          dialValue: safeString(hop?.dialValue),
-        }))
-        .filter((hop) => hop.label && hop.dialValue),
-      primaryTargetUserId: safeString(parsed.primaryTargetUserId || "") || null,
-      routeType: safeString(parsed.routeType || "") || null,
-      routedTo: safeString(parsed.routedTo || ""),
-    } satisfies VoiceRoutePlan;
-  } catch {
-    return null;
-  }
-}
-
-function buildRedirectUrl(requestUrl: URL, plan: VoiceRoutePlan, hopIndex: number) {
-  const redirectUrl = new URL(requestUrl.pathname, requestUrl.origin);
-  redirectUrl.searchParams.set("hop", String(hopIndex));
-  redirectUrl.searchParams.set("routePlan", encodeRoutePlan(plan));
-  return redirectUrl.toString();
 }
 
 function inferTerminalStatus(payload: Record<string, string>, plan: VoiceRoutePlan | null) {
@@ -264,19 +205,25 @@ export async function POST(request: Request) {
       userId: voiceCall.assignedToId,
     });
 
+    if (!routePlanFromQuery && hopIndex === 0 && effectiveRoutePlan.routeType !== "AFTER_HOURS") {
+      const ivrUrl = new URL("/api/voice/ivr", requestUrl.origin);
+      ivrUrl.searchParams.set("routePlan", encodeRoutePlan(effectiveRoutePlan));
+      return xmlResponse(buildWorkingHoursIvrXml(ivrUrl.toString()));
+    }
+
     return xmlResponse(
       buildDialAttemptXml({
         preDialMessage:
           hopIndex === 0 && effectiveRoutePlan.routeType === "AFTER_HOURS"
-            ? "Thank you for calling Betech Solar Solutions. Our sales team is currently outside working hours. Please hold as we connect you to the admin line."
+            ? `${BETECH_AFTER_HOURS_WELCOME_MESSAGE} ${BETECH_CONNECTING_PROMPT}`
             : hopIndex === 0
-              ? "Thank you for calling Betech Solar Solutions. Please hold as we connect your call."
+              ? BETECH_CONNECTING_PROMPT
               : null,
         phoneNumber: currentHop.dialValue,
         maxDurationSeconds: VOICE_HOP_MAX_DURATION_SECONDS,
         redirectUrl:
           hopIndex + 1 < effectiveRoutePlan.hops.length
-            ? buildRedirectUrl(requestUrl, effectiveRoutePlan, hopIndex + 1)
+            ? buildRoutePlanRedirectUrl(requestUrl, effectiveRoutePlan, hopIndex + 1)
             : null,
       }),
     );
