@@ -1396,27 +1396,25 @@ export default function VoiceConsoleClient({
                 {activeTab === "operations" ? (
                   <section className="grid h-full min-h-0 gap-4 overflow-visible xl:grid-cols-[minmax(0,1fr)_312px] xl:items-start">
                     <section className="min-w-0 space-y-4">
-                      <div className={cardShell("p-4")}>
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
-                              <span>Active Call</span>
-                              {activeInteractionCall ? (
+                      {activeInteractionCall ? (
+                        <div className={cardShell("p-4")}>
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                                <span>Active Call</span>
                                 <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] text-emerald-100">
                                   Live
                                 </span>
-                              ) : null}
-                            </div>
-                            <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-center">
-                              <div className="flex h-16 w-16 items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-500/10 text-emerald-100">
-                                <PhoneCall className="h-7 w-7" />
                               </div>
-                              <div className="min-w-0">
-                                <div className="truncate text-2xl font-semibold tracking-tight text-white">{activeCallLabel}</div>
-                                <div className="mt-1 text-sm text-slate-400">
-                                  {activeInteractionCall?.customer.location || "Customer location not captured"}
+                              <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-center">
+                                <div className="flex h-16 w-16 items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-500/10 text-emerald-100">
+                                  <PhoneCall className="h-7 w-7" />
                                 </div>
-                                {activeInteractionCall ? (
+                                <div className="min-w-0">
+                                  <div className="truncate text-2xl font-semibold tracking-tight text-white">{activeCallLabel}</div>
+                                  <div className="mt-1 text-sm text-slate-400">
+                                    {activeInteractionCall.customer.location || "Customer location not captured"}
+                                  </div>
                                   <div className="mt-1.5 flex flex-wrap gap-2">
                                     <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100">
                                       {activeInteractionCall.direction === "INBOUND" ? "Inbound Call" : "Outbound Call"}
@@ -1425,19 +1423,17 @@ export default function VoiceConsoleClient({
                                       {activeInteractionCall.queueReasonLabel || "Live queue"}
                                     </span>
                                   </div>
-                                ) : null}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-lg font-medium text-slate-300">{formatDuration(activeInteractionCall.durationInSeconds)}</div>
+                              <div className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">
+                                {formatDateTime(activeInteractionCall.startedAt || activeInteractionCall.createdAt)}
                               </div>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <div className="text-lg font-medium text-slate-300">{activeInteractionCall ? formatDuration(activeInteractionCall.durationInSeconds) : "00:00"}</div>
-                            <div className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">
-                              {activeInteractionCall ? formatDateTime(activeInteractionCall.startedAt || activeInteractionCall.createdAt) : "No active interaction"}
-                            </div>
-                          </div>
-                        </div>
 
-                        {activeInteractionCall ? (
                           <div className="mt-4 grid gap-2 sm:grid-cols-3">
                             <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2.5">
                               <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">First Response</div>
@@ -1458,97 +1454,110 @@ export default function VoiceConsoleClient({
                               </div>
                             </div>
                           </div>
-                        ) : null}
 
-                        <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-                          {[
-                            { label: softphone.currentCall?.muted ? "Unmute" : "Mute", onClick: softphone.toggleMute, icon: Mic },
-                            { label: softphone.currentCall?.held ? "Resume" : "Hold", onClick: softphone.toggleHold, icon: PhoneOff },
-                            { label: showWorkspaceDialPad ? "Hide Keypad" : "Keypad", onClick: () => setShowWorkspaceDialPad((value) => !value), icon: Grip },
-                            { label: "Answer", onClick: softphone.answerCall, icon: PhoneCall },
-                            { label: showTransferPanel ? "Hide Transfer" : "Transfer", onClick: () => setShowTransferPanel((value) => !value), icon: ArrowRightLeft },
-                          ].map((action) => {
-                            const Icon = action.icon;
-                            return (
-                              <button
-                                key={action.label}
-                                type="button"
-                                onClick={action.onClick}
-                                disabled={!activeInteractionCall && action.label !== "Keypad"}
-                                className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2.5 text-center text-xs font-medium text-slate-100 transition hover:border-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                <Icon className="h-4 w-4" />
-                                <span>{action.label}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        <div className="mt-3 flex flex-wrap gap-2.5">
-                          <button
-                            type="button"
-                            onClick={softphone.hangUp}
-                            disabled={!activeInteractionCall}
-                            className="min-w-[150px] rounded-full border border-rose-500/40 bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            End Call
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleCallback(selectedCall?.callerNumber || selectedPhone)}
-                            className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-2.5 text-sm font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-400"
-                          >
-                            Call Back
-                          </button>
-                        </div>
-
-                        {showWorkspaceDialPad ? (
-                          <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
-                            <DialPad compact />
+                          <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+                            {[
+                              { label: softphone.currentCall?.muted ? "Unmute" : "Mute", onClick: softphone.toggleMute, icon: Mic },
+                              { label: softphone.currentCall?.held ? "Resume" : "Hold", onClick: softphone.toggleHold, icon: PhoneOff },
+                              { label: showWorkspaceDialPad ? "Hide Keypad" : "Keypad", onClick: () => setShowWorkspaceDialPad((value) => !value), icon: Grip },
+                              { label: "Answer", onClick: softphone.answerCall, icon: PhoneCall },
+                              { label: showTransferPanel ? "Hide Transfer" : "Transfer", onClick: () => setShowTransferPanel((value) => !value), icon: ArrowRightLeft },
+                            ].map((action) => {
+                              const Icon = action.icon;
+                              return (
+                                <button
+                                  key={action.label}
+                                  type="button"
+                                  onClick={action.onClick}
+                                  className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2.5 text-center text-xs font-medium text-slate-100 transition hover:border-slate-700"
+                                >
+                                  <Icon className="h-4 w-4" />
+                                  <span>{action.label}</span>
+                                </button>
+                              );
+                            })}
                           </div>
-                        ) : null}
 
-                        {showTransferPanel ? (
-                          <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
-                            <div className="flex flex-col gap-3">
-                              <div>
-                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Transfer Call</div>
-                                <div className="mt-1 text-sm text-slate-300">
-                                  Reassign this live call to admin, another routing agent, or log an external transfer number.
+                          <div className="mt-3 flex flex-wrap gap-2.5">
+                            <button
+                              type="button"
+                              onClick={softphone.hangUp}
+                              className="min-w-[150px] rounded-full border border-rose-500/40 bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-500"
+                            >
+                              End Call
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleCallback(selectedCall?.callerNumber || selectedPhone)}
+                              className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-2.5 text-sm font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-400"
+                            >
+                              Call Back
+                            </button>
+                          </div>
+
+                          {showWorkspaceDialPad ? (
+                            <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+                              <DialPad compact />
+                            </div>
+                          ) : null}
+
+                          {showTransferPanel ? (
+                            <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+                              <div className="flex flex-col gap-3">
+                                <div>
+                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Transfer Call</div>
+                                  <div className="mt-1 text-sm text-slate-300">
+                                    Reassign this live call to admin, another routing agent, or log an external transfer number.
+                                  </div>
+                                </div>
+                                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                                  <select
+                                    value={transferAssigneeId}
+                                    onChange={(event) => setTransferAssigneeId(event.target.value)}
+                                    className="rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none"
+                                  >
+                                    <option value="">Transfer to routing agent / admin</option>
+                                    {visibleAgents.map((agent) => (
+                                      <option key={agent.id} value={agent.id}>
+                                        {(agent as any).displayName || agent.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <input
+                                    value={transferPhone}
+                                    onChange={(event) => setTransferPhone(event.target.value)}
+                                    placeholder="Or enter external phone number"
+                                    className="rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={handleTransferCall}
+                                    disabled={transferPending || (!transferAssigneeId && !transferPhone.trim())}
+                                    className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {transferPending ? "Transferring..." : "Confirm Transfer"}
+                                  </button>
                                 </div>
                               </div>
-                              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-                                <select
-                                  value={transferAssigneeId}
-                                  onChange={(event) => setTransferAssigneeId(event.target.value)}
-                                  className="rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none"
-                                >
-                                  <option value="">Transfer to routing agent / admin</option>
-                                  {visibleAgents.map((agent) => (
-                                    <option key={agent.id} value={agent.id}>
-                                      {(agent as any).displayName || agent.name}
-                                    </option>
-                                  ))}
-                                </select>
-                                <input
-                                  value={transferPhone}
-                                  onChange={(event) => setTransferPhone(event.target.value)}
-                                  placeholder="Or enter external phone number"
-                                  className="rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={handleTransferCall}
-                                  disabled={!activeInteractionCall || transferPending || (!transferAssigneeId && !transferPhone.trim())}
-                                  className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                  {transferPending ? "Transferring..." : "Confirm Transfer"}
-                                </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <div className={cardShell("px-4 py-4")}>
+                          <div className="flex items-start gap-3">
+                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-slate-800 bg-slate-900/60 text-slate-300">
+                              <PhoneCall className="h-5 w-5" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Active Call</div>
+                              <div className="mt-1 text-base font-semibold text-white">No live call right now</div>
+                              <div className="mt-1 text-sm text-slate-400">
+                                Incoming calls route directly to fallback phones. Use recent calls, follow-ups, or the popup strip when a live fallback call is active.
                               </div>
                             </div>
                           </div>
-                        ) : null}
-                      </div>
+                        </div>
+                      )}
 
                       <section className={cardShell("p-4")}>
                         <div className="flex items-center justify-between gap-3">

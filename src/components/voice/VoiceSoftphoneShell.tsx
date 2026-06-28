@@ -2,7 +2,6 @@
 
 import BrowserPhone from "@/components/voice/BrowserPhone";
 import FallbackCallPopup from "@/components/voice/FallbackCallPopup";
-import IncomingCallModal from "@/components/voice/IncomingCallModal";
 import { SoftphoneProvider } from "@/components/voice/SoftphoneProvider";
 
 export default function VoiceSoftphoneShell({
@@ -16,7 +15,6 @@ export default function VoiceSoftphoneShell({
     <SoftphoneProvider>
       {children}
       {enableFloatingPhone ? <BrowserPhone /> : null}
-      <IncomingCallModal />
       <FallbackCallPopup />
     </SoftphoneProvider>
   );
