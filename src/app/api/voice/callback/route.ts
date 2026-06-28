@@ -89,16 +89,20 @@ export async function POST(request: Request) {
 
     const status = inferTerminalStatus(normalizedPayload, routePlanFromQuery);
     const isActive = isVoiceCallActive(normalizedPayload);
+    const resolvedPayload =
+      status === safeString(normalizedPayload.status || normalizedPayload.callSessionState || normalizedPayload.callStatus)
+        ? normalizedPayload
+        : { ...normalizedPayload, status };
 
     if (browserDialedNumber) {
-      const voiceCall = await upsertVoiceCallFromPayload(normalizedPayload, {
+      const voiceCall = await upsertVoiceCallFromPayload(resolvedPayload, {
         routeType: "WEBRTC_OUTBOUND",
         routedTo: browserDialedNumber,
         assignedToId: null,
       });
       await createVoiceEventFromPayload(
         {
-          ...normalizedPayload,
+          ...resolvedPayload,
           eventType: isActive ? "WEBRTC_OUTBOUND_CREATED" : "WEBRTC_OUTBOUND_COMPLETED",
         },
         voiceCall.id,
@@ -144,7 +148,7 @@ export async function POST(request: Request) {
     const currentHop = effectiveRoutePlan.hops[hopIndex] ?? null;
     const hasRoutableTarget = effectiveRoutePlan.hops.length > 0;
     const routeAnnotatedPayload = {
-      ...normalizedPayload,
+      ...resolvedPayload,
       routeReason: effectiveRoutePlan.routeReason || "",
     };
 
