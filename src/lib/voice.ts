@@ -576,6 +576,187 @@ export function inferVoiceCompletionStatus(
   return normalizeVoiceStatus(payload);
 }
 
+function getInternalRoutingPhoneSet() {
+  return new Set(
+    [getConfiguredPhone("BRENDAH"), getConfiguredPhone("JENNIFER"), getConfiguredPhone("ADMIN")]
+      .map((value) => normalizeVoiceNumber(value || ""))
+      .filter(Boolean),
+  );
+}
+
+function getCustomerContactPhones(call: {
+  callerNumber?: string | null;
+  destinationNumber?: string | null;
+  routedTo?: string | null;
+}) {
+  const internalNumbers = getInternalRoutingPhoneSet();
+  const values = [call.callerNumber, call.destinationNumber]
+    .flatMap((value) => getKenyanPhoneVariants(value || ""))
+    .filter((value) => Boolean(value) && !internalNumbers.has(value));
+
+  return Array.from(new Set(values));
+}
+
+function isAnsweredBusinessStatus(status: string | null | undefined) {
+  const normalized = safeString(status).toLowerCase();
+  return ["answered", "connected", "completed", "complete", "successful", "success", "transferred"].includes(normalized);
+}
+
+async function ensureAutoCallbackFollowUp(input: {
+  voiceCallId: string;
+  voiceLeadId?: string | null;
+  phone: string;
+  assignedToId?: string | null;
+  status: string;
+}) {
+  const phoneVariants = getKenyanPhoneVariants(input.phone);
+  if (!phoneVariants.length) return null;
+
+  const existing = await prisma.voiceFollowUp.findFirst({
+    where: {
+      phone: { in: phoneVariants },
+      status: { in: ["pending", "contacted"] },
+      OR: [
+        { voiceCallId: input.voiceCallId },
+        ...(input.voiceLeadId ? [{ voiceLeadId: input.voiceLeadId }] : []),
+        { title: { contains: "call back", mode: "insensitive" } },
+      ],
+    },
+    orderBy: [{ updatedAt: "desc" }],
+  });
+
+  const notes = `Auto-created after ${safeString(input.status).replace(/_/g, " ") || "missed"} call.`;
+  const dueAt = new Date(Date.now() + 15 * 60 * 1000);
+
+  if (existing) {
+    return prisma.voiceFollowUp.update({
+      where: { id: existing.id },
+      data: {
+        voiceCallId: input.voiceCallId,
+        voiceLeadId: input.voiceLeadId ?? existing.voiceLeadId,
+        assignedToId: input.assignedToId ?? existing.assignedToId,
+        dueAt: existing.dueAt ?? dueAt,
+        notes: existing.notes || notes,
+      },
+    });
+  }
+
+  return prisma.voiceFollowUp.create({
+    data: {
+      voiceCallId: input.voiceCallId,
+      voiceLeadId: input.voiceLeadId ?? null,
+      assignedToId: input.assignedToId ?? null,
+      phone: input.phone,
+      title: "Call back customer",
+      status: "pending",
+      dueAt,
+      notes,
+    },
+  });
+}
+
+async function closeVoiceCallbackWorkForAnsweredCall(call: {
+  id: string;
+  callerNumber: string;
+  destinationNumber?: string | null;
+  assignedToId?: string | null;
+  status: string;
+  durationInSeconds?: number | null;
+}) {
+  if (!isAnsweredBusinessStatus(call.status) && Number(call.durationInSeconds ?? 0) <= 0) return;
+
+  const phoneVariants = getCustomerContactPhones(call);
+  if (!phoneVariants.length) return;
+
+  const followUpResult = await prisma.voiceFollowUp.updateMany({
+    where: {
+      phone: { in: phoneVariants },
+      status: { in: ["pending", "contacted"] },
+    },
+    data: {
+      status: "resolved",
+    },
+  });
+
+  const leadResult = await prisma.voiceLead.updateMany({
+    where: {
+      phone: { in: phoneVariants },
+      status: { in: ["open", "pending_follow_up"] },
+    },
+    data: {
+      status: "contacted",
+      lastCallAt: new Date(),
+      assignedToId: call.assignedToId ?? undefined,
+    },
+  });
+
+  if (followUpResult.count || leadResult.count) {
+    publishVoiceLiveEvent({
+      type: "queue",
+      reason: "voice_callback_work_resolved",
+      callId: call.id,
+      userId: call.assignedToId ?? null,
+    });
+  }
+}
+
+export async function syncVoiceCallAutomation(input: {
+  id: string;
+  callerNumber: string;
+  destinationNumber?: string | null;
+  status: string;
+  startedAt?: Date | null;
+  assignedToId?: string | null;
+  durationInSeconds?: number | null;
+}) {
+  const normalizedStatus = safeString(input.status).toLowerCase();
+
+  if (shouldCreateMissedLead(normalizedStatus)) {
+    const lead = await createOrUpdateMissedVoiceLead({
+      callerNumber: input.callerNumber,
+      status: normalizedStatus,
+      startedAt: input.startedAt,
+      assignedToId: input.assignedToId,
+      voiceCallId: input.id,
+    });
+
+    const callbackPhone = getCustomerContactPhones({
+      callerNumber: input.callerNumber,
+      destinationNumber: input.destinationNumber,
+    })[0];
+
+    if (callbackPhone) {
+      const followUp = await ensureAutoCallbackFollowUp({
+        voiceCallId: input.id,
+        voiceLeadId: lead?.id ?? null,
+        phone: callbackPhone,
+        assignedToId: input.assignedToId ?? lead?.assignedToId ?? null,
+        status: normalizedStatus,
+      });
+
+      if (followUp) {
+        publishVoiceLiveEvent({
+          type: "follow_up",
+          reason: "voice_callback_follow_up_auto_created",
+          callId: input.id,
+          userId: followUp.assignedToId,
+        });
+      }
+    }
+
+    return;
+  }
+
+  await closeVoiceCallbackWorkForAnsweredCall({
+    id: input.id,
+    callerNumber: input.callerNumber,
+    destinationNumber: input.destinationNumber,
+    assignedToId: input.assignedToId,
+    status: normalizedStatus,
+    durationInSeconds: input.durationInSeconds,
+  });
+}
+
 function parseMoney(value: string | undefined) {
   if (!value) return null;
   const parsed = safeNumber(value, Number.NaN);
@@ -712,6 +893,7 @@ export async function createOrUpdateMissedVoiceLead(call: {
   status: string;
   startedAt?: Date | null;
   assignedToId?: string | null;
+  voiceCallId?: string | null;
 }) {
   if (!shouldCreateMissedLead(call.status) || !call.callerNumber) return null;
 

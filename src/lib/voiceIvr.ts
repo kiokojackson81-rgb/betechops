@@ -12,6 +12,7 @@ export type VoiceRoutePlan = {
   hops: VoiceRouteHop[];
   primaryTargetUserId: string | null;
   routeType: string | null;
+  routeReason?: string | null;
   routedTo: string;
 };
 
@@ -55,6 +56,7 @@ export function decodeRoutePlan(serialized: string | null) {
         .filter((hop) => hop.label && hop.dialValue),
       primaryTargetUserId: safeString(parsed.primaryTargetUserId || "") || null,
       routeType: safeString(parsed.routeType || "") || null,
+      routeReason: safeString(parsed.routeReason || "") || null,
       routedTo: safeString(parsed.routedTo || ""),
     } satisfies VoiceRoutePlan;
   } catch {
@@ -107,6 +109,7 @@ export function buildVoiceRoutePlanFromPhoneNumbers(input: {
     })),
     primaryTargetUserId: null,
     routeType: input.routeType,
+    routeReason: null,
     routedTo: normalizedNumbers.join(","),
   } satisfies VoiceRoutePlan;
 }

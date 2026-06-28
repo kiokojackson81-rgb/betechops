@@ -3,7 +3,6 @@ import {
   buildEmptyVoiceXmlResponse,
   buildVoiceMessageXmlResponse,
   buildVoiceXmlResponse,
-  createOrUpdateMissedVoiceLead,
   createVoiceEventFromPayload,
   ensureVoiceLeadForCaller,
   getVoiceRouteTargets,
@@ -11,6 +10,7 @@ import {
   isVoiceCallActive,
   parseVoicePayloadFromRequest,
   safeString,
+  syncVoiceCallAutomation,
   upsertVoiceCallFromPayload,
 } from "@/lib/voice";
 import {
@@ -136,6 +136,7 @@ export async function POST(request: Request) {
           ),
           primaryTargetUserId: resolvedRoute.primaryTarget?.userId ?? null,
           routeType: resolvedRoute.routeType,
+          routeReason: resolvedRoute.routeReason,
           routedTo: resolvedRoute.orderedTargets
             .flatMap((target) => target.dialValues?.length ? target.dialValues : [target.dialValue || target.phoneNumber])
             .filter(Boolean)
@@ -144,18 +145,22 @@ export async function POST(request: Request) {
       })());
     const currentHop = effectiveRoutePlan.hops[hopIndex] ?? null;
     const hasRoutableTarget = effectiveRoutePlan.hops.length > 0;
+    const routeAnnotatedPayload = {
+      ...normalizedPayload,
+      routeReason: effectiveRoutePlan.routeReason || "",
+    };
 
-    const voiceCall = await upsertVoiceCallFromPayload(normalizedPayload, {
+    const voiceCall = await upsertVoiceCallFromPayload(routeAnnotatedPayload, {
       routeType: effectiveRoutePlan.routeType,
       routedTo: effectiveRoutePlan.routedTo,
       assignedToId: effectiveRoutePlan.primaryTargetUserId,
     });
-    await createVoiceEventFromPayload(
-      {
-        ...normalizedPayload,
-        eventType: isActive ? "CALL_CREATED" : "CALL_COMPLETED",
-      },
-      voiceCall.id,
+      await createVoiceEventFromPayload(
+        {
+          ...routeAnnotatedPayload,
+          eventType: isActive ? "CALL_CREATED" : "CALL_COMPLETED",
+        },
+        voiceCall.id,
     );
 
     await ensureVoiceLeadForCaller({
@@ -164,14 +169,28 @@ export async function POST(request: Request) {
       assignedToId: voiceCall.assignedToId,
       customerId: voiceCall.customerId,
     });
+    await syncVoiceCallAutomation({
+      id: voiceCall.id,
+      callerNumber: voiceCall.callerNumber,
+      destinationNumber: voiceCall.destinationNumber,
+      status: status,
+      startedAt: voiceCall.startedAt,
+      assignedToId: voiceCall.assignedToId,
+      durationInSeconds: voiceCall.durationInSeconds,
+    });
 
     if (!isActive) {
-      await createOrUpdateMissedVoiceLead({
-        callerNumber: voiceCall.callerNumber,
-        status,
-        startedAt: voiceCall.startedAt,
-        assignedToId: voiceCall.assignedToId,
-      });
+      await createVoiceEventFromPayload(
+        {
+          ...routeAnnotatedPayload,
+          eventType: "ROUTE_HOP_COMPLETED",
+          hopIndex: String(hopIndex),
+          hopLabel: currentHop?.label || "",
+          dialValue: currentHop?.dialValue || "",
+          routeReason: effectiveRoutePlan.routeReason || "",
+        },
+        voiceCall.id,
+      );
       return xmlResponse(buildEmptyVoiceXmlResponse());
     }
 
@@ -209,6 +228,18 @@ export async function POST(request: Request) {
       ivrUrl.searchParams.set("routePlan", encodeRoutePlan(effectiveRoutePlan));
       return xmlResponse(buildWorkingHoursIvrXml(ivrUrl.toString()));
     }
+
+    await createVoiceEventFromPayload(
+      {
+        ...routeAnnotatedPayload,
+        eventType: "ROUTE_HOP_STARTED",
+        hopIndex: String(hopIndex),
+        hopLabel: currentHop.label,
+        dialValue: currentHop.dialValue,
+        routeReason: effectiveRoutePlan.routeReason || "",
+      },
+      voiceCall.id,
+    );
 
     return xmlResponse(
       buildDialAttemptXml({

@@ -68,7 +68,7 @@ function isWaitingStatus(status: string | null | undefined) {
 }
 
 function isAnsweredStatus(status: string | null | undefined) {
-  return ["answered", "in_progress", "completed"].includes(normalizeStatus(status));
+  return ["answered", "connected", "transferred"].includes(normalizeStatus(status));
 }
 
 function isMissedStatus(status: string | null | undefined) {
@@ -82,6 +82,8 @@ function isMissedStatus(status: string | null | undefined) {
     "not_answered",
     "not answered",
     "aborted",
+    "cancelled",
+    "disconnected",
   ].includes(normalizeStatus(status));
 }
 
@@ -93,6 +95,133 @@ function isAgentAvailableForRouting(status: string | null | undefined, lastSeenA
 
 function formatStatusLabel(status: string | null | undefined) {
   return String(status || "unknown").replace(/_/g, " ");
+}
+
+const VOICE_DISPOSITION_CODES = ["SALE", "QUOTE", "SUPPORT", "WRONG_NUMBER", "FOLLOW_UP_NEEDED"] as const;
+
+function extractDisposition(note: string | null | undefined) {
+  const match = String(note || "").trim().match(/^Disposition:\s*([A-Z_]+)/i);
+  const code = String(match?.[1] || "").trim().toUpperCase();
+  if (!VOICE_DISPOSITION_CODES.includes(code as (typeof VOICE_DISPOSITION_CODES)[number])) return null;
+  return code as (typeof VOICE_DISPOSITION_CODES)[number];
+}
+
+function getCallQueueReasonLabel(call: {
+  routeType?: string | null;
+  menuOption?: string | null;
+  rawPayloadJson?: unknown;
+  assignedToId?: string | null;
+}) {
+  const payload = call.rawPayloadJson && typeof call.rawPayloadJson === "object"
+    ? (call.rawPayloadJson as Record<string, unknown>)
+    : null;
+  const routeReason = normalizeStatus(String(payload?.routeReason || ""));
+  const routeType = String(call.routeType || "").trim().toUpperCase();
+
+  if (String(call.menuOption || "").trim() === "1" || routeType === "TECHNICAL_TEAM") {
+    return "Technical option";
+  }
+  if (routeType === "AFTER_HOURS") {
+    return "Admin fallback";
+  }
+  if (routeReason === "returning_customer") {
+    return "Returning customer";
+  }
+  if (routeReason === "round_robin") {
+    return "New caller";
+  }
+  if (routeReason === "admin_only" || routeReason === "after_hours") {
+    return "Admin fallback";
+  }
+  return "Live queue";
+}
+
+function getQueueReasonLabelForLead(source: string | null | undefined, title?: string | null) {
+  const normalizedSource = String(source || "").trim().toUpperCase();
+  if (normalizedSource === "VOICE_MISSED_CALL") return "Missed call callback";
+  if (String(title || "").toLowerCase().includes("call back")) return "Callback task";
+  return "Follow-up queue";
+}
+
+function getRingSeconds(input: {
+  startedAt: Date | null;
+  endedAt: Date | null;
+  createdAt: Date;
+  durationInSeconds?: number | null;
+  isActive?: boolean | null;
+}) {
+  const start = getCallStartedAt(input);
+  const end = input.endedAt ?? (input.isActive ? new Date() : null);
+  if (!end) return 0;
+  const totalSeconds = Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000));
+  return Math.max(0, totalSeconds - Number(input.durationInSeconds ?? 0));
+}
+
+function getCallbackOverdueSeconds(item: {
+  dueAt?: string | null;
+  status?: string | null;
+}) {
+  if (!item.dueAt) return 0;
+  if (["resolved", "closed", "contacted"].includes(normalizeStatus(item.status))) return 0;
+  const due = new Date(item.dueAt).getTime();
+  if (Number.isNaN(due)) return 0;
+  return Math.max(0, Math.floor((Date.now() - due) / 1000));
+}
+
+function buildHopAudit(events: Array<{ id: string; eventType: string; createdAt: Date; payloadJson: unknown }>) {
+  return events
+    .filter((event) => event.eventType === "ROUTE_HOP_STARTED" || event.eventType === "ROUTE_HOP_COMPLETED")
+    .map((event) => {
+      const payload = event.payloadJson && typeof event.payloadJson === "object"
+        ? (event.payloadJson as Record<string, unknown>)
+        : {};
+      const status = event.eventType === "ROUTE_HOP_STARTED"
+        ? "RANG"
+        : formatStatusLabel(String(payload.status || payload.callSessionState || "completed")).toUpperCase();
+      return {
+        id: event.id,
+        title: String(payload.hopLabel || payload.dialValue || "Route hop"),
+        status,
+        detail: String(payload.dialValue || ""),
+        at: event.createdAt.toISOString(),
+      };
+    });
+}
+
+function normalizeCallDisplayStatus(input: {
+  status: string | null | undefined;
+  durationInSeconds?: number | null;
+  isActive?: boolean | null;
+}) {
+  const normalized = normalizeStatus(input.status);
+  const durationInSeconds = Number(input.durationInSeconds ?? 0);
+  const isActive = Boolean(input.isActive);
+
+  if (isActive || isCallActiveStatus(normalized)) {
+    if (["answered", "in_progress", "processing", "connected"].includes(normalized)) {
+      return "ANSWERED";
+    }
+    if (["initiated", "dialing"].includes(normalized)) {
+      return "DIALING";
+    }
+    return "RINGING";
+  }
+
+  if (["busy", "user_busy"].includes(normalized)) return "BUSY";
+  if (["transferred"].includes(normalized)) return "TRANSFERRED";
+  if (["failed", "error"].includes(normalized)) return "FAILED";
+  if (["aborted", "cancelled", "canceled"].includes(normalized)) {
+    return durationInSeconds > 0 ? "DISCONNECTED" : "CANCELLED";
+  }
+  if (["missed", "no_answer", "no answer", "unanswered", "not_answered", "not answered"].includes(normalized)) {
+    return "MISSED";
+  }
+  if (["answered", "connected", "in_progress"].includes(normalized)) return "ANSWERED";
+  if (["completed", "success", "successful", "complete"].includes(normalized)) {
+    return durationInSeconds > 0 ? "ANSWERED" : "MISSED";
+  }
+  if (durationInSeconds > 0) return "ANSWERED";
+  return normalized ? normalized.toUpperCase() : "UNKNOWN";
 }
 
 function toNumber(value: unknown) {
@@ -602,13 +731,20 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
       const context = await getContextForPhone(call.callerNumber);
       const contextSummary = serializeCustomerContextSummary(context);
       const lastActivity = contextSummary.recentTimeline[0] ?? null;
+      const displayStatus = normalizeCallDisplayStatus({
+        status: call.status,
+        durationInSeconds: call.durationInSeconds,
+        isActive: call.isActive,
+      });
       return {
         id: call.id,
         sessionId: call.sessionId,
         callerNumber: call.callerNumber,
         direction: call.direction,
-        status: call.status,
-        statusLabel: formatStatusLabel(call.status),
+        status: displayStatus,
+        statusLabel: formatStatusLabel(displayStatus),
+        providerStatus: call.status,
+        providerStatusLabel: formatStatusLabel(call.status),
         isActive: call.isActive || isCallActiveStatus(call.status),
         routedTo: call.routedTo,
         routeType: call.routeType,
@@ -623,6 +759,12 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
         amount: Number(call.amount ?? 0),
         currencyCode: call.currencyCode ?? "KES",
         recordingUrl: call.recordingUrl,
+        queueReasonLabel: getCallQueueReasonLabel(call),
+        sla: {
+          ringSeconds: getRingSeconds(call),
+          talkSeconds: Number(call.durationInSeconds ?? 0),
+          firstResponseSeconds: getRingSeconds(call),
+        },
         customer: contextSummary,
         linkedSummaryText: `${contextSummary.linkedRecords.receipts} receipts · ${contextSummary.linkedRecords.webOrders} web orders · ${contextSummary.linkedRecords.quotations} quotes`,
         lastActivityTitle: lastActivity?.title ?? null,
@@ -645,13 +787,20 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
       const context = await getContextForPhone(call.callerNumber);
       const contextSummary = serializeCustomerContextSummary(context);
       const lastActivity = contextSummary.recentTimeline[0] ?? null;
+      const displayStatus = normalizeCallDisplayStatus({
+        status: call.status,
+        durationInSeconds: call.durationInSeconds,
+        isActive: call.isActive,
+      });
       return {
         id: call.id,
         sessionId: call.sessionId,
         callerNumber: call.callerNumber,
         direction: call.direction,
-        status: call.status,
-        statusLabel: formatStatusLabel(call.status),
+        status: displayStatus,
+        statusLabel: formatStatusLabel(displayStatus),
+        providerStatus: call.status,
+        providerStatusLabel: formatStatusLabel(call.status),
         isActive: call.isActive || isCallActiveStatus(call.status),
         routedTo: call.routedTo,
         routeType: call.routeType,
@@ -666,6 +815,12 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
         amount: Number(call.amount ?? 0),
         currencyCode: call.currencyCode ?? "KES",
         recordingUrl: call.recordingUrl,
+        queueReasonLabel: getCallQueueReasonLabel(call),
+        sla: {
+          ringSeconds: getRingSeconds(call),
+          talkSeconds: Number(call.durationInSeconds ?? 0),
+          firstResponseSeconds: getRingSeconds(call),
+        },
         customer: contextSummary,
         linkedSummaryText: `${contextSummary.linkedRecords.receipts} receipts · ${contextSummary.linkedRecords.webOrders} web orders · ${contextSummary.linkedRecords.quotations} quotes`,
         lastActivityTitle: lastActivity?.title ?? null,
@@ -698,6 +853,11 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
         dueAt: toIso(task.dueAt),
         createdAt: task.createdAt.toISOString(),
         updatedAt: task.updatedAt.toISOString(),
+        queueReasonLabel: getQueueReasonLabelForLead("VOICE_FOLLOW_UP", task.title),
+        callbackOverdueSeconds: getCallbackOverdueSeconds({
+          dueAt: toIso(task.dueAt),
+          status: task.status,
+        }),
         assignedToId: task.assignedToId,
         assignedToName: task.assignedTo?.name ?? null,
         assignedToEmail: task.assignedTo?.email ?? null,
@@ -733,6 +893,8 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
           dueAt: null,
           createdAt: lead.createdAt.toISOString(),
           updatedAt: lead.updatedAt.toISOString(),
+          queueReasonLabel: getQueueReasonLabelForLead(lead.source, lead.name),
+          callbackOverdueSeconds: 0,
           assignedToId: lead.assignedToId,
           assignedToName: lead.assignedTo?.name ?? null,
           assignedToEmail: lead.assignedTo?.email ?? null,
@@ -777,6 +939,27 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
   const missedCallsCount =
     followUps.filter((task) => isMissedStatus(task.status) || task.status === "pending").length +
     missedLeads.filter((lead) => isMissedStatus(lead.status) || lead.status === "pending_follow_up" || lead.status === "open").length;
+  const longestWaitingSeconds = activeCalls.reduce((max, call) => Math.max(max, call.waitingSeconds || 0), 0);
+  const callbackOverdueCount = followUps.filter((task) => Number(task.callbackOverdueSeconds || 0) > 0).length;
+  const transferRate =
+    recentCalls.length > 0
+      ? recentCalls.filter((call) => normalizeStatus(call.status) === "transferred").length / recentCalls.length
+      : 0;
+  const answerRate = recentCalls.length > 0 ? answeredCallsCount / recentCalls.length : 0;
+  const callbackCompletionRate =
+    followUps.length > 0
+      ? followUps.filter((task) => ["resolved", "closed", "contacted"].includes(normalizeStatus(task.status))).length / followUps.length
+      : 0;
+  const missedByAgent = Object.values(
+    [...followUps, ...missedLeads].reduce<Record<string, { agent: string; count: number }>>((accumulator, item) => {
+      const agent =
+        String(item.assignedToName || item.assignedToEmail || item.assignedAgentLabel || "Unassigned").trim() || "Unassigned";
+      if (!accumulator[agent]) accumulator[agent] = { agent, count: 0 };
+      accumulator[agent].count += 1;
+      return accumulator;
+    }, {}),
+  ).sort((left, right) => right.count - left.count);
+  const availableAgentsCount = agents.filter((agent) => agent.isAvailableForRouting).length;
 
   const selectedCall =
     (input.selectedCallId ? activeCalls.find((call) => call.id === input.selectedCallId) || recentCalls.find((call) => call.id === input.selectedCallId) : null) ||
@@ -791,6 +974,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     ? await prisma.voiceCall.findUnique({
         where: { id: selectedCall.id },
         include: {
+          assignedTo: { select: { id: true, name: true, email: true } },
           events: {
             orderBy: [{ createdAt: "asc" }],
             take: 24,
@@ -835,6 +1019,20 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
           averageTalkTimeSeconds: Math.round(Number(avgTalkAggregate._avg.durationInSeconds ?? 0)),
           callCostToday: Number(callCostAggregate._sum.amount ?? 0),
           newVoiceLeads: newVoiceLeadsCount,
+          wallboard: {
+            liveQueue: waitingCallsCount + followUps.length + missedLeads.length,
+            longestWaitingSeconds,
+            availableAgents: availableAgentsCount,
+            answeredToday: answeredCallsCount,
+            missedToday: missedCallsCount,
+          },
+          supervisor: {
+            answerRate,
+            transferRate,
+            callbackCompletionRate,
+            callbackOverdueCount,
+            missedByAgent,
+          },
         }
       : {
           myCallsToday: callsTodayCount,
@@ -864,14 +1062,40 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
           sessionId: selectedCallDetail.sessionId,
           callerNumber: selectedCallDetail.callerNumber,
           direction: selectedCallDetail.direction,
-          status: selectedCallDetail.status,
+          status: normalizeCallDisplayStatus({
+            status: selectedCallDetail.status,
+            durationInSeconds: selectedCallDetail.durationInSeconds,
+            isActive: selectedCallDetail.isActive,
+          }),
+          statusLabel: formatStatusLabel(
+            normalizeCallDisplayStatus({
+              status: selectedCallDetail.status,
+              durationInSeconds: selectedCallDetail.durationInSeconds,
+              isActive: selectedCallDetail.isActive,
+            }),
+          ),
+          providerStatus: selectedCallDetail.status,
+          providerStatusLabel: formatStatusLabel(selectedCallDetail.status),
+          queueReasonLabel: getCallQueueReasonLabel(selectedCallDetail),
           routedTo: selectedCallDetail.routedTo,
+          assignedToName: selectedCallDetail.assignedTo?.name ?? null,
+          assignedToEmail: selectedCallDetail.assignedTo?.email ?? null,
           recordingUrl: selectedCallDetail.recordingUrl,
           durationInSeconds: selectedCallDetail.durationInSeconds ?? 0,
           amount: Number(selectedCallDetail.amount ?? 0),
           currencyCode: selectedCallDetail.currencyCode ?? "KES",
           startedAt: toIso(selectedCallDetail.startedAt),
           endedAt: toIso(selectedCallDetail.endedAt),
+          sla: {
+            firstResponseSeconds: getRingSeconds(selectedCallDetail),
+            ringSeconds: getRingSeconds(selectedCallDetail),
+            talkSeconds: Number(selectedCallDetail.durationInSeconds ?? 0),
+          },
+          hopAudit: buildHopAudit(selectedCallDetail.events),
+          disposition:
+            selectedCallDetail.callNotes
+              .map((note) => extractDisposition(note.note))
+              .find(Boolean) ?? null,
           timeline: [
             ...selectedCallDetail.events.map((event) => ({
               id: `event-${event.id}`,

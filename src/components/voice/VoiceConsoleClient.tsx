@@ -41,6 +41,7 @@ type VoiceConsoleClientProps = {
 
 const MANUAL_PRESENCE_STATUSES = ["AVAILABLE", "OFFLINE"] as const;
 const VOICE_CONSOLE_TABS = ["operations", "recent", "recordings", "followups", "agents", "feedback", "settings"] as const;
+const VOICE_DISPOSITIONS = ["SALE", "QUOTE", "SUPPORT", "WRONG_NUMBER", "FOLLOW_UP_NEEDED"] as const;
 type VoiceConsoleTab = (typeof VOICE_CONSOLE_TABS)[number];
 const VOICE_DATE_FILTERS = ["today", "yesterday", "week", "period"] as const;
 type VoiceDateFilter = (typeof VOICE_DATE_FILTERS)[number];
@@ -132,7 +133,7 @@ function statusTone(status: string | null | undefined) {
   if (["busy", "ringing", "queued", "pending", "in_progress", "pending_follow_up", "away", "waiting", "connecting"].includes(normalized)) {
     return "border-amber-500/30 bg-amber-500/10 text-amber-100";
   }
-  if (["offline", "break", "missed", "aborted", "failed", "closed", "error"].includes(normalized)) {
+  if (["offline", "break", "missed", "aborted", "failed", "closed", "error", "cancelled", "disconnected"].includes(normalized)) {
     return "border-rose-500/30 bg-rose-500/10 text-rose-100";
   }
   return "border-white/10 bg-white/[0.04] text-slate-200";
@@ -228,6 +229,10 @@ function formatPresenceChoiceLabel(status: (typeof MANUAL_PRESENCE_STATUSES)[num
   return status === "AVAILABLE" ? "Available" : "Offline";
 }
 
+function formatDispositionLabel(value: (typeof VOICE_DISPOSITIONS)[number] | string | null | undefined) {
+  return String(value || "").replace(/_/g, " ").trim() || "Not set";
+}
+
 function isInternalVoiceHref(value: string | null | undefined) {
   return Boolean(value) && String(value).startsWith("/");
 }
@@ -276,6 +281,7 @@ export default function VoiceConsoleClient({
   const [dateFilter, setDateFilter] = useState<VoiceDateFilter>(() => normalizeVoiceDateFilter(searchParams.get("range")));
   const [queueView, setQueueView] = useState<"all" | "waiting" | "missed">("all");
   const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [dispositionPending, setDispositionPending] = useState(false);
   const lastAnnouncedCallIdRef = useRef<string | null>(null);
   const liveStatusTimeoutRef = useRef<number | null>(null);
 
@@ -680,6 +686,32 @@ export default function VoiceConsoleClient({
     }
   };
 
+  const handleSetDisposition = async (disposition: (typeof VOICE_DISPOSITIONS)[number]) => {
+    if (!selectedCall?.id) return;
+    setDispositionPending(true);
+    setError(null);
+    try {
+      const response = await fetch(`${pollBaseHref.replace("/live", "/notes")}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          voiceCallId: selectedCall.id,
+          note: `Disposition: ${disposition}`,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(String(payload.error || "disposition_failed"));
+      }
+      await refreshSnapshot(selectedCallId, selectedPhone);
+    } catch (dispositionError) {
+      console.error("[voice.console.disposition_failed]", dispositionError);
+      setError("Could not save the call disposition.");
+    } finally {
+      setDispositionPending(false);
+    }
+  };
+
   const handleCreateFollowUp = async () => {
     if (!followUpTitle.trim()) return;
     setSubmittingFollowUp(true);
@@ -801,12 +833,12 @@ export default function VoiceConsoleClient({
   };
 
   const filteredAnsweredCount = filteredRecentCalls.filter((call) =>
-    ["answered", "in progress", "completed"].includes(String(call.statusLabel || "").trim().toLowerCase()),
+    ["answered", "connected", "transferred"].includes(String(call.status || "").trim().toLowerCase()),
   ).length;
 
   const filteredMissedCount =
     filteredRecentCalls.filter((call) =>
-      ["missed", "no answer", "busy", "failed", "aborted"].includes(String(call.statusLabel || "").trim().toLowerCase()),
+      ["missed", "busy", "failed", "cancelled", "disconnected"].includes(String(call.status || "").trim().toLowerCase()),
     ).length + filteredFollowUps.length;
 
   const filteredAverageTalkTime =
@@ -1003,6 +1035,9 @@ export default function VoiceConsoleClient({
           },
         ];
 
+  const adminWallboard = data.viewer.isAdmin ? (data.summary as any).wallboard : null;
+  const supervisorMetrics = data.viewer.isAdmin ? (data.summary as any).supervisor : null;
+
   const contextQuickCards = [
     { label: "Phone Number", value: selectedCall?.callerNumber || "No active call" },
     { label: "Location", value: selectedContextData?.location || "No location saved" },
@@ -1015,6 +1050,7 @@ export default function VoiceConsoleClient({
         "Unassigned",
     },
     { label: "First Seen", value: formatDateTime(selectedCall?.startedAt || selectedCall?.createdAt || null) },
+    { label: "Queue Reason", value: (data.selectedCallDetail as any)?.queueReasonLabel || (selectedCall as any)?.queueReasonLabel || "Live queue" },
   ];
 
   const selectedCallLabel =
@@ -1293,9 +1329,12 @@ export default function VoiceConsoleClient({
                                   {activeInteractionCall?.customer.location || "Customer location not captured"}
                                 </div>
                                 {activeInteractionCall ? (
-                                  <div className="mt-1.5">
+                                  <div className="mt-1.5 flex flex-wrap gap-2">
                                     <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100">
                                       {activeInteractionCall.direction === "INBOUND" ? "Inbound Call" : "Outbound Call"}
+                                    </span>
+                                    <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-slate-300">
+                                      {activeInteractionCall.queueReasonLabel || "Live queue"}
                                     </span>
                                   </div>
                                 ) : null}
@@ -1309,6 +1348,29 @@ export default function VoiceConsoleClient({
                             </div>
                           </div>
                         </div>
+
+                        {activeInteractionCall ? (
+                          <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                            <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2.5">
+                              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">First Response</div>
+                              <div className="mt-1 text-sm font-semibold text-white">
+                                {formatDuration((activeInteractionCall as any).sla?.firstResponseSeconds)}
+                              </div>
+                            </div>
+                            <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2.5">
+                              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Ring Time</div>
+                              <div className="mt-1 text-sm font-semibold text-white">
+                                {formatDuration((activeInteractionCall as any).sla?.ringSeconds)}
+                              </div>
+                            </div>
+                            <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2.5">
+                              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Talk Time</div>
+                              <div className="mt-1 text-sm font-semibold text-white">
+                                {formatDuration((activeInteractionCall as any).sla?.talkSeconds)}
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
 
                         <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
                           {[
@@ -1452,6 +1514,65 @@ export default function VoiceConsoleClient({
                           )}
                         </div>
                       </section>
+
+                      {data.viewer.isAdmin && (adminWallboard || supervisorMetrics) ? (
+                        <section className={cardShell("p-4")}>
+                          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                            <div className="min-w-0">
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Wallboard</div>
+                              <div className="mt-1 text-base font-semibold text-white">Live queue and service health</div>
+                            </div>
+                            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                              {[
+                                ["Live Queue", String(adminWallboard?.liveQueue || 0)],
+                                ["Longest Waiting", formatDuration(adminWallboard?.longestWaitingSeconds || 0)],
+                                ["Agents Ready", String(adminWallboard?.availableAgents || 0)],
+                                ["Answered vs Missed", `${adminWallboard?.answeredToday || 0}/${adminWallboard?.missedToday || 0}`],
+                              ].map(([label, value]) => (
+                                <div key={label} className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2.5">
+                                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</div>
+                                  <div className="mt-1 text-sm font-semibold text-white">{value}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+                            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Supervisor KPIs</div>
+                              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                {[
+                                  ["Answer Rate", `${Math.round(Number(supervisorMetrics?.answerRate || 0) * 100)}%`],
+                                  ["Transfer Rate", `${Math.round(Number(supervisorMetrics?.transferRate || 0) * 100)}%`],
+                                  ["Callback Completion", `${Math.round(Number(supervisorMetrics?.callbackCompletionRate || 0) * 100)}%`],
+                                  ["Overdue Callbacks", String(supervisorMetrics?.callbackOverdueCount || 0)],
+                                ].map(([label, value]) => (
+                                  <div key={label} className="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5">
+                                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</div>
+                                    <div className="mt-1 text-sm font-semibold text-white">{value}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Missed By Agent</div>
+                              <div className="mt-3 space-y-2">
+                                {Array.isArray(supervisorMetrics?.missedByAgent) && supervisorMetrics.missedByAgent.length ? (
+                                  supervisorMetrics.missedByAgent.slice(0, 5).map((row: any) => (
+                                    <div key={row.agent} className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5 text-sm">
+                                      <span className="truncate text-slate-300">{row.agent}</span>
+                                      <span className="font-semibold text-white">{row.count}</span>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className="rounded-xl border border-dashed border-slate-800 px-3 py-5 text-sm text-slate-500">
+                                    No missed-call backlog right now.
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </section>
+                      ) : null}
                     </section>
 
                     <aside className="min-w-0 xl:sticky xl:top-3">
@@ -1506,6 +1627,9 @@ export default function VoiceConsoleClient({
                                             ? formatTimeOnly(queueItem.startedAt || queueItem.createdAt)
                                             : formatTimeOnly(queueItem.dueAt || queueItem.updatedAt))}
                                       </div>
+                                      <div className="mt-1 truncate text-[11px] text-slate-500">
+                                        {queueItem.queueReasonLabel || (isCall ? "Live queue" : "Follow-up queue")}
+                                      </div>
                                     </div>
                                     <button
                                       type="button"
@@ -1524,6 +1648,11 @@ export default function VoiceConsoleClient({
                                       {isCall ? queueItem.statusLabel : queueItem.statusLabel || queueItem.type}
                                     </span>
                                   </div>
+                                  {!isCall && Number(queueItem.callbackOverdueSeconds || 0) > 0 ? (
+                                    <div className="mt-2 text-[11px] text-amber-200">
+                                      Callback overdue by {formatRelative(queueItem.callbackOverdueSeconds)}
+                                    </div>
+                                  ) : null}
                                 </div>
                               );
                             })
@@ -1662,7 +1791,11 @@ export default function VoiceConsoleClient({
                                           </div>
                                           <div className="min-w-0">
                                             <div className="truncate text-sm text-slate-200">{call.routedToDisplay || call.assignedToName || call.assignedToEmail || "-"}</div>
-                                            <div className="truncate text-xs text-slate-500">{call.lastActivityTitle || "No recent activity"}</div>
+                                            <div className="truncate text-xs text-slate-500">
+                                              {call.providerStatusLabel && call.providerStatusLabel !== call.statusLabel
+                                                ? `Provider ${call.providerStatusLabel}`
+                                                : call.routeType || "Direct route"}
+                                            </div>
                                           </div>
                                           <div>
                                             <span className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(call.status)}`}>
@@ -1682,6 +1815,17 @@ export default function VoiceConsoleClient({
                                                     <div className="mt-1 text-sm text-slate-400">
                                                       {call.callerNumber} · {call.direction} · {call.statusLabel}
                                                     </div>
+                                                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-300">
+                                                      <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
+                                                        {call.queueReasonLabel || "Live queue"}
+                                                      </span>
+                                                      <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
+                                                        Ring {formatDuration((call as any).sla?.ringSeconds)}
+                                                      </span>
+                                                      <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
+                                                        Talk {formatDuration((call as any).sla?.talkSeconds)}
+                                                      </span>
+                                                    </div>
                                                   </div>
                                                   <div className="flex flex-wrap gap-2">
                                                     <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
@@ -1689,6 +1833,9 @@ export default function VoiceConsoleClient({
                                                     </div>
                                                     <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
                                                       Cost {formatMoney(call.amount, call.currencyCode)}
+                                                    </div>
+                                                    <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
+                                                      Provider {call.providerStatusLabel || call.statusLabel}
                                                     </div>
                                                     <button
                                                       type="button"
@@ -1732,17 +1879,19 @@ export default function VoiceConsoleClient({
                                                   <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                                                     <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Who received</div>
                                                     <div className="mt-2 text-sm font-semibold text-white">{call.assignedToName || call.assignedToEmail || call.routedToDisplay || "Unassigned"}</div>
-                                                    <div className="mt-1 text-xs text-slate-500">{call.routeType || "Direct route"}</div>
+                                                    <div className="mt-1 text-xs text-slate-500">{call.queueReasonLabel || call.routeType || "Direct route"}</div>
+                                                  </div>
+                                                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                                                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Disposition</div>
+                                                    <div className="mt-2 text-sm font-semibold text-white">
+                                                      {formatDispositionLabel((expandedDetail as any)?.disposition)}
+                                                    </div>
+                                                    <div className="mt-1 text-xs text-slate-500">Outcome code saved after answered calls</div>
                                                   </div>
                                                   <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                                                     <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Orders</div>
                                                     <div className="mt-2 text-lg font-semibold text-white">{call.customer.linkedRecords.webOrders}</div>
                                                     <div className="mt-1 text-xs text-slate-500">Previous orders linked to caller</div>
-                                                  </div>
-                                                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-                                                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Previous calls</div>
-                                                    <div className="mt-2 text-lg font-semibold text-white">{call.customer.linkedRecords.recentCalls}</div>
-                                                    <div className="mt-1 text-xs text-slate-500">CRM voice history</div>
                                                   </div>
                                                   <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                                                     <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Open quotes</div>
@@ -1772,29 +1921,51 @@ export default function VoiceConsoleClient({
                                                       ))}
                                                   </div>
                                                 </div>
+
+                                                {(expandedDetail as any)?.hopAudit?.length ? (
+                                                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                                                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Per-hop audit</div>
+                                                    <div className="mt-3 space-y-2">
+                                                      {(expandedDetail as any).hopAudit.map((hop: any) => (
+                                                        <div key={hop.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5">
+                                                          <div className="min-w-0">
+                                                            <div className="truncate text-sm font-semibold text-white">{hop.title}</div>
+                                                            <div className="truncate text-xs text-slate-500">{hop.detail || "Dial attempt"}</div>
+                                                          </div>
+                                                          <div className="text-right">
+                                                            <div className="text-xs font-semibold text-slate-200">{hop.status}</div>
+                                                            <div className="text-[11px] text-slate-500">{formatDateTime(hop.at)}</div>
+                                                          </div>
+                                                        </div>
+                                                      ))}
+                                                    </div>
+                                                  </div>
+                                                ) : null}
                                               </div>
 
                                               <div className="space-y-4">
-                                                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-                                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Reassign</div>
-                                                  <div className="mt-2 text-sm text-slate-300">Move this call to another agent for ownership and follow-up.</div>
-                                                  <select
-                                                    defaultValue={call.assignedToId || ""}
-                                                    onChange={(event) => {
-                                                      const assignedToId = event.target.value;
-                                                      if (!assignedToId) return;
-                                                      void handleReassign({ callId: call.id, assignedToId });
-                                                    }}
-                                                    className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-slate-100 outline-none"
-                                                  >
-                                                    <option value="">Select agent</option>
-                                                    {visibleAgents.map((agent) => (
-                                                      <option key={agent.id} value={agent.id}>
-                                                        {(agent as any).displayName || agent.name}
-                                                      </option>
-                                                    ))}
-                                                  </select>
-                                                </div>
+                                                {data.viewer.isAdmin ? (
+                                                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                                                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Reassign</div>
+                                                    <div className="mt-2 text-sm text-slate-300">Move this call to another agent for ownership and follow-up.</div>
+                                                    <select
+                                                      defaultValue={call.assignedToId || ""}
+                                                      onChange={(event) => {
+                                                        const assignedToId = event.target.value;
+                                                        if (!assignedToId) return;
+                                                        void handleReassign({ callId: call.id, assignedToId });
+                                                      }}
+                                                      className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-slate-100 outline-none"
+                                                    >
+                                                      <option value="">Select agent</option>
+                                                      {visibleAgents.map((agent) => (
+                                                        <option key={agent.id} value={agent.id}>
+                                                          {(agent as any).displayName || agent.name}
+                                                        </option>
+                                                      ))}
+                                                    </select>
+                                                  </div>
+                                                ) : null}
 
                                                 <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                                                   <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Recording</div>
@@ -1938,26 +2109,28 @@ export default function VoiceConsoleClient({
                                 >
                                   Mark Contacted
                                 </button>
-                                <select
-                                  defaultValue={item.assignedToId || ""}
-                                  onChange={(event) => {
-                                    const assignedToId = event.target.value;
-                                    if (!assignedToId) return;
-                                    void handleReassign({
-                                      queueId: item.id,
-                                      queueType: item.type,
-                                      assignedToId,
-                                    });
-                                  }}
-                                  className="rounded-full border border-slate-800 bg-slate-950/80 px-3 py-2 text-xs text-slate-100 outline-none"
-                                >
-                                  <option value="">Reassign</option>
-                                  {visibleAgents.map((agent) => (
-                                    <option key={agent.id} value={agent.id}>
-                                      {(agent as any).displayName || agent.name}
-                                    </option>
-                                  ))}
-                                </select>
+                                {data.viewer.isAdmin ? (
+                                  <select
+                                    defaultValue={item.assignedToId || ""}
+                                    onChange={(event) => {
+                                      const assignedToId = event.target.value;
+                                      if (!assignedToId) return;
+                                      void handleReassign({
+                                        queueId: item.id,
+                                        queueType: item.type,
+                                        assignedToId,
+                                      });
+                                    }}
+                                    className="rounded-full border border-slate-800 bg-slate-950/80 px-3 py-2 text-xs text-slate-100 outline-none"
+                                  >
+                                    <option value="">Reassign</option>
+                                    {visibleAgents.map((agent) => (
+                                      <option key={agent.id} value={agent.id}>
+                                        {(agent as any).displayName || agent.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                ) : null}
                                 {item.type === "task" ? (
                                   <button
                                     type="button"
@@ -2189,6 +2362,68 @@ export default function VoiceConsoleClient({
                       </div>
                     </div>
 
+                    <div className="grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+                      <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
+                        <div className="text-sm font-semibold text-white">Disposition Codes</div>
+                        <div className="mt-2 text-sm text-slate-400">
+                          Save a final outcome after an answered call so supervisors can track service quality.
+                        </div>
+                        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                          {VOICE_DISPOSITIONS.map((disposition) => (
+                            <button
+                              key={disposition}
+                              type="button"
+                              disabled={!selectedCall?.id || dispositionPending}
+                              onClick={() => handleSetDisposition(disposition)}
+                              className={`rounded-xl border px-3 py-2 text-sm font-semibold transition ${
+                                (data.selectedCallDetail as any)?.disposition === disposition
+                                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
+                                  : "border-white/10 bg-white/[0.03] text-slate-100 hover:border-white/20"
+                              } disabled:cursor-not-allowed disabled:opacity-50`}
+                            >
+                              {formatDispositionLabel(disposition)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
+                        <div className="text-sm font-semibold text-white">SLA and Routing Audit</div>
+                        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                          {[
+                            ["First response", formatDuration((data.selectedCallDetail as any)?.sla?.firstResponseSeconds)],
+                            ["Ring time", formatDuration((data.selectedCallDetail as any)?.sla?.ringSeconds)],
+                            ["Talk time", formatDuration((data.selectedCallDetail as any)?.sla?.talkSeconds)],
+                          ].map(([label, value]) => (
+                            <div key={label} className="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3">
+                              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</div>
+                              <div className="mt-1 text-sm font-semibold text-white">{value}</div>
+                            </div>
+                          ))}
+                        </div>
+                        {(data.selectedCallDetail as any)?.hopAudit?.length ? (
+                          <div className="mt-4 space-y-2">
+                            {(data.selectedCallDetail as any).hopAudit.map((hop: any) => (
+                              <div key={hop.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3">
+                                <div className="min-w-0">
+                                  <div className="truncate text-sm font-semibold text-white">{hop.title}</div>
+                                  <div className="truncate text-xs text-slate-500">{hop.detail || "Dial attempt"}</div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-xs font-semibold text-slate-200">{hop.status}</div>
+                                  <div className="text-[11px] text-slate-500">{formatDateTime(hop.at)}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="mt-4 rounded-xl border border-dashed border-slate-800 px-3 py-5 text-sm text-slate-500">
+                            Per-hop audit will appear here for routed calls.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
                     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
                       <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
                         <div className="text-sm font-semibold text-white">Quick Note</div>
@@ -2286,26 +2521,28 @@ export default function VoiceConsoleClient({
                         </div>
                       </div>
 
-                      <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
-                        <div className="text-sm font-semibold text-white">Reassign</div>
-                        <div className="mt-2 text-sm text-slate-300">Move this interaction to another agent for ownership and follow-up.</div>
-                        <select
-                          defaultValue={selectedCall?.assignedToId || ""}
-                          onChange={(event) => {
-                            const assignedToId = event.target.value;
-                            if (!assignedToId || !selectedCall?.id) return;
-                            void handleReassign({ callId: selectedCall.id, assignedToId });
-                          }}
-                          className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-slate-100 outline-none"
-                        >
-                          <option value="">Select agent</option>
-                          {visibleAgents.map((agent) => (
-                            <option key={agent.id} value={agent.id}>
-                              {(agent as any).displayName || agent.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                      {data.viewer.isAdmin ? (
+                        <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
+                          <div className="text-sm font-semibold text-white">Reassign</div>
+                          <div className="mt-2 text-sm text-slate-300">Move this interaction to another agent for ownership and follow-up.</div>
+                          <select
+                            defaultValue={selectedCall?.assignedToId || ""}
+                            onChange={(event) => {
+                              const assignedToId = event.target.value;
+                              if (!assignedToId || !selectedCall?.id) return;
+                              void handleReassign({ callId: selectedCall.id, assignedToId });
+                            }}
+                            className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-slate-100 outline-none"
+                          >
+                            <option value="">Select agent</option>
+                            {visibleAgents.map((agent) => (
+                              <option key={agent.id} value={agent.id}>
+                                {(agent as any).displayName || agent.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : null}
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-dashed border-slate-800 px-3 py-6 text-sm text-slate-500">

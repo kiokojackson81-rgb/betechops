@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import {
-  createOrUpdateMissedVoiceLead,
   createVoiceEventFromPayload,
   ensureVoiceLeadForCaller,
+  syncVoiceCallAutomation,
   upsertVoiceCallFromPayload,
 } from "@/lib/voice";
 import { maybeSendCallFeedbackSms } from "@/lib/feedbackSms";
@@ -66,11 +66,14 @@ export async function POST(request: Request) {
       assignedToId: voiceCall.assignedToId,
       customerId: voiceCall.customerId,
     });
-    await createOrUpdateMissedVoiceLead({
+    await syncVoiceCallAutomation({
+      id: voiceCall.id,
       callerNumber: voiceCall.callerNumber,
+      destinationNumber: voiceCall.destinationNumber,
       status: voiceCall.status,
       startedAt: voiceCall.startedAt,
       assignedToId: voiceCall.assignedToId,
+      durationInSeconds: voiceCall.durationInSeconds,
     });
     await maybeSendCallFeedbackSms(voiceCall).catch((smsError) => {
       console.warn("[voice.outbound.feedback_sms_skipped]", smsError instanceof Error ? smsError.message : smsError);
