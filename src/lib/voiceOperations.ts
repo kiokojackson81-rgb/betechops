@@ -42,6 +42,7 @@ export type VoiceLiveSnapshotInput = {
   viewer: VoiceViewer;
   selectedCallId?: string | null;
   selectedPhone?: string | null;
+  scope?: "all" | "mine";
 };
 
 export function canAccessVoiceDesk(role: string | null | undefined, attendantCategory: string | null | undefined) {
@@ -498,13 +499,13 @@ async function listVoiceAgents() {
   });
 }
 
-function buildCallWhere(viewer: VoiceViewer) {
-  if (viewer.isAdmin) return {};
+function buildCallWhere(viewer: VoiceViewer, scope: "all" | "mine" = "all") {
+  if (viewer.isAdmin && scope !== "mine") return {};
   return { assignedToId: viewer.targetUserId };
 }
 
-function buildFollowUpWhere(viewer: VoiceViewer) {
-  if (viewer.isAdmin) {
+function buildFollowUpWhere(viewer: VoiceViewer, scope: "all" | "mine" = "all") {
+  if (viewer.isAdmin && scope !== "mine") {
     return { status: { in: ["pending", "contacted"] } };
   }
   return {
@@ -513,8 +514,8 @@ function buildFollowUpWhere(viewer: VoiceViewer) {
   };
 }
 
-function buildLeadWhere(viewer: VoiceViewer) {
-  if (viewer.isAdmin) {
+function buildLeadWhere(viewer: VoiceViewer, scope: "all" | "mine" = "all") {
+  if (viewer.isAdmin && scope !== "mine") {
     return { status: { in: ["open", "pending_follow_up"] } };
   }
   return {
@@ -625,10 +626,11 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
   const { viewer } = input;
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
+  const scope = input.scope === "mine" ? "mine" : "all";
 
-  const callWhere = buildCallWhere(viewer);
-  const followUpWhere = buildFollowUpWhere(viewer);
-  const leadWhere = buildLeadWhere(viewer);
+  const callWhere = buildCallWhere(viewer, scope);
+  const followUpWhere = buildFollowUpWhere(viewer, scope);
+  const leadWhere = buildLeadWhere(viewer, scope);
 
   const [
     callsTodayCount,
@@ -1029,6 +1031,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
       targetAttendantCategory: viewer.targetAttendantCategory,
       isAdmin: viewer.isAdmin,
       impersonateId: viewer.impersonateId,
+      scope,
     },
     summary: viewer.isAdmin
       ? {

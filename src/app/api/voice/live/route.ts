@@ -48,6 +48,7 @@ export async function GET(request: Request) {
               viewer,
               selectedCallId,
               selectedPhone,
+              scope: url.searchParams.get("scope") === "mine" ? "mine" : "all",
             });
             writeEvent("snapshot", { reason, snapshot });
           };
@@ -95,6 +96,7 @@ export async function GET(request: Request) {
       viewer,
       selectedCallId: url.searchParams.get("selectedCallId"),
       selectedPhone: url.searchParams.get("selectedPhone"),
+      scope: url.searchParams.get("scope") === "mine" ? "mine" : "all",
     });
 
     return NextResponse.json(snapshot, { status: 200 });
