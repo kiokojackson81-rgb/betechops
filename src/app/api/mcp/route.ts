@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { searchLiveCatalog } from "@/lib/aiCatalog";
 import { isAuthorizedApiRequest } from "@/lib/apiAuth";
 
 const TOOL_NAME = "search_catalog_product";
@@ -11,24 +10,95 @@ type JsonRpcRequest = {
   params?: Record<string, unknown>;
 };
 
-function buildCatalogToolPayload(catalog: Awaited<ReturnType<typeof searchLiveCatalog>>) {
-  const products = Array.isArray(catalog.results) ? catalog.results : [];
-  const firstProduct = products[0] ?? null;
+type CatalogSearchApiResponse = {
+  ok?: boolean;
+  source?: string;
+  query?: string;
+  resultCount?: number;
+  results?: Array<{
+    productName?: string;
+    price?: number;
+    currency?: string;
+    availability?: string;
+    warranty?: string | null;
+    shortDescription?: string | null;
+    productUrl?: string;
+    imageUrl?: string | null;
+  }>;
+  products?: Array<{
+    productName?: string;
+    price?: number;
+    currency?: string;
+    availability?: string;
+    warranty?: string | null;
+    shortDescription?: string | null;
+    productUrl?: string;
+    imageUrl?: string | null;
+  }>;
+};
 
-  console.info("Received MCP response:", {
-    resultCount: Number(catalog.resultCount ?? 0),
-    firstProductName: firstProduct?.productName ?? null,
-    firstProductPrice: firstProduct?.price ?? null,
-    firstProductAvailability: firstProduct?.availability ?? null,
+async function callLiveCatalogSearchEndpoint(input: {
+  origin: string;
+  query: string;
+  limit: number;
+  authHeader: string;
+}) {
+  const url = new URL("/api/ai/catalog-search", input.origin);
+  url.searchParams.set("query", input.query);
+  url.searchParams.set("limit", String(input.limit));
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    headers: input.authHeader ? { authorization: input.authHeader } : {},
+    cache: "no-store",
   });
 
+  const contentType = String(response.headers.get("content-type") || "");
+  if (!response.ok) {
+    throw new Error(`Catalog search endpoint failed with status ${response.status}`);
+  }
+  if (!contentType.toLowerCase().includes("application/json")) {
+    throw new Error(`Catalog search endpoint returned non-JSON content-type: ${contentType || "unknown"}`);
+  }
+
+  return (await response.json()) as CatalogSearchApiResponse;
+}
+
+function buildCatalogToolPayload(catalog: CatalogSearchApiResponse) {
+  const products = Array.isArray(catalog.products)
+    ? catalog.products
+    : Array.isArray(catalog.results)
+      ? catalog.results
+      : [];
+  const firstProduct = products[0] ?? null;
+  const resultCount = Math.max(Number(catalog.resultCount ?? 0), products.length);
+  const found = resultCount > 0 || products.length > 0;
+
   return {
-    source: catalog.source,
-    query: catalog.query,
-    resultCount: Number(catalog.resultCount ?? 0),
-    results: products,
-    products,
-    primaryProduct: firstProduct,
+    found,
+    resultCount,
+    primary: firstProduct
+      ? {
+          productName: firstProduct.productName ?? "",
+          price: Number(firstProduct.price ?? 0),
+          currency: firstProduct.currency || "KES",
+          availability: firstProduct.availability || "",
+          warranty: firstProduct.warranty || "",
+          shortDescription: firstProduct.shortDescription || "",
+          productUrl: firstProduct.productUrl || "",
+          imageUrl: firstProduct.imageUrl || "",
+        }
+      : null,
+    alternatives: products.slice(1, 3).map((product) => ({
+      productName: product.productName ?? "",
+      price: Number(product.price ?? 0),
+      currency: product.currency || "KES",
+      availability: product.availability || "",
+      warranty: product.warranty || "",
+      shortDescription: product.shortDescription || "",
+      productUrl: product.productUrl || "",
+      imageUrl: product.imageUrl || "",
+    })),
   };
 }
 
@@ -51,18 +121,18 @@ function getServerPrompt() {
   return [
     "Use search_catalog_product before answering any product price, stock, availability, spec, warranty, or recommendation question.",
     "Treat the catalog tool output as the only source of truth.",
-    "Check both resultCount and the products array in the tool response.",
-    "If resultCount is greater than 0 OR products.length is greater than 0, never say not available, currently unavailable, or isn't showing.",
-    "When search_catalog_product returns one or more products, always use the first result as the primary recommendation.",
+    "The tool returns compact JSON only. Never treat website pages, HTML, or scraped page text as the catalog answer.",
+    "Check both found and resultCount in the tool response.",
+    "If found is true or resultCount is greater than 0, never say not available, currently unavailable, or isn't showing.",
+    "When search_catalog_product returns one or more products, always use primary as the main answer.",
     "Format the reply from the returned JSON instead of giving a generic confirmation.",
-    "Map and use these fields from the first returned product: productName, price, availability, warranty, shortDescription, productUrl, imageUrl.",
-    "For the primary product include: Product Name, Price, Availability, Warranty, one or two key features from the short description, and the product URL when available.",
-    "Use this exact response structure when product data exists: Yes, we have the {productName} available. Price: {price}. Availability: {availability}. Warranty: {warranty}. Key Features: {shortDescription}. View Product: {productUrl}. Would you like delivery or shop pickup?",
+    "Map and use these fields from primary: productName, price, availability, warranty, shortDescription, productUrl, imageUrl.",
+    "Use this exact response structure when product data exists: Yes, we have {productName} available. Price: KSh {price}. Availability: {availability}. Warranty: {warranty}. Would you like delivery or pickup?",
     "If imageUrl exists and the client supports product cards or image responses, include the image.",
-    "If resultCount is greater than 1, show the best match first and then mention up to two alternatives ordered by relevance.",
+    "If alternatives exist, you may mention up to two after the primary match.",
     "Never ask unnecessary clarification questions when an exact or suitable product match already exists.",
     "Only ask follow-up questions if no suitable product was found.",
-    "Only say not available if both resultCount equals 0 and the products array is empty.",
+    "Only say not available if found is false, resultCount equals 0, and there is no primary product.",
     "If the tool returns no results, say no matching product was found and do not invent details.",
     "Keep tag rules unchanged: ai_msg_1, ai_msg_2, ai_msg_3, not_clear, system_quote, hot_lead.",
     "Maximum AI replies: 3, then hand over to a human.",
@@ -161,16 +231,27 @@ export async function POST(request: NextRequest) {
     const args = (body.params?.arguments || {}) as Record<string, unknown>;
     const query = String(args.query || "").trim();
     const limit = Number(args.limit || 8);
-    const catalog = await searchLiveCatalog({ query, origin, limit });
+    const authHeader = String(request.headers.get("authorization") || "");
+    console.info("[MCP search_catalog_product called]", `query=${query}`);
+    const catalog = await callLiveCatalogSearchEndpoint({
+      origin,
+      query,
+      limit,
+      authHeader,
+    });
     const toolPayload = buildCatalogToolPayload(catalog);
+    console.info(
+      "[MCP search_catalog_product called]",
+      `resultCount=${toolPayload.resultCount}`,
+      `firstProductName=${toolPayload.primary?.productName || ""}`,
+      `firstProductPrice=${toolPayload.primary?.price ?? ""}`,
+    );
 
     return jsonRpc(id, {
       content: [
         {
           type: "text",
-          text: JSON.stringify({
-            catalog_result: toolPayload,
-          }),
+          text: JSON.stringify(toolPayload),
         },
       ],
       structuredContent: {
