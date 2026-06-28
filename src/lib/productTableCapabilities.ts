@@ -18,6 +18,7 @@ export type ProductTableCapabilities = {
   warrantyPeriod: boolean;
   warrantyNotes: boolean;
   mainImageUrl: boolean;
+  imageExtractedText: boolean;
   galleryImageUrls: boolean;
   brandImageUrl: boolean;
   tiktokVideoUrl: boolean;
@@ -61,6 +62,7 @@ export async function getProductTableCapabilities(prisma: PrismaClient): Promise
     warrantyPeriod: available.has("warrantyPeriod"),
     warrantyNotes: available.has("warrantyNotes"),
     mainImageUrl: available.has("mainImageUrl"),
+    imageExtractedText: available.has("imageExtractedText"),
     galleryImageUrls: available.has("galleryImageUrls"),
     brandImageUrl: available.has("brandImageUrl"),
     tiktokVideoUrl: available.has("tiktokVideoUrl"),

@@ -31,6 +31,7 @@ const productSchema = z.object({
   warrantyPeriod: z.string().trim().max(120).nullable().optional(),
   warrantyNotes: z.string().trim().max(1000).nullable().optional(),
   mainImageUrl: z.string().trim().max(500).nullable().optional(),
+  imageExtractedText: z.string().trim().max(12000).nullable().optional(),
   galleryImageUrls: z.array(z.string().trim().max(500)).max(12).nullable().optional(),
   brandImageUrl: z.string().trim().max(500).nullable().optional(),
   tiktokVideoUrl: z.string().trim().max(500).nullable().optional(),
@@ -158,6 +159,9 @@ function buildShopInsertFragments(
   }
   if (capabilities.mainImageUrl) {
     pushColumn("mainImageUrl", normalizeOptionalText(data.mainImageUrl));
+  }
+  if (capabilities.imageExtractedText) {
+    pushColumn("imageExtractedText", normalizeOptionalText(data.imageExtractedText));
   }
   if (capabilities.galleryImageUrls) {
     pushColumn("galleryImageUrls", normalizeJsonStringArray(data.galleryImageUrls));
@@ -298,6 +302,7 @@ export async function GET(req: Request) {
             ${capabilities.warrantyPeriod ? `"warrantyPeriod"` : `NULL::text`} AS "warrantyPeriod",
             ${capabilities.warrantyNotes ? `"warrantyNotes"` : `NULL::text`} AS "warrantyNotes",
             ${capabilities.mainImageUrl ? `"mainImageUrl"` : `NULL::text`} AS "mainImageUrl",
+            ${capabilities.imageExtractedText ? `"imageExtractedText"` : `NULL::text`} AS "imageExtractedText",
             ${capabilities.galleryImageUrls ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
             ${capabilities.brandImageUrl ? `"brandImageUrl"` : `NULL::text`} AS "brandImageUrl",
             ${capabilities.tiktokVideoUrl ? `"tiktokVideoUrl"` : `NULL::text`} AS "tiktokVideoUrl",
@@ -366,6 +371,7 @@ export async function GET(req: Request) {
             ${capabilities.warrantyPeriod ? `"warrantyPeriod"` : `NULL::text`} AS "warrantyPeriod",
             ${capabilities.warrantyNotes ? `"warrantyNotes"` : `NULL::text`} AS "warrantyNotes",
             ${capabilities.mainImageUrl ? `"mainImageUrl"` : `NULL::text`} AS "mainImageUrl",
+            ${capabilities.imageExtractedText ? `"imageExtractedText"` : `NULL::text`} AS "imageExtractedText",
             ${capabilities.galleryImageUrls ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
             ${capabilities.brandImageUrl ? `"brandImageUrl"` : `NULL::text`} AS "brandImageUrl",
             ${capabilities.tiktokVideoUrl ? `"tiktokVideoUrl"` : `NULL::text`} AS "tiktokVideoUrl",

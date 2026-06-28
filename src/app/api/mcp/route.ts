@@ -12,19 +12,9 @@ type JsonRpcRequest = {
 
 type CatalogSearchApiResponse = {
   ok?: boolean;
-  source?: string;
-  query?: string;
+  found?: boolean;
+  queryType?: string;
   resultCount?: number;
-  results?: Array<{
-    productName?: string;
-    price?: number;
-    currency?: string;
-    availability?: string;
-    warranty?: string | null;
-    shortDescription?: string | null;
-    productUrl?: string;
-    imageUrl?: string | null;
-  }>;
   products?: Array<{
     productName?: string;
     price?: number;
@@ -34,7 +24,22 @@ type CatalogSearchApiResponse = {
     shortDescription?: string | null;
     productUrl?: string;
     imageUrl?: string | null;
+    category?: string;
+    relevanceScore?: number;
   }>;
+  primary?: {
+    productName?: string;
+    price?: number;
+    currency?: string;
+    availability?: string;
+    warranty?: string | null;
+    shortDescription?: string | null;
+    productUrl?: string;
+    imageUrl?: string | null;
+  } | null;
+  alternatives?: Array<Record<string, unknown>>;
+  estimate?: Record<string, unknown>;
+  needsSizing?: boolean;
 };
 
 async function callLiveCatalogSearchEndpoint(input: {
@@ -65,17 +70,12 @@ async function callLiveCatalogSearchEndpoint(input: {
 }
 
 function buildCatalogToolPayload(catalog: CatalogSearchApiResponse) {
-  const products = Array.isArray(catalog.products)
-    ? catalog.products
-    : Array.isArray(catalog.results)
-      ? catalog.results
-      : [];
-  const firstProduct = products[0] ?? null;
-  const resultCount = Math.max(Number(catalog.resultCount ?? 0), products.length);
-  const found = resultCount > 0 || products.length > 0;
-
+  const products = Array.isArray(catalog.products) ? catalog.products : [];
+  const firstProduct = catalog.primary ?? products[0] ?? null;
+  const resultCount = Math.max(Number(catalog.resultCount ?? 0), products.length, firstProduct ? 1 : 0);
   return {
-    found,
+    found: Boolean(catalog.found ?? (resultCount > 0)),
+    queryType: String(catalog.queryType || "single_product"),
     resultCount,
     primary: firstProduct
       ? {
@@ -89,7 +89,9 @@ function buildCatalogToolPayload(catalog: CatalogSearchApiResponse) {
           imageUrl: firstProduct.imageUrl || "",
         }
       : null,
-    alternatives: products.slice(1, 3).map((product) => ({
+    alternatives: Array.isArray(catalog.alternatives) && catalog.alternatives.length
+      ? catalog.alternatives.slice(0, 2)
+      : products.slice(1, 3).map((product) => ({
       productName: product.productName ?? "",
       price: Number(product.price ?? 0),
       currency: product.currency || "KES",
@@ -99,6 +101,9 @@ function buildCatalogToolPayload(catalog: CatalogSearchApiResponse) {
       productUrl: product.productUrl || "",
       imageUrl: product.imageUrl || "",
     })),
+    products,
+    estimate: catalog.estimate ?? null,
+    needsSizing: Boolean(catalog.needsSizing),
   };
 }
 
@@ -121,18 +126,18 @@ function getServerPrompt() {
   return [
     "Use search_catalog_product before answering any product price, stock, availability, spec, warranty, or recommendation question.",
     "Treat the catalog tool output as the only source of truth.",
-    "The tool returns compact JSON only. Never treat website pages, HTML, or scraped page text as the catalog answer.",
-    "Check both found and resultCount in the tool response.",
+    "The tool returns compact JSON only. Never use HTML, markdown tables, or website page text as the answer.",
+    "All final replies must be plain text only.",
     "If found is true or resultCount is greater than 0, never say not available, currently unavailable, or isn't showing.",
-    "When search_catalog_product returns one or more products, always use primary as the main answer.",
-    "Format the reply from the returned JSON instead of giving a generic confirmation.",
-    "Map and use these fields from primary: productName, price, availability, warranty, shortDescription, productUrl, imageUrl.",
-    "Use this exact response structure when product data exists: Yes, we have {productName} available. Price: KSh {price}. Availability: {availability}. Warranty: {warranty}. Would you like delivery or pickup?",
-    "If imageUrl exists and the client supports product cards or image responses, include the image.",
-    "If alternatives exist, you may mention up to two after the primary match.",
+    "Use queryType to choose the reply style.",
+    "For queryType single_product: use primary as the main answer. Mention productName, price, availability, warranty, productUrl, and one short plain-text features line from shortDescription if useful. End with: Would you like delivery or shop pickup?",
+    "For queryType category_list: list available products from the products array in plain text with price and availability. Do not ask unnecessary clarification when products are already listed.",
+    "For queryType need_based_recommendation: explain the estimate in plain text first using runningLoadWatts, dailyEnergyWh, and assumptions, then recommend primary. If needsSizing is true, tell the customer this requires a custom quotation and transfer to human or system_quote.",
+    "If imageUrl exists and the client supports image responses, it may use it, but the text reply must remain plain text.",
+    "If alternatives exist, mention up to two after the primary match.",
     "Never ask unnecessary clarification questions when an exact or suitable product match already exists.",
     "Only ask follow-up questions if no suitable product was found.",
-    "Only say not available if found is false, resultCount equals 0, and there is no primary product.",
+    "Only say not available if found is false, resultCount equals 0, and products is empty.",
     "If the tool returns no results, say no matching product was found and do not invent details.",
     "Keep tag rules unchanged: ai_msg_1, ai_msg_2, ai_msg_3, not_clear, system_quote, hot_lead.",
     "Maximum AI replies: 3, then hand over to a human.",
@@ -242,6 +247,7 @@ export async function POST(request: NextRequest) {
     const toolPayload = buildCatalogToolPayload(catalog);
     console.info(
       "[MCP search_catalog_product called]",
+      `queryType=${toolPayload.queryType}`,
       `resultCount=${toolPayload.resultCount}`,
       `firstProductName=${toolPayload.primary?.productName || ""}`,
       `firstProductPrice=${toolPayload.primary?.price ?? ""}`,

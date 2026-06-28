@@ -984,6 +984,7 @@ model Product {
   warrantyPeriod             String?
   warrantyNotes              String?
   mainImageUrl               String?
+  imageExtractedText         String?
   galleryImageUrls           Json?
   brandImageUrl              String?
   tiktokVideoUrl             String?

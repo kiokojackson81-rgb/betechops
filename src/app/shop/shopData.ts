@@ -42,6 +42,7 @@ export type ShopProduct = {
   pickupDelayDays?: number;
   availabilityMessage?: string;
   checkoutAvailabilityMessage?: string;
+  imageExtractedText?: string | null;
   stockStatus: "in_stock" | "limited_stock" | "preorder" | "quote_only";
   tags: string[];
   whatsappMessage: string;

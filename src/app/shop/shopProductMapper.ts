@@ -34,6 +34,7 @@ type OpsCatalogueProduct = {
   warrantyPeriod?: string | null;
   warrantyNotes?: string | null;
   mainImageUrl?: string | null;
+  imageExtractedText?: string | null;
   galleryImageUrls?: unknown;
   brandImageUrl?: string | null;
   tiktokVideoUrl?: string | null;
@@ -215,6 +216,7 @@ async function queryOpsCatalogueProducts(whereClause = "", params: unknown[] = [
         ${available.has("warrantyPeriod") ? `"warrantyPeriod"` : `NULL::text`} AS "warrantyPeriod",
         ${available.has("warrantyNotes") ? `"warrantyNotes"` : `NULL::text`} AS "warrantyNotes",
         ${available.has("mainImageUrl") ? `"mainImageUrl"` : `NULL::text`} AS "mainImageUrl",
+        ${available.has("imageExtractedText") ? `"imageExtractedText"` : `NULL::text`} AS "imageExtractedText",
         ${available.has("galleryImageUrls") ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
         ${available.has("brandImageUrl") ? `"brandImageUrl"` : `NULL::text`} AS "brandImageUrl",
         ${available.has("tiktokVideoUrl") ? `"tiktokVideoUrl"` : `NULL::text`} AS "tiktokVideoUrl",
@@ -265,6 +267,7 @@ async function queryOpsCatalogueProducts(whereClause = "", params: unknown[] = [
         ${available.has("warrantyPeriod") ? `"warrantyPeriod"` : `NULL::text`} AS "warrantyPeriod",
         ${available.has("warrantyNotes") ? `"warrantyNotes"` : `NULL::text`} AS "warrantyNotes",
         ${available.has("mainImageUrl") ? `"mainImageUrl"` : `NULL::text`} AS "mainImageUrl",
+        ${available.has("imageExtractedText") ? `"imageExtractedText"` : `NULL::text`} AS "imageExtractedText",
         ${available.has("galleryImageUrls") ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
         ${available.has("brandImageUrl") ? `"brandImageUrl"` : `NULL::text`} AS "brandImageUrl",
         ${available.has("tiktokVideoUrl") ? `"tiktokVideoUrl"` : `NULL::text`} AS "tiktokVideoUrl",
@@ -627,6 +630,7 @@ function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview 
         galleryImages,
         brandImage,
         tiktokVideoUrl,
+        imageExtractedText: normalizeOptionalText(product.imageExtractedText),
         visualType: category.visualType,
         shortDescription,
         fullDescription: fullDescription || undefined,

@@ -33,6 +33,7 @@ type PosProduct = {
   warrantyPeriod?: string | null;
   warrantyNotes?: string | null;
   mainImageUrl?: string | null;
+  imageExtractedText?: string | null;
   galleryImageUrls?: string[] | null;
   brandImageUrl?: string | null;
   tiktokVideoUrl?: string | null;
@@ -60,6 +61,7 @@ type PosCatalogueCapabilities = {
   warrantyPeriod: boolean;
   warrantyNotes: boolean;
   mainImageUrl: boolean;
+  imageExtractedText: boolean;
   galleryImageUrls: boolean;
   brandImageUrl: boolean;
   tiktokVideoUrl: boolean;
@@ -113,6 +115,7 @@ type ProductDraft = {
   warrantyPeriod: string;
   warrantyNotes: string;
   mainImageUrl: string;
+  imageExtractedText: string;
   galleryImageUrls: string[];
   brandImageUrl: string;
   tiktokVideoUrl: string;
@@ -168,6 +171,7 @@ const emptyDraft: ProductDraft = {
   warrantyPeriod: "",
   warrantyNotes: "",
   mainImageUrl: "",
+  imageExtractedText: "",
   galleryImageUrls: [],
   brandImageUrl: "",
   tiktokVideoUrl: "",
@@ -203,6 +207,7 @@ const defaultCapabilities: PosCatalogueCapabilities = {
   warrantyPeriod: false,
   warrantyNotes: false,
   mainImageUrl: false,
+  imageExtractedText: false,
   galleryImageUrls: false,
   brandImageUrl: false,
   tiktokVideoUrl: false,
@@ -301,6 +306,7 @@ function createDraftFromProduct(product: PosProduct): ProductDraft {
     warrantyPeriod: product.warrantyPeriod ?? product.shopWarranty ?? "",
     warrantyNotes: product.warrantyNotes ?? "",
     mainImageUrl: product.mainImageUrl ?? product.shopImageUrl ?? "",
+    imageExtractedText: product.imageExtractedText ?? "",
     galleryImageUrls: parseStringArray(product.galleryImageUrls),
     brandImageUrl: product.brandImageUrl ?? "",
     tiktokVideoUrl: product.tiktokVideoUrl ?? "",
@@ -379,6 +385,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
   const [uploadingKind, setUploadingKind] = useState<"main" | "gallery" | "brand" | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiAction, setAiAction] = useState<"prefill" | "redesign" | "both" | null>(null);
+  const [ocrBusy, setOcrBusy] = useState(false);
   const [pendingMainImageFile, setPendingMainImageFile] = useState<File | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [approvalBusyId, setApprovalBusyId] = useState<string | null>(null);
@@ -869,6 +876,55 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
     });
   }, []);
 
+  const runAiOcrExtraction = useCallback(async () => {
+    if (!capabilities.imageExtractedText) {
+      showToast("OCR text field is not available on this product schema yet", "error");
+      return;
+    }
+    if (!pendingMainImageFile && !draft.mainImageUrl.trim()) {
+      showToast("Choose or upload a main image first", "error");
+      return;
+    }
+
+    setOcrBusy(true);
+    try {
+      const form = new FormData();
+      if (pendingMainImageFile) {
+        const normalizedFile = await normalizeSourceImageForAi(pendingMainImageFile);
+        form.append("file", normalizedFile);
+      } else {
+        form.append("imageUrl", draft.mainImageUrl.trim());
+      }
+
+      const response = await fetch(`${productApiBase}/ai-ocr`, {
+        method: "POST",
+        body: form,
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(getApiErrorMessage(json, "OCR extraction failed"));
+
+      const extractedText = typeof json?.text === "string" ? json.text.trim() : "";
+      setDraft((current) => ({ ...current, imageExtractedText: extractedText }));
+
+      if (draft.id) {
+        const saveResponse = await fetch(`${productApiBase}/${draft.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageExtractedText: extractedText || null }),
+        });
+        const saveJson = await saveResponse.json().catch(() => ({}));
+        if (!saveResponse.ok) throw new Error(getApiErrorMessage(saveJson, "Failed to save OCR text"));
+        await loadData(query);
+      }
+
+      showToast("Image text extracted", "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "OCR extraction failed", "error");
+    } finally {
+      setOcrBusy(false);
+    }
+  }, [capabilities.imageExtractedText, draft.id, draft.mainImageUrl, loadData, normalizeSourceImageForAi, pendingMainImageFile, productApiBase, query]);
+
   const runAiPrefill = useCallback(async (sourceFile: File) => {
     const prefillForm = new FormData();
     prefillForm.append("file", sourceFile);
@@ -994,6 +1050,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
         ...(capabilities.shortDescription ? { shortDescription: draft.shortDescription.trim() || null } : {}),
         ...(capabilities.warrantyPeriod ? { warrantyPeriod: draft.warrantyPeriod.trim() || null } : {}),
         ...(capabilities.mainImageUrl ? { mainImageUrl: draft.mainImageUrl.trim() || null } : {}),
+        ...(capabilities.imageExtractedText ? { imageExtractedText: draft.imageExtractedText.trim() || null } : {}),
         ...(capabilities.galleryImageUrls ? { galleryImageUrls: draft.galleryImageUrls } : {}),
         ...(capabilities.tiktokVideoUrl ? { tiktokVideoUrl: draft.tiktokVideoUrl.trim() || null } : {}),
         ...(capabilities.ecommerceVisible ? { ecommerceVisible: draft.id ? draft.ecommerceVisible : true } : {}),
@@ -1638,7 +1695,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                               onClick={() => void createBrandOption()}
                               disabled={brandSaving}
                             >
-                              <span>+ Add new brand: "{normalizedDraftBrand}"</span>
+                              <span>+ Add new brand: &quot;{normalizedDraftBrand}&quot;</span>
                               <span className="text-xs">{brandSaving ? "Saving..." : "Add"}</span>
                             </button>
                           ) : null}
@@ -1826,6 +1883,30 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                       >
                         Remove main image
                       </button>
+                      {capabilities.imageExtractedText ? (
+                        <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Saved image text</div>
+                              <div className="mt-1 text-[11px] leading-5 text-slate-500">Run OCR once on the product banner, then edit the extracted text manually if needed.</div>
+                            </div>
+                            <button
+                              type="button"
+                              className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-100 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={ocrBusy || aiBusy}
+                              onClick={() => void runAiOcrExtraction()}
+                            >
+                              {ocrBusy ? "Extracting..." : "Extract text from image"}
+                            </button>
+                          </div>
+                          <textarea
+                            className={`${fieldClass} mt-3 min-h-[140px]`}
+                            value={draft.imageExtractedText}
+                            onChange={(e) => setDraft((s) => ({ ...s, imageExtractedText: e.target.value }))}
+                            placeholder="Visible text from the product banner or poster..."
+                          />
+                        </div>
+                      ) : null}
                     </div>
                     <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
                       <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Gallery images</div>
@@ -1949,11 +2030,11 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                   <div className="mt-3 text-3xl font-semibold text-amber-200">{approvals.length}</div>
                   <div className="mt-1 text-sm text-slate-400">Commission requests waiting for release or rejection.</div>
                 </div>
-                <a href="/admin/receipts/missing-buying" className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 hover:bg-amber-400/15">
+                <Link href="/admin/receipts/missing-buying" className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 hover:bg-amber-400/15">
                   <div className="text-xs uppercase tracking-[0.2em] text-amber-200">Admin pricing</div>
                   <div className="mt-3 text-lg font-semibold text-white">Price variable-cost sales</div>
                   <div className="mt-1 text-sm text-amber-100/80">Set buying prices after POS project sales so profit and commissions update.</div>
-                </a>
+                </Link>
               </>
             ) : null}
           </div>

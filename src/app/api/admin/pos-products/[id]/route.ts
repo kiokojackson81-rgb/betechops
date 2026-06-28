@@ -31,6 +31,7 @@ const updateSchema = z.object({
   warrantyPeriod: z.string().trim().max(120).nullable().optional(),
   warrantyNotes: z.string().trim().max(1000).nullable().optional(),
   mainImageUrl: z.string().trim().max(500).nullable().optional(),
+  imageExtractedText: z.string().trim().max(12000).nullable().optional(),
   galleryImageUrls: z.array(z.string().trim().max(500)).max(12).nullable().optional(),
   brandImageUrl: z.string().trim().max(500).nullable().optional(),
   tiktokVideoUrl: z.string().trim().max(500).nullable().optional(),
@@ -112,6 +113,7 @@ function sanitizeBrendahProductUpdate(data: z.infer<typeof updateSchema>): z.inf
     warrantyPeriod: data.warrantyPeriod,
     warrantyNotes: data.warrantyNotes,
     mainImageUrl: data.mainImageUrl,
+    imageExtractedText: data.imageExtractedText,
     galleryImageUrls: data.galleryImageUrls,
     brandImageUrl: data.brandImageUrl,
     tiktokVideoUrl: data.tiktokVideoUrl,
@@ -166,6 +168,7 @@ async function getExistingProductRecord(id: string, capabilities: Awaited<Return
             ${capabilities.warrantyPeriod ? `"warrantyPeriod"` : `NULL::text`} AS "warrantyPeriod",
             ${capabilities.warrantyNotes ? `"warrantyNotes"` : `NULL::text`} AS "warrantyNotes",
             ${capabilities.mainImageUrl ? `"mainImageUrl"` : `NULL::text`} AS "mainImageUrl",
+            ${capabilities.imageExtractedText ? `"imageExtractedText"` : `NULL::text`} AS "imageExtractedText",
             ${capabilities.galleryImageUrls ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
             ${capabilities.brandImageUrl ? `"brandImageUrl"` : `NULL::text`} AS "brandImageUrl",
             ${capabilities.tiktokVideoUrl ? `"tiktokVideoUrl"` : `NULL::text`} AS "tiktokVideoUrl",
@@ -210,6 +213,7 @@ async function getExistingProductRecord(id: string, capabilities: Awaited<Return
             ${capabilities.warrantyPeriod ? `"warrantyPeriod"` : `NULL::text`} AS "warrantyPeriod",
             ${capabilities.warrantyNotes ? `"warrantyNotes"` : `NULL::text`} AS "warrantyNotes",
             ${capabilities.mainImageUrl ? `"mainImageUrl"` : `NULL::text`} AS "mainImageUrl",
+            ${capabilities.imageExtractedText ? `"imageExtractedText"` : `NULL::text`} AS "imageExtractedText",
             ${capabilities.galleryImageUrls ? `"galleryImageUrls"` : `NULL::jsonb`} AS "galleryImageUrls",
             ${capabilities.brandImageUrl ? `"brandImageUrl"` : `NULL::text`} AS "brandImageUrl",
             ${capabilities.tiktokVideoUrl ? `"tiktokVideoUrl"` : `NULL::text`} AS "tiktokVideoUrl",
@@ -327,6 +331,7 @@ export async function PATCH(req: Request, context: ParamsContext) {
   if (capabilities.warrantyPeriod && data.warrantyPeriod !== undefined) pushSet("warrantyPeriod", normalizeOptionalText(data.warrantyPeriod));
   if (capabilities.warrantyNotes && data.warrantyNotes !== undefined) pushSet("warrantyNotes", normalizeOptionalText(data.warrantyNotes));
   if (capabilities.mainImageUrl && data.mainImageUrl !== undefined) pushSet("mainImageUrl", normalizeOptionalText(data.mainImageUrl));
+  if (capabilities.imageExtractedText && data.imageExtractedText !== undefined) pushSet("imageExtractedText", normalizeOptionalText(data.imageExtractedText));
   if (capabilities.galleryImageUrls && data.galleryImageUrls !== undefined) pushSet("galleryImageUrls", normalizeJsonStringArray(data.galleryImageUrls));
   if (capabilities.brandImageUrl && data.brandImageUrl !== undefined) pushSet("brandImageUrl", normalizeOptionalText(data.brandImageUrl));
   if (capabilities.tiktokVideoUrl && data.tiktokVideoUrl !== undefined) pushSet("tiktokVideoUrl", normalizeOptionalText(data.tiktokVideoUrl));

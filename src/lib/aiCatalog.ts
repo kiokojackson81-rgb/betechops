@@ -1,7 +1,8 @@
 import { getOpsCatalogueProductsReadOnlyMapped } from "@/app/shop/shopProductMapper";
 import { getShopProductHref } from "@/app/shop/storefrontPaths";
-import { getProductSimilarityScore } from "@/lib/posProductSimilarity";
 import type { ShopProduct } from "@/app/shop/shopData";
+import { estimateNeedBasedLoad, type AiNeedEstimate, type LoadEstimateQueryType } from "@/lib/aiLoadEstimator";
+import { getProductSimilarityScore } from "@/lib/posProductSimilarity";
 
 export type CatalogSearchResultItem = {
   productName: string;
@@ -16,6 +17,21 @@ export type CatalogSearchResultItem = {
   warranty: string | null;
   deliveryInstallNotes: string | null;
   relevanceScore: number;
+  category: string;
+};
+
+export type LiveCatalogSearchResponse = {
+  query: string;
+  source: "live_website_catalog";
+  found: boolean;
+  queryType: LoadEstimateQueryType;
+  resultCount: number;
+  products: CatalogSearchResultItem[];
+  results: CatalogSearchResultItem[];
+  primary: CatalogSearchResultItem | null;
+  alternatives: CatalogSearchResultItem[];
+  estimate?: AiNeedEstimate;
+  needsSizing?: boolean;
 };
 
 type RankedCatalogMatch = {
@@ -23,6 +39,31 @@ type RankedCatalogMatch = {
   score: number;
   normalizedName: string;
 };
+
+const QUERY_TYPE_CATEGORY_PATTERNS = [
+  {
+    matcher: ["full kit", "solar full kit", "starter solar kit", "small solar kit", "home solar kit", "home backup kit"],
+    searchTerms: ["starter solar kit", "solar full kit", "gel solar kit", "lithium solar kit", "home backup kit"],
+  },
+  {
+    matcher: ["solar pump", "pump prices", "water pump"],
+    searchTerms: ["solar water pump", "dc solar water pump", "ac solar water pump", "submersible pump", "surface pump"],
+  },
+  {
+    matcher: ["battery prices", "battery price", "solar battery"],
+    searchTerms: ["solar battery", "gel battery", "lithium battery"],
+  },
+  {
+    matcher: ["inverter prices", "inverter price", "solar inverter"],
+    searchTerms: ["solar inverter", "hybrid inverter"],
+  },
+  {
+    matcher: ["panel prices", "panel price", "solar panels", "solar panel"],
+    searchTerms: ["solar panel", "bifacial solar panel", "monocrystalline solar panel"],
+  },
+];
+
+const PREMIUM_KEYWORDS = ["premium", "heavy duty", "industrial", "commercial", "large", "big", "5kw", "10kw"];
 
 function normalizeText(value: string) {
   return value
@@ -67,7 +108,6 @@ function buildAbsoluteUrl(origin: string, pathOrUrl: string | null | undefined) 
   const normalized = String(pathOrUrl || "").trim();
   if (!normalized) return null;
   if (/^https?:\/\//i.test(normalized)) return normalized;
-  if (!origin) return normalized;
   return `${origin.replace(/\/+$/, "")}/${normalized.replace(/^\/+/, "")}`;
 }
 
@@ -82,6 +122,7 @@ function buildSearchHaystacks(product: ShopProduct) {
     sku: product.sku || "",
     subcategory: product.subcategory || "",
     specs: (product.specs || []).join(" "),
+    imageExtractedText: product.imageExtractedText || "",
   };
 }
 
@@ -105,7 +146,6 @@ function countTokenMatches(queryTokens: string[], candidateTokens: string[]) {
         );
       }),
     );
-
     if (index >= 0) {
       matches += 1;
       remaining.splice(index, 1);
@@ -126,7 +166,6 @@ function scoreField(query: string, value: string, weight: number) {
   const tokenCoverage = queryTokens.length ? countTokenMatches(queryTokens, fieldTokens) / queryTokens.length : 0;
   const exactBoost = normalizedField === normalizedQuery ? 1 : 0;
   const containsBoost = normalizedField.includes(normalizedQuery) || collapsedField.includes(collapsedQuery) ? 0.85 : 0;
-
   return weight * Math.max(similarity, tokenCoverage * 0.92, containsBoost, exactBoost);
 }
 
@@ -145,7 +184,8 @@ function scoreCatalogProduct(query: string, product: ShopProduct): RankedCatalog
     scoreField(query, fields.brand, 1.2) +
     scoreField(query, fields.tags, 1.3) +
     scoreField(query, fields.sku, 1.3) +
-    scoreField(query, fields.specs, 1.8);
+    scoreField(query, fields.specs, 1.8) +
+    scoreField(query, fields.imageExtractedText, 2.1);
 
   const allSearchText = Object.values(fields).join(" ");
   const normalizedAll = normalizeText(allSearchText);
@@ -161,17 +201,12 @@ function scoreCatalogProduct(query: string, product: ShopProduct): RankedCatalog
   if (collapseNormalizedText(product.name).includes(collapsedQuery)) score += 1.4;
   if (coverage === 1) score += 1.75;
 
-  return {
-    product,
-    score,
-    normalizedName: normalizeText(product.name),
-  };
+  return { product, score, normalizedName: normalizeText(product.name) };
 }
 
 function shouldKeepMatch(query: string, match: RankedCatalogMatch) {
   const queryTokens = getNormalizedTokens(query);
   if (!queryTokens.length) return false;
-
   const fieldTokens = getNormalizedTokens(
     [
       match.product.name,
@@ -181,11 +216,11 @@ function shouldKeepMatch(query: string, match: RankedCatalogMatch) {
       match.product.category,
       match.product.subcategory || "",
       match.product.brand,
+      match.product.imageExtractedText || "",
       ...(match.product.tags || []),
       ...(match.product.specs || []),
     ].join(" "),
   );
-
   const coverage = countTokenMatches(queryTokens, fieldTokens) / queryTokens.length;
   return match.score >= 1.15 || coverage >= 0.45;
 }
@@ -194,71 +229,147 @@ function roundScore(score: number) {
   return Number(score.toFixed(4));
 }
 
-function logCatalogSearch(query: string, ranked: RankedCatalogMatch[]) {
+function toCatalogItem(product: ShopProduct, score: number, origin: string): CatalogSearchResultItem {
+  return {
+    productName: product.name,
+    price: Number(product.price),
+    currency: "KES",
+    availability: product.availabilityMessage || product.stockStatus.replace(/_/g, " "),
+    stockStatus: product.stockStatus,
+    productCategory: compactText([product.category, product.subcategory].filter(Boolean).join(" / ")) || product.category,
+    shortDescription: compactText(product.shortDescription || product.fullDescription || ""),
+    productUrl: `${origin.replace(/\/+$/, "")}${getShopProductHref(product.slug, product.opsProductId)}`,
+    imageUrl: buildAbsoluteUrl(origin, product.image),
+    warranty: compactText(product.warranty || product.warrantyNotes || ""),
+    deliveryInstallNotes: getDeliveryInstallNotes(product),
+    relevanceScore: roundScore(score),
+    category: product.category,
+  };
+}
+
+function isNeedBasedQuery(query: string) {
+  const normalized = normalizeText(query);
+  return ["bulb", "light", "tv", "fridge", "starlink", "wifi", "router", "phone charging", "freezer", "shop backup", "cctv", "electric fence", "pump", "microwave", "washing machine"].some((needle) =>
+    normalized.includes(needle),
+  );
+}
+
+function getCategoryListTerms(query: string) {
+  const normalized = normalizeText(query);
+  for (const entry of QUERY_TYPE_CATEGORY_PATTERNS) {
+    if (entry.matcher.some((needle) => normalized.includes(needle))) return entry.searchTerms;
+  }
+  return null;
+}
+
+function wantsPremiumOrdering(query: string) {
+  const normalized = normalizeText(query);
+  return PREMIUM_KEYWORDS.some((needle) => normalized.includes(needle));
+}
+
+function logCatalogSearch(query: string, queryType: LoadEstimateQueryType, ranked: RankedCatalogMatch[], estimate?: AiNeedEstimate) {
   console.info("[catalog-search]", {
     query,
+    queryType,
     normalizedQuery: normalizeText(query),
-    normalizedQueryCollapsed: collapseNormalizedText(query),
     matches: ranked.map((entry) => ({
       name: entry.product.name,
       sku: entry.product.sku || null,
       score: roundScore(entry.score),
       stockStatus: entry.product.stockStatus,
     })),
+    estimate: estimate
+      ? {
+          runningLoadWatts: estimate.runningLoadWatts,
+          dailyEnergyWh: estimate.dailyEnergyWh,
+          recommendedSearchQuery: estimate.recommendedSearchQuery,
+        }
+      : null,
   });
+}
+
+function buildEmptyResponse(query: string, queryType: LoadEstimateQueryType, estimate?: AiNeedEstimate, needsSizing = false): LiveCatalogSearchResponse {
+  return {
+    query,
+    source: "live_website_catalog",
+    found: false,
+    queryType,
+    resultCount: 0,
+    products: [],
+    results: [],
+    primary: null,
+    alternatives: [],
+    estimate,
+    needsSizing,
+  };
+}
+
+function rankSingleProduct(products: ShopProduct[], query: string, limit: number) {
+  return products
+    .map((product) => scoreCatalogProduct(query, product))
+    .filter((match) => shouldKeepMatch(query, match))
+    .sort((left, right) => right.score - left.score || left.product.name.localeCompare(right.product.name))
+    .slice(0, limit);
+}
+
+function rankCategoryList(products: ShopProduct[], searchTerms: string[], query: string, limit: number) {
+  const premium = wantsPremiumOrdering(query);
+  const termQuery = searchTerms.join(" ");
+  return products
+    .map((product) => scoreCatalogProduct(termQuery, product))
+    .filter((match) => match.score >= 1.1)
+    .sort((left, right) => {
+      if (premium) {
+        return right.product.price - left.product.price || right.score - left.score;
+      }
+      return left.product.price - right.product.price || right.score - left.score;
+    })
+    .slice(0, limit);
 }
 
 export async function searchLiveCatalog(input: {
   query: string;
   origin: string;
   limit?: number;
-}) {
+}): Promise<LiveCatalogSearchResponse> {
   const query = String(input.query || "").trim();
-  if (!query) {
-    return {
-      query: "",
-      source: "live_website_catalog" as const,
-      resultCount: 0,
-      results: [] as CatalogSearchResultItem[],
-    };
+  if (!query) return buildEmptyResponse("", "single_product");
+
+  const products = await getOpsCatalogueProductsReadOnlyMapped();
+  const normalizedLimit = Math.min(20, Math.max(1, Number(input.limit || 5)));
+
+  const estimate = isNeedBasedQuery(query) ? estimateNeedBasedLoad(query) : null;
+  if (estimate?.needsSizing) {
+    return buildEmptyResponse(query, "need_based_recommendation", estimate, true);
   }
 
-  const limit = Math.min(20, Math.max(1, Number(input.limit || 5)));
-  const products = await getOpsCatalogueProductsReadOnlyMapped();
-  const rankedMatches = products
-    .map((product) => scoreCatalogProduct(query, product))
-    .filter((match) => shouldKeepMatch(query, match))
-    .sort((left, right) => {
-      return (
-        right.score - left.score ||
-        left.normalizedName.localeCompare(right.normalizedName) ||
-        left.product.name.localeCompare(right.product.name)
-      );
-    })
-    .slice(0, limit);
+  const categoryTerms = getCategoryListTerms(query);
+  const queryType: LoadEstimateQueryType = estimate ? "need_based_recommendation" : categoryTerms ? "category_list" : "single_product";
+  const effectiveLimit = queryType === "category_list" ? Math.min(8, Math.max(normalizedLimit, 8)) : normalizedLimit;
+  const searchQuery = estimate?.recommendedSearchQuery || (categoryTerms ? categoryTerms.join(" ") : query);
 
-  logCatalogSearch(query, rankedMatches);
+  const rankedMatches =
+    queryType === "category_list" && categoryTerms
+      ? rankCategoryList(products, categoryTerms, query, effectiveLimit)
+      : rankSingleProduct(products, searchQuery, effectiveLimit);
 
-  const ranked = rankedMatches
-    .map(({ product, score }) => ({
-      productName: product.name,
-      price: Number(product.price),
-      currency: "KES" as const,
-      availability: product.availabilityMessage || product.stockStatus.replace(/_/g, " "),
-      stockStatus: product.stockStatus,
-      productCategory: compactText([product.category, product.subcategory].filter(Boolean).join(" / ")) || product.category,
-      shortDescription: compactText(product.shortDescription || product.fullDescription || ""),
-      productUrl: `${input.origin.replace(/\/+$/, "")}${getShopProductHref(product.slug, product.opsProductId)}`,
-      imageUrl: buildAbsoluteUrl(input.origin, product.image),
-      warranty: compactText(product.warranty || product.warrantyNotes || ""),
-      deliveryInstallNotes: getDeliveryInstallNotes(product),
-      relevanceScore: roundScore(score),
-    }));
+  logCatalogSearch(query, queryType, rankedMatches, estimate || undefined);
+
+  const catalogItems = rankedMatches.map(({ product, score }) => toCatalogItem(product, score, input.origin));
+  const primary = catalogItems[0] ?? null;
+  const alternatives = catalogItems.slice(1, 3);
 
   return {
     query,
-    source: "live_website_catalog" as const,
-    resultCount: ranked.length,
-    results: ranked,
+    source: "live_website_catalog",
+    found: catalogItems.length > 0,
+    queryType,
+    resultCount: catalogItems.length,
+    products: catalogItems,
+    results: catalogItems,
+    primary,
+    alternatives,
+    estimate: estimate || undefined,
+    needsSizing: Boolean(estimate?.needsSizing),
   };
 }

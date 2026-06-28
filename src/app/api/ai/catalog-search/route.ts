@@ -18,8 +18,8 @@ export async function GET(request: NextRequest) {
   const query = String(searchParams.get("query") || searchParams.get("q") || "").trim();
   const limit = Number(searchParams.get("limit") || "8");
   const catalog = await searchLiveCatalog({ query, origin, limit });
-  const products = Array.isArray(catalog.results) ? catalog.results : [];
-  const firstProduct = products[0] ?? null;
+  const products = Array.isArray(catalog.products) ? catalog.products : [];
+  const firstProduct = catalog.primary ?? products[0] ?? null;
 
   console.info("Received MCP response:", {
     resultCount: Number(catalog.resultCount ?? 0),
@@ -30,11 +30,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    source: catalog.source,
-    query: catalog.query,
-    resultCount: catalog.resultCount,
-    results: products,
-    products,
+    ...catalog,
     primaryProduct: firstProduct,
   });
 }
