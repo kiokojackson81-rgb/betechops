@@ -1,14 +1,6 @@
 import { safeString } from "@/lib/voice";
 import { toSpeechText } from "@/lib/voiceSpeech";
 
-function resolveVoiceHopMaxDurationSeconds() {
-  const configured = Number.parseInt(String(process.env.VOICE_HOP_MAX_DURATION_SECONDS || "").trim(), 10);
-  if (Number.isFinite(configured) && configured > 0) return configured;
-  return 120;
-}
-
-export const VOICE_HOP_MAX_DURATION_SECONDS = resolveVoiceHopMaxDurationSeconds();
-
 export type VoiceRouteHop = {
   label: string;
   dialValue: string;

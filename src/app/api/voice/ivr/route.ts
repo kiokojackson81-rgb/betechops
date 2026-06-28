@@ -1,5 +1,4 @@
 import {
-  VOICE_HOP_MAX_DURATION_SECONDS,
   type VoiceRoutePlan,
   buildVoiceRoutePlanFromPhoneNumbers,
   buildDialAttemptXml,
@@ -68,7 +67,6 @@ export async function POST(request: Request) {
     buildDialAttemptXml({
       preDialMessage: null,
       phoneNumber: currentHop.dialValue,
-      maxDurationSeconds: VOICE_HOP_MAX_DURATION_SECONDS,
       redirectUrl:
         selectedRoutePlan.hops.length > 1
           ? buildRoutePlanRedirectUrl(requestUrl, selectedRoutePlan, 1)

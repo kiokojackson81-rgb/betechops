@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import {
   buildEmptyVoiceXmlResponse,
   buildVoiceMessageXmlResponse,
@@ -15,7 +14,6 @@ import {
 } from "@/lib/voice";
 import {
   BETECH_AFTER_HOURS_WELCOME_MESSAGE,
-  VOICE_HOP_MAX_DURATION_SECONDS,
   type VoiceRoutePlan,
   buildDialAttemptXml,
   buildRoutePlanRedirectUrl,
@@ -248,7 +246,6 @@ export async function POST(request: Request) {
             ? BETECH_AFTER_HOURS_WELCOME_MESSAGE
             : null,
         phoneNumber: currentHop.dialValue,
-        maxDurationSeconds: VOICE_HOP_MAX_DURATION_SECONDS,
         redirectUrl:
           hopIndex + 1 < effectiveRoutePlan.hops.length
             ? buildRoutePlanRedirectUrl(requestUrl, effectiveRoutePlan, hopIndex + 1)
