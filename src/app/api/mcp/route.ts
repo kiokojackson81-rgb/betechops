@@ -90,8 +90,8 @@ function buildCatalogToolPayload(catalog: CatalogSearchApiResponse) {
         }
       : null,
     alternatives: Array.isArray(catalog.alternatives) && catalog.alternatives.length
-      ? catalog.alternatives.slice(0, 2)
-      : products.slice(1, 3).map((product) => ({
+      ? catalog.alternatives.slice(0, 3)
+      : products.slice(1, 4).map((product) => ({
       productName: product.productName ?? "",
       price: Number(product.price ?? 0),
       currency: product.currency || "KES",
@@ -130,7 +130,10 @@ function getServerPrompt() {
     "All final replies must be plain text only.",
     "If found is true or resultCount is greater than 0, never say not available, currently unavailable, or isn't showing.",
     "Use queryType to choose the reply style.",
-    "For queryType single_product: use primary as the main answer. Mention productName, price, availability, warranty, productUrl, and one short plain-text features line from shortDescription if useful. End with: Would you like delivery or shop pickup?",
+    "For queryType single_product: use primary as the main answer. Mention productName, price, availability, warranty, productUrl, and one short plain-text features line from shortDescription if useful.",
+    "If queryType is single_product and resultCount is greater than 1 for an exact product phrase, list up to 4 matching variants immediately using productName, price, and availability. Do not ask the customer to wait.",
+    "When catalog_result has products, never say: let us check, allow us a moment, we'll confirm shortly, or checking exact listing.",
+    "For exact product phrase matches with multiple variants, use this style: Yes, we have {product family} options available. 1. {productName} Price: KSh {price} Availability: {availability}. Continue for up to 4 options. End with: Would you like delivery or shop pickup?",
     "For queryType category_list: list available products from the products array in plain text with price and availability. Do not ask unnecessary clarification when products are already listed.",
     "For queryType need_based_recommendation: explain the estimate in plain text first using runningLoadWatts, dailyEnergyWh, and assumptions, then recommend primary. If needsSizing is true, tell the customer this requires a custom quotation and transfer to human or system_quote.",
     "If imageUrl exists and the client supports image responses, it may use it, but the text reply must remain plain text.",
