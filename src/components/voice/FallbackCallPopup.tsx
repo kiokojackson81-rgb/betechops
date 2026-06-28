@@ -24,6 +24,17 @@ function formatDateTime(value: string | null | undefined) {
   }).format(date);
 }
 
+function formatDurationFromSeconds(totalSeconds: number) {
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const seconds = safeSeconds % 60;
+  if (hours > 0) {
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
 function isRecipientCallActive(status: string | null | undefined) {
   return ["RINGING", "DIALING", "ANSWERED", "CONNECTED", "TRANSFERRED"].includes(String(status || "").trim().toUpperCase());
 }
@@ -94,6 +105,10 @@ export default function FallbackCallPopup() {
   const [transferAssigneeId, setTransferAssigneeId] = useState("");
   const [transferPhone, setTransferPhone] = useState("");
   const [transferError, setTransferError] = useState<string | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [notePending, setNotePending] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
+  const [callTimerLabel, setCallTimerLabel] = useState("00:00");
 
   useEffect(() => {
     const eventSource = new EventSource("/api/voice/live?stream=1&scope=mine");
@@ -184,6 +199,8 @@ export default function FallbackCallPopup() {
       setTransferAssigneeId("");
       setTransferPhone("");
       setTransferError(null);
+      setNoteDraft("");
+      setNoteError(null);
     }
   }, [activeRecipientCall]);
 
@@ -270,6 +287,53 @@ export default function FallbackCallPopup() {
     }
   };
 
+  const handleAddNote = async () => {
+    if (!activeRecipientCall?.id || !noteDraft.trim()) return;
+    setNotePending(true);
+    setNoteError(null);
+    try {
+      const response = await fetch("/api/voice/notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          voiceCallId: activeRecipientCall.id,
+          note: noteDraft.trim(),
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(String(payload.error || "voice_note_failed"));
+      }
+      setNoteDraft("");
+      setStreamNonce((value) => value + 1);
+    } catch (error) {
+      setNoteError(error instanceof Error ? error.message : "Could not save the note.");
+    } finally {
+      setNotePending(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!snapshot || !activeRecipientCall) {
+      setCallTimerLabel("00:00");
+      return;
+    }
+
+    const calculateTimer = () => {
+      const anchor = new Date(activeRecipientCall.startedAt || activeRecipientCall.createdAt || snapshot.generatedAt).getTime();
+      if (Number.isNaN(anchor)) {
+        setCallTimerLabel("00:00");
+        return;
+      }
+      const elapsedSeconds = Math.max(0, Math.floor((Date.now() - anchor) / 1000));
+      setCallTimerLabel(formatDurationFromSeconds(elapsedSeconds));
+    };
+
+    calculateTimer();
+    const interval = window.setInterval(calculateTimer, 1000);
+    return () => window.clearInterval(interval);
+  }, [activeRecipientCall, snapshot]);
+
   if (!snapshot || !activeRecipientCall) {
     return null;
   }
@@ -291,6 +355,8 @@ export default function FallbackCallPopup() {
   ];
   const callerInitials = getCallerInitials(customerName);
   const statusTheme = getStatusTheme(activeRecipientCall.statusLabel || activeRecipientCall.status);
+  const routeLabel = activeRecipientCall.queueReasonLabel || activeRecipientCall.routedToDisplay || "Live queue";
+  const lastUpdatedAt = activeRecipientCall.startedAt || activeRecipientCall.createdAt || snapshot.generatedAt;
 
   if (!canShowPopup && canShowMiniStrip) {
     return (
@@ -309,6 +375,7 @@ export default function FallbackCallPopup() {
                     {activeRecipientCall.statusLabel}
                   </span>
                   <span className="truncate">{activeRecipientCall.callerNumber}</span>
+                  <span className="shrink-0 text-slate-500">{callTimerLabel}</span>
                 </div>
               </div>
             </div>
@@ -368,6 +435,9 @@ export default function FallbackCallPopup() {
                     {activeRecipientCall.statusLabel}
                   </span>
                   <span className="truncate text-sm text-slate-300">{activeRecipientCall.callerNumber}</span>
+                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] font-semibold tracking-[0.14em] text-white">
+                    {callTimerLabel}
+                  </span>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2 text-xs">
                   <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-slate-300">
@@ -375,6 +445,9 @@ export default function FallbackCallPopup() {
                   </span>
                   <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-slate-300">
                     Assigned: {snapshot.selectedContext?.assignedAgent?.name || activeRecipientCall.assignedToName || "Unassigned"}
+                  </span>
+                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-slate-300">
+                    Route: {routeLabel}
                   </span>
                 </div>
               </div>
@@ -400,7 +473,7 @@ export default function FallbackCallPopup() {
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-3">
               <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Updated</div>
-              <div className="mt-1 text-sm font-semibold text-white">{formatDateTime(snapshot.generatedAt)}</div>
+              <div className="mt-1 text-sm font-semibold text-white">{formatDateTime(lastUpdatedAt)}</div>
             </div>
           </div>
 
@@ -476,6 +549,31 @@ export default function FallbackCallPopup() {
                   <div className="mt-2">{recentNotes[0]?.note}</div>
                 </div>
               ) : null}
+
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Quick Note</div>
+                <div className="mt-1 text-sm text-slate-300">Capture context without leaving the popup.</div>
+                <div className="mt-3 grid gap-3">
+                  <textarea
+                    value={noteDraft}
+                    onChange={(event) => setNoteDraft(event.target.value)}
+                    placeholder="Add a short note about this call"
+                    rows={3}
+                    className="rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500"
+                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleAddNote}
+                      disabled={notePending || !noteDraft.trim()}
+                      className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {notePending ? "Saving..." : "Save Note"}
+                    </button>
+                    {noteError ? <div className="text-sm text-rose-300">{noteError}</div> : null}
+                  </div>
+                </div>
+              </div>
             </div>
           ) : null}
 
@@ -523,10 +621,40 @@ export default function FallbackCallPopup() {
                   <option value="">Select routing agent</option>
                   {visibleAgents.map((agent) => (
                     <option key={agent.id} value={agent.id}>
-                      {agent.displayName}
+                      {agent.displayName} · {agent.isAvailableForRouting ? "Available" : agent.status === "AVAILABLE" ? "Stale" : "Busy"}
                     </option>
                   ))}
                 </select>
+                <div className="grid gap-2">
+                  {visibleAgents.map((agent) => (
+                    <button
+                      key={agent.id}
+                      type="button"
+                      onClick={() => setTransferAssigneeId(agent.id)}
+                      className={`flex items-center justify-between rounded-2xl border px-3 py-3 text-left transition ${
+                        transferAssigneeId === agent.id
+                          ? "border-cyan-400/40 bg-cyan-500/10"
+                          : "border-white/10 bg-slate-950/40 hover:border-white/20"
+                      }`}
+                    >
+                      <div>
+                        <div className="text-sm font-semibold text-white">{agent.displayName}</div>
+                        <div className="mt-1 text-xs text-slate-400">{agent.phone || agent.email || "No direct number"}</div>
+                      </div>
+                      <span
+                        className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${
+                          agent.isAvailableForRouting
+                            ? "border-emerald-400/30 bg-emerald-500/12 text-emerald-100"
+                            : agent.status === "AVAILABLE"
+                              ? "border-amber-400/30 bg-amber-500/12 text-amber-100"
+                              : "border-rose-400/30 bg-rose-500/12 text-rose-100"
+                        }`}
+                      >
+                        {agent.isAvailableForRouting ? "Available" : agent.status === "AVAILABLE" ? "Stale" : "Busy"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
                 <input
                   value={transferPhone}
                   onChange={(event) => setTransferPhone(event.target.value)}
