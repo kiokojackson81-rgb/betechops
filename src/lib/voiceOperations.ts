@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { getKenyanPhoneVariants, normalizeKenyanPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { getVoiceCustomerContext } from "@/lib/voiceCustomerContext";
 import { publishVoiceLiveEvent } from "@/lib/voiceLiveEvents";
@@ -968,11 +969,31 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     recentCalls[0] ||
     null;
 
-  const selectedPhone = input.selectedPhone || selectedCall?.callerNumber || followUps[0]?.phone || missedLeads[0]?.phone || null;
+  const normalizedSelectedPhone = normalizeKenyanPhone(input.selectedPhone || "");
+  const selectedPhoneVariants = normalizedSelectedPhone ? getKenyanPhoneVariants(normalizedSelectedPhone) : [];
+  const fallbackSelectedCall =
+    !selectedCall && selectedPhoneVariants.length
+      ? await prisma.voiceCall.findFirst({
+          where: {
+            ...callWhere,
+            OR: [
+              { callerNumber: { in: selectedPhoneVariants } },
+              { destinationNumber: { in: selectedPhoneVariants } },
+            ],
+          },
+          include: {
+            assignedTo: { select: { id: true, name: true, email: true } },
+          },
+          orderBy: [{ createdAt: "desc" }],
+        })
+      : null;
+
+  const effectiveSelectedCall = selectedCall || fallbackSelectedCall;
+  const selectedPhone = normalizedSelectedPhone || selectedCall?.callerNumber || fallbackSelectedCall?.callerNumber || followUps[0]?.phone || missedLeads[0]?.phone || null;
   const selectedContext = selectedPhone ? serializeCustomerContextSummary(await getContextForPhone(selectedPhone)) : null;
-  const selectedCallDetail = selectedCall
+  const selectedCallDetail = effectiveSelectedCall
     ? await prisma.voiceCall.findUnique({
-        where: { id: selectedCall.id },
+        where: { id: effectiveSelectedCall.id },
         include: {
           assignedTo: { select: { id: true, name: true, email: true } },
           events: {
@@ -1053,7 +1074,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     followUps,
     missedLeads,
     agents,
-    selectedCallId: selectedCall?.id ?? null,
+    selectedCallId: effectiveSelectedCall?.id ?? null,
     selectedPhone,
     selectedContext,
     selectedCallDetail: selectedCallDetail

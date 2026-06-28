@@ -26,6 +26,7 @@ import DialPad from "@/components/voice/DialPad";
 import VoiceFeedbackPanel from "@/components/voice/VoiceFeedbackPanel";
 import VoiceSettingsClient from "@/components/voice/VoiceSettingsClient";
 import { useSoftphone } from "@/components/voice/SoftphoneProvider";
+import { normalizeKenyanPhone } from "@/lib/phone";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import type { VoiceLiveSnapshot } from "@/lib/voiceOperations";
 
@@ -45,6 +46,7 @@ const VOICE_DISPOSITIONS = ["SALE", "QUOTE", "SUPPORT", "WRONG_NUMBER", "FOLLOW_
 type VoiceConsoleTab = (typeof VOICE_CONSOLE_TABS)[number];
 const VOICE_DATE_FILTERS = ["today", "yesterday", "week", "period"] as const;
 type VoiceDateFilter = (typeof VOICE_DATE_FILTERS)[number];
+type VoiceQueueView = "all" | "waiting" | "missed";
 
 function getNairobiReportDate() {
   return new Intl.DateTimeFormat("en-CA", {
@@ -160,6 +162,10 @@ function normalizeVoiceTab(value: string | null): VoiceConsoleTab {
 
 function normalizeVoiceDateFilter(value: string | null): VoiceDateFilter {
   return VOICE_DATE_FILTERS.includes(value as VoiceDateFilter) ? (value as VoiceDateFilter) : "today";
+}
+
+function normalizeQueueView(value: string | null): VoiceQueueView {
+  return value === "waiting" || value === "missed" ? value : "all";
 }
 
 function getVoiceDateFilterMeta(
@@ -279,7 +285,7 @@ export default function VoiceConsoleClient({
     return mode === "admin" || nextTab !== "feedback" ? nextTab : "operations";
   });
   const [dateFilter, setDateFilter] = useState<VoiceDateFilter>(() => normalizeVoiceDateFilter(searchParams.get("range")));
-  const [queueView, setQueueView] = useState<"all" | "waiting" | "missed">("all");
+  const [queueView, setQueueView] = useState<VoiceQueueView>(() => normalizeQueueView(searchParams.get("queue")));
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [dispositionPending, setDispositionPending] = useState(false);
   const lastAnnouncedCallIdRef = useRef<string | null>(null);
@@ -341,10 +347,24 @@ export default function VoiceConsoleClient({
     [dateFilter, visibleCallQueue],
   );
 
+  const filteredFollowUpsByView = useMemo(() => {
+    if (queueView === "waiting") {
+      return [] as typeof filteredFollowUps;
+    }
+    if (queueView === "missed") {
+      return filteredFollowUps.filter((item: any) => {
+        const normalizedStatus = String(item.status || "").trim().toLowerCase();
+        return ["pending", "open", "pending_follow_up"].includes(normalizedStatus);
+      });
+    }
+    return filteredFollowUps;
+  }, [filteredFollowUps, queueView]);
+
   useEffect(() => {
     const nextTab = normalizeVoiceTab(searchParams.get("tab"));
     setActiveTab(mode === "admin" || nextTab !== "feedback" ? nextTab : "operations");
     setDateFilter(normalizeVoiceDateFilter(searchParams.get("range")));
+    setQueueView(normalizeQueueView(searchParams.get("queue")));
   }, [mode, searchParams]);
 
   useEffect(() => {
@@ -364,10 +384,26 @@ export default function VoiceConsoleClient({
     return () => window.removeEventListener("keydown", handleEscape);
   }, [detailModalOpen]);
 
-  const switchTab = (tab: VoiceConsoleTab) => {
+  const switchTab = (tab: VoiceConsoleTab, nextQueueView?: VoiceQueueView | null) => {
     setActiveTab(tab);
+    if (nextQueueView) {
+      setQueueView(nextQueueView);
+    }
     const params = new URLSearchParams(searchParams.toString());
     params.set("tab", tab);
+    if (nextQueueView) {
+      params.set("queue", nextQueueView);
+    } else if (tab !== "followups") {
+      params.delete("queue");
+    }
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  };
+
+  const setQueueViewWithUrl = (nextQueueView: VoiceQueueView) => {
+    setQueueView(nextQueueView);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", "followups");
+    params.set("queue", nextQueueView);
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
@@ -408,6 +444,27 @@ export default function VoiceConsoleClient({
     setSelectedPhone(nextData.selectedPhone);
     setLastRefreshAt(nextData.generatedAt);
     return nextData;
+  };
+
+  const handleVoiceSearch = async (rawQuery?: string | null) => {
+    const query = String(rawQuery ?? queueSearch ?? "").trim();
+    const normalizedPhone = normalizeKenyanPhone(query);
+    if (!normalizedPhone) return;
+    setError(null);
+    setSelectedCallId(null);
+    setSelectedPhone(normalizedPhone);
+    try {
+      const nextData = await refreshSnapshot(null, normalizedPhone);
+      if (!nextData.selectedPhone) {
+        setError("No voice history was found for that number.");
+        return;
+      }
+      setContextTab("customer");
+      setDetailModalOpen(true);
+    } catch (searchError) {
+      console.error("[voice.console.search_failed]", searchError);
+      setError("Could not load the customer voice history.");
+    }
   };
 
   useEffect(() => {
@@ -948,7 +1005,13 @@ export default function VoiceConsoleClient({
 
   const queueItemsByView = useMemo(() => {
     if (queueView === "waiting") return queueItems.filter((item: any) => Boolean(item.callerNumber));
-    if (queueView === "missed") return queueItems.filter((item: any) => !item.callerNumber);
+    if (queueView === "missed") {
+      return queueItems.filter((item: any) => {
+        if (Boolean(item.callerNumber)) return false;
+        const normalizedStatus = String(item.status || "").trim().toLowerCase();
+        return ["pending", "open", "pending_follow_up"].includes(normalizedStatus);
+      });
+    }
     return queueItems;
   }, [queueItems, queueView]);
 
@@ -976,6 +1039,17 @@ export default function VoiceConsoleClient({
   const followUpsHref = useMemo(() => {
     const params = new URLSearchParams();
     params.set("tab", "followups");
+    params.set("queue", "all");
+    if (data.viewer.impersonateId) {
+      params.set("impersonateId", data.viewer.impersonateId);
+    }
+    return `${pathname}?${params.toString()}`;
+  }, [data.viewer.impersonateId, pathname]);
+
+  const missedCallsHref = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set("tab", "followups");
+    params.set("queue", "missed");
     if (data.viewer.impersonateId) {
       params.set("impersonateId", data.viewer.impersonateId);
     }
@@ -1019,7 +1093,7 @@ export default function VoiceConsoleClient({
       ? [
           { label: "Calls Today", value: String(filteredRecentCalls.length) },
           { label: "Waiting", value: String(visibleWaitingCalls.length) },
-          { label: "Missed Calls", value: String(filteredMissedCount), action: () => switchTab("followups") },
+          { label: "Missed Calls", value: String(filteredMissedCount), action: () => switchTab("followups", "missed") },
           {
             label: "Avg Talk Time",
             value: formatDuration(Number.isFinite(filteredAverageTalkTime) ? Math.round(filteredAverageTalkTime) : 0),
@@ -1028,7 +1102,7 @@ export default function VoiceConsoleClient({
       : [
           { label: "My Calls", value: String(filteredRecentCalls.length) },
           { label: "My Waiting", value: String(visibleWaitingCalls.length) },
-          { label: "Missed Calls", value: String(filteredMissedCount), action: () => switchTab("followups") },
+          { label: "Missed Calls", value: String(filteredMissedCount), action: () => switchTab("followups", "missed") },
           {
             label: "Avg Talk Time",
             value: formatDuration(Number.isFinite(filteredAverageTalkTime) ? Math.round(filteredAverageTalkTime) : 0),
@@ -1178,7 +1252,7 @@ export default function VoiceConsoleClient({
                     </button>
                     <button
                       type="button"
-                      onClick={() => router.push(followUpsHref)}
+                      onClick={() => router.push(missedCallsHref)}
                       className="flex w-full items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-left text-slate-300 transition hover:border-white/10 hover:bg-white/[0.03]"
                     >
                       <PhoneOff className="h-4 w-4 shrink-0" />
@@ -1201,12 +1275,26 @@ export default function VoiceConsoleClient({
                           onChange={(event) =>
                             activeTab === "recent" ? setRecentSearch(event.target.value) : setQueueSearch(event.target.value)
                           }
+                          onKeyDown={(event) => {
+                            if (event.key !== "Enter" || activeTab === "recent") return;
+                            void handleVoiceSearch(queueSearch);
+                          }}
                           placeholder="Search customer or number..."
                           className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
                         />
-                        <span className="hidden rounded-xl border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-slate-400 sm:inline-flex">
-                          Ctrl K
-                        </span>
+                        {activeTab === "recent" ? (
+                          <span className="hidden rounded-xl border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-slate-400 sm:inline-flex">
+                            Ctrl K
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => void handleVoiceSearch(queueSearch)}
+                            className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1 text-xs font-semibold text-cyan-100 transition hover:border-cyan-400"
+                          >
+                            Search
+                          </button>
+                        )}
                       </div>
 
                       <button
@@ -2069,12 +2157,31 @@ export default function VoiceConsoleClient({
                         <h2 className="mt-1 text-2xl font-semibold text-white">Callback and reassignment queue</h2>
                       </div>
                       <span className="rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1 text-xs text-slate-300">
-                        {filteredFollowUps.length}
+                        {filteredFollowUpsByView.length}
                       </span>
                     </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {[
+                        { key: "all", label: `All (${filteredFollowUps.length})` },
+                        { key: "missed", label: `Missed (${filteredFollowUps.filter((item: any) => ["pending", "open", "pending_follow_up"].includes(String(item.status || "").trim().toLowerCase())).length})` },
+                      ].map((item) => (
+                        <button
+                          key={item.key}
+                          type="button"
+                          onClick={() => setQueueViewWithUrl(item.key as VoiceQueueView)}
+                          className={`rounded-full border px-3 py-1.5 text-[11px] font-medium transition ${
+                            queueView === item.key
+                              ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100"
+                              : "border-white/10 bg-white/[0.02] text-slate-400 hover:border-white/20 hover:text-slate-200"
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
                     <div className="mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden pr-1">
-                      {filteredFollowUps.length ? (
-                        filteredFollowUps.map((item) => (
+                      {filteredFollowUpsByView.length ? (
+                        filteredFollowUpsByView.map((item) => (
                           <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                               <div className="min-w-0">
@@ -2083,6 +2190,7 @@ export default function VoiceConsoleClient({
                                 <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-500">
                                   <span>{item.assignedAgentLabel}</span>
                                   <span>{formatDateTime(item.dueAt || item.updatedAt)}</span>
+                                  <span>{(item as any).queueReasonLabel || "Follow-up queue"}</span>
                                 </div>
                               </div>
                               <div className="flex flex-wrap items-center gap-2">
