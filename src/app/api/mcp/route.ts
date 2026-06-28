@@ -11,6 +11,27 @@ type JsonRpcRequest = {
   params?: Record<string, unknown>;
 };
 
+function buildCatalogToolPayload(catalog: Awaited<ReturnType<typeof searchLiveCatalog>>) {
+  const products = Array.isArray(catalog.results) ? catalog.results : [];
+  const firstProduct = products[0] ?? null;
+
+  console.info("Received MCP response:", {
+    resultCount: Number(catalog.resultCount ?? 0),
+    firstProductName: firstProduct?.productName ?? null,
+    firstProductPrice: firstProduct?.price ?? null,
+    firstProductAvailability: firstProduct?.availability ?? null,
+  });
+
+  return {
+    source: catalog.source,
+    query: catalog.query,
+    resultCount: Number(catalog.resultCount ?? 0),
+    results: products,
+    products,
+    primaryProduct: firstProduct,
+  };
+}
+
 function jsonRpc(id: JsonRpcRequest["id"], result: unknown, status = 200) {
   return NextResponse.json({ jsonrpc: "2.0", id: id ?? null, result }, { status });
 }
@@ -30,15 +51,18 @@ function getServerPrompt() {
   return [
     "Use search_catalog_product before answering any product price, stock, availability, spec, warranty, or recommendation question.",
     "Treat the catalog tool output as the only source of truth.",
+    "Check both resultCount and the products array in the tool response.",
+    "If resultCount is greater than 0 OR products.length is greater than 0, never say not available, currently unavailable, or isn't showing.",
     "When search_catalog_product returns one or more products, always use the first result as the primary recommendation.",
     "Format the reply from the returned JSON instead of giving a generic confirmation.",
+    "Map and use these fields from the first returned product: productName, price, availability, warranty, shortDescription, productUrl, imageUrl.",
     "For the primary product include: Product Name, Price, Availability, Warranty, one or two key features from the short description, and the product URL when available.",
-    "Use this style when data exists: Yes, we have {Product Name} available. Price: {Price}. Availability: {Availability}. Warranty: {Warranty}. Key Features: {short description highlights}. View Product: {productUrl}.",
+    "Use this exact response structure when product data exists: Yes, we have the {productName} available. Price: {price}. Availability: {availability}. Warranty: {warranty}. Key Features: {shortDescription}. View Product: {productUrl}. Would you like delivery or shop pickup?",
     "If imageUrl exists and the client supports product cards or image responses, include the image.",
     "If resultCount is greater than 1, show the best match first and then mention up to two alternatives ordered by relevance.",
     "Never ask unnecessary clarification questions when an exact or suitable product match already exists.",
     "Only ask follow-up questions if no suitable product was found.",
-    "Never say not available when resultCount is greater than 0.",
+    "Only say not available if both resultCount equals 0 and the products array is empty.",
     "If the tool returns no results, say no matching product was found and do not invent details.",
     "Keep tag rules unchanged: ai_msg_1, ai_msg_2, ai_msg_3, not_clear, system_quote, hot_lead.",
     "Maximum AI replies: 3, then hand over to a human.",
@@ -138,28 +162,19 @@ export async function POST(request: NextRequest) {
     const query = String(args.query || "").trim();
     const limit = Number(args.limit || 8);
     const catalog = await searchLiveCatalog({ query, origin, limit });
+    const toolPayload = buildCatalogToolPayload(catalog);
 
     return jsonRpc(id, {
       content: [
         {
           type: "text",
           text: JSON.stringify({
-            catalog_result: {
-              source: catalog.source,
-              query: catalog.query,
-              resultCount: catalog.resultCount,
-              results: catalog.results,
-            },
+            catalog_result: toolPayload,
           }),
         },
       ],
       structuredContent: {
-        catalog_result: {
-          source: catalog.source,
-          query: catalog.query,
-          resultCount: catalog.resultCount,
-          results: catalog.results,
-        },
+        catalog_result: toolPayload,
       },
       isError: false,
     });

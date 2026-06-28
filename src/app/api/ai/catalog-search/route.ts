@@ -18,12 +18,23 @@ export async function GET(request: NextRequest) {
   const query = String(searchParams.get("query") || searchParams.get("q") || "").trim();
   const limit = Number(searchParams.get("limit") || "8");
   const catalog = await searchLiveCatalog({ query, origin, limit });
+  const products = Array.isArray(catalog.results) ? catalog.results : [];
+  const firstProduct = products[0] ?? null;
+
+  console.info("Received MCP response:", {
+    resultCount: Number(catalog.resultCount ?? 0),
+    firstProductName: firstProduct?.productName ?? null,
+    firstProductPrice: firstProduct?.price ?? null,
+    firstProductAvailability: firstProduct?.availability ?? null,
+  });
 
   return NextResponse.json({
     ok: true,
     source: catalog.source,
     query: catalog.query,
     resultCount: catalog.resultCount,
-    results: catalog.results,
+    results: products,
+    products,
+    primaryProduct: firstProduct,
   });
 }
