@@ -64,6 +64,7 @@ export async function GET(request: Request) {
           const heartbeat = setInterval(() => {
             if (closed) return;
             controller.enqueue(encoder.encode(`: ping ${Date.now()}\n\n`));
+            writeEvent("heartbeat", { at: new Date().toISOString() });
           }, 15000);
 
           const recycleTimeout = setTimeout(() => {

@@ -9,6 +9,7 @@ import type { VoiceLiveSnapshot } from "@/lib/voiceOperations";
 type PopupSnapshot = VoiceLiveSnapshot | null;
 type PopupTab = "overview" | "history" | "transfer";
 const DISMISSED_CALL_STORAGE_KEY = "voice-fallback-popup-dismissed";
+const STREAM_STALE_AFTER_MS = 45_000;
 
 function formatCurrency(value: number | null | undefined) {
   return `KES ${Number(value || 0).toLocaleString("en-KE")}`;
@@ -91,12 +92,20 @@ function buildVoiceDeskHref(snapshot: NonNullable<PopupSnapshot>) {
   return `${base}${params.toString() ? `?${params.toString()}` : ""}`;
 }
 
+function getSnapshotTimestamp(snapshot: PopupSnapshot) {
+  if (!snapshot?.generatedAt) return 0;
+  const timestamp = new Date(snapshot.generatedAt).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
 export default function FallbackCallPopup() {
   const softphone = useSoftphone();
   const streamRef = useRef<EventSource | null>(null);
   const [snapshot, setSnapshot] = useState<PopupSnapshot>(null);
   const [streamError, setStreamError] = useState(false);
+  const [feedDelayed, setFeedDelayed] = useState(false);
   const [streamNonce, setStreamNonce] = useState(0);
+  const [lastStreamActivityAt, setLastStreamActivityAt] = useState<number>(Date.now());
   const [dismissedCallId, setDismissedCallId] = useState<string | null>(null);
   const [dismissStateHydrated, setDismissStateHydrated] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
@@ -117,12 +126,25 @@ export default function FallbackCallPopup() {
 
     eventSource.addEventListener("snapshot", (event) => {
       setStreamError(false);
+      setFeedDelayed(false);
+      setLastStreamActivityAt(Date.now());
       try {
         const payload = JSON.parse((event as MessageEvent).data) as { snapshot?: VoiceLiveSnapshot };
-        setSnapshot(payload.snapshot ?? null);
+        if (!payload.snapshot) return;
+        setSnapshot((previous) => {
+          const previousTime = getSnapshotTimestamp(previous);
+          const nextTime = getSnapshotTimestamp(payload.snapshot ?? null);
+          return nextTime >= previousTime ? payload.snapshot ?? null : previous;
+        });
       } catch {
-        setSnapshot(null);
+        // Keep the last good snapshot instead of blanking the popup during transient parse errors.
       }
+    });
+
+    eventSource.addEventListener("heartbeat", () => {
+      setStreamError(false);
+      setFeedDelayed(false);
+      setLastStreamActivityAt(Date.now());
     });
 
     eventSource.addEventListener("reconnect", () => {
@@ -151,6 +173,13 @@ export default function FallbackCallPopup() {
       streamRef.current = null;
     };
   }, [streamNonce]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setFeedDelayed(Date.now() - lastStreamActivityAt > STREAM_STALE_AFTER_MS);
+    }, 5000);
+    return () => window.clearInterval(interval);
+  }, [lastStreamActivityAt]);
 
   const myPresence = useMemo(() => {
     return snapshot?.agents.find((agent) => agent.id === snapshot.viewer.targetUserId) ?? null;
@@ -584,7 +613,11 @@ export default function FallbackCallPopup() {
                   <History className="h-3.5 w-3.5" />
                   Recent Activity
                 </div>
-                {streamError ? <div className="text-[10px] uppercase tracking-[0.18em] text-amber-300">Reconnecting feed</div> : null}
+                {streamError || feedDelayed ? (
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-amber-300">
+                    {streamError ? "Reconnecting feed" : "Feed delayed"}
+                  </div>
+                ) : null}
               </div>
               <div className="mt-4 space-y-3">
                 {recentTimeline.length ? (

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import {
   addVoiceCallNote,
   isVoiceOperationsSchemaMissingError,
@@ -6,6 +7,12 @@ import {
 } from "@/lib/voiceOperations";
 
 export const dynamic = "force-dynamic";
+
+function isActiveVoiceCallStatus(status: string | null | undefined) {
+  return ["queued", "ringing", "initiated", "dialing", "in_progress", "answered", "connected", "transferred"].includes(
+    String(status || "").trim().toLowerCase(),
+  );
+}
 
 export async function POST(request: Request) {
   try {
@@ -25,6 +32,28 @@ export async function POST(request: Request) {
 
     if (!body.voiceCallId) {
       return NextResponse.json({ error: "voice_call_id_required" }, { status: 400 });
+    }
+
+    const call = await prisma.voiceCall.findUnique({
+      where: { id: body.voiceCallId },
+      select: {
+        id: true,
+        assignedToId: true,
+        isActive: true,
+        status: true,
+      },
+    });
+
+    if (!call) {
+      return NextResponse.json({ error: "voice_call_not_found" }, { status: 404 });
+    }
+
+    if (!viewer.isAdmin && call.assignedToId && call.assignedToId !== viewer.targetUserId) {
+      return NextResponse.json({ error: "not_authorized_for_call" }, { status: 403 });
+    }
+
+    if (!call.isActive && !isActiveVoiceCallStatus(call.status)) {
+      return NextResponse.json({ error: "voice_call_not_active" }, { status: 409 });
     }
 
     const note = await addVoiceCallNote({

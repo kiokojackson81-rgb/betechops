@@ -10,6 +10,12 @@ import {
 
 export const dynamic = "force-dynamic";
 
+function isActiveVoiceCallStatus(status: string | null | undefined) {
+  return ["queued", "ringing", "initiated", "dialing", "in_progress", "answered", "connected", "transferred"].includes(
+    String(status || "").trim().toLowerCase(),
+  );
+}
+
 export async function POST(request: Request) {
   try {
     const url = new URL(request.url);
@@ -37,6 +43,8 @@ export async function POST(request: Request) {
       select: {
         id: true,
         assignedToId: true,
+        isActive: true,
+        status: true,
       },
     });
 
@@ -46,6 +54,10 @@ export async function POST(request: Request) {
 
     if (!viewer.isAdmin && call.assignedToId && call.assignedToId !== viewer.targetUserId) {
       return NextResponse.json({ ok: false, error: "not_authorized_for_call" }, { status: 403 });
+    }
+
+    if (!call.isActive && !isActiveVoiceCallStatus(call.status)) {
+      return NextResponse.json({ ok: false, error: "voice_call_not_active" }, { status: 409 });
     }
 
     const normalizedTargetPhone = normalizeKenyanPhone(body.targetPhone || "");
