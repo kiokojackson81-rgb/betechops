@@ -30,6 +30,15 @@ function getServerPrompt() {
   return [
     "Use search_catalog_product before answering any product price, stock, availability, spec, warranty, or recommendation question.",
     "Treat the catalog tool output as the only source of truth.",
+    "When search_catalog_product returns one or more products, always use the first result as the primary recommendation.",
+    "Format the reply from the returned JSON instead of giving a generic confirmation.",
+    "For the primary product include: Product Name, Price, Availability, Warranty, one or two key features from the short description, and the product URL when available.",
+    "Use this style when data exists: Yes, we have {Product Name} available. Price: {Price}. Availability: {Availability}. Warranty: {Warranty}. Key Features: {short description highlights}. View Product: {productUrl}.",
+    "If imageUrl exists and the client supports product cards or image responses, include the image.",
+    "If resultCount is greater than 1, show the best match first and then mention up to two alternatives ordered by relevance.",
+    "Never ask unnecessary clarification questions when an exact or suitable product match already exists.",
+    "Only ask follow-up questions if no suitable product was found.",
+    "Never say not available when resultCount is greater than 0.",
     "If the tool returns no results, say no matching product was found and do not invent details.",
     "Keep tag rules unchanged: ai_msg_1, ai_msg_2, ai_msg_3, not_clear, system_quote, hot_lead.",
     "Maximum AI replies: 3, then hand over to a human.",
@@ -96,7 +105,7 @@ export async function POST(request: NextRequest) {
         {
           name: TOOL_NAME,
           description:
-            "Search the live Betech website catalog before answering product price, stock, availability, warranty, specs, or recommendation questions.",
+            "Search the live Betech website catalog before answering product price, stock, availability, warranty, specs, or recommendation questions. Use the first returned result as the primary match and format the customer reply from the returned JSON.",
           inputSchema: {
             type: "object",
             properties: {
