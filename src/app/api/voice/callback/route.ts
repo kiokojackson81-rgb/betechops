@@ -225,7 +225,12 @@ export async function POST(request: Request) {
       userId: voiceCall.assignedToId,
     });
 
-    if (!routePlanFromQuery && hopIndex === 0 && effectiveRoutePlan.routeType !== "AFTER_HOURS") {
+    if (
+      !routePlanFromQuery &&
+      hopIndex === 0 &&
+      effectiveRoutePlan.routeType !== "AFTER_HOURS" &&
+      effectiveRoutePlan.routeType !== "DIRECT_FALLBACK"
+    ) {
       const ivrUrl = new URL("/api/voice/ivr", requestUrl.origin);
       ivrUrl.searchParams.set("routePlan", encodeRoutePlan(effectiveRoutePlan));
       return xmlResponse(buildWorkingHoursIvrXml(ivrUrl.toString()));

@@ -384,6 +384,34 @@ export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerN
   const allConfiguredTargets = [targets.BRENDAH, targets.JENNIFER, targets.ADMIN].filter((target) => target.phoneNumber);
   const agentTargets = [targets.BRENDAH, targets.JENNIFER].filter((target) => target.phoneNumber);
   const adminTarget = targets.ADMIN;
+  const directFallbackTargets = [adminTarget].filter((target) => target.phoneNumber);
+
+  if (directFallbackTargets.length) {
+    console.info("[voice.routing.direct_fallback]", {
+      callerNumber,
+      date: date.toISOString(),
+      orderedTargets: directFallbackTargets.map((target) => ({
+        label: target.label,
+        phoneNumber: target.phoneNumber,
+        userId: target.userId,
+        presenceStatus: target.presenceStatus,
+        isAvailable: target.isAvailable,
+        dialValues: target.dialValues,
+      })),
+    });
+
+    return {
+      routeType: "DIRECT_FALLBACK",
+      orderedTargets: directFallbackTargets,
+      primaryTarget: directFallbackTargets[0] ?? null,
+      availableTargets: directFallbackTargets.filter((target) => target.isAvailable),
+      unavailableTargets: allConfiguredTargets.filter((target) => !directFallbackTargets.includes(target)),
+      hasAvailableTarget: directFallbackTargets.some((target) => target.isAvailable),
+      hasRoutableTarget: true,
+      usedMobileFallback: false,
+      routeReason: "admin_only" as const,
+    };
+  }
 
   if (!isWithinVoiceWorkingHours(date)) {
     const fallbackTargets = [adminTarget].filter((target) => target.phoneNumber && target.isAvailable);
