@@ -294,6 +294,36 @@ async function findPreviousAgentTarget(
   return agentTargets.find((target) => target.userId === lastCall.assignedToId) ?? null;
 }
 
+async function callerPrefersAdminFirst(
+  callerNumber: string | null,
+  agentTargets: VoiceRouteTarget[],
+) {
+  if (!callerNumber) return false;
+  const phoneVariants = getKenyanPhoneVariants(callerNumber);
+  if (!phoneVariants.length) return false;
+
+  const agentUserIds = agentTargets.map((target) => target.userId).filter((value): value is string => Boolean(value));
+  if (!agentUserIds.length) return false;
+
+  const lastTechnicalRouting = await prisma.voiceCall.findFirst({
+    where: {
+      direction: "INBOUND",
+      callerNumber: { in: phoneVariants },
+      assignedToId: { in: agentUserIds },
+      OR: [
+        { routeType: "TECHNICAL_TEAM" },
+        { menuOption: "1" },
+      ],
+    },
+    orderBy: [{ createdAt: "desc" }],
+    select: {
+      id: true,
+    },
+  });
+
+  return Boolean(lastTechnicalRouting);
+}
+
 async function findRoundRobinTarget(agentTargets: VoiceRouteTarget[]) {
   const agentUserIds = agentTargets.map((target) => target.userId).filter((value): value is string => Boolean(value));
   if (!agentUserIds.length) return agentTargets[0] ?? null;
@@ -320,15 +350,24 @@ function buildWorkingHoursSelection(input: {
   agentTargets: VoiceRouteTarget[];
   adminTarget: VoiceRouteTarget;
   routeReason: VoiceRouteSelection["routeReason"];
+  preferAdminFirst?: boolean;
 }): VoiceRouteSelection {
   const alternateTargets = input.agentTargets.filter(
     (target) => target.userId && target.userId !== input.preferredTarget?.userId,
   );
-  const orderedTargets = [
-    ...(input.preferredTarget?.phoneNumber ? [input.preferredTarget] : []),
-    ...alternateTargets.filter((target) => Boolean(target.phoneNumber)),
-    ...(input.adminTarget.phoneNumber ? [input.adminTarget] : []),
-  ].filter((target, index, array) => array.findIndex((candidate) => candidate.label === target.label) === index);
+  const orderedTargets = (
+    input.preferAdminFirst
+      ? [
+          ...(input.adminTarget.phoneNumber ? [input.adminTarget] : []),
+          ...(input.preferredTarget?.phoneNumber ? [input.preferredTarget] : []),
+          ...alternateTargets.filter((target) => Boolean(target.phoneNumber)),
+        ]
+      : [
+          ...(input.preferredTarget?.phoneNumber ? [input.preferredTarget] : []),
+          ...alternateTargets.filter((target) => Boolean(target.phoneNumber)),
+          ...(input.adminTarget.phoneNumber ? [input.adminTarget] : []),
+        ]
+  ).filter((target, index, array) => array.findIndex((candidate) => candidate.label === target.label) === index);
 
   return {
     preferredTarget: input.preferredTarget,
@@ -362,6 +401,7 @@ export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerN
   }
 
   const previousAgentTarget = await findPreviousAgentTarget(callerNumber, agentTargets);
+  const preferAdminFirst = await callerPrefersAdminFirst(callerNumber, agentTargets);
   const roundRobinTarget = previousAgentTarget ? null : await findRoundRobinTarget(agentTargets);
   const selection = previousAgentTarget
     ? buildWorkingHoursSelection({
@@ -369,12 +409,14 @@ export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerN
         agentTargets,
         adminTarget,
         routeReason: "returning_customer",
+        preferAdminFirst,
       })
     : buildWorkingHoursSelection({
         preferredTarget: roundRobinTarget,
         agentTargets,
         adminTarget,
         routeReason: "round_robin",
+        preferAdminFirst: false,
       });
 
   const workingTargets = [targets.BRENDAH, targets.JENNIFER, targets.ADMIN];
@@ -394,6 +436,7 @@ export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerN
       reason: selection.routeReason,
       callerNumber,
       previousAgent: previousAgentTarget?.label ?? null,
+      preferAdminFirst,
       roundRobinTarget: roundRobinTarget?.label ?? null,
       primaryTarget: primaryTarget?.label ?? null,
       orderedTargets: orderedTargets.map((target) => target.label),

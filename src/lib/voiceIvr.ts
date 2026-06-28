@@ -15,23 +15,16 @@ export type VoiceRoutePlan = {
 };
 
 export const BETECH_WORKING_HOURS_WELCOME_MESSAGE = [
-  "Welcome to Betech Solar Solutions. Please hold while we connect your call to our customer service team.",
-  "We specialize in solar system installation, solar water pumping solutions, solar water heating systems, solar panels, hybrid inverters, lithium and gel batteries, and complete solar accessories.",
-  "Visit our showroom at Pramukh Plaza, Third Floor, Shop Number 3, at the junction of Munyu Road and Sheikh Karume Road, Nairobi CBD.",
-  "You can also explore our products at www.betech.co.ke or view our recent installations on TikTok by searching Solar Projects.",
-  "If you wish to speak to our technical team, press 1.",
+  "Welcome to Betech Solar Solutions.",
+  "Please hold as we connect you to our customer service team.",
+  "If you wish to speak to our technician, press 1.",
 ].join(" ");
 
 export const BETECH_WORKING_HOURS_DIGITS_PROMPT =
-  "Press 1 to speak to our technical team. Otherwise, please hold as we connect your call to our customer service team.";
-
-export const BETECH_CONNECTING_PROMPT = "Please hold as we connect your call.";
+  "Press 1 to speak to our technician. Otherwise, please hold as we connect your call.";
 
 export const BETECH_AFTER_HOURS_WELCOME_MESSAGE = [
   "Welcome to Betech Solar Solutions.",
-  "We specialize in solar system installation, solar water pumping solutions, solar water heating systems, solar panels, hybrid inverters, lithium and gel batteries, and complete solar accessories.",
-  "Visit our showroom at Pramukh Plaza, Third Floor, Shop Number 3, at the junction of Munyu Road and Sheikh Karume Road, Nairobi CBD.",
-  "You can also explore our products at www.betech.co.ke or view our recent installations on TikTok by searching Solar Projects.",
 ].join(" ");
 
 export function escapeVoiceXml(value: string) {
@@ -117,9 +110,9 @@ export function buildVoiceRoutePlanFromPhoneNumbers(input: {
   } satisfies VoiceRoutePlan;
 }
 
-export function getTechnicalTeamPhoneNumbers() {
-  const configured = safeString(process.env.BETECH_VOICE_TECH_TEAM_NUMBERS || process.env.BETECH_VOICE_TECH_TEAM_NUMBER);
-  if (!configured) return ["+254722151083"];
+export function getAdminPhoneNumbers() {
+  const configured = safeString(process.env.BETECH_VOICE_ADMIN_NUMBER);
+  if (!configured) return ["+254705663175"];
   return configured
     .split(",")
     .map((value) => safeString(value))

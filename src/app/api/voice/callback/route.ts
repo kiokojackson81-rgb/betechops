@@ -15,7 +15,6 @@ import {
 } from "@/lib/voice";
 import {
   BETECH_AFTER_HOURS_WELCOME_MESSAGE,
-  BETECH_CONNECTING_PROMPT,
   VOICE_HOP_MAX_DURATION_SECONDS,
   type VoiceRoutePlan,
   buildDialAttemptXml,
@@ -42,7 +41,7 @@ function xmlResponse(body: string) {
 function buildAdminFallbackXml() {
   const adminNumber = safeString(process.env.BETECH_VOICE_ADMIN_NUMBER) || "+254705663175";
   return buildVoiceXmlResponse({
-    preDialMessage: BETECH_CONNECTING_PROMPT,
+    preDialMessage: null,
     phoneNumbers: [adminNumber],
   });
 }
@@ -215,10 +214,8 @@ export async function POST(request: Request) {
       buildDialAttemptXml({
         preDialMessage:
           hopIndex === 0 && effectiveRoutePlan.routeType === "AFTER_HOURS"
-            ? `${BETECH_AFTER_HOURS_WELCOME_MESSAGE} ${BETECH_CONNECTING_PROMPT}`
-            : hopIndex === 0
-              ? BETECH_CONNECTING_PROMPT
-              : null,
+            ? BETECH_AFTER_HOURS_WELCOME_MESSAGE
+            : null,
         phoneNumber: currentHop.dialValue,
         maxDurationSeconds: VOICE_HOP_MAX_DURATION_SECONDS,
         redirectUrl:

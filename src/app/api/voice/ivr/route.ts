@@ -1,14 +1,15 @@
 import {
-  BETECH_CONNECTING_PROMPT,
   VOICE_HOP_MAX_DURATION_SECONDS,
+  type VoiceRoutePlan,
+  buildVoiceRoutePlanFromPhoneNumbers,
   buildDialAttemptXml,
   buildRoutePlanRedirectUrl,
-  buildVoiceRoutePlanFromPhoneNumbers,
   decodeRoutePlan,
+  getAdminPhoneNumbers,
   getIvrDigits,
-  getTechnicalTeamPhoneNumbers,
 } from "@/lib/voiceIvr";
 import { buildVoiceMessageXmlResponse, parseVoicePayloadFromRequest } from "@/lib/voice";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -29,14 +30,34 @@ export async function POST(request: Request) {
   const customerServiceRoutePlan = decodeRoutePlan(requestUrl.searchParams.get("routePlan"));
   const digits = getIvrDigits(payload);
 
-  const selectedRoutePlan =
-    digits === "1"
-      ? buildVoiceRoutePlanFromPhoneNumbers({
-          labels: ["TECHNICAL_TEAM"],
-          phoneNumbers: getTechnicalTeamPhoneNumbers(),
+  let selectedRoutePlan: VoiceRoutePlan | null = customerServiceRoutePlan;
+
+  if (digits === "1") {
+    const fallbackAgentHop = customerServiceRoutePlan?.hops?.[0] ?? null;
+    const adminFirstRoutePlan = buildVoiceRoutePlanFromPhoneNumbers({
+      labels: ["ADMIN", fallbackAgentHop?.label || "AGENT_FALLBACK"],
+      phoneNumbers: [
+        ...getAdminPhoneNumbers(),
+        ...(fallbackAgentHop?.dialValue ? [fallbackAgentHop.dialValue] : []),
+      ],
+      routeType: "TECHNICAL_TEAM",
+    });
+    selectedRoutePlan = {
+      ...adminFirstRoutePlan,
+      primaryTargetUserId: customerServiceRoutePlan?.primaryTargetUserId ?? null,
+    };
+
+    const sessionId = payload.sessionId || payload.SessionId || "";
+    if (sessionId) {
+      await prisma.voiceCall.updateMany({
+        where: { sessionId },
+        data: {
           routeType: "TECHNICAL_TEAM",
-        })
-      : customerServiceRoutePlan;
+          menuOption: "1",
+        },
+      });
+    }
+  }
 
   const currentHop = selectedRoutePlan?.hops?.[0] ?? null;
   if (!selectedRoutePlan || !currentHop) {
@@ -45,7 +66,7 @@ export async function POST(request: Request) {
 
   return xmlResponse(
     buildDialAttemptXml({
-      preDialMessage: BETECH_CONNECTING_PROMPT,
+      preDialMessage: null,
       phoneNumber: currentHop.dialValue,
       maxDurationSeconds: VOICE_HOP_MAX_DURATION_SECONDS,
       redirectUrl:
