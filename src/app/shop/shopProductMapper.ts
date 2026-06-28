@@ -615,6 +615,7 @@ function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview 
   const mappedProduct: ShopProduct | null = includedInCatalog
     ? {
         id: `ops-${product.id}`,
+        sku: product.sku,
         slug: slugify(fallbackName),
         name: fallbackName,
         category: category.title,

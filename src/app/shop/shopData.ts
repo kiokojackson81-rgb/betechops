@@ -20,6 +20,7 @@ export type ShopProductVisualType =
 
 export type ShopProduct = {
   id: string;
+  sku?: string;
   slug: string;
   name: string;
   category: string;
