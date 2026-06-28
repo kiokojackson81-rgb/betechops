@@ -4,6 +4,7 @@ import { getKenyanPhoneVariants, normalizeKenyanPhone } from "@/lib/phone";
 import { resolveVoiceCustomerLinkByPhone } from "@/lib/voiceCustomerContext";
 import { publishVoiceLiveEvent } from "@/lib/voiceLiveEvents";
 import { buildVoiceWebrtcIdentity } from "@/lib/voiceOperations";
+import { toSpeechText } from "@/lib/voiceSpeech";
 import { isVoiceWebrtcClientReady } from "@/lib/voiceWebrtc/registry";
 
 const NAIROBI_TIMEZONE = "Africa/Nairobi";
@@ -484,7 +485,7 @@ export function buildVoiceXmlResponse(input: {
 }) {
   const phoneNumbers = input.phoneNumbers.filter(Boolean).join(",");
   const sayPart = input.preDialMessage
-    ? `<Say>${escapeXml(input.preDialMessage)}</Say>`
+    ? `<Say>${escapeXml(toSpeechText(input.preDialMessage))}</Say>`
     : "";
   return `<?xml version="1.0" encoding="UTF-8"?><Response>${sayPart}<Dial record="true" sequential="true" phoneNumbers="${escapeXml(phoneNumbers)}" /></Response>`;
 }
@@ -494,7 +495,7 @@ export function buildEmptyVoiceXmlResponse() {
 }
 
 export function buildVoiceMessageXmlResponse(message: string) {
-  return `<?xml version="1.0" encoding="UTF-8"?><Response><Say>${escapeXml(message)}</Say></Response>`;
+  return `<?xml version="1.0" encoding="UTF-8"?><Response><Say>${escapeXml(toSpeechText(message))}</Say></Response>`;
 }
 
 function escapeXml(value: string) {

@@ -1,4 +1,5 @@
 import { safeString } from "@/lib/voice";
+import { toSpeechText } from "@/lib/voiceSpeech";
 
 export const VOICE_HOP_MAX_DURATION_SECONDS = 15;
 
@@ -74,7 +75,7 @@ export function buildDialAttemptXml(input: {
   preDialMessage?: string | null;
   maxDurationSeconds?: number;
 }) {
-  const sayPart = input.preDialMessage ? `<Say voice="woman">${escapeVoiceXml(input.preDialMessage)}</Say>` : "";
+  const sayPart = input.preDialMessage ? `<Say voice="woman">${escapeVoiceXml(toSpeechText(input.preDialMessage))}</Say>` : "";
   const maxDurationPart = input.maxDurationSeconds ? ` maxDuration="${input.maxDurationSeconds}"` : "";
   const redirectPart = input.redirectUrl ? `<Redirect>${escapeVoiceXml(input.redirectUrl)}</Redirect>` : "";
   return (
@@ -86,9 +87,9 @@ export function buildDialAttemptXml(input: {
 export function buildWorkingHoursIvrXml(callbackUrl: string) {
   return `<?xml version="1.0" encoding="UTF-8"?>` +
     `<Response>` +
-    `<Say voice="woman">${escapeVoiceXml(BETECH_WORKING_HOURS_WELCOME_MESSAGE)}</Say>` +
+    `<Say voice="woman">${escapeVoiceXml(toSpeechText(BETECH_WORKING_HOURS_WELCOME_MESSAGE))}</Say>` +
     `<GetDigits timeout="5" numDigits="1" callbackUrl="${escapeVoiceXml(callbackUrl)}">` +
-    `<Say voice="woman">${escapeVoiceXml(BETECH_WORKING_HOURS_DIGITS_PROMPT)}</Say>` +
+    `<Say voice="woman">${escapeVoiceXml(toSpeechText(BETECH_WORKING_HOURS_DIGITS_PROMPT))}</Say>` +
     `</GetDigits>` +
     `</Response>`;
 }
