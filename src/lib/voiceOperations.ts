@@ -491,6 +491,8 @@ async function listVoiceAgents() {
           status: true,
           lastSeenAt: true,
           currentCallId: true,
+          dismissedPopupCallId: true,
+          dismissedPopupAt: true,
           updatedAt: true,
         },
       },
@@ -612,6 +614,8 @@ function serializePresenceRow(
     lastSeenAt: toIso(agent.voicePresence?.lastSeenAt),
     updatedAt: toIso(agent.voicePresence?.updatedAt),
     currentCallId: agent.voicePresence?.currentCallId ?? null,
+    dismissedPopupCallId: agent.voicePresence?.dismissedPopupCallId ?? null,
+    dismissedPopupAt: toIso(agent.voicePresence?.dismissedPopupAt),
     activeCallCount,
     waitingCallCount,
     isAvailableForRouting: isAgentAvailableForRouting(effectiveStatus, agent.voicePresence?.lastSeenAt),
@@ -1032,6 +1036,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
       isAdmin: viewer.isAdmin,
       impersonateId: viewer.impersonateId,
       scope,
+      popupDismissedCallId: agents.find((agent) => agent.id === viewer.targetUserId)?.dismissedPopupCallId ?? null,
     },
     summary: viewer.isAdmin
       ? {
@@ -1209,6 +1214,37 @@ export async function updateVoicePresence(input: {
     userId: presence.userId,
     callId: presence.currentCallId,
   });
+  return presence;
+}
+
+export async function updateVoicePopupDismissal(input: {
+  userId: string;
+  dismissedPopupCallId?: string | null;
+}) {
+  const dismissedPopupCallId = String(input.dismissedPopupCallId || "").trim() || null;
+  const presence = await prisma.voiceAgentPresence.upsert({
+    where: { userId: input.userId },
+    create: {
+      userId: input.userId,
+      status: "OFFLINE",
+      lastSeenAt: new Date(),
+      dismissedPopupCallId,
+      dismissedPopupAt: dismissedPopupCallId ? new Date() : null,
+    },
+    update: {
+      dismissedPopupCallId,
+      dismissedPopupAt: dismissedPopupCallId ? new Date() : null,
+      lastSeenAt: new Date(),
+    },
+  });
+
+  publishVoiceLiveEvent({
+    type: "presence",
+    reason: "voice_popup_dismissal_updated",
+    userId: presence.userId,
+    callId: presence.dismissedPopupCallId ?? undefined,
+  });
+
   return presence;
 }
 

@@ -1602,6 +1602,8 @@ model VoiceAgentPresence {
   status        String    @default("OFFLINE")
   lastSeenAt    DateTime  @default(now())
   currentCallId String?
+  dismissedPopupCallId String?
+  dismissedPopupAt DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   user          User      @relation("VoicePresenceUser", fields: [userId], references: [id], onDelete: Cascade)
@@ -1609,6 +1611,7 @@ model VoiceAgentPresence {
 
   @@index([status, updatedAt])
   @@index([currentCallId])
+  @@index([dismissedPopupCallId])
 }
 
 model VoiceCallNote {

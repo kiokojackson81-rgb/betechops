@@ -8,7 +8,6 @@ import type { VoiceLiveSnapshot } from "@/lib/voiceOperations";
 
 type PopupSnapshot = VoiceLiveSnapshot | null;
 type PopupTab = "overview" | "history" | "transfer";
-const DISMISSED_CALL_STORAGE_KEY = "voice-fallback-popup-dismissed";
 const STREAM_STALE_AFTER_MS = 45_000;
 
 function formatCurrency(value: number | null | undefined) {
@@ -74,10 +73,6 @@ function getStatusTheme(status: string | null | undefined) {
   };
 }
 
-function buildDismissedStorageValue(viewerUserId: string, callId: string) {
-  return `${viewerUserId}:${callId}`;
-}
-
 function buildVoiceDeskHref(snapshot: NonNullable<PopupSnapshot>) {
   const params = new URLSearchParams();
   if (snapshot.selectedCallId) params.set("selectedCallId", snapshot.selectedCallId);
@@ -107,7 +102,6 @@ export default function FallbackCallPopup() {
   const [streamNonce, setStreamNonce] = useState(0);
   const [lastStreamActivityAt, setLastStreamActivityAt] = useState<number>(Date.now());
   const [dismissedCallId, setDismissedCallId] = useState<string | null>(null);
-  const [dismissStateHydrated, setDismissStateHydrated] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<PopupTab>("overview");
   const [transferPending, setTransferPending] = useState(false);
@@ -195,24 +189,8 @@ export default function FallbackCallPopup() {
   }, [snapshot]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !snapshot?.viewer.targetUserId) return;
-    setDismissStateHydrated(false);
-    const storedValue = window.localStorage.getItem(DISMISSED_CALL_STORAGE_KEY);
-    if (!storedValue) {
-      setDismissedCallId(null);
-      setDismissStateHydrated(true);
-      return;
-    }
-    const prefix = `${snapshot.viewer.targetUserId}:`;
-    if (!storedValue.startsWith(prefix)) {
-      setDismissedCallId(null);
-      setDismissStateHydrated(true);
-      return;
-    }
-    const storedCallId = storedValue.slice(prefix.length).trim();
-    setDismissedCallId(storedCallId || null);
-    setDismissStateHydrated(true);
-  }, [snapshot?.viewer.targetUserId]);
+    setDismissedCallId(snapshot?.viewer.popupDismissedCallId ?? null);
+  }, [snapshot?.viewer.popupDismissedCallId]);
 
   useEffect(() => {
     if (!activeRecipientCall || dismissedCallId !== activeRecipientCall.id) return;
@@ -233,30 +211,13 @@ export default function FallbackCallPopup() {
     }
   }, [activeRecipientCall]);
 
-  useEffect(() => {
-    if (typeof window === "undefined" || !snapshot?.viewer.targetUserId) return;
-    if (!dismissedCallId) {
-      const storedValue = window.localStorage.getItem(DISMISSED_CALL_STORAGE_KEY);
-      if (storedValue?.startsWith(`${snapshot.viewer.targetUserId}:`)) {
-        window.localStorage.removeItem(DISMISSED_CALL_STORAGE_KEY);
-      }
-      return;
-    }
-    window.localStorage.setItem(
-      DISMISSED_CALL_STORAGE_KEY,
-      buildDismissedStorageValue(snapshot.viewer.targetUserId, dismissedCallId),
-    );
-  }, [dismissedCallId, snapshot?.viewer.targetUserId]);
-
   const canShowPopup =
-    dismissStateHydrated &&
     Boolean(snapshot) &&
     Boolean(myPresence) &&
     myPresence?.status === "AVAILABLE" &&
     Boolean(activeRecipientCall) &&
     dismissedCallId !== activeRecipientCall?.id;
   const canShowMiniStrip =
-    dismissStateHydrated &&
     Boolean(snapshot) &&
     Boolean(activeRecipientCall) &&
     dismissedCallId === activeRecipientCall?.id;
@@ -275,9 +236,20 @@ export default function FallbackCallPopup() {
     ? `/marketing/receipts?tab=quotations&quoteId=${encodeURIComponent(snapshot.selectedContext.latestQuotationId)}`
     : null;
 
+  const persistPopupDismissal = (nextDismissedPopupCallId: string | null) => {
+    return fetch("/api/voice/popup-state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dismissedPopupCallId: nextDismissedPopupCallId,
+      }),
+    });
+  };
+
   const handleDismiss = () => {
     if (activeRecipientCall?.id) {
       setDismissedCallId(activeRecipientCall.id);
+      void persistPopupDismissal(activeRecipientCall.id);
     }
   };
 
@@ -309,6 +281,7 @@ export default function FallbackCallPopup() {
       setTransferAssigneeId("");
       setTransferPhone("");
       setDismissedCallId(activeRecipientCall.id);
+      void persistPopupDismissal(activeRecipientCall.id);
     } catch (error) {
       setTransferError(error instanceof Error ? error.message : "Could not transfer the call.");
     } finally {
@@ -412,7 +385,10 @@ export default function FallbackCallPopup() {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => setDismissedCallId(null)}
+                onClick={() => {
+                  setDismissedCallId(null);
+                  void persistPopupDismissal(null);
+                }}
                 className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400"
               >
                 Open Call
