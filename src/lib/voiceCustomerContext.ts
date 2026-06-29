@@ -7,12 +7,15 @@ import {
   type SerializedQuoteRequest,
 } from "@/lib/quoteRequests";
 import {
-  isOpenAgentOrderStatus,
   isOpenQuotationStatus,
   isPendingPodStatus,
   isPendingWebOrderStatus,
 } from "@/lib/operationsWorkQueue";
-import { lookupChatraceContactByPhone, type ChatraceLookupResult } from "@/lib/integrations/chatrace";
+import {
+  buildChatraceLookupBaseResult,
+  lookupChatraceContactByPhone,
+  type ChatraceLookupResult,
+} from "@/lib/integrations/chatrace";
 
 type VoiceBasicUser = {
   id: string;
@@ -356,8 +359,12 @@ async function listVoiceQuoteRequests(input: {
   return rows.map(serializeQuoteRequest);
 }
 
-export async function getVoiceCustomerContext(rawPhone: string | null | undefined, options?: { take?: number }) {
+export async function getVoiceCustomerContext(
+  rawPhone: string | null | undefined,
+  options?: { take?: number; includeChatrace?: boolean },
+) {
   const take = Math.max(1, Math.min(10, Number(options?.take ?? 5)));
+  const includeChatrace = options?.includeChatrace !== false;
   const link = await resolveVoiceCustomerLinkByPhone(rawPhone);
   const normalizedEmails = uniqueStrings([
     link.matchedCustomer?.email ? normalizeEmail(link.matchedCustomer.email) : "",
@@ -367,7 +374,9 @@ export async function getVoiceCustomerContext(rawPhone: string | null | undefine
     return {
       normalizedPhone: link.normalizedPhone,
       phoneVariants: [],
-      chatrace: await lookupChatraceContactByPhone(link.normalizedPhone),
+      chatrace: includeChatrace
+        ? await lookupChatraceContactByPhone(link.normalizedPhone)
+        : buildChatraceLookupBaseResult(link.normalizedPhone),
       matchedCustomer: null,
       recentReceipts: [],
       recentWebOrders: [],
@@ -551,7 +560,9 @@ export async function getVoiceCustomerContext(rawPhone: string | null | undefine
         orderBy: [{ updatedAt: "desc" }],
         take,
       }),
-      lookupChatraceContactByPhone(link.normalizedPhone),
+      includeChatrace
+        ? lookupChatraceContactByPhone(link.normalizedPhone)
+        : Promise.resolve(buildChatraceLookupBaseResult(link.normalizedPhone)),
     ]);
 
   const recentReceipts: VoiceReceiptContext[] = receiptRows.map((receipt) => {

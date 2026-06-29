@@ -5,9 +5,13 @@ import { Prisma } from '@prisma/client';
 const BASE_URL = (process.env.CHATRACE_BASE_URL || '').replace(/\/$/, '');
 const API_TOKEN = process.env.CHATRACE_API_TOKEN;
 const ACCOUNT_ID = process.env.CHATRACE_ACCOUNT_ID;
-const CHATRACE_LOOKUP_CACHE_TTL_MS = 90_000;
-const CHATRACE_LOOKUP_RATE_LIMIT_TTL_MS = 30_000;
+const CHATRACE_LOOKUP_CACHE_TTL_MS = 15 * 60_000;
+const CHATRACE_LOOKUP_RATE_LIMIT_TTL_MS = 60_000;
+const CHATRACE_LOOKUP_MAX_REQUESTS_PER_MINUTE = 40;
 let chatraceLookupRateLimitedUntil = 0;
+let chatraceLookupRateLimitLoggedAt = 0;
+const chatraceLookupInFlight = new Map<string, Promise<ChatraceLookupResult>>();
+const chatraceLookupRequestTimestamps: number[] = [];
 
 export type ChatraceCustomFieldSummary = {
   name: string;
@@ -27,6 +31,7 @@ export type ChatraceLookupResult = {
   lastMessagePreview?: string | null;
   profileUrl?: string | null;
   sourceError?: boolean;
+  rateLimited?: boolean;
 };
 
 type ChatraceLookupCacheEntry = {
@@ -502,6 +507,40 @@ function writeChatraceLookupCache(phone: string, value: ChatraceLookupResult, tt
   });
 }
 
+export function buildChatraceLookupBaseResult(
+  normalizedPhone: string,
+  overrides?: Partial<ChatraceLookupResult>,
+): ChatraceLookupResult {
+  return {
+    found: false,
+    normalizedPhone,
+    tags: [],
+    customFields: [],
+    lastMessagePreview: null,
+    profileUrl: null,
+    sourceError: false,
+    rateLimited: false,
+    ...overrides,
+  };
+}
+
+function pruneChatraceLookupRequestTimestamps(now = Date.now()) {
+  while (chatraceLookupRequestTimestamps.length && now - chatraceLookupRequestTimestamps[0] >= 60_000) {
+    chatraceLookupRequestTimestamps.shift();
+  }
+}
+
+function reserveChatraceLookupRequestSlot() {
+  const now = Date.now();
+  pruneChatraceLookupRequestTimestamps(now);
+  if (chatraceLookupRequestTimestamps.length >= CHATRACE_LOOKUP_MAX_REQUESTS_PER_MINUTE) {
+    chatraceLookupRateLimitedUntil = Math.max(chatraceLookupRateLimitedUntil, now + CHATRACE_LOOKUP_RATE_LIMIT_TTL_MS);
+    return false;
+  }
+  chatraceLookupRequestTimestamps.push(now);
+  return true;
+}
+
 function snippet(text: string, max = 240) {
   if (!text) return "";
   const clean = text.replace(/\s+/g, " ").trim();
@@ -670,7 +709,7 @@ function mapChatraceContactToLookup(input: {
   contact: Record<string, unknown>;
   normalizedPhone: string;
   config: ReturnType<typeof getChatraceLookupConfig>;
-}) {
+}): ChatraceLookupResult {
   const customFields = toCustomFieldList(input.contact.custom_fields);
   const contactId = Number(input.contact.id ?? 0) || null;
   const firstName = toLookupString(input.contact.first_name);
@@ -710,22 +749,14 @@ function mapChatraceContactToLookup(input: {
 
 export async function lookupChatraceContactByPhone(rawPhone: string | null | undefined): Promise<ChatraceLookupResult> {
   const normalizedPhone = normalizeKenyanPhone(rawPhone ?? "");
-  const baseResult: ChatraceLookupResult = {
-    found: false,
-    normalizedPhone,
-    tags: [],
-    customFields: [],
-    lastMessagePreview: null,
-    profileUrl: null,
-    sourceError: false,
-  };
+  const baseResult = buildChatraceLookupBaseResult(normalizedPhone);
 
   if (!normalizedPhone) {
     return baseResult;
   }
 
   if (chatraceLookupRateLimitedUntil > Date.now()) {
-    const result = { ...baseResult, sourceError: true };
+    const result = buildChatraceLookupBaseResult(normalizedPhone, { sourceError: true, rateLimited: true });
     writeChatraceLookupCache(normalizedPhone, result, chatraceLookupRateLimitedUntil - Date.now());
     return result;
   }
@@ -737,9 +768,14 @@ export async function lookupChatraceContactByPhone(rawPhone: string | null | und
 
   const config = getChatraceLookupConfig();
   if (!config.baseUrl || !config.token) {
-    const result = { ...baseResult, sourceError: true };
+    const result = buildChatraceLookupBaseResult(normalizedPhone, { sourceError: true });
     writeChatraceLookupCache(normalizedPhone, result);
     return result;
+  }
+
+  const inFlight = chatraceLookupInFlight.get(normalizedPhone);
+  if (inFlight) {
+    return inFlight;
   }
 
   const candidates = Array.from(
@@ -752,22 +788,37 @@ export async function lookupChatraceContactByPhone(rawPhone: string | null | und
     ),
   );
 
-  try {
+  const lookupPromise = (async () => {
     let foundContact: Record<string, unknown> | null = null;
 
     for (const candidate of candidates) {
+      if (!reserveChatraceLookupRequestSlot()) {
+        const result = buildChatraceLookupBaseResult(normalizedPhone, { sourceError: true, rateLimited: true });
+        if (Date.now() - chatraceLookupRateLimitLoggedAt > CHATRACE_LOOKUP_RATE_LIMIT_TTL_MS) {
+          chatraceLookupRateLimitLoggedAt = Date.now();
+          console.error("[chatrace.lookup.global_rate_limited]", {
+            phone: normalizedPhone,
+            windowRequests: chatraceLookupRequestTimestamps.length,
+          });
+        }
+        writeChatraceLookupCache(normalizedPhone, result, CHATRACE_LOOKUP_RATE_LIMIT_TTL_MS);
+        return result;
+      }
       const path = `/contacts/find_by_custom_field?field_id=phone&value=${encodeURIComponent(candidate)}`;
       const response = await runChatraceLookupRequest(path);
       if (!response.ok) {
         if (response.status === 429) {
-          const result = { ...baseResult, sourceError: true };
+          const result = buildChatraceLookupBaseResult(normalizedPhone, { sourceError: true, rateLimited: true });
           chatraceLookupRateLimitedUntil = Date.now() + CHATRACE_LOOKUP_RATE_LIMIT_TTL_MS;
-          console.error("[chatrace.lookup.rate_limited]", {
-            phone: normalizedPhone,
-            candidate,
-            status: response.status,
-            bodySnippet: snippet(response.raw, 400),
-          });
+          if (Date.now() - chatraceLookupRateLimitLoggedAt > CHATRACE_LOOKUP_RATE_LIMIT_TTL_MS) {
+            chatraceLookupRateLimitLoggedAt = Date.now();
+            console.error("[chatrace.lookup.rate_limited]", {
+              phone: normalizedPhone,
+              candidate,
+              status: response.status,
+              bodySnippet: snippet(response.raw, 400),
+            });
+          }
           writeChatraceLookupCache(normalizedPhone, result, CHATRACE_LOOKUP_RATE_LIMIT_TTL_MS);
           return result;
         }
@@ -801,17 +852,22 @@ export async function lookupChatraceContactByPhone(rawPhone: string | null | und
         }
       } else if (detailResponse.status === 429) {
         chatraceLookupRateLimitedUntil = Date.now() + CHATRACE_LOOKUP_RATE_LIMIT_TTL_MS;
-        console.error("[chatrace.lookup.contact.rate_limited]", {
-          phone: normalizedPhone,
-          contactId,
-          status: detailResponse.status,
-          bodySnippet: snippet(detailResponse.raw, 400),
-        });
+        if (Date.now() - chatraceLookupRateLimitLoggedAt > CHATRACE_LOOKUP_RATE_LIMIT_TTL_MS) {
+          chatraceLookupRateLimitLoggedAt = Date.now();
+          console.error("[chatrace.lookup.contact.rate_limited]", {
+            phone: normalizedPhone,
+            contactId,
+            status: detailResponse.status,
+            bodySnippet: snippet(detailResponse.raw, 400),
+          });
+        }
         const result = mapChatraceContactToLookup({
           contact: foundContact,
           normalizedPhone,
           config,
         });
+        result.rateLimited = true;
+        result.sourceError = true;
         writeChatraceLookupCache(normalizedPhone, result, CHATRACE_LOOKUP_RATE_LIMIT_TTL_MS);
         return result;
       } else {
@@ -831,13 +887,18 @@ export async function lookupChatraceContactByPhone(rawPhone: string | null | und
     });
     writeChatraceLookupCache(normalizedPhone, result);
     return result;
-  } catch (error) {
+  })().catch((error) => {
     console.error("[chatrace.lookup.failed]", {
       phone: normalizedPhone,
       error: error instanceof Error ? error.message : String(error),
     });
-    const result = { ...baseResult, sourceError: true };
+    const result = buildChatraceLookupBaseResult(normalizedPhone, { sourceError: true });
     writeChatraceLookupCache(normalizedPhone, result);
     return result;
-  }
+  }).finally(() => {
+    chatraceLookupInFlight.delete(normalizedPhone);
+  });
+
+  chatraceLookupInFlight.set(normalizedPhone, lookupPromise);
+  return lookupPromise;
 }

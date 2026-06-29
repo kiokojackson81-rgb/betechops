@@ -229,11 +229,6 @@ function normalizeCallDisplayStatus(input: {
   return normalized ? normalized.toUpperCase() : "UNKNOWN";
 }
 
-function toNumber(value: unknown) {
-  const amount = Number(value ?? 0);
-  return Number.isFinite(amount) ? amount : 0;
-}
-
 function toIso(value: Date | null | undefined) {
   return value ? value.toISOString() : null;
 }
@@ -800,16 +795,17 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
   ]);
 
   const contextCache = new Map<string, Promise<Awaited<ReturnType<typeof getVoiceCustomerContext>>>>();
-  const getContextForPhone = (phone: string) => {
-    if (!contextCache.has(phone)) {
-      contextCache.set(phone, getVoiceCustomerContext(phone, { take: 5 }));
+  const getContextForPhone = (phone: string, includeChatrace = false) => {
+    const key = `${includeChatrace ? "live" : "local"}:${phone}`;
+    if (!contextCache.has(key)) {
+      contextCache.set(key, getVoiceCustomerContext(phone, { take: 5, includeChatrace }));
     }
-    return contextCache.get(phone)!;
+    return contextCache.get(key)!;
   };
 
   const activeCalls = await Promise.all(
     activeCallsRaw.map(async (call) => {
-      const context = await getContextForPhone(call.callerNumber);
+      const context = await getContextForPhone(call.callerNumber, false);
       const contextSummary = serializeCustomerContextSummary(context);
       const lastActivity = contextSummary.recentTimeline[0] ?? null;
       const displayStatus = normalizeCallDisplayStatus({
@@ -865,7 +861,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
 
   const recentCalls = await Promise.all(
     recentCallsRaw.map(async (call) => {
-      const context = await getContextForPhone(call.callerNumber);
+      const context = await getContextForPhone(call.callerNumber, false);
       const contextSummary = serializeCustomerContextSummary(context);
       const lastActivity = contextSummary.recentTimeline[0] ?? null;
       const displayStatus = normalizeCallDisplayStatus({
@@ -921,7 +917,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
 
   const followUps = await Promise.all(
     followUpsRaw.map(async (task) => {
-      const context = await getContextForPhone(task.phone);
+      const context = await getContextForPhone(task.phone, false);
       const contextSummary = serializeCustomerContextSummary(context);
       return {
         id: task.id,
@@ -961,7 +957,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     voiceLeadsRaw
       .filter((lead) => !taskLeadPhoneSet.has(lead.phone))
       .map(async (lead) => {
-        const context = await getContextForPhone(lead.phone);
+        const context = await getContextForPhone(lead.phone, false);
         const contextSummary = serializeCustomerContextSummary(context);
         return {
           id: lead.id,
@@ -1070,7 +1066,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
 
   const effectiveSelectedCall = selectedCall || fallbackSelectedCall;
   const selectedPhone = normalizedSelectedPhone || selectedCall?.callerNumber || fallbackSelectedCall?.callerNumber || followUps[0]?.phone || missedLeads[0]?.phone || null;
-  const selectedContext = selectedPhone ? serializeCustomerContextSummary(await getContextForPhone(selectedPhone)) : null;
+  const selectedContext = selectedPhone ? serializeCustomerContextSummary(await getContextForPhone(selectedPhone, true)) : null;
   const selectedCallDetail = effectiveSelectedCall
     ? await prisma.voiceCall.findUnique({
         where: { id: effectiveSelectedCall.id },
