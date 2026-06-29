@@ -88,9 +88,7 @@ export function buildWorkingHoursIvrXml(callbackUrl: string) {
   return `<?xml version="1.0" encoding="UTF-8"?>` +
     `<Response>` +
     `<Say voice="woman">${escapeVoiceXml(toSpeechText(BETECH_WORKING_HOURS_WELCOME_MESSAGE))}</Say>` +
-    `<GetDigits timeout="5" numDigits="1" callbackUrl="${escapeVoiceXml(callbackUrl)}">` +
-    `<Say voice="woman">${escapeVoiceXml(toSpeechText(BETECH_WORKING_HOURS_DIGITS_PROMPT))}</Say>` +
-    `</GetDigits>` +
+    `<GetDigits timeout="5" numDigits="1" callbackUrl="${escapeVoiceXml(callbackUrl)}"></GetDigits>` +
     `</Response>`;
 }
 

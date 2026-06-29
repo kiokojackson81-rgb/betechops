@@ -1,4 +1,5 @@
 import {
+  BETECH_WORKING_HOURS_DIGITS_PROMPT,
   type VoiceRoutePlan,
   buildVoiceRoutePlanFromPhoneNumbers,
   buildDialAttemptXml,
@@ -65,7 +66,7 @@ export async function POST(request: Request) {
 
   return xmlResponse(
     buildDialAttemptXml({
-      preDialMessage: null,
+      preDialMessage: digits === "1" ? BETECH_WORKING_HOURS_DIGITS_PROMPT : null,
       phoneNumber: currentHop.dialValue,
       redirectUrl:
         selectedRoutePlan.hops.length > 1
