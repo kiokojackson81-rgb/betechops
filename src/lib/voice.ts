@@ -431,10 +431,11 @@ export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerN
   const previousAgentTarget = await findPreviousAgentTarget(callerNumber, agentTargets);
   const stickyTarget = assignedLeadTarget ?? previousAgentTarget;
 
-  if (!stickyTarget && directFallbackTargets.length) {
+  if (!stickyTarget && !agentTargets.length && directFallbackTargets.length) {
     console.info("[voice.routing.direct_fallback]", {
       callerNumber,
       date: date.toISOString(),
+      reason: "no_agent_targets_configured",
       orderedTargets: directFallbackTargets.map((target) => ({
         label: target.label,
         phoneNumber: target.phoneNumber,
