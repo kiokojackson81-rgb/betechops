@@ -293,6 +293,85 @@ async function findAssignedLeadTarget(
   return agentTargets.find((target) => target.userId === assignedLead.assignedToId) ?? null;
 }
 
+async function findAssignedFollowUpTarget(
+  callerNumber: string | null,
+  agentTargets: VoiceRouteTarget[],
+): Promise<VoiceRouteTarget | null> {
+  if (!callerNumber) return null;
+  const phoneVariants = getKenyanPhoneVariants(callerNumber);
+  if (!phoneVariants.length) return null;
+
+  const agentUserIds = agentTargets.map((target) => target.userId).filter((value): value is string => Boolean(value));
+  if (!agentUserIds.length) return null;
+
+  const followUp = await prisma.voiceFollowUp.findFirst({
+    where: {
+      phone: { in: phoneVariants },
+      assignedToId: { in: agentUserIds },
+      status: { in: ["pending", "contacted", "open", "pending_follow_up"] },
+    },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+    select: {
+      assignedToId: true,
+    },
+  });
+
+  if (!followUp?.assignedToId) return null;
+  return agentTargets.find((target) => target.userId === followUp.assignedToId) ?? null;
+}
+
+async function findStickyOwnerTarget(
+  callerNumber: string | null,
+  agentTargets: VoiceRouteTarget[],
+): Promise<VoiceRouteTarget | null> {
+  if (!callerNumber) return null;
+  const phoneVariants = getKenyanPhoneVariants(callerNumber);
+  if (!phoneVariants.length) return null;
+
+  const agentUserIds = agentTargets.map((target) => target.userId).filter((value): value is string => Boolean(value));
+  if (!agentUserIds.length) return null;
+
+  const [followUp, lead, lastCall] = await Promise.all([
+    prisma.voiceFollowUp.findFirst({
+      where: {
+        phone: { in: phoneVariants },
+        assignedToId: { in: agentUserIds },
+        status: { in: ["pending", "contacted", "open", "pending_follow_up"] },
+      },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      select: { assignedToId: true, updatedAt: true, createdAt: true },
+    }),
+    prisma.voiceLead.findFirst({
+      where: {
+        phone: { in: phoneVariants },
+        assignedToId: { in: agentUserIds },
+      },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      select: { assignedToId: true, updatedAt: true, createdAt: true },
+    }),
+    prisma.voiceCall.findFirst({
+      where: {
+        direction: "INBOUND",
+        callerNumber: { in: phoneVariants },
+        assignedToId: { in: agentUserIds },
+      },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      select: { assignedToId: true, updatedAt: true, createdAt: true },
+    }),
+  ]);
+
+  const freshest = [followUp, lead, lastCall]
+    .filter((item): item is { assignedToId: string | null; updatedAt: Date; createdAt: Date } => Boolean(item?.assignedToId))
+    .sort((left, right) => {
+      const rightTime = right.updatedAt?.getTime?.() ?? right.createdAt.getTime();
+      const leftTime = left.updatedAt?.getTime?.() ?? left.createdAt.getTime();
+      return rightTime - leftTime;
+    })[0];
+
+  if (!freshest?.assignedToId) return null;
+  return agentTargets.find((target) => target.userId === freshest.assignedToId) ?? null;
+}
+
 async function findPreviousAgentTarget(
   callerNumber: string | null,
   agentTargets: VoiceRouteTarget[],
@@ -310,7 +389,7 @@ async function findPreviousAgentTarget(
       callerNumber: { in: phoneVariants },
       assignedToId: { in: agentUserIds },
     },
-    orderBy: [{ createdAt: "desc" }],
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
     select: {
       assignedToId: true,
     },
@@ -397,9 +476,11 @@ export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerN
     };
   }
 
+  const assignedFollowUpTarget = await findAssignedFollowUpTarget(callerNumber, agentTargets);
   const assignedLeadTarget = await findAssignedLeadTarget(callerNumber, agentTargets);
   const previousAgentTarget = await findPreviousAgentTarget(callerNumber, agentTargets);
-  const stickyTarget = assignedLeadTarget ?? previousAgentTarget;
+  const stickyOwnerTarget = await findStickyOwnerTarget(callerNumber, agentTargets);
+  const stickyTarget = stickyOwnerTarget ?? assignedFollowUpTarget ?? assignedLeadTarget ?? previousAgentTarget;
 
   if (!stickyTarget && !agentTargets.length && directFallbackTargets.length) {
     console.info("[voice.routing.direct_fallback]", {
@@ -435,7 +516,7 @@ export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerN
         preferredTarget: stickyTarget,
         agentTargets,
         adminTarget,
-        routeReason: assignedLeadTarget ? "assigned_owner" : "returning_customer",
+        routeReason: stickyOwnerTarget ? "assigned_owner" : "returning_customer",
         preferAdminFirst: false,
       })
     : buildWorkingHoursSelection({
@@ -462,7 +543,9 @@ export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerN
       routeType: "WORKING_HOURS",
       reason: selection.routeReason,
       callerNumber,
+      assignedFollowUpTarget: assignedFollowUpTarget?.label ?? null,
       assignedLeadTarget: assignedLeadTarget?.label ?? null,
+      stickyOwnerTarget: stickyOwnerTarget?.label ?? null,
       previousAgent: previousAgentTarget?.label ?? null,
       preferAdminFirst: false,
       roundRobinTarget: roundRobinTarget?.label ?? null,

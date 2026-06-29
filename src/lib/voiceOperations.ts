@@ -325,19 +325,29 @@ async function persistVoicePhoneAssignment(input: {
     data: { assignedToId: input.assignedToId },
   });
 
-  const existingLead = await prisma.voiceLead.findFirst({
+  const existingLeads = await prisma.voiceLead.findMany({
     where: { phone: { in: phoneVariants } },
     orderBy: [{ updatedAt: "desc" }],
+    select: {
+      id: true,
+      customerId: true,
+      lastCallAt: true,
+    },
   });
 
-  if (existingLead) {
-    return prisma.voiceLead.update({
-      where: { id: existingLead.id },
+  if (existingLeads.length) {
+    await prisma.voiceLead.updateMany({
+      where: { id: { in: existingLeads.map((lead) => lead.id) } },
       data: {
         assignedToId: input.assignedToId,
-        customerId: input.customerId ?? existingLead.customerId,
-        lastCallAt: input.lastCallAt ?? existingLead.lastCallAt,
+        ...(input.customerId ? { customerId: input.customerId } : {}),
+        ...(input.lastCallAt ? { lastCallAt: input.lastCallAt } : {}),
       },
+    });
+
+    const freshestLead = existingLeads[0];
+    return prisma.voiceLead.findUnique({
+      where: { id: freshestLead.id },
     });
   }
 
@@ -351,6 +361,19 @@ async function persistVoicePhoneAssignment(input: {
       lastCallAt: input.lastCallAt ?? new Date(),
     },
   });
+}
+
+function getManualReassignmentPhone(call: {
+  callerNumber?: string | null;
+  destinationNumber?: string | null;
+}) {
+  const externalPhone = getExternalVoicePhoneForCall(call);
+  if (externalPhone) return externalPhone;
+  return (
+    normalizeKenyanPhone(String(call.callerNumber || "").trim()) ||
+    normalizeKenyanPhone(String(call.destinationNumber || "").trim()) ||
+    null
+  );
 }
 
 type RoutingAgentDefinition = {
@@ -1346,10 +1369,10 @@ export async function reassignVoiceWork(input: {
         startedAt: true,
       },
     });
-    const externalPhone = callContext ? getExternalVoicePhoneForCall(callContext) : null;
-    if (externalPhone) {
+    const assignmentPhone = callContext ? getManualReassignmentPhone(callContext) : null;
+    if (assignmentPhone) {
       await persistVoicePhoneAssignment({
-        phone: externalPhone,
+        phone: assignmentPhone,
         assignedToId: input.assignedToId,
         customerId: callContext?.customerId ?? null,
         lastCallAt: callContext?.startedAt ?? null,
