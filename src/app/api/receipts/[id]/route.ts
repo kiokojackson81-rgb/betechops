@@ -41,11 +41,22 @@ async function createManualReceiptProduct(
   const id = `manual_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   const sku = `manual-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
   const columns = ["id", capabilities.skuColumn, capabilities.nameColumn, capabilities.categoryColumn, capabilities.priceColumn];
-  const values: Array<string | number | boolean> = [id, sku, input.title, "manual", input.unitPrice];
+  const values: Array<string | number | boolean | Date> = [id, sku, input.title, "manual", input.unitPrice];
+  const now = new Date();
 
   if (capabilities.activeColumn) {
     columns.push(capabilities.activeColumn);
     values.push(true);
+  }
+
+  if (capabilities.available.has("createdAt")) {
+    columns.push("createdAt");
+    values.push(now);
+  }
+
+  if (capabilities.available.has("updatedAt")) {
+    columns.push("updatedAt");
+    values.push(now);
   }
 
   const placeholders = values.map((_, index) => `$${index + 1}`).join(", ");
