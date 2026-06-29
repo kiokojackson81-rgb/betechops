@@ -363,8 +363,11 @@ export default function BrowserPhone() {
   );
 
   return (
-    <div className={`fixed bottom-3 right-3 sm:bottom-6 sm:right-6 ${drawerOpen ? "z-[30]" : "z-[40]"}`}>
-      <div className="relative flex flex-col items-end gap-3">
+    <div
+      className={`pointer-events-none fixed bottom-3 right-3 sm:bottom-6 sm:right-6 ${drawerOpen ? "z-[30]" : "z-[40]"}`}
+      aria-hidden={false}
+    >
+      <div className="pointer-events-auto relative flex flex-col items-end gap-3">
       {!softphone.isCollapsed ? (
           <div className="max-h-[calc(100vh-80px)] w-[calc(100vw-24px)] max-w-[420px] overflow-y-auto overflow-x-hidden rounded-[24px] border border-slate-800/90 bg-slate-950/98 shadow-[0_18px_54px_rgba(0,0,0,0.42)] sm:max-h-[calc(100vh-120px)] sm:w-[min(420px,calc(100vw-32px))]">
             <div className="flex items-start justify-between gap-3 border-b border-slate-800 px-4 py-4">
