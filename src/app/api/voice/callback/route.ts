@@ -173,10 +173,12 @@ export async function POST(request: Request) {
     });
     await syncVoiceCallAutomation({
       id: voiceCall.id,
+      direction: voiceCall.direction,
       callerNumber: voiceCall.callerNumber,
       destinationNumber: voiceCall.destinationNumber,
       status: status,
       startedAt: voiceCall.startedAt,
+      endedAt: voiceCall.endedAt,
       assignedToId: voiceCall.assignedToId,
       durationInSeconds: voiceCall.durationInSeconds,
     });

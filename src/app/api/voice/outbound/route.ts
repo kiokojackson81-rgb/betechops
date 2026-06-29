@@ -6,7 +6,6 @@ import {
   syncVoiceCallAutomation,
   upsertVoiceCallFromPayload,
 } from "@/lib/voice";
-import { maybeSendCallFeedbackSms } from "@/lib/feedbackSms";
 
 export const dynamic = "force-dynamic";
 
@@ -68,15 +67,14 @@ export async function POST(request: Request) {
     });
     await syncVoiceCallAutomation({
       id: voiceCall.id,
+      direction: voiceCall.direction,
       callerNumber: voiceCall.callerNumber,
       destinationNumber: voiceCall.destinationNumber,
       status: voiceCall.status,
       startedAt: voiceCall.startedAt,
+      endedAt: voiceCall.endedAt,
       assignedToId: voiceCall.assignedToId,
       durationInSeconds: voiceCall.durationInSeconds,
-    });
-    await maybeSendCallFeedbackSms(voiceCall).catch((smsError) => {
-      console.warn("[voice.outbound.feedback_sms_skipped]", smsError instanceof Error ? smsError.message : smsError);
     });
 
     return NextResponse.json({

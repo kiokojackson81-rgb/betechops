@@ -1555,6 +1555,7 @@ model VoiceCall {
   callNotes         VoiceCallNote[]
   followUps         VoiceFollowUp[]
   feedbackSessions  VoiceCallFeedback[]
+  smsNotifications  VoiceSmsNotificationLog[]
   presenceAssignments VoiceAgentPresence[] @relation("VoicePresenceCurrentCall")
 
   @@index([status, createdAt])
@@ -1691,6 +1692,41 @@ model CallFeedbackSmsLog {
   @@index([phone])
   @@index([sentAt])
   @@index([phone, sentAt])
+}
+
+enum VoiceSmsNotificationType {
+  MISSED_CALL_SMS
+  CALL_FEEDBACK_SMS
+}
+
+enum VoiceSmsNotificationStatus {
+  PROCESSING
+  SENT
+  FAILED
+  SKIPPED_DUPLICATE
+}
+
+model VoiceSmsNotificationLog {
+  id                    String                     @id @default(cuid())
+  phoneNumber           String
+  normalizedPhoneNumber String
+  notificationType      VoiceSmsNotificationType
+  voiceCallId           String?
+  messageBody           String
+  provider              String
+  providerMessageId     String?
+  status                VoiceSmsNotificationStatus
+  reason                String?
+  dayKey                String
+  sentAt                DateTime?
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+  voiceCall             VoiceCall?                 @relation(fields: [voiceCallId], references: [id], onDelete: SetNull)
+
+  @@index([normalizedPhoneNumber, notificationType, dayKey])
+  @@index([voiceCallId, notificationType])
+  @@index([status, createdAt])
+  @@unique([voiceCallId, notificationType])
 }
 
 model VoiceCallFeedback {

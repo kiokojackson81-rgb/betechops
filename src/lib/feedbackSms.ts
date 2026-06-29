@@ -1,11 +1,11 @@
 import type { VoiceCall } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { sendTransactionalSms } from "@/lib/africasTalking";
 import {
   ensureVoiceCallFeedbackSession,
   getFeedbackPublicUrl,
   normalizeFeedbackPhone,
 } from "@/lib/callFeedback";
+import { isInternalVoicePhone, sendVoiceSmsOncePerDay } from "@/lib/voiceSmsNotifications";
 
 const SUCCESS_STATUSES = new Set(["success", "successful", "completed", "complete", "answered"]);
 const INBOUND_ANSWERED_STATUSES = new Set(["answered"]);
@@ -29,8 +29,13 @@ export async function maybeSendCallFeedbackSms(
     "id" | "direction" | "callerNumber" | "destinationNumber" | "status" | "durationInSeconds" | "assignedToId" | "startedAt" | "endedAt"
   >,
 ) {
-  const normalizedPhone = normalizeFeedbackPhone(call.callerNumber || call.destinationNumber || "");
+  const targetPhone =
+    String(call.direction || "").trim().toUpperCase() === "OUTBOUND"
+      ? call.destinationNumber || call.callerNumber || ""
+      : call.callerNumber || call.destinationNumber || "";
+  const normalizedPhone = normalizeFeedbackPhone(targetPhone);
   if (!normalizedPhone) return { sent: false, reason: "missing_phone" } as const;
+  if (isInternalVoicePhone(normalizedPhone)) return { sent: false, reason: "internal_phone" } as const;
   if (!isSuccessfulFeedbackCall(call)) return { sent: false, reason: "call_not_eligible" } as const;
 
   const session =
@@ -53,7 +58,18 @@ export async function maybeSendCallFeedbackSms(
   const feedbackUrl = getFeedbackPublicUrl(session.token);
   const message = `Thank you for calling Betech Solar Solutions. We value your feedback. Please share your experience with us here: ${feedbackUrl}`;
 
-  await sendTransactionalSms(normalizedPhone, message);
+  const sendResult = await sendVoiceSmsOncePerDay({
+    phoneNumber: targetPhone,
+    normalizedPhoneNumber: normalizedPhone,
+    notificationType: "CALL_FEEDBACK_SMS",
+    voiceCallId: call.id,
+    messageBody: message,
+  });
+
+  if (!sendResult.sent) {
+    return sendResult;
+  }
+
   await prisma.voiceCallFeedback.update({
     where: { id: session.id },
     data: {
@@ -62,5 +78,10 @@ export async function maybeSendCallFeedbackSms(
     },
   });
 
-  return { sent: true, reason: "sent", token: session.token } as const;
+  return {
+    sent: true,
+    reason: "sent",
+    token: session.token,
+    providerMessageId: sendResult.providerMessageId,
+  } as const;
 }

@@ -6,6 +6,8 @@ import { publishVoiceLiveEvent } from "@/lib/voiceLiveEvents";
 import { buildVoiceWebrtcIdentity } from "@/lib/voiceOperations";
 import { toSpeechText } from "@/lib/voiceSpeech";
 import { isVoiceWebrtcClientReady } from "@/lib/voiceWebrtc/registry";
+import { maybeSendCallFeedbackSms } from "@/lib/feedbackSms";
+import { maybeSendMissedCallSms } from "@/lib/voiceSmsNotifications";
 
 const NAIROBI_TIMEZONE = "Africa/Nairobi";
 
@@ -730,10 +732,12 @@ async function closeVoiceCallbackWorkForAnsweredCall(call: {
 
 export async function syncVoiceCallAutomation(input: {
   id: string;
+  direction: string;
   callerNumber: string;
   destinationNumber?: string | null;
   status: string;
   startedAt?: Date | null;
+  endedAt?: Date | null;
   assignedToId?: string | null;
   durationInSeconds?: number | null;
 }) {
@@ -772,6 +776,18 @@ export async function syncVoiceCallAutomation(input: {
       }
     }
 
+    await maybeSendMissedCallSms({
+      id: input.id,
+      direction: input.direction,
+      callerNumber: input.callerNumber,
+      destinationNumber: input.destinationNumber ?? null,
+      status: normalizedStatus,
+      durationInSeconds: input.durationInSeconds ?? null,
+      startedAt: input.startedAt ?? null,
+    }).catch((smsError) => {
+      console.warn("[voice.sms.missed_call_skipped]", smsError instanceof Error ? smsError.message : smsError);
+    });
+
     return;
   }
 
@@ -782,6 +798,20 @@ export async function syncVoiceCallAutomation(input: {
     assignedToId: input.assignedToId,
     status: normalizedStatus,
     durationInSeconds: input.durationInSeconds,
+  });
+
+  await maybeSendCallFeedbackSms({
+    id: input.id,
+    direction: input.direction,
+    callerNumber: input.callerNumber,
+    destinationNumber: input.destinationNumber ?? null,
+    status: normalizedStatus,
+    durationInSeconds: input.durationInSeconds ?? null,
+    assignedToId: input.assignedToId ?? null,
+    startedAt: input.startedAt ?? null,
+    endedAt: input.endedAt ?? null,
+  }).catch((smsError) => {
+    console.warn("[voice.sms.feedback_skipped]", smsError instanceof Error ? smsError.message : smsError);
   });
 }
 
@@ -913,6 +943,10 @@ function shouldCreateMissedLead(status: string) {
     "unanswered",
     "not_answered",
     "not answered",
+    "aborted",
+    "cancelled",
+    "canceled",
+    "disconnected",
   ].includes(normalized);
 }
 
