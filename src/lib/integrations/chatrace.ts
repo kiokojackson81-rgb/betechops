@@ -6,6 +6,7 @@ const BASE_URL = (process.env.CHATRACE_BASE_URL || '').replace(/\/$/, '');
 const API_TOKEN = process.env.CHATRACE_API_TOKEN;
 const ACCOUNT_ID = process.env.CHATRACE_ACCOUNT_ID;
 const CHATRACE_LOOKUP_CACHE_TTL_MS = 90_000;
+const CHATRACE_LOOKUP_RATE_LIMIT_TTL_MS = 30_000;
 
 export type ChatraceCustomFieldSummary = {
   name: string;
@@ -493,9 +494,9 @@ function readChatraceLookupCache(phone: string) {
   return cached.value;
 }
 
-function writeChatraceLookupCache(phone: string, value: ChatraceLookupResult) {
+function writeChatraceLookupCache(phone: string, value: ChatraceLookupResult, ttlMs = CHATRACE_LOOKUP_CACHE_TTL_MS) {
   chatraceLookupCache.set(buildChatraceLookupCacheKey(phone), {
-    expiresAt: Date.now() + CHATRACE_LOOKUP_CACHE_TTL_MS,
+    expiresAt: Date.now() + ttlMs,
     value,
   });
 }
@@ -751,6 +752,17 @@ export async function lookupChatraceContactByPhone(rawPhone: string | null | und
       const path = `/contacts/find_by_custom_field?field_id=phone&value=${encodeURIComponent(candidate)}`;
       const response = await runChatraceLookupRequest(path);
       if (!response.ok) {
+        if (response.status === 429) {
+          const result = { ...baseResult, sourceError: true };
+          console.error("[chatrace.lookup.rate_limited]", {
+            phone: normalizedPhone,
+            candidate,
+            status: response.status,
+            bodySnippet: snippet(response.raw, 400),
+          });
+          writeChatraceLookupCache(normalizedPhone, result, CHATRACE_LOOKUP_RATE_LIMIT_TTL_MS);
+          return result;
+        }
         console.error("[chatrace.lookup.find.failed]", {
           phone: normalizedPhone,
           candidate,
@@ -779,6 +791,20 @@ export async function lookupChatraceContactByPhone(rawPhone: string | null | und
         if (detailContact && typeof detailContact === "object") {
           foundContact = detailContact as Record<string, unknown>;
         }
+      } else if (detailResponse.status === 429) {
+        console.error("[chatrace.lookup.contact.rate_limited]", {
+          phone: normalizedPhone,
+          contactId,
+          status: detailResponse.status,
+          bodySnippet: snippet(detailResponse.raw, 400),
+        });
+        const result = mapChatraceContactToLookup({
+          contact: foundContact,
+          normalizedPhone,
+          config,
+        });
+        writeChatraceLookupCache(normalizedPhone, result, CHATRACE_LOOKUP_RATE_LIMIT_TTL_MS);
+        return result;
       } else {
         console.error("[chatrace.lookup.contact.failed]", {
           phone: normalizedPhone,

@@ -35,6 +35,14 @@ const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" | null => {
 export const dynamic = "force-dynamic";
 
 const IMMEDIATE_THRESHOLD = Number(process.env.IMMEDIATE_COMMISSION_THRESHOLD || 500000);
+const RECEIPT_PRODUCT_SELECT = {
+  id: true,
+  lastBuyingPrice: true,
+  variableCost: true,
+  commissionEnabled: true,
+  commissionAmount: true,
+  commissionRequiresApproval: true,
+} satisfies Prisma.ProductSelect;
 
 export async function GET(req: NextRequest) {
   try {
@@ -984,8 +992,14 @@ export async function POST(req: NextRequest) {
         const title = fullTitle.slice(0, 255);
         const selectedProductId = typeof it.productId === "string" ? it.productId.trim() : "";
         let product = selectedProductId
-          ? await tx.product.findUnique({ where: { id: selectedProductId } })
-          : await tx.product.findFirst({ where: { name: title } });
+          ? await tx.product.findUnique({
+              where: { id: selectedProductId },
+              select: RECEIPT_PRODUCT_SELECT,
+            })
+          : await tx.product.findFirst({
+              where: { name: title },
+              select: RECEIPT_PRODUCT_SELECT,
+            });
         if (!product) {
           product = await tx.product.create({
             data: {
