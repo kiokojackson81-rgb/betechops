@@ -22,6 +22,7 @@ export const BETECH_WORKING_HOURS_WELCOME_MESSAGE = [
 
 export const BETECH_WORKING_HOURS_DIGITS_PROMPT =
   "Please hold while we connect your call.";
+const BETECH_WORKING_HOURS_GET_DIGITS_FILLER = "\u200B";
 
 export const BETECH_AFTER_HOURS_WELCOME_MESSAGE = [
   "Welcome to Betech Solar Solutions.",
@@ -88,7 +89,9 @@ export function buildWorkingHoursIvrXml(callbackUrl: string) {
   return `<?xml version="1.0" encoding="UTF-8"?>` +
     `<Response>` +
     `<Say voice="woman">${escapeVoiceXml(toSpeechText(BETECH_WORKING_HOURS_WELCOME_MESSAGE))}</Say>` +
-    `<GetDigits timeout="5" numDigits="1" callbackUrl="${escapeVoiceXml(callbackUrl)}"></GetDigits>` +
+    `<GetDigits timeout="5" numDigits="1" callbackUrl="${escapeVoiceXml(callbackUrl)}">` +
+    `<Say voice="woman">${BETECH_WORKING_HOURS_GET_DIGITS_FILLER}</Say>` +
+    `</GetDigits>` +
     `</Response>`;
 }
 
