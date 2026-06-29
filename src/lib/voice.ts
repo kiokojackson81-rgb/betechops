@@ -320,36 +320,6 @@ async function findPreviousAgentTarget(
   return agentTargets.find((target) => target.userId === lastCall.assignedToId) ?? null;
 }
 
-async function callerPrefersAdminFirst(
-  callerNumber: string | null,
-  agentTargets: VoiceRouteTarget[],
-) {
-  if (!callerNumber) return false;
-  const phoneVariants = getKenyanPhoneVariants(callerNumber);
-  if (!phoneVariants.length) return false;
-
-  const agentUserIds = agentTargets.map((target) => target.userId).filter((value): value is string => Boolean(value));
-  if (!agentUserIds.length) return false;
-
-  const lastTechnicalRouting = await prisma.voiceCall.findFirst({
-    where: {
-      direction: "INBOUND",
-      callerNumber: { in: phoneVariants },
-      assignedToId: { in: agentUserIds },
-      OR: [
-        { routeType: "TECHNICAL_TEAM" },
-        { menuOption: "1" },
-      ],
-    },
-    orderBy: [{ createdAt: "desc" }],
-    select: {
-      id: true,
-    },
-  });
-
-  return Boolean(lastTechnicalRouting);
-}
-
 async function findRoundRobinTarget(agentTargets: VoiceRouteTarget[]) {
   const agentUserIds = agentTargets.map((target) => target.userId).filter((value): value is string => Boolean(value));
   if (!agentUserIds.length) return agentTargets[0] ?? null;
@@ -459,7 +429,6 @@ export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerN
     };
   }
 
-  const preferAdminFirst = stickyTarget ? await callerPrefersAdminFirst(callerNumber, agentTargets) : false;
   const roundRobinTarget = stickyTarget ? null : await findRoundRobinTarget(agentTargets);
   const selection = stickyTarget
     ? buildWorkingHoursSelection({
@@ -467,7 +436,7 @@ export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerN
         agentTargets,
         adminTarget,
         routeReason: assignedLeadTarget ? "assigned_owner" : "returning_customer",
-        preferAdminFirst,
+        preferAdminFirst: false,
       })
     : buildWorkingHoursSelection({
         preferredTarget: roundRobinTarget,
@@ -495,7 +464,7 @@ export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerN
       callerNumber,
       assignedLeadTarget: assignedLeadTarget?.label ?? null,
       previousAgent: previousAgentTarget?.label ?? null,
-      preferAdminFirst,
+      preferAdminFirst: false,
       roundRobinTarget: roundRobinTarget?.label ?? null,
       primaryTarget: primaryTarget?.label ?? null,
       orderedTargets: orderedTargets.map((target) => target.label),

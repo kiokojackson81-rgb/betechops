@@ -21,7 +21,7 @@ export const BETECH_WORKING_HOURS_WELCOME_MESSAGE = [
 ].join(" ");
 
 export const BETECH_WORKING_HOURS_DIGITS_PROMPT =
-  "Press 1 to speak to our technician. Otherwise, please hold as we connect your call.";
+  "Please hold while we connect your call.";
 
 export const BETECH_AFTER_HOURS_WELCOME_MESSAGE = [
   "Welcome to Betech Solar Solutions.",
