@@ -221,10 +221,7 @@ async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], Vo
       if (!webRtcRegistration?.identity) skipReasons.push("missing_browser_identity");
       if (!webRtcRegistration) skipReasons.push("browser_not_registered");
     }
-    const shouldUseWebrtc = isVoiceWebrtcEnabled() && Boolean(webRtcRegistration?.identity) && isAvailable;
-    const dialValues = shouldUseWebrtc
-      ? [String(webRtcRegistration?.identity || ""), phoneNumber].filter(Boolean)
-      : [phoneNumber].filter(Boolean);
+    const dialValues = [phoneNumber].filter(Boolean);
 
     const target = {
       label,
