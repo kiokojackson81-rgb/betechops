@@ -129,6 +129,9 @@ function getCallQueueReasonLabel(call: {
   if (routeReason === "returning_customer") {
     return "Returning customer";
   }
+  if (routeReason === "assigned_owner") {
+    return "Assigned owner";
+  }
   if (routeReason === "round_robin") {
     return "New caller";
   }
@@ -283,6 +286,76 @@ function buildVoiceHref(path: string, impersonateId?: string | null) {
   const url = new URL(`https://voice.local${path}`);
   if (impersonateId) url.searchParams.set("impersonateId", impersonateId);
   return `${url.pathname}${url.searchParams.toString() ? `?${url.searchParams.toString()}` : ""}`;
+}
+
+function getVoiceInternalNumberSet() {
+  return new Set(
+    [
+      process.env.BETECH_VOICE_BRENDAH_NUMBER,
+      process.env.BETECH_VOICE_JENNIFER_NUMBER,
+      process.env.BETECH_VOICE_ADMIN_NUMBER,
+      process.env.ADMIN_PHONE,
+    ]
+      .map((value) => normalizeKenyanPhone(String(value || "").trim()))
+      .filter(Boolean),
+  );
+}
+
+function getExternalVoicePhoneForCall(call: {
+  callerNumber?: string | null;
+  destinationNumber?: string | null;
+}) {
+  const internalNumbers = getVoiceInternalNumberSet();
+  const candidates = [call.callerNumber, call.destinationNumber]
+    .map((value) => normalizeKenyanPhone(String(value || "").trim()))
+    .filter(Boolean)
+    .filter((value) => !internalNumbers.has(value));
+  return candidates[0] ?? null;
+}
+
+async function persistVoicePhoneAssignment(input: {
+  phone: string;
+  assignedToId: string;
+  customerId?: string | null;
+  lastCallAt?: Date | null;
+}) {
+  const phoneVariants = getKenyanPhoneVariants(input.phone);
+  if (!phoneVariants.length) return null;
+
+  await prisma.voiceFollowUp.updateMany({
+    where: {
+      phone: { in: phoneVariants },
+      status: { in: ["pending", "contacted", "open", "pending_follow_up"] },
+    },
+    data: { assignedToId: input.assignedToId },
+  });
+
+  const existingLead = await prisma.voiceLead.findFirst({
+    where: { phone: { in: phoneVariants } },
+    orderBy: [{ updatedAt: "desc" }],
+  });
+
+  if (existingLead) {
+    return prisma.voiceLead.update({
+      where: { id: existingLead.id },
+      data: {
+        assignedToId: input.assignedToId,
+        customerId: input.customerId ?? existingLead.customerId,
+        lastCallAt: input.lastCallAt ?? existingLead.lastCallAt,
+      },
+    });
+  }
+
+  return prisma.voiceLead.create({
+    data: {
+      phone: input.phone,
+      source: "VOICE_INBOUND_CALL",
+      status: "contacted",
+      assignedToId: input.assignedToId,
+      customerId: input.customerId ?? null,
+      lastCallAt: input.lastCallAt ?? new Date(),
+    },
+  });
 }
 
 type RoutingAgentDefinition = {
@@ -1268,6 +1341,25 @@ export async function reassignVoiceWork(input: {
       data: { assignedToId: input.assignedToId },
     });
 
+    const callContext = await prisma.voiceCall.findUnique({
+      where: { id: input.callId },
+      select: {
+        callerNumber: true,
+        destinationNumber: true,
+        customerId: true,
+        startedAt: true,
+      },
+    });
+    const externalPhone = callContext ? getExternalVoicePhoneForCall(callContext) : null;
+    if (externalPhone) {
+      await persistVoicePhoneAssignment({
+        phone: externalPhone,
+        assignedToId: input.assignedToId,
+        customerId: callContext?.customerId ?? null,
+        lastCallAt: callContext?.startedAt ?? null,
+      });
+    }
+
     publishVoiceLiveEvent({
       type: "queue",
       reason: "voice_call_reassigned",
@@ -1282,6 +1374,13 @@ export async function reassignVoiceWork(input: {
       where: { id: input.queueId },
       data: { assignedToId: input.assignedToId },
     });
+    const normalizedPhone = normalizeKenyanPhone(followUp.phone);
+    if (normalizedPhone) {
+      await persistVoicePhoneAssignment({
+        phone: normalizedPhone,
+        assignedToId: input.assignedToId,
+      });
+    }
     publishVoiceLiveEvent({
       type: "queue",
       reason: "voice_task_reassigned",
@@ -1294,6 +1393,13 @@ export async function reassignVoiceWork(input: {
   if (input.queueId && input.queueType === "lead") {
     const lead = await prisma.voiceLead.update({
       where: { id: input.queueId },
+      data: { assignedToId: input.assignedToId },
+    });
+    await prisma.voiceFollowUp.updateMany({
+      where: {
+        OR: [{ voiceLeadId: lead.id }, { phone: lead.phone }],
+        status: { in: ["pending", "contacted", "open", "pending_follow_up"] },
+      },
       data: { assignedToId: input.assignedToId },
     });
     publishVoiceLiveEvent({

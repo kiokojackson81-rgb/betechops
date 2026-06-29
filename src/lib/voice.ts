@@ -267,8 +267,34 @@ async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], Vo
 type VoiceRouteSelection = {
   preferredTarget: VoiceRouteTarget | null;
   orderedTargets: VoiceRouteTarget[];
-  routeReason: "after_hours" | "returning_customer" | "round_robin" | "admin_only";
+  routeReason: "after_hours" | "returning_customer" | "round_robin" | "admin_only" | "assigned_owner";
 };
+
+async function findAssignedLeadTarget(
+  callerNumber: string | null,
+  agentTargets: VoiceRouteTarget[],
+): Promise<VoiceRouteTarget | null> {
+  if (!callerNumber) return null;
+  const phoneVariants = getKenyanPhoneVariants(callerNumber);
+  if (!phoneVariants.length) return null;
+
+  const agentUserIds = agentTargets.map((target) => target.userId).filter((value): value is string => Boolean(value));
+  if (!agentUserIds.length) return null;
+
+  const assignedLead = await prisma.voiceLead.findFirst({
+    where: {
+      phone: { in: phoneVariants },
+      assignedToId: { in: agentUserIds },
+    },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+    select: {
+      assignedToId: true,
+    },
+  });
+
+  if (!assignedLead?.assignedToId) return null;
+  return agentTargets.find((target) => target.userId === assignedLead.assignedToId) ?? null;
+}
 
 async function findPreviousAgentTarget(
   callerNumber: string | null,
@@ -388,7 +414,27 @@ export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerN
   const adminTarget = targets.ADMIN;
   const directFallbackTargets = [adminTarget].filter((target) => target.phoneNumber);
 
-  if (directFallbackTargets.length) {
+  if (!isWithinVoiceWorkingHours(date)) {
+    const fallbackTargets = [adminTarget].filter((target) => target.phoneNumber && target.isAvailable);
+    const orderedTargets = fallbackTargets.length ? fallbackTargets : [adminTarget].filter((target) => target.phoneNumber);
+    return {
+      routeType: "AFTER_HOURS",
+      orderedTargets,
+      primaryTarget: orderedTargets[0] ?? null,
+      availableTargets: orderedTargets.filter((target) => target.isAvailable),
+      unavailableTargets: allConfiguredTargets.filter((target) => !orderedTargets.includes(target)),
+      hasAvailableTarget: orderedTargets.some((target) => target.isAvailable),
+      hasRoutableTarget: orderedTargets.length > 0,
+      usedMobileFallback: false,
+      routeReason: "after_hours" as const,
+    };
+  }
+
+  const assignedLeadTarget = await findAssignedLeadTarget(callerNumber, agentTargets);
+  const previousAgentTarget = await findPreviousAgentTarget(callerNumber, agentTargets);
+  const stickyTarget = assignedLeadTarget ?? previousAgentTarget;
+
+  if (!stickyTarget && directFallbackTargets.length) {
     console.info("[voice.routing.direct_fallback]", {
       callerNumber,
       date: date.toISOString(),
@@ -415,31 +461,14 @@ export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerN
     };
   }
 
-  if (!isWithinVoiceWorkingHours(date)) {
-    const fallbackTargets = [adminTarget].filter((target) => target.phoneNumber && target.isAvailable);
-    const orderedTargets = fallbackTargets.length ? fallbackTargets : [adminTarget].filter((target) => target.phoneNumber);
-    return {
-      routeType: "AFTER_HOURS",
-      orderedTargets,
-      primaryTarget: orderedTargets[0] ?? null,
-      availableTargets: orderedTargets.filter((target) => target.isAvailable),
-      unavailableTargets: allConfiguredTargets.filter((target) => !orderedTargets.includes(target)),
-      hasAvailableTarget: orderedTargets.some((target) => target.isAvailable),
-      hasRoutableTarget: orderedTargets.length > 0,
-      usedMobileFallback: false,
-      routeReason: "after_hours" as const,
-    };
-  }
-
-  const previousAgentTarget = await findPreviousAgentTarget(callerNumber, agentTargets);
-  const preferAdminFirst = await callerPrefersAdminFirst(callerNumber, agentTargets);
-  const roundRobinTarget = previousAgentTarget ? null : await findRoundRobinTarget(agentTargets);
-  const selection = previousAgentTarget
+  const preferAdminFirst = stickyTarget ? await callerPrefersAdminFirst(callerNumber, agentTargets) : false;
+  const roundRobinTarget = stickyTarget ? null : await findRoundRobinTarget(agentTargets);
+  const selection = stickyTarget
     ? buildWorkingHoursSelection({
-        preferredTarget: previousAgentTarget,
+        preferredTarget: stickyTarget,
         agentTargets,
         adminTarget,
-        routeReason: "returning_customer",
+        routeReason: assignedLeadTarget ? "assigned_owner" : "returning_customer",
         preferAdminFirst,
       })
     : buildWorkingHoursSelection({
@@ -466,6 +495,7 @@ export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerN
       routeType: "WORKING_HOURS",
       reason: selection.routeReason,
       callerNumber,
+      assignedLeadTarget: assignedLeadTarget?.label ?? null,
       previousAgent: previousAgentTarget?.label ?? null,
       preferAdminFirst,
       roundRobinTarget: roundRobinTarget?.label ?? null,
@@ -963,10 +993,24 @@ export async function createOrUpdateMissedVoiceLead(call: {
   const customerLink = phone ? await resolveVoiceCustomerLinkByPhone(phone) : null;
   const customerId = customerLink?.matchedCustomer?.id ?? null;
   const callerName = customerLink?.matchedCustomer?.name ?? null;
+  const routingUsers = await resolveRoutingUsers();
+  const routingTargets = await buildVoiceTargets();
   const existing = await prisma.voiceLead.findFirst({
     where: { phone, status: { in: ["open", "pending_follow_up"] } },
     orderBy: { updatedAt: "desc" },
   });
+
+  const candidateTargets = Object.values(routingTargets).filter(
+    (target) => target.label !== "ADMIN" && target.userId,
+  );
+  const nonAdminAssignedToId =
+    call.assignedToId && call.assignedToId !== routingUsers.ADMIN ? call.assignedToId : null;
+  const currentOwnerTarget =
+    nonAdminAssignedToId
+      ? candidateTargets.find((target) => target.userId === nonAdminAssignedToId) ?? null
+      : await findAssignedLeadTarget(phone, candidateTargets);
+  const roundRobinTarget = currentOwnerTarget ? null : await findRoundRobinTarget(candidateTargets);
+  const leadOwnerId = currentOwnerTarget?.userId ?? roundRobinTarget?.userId ?? existing?.assignedToId ?? null;
 
   if (existing) {
     const lead = await prisma.voiceLead.update({
@@ -975,7 +1019,7 @@ export async function createOrUpdateMissedVoiceLead(call: {
         name: callerName ?? existing.name,
         source: "VOICE_MISSED_CALL",
         status: "pending_follow_up",
-        assignedToId: call.assignedToId ?? existing.assignedToId,
+        assignedToId: leadOwnerId,
         customerId: customerId ?? existing.customerId,
         lastCallAt: call.startedAt ?? new Date(),
       },
@@ -994,7 +1038,7 @@ export async function createOrUpdateMissedVoiceLead(call: {
       name: callerName,
       source: "VOICE_MISSED_CALL",
       status: "pending_follow_up",
-      assignedToId: call.assignedToId ?? null,
+      assignedToId: leadOwnerId,
       customerId,
       lastCallAt: call.startedAt ?? new Date(),
     },
