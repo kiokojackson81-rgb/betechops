@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PaymentMethod } from "@prisma/client";
+import { PaymentMethod, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { waitForReceiptById } from "@/lib/receiptReadAfterWrite";
 import { requireRole } from "@/lib/api";
@@ -18,10 +18,60 @@ import {
 import { getShopProductHref } from "@/app/shop/storefrontPaths";
 import { getOpsCatalogueProductMappedById } from "@/app/shop/shopProductMapper";
 import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
+import { getProductTableCapabilities, type ProductTableCapabilities } from "@/lib/productTableCapabilities";
 import { WebsiteOrderStatus } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 const SHOP_BASE_URL = "https://www.betech.co.ke";
+
+type ReceiptProductSnapshot = {
+  id: string;
+  lastBuyingPrice: number | null;
+  variableCost: boolean;
+  commissionEnabled: boolean;
+  commissionAmount: Prisma.Decimal | null;
+  commissionRequiresApproval: boolean;
+};
+
+async function createManualReceiptProduct(
+  tx: Prisma.TransactionClient,
+  capabilities: ProductTableCapabilities,
+  input: { title: string; unitPrice: number },
+): Promise<ReceiptProductSnapshot> {
+  const id = `manual_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  const sku = `manual-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  const columns = ["id", capabilities.skuColumn, capabilities.nameColumn, capabilities.categoryColumn, capabilities.priceColumn];
+  const values: Array<string | number | boolean> = [id, sku, input.title, "manual", input.unitPrice];
+
+  if (capabilities.activeColumn) {
+    columns.push(capabilities.activeColumn);
+    values.push(true);
+  }
+
+  const placeholders = values.map((_, index) => `$${index + 1}`).join(", ");
+  const columnsSql = columns.map((column) => `"${column}"`).join(", ");
+  const returningSql = [
+    `"id"`,
+    capabilities.available.has("lastBuyingPrice") ? `"lastBuyingPrice"` : `0::double precision AS "lastBuyingPrice"`,
+    capabilities.available.has("variableCost") ? `"variableCost"` : `FALSE AS "variableCost"`,
+    capabilities.available.has("commissionEnabled") ? `"commissionEnabled"` : `FALSE AS "commissionEnabled"`,
+    capabilities.available.has("commissionAmount") ? `"commissionAmount"` : `0::numeric AS "commissionAmount"`,
+    capabilities.available.has("commissionRequiresApproval")
+      ? `"commissionRequiresApproval"`
+      : `FALSE AS "commissionRequiresApproval"`,
+  ].join(", ");
+
+  const rows = await tx.$queryRawUnsafe<ReceiptProductSnapshot[]>(
+    `INSERT INTO "Product" (${columnsSql}) VALUES (${placeholders}) RETURNING ${returningSql}`,
+    ...values,
+  );
+
+  const created = rows[0];
+  if (!created) {
+    throw new Error("Failed to create manual receipt product");
+  }
+  return created;
+}
 
 type ParamsContext = { params: { id: string } } | { params: Promise<{ id: string }> };
 
@@ -335,6 +385,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
         }
       }
       await tx.orderItem.deleteMany({ where: { orderId: existing.orderId } });
+      const productTableCapabilities = await getProductTableCapabilities(tx as unknown as Parameters<typeof getProductTableCapabilities>[0]);
       const createdOrderItems: any[] = [];
       const createdItems: Array<{
         title: string;
@@ -348,17 +399,24 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
       }> = [];
       for (const it of items) {
         const title = String(it.title || it.product || it.productName || "Item").slice(0, 255);
-        let product = await tx.product.findFirst({ where: { name: title } });
+        let product = await tx.product.findFirst({
+          where: { name: title },
+          select: {
+            id: true,
+            lastBuyingPrice: true,
+            variableCost: true,
+            commissionEnabled: true,
+            commissionAmount: true,
+            commissionRequiresApproval: true,
+          },
+        });
         if (!product) {
-          product = await tx.product.create({
-            data: {
-              sku: `manual-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-              name: title,
-              category: "manual",
-              sellingPrice: Number(it.unitPrice || it.sellingPrice || 0) || 0,
-            },
+          product = await createManualReceiptProduct(tx, productTableCapabilities, {
+            title,
+            unitPrice: Number(it.unitPrice || it.sellingPrice || 0) || 0,
           });
         }
+        if (!product) throw new Error(`Failed to resolve product for receipt item ${title}`);
         const quantity = Math.max(1, Number(it.quantity || 1));
         const unitPrice = Number(it.unitPrice || it.sellingPrice || 0) || 0;
         const costPrice = Math.max(0, Math.round(Number(it.buyingPrice ?? 0)));
