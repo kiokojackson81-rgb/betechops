@@ -363,6 +363,26 @@ async function persistVoicePhoneAssignment(input: {
   });
 }
 
+async function propagateVoiceCallAssignmentByPhone(input: {
+  phone: string;
+  assignedToId: string;
+}) {
+  const phoneVariants = getKenyanPhoneVariants(input.phone);
+  if (!phoneVariants.length) return;
+
+  await prisma.voiceCall.updateMany({
+    where: {
+      OR: [
+        { callerNumber: { in: phoneVariants } },
+        { destinationNumber: { in: phoneVariants } },
+      ],
+    },
+    data: {
+      assignedToId: input.assignedToId,
+    },
+  });
+}
+
 function getManualReassignmentPhone(call: {
   callerNumber?: string | null;
   destinationNumber?: string | null;
@@ -1369,13 +1389,35 @@ export async function reassignVoiceWork(input: {
         startedAt: true,
       },
     });
-    const assignmentPhone = callContext ? getManualReassignmentPhone(callContext) : null;
-    if (assignmentPhone) {
+    const relatedFollowUps = await prisma.voiceFollowUp.findMany({
+      where: {
+        OR: [{ voiceCallId: input.callId }],
+      },
+      select: {
+        phone: true,
+      },
+      orderBy: [{ updatedAt: "desc" }],
+    });
+
+    const assignmentPhones = Array.from(
+      new Set(
+        [
+          callContext ? getManualReassignmentPhone(callContext) : null,
+          ...relatedFollowUps.map((item) => normalizeKenyanPhone(String(item.phone || "").trim()) || null),
+        ].filter((value): value is string => Boolean(value)),
+      ),
+    );
+
+    for (const assignmentPhone of assignmentPhones) {
       await persistVoicePhoneAssignment({
         phone: assignmentPhone,
         assignedToId: input.assignedToId,
         customerId: callContext?.customerId ?? null,
         lastCallAt: callContext?.startedAt ?? null,
+      });
+      await propagateVoiceCallAssignmentByPhone({
+        phone: assignmentPhone,
+        assignedToId: input.assignedToId,
       });
     }
 
