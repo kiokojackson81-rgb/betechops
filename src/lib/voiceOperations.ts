@@ -529,6 +529,7 @@ function buildLeadWhere(viewer: VoiceViewer, scope: "all" | "mine" = "all") {
 function serializeCustomerContextSummary(context: Awaited<ReturnType<typeof getVoiceCustomerContext>>) {
   return {
     normalizedPhone: context.normalizedPhone,
+    chatrace: context.chatrace,
     matchedCustomerId: context.matchedCustomer?.id ?? null,
     customerName: context.summary.customerName,
     email: context.summary.email,

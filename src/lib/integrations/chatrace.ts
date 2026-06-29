@@ -1,9 +1,38 @@
 import { prisma } from '@/lib/prisma';
+import { getKenyanPhoneVariants, normalizeKenyanPhone } from '@/lib/phone';
 import { Prisma } from '@prisma/client';
 
 const BASE_URL = (process.env.CHATRACE_BASE_URL || '').replace(/\/$/, '');
 const API_TOKEN = process.env.CHATRACE_API_TOKEN;
 const ACCOUNT_ID = process.env.CHATRACE_ACCOUNT_ID;
+const CHATRACE_LOOKUP_CACHE_TTL_MS = 90_000;
+
+export type ChatraceCustomFieldSummary = {
+  name: string;
+  value: string;
+};
+
+export type ChatraceLookupResult = {
+  found: boolean;
+  normalizedPhone: string;
+  contactId?: number;
+  name?: string;
+  phone?: string;
+  channel?: string;
+  lastInteractionAt?: string;
+  tags?: string[];
+  customFields?: ChatraceCustomFieldSummary[];
+  lastMessagePreview?: string | null;
+  profileUrl?: string | null;
+  sourceError?: boolean;
+};
+
+type ChatraceLookupCacheEntry = {
+  expiresAt: number;
+  value: ChatraceLookupResult;
+};
+
+const chatraceLookupCache = new Map<string, ChatraceLookupCacheEntry>();
 
 export type SendReceiptToChatraceInput = {
   phoneE164: string;
@@ -428,5 +457,352 @@ async function persistDebug(receiptNumber: string, debug: any) {
     await prisma.receipt.update({ where: { id: receipt.id }, data: { data: next as Prisma.InputJsonValue } });
   } catch (e) {
     console.error('[chatrace] failed to persist debug', e);
+  }
+}
+
+function getChatraceLookupConfig() {
+  const baseUrl = (
+    process.env.CHATRACE_INTERNAL_BASE_URL ||
+    process.env.CHATRACE_BASE_URL ||
+    "https://api.chatrace.com"
+  ).replace(/\/$/, "");
+  const accountId =
+    process.env.CHATRACE_INTERNAL_ACCOUNT_ID ||
+    process.env.CHATRACE_ACCOUNT_ID ||
+    "";
+  const token =
+    process.env.CHATRACE_INTERNAL_API_TOKEN ||
+    process.env.CHATRACE_API_TOKEN ||
+    "";
+
+  return { baseUrl, accountId, token };
+}
+
+function buildChatraceLookupCacheKey(phone: string) {
+  return `lookup:${phone}`;
+}
+
+function readChatraceLookupCache(phone: string) {
+  const key = buildChatraceLookupCacheKey(phone);
+  const cached = chatraceLookupCache.get(key);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    chatraceLookupCache.delete(key);
+    return null;
+  }
+  return cached.value;
+}
+
+function writeChatraceLookupCache(phone: string, value: ChatraceLookupResult) {
+  chatraceLookupCache.set(buildChatraceLookupCacheKey(phone), {
+    expiresAt: Date.now() + CHATRACE_LOOKUP_CACHE_TTL_MS,
+    value,
+  });
+}
+
+function snippet(text: string, max = 240) {
+  if (!text) return "";
+  const clean = text.replace(/\s+/g, " ").trim();
+  return clean.length > max ? `${clean.slice(0, max)}…` : clean;
+}
+
+function toLookupString(value: unknown) {
+  if (value == null) return "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => toLookupString(entry))
+      .filter(Boolean)
+      .join(", ");
+  }
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}
+
+function toTagList(value: unknown) {
+  if (Array.isArray(value)) {
+    return Array.from(
+      new Set(
+        value
+          .flatMap((entry) => {
+            if (typeof entry === "string") return [entry.trim()];
+            if (entry && typeof entry === "object") {
+              const record = entry as Record<string, unknown>;
+              return [record.name, record.tag, record.label].map((item) => toLookupString(item));
+            }
+            return [];
+          })
+          .filter(Boolean),
+      ),
+    );
+  }
+
+  const raw = toLookupString(value);
+  if (!raw) return [];
+  return Array.from(
+    new Set(
+      raw
+        .split(/[|,]/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function toCustomFieldList(value: unknown): ChatraceCustomFieldSummary[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const record = entry as Record<string, unknown>;
+      const name = toLookupString(record.name || record.field_name || record.label || record.key);
+      const fieldValue = toLookupString(record.value ?? record.field_value ?? record.content);
+      if (!name || !fieldValue) return null;
+      return { name, value: fieldValue };
+    })
+    .filter((entry): entry is ChatraceCustomFieldSummary => Boolean(entry));
+}
+
+function extractMessagePreview(candidate: unknown, customFields: ChatraceCustomFieldSummary[]) {
+  const direct = snippet(toLookupString(candidate));
+  if (direct) return direct;
+
+  const historyField = customFields.find((field) =>
+    ["chat_history", "chat history", "last_message", "last message", "recent_messages"].includes(
+      field.name.trim().toLowerCase(),
+    ),
+  );
+  if (!historyField?.value) return null;
+
+  const raw = historyField.value.trim();
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed) && parsed.length) {
+      const lastEntry = parsed[parsed.length - 1];
+      if (lastEntry && typeof lastEntry === "object") {
+        const message = toLookupString((lastEntry as Record<string, unknown>).message);
+        if (message) return snippet(message);
+      }
+      return snippet(toLookupString(lastEntry));
+    }
+    if (parsed && typeof parsed === "object") {
+      const message = toLookupString((parsed as Record<string, unknown>).message);
+      if (message) return snippet(message);
+    }
+  } catch {
+    return snippet(raw);
+  }
+
+  return snippet(raw);
+}
+
+function buildChatraceProfileUrl(baseUrl: string, accountId: string, contactId: number | null) {
+  if (!contactId) return null;
+  try {
+    const base = new URL(baseUrl);
+    const appHost = base.hostname.startsWith("api.") ? base.hostname.replace(/^api\./, "app.") : base.hostname;
+    const accountSegment = accountId ? `/accounts/${encodeURIComponent(accountId)}` : "";
+    return `${base.protocol}//${appHost}${accountSegment}/contacts/${contactId}`;
+  } catch {
+    return null;
+  }
+}
+
+async function runChatraceLookupRequest(path: string) {
+  const config = getChatraceLookupConfig();
+  const url = `${config.baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
+  const controller = new AbortController();
+  const timeoutMs = 8_000;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const headers: Record<string, string> = {
+      "X-ACCESS-TOKEN": config.token,
+      Accept: "application/json",
+    };
+    if (config.accountId) {
+      headers["X-ACCOUNT-ID"] = config.accountId;
+    }
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers,
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    const raw = await response.text().catch(() => "");
+    let json: any = null;
+    try {
+      json = raw ? JSON.parse(raw) : null;
+    } catch {
+      json = null;
+    }
+
+    return { ok: response.ok, status: response.status, raw, json, config };
+  } catch (error) {
+    clearTimeout(timer);
+    throw error;
+  }
+}
+
+function pickChatraceContact(payload: any) {
+  if (!payload) return null;
+  if (Array.isArray(payload)) return payload[0] ?? null;
+  if (Array.isArray(payload?.data)) return payload.data[0] ?? null;
+  if (payload?.data && typeof payload.data === "object") return payload.data;
+  if (payload?.contact && typeof payload.contact === "object") return payload.contact;
+  if (payload?.id) return payload;
+  return null;
+}
+
+function mapChatraceContactToLookup(input: {
+  contact: Record<string, unknown>;
+  normalizedPhone: string;
+  config: ReturnType<typeof getChatraceLookupConfig>;
+}) {
+  const customFields = toCustomFieldList(input.contact.custom_fields);
+  const contactId = Number(input.contact.id ?? 0) || null;
+  const firstName = toLookupString(input.contact.first_name);
+  const lastName = toLookupString(input.contact.last_name);
+  const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
+  const phone =
+    toLookupString(input.contact.phone) ||
+    customFields.find((field) => field.name.trim().toLowerCase() === "phone")?.value ||
+    input.normalizedPhone;
+  const tags = toTagList(input.contact.tags);
+
+  return {
+    found: true,
+    normalizedPhone: input.normalizedPhone,
+    contactId: contactId ?? undefined,
+    name: fullName || toLookupString(input.contact.name) || undefined,
+    phone: phone || input.normalizedPhone,
+    channel: toLookupString(input.contact.channel) || undefined,
+    lastInteractionAt:
+      toLookupString(input.contact.last_interaction) ||
+      toLookupString(input.contact.last_interaction_at) ||
+      undefined,
+    tags,
+    customFields,
+    lastMessagePreview: extractMessagePreview(
+      input.contact.last_message_preview ||
+        input.contact.last_message ||
+        input.contact.preview ||
+        input.contact.last_message_text,
+      customFields,
+    ),
+    profileUrl:
+      toLookupString(input.contact.profile_url || input.contact.url || input.contact.link) ||
+      buildChatraceProfileUrl(input.config.baseUrl, input.config.accountId, contactId),
+  } satisfies ChatraceLookupResult;
+}
+
+export async function lookupChatraceContactByPhone(rawPhone: string | null | undefined): Promise<ChatraceLookupResult> {
+  const normalizedPhone = normalizeKenyanPhone(rawPhone ?? "");
+  const baseResult: ChatraceLookupResult = {
+    found: false,
+    normalizedPhone,
+    tags: [],
+    customFields: [],
+    lastMessagePreview: null,
+    profileUrl: null,
+    sourceError: false,
+  };
+
+  if (!normalizedPhone) {
+    return baseResult;
+  }
+
+  const cached = readChatraceLookupCache(normalizedPhone);
+  if (cached) {
+    return cached;
+  }
+
+  const config = getChatraceLookupConfig();
+  if (!config.baseUrl || !config.token) {
+    const result = { ...baseResult, sourceError: true };
+    writeChatraceLookupCache(normalizedPhone, result);
+    return result;
+  }
+
+  const candidates = Array.from(
+    new Set(
+      [
+        normalizedPhone,
+        ...getKenyanPhoneVariants(normalizedPhone),
+        normalizedPhone.replace(/^\+/, ""),
+      ].filter(Boolean),
+    ),
+  );
+
+  try {
+    let foundContact: Record<string, unknown> | null = null;
+
+    for (const candidate of candidates) {
+      const path = `/contacts/find_by_custom_field?field_id=phone&value=${encodeURIComponent(candidate)}`;
+      const response = await runChatraceLookupRequest(path);
+      if (!response.ok) {
+        console.error("[chatrace.lookup.find.failed]", {
+          phone: normalizedPhone,
+          candidate,
+          status: response.status,
+          bodySnippet: snippet(response.raw, 400),
+        });
+        continue;
+      }
+
+      const contact = pickChatraceContact(response.json);
+      if (!contact || typeof contact !== "object") continue;
+      foundContact = contact as Record<string, unknown>;
+      break;
+    }
+
+    if (!foundContact) {
+      writeChatraceLookupCache(normalizedPhone, baseResult);
+      return baseResult;
+    }
+
+    const contactId = Number(foundContact.id ?? 0) || null;
+    if (contactId) {
+      const detailResponse = await runChatraceLookupRequest(`/contacts/${contactId}`);
+      if (detailResponse.ok) {
+        const detailContact = pickChatraceContact(detailResponse.json);
+        if (detailContact && typeof detailContact === "object") {
+          foundContact = detailContact as Record<string, unknown>;
+        }
+      } else {
+        console.error("[chatrace.lookup.contact.failed]", {
+          phone: normalizedPhone,
+          contactId,
+          status: detailResponse.status,
+          bodySnippet: snippet(detailResponse.raw, 400),
+        });
+      }
+    }
+
+    const result = mapChatraceContactToLookup({
+      contact: foundContact,
+      normalizedPhone,
+      config,
+    });
+    writeChatraceLookupCache(normalizedPhone, result);
+    return result;
+  } catch (error) {
+    console.error("[chatrace.lookup.failed]", {
+      phone: normalizedPhone,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    const result = { ...baseResult, sourceError: true };
+    writeChatraceLookupCache(normalizedPhone, result);
+    return result;
   }
 }

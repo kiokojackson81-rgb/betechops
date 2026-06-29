@@ -243,6 +243,124 @@ function isInternalVoiceHref(value: string | null | undefined) {
   return Boolean(value) && String(value).startsWith("/");
 }
 
+type ChatraceActivityData = {
+  found?: boolean;
+  sourceError?: boolean;
+  name?: string;
+  phone?: string;
+  channel?: string;
+  lastInteractionAt?: string;
+  tags?: string[];
+  lastMessagePreview?: string | null;
+  profileUrl?: string | null;
+};
+
+function formatChatraceLastChat(value: string | null | undefined) {
+  if (!value) return "No recent chat";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "No recent chat";
+
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const yesterday = today - 24 * 60 * 60 * 1000;
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+
+  if (target === today) return "Today";
+  if (target === yesterday) return "Yesterday";
+  return date.toLocaleDateString("en-KE", {
+    timeZone: "Africa/Nairobi",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function ChatraceActivityCard({
+  data,
+  compact = false,
+  className = "",
+}: {
+  data: ChatraceActivityData | null | undefined;
+  compact?: boolean;
+  className?: string;
+}) {
+  const tags = Array.isArray(data?.tags) ? data?.tags.filter(Boolean) : [];
+  const hasPreview = Boolean(data?.lastMessagePreview);
+  const isFound = Boolean(data?.found);
+  const isUnavailable = Boolean(data?.sourceError) && !isFound;
+
+  return (
+    <div className={`rounded-[20px] border border-slate-800 bg-slate-900/70 p-4 ${className}`.trim()}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Chatrace Activity</div>
+          <div className="mt-1 text-base font-semibold text-white">
+            {isUnavailable ? "Chatrace unavailable" : isFound ? "Recently chatted: Yes" : "Recently chatted: No"}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <span className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusTone(isFound ? "available" : isUnavailable ? "busy" : "offline")}`}>
+            {isFound ? "Matched" : isUnavailable ? "Unavailable" : "No match"}
+          </span>
+          {data?.channel ? (
+            <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-300">
+              {data.channel}
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      <div className={`mt-4 grid gap-3 ${compact ? "md:grid-cols-2" : "xl:grid-cols-2"}`}>
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-3">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Last Chat</div>
+          <div className="mt-1 text-sm font-semibold text-white">{formatChatraceLastChat(data?.lastInteractionAt)}</div>
+          <div className="mt-1 text-xs text-slate-500">{data?.name || data?.phone || "No Chatrace contact found"}</div>
+        </div>
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-3">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Tags</div>
+          {tags.length ? (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {tags.slice(0, compact ? 3 : 6).map((tag) => (
+                <span key={tag} className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-100">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-1 text-sm text-slate-500">No tags synced from Chatrace.</div>
+          )}
+        </div>
+      </div>
+
+      {hasPreview ? (
+        <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-3">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Last Message Preview</div>
+          <div className="mt-1 text-sm text-slate-200">{data?.lastMessagePreview}</div>
+        </div>
+      ) : null}
+
+      {!hasPreview && !isFound && !isUnavailable ? (
+        <div className="mt-3 rounded-2xl border border-dashed border-slate-800 px-3 py-5 text-sm text-slate-500">
+          No recent Chatrace chat found for this caller.
+        </div>
+      ) : null}
+
+      {data?.profileUrl ? (
+        <div className="mt-3">
+          <a
+            href={data.profileUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400"
+          >
+            Open in Chatrace
+          </a>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function VoiceConsoleClient({
   mode,
   initialData,
@@ -614,6 +732,8 @@ export default function VoiceConsoleClient({
     if (!selectedCall || !isMeaningfulVoicePhone(selectedCall.callerNumber)) return null;
     return data.selectedContext;
   }, [data.selectedContext, selectedCall]);
+
+  const selectedChatraceActivity = selectedContextData?.chatrace || selectedCall?.customer?.chatrace || null;
 
   useEffect(() => {
     if (selectedCall?.customer && isMeaningfulVoicePhone(selectedCall.callerNumber)) {
@@ -1455,6 +1575,8 @@ export default function VoiceConsoleClient({
                             </div>
                           </div>
 
+                          <ChatraceActivityCard data={activeInteractionCall.customer.chatrace} compact className="mt-4" />
+
                           <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
                             {[
                               { label: softphone.currentCall?.muted ? "Unmute" : "Mute", onClick: softphone.toggleMute, icon: Mic },
@@ -2064,6 +2186,8 @@ export default function VoiceConsoleClient({
                                                   </div>
                                                 ) : null}
 
+                                                <ChatraceActivityCard data={call.customer.chatrace} compact />
+
                                                 <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                                                   <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Recording</div>
                                                   {call.recordingUrl ? (
@@ -2259,6 +2383,7 @@ export default function VoiceConsoleClient({
                                 ) : null}
                               </div>
                             </div>
+                            <ChatraceActivityCard data={(item as any).customer?.chatrace} compact className="mt-4" />
                           </div>
                         ))
                       ) : (
@@ -2441,40 +2566,44 @@ export default function VoiceConsoleClient({
                         </div>
                       </div>
 
-                      <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
-                        <div className="text-lg font-semibold text-white">Quick Actions</div>
-                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                          <button
-                            type="button"
-                            onClick={() => openWorkspaceHref(selectedCustomerLinks.customer)}
-                            className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-center text-sm font-semibold text-cyan-100 transition hover:border-cyan-400"
-                          >
-                            Open CRM
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => openWorkspaceHref(selectedCustomerLinks.quote)}
-                            className="rounded-xl border border-fuchsia-500/30 bg-fuchsia-500/10 px-4 py-3 text-center text-sm font-semibold text-fuchsia-100 transition hover:border-fuchsia-400"
-                          >
-                            Create Quote
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => openWorkspaceHref(selectedCustomerLinks.receipt)}
-                            className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-center text-sm font-semibold text-emerald-100 transition hover:border-emerald-400"
-                          >
-                            Create Receipt
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDetailModalOpen(false);
-                              switchTab("followups");
-                            }}
-                            className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-center text-sm font-semibold text-amber-100 transition hover:border-amber-400"
-                          >
-                            Open Follow-ups
-                          </button>
+                      <div className="space-y-4">
+                        <ChatraceActivityCard data={selectedChatraceActivity} />
+
+                        <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
+                          <div className="text-lg font-semibold text-white">Quick Actions</div>
+                          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                            <button
+                              type="button"
+                              onClick={() => openWorkspaceHref(selectedCustomerLinks.customer)}
+                              className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-center text-sm font-semibold text-cyan-100 transition hover:border-cyan-400"
+                            >
+                              Open CRM
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openWorkspaceHref(selectedCustomerLinks.quote)}
+                              className="rounded-xl border border-fuchsia-500/30 bg-fuchsia-500/10 px-4 py-3 text-center text-sm font-semibold text-fuchsia-100 transition hover:border-fuchsia-400"
+                            >
+                              Create Quote
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openWorkspaceHref(selectedCustomerLinks.receipt)}
+                              className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-center text-sm font-semibold text-emerald-100 transition hover:border-emerald-400"
+                            >
+                              Create Receipt
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDetailModalOpen(false);
+                                switchTab("followups");
+                              }}
+                              className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-center text-sm font-semibold text-amber-100 transition hover:border-amber-400"
+                            >
+                              Open Follow-ups
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>

@@ -12,6 +12,7 @@ import {
   isPendingPodStatus,
   isPendingWebOrderStatus,
 } from "@/lib/operationsWorkQueue";
+import { lookupChatraceContactByPhone, type ChatraceLookupResult } from "@/lib/integrations/chatrace";
 
 type VoiceBasicUser = {
   id: string;
@@ -173,6 +174,7 @@ export type VoiceTimelineItem = {
 export type VoiceCustomerContext = {
   normalizedPhone: string;
   phoneVariants: string[];
+  chatrace: ChatraceLookupResult;
   matchedCustomer: VoiceBasicUser | null;
   recentReceipts: VoiceReceiptContext[];
   recentWebOrders: VoiceWebsiteOrderContext[];
@@ -365,6 +367,7 @@ export async function getVoiceCustomerContext(rawPhone: string | null | undefine
     return {
       normalizedPhone: link.normalizedPhone,
       phoneVariants: [],
+      chatrace: await lookupChatraceContactByPhone(link.normalizedPhone),
       matchedCustomer: null,
       recentReceipts: [],
       recentWebOrders: [],
@@ -391,7 +394,17 @@ export async function getVoiceCustomerContext(rawPhone: string | null | undefine
     } satisfies VoiceCustomerContext;
   }
 
-  const [receiptRows, webOrderRows, agentSaleRows, quoteRows, voiceCallRows, voiceLeadRows, voiceNoteRows, voiceTaskRows] =
+  const [
+    receiptRows,
+    webOrderRows,
+    agentSaleRows,
+    quoteRows,
+    voiceCallRows,
+    voiceLeadRows,
+    voiceNoteRows,
+    voiceTaskRows,
+    chatrace,
+  ] =
     await Promise.all([
       prisma.receipt.findMany({
         where: {
@@ -538,6 +551,7 @@ export async function getVoiceCustomerContext(rawPhone: string | null | undefine
         orderBy: [{ updatedAt: "desc" }],
         take,
       }),
+      lookupChatraceContactByPhone(link.normalizedPhone),
     ]);
 
   const recentReceipts: VoiceReceiptContext[] = receiptRows.map((receipt) => {
@@ -770,6 +784,7 @@ export async function getVoiceCustomerContext(rawPhone: string | null | undefine
   return {
     normalizedPhone: link.normalizedPhone,
     phoneVariants: link.phoneVariants,
+    chatrace,
     matchedCustomer: link.matchedCustomer,
     recentReceipts,
     recentWebOrders,
