@@ -362,7 +362,7 @@ export default function FallbackCallPopup() {
 
   if (!canShowPopup && canShowMiniStrip) {
     return (
-      <div className="pointer-events-none fixed inset-x-0 bottom-3 z-[95] flex justify-center px-3 sm:justify-end sm:px-5">
+      <div className="pointer-events-none fixed bottom-3 right-3 z-40 w-[calc(100vw-24px)] sm:bottom-5 sm:right-5 sm:w-auto">
         <aside className="pointer-events-auto w-full max-w-[32rem] rounded-[24px] border border-cyan-400/20 bg-[linear-gradient(180deg,rgba(7,12,25,0.96),rgba(2,6,18,0.98))] shadow-[0_24px_80px_rgba(2,8,20,0.55)] backdrop-blur-xl">
           <div className="flex flex-wrap items-center gap-3 px-4 py-3">
             <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -420,8 +420,8 @@ export default function FallbackCallPopup() {
   }
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-3 bottom-3 z-[95] flex justify-center px-3 sm:justify-end sm:px-5">
-      <aside className="pointer-events-auto flex h-full w-full max-w-[42rem] flex-col overflow-hidden rounded-[28px] border border-cyan-400/20 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.14),transparent_38%),linear-gradient(180deg,rgba(7,12,25,0.98),rgba(2,6,18,1))] shadow-[0_32px_120px_rgba(2,8,20,0.6)] backdrop-blur-xl sm:max-h-[calc(100vh-1.5rem)]">
+    <div className="pointer-events-none fixed bottom-3 right-3 z-[45] w-[calc(100vw-24px)] sm:bottom-5 sm:right-5 sm:w-auto">
+      <aside className="pointer-events-auto flex max-h-[calc(100vh-6rem)] w-full max-w-[42rem] flex-col overflow-hidden rounded-[28px] border border-cyan-400/20 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.14),transparent_38%),linear-gradient(180deg,rgba(7,12,25,0.98),rgba(2,6,18,1))] shadow-[0_32px_120px_rgba(2,8,20,0.6)] backdrop-blur-xl">
         <div className="shrink-0 border-b border-white/10 px-5 py-4">
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 items-start gap-4">

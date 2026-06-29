@@ -10,8 +10,8 @@ export default function IncomingCallModal() {
   if (!call) return null;
 
   return (
-    <div className="fixed inset-0 z-[90] bg-slate-950/70 p-4 backdrop-blur-sm">
-      <div className="mx-auto mt-12 max-w-xl rounded-[30px] border border-cyan-500/20 bg-[linear-gradient(180deg,rgba(8,15,28,0.98),rgba(3,6,18,1))] p-6 shadow-[0_24px_90px_rgba(2,8,20,0.7)]">
+    <div className="pointer-events-none fixed bottom-3 right-3 z-[45] w-[calc(100vw-24px)] sm:bottom-5 sm:right-5 sm:w-auto">
+      <div className="pointer-events-auto w-full max-w-xl rounded-[30px] border border-cyan-500/20 bg-[linear-gradient(180deg,rgba(8,15,28,0.98),rgba(3,6,18,1))] p-6 shadow-[0_24px_90px_rgba(2,8,20,0.7)]">
         <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-cyan-300">Incoming Call</div>
         <h2 className="mt-3 text-3xl font-semibold text-white">{call.customer?.name || call.displayName}</h2>
         <div className="mt-2 whitespace-nowrap text-lg text-slate-300">{call.remoteIdentity}</div>
