@@ -743,21 +743,15 @@ export default function DailyReportFinal() {
         const data = await res.json().catch(() => null);
         if (!data) return null;
         if (isBrendahView) {
-          const summarySales = Number(
-            serverQuickStats?.totalSales ?? data.aggregates?.totalSales ?? 0,
-          );
-          const summaryReceipts = Number(
-            serverQuickStats?.totalReceipts ?? data.aggregates?.totalReceipts ?? 0,
-          );
           setServerQuickStats((prev) => ({
-            totalSales: summarySales,
+            totalSales: Number(prev?.totalSales ?? data.aggregates?.totalSales ?? 0),
             totalItems: Number(data.aggregates?.totalItems ?? 0),
             totalNewProducts: Number(prev?.totalNewProducts ?? 0),
             totalEditedProducts: Number(prev?.totalEditedProducts ?? 0),
             totalCopiedProducts: Number(prev?.totalCopiedProducts ?? 0),
             walkInsServed: Number(prev?.walkInsServed ?? 0),
             walkInsPurchased: Number(prev?.walkInsPurchased ?? 0),
-            totalReceipts: summaryReceipts,
+            totalReceipts: Number(prev?.totalReceipts ?? data.aggregates?.totalReceipts ?? 0),
           }));
           return data;
         }
@@ -785,7 +779,6 @@ export default function DailyReportFinal() {
       impersonationReady,
       isBrendahView,
       selectedPeriodKey,
-      serverQuickStats,
     ],
   );
 

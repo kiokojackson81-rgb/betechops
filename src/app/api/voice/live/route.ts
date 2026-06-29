@@ -29,7 +29,13 @@ export async function GET(request: Request) {
         async start(controller) {
           let closed = false;
           const writeEvent = (event: string, data: unknown) => {
-            controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+            if (closed) return;
+            try {
+              controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+            } catch (error) {
+              console.error("[voice.live.sse_push_failed]", error);
+              safeClose();
+            }
           };
 
           const safeClose = () => {
@@ -63,7 +69,13 @@ export async function GET(request: Request) {
 
           const heartbeat = setInterval(() => {
             if (closed) return;
-            controller.enqueue(encoder.encode(`: ping ${Date.now()}\n\n`));
+            try {
+              controller.enqueue(encoder.encode(`: ping ${Date.now()}\n\n`));
+            } catch (error) {
+              console.error("[voice.live.sse_push_failed]", error);
+              safeClose();
+              return;
+            }
             writeEvent("heartbeat", { at: new Date().toISOString() });
           }, 15000);
 
