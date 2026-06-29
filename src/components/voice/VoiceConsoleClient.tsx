@@ -406,6 +406,9 @@ export default function VoiceConsoleClient({
   const [queueView, setQueueView] = useState<VoiceQueueView>(() => normalizeQueueView(searchParams.get("queue")));
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [dispositionPending, setDispositionPending] = useState(false);
+  const [callAssignmentDrafts, setCallAssignmentDrafts] = useState<Record<string, string>>({});
+  const [queueAssignmentDrafts, setQueueAssignmentDrafts] = useState<Record<string, string>>({});
+  const [assignmentPendingKey, setAssignmentPendingKey] = useState<string | null>(null);
   const lastAnnouncedCallIdRef = useRef<string | null>(null);
   const liveStatusTimeoutRef = useRef<number | null>(null);
 
@@ -950,6 +953,8 @@ export default function VoiceConsoleClient({
     assignedToId: string;
   }) => {
     setError(null);
+    const pendingKey = input.callId ? `call:${input.callId}` : input.queueId && input.queueType ? `${input.queueType}:${input.queueId}` : "reassign";
+    setAssignmentPendingKey(pendingKey);
     try {
       const response = await fetch(`${pollBaseHref.replace("/live", "/calls")}`, {
         method: "POST",
@@ -960,10 +965,27 @@ export default function VoiceConsoleClient({
       if (!response.ok) {
         throw new Error(String(payload.error || "reassign_failed"));
       }
+      if (input.callId) {
+        setCallAssignmentDrafts((current) => {
+          const next = { ...current };
+          delete next[input.callId as string];
+          return next;
+        });
+      }
+      if (input.queueId && input.queueType) {
+        const queueKey = `${input.queueType}:${input.queueId}`;
+        setQueueAssignmentDrafts((current) => {
+          const next = { ...current };
+          delete next[queueKey];
+          return next;
+        });
+      }
       await refreshSnapshot(selectedCallId, selectedPhone);
     } catch (reassignError) {
       console.error("[voice.console.reassign_failed]", reassignError);
       setError("Could not reassign the voice work item.");
+    } finally {
+      setAssignmentPendingKey(null);
     }
   };
 
@@ -2167,12 +2189,17 @@ export default function VoiceConsoleClient({
                                                   <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                                                     <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Reassign</div>
                                                     <div className="mt-2 text-sm text-slate-300">Move this call to another agent for ownership and follow-up.</div>
+                                                    {(() => {
+                                                      const draftValue = callAssignmentDrafts[call.id] ?? call.assignedToId ?? "";
+                                                      const isDirty = draftValue !== (call.assignedToId ?? "");
+                                                      const pendingKey = `call:${call.id}`;
+                                                      return (
+                                                        <>
                                                     <select
-                                                      defaultValue={call.assignedToId || ""}
+                                                      value={draftValue}
                                                       onChange={(event) => {
                                                         const assignedToId = event.target.value;
-                                                        if (!assignedToId) return;
-                                                        void handleReassign({ callId: call.id, assignedToId });
+                                                        setCallAssignmentDrafts((current) => ({ ...current, [call.id]: assignedToId }));
                                                       }}
                                                       className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-slate-100 outline-none"
                                                     >
@@ -2183,6 +2210,22 @@ export default function VoiceConsoleClient({
                                                         </option>
                                                       ))}
                                                     </select>
+                                                    <div className="mt-3 flex items-center justify-between gap-3">
+                                                      <div className="text-xs text-slate-500">
+                                                        {isDirty ? "Assignment changed. Save to persist future routing." : "Current owner is already saved."}
+                                                      </div>
+                                                      <button
+                                                        type="button"
+                                                        disabled={!draftValue || !isDirty || assignmentPendingKey === pendingKey}
+                                                        onClick={() => void handleReassign({ callId: call.id, assignedToId: draftValue })}
+                                                        className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                                                      >
+                                                        {assignmentPendingKey === pendingKey ? "Saving..." : "Save Assignment"}
+                                                      </button>
+                                                    </div>
+                                                        </>
+                                                      );
+                                                    })()}
                                                   </div>
                                                 ) : null}
 
@@ -2351,26 +2394,44 @@ export default function VoiceConsoleClient({
                                   Mark Contacted
                                 </button>
                                 {data.viewer.isAdmin ? (
-                                  <select
-                                    defaultValue={item.assignedToId || ""}
-                                    onChange={(event) => {
-                                      const assignedToId = event.target.value;
-                                      if (!assignedToId) return;
-                                      void handleReassign({
-                                        queueId: item.id,
-                                        queueType: item.type,
-                                        assignedToId,
-                                      });
-                                    }}
-                                    className="rounded-full border border-slate-800 bg-slate-950/80 px-3 py-2 text-xs text-slate-100 outline-none"
-                                  >
-                                    <option value="">Reassign</option>
-                                    {visibleAgents.map((agent) => (
-                                      <option key={agent.id} value={agent.id}>
-                                        {(agent as any).displayName || agent.name}
-                                      </option>
-                                    ))}
-                                  </select>
+                                  (() => {
+                                    const queueKey = `${item.type}:${item.id}`;
+                                    const draftValue = queueAssignmentDrafts[queueKey] ?? item.assignedToId ?? "";
+                                    const isDirty = draftValue !== (item.assignedToId ?? "");
+                                    return (
+                                      <div className="flex items-center gap-2">
+                                        <select
+                                          value={draftValue}
+                                          onChange={(event) => {
+                                            const assignedToId = event.target.value;
+                                            setQueueAssignmentDrafts((current) => ({ ...current, [queueKey]: assignedToId }));
+                                          }}
+                                          className="rounded-full border border-slate-800 bg-slate-950/80 px-3 py-2 text-xs text-slate-100 outline-none"
+                                        >
+                                          <option value="">Reassign</option>
+                                          {visibleAgents.map((agent) => (
+                                            <option key={agent.id} value={agent.id}>
+                                              {(agent as any).displayName || agent.name}
+                                            </option>
+                                          ))}
+                                        </select>
+                                        <button
+                                          type="button"
+                                          disabled={!draftValue || !isDirty || assignmentPendingKey === queueKey}
+                                          onClick={() =>
+                                            void handleReassign({
+                                              queueId: item.id,
+                                              queueType: item.type,
+                                              assignedToId: draftValue,
+                                            })
+                                          }
+                                          className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                                        >
+                                          {assignmentPendingKey === queueKey ? "Saving..." : "Save"}
+                                        </button>
+                                      </div>
+                                    );
+                                  })()
                                 ) : null}
                                 {item.type === "task" ? (
                                   <button
@@ -2771,12 +2832,19 @@ export default function VoiceConsoleClient({
                         <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
                           <div className="text-sm font-semibold text-white">Reassign</div>
                           <div className="mt-2 text-sm text-slate-300">Move this interaction to another agent for ownership and follow-up.</div>
+                          {(() => {
+                            const callId = selectedCall?.id ?? "";
+                            const draftValue = callId ? (callAssignmentDrafts[callId] ?? selectedCall?.assignedToId ?? "") : "";
+                            const isDirty = Boolean(callId) && draftValue !== (selectedCall?.assignedToId ?? "");
+                            const pendingKey = callId ? `call:${callId}` : "call";
+                            return (
+                              <>
                           <select
-                            defaultValue={selectedCall?.assignedToId || ""}
+                            value={draftValue}
                             onChange={(event) => {
+                              if (!callId) return;
                               const assignedToId = event.target.value;
-                              if (!assignedToId || !selectedCall?.id) return;
-                              void handleReassign({ callId: selectedCall.id, assignedToId });
+                              setCallAssignmentDrafts((current) => ({ ...current, [callId]: assignedToId }));
                             }}
                             className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-slate-100 outline-none"
                           >
@@ -2787,6 +2855,25 @@ export default function VoiceConsoleClient({
                               </option>
                             ))}
                           </select>
+                          <div className="mt-3 flex items-center justify-between gap-3">
+                            <div className="text-xs text-slate-500">
+                              {isDirty ? "Click save to persist this reassignment on the server." : "Saved owner will be used for future routing."}
+                            </div>
+                            <button
+                              type="button"
+                              disabled={!callId || !draftValue || !isDirty || assignmentPendingKey === pendingKey}
+                              onClick={() => {
+                                if (!callId) return;
+                                void handleReassign({ callId, assignedToId: draftValue });
+                              }}
+                              className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {assignmentPendingKey === pendingKey ? "Saving..." : "Save Assignment"}
+                            </button>
+                          </div>
+                              </>
+                            );
+                          })()}
                         </div>
                       ) : null}
                     </div>
