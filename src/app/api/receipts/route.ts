@@ -23,6 +23,7 @@ import {
 import { adjustProfitForPodDeliveryFee, getPodDeliveryFee, loadPodDeliveryFeeMap } from "@/lib/podDeliveryFee";
 import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
 import { waitForReceiptById } from "@/lib/receiptReadAfterWrite";
+import { getProductTableCapabilities, type ProductTableCapabilities } from "@/lib/productTableCapabilities";
 
 const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" | null => {
   if (typeof value !== "string") return null;
@@ -43,6 +44,55 @@ const RECEIPT_PRODUCT_SELECT = {
   commissionAmount: true,
   commissionRequiresApproval: true,
 } satisfies Prisma.ProductSelect;
+
+type ReceiptProductSnapshot = {
+  id: string;
+  lastBuyingPrice: number | null;
+  variableCost: boolean;
+  commissionEnabled: boolean;
+  commissionAmount: Prisma.Decimal | null;
+  commissionRequiresApproval: boolean;
+};
+
+async function createManualReceiptProduct(
+  tx: Prisma.TransactionClient,
+  capabilities: ProductTableCapabilities,
+  input: { title: string; unitPrice: number },
+): Promise<ReceiptProductSnapshot> {
+  const id = generateRandomId();
+  const sku = `manual-${generateRandomId()}`;
+  const columns = ["id", capabilities.skuColumn, capabilities.nameColumn, capabilities.categoryColumn, capabilities.priceColumn];
+  const values: Array<string | number | boolean> = [id, sku, input.title, "manual", input.unitPrice];
+
+  if (capabilities.activeColumn) {
+    columns.push(capabilities.activeColumn);
+    values.push(true);
+  }
+
+  const placeholders = values.map((_, index) => `$${index + 1}`).join(", ");
+  const columnsSql = columns.map((column) => `"${column}"`).join(", ");
+  const returningSql = [
+    `"id"`,
+    capabilities.available.has("lastBuyingPrice") ? `"lastBuyingPrice"` : `0::double precision AS "lastBuyingPrice"`,
+    capabilities.available.has("variableCost") ? `"variableCost"` : `FALSE AS "variableCost"`,
+    capabilities.available.has("commissionEnabled") ? `"commissionEnabled"` : `FALSE AS "commissionEnabled"`,
+    capabilities.available.has("commissionAmount") ? `"commissionAmount"` : `0::numeric AS "commissionAmount"`,
+    capabilities.available.has("commissionRequiresApproval")
+      ? `"commissionRequiresApproval"`
+      : `FALSE AS "commissionRequiresApproval"`,
+  ].join(", ");
+
+  const rows = await (tx as Prisma.TransactionClient).$queryRawUnsafe<ReceiptProductSnapshot[]>(
+    `INSERT INTO "Product" (${columnsSql}) VALUES (${placeholders}) RETURNING ${returningSql}`,
+    ...values,
+  );
+
+  const created = rows[0];
+  if (!created) {
+    throw new Error("Failed to create manual receipt product");
+  }
+  return created;
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -984,6 +1034,7 @@ export async function POST(req: NextRequest) {
         shopId = shop?.id ?? null;
       }
       if (!shopId) throw new Error("No active shop found for receipt");
+      const productTableCapabilities = await getProductTableCapabilities(tx as unknown as Parameters<typeof getProductTableCapabilities>[0]);
 
       // ensure products exist for items (prefer selected catalog products, otherwise create lightweight manual records)
       const createdItems: any[] = [];
@@ -1001,14 +1052,13 @@ export async function POST(req: NextRequest) {
               select: RECEIPT_PRODUCT_SELECT,
             });
         if (!product) {
-          product = await tx.product.create({
-            data: {
-              sku: `manual-${generateRandomId()}`,
-              name: title,
-              category: "manual",
-              sellingPrice: Number(it.unitPrice || it.sellingPrice || 0) || 0,
-            },
+          product = await createManualReceiptProduct(tx, productTableCapabilities, {
+            title,
+            unitPrice: Number(it.unitPrice || it.sellingPrice || 0) || 0,
           });
+        }
+        if (!product) {
+          throw new Error(`Failed to resolve product for receipt item ${title}`);
         }
         const quantity = Math.max(1, parseIntLike(it.quantity ?? 1, 1));
         const unitPrice = parseNumber(it.unitPrice ?? it.sellingPrice ?? 0);

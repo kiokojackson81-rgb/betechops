@@ -119,6 +119,19 @@ async function reserveVoiceSmsNotification(input: {
 }) {
   const dayKey = formatNairobiDayKey();
 
+  if (input.voiceCallId) {
+    const existingForCall = await prisma.voiceSmsNotificationLog.findFirst({
+      where: {
+        voiceCallId: input.voiceCallId,
+        notificationType: input.notificationType,
+      },
+      select: { id: true },
+    });
+    if (existingForCall) {
+      return { ok: false as const, reason: "already_processed_for_call" };
+    }
+  }
+
   try {
     const log = await prisma.voiceSmsNotificationLog.create({
       data: {
@@ -157,12 +170,7 @@ async function reserveVoiceSmsNotification(input: {
     });
     return { ok: false as const, reason: "already_sent_today" };
   } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002" &&
-      Array.isArray(error.meta?.target) &&
-      error.meta.target.includes("voiceCallId")
-    ) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       return { ok: false as const, reason: "already_processed_for_call" };
     }
     throw error;

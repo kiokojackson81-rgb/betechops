@@ -85,13 +85,25 @@ export function buildDialAttemptXml(input: {
   );
 }
 
-export function buildWorkingHoursIvrXml(callbackUrl: string) {
+export function buildWorkingHoursIvrXml(input: {
+  callbackUrl: string;
+  fallbackPhoneNumber?: string | null;
+  fallbackRedirectUrl?: string | null;
+}) {
+  const fallbackDialPart = input.fallbackPhoneNumber
+    ? `<Dial record="true" phoneNumbers="${escapeVoiceXml(input.fallbackPhoneNumber)}" />`
+    : "";
+  const fallbackRedirectPart = input.fallbackRedirectUrl
+    ? `<Redirect>${escapeVoiceXml(input.fallbackRedirectUrl)}</Redirect>`
+    : "";
   return `<?xml version="1.0" encoding="UTF-8"?>` +
     `<Response>` +
     `<Say voice="woman">${escapeVoiceXml(toSpeechText(BETECH_WORKING_HOURS_WELCOME_MESSAGE))}</Say>` +
-    `<GetDigits timeout="5" numDigits="1" callbackUrl="${escapeVoiceXml(callbackUrl)}">` +
+    `<GetDigits timeout="5" numDigits="1" callbackUrl="${escapeVoiceXml(input.callbackUrl)}">` +
     `<Say voice="woman">${BETECH_WORKING_HOURS_GET_DIGITS_FILLER}</Say>` +
     `</GetDigits>` +
+    fallbackDialPart +
+    fallbackRedirectPart +
     `</Response>`;
 }
 

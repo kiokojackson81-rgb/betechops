@@ -7,6 +7,7 @@ const API_TOKEN = process.env.CHATRACE_API_TOKEN;
 const ACCOUNT_ID = process.env.CHATRACE_ACCOUNT_ID;
 const CHATRACE_LOOKUP_CACHE_TTL_MS = 90_000;
 const CHATRACE_LOOKUP_RATE_LIMIT_TTL_MS = 30_000;
+let chatraceLookupRateLimitedUntil = 0;
 
 export type ChatraceCustomFieldSummary = {
   name: string;
@@ -723,6 +724,12 @@ export async function lookupChatraceContactByPhone(rawPhone: string | null | und
     return baseResult;
   }
 
+  if (chatraceLookupRateLimitedUntil > Date.now()) {
+    const result = { ...baseResult, sourceError: true };
+    writeChatraceLookupCache(normalizedPhone, result, chatraceLookupRateLimitedUntil - Date.now());
+    return result;
+  }
+
   const cached = readChatraceLookupCache(normalizedPhone);
   if (cached) {
     return cached;
@@ -754,6 +761,7 @@ export async function lookupChatraceContactByPhone(rawPhone: string | null | und
       if (!response.ok) {
         if (response.status === 429) {
           const result = { ...baseResult, sourceError: true };
+          chatraceLookupRateLimitedUntil = Date.now() + CHATRACE_LOOKUP_RATE_LIMIT_TTL_MS;
           console.error("[chatrace.lookup.rate_limited]", {
             phone: normalizedPhone,
             candidate,
@@ -792,6 +800,7 @@ export async function lookupChatraceContactByPhone(rawPhone: string | null | und
           foundContact = detailContact as Record<string, unknown>;
         }
       } else if (detailResponse.status === 429) {
+        chatraceLookupRateLimitedUntil = Date.now() + CHATRACE_LOOKUP_RATE_LIMIT_TTL_MS;
         console.error("[chatrace.lookup.contact.rate_limited]", {
           phone: normalizedPhone,
           contactId,

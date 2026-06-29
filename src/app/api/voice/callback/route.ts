@@ -235,7 +235,16 @@ export async function POST(request: Request) {
     ) {
       const ivrUrl = new URL("/api/voice/ivr", requestUrl.origin);
       ivrUrl.searchParams.set("routePlan", encodeRoutePlan(effectiveRoutePlan));
-      return xmlResponse(buildWorkingHoursIvrXml(ivrUrl.toString()));
+      return xmlResponse(
+        buildWorkingHoursIvrXml({
+          callbackUrl: ivrUrl.toString(),
+          fallbackPhoneNumber: currentHop.dialValue,
+          fallbackRedirectUrl:
+            hopIndex + 1 < effectiveRoutePlan.hops.length
+              ? buildRoutePlanRedirectUrl(requestUrl, effectiveRoutePlan, hopIndex + 1)
+              : null,
+        }),
+      );
     }
 
     await createVoiceEventFromPayload(
