@@ -669,6 +669,9 @@ export function inferVoiceCompletionStatus(
 
   const normalizedStatus = safeString(payload.status).toLowerCase();
   const normalizedSessionState = safeString(payload.callSessionState).toLowerCase();
+  if (["answered", "connected", "in_progress", "transferred"].includes(normalizedStatus)) {
+    return normalizedStatus;
+  }
   const duration = parseInteger(payload.durationInSeconds || payload.duration) ?? 0;
   const direction = safeString(payload.direction || "INBOUND").toUpperCase() || "INBOUND";
   const treatZeroDurationSuccessAsNoAnswer = options?.treatZeroDurationSuccessAsNoAnswer !== false;
@@ -690,8 +693,15 @@ export function inferVoiceCompletionStatus(
         payload.talkDurationInSeconds ||
         payload.conversationDurationInSeconds,
     ) ?? 0;
+  const dialDuration =
+    parseInteger(
+      payload.dialDurationInSeconds ||
+        payload.dialDuration ||
+        payload.dialCallDurationInSeconds,
+    ) ?? 0;
   const hasBridgeEvidence =
     bridgeDuration > 0 ||
+    dialDuration > 0 ||
     ["answered", "connected", "completed", "complete", "success", "successful", "transferred", "bridged"].includes(
       bridgeStatus,
     ) ||

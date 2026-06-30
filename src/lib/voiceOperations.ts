@@ -245,6 +245,9 @@ function inferVoiceProviderOutcomeFromPayload(
 
   const normalizedStatus = String(payload.status || "").trim().toLowerCase();
   const normalizedSessionState = String(payload.callSessionState || "").trim().toLowerCase();
+  if (["answered", "connected", "in_progress", "transferred"].includes(normalizedStatus)) {
+    return normalizedStatus;
+  }
   const duration = Number(payload.durationInSeconds || payload.duration || 0) || 0;
   const direction = String(payload.direction || "INBOUND").trim().toUpperCase() || "INBOUND";
   const treatZeroDurationSuccessAsNoAnswer = options?.treatZeroDurationSuccessAsNoAnswer !== false;
@@ -270,8 +273,16 @@ function inferVoiceProviderOutcomeFromPayload(
         payload.conversationDurationInSeconds ||
         0,
     ) || 0;
+  const dialDuration =
+    Number(
+      payload.dialDurationInSeconds ||
+        payload.dialDuration ||
+        payload.dialCallDurationInSeconds ||
+        0,
+    ) || 0;
   const hasBridgeEvidence =
     bridgeDuration > 0 ||
+    dialDuration > 0 ||
     ["answered", "connected", "completed", "complete", "success", "successful", "transferred", "bridged"].includes(
       bridgeStatus,
     ) ||
