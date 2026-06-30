@@ -102,6 +102,27 @@ function formatStatusLabel(status: string | null | undefined) {
   return String(status || "unknown").replace(/_/g, " ");
 }
 
+function getStatusTrackingKeys(phone: string | null | undefined) {
+  const normalizedPhone = normalizeKenyanPhone(phone || "");
+  const variants = phone ? getKenyanPhoneVariants(phone) : [];
+  return Array.from(new Set([normalizedPhone, phone, ...variants].filter(Boolean) as string[]));
+}
+
+function getFollowUpReviewStatus(
+  baseStatus: string | null | undefined,
+  items: Array<{ status?: string | null; updatedAt?: Date | null }>,
+) {
+  if (!isMissedStatus(baseStatus)) return null;
+  const latestItem = [...items]
+    .filter((item) => item?.status)
+    .sort((left, right) => (right.updatedAt?.getTime() ?? 0) - (left.updatedAt?.getTime() ?? 0))[0];
+
+  const normalizedStatus = normalizeStatus(latestItem?.status);
+  if (normalizedStatus === "contacted") return "contacted";
+  if (normalizedStatus === "resolved" || normalizedStatus === "closed") return "resolved";
+  return null;
+}
+
 const VOICE_DISPOSITION_CODES = ["SALE", "QUOTE", "SUPPORT", "WRONG_NUMBER", "FOLLOW_UP_NEEDED"] as const;
 
 function extractDisposition(note: string | null | undefined) {
@@ -1012,6 +1033,63 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     return contextCache.get(key)!;
   };
 
+  const recentCallIds = recentCallsRaw.map((call) => call.id);
+  const recentCallPhones = Array.from(
+    new Set(recentCallsRaw.flatMap((call) => getStatusTrackingKeys(call.callerNumber))),
+  );
+  const [recentCallFollowUpsRaw, recentCallLeadsRaw] = await Promise.all([
+    recentCallIds.length || recentCallPhones.length
+      ? prisma.voiceFollowUp.findMany({
+          where: {
+            OR: [
+              recentCallIds.length ? { voiceCallId: { in: recentCallIds } } : undefined,
+              recentCallPhones.length ? { phone: { in: recentCallPhones } } : undefined,
+            ].filter(Boolean) as Array<Record<string, unknown>>,
+          },
+          select: {
+            voiceCallId: true,
+            phone: true,
+            status: true,
+            updatedAt: true,
+          },
+        })
+      : Promise.resolve([]),
+    recentCallPhones.length
+      ? prisma.voiceLead.findMany({
+          where: {
+            phone: { in: recentCallPhones },
+            status: { in: ["contacted", "closed"] },
+          },
+          select: {
+            phone: true,
+            status: true,
+            updatedAt: true,
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const followUpsByCallId = new Map<string, typeof recentCallFollowUpsRaw>();
+  const reviewItemsByPhone = new Map<
+    string,
+    Array<{ status: string; updatedAt: Date; voiceCallId?: string | null; phone?: string | null }>
+  >();
+
+  for (const item of recentCallFollowUpsRaw) {
+    if (item.voiceCallId) {
+      followUpsByCallId.set(item.voiceCallId, [...(followUpsByCallId.get(item.voiceCallId) || []), item]);
+    }
+    for (const key of getStatusTrackingKeys(item.phone)) {
+      reviewItemsByPhone.set(key, [...(reviewItemsByPhone.get(key) || []), item]);
+    }
+  }
+
+  for (const item of recentCallLeadsRaw) {
+    for (const key of getStatusTrackingKeys(item.phone)) {
+      reviewItemsByPhone.set(key, [...(reviewItemsByPhone.get(key) || []), item]);
+    }
+  }
+
   const activeCalls = await Promise.all(
     activeCallsRaw.map(async (call) => {
       const context = await getContextForPhone(call.callerNumber, false);
@@ -1070,13 +1148,18 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
       const contextSummary = serializeCustomerContextSummary(context);
       const lastActivity = contextSummary.recentTimeline[0] ?? null;
       const { displayStatus, providerStatus } = resolveVoiceProviderOutcome(call);
+      const reviewStatus = getFollowUpReviewStatus(displayStatus, [
+        ...(followUpsByCallId.get(call.id) || []),
+        ...getStatusTrackingKeys(call.callerNumber).flatMap((key) => reviewItemsByPhone.get(key) || []),
+      ]);
+      const effectiveStatus = reviewStatus || displayStatus;
       return {
         id: call.id,
         sessionId: call.sessionId,
         callerNumber: call.callerNumber,
         direction: call.direction,
-        status: displayStatus,
-        statusLabel: formatStatusLabel(displayStatus),
+        status: effectiveStatus,
+        statusLabel: formatStatusLabel(effectiveStatus),
         providerStatus,
         providerStatusLabel: formatStatusLabel(providerStatus),
         isActive: call.isActive || isCallActiveStatus(call.status),
@@ -1384,9 +1467,11 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
       ? {
           ...(function () {
             const { displayStatus, providerStatus } = resolveVoiceProviderOutcome(selectedCallDetail);
+            const reviewStatus = getFollowUpReviewStatus(displayStatus, selectedCallDetail.followUps);
+            const effectiveStatus = reviewStatus || displayStatus;
             return {
-              status: displayStatus,
-              statusLabel: formatStatusLabel(displayStatus),
+              status: effectiveStatus,
+              statusLabel: formatStatusLabel(effectiveStatus),
               providerStatus,
               providerStatusLabel: formatStatusLabel(providerStatus),
             };
