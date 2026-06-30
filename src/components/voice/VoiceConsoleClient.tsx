@@ -2291,6 +2291,78 @@ export default function VoiceConsoleClient({
                                                   </div>
                                                 ) : null}
 
+                                                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Follow-up Actions</div>
+                                                  <div className="mt-2 text-sm text-slate-300">
+                                                    Manage callback work linked to this call without leaving call history.
+                                                  </div>
+                                                  <div className="mt-3 space-y-3">
+                                                    {(expandedDetail as any)?.followUps?.length ? (
+                                                      (expandedDetail as any).followUps.map((task: any) => {
+                                                        const normalizedStatus = String(task.status || "").trim().toLowerCase();
+                                                        const isResolved = ["resolved", "closed"].includes(normalizedStatus);
+                                                        const isContacted = normalizedStatus === "contacted";
+                                                        return (
+                                                          <div key={task.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                                                            <div className="flex flex-col gap-3">
+                                                              <div className="flex items-start justify-between gap-3">
+                                                                <div className="min-w-0">
+                                                                  <div className="truncate text-sm font-semibold text-white">{task.title || "Follow-up task"}</div>
+                                                                  <div className="mt-1 text-xs text-slate-400">
+                                                                    {(task.assignedToName || task.assignedToEmail || "Unassigned") +
+                                                                      " · " +
+                                                                      (task.dueAt ? formatDateTime(task.dueAt) : "No due date")}
+                                                                  </div>
+                                                                  {task.notes ? (
+                                                                    <div className="mt-2 text-xs text-slate-500">{task.notes}</div>
+                                                                  ) : null}
+                                                                </div>
+                                                                <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusTone(task.status)}`}>
+                                                                  {String(task.status || "pending").replace(/_/g, " ")}
+                                                                </span>
+                                                              </div>
+                                                              <div className="flex flex-wrap gap-2">
+                                                                <button
+                                                                  type="button"
+                                                                  onClick={() => handleCallback(call.callerNumber)}
+                                                                  className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
+                                                                >
+                                                                  Callback
+                                                                </button>
+                                                                <button
+                                                                  type="button"
+                                                                  disabled={isResolved || isContacted}
+                                                                  onClick={() =>
+                                                                    handleMarkContacted({
+                                                                      id: task.id,
+                                                                      queueType: "task",
+                                                                    })
+                                                                  }
+                                                                  className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+                                                                >
+                                                                  {isContacted ? "Contacted" : "Mark Contacted"}
+                                                                </button>
+                                                                <button
+                                                                  type="button"
+                                                                  disabled={isResolved}
+                                                                  onClick={() => handleResolveTask(task.id)}
+                                                                  className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+                                                                >
+                                                                  {isResolved ? "Resolved" : "Resolve"}
+                                                                </button>
+                                                              </div>
+                                                            </div>
+                                                          </div>
+                                                        );
+                                                      })
+                                                    ) : (
+                                                      <div className="rounded-2xl border border-dashed border-slate-800 px-3 py-5 text-sm text-slate-500">
+                                                        No linked follow-up task for this call yet.
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                </div>
+
                                                 <ChatraceActivityCard data={call.customer.chatrace} compact />
 
                                                 <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
