@@ -19,12 +19,19 @@ export async function GET(request: Request) {
   try {
     const products = filterShopProducts(await getOpsCatalogueProductsReadOnlyMapped(), { category, subcategory, q });
 
-    return NextResponse.json({
-      ok: true,
-      source: "ops" as const,
-      useOpsApi: true,
-      products,
-    });
+    return NextResponse.json(
+      {
+        ok: true,
+        source: "ops" as const,
+        useOpsApi: true,
+        products,
+      },
+      {
+        headers: {
+          "Cache-Control": "public, s-maxage=600, stale-while-revalidate=86400",
+        },
+      },
+    );
   } catch (error) {
     console.error("[shop] failed to read ops catalogue products in live mode", error);
     return NextResponse.json(

@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import type { ShopProduct } from "@/app/shop/shopData";
 import { prisma } from "@/lib/prisma";
 
@@ -5,6 +6,8 @@ export type ProductPopularitySignal = {
   score: number;
   latestAt: number;
 };
+
+const PRODUCT_POPULARITY_REVALIDATE_SECONDS = 600;
 
 function getIsoTimestamp(value?: string | null) {
   if (!value) return 0;
@@ -26,8 +29,6 @@ function normalizeProductKey(value: string) {
 }
 
 export async function getPopularitySignalsForProducts(products: ShopProduct[]) {
-  const byOpsProductId = new Map<string, ProductPopularitySignal>();
-  const byName = new Map<string, ProductPopularitySignal>();
   const opsProductIds = Array.from(
     new Set(
       products
@@ -35,67 +36,21 @@ export async function getPopularitySignalsForProducts(products: ShopProduct[]) {
         .filter(Boolean),
     ),
   );
-
-  if (opsProductIds.length) {
-    const [posOrderItems, websiteOrderItems] = await Promise.all([
-      prisma.orderItem
-        .findMany({
-          where: { productId: { in: opsProductIds } },
-          select: {
-            productId: true,
-            quantity: true,
-            order: { select: { createdAt: true } },
-          },
-        })
-        .catch(() => []),
-      prisma.websiteOrderItem
-        .findMany({
-          where: { productId: { in: opsProductIds } },
-          select: {
-            productId: true,
-            quantity: true,
-            websiteOrder: { select: { createdAt: true } },
-          },
-        })
-        .catch(() => []),
-    ]);
-
-    for (const row of posOrderItems) {
-      const existing = byOpsProductId.get(row.productId) ?? { score: 0, latestAt: 0 };
-      byOpsProductId.set(row.productId, {
-        score: existing.score + Number(row.quantity ?? 0),
-        latestAt: Math.max(existing.latestAt, new Date(row.order.createdAt).getTime()),
-      });
-    }
-
-    for (const row of websiteOrderItems) {
-      if (!row.productId) continue;
-      const existing = byOpsProductId.get(row.productId) ?? { score: 0, latestAt: 0 };
-      byOpsProductId.set(row.productId, {
-        score: existing.score + Number(row.quantity ?? 0),
-        latestAt: Math.max(existing.latestAt, new Date(row.websiteOrder.createdAt).getTime()),
-      });
-    }
+  const normalizedNames = Array.from(
+    new Set(
+      products
+        .map((product) => normalizeProductKey(product.name))
+        .filter(Boolean),
+    ),
+  );
+  const popularitySources = await getCachedPopularitySources(opsProductIds, normalizedNames);
+  const byOpsProductId = new Map<string, ProductPopularitySignal>();
+  const byName = new Map<string, ProductPopularitySignal>();
+  for (const [productId, signal] of popularitySources.byOpsProductId) {
+    byOpsProductId.set(productId, signal);
   }
-
-  const agentSales = await prisma.agentSale
-    .findMany({
-      select: {
-        productName: true,
-        quantity: true,
-        createdAt: true,
-      },
-    })
-    .catch(() => [] as Array<{ productName: string; quantity: number; createdAt: Date }>);
-
-  for (const row of agentSales) {
-    const key = normalizeProductKey(String(row.productName || ""));
-    if (!key) continue;
-    const existing = byName.get(key) ?? { score: 0, latestAt: 0 };
-    byName.set(key, {
-      score: existing.score + Number(row.quantity ?? 0),
-      latestAt: Math.max(existing.latestAt, new Date(row.createdAt).getTime()),
-    });
+  for (const [productName, signal] of popularitySources.byName) {
+    byName.set(productName, signal);
   }
 
   return new Map(
@@ -112,6 +67,86 @@ export async function getPopularitySignalsForProducts(products: ShopProduct[]) {
     }),
   );
 }
+
+const getCachedPopularitySources = unstable_cache(
+  async (opsProductIds: string[], normalizedNames: string[]) => {
+    const byOpsProductId = new Map<string, ProductPopularitySignal>();
+    const byName = new Map<string, ProductPopularitySignal>();
+
+    if (opsProductIds.length) {
+      const [posOrderItems, websiteOrderItems] = await Promise.all([
+        prisma.orderItem
+          .findMany({
+            where: { productId: { in: opsProductIds } },
+            select: {
+              productId: true,
+              quantity: true,
+              order: { select: { createdAt: true } },
+            },
+          })
+          .catch(() => []),
+        prisma.websiteOrderItem
+          .findMany({
+            where: { productId: { in: opsProductIds } },
+            select: {
+              productId: true,
+              quantity: true,
+              websiteOrder: { select: { createdAt: true } },
+            },
+          })
+          .catch(() => []),
+      ]);
+
+      for (const row of posOrderItems) {
+        const existing = byOpsProductId.get(row.productId) ?? { score: 0, latestAt: 0 };
+        byOpsProductId.set(row.productId, {
+          score: existing.score + Number(row.quantity ?? 0),
+          latestAt: Math.max(existing.latestAt, new Date(row.order.createdAt).getTime()),
+        });
+      }
+
+      for (const row of websiteOrderItems) {
+        if (!row.productId) continue;
+        const existing = byOpsProductId.get(row.productId) ?? { score: 0, latestAt: 0 };
+        byOpsProductId.set(row.productId, {
+          score: existing.score + Number(row.quantity ?? 0),
+          latestAt: Math.max(existing.latestAt, new Date(row.websiteOrder.createdAt).getTime()),
+        });
+      }
+    }
+
+    if (normalizedNames.length) {
+      const agentSales = await prisma.agentSale
+        .findMany({
+          select: {
+            productName: true,
+            quantity: true,
+            createdAt: true,
+          },
+        })
+        .catch(() => [] as Array<{ productName: string; quantity: number; createdAt: Date }>);
+
+      for (const row of agentSales) {
+        const key = normalizeProductKey(String(row.productName || ""));
+        if (!key) continue;
+        const existing = byName.get(key) ?? { score: 0, latestAt: 0 };
+        byName.set(key, {
+          score: existing.score + Number(row.quantity ?? 0),
+          latestAt: Math.max(existing.latestAt, new Date(row.createdAt).getTime()),
+        });
+      }
+    }
+
+    return {
+      byOpsProductId: Array.from(byOpsProductId.entries()),
+      byName: Array.from(byName.entries()),
+    };
+  },
+  ["shop:product-popularity:v1"],
+  {
+    revalidate: PRODUCT_POPULARITY_REVALIDATE_SECONDS,
+  },
+);
 
 export function getPopularityCountsFromSignals(signals: Map<string, ProductPopularitySignal>) {
   return new Map(Array.from(signals.entries(), ([productId, signal]) => [productId, Number(signal.score ?? 0)]));

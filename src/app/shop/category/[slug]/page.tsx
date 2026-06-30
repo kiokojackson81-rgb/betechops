@@ -20,12 +20,15 @@ import { getShopProducts } from "@/app/shop/shopApi";
 import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks, type ShopProduct } from "@/app/shop/shopData";
 import { getShopCategoryHref, getShopRequestQuoteHref } from "@/app/shop/storefrontPaths";
+import { getShopBaseUrl } from "@/lib/runtimeUrls";
 import {
   compareProductsByLatest,
   compareProductsByPopularity,
   getPopularitySignalsForProducts,
   type ProductPopularitySignal,
 } from "@/lib/productPopularity";
+
+export const revalidate = 600;
 
 type CategoryPageProps = {
   params: Promise<{ slug: string }>;
@@ -265,6 +268,9 @@ export async function generateMetadata({ params, searchParams }: CategoryPagePro
   return buildShopMetadata({
     title,
     description: buildCategoryDescription(category, subcategory?.label),
+    alternates: {
+      canonical: `${getShopBaseUrl()}${getShopCategoryHref(category.value)}`,
+    },
   });
 }
 

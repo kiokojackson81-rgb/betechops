@@ -19,12 +19,15 @@ import { getShopProducts } from "@/app/shop/shopApi";
 import { buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks, type ShopProduct } from "@/app/shop/shopData";
 import { SHOP_ALL_PRODUCTS_HREF, SHOP_HOME_HREF, getShopRequestQuoteHref } from "@/app/shop/storefrontPaths";
+import { getShopBaseUrl } from "@/lib/runtimeUrls";
 import {
   compareProductsByLatest,
   compareProductsByPopularity,
   getPopularitySignalsForProducts,
   type ProductPopularitySignal,
 } from "@/lib/productPopularity";
+
+export const revalidate = 600;
 
 type AllProductsPageProps = {
   searchParams?: Promise<{
@@ -247,6 +250,9 @@ export async function generateMetadata(): Promise<Metadata> {
     title: "All Products",
     description:
       "Browse all Betech Solar products in one place, with filters for category, brand, price, stock and warranty.",
+    alternates: {
+      canonical: `${getShopBaseUrl()}${SHOP_ALL_PRODUCTS_HREF}`,
+    },
   });
 }
 

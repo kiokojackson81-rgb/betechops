@@ -8,6 +8,7 @@ import { getVoiceWebrtcRegistryEntry } from "@/lib/voiceWebrtc/registry";
 export const VOICE_ALLOWED_ATTENDANT_CATEGORIES = ["DIRECT_SALES_OPS", "MARKETING_OPS"] as const;
 export const VOICE_PRESENCE_STATUSES = ["AVAILABLE", "AWAY", "BUSY", "BREAK", "OFFLINE"] as const;
 const VOICE_PRESENCE_STALE_MS = 90 * 1000;
+const VOICE_PRESENCE_WRITE_DEBOUNCE_MS = 20 * 1000;
 
 type VoicePresenceStatus = (typeof VOICE_PRESENCE_STATUSES)[number];
 
@@ -1394,18 +1395,34 @@ export async function updateVoicePresence(input: {
     throw new Error("invalid_presence_status");
   }
 
+  const existingPresence = await prisma.voiceAgentPresence.findUnique({
+    where: { userId: input.userId },
+  });
+  const now = new Date();
+  const normalizedCurrentCallId = input.currentCallId ?? null;
+
+  if (existingPresence) {
+    const statusMatches = (normalizedStatus ?? existingPresence.status) === existingPresence.status;
+    const callMatches = normalizedCurrentCallId === existingPresence.currentCallId;
+    const lastSeenAgeMs = now.getTime() - existingPresence.lastSeenAt.getTime();
+
+    if (statusMatches && callMatches && lastSeenAgeMs < VOICE_PRESENCE_WRITE_DEBOUNCE_MS) {
+      return existingPresence;
+    }
+  }
+
   const presence = await prisma.voiceAgentPresence.upsert({
     where: { userId: input.userId },
     create: {
       userId: input.userId,
       status: normalizedStatus || "OFFLINE",
-      currentCallId: input.currentCallId ?? null,
-      lastSeenAt: new Date(),
+      currentCallId: normalizedCurrentCallId,
+      lastSeenAt: now,
     },
     update: {
       status: normalizedStatus ?? undefined,
-      currentCallId: input.currentCallId ?? null,
-      lastSeenAt: new Date(),
+      currentCallId: normalizedCurrentCallId,
+      lastSeenAt: now,
     },
   });
   publishVoiceLiveEvent({

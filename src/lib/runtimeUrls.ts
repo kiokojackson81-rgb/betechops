@@ -53,6 +53,14 @@ export function isOpsHost(host: string | null | undefined) {
   return normalizedHost === opsHost;
 }
 
+export function isShopHost(host: string | null | undefined) {
+  if (!host) return false;
+  const normalizedHost = host.trim().toLowerCase();
+  if (!normalizedHost) return false;
+  const shopHost = new URL(getShopBaseUrl()).host.toLowerCase();
+  return normalizedHost === shopHost;
+}
+
 export function isAllowedAuthOrigin(origin: string) {
   const normalized = normalizeOrigin(origin);
   if (!normalized) return false;

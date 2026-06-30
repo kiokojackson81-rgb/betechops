@@ -1,6 +1,35 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getReferralCookieMaxAge, normalizeReferralCode, REFERRAL_COOKIE_NAME } from "@/lib/attribution";
+import {
+  isBlockedCrawlerUserAgent,
+  isFilterLikeCatalogRequest,
+  isInternalAllowedAutomationUserAgent,
+  isKnownCrawlerUserAgent,
+  isLimitedPublicAiCrawlerUserAgent,
+  isAllowedPublicAiCrawlerPath,
+  shouldApplyNoIndexToPublicRequest,
+} from "@/lib/botTrafficPolicy";
+import { isAgentsHost, isOpsHost, isShopHost } from "@/lib/runtimeUrls";
+
+function hasSessionCookie(req: NextRequest) {
+  const cookieCandidates = [
+    "__Secure-next-auth.session-token",
+    "__Host-next-auth.session-token",
+    "next-auth.session-token",
+  ];
+
+  const cookies = req.cookies;
+  return cookieCandidates.some((name) => {
+    const candidate = cookies.get(name);
+    return Boolean(candidate?.value);
+  });
+}
+
+function applyRobotsHeaders(response: NextResponse, value: string) {
+  response.headers.set("X-Robots-Tag", value);
+  return response;
+}
 
 // Combined middleware:
 // - Fast-fail unauthenticated requests to sensitive API routes (support/admin/pos)
@@ -9,8 +38,51 @@ export function middleware(req: NextRequest) {
   try {
     const pathname = req.nextUrl.pathname || "";
     const params = req.nextUrl.searchParams;
+    const host = req.headers.get("host");
+    const userAgent = req.headers.get("user-agent");
     const referralCode = normalizeReferralCode(params.get("ref"));
     const response = NextResponse.next();
+    const onAgentsHost = isAgentsHost(host);
+    const onOpsHost = isOpsHost(host);
+    const onShopHost = isShopHost(host);
+    const isCrawler = isKnownCrawlerUserAgent(userAgent);
+    const isInternalAutomation = isInternalAllowedAutomationUserAgent(userAgent);
+
+    if ((onAgentsHost || onOpsHost) && !pathname.startsWith("/api")) {
+      applyRobotsHeaders(response, "noindex, nofollow, noarchive, nosnippet");
+    }
+
+    if ((onAgentsHost || onOpsHost) && isCrawler && !isInternalAutomation) {
+      return new NextResponse("Forbidden", { status: 403 });
+    }
+
+    if (onShopHost && isBlockedCrawlerUserAgent(userAgent)) {
+      return new NextResponse("Forbidden", { status: 403 });
+    }
+
+    if (onShopHost && shouldApplyNoIndexToPublicRequest(pathname, params)) {
+      applyRobotsHeaders(response, "noindex, follow, noarchive");
+    }
+
+    if (
+      onShopHost &&
+      isLimitedPublicAiCrawlerUserAgent(userAgent) &&
+      (!isAllowedPublicAiCrawlerPath(pathname, params) || isFilterLikeCatalogRequest(pathname, params))
+    ) {
+      return new NextResponse("Forbidden", { status: 403 });
+    }
+
+    if (
+      onAgentsHost &&
+      pathname.startsWith("/products") &&
+      !hasSessionCookie(req)
+    ) {
+      const loginUrl = req.nextUrl.clone();
+      loginUrl.pathname = "/login";
+      loginUrl.search = "";
+      loginUrl.searchParams.set("callbackUrl", `${pathname}${req.nextUrl.search}`);
+      return NextResponse.redirect(loginUrl);
+    }
 
     if (referralCode) {
       response.cookies.set({
@@ -34,23 +106,7 @@ export function middleware(req: NextRequest) {
       pathname.startsWith("/api/admin") ||
       pathname.startsWith("/api/pos-commissions")
     ) {
-      const cookieCandidates = [
-        "__Secure-next-auth.session-token",
-        "__Host-next-auth.session-token",
-        "next-auth.session-token",
-      ];
-
-      const cookies = req.cookies;
-      let tokenFound = false;
-      for (const name of cookieCandidates) {
-        const c = cookies.get(name);
-        if (c && c.value) {
-          tokenFound = true;
-          break;
-        }
-      }
-
-      if (!tokenFound) {
+      if (!hasSessionCookie(req)) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
     }
@@ -63,12 +119,13 @@ export function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map|txt|xml)$).*)",
     "/api/support/:path*",
     "/api/admin/:path*",
     "/api/pos-commissions/:path*",
     "/marketing/:path*",
     "/attendant/:path*",
     "/auth/post-login",
+    "/robots.txt",
   ],
 };

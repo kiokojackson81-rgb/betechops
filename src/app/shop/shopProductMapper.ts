@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getProductTableCapabilities } from "@/lib/productTableCapabilities";
 import type { ShopProduct, ShopProductVisualType } from "@/app/shop/shopData";
@@ -63,6 +64,8 @@ type ShopCategoryDefinition = {
   visualType: ShopProductVisualType;
   image: string;
 };
+
+const SHOP_CATALOGUE_REVALIDATE_SECONDS = 600;
 
 export type ShopProductMappingField =
   | "category"
@@ -714,8 +717,7 @@ export function filterShopProducts(
 }
 
 export async function getOpsCatalogueProductsReadOnly() {
-  const products = await queryOpsCatalogueProducts();
-  return products.map(mapOpsProduct).filter((entry): entry is ShopProductMappingPreview => Boolean(entry));
+  return getCachedOpsCatalogueProductsReadOnly();
 }
 
 export async function getOpsCatalogueProductsReadOnlyMapped() {
@@ -728,7 +730,21 @@ export async function getOpsCatalogueProductMappedById(opsProductId: string) {
   const normalizedId = String(opsProductId || "").trim();
   if (!normalizedId) return null;
 
-  const products = await queryOpsCatalogueProducts(`AND "id" = $1`, [normalizedId]);
-  const product = products[0];
-  return product ? mapOpsProductToShopProduct(product) : null;
+  return (
+    (await getOpsCatalogueProductsReadOnly())
+      .find((entry) => entry.opsProductId === normalizedId)
+      ?.product ?? null
+  );
 }
+
+const getCachedOpsCatalogueProductsReadOnly = unstable_cache(
+  async () => {
+    const products = await queryOpsCatalogueProducts();
+    return products.map(mapOpsProduct).filter((entry): entry is ShopProductMappingPreview => Boolean(entry));
+  },
+  ["shop:ops-catalogue:readonly:v1"],
+  {
+    revalidate: SHOP_CATALOGUE_REVALIDATE_SECONDS,
+    tags: ["shop-products"],
+  },
+);
