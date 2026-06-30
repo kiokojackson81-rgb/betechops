@@ -14,6 +14,8 @@ const BLOCKED_CRAWLER_SIGNATURES = [
   "megaindex",
   "zoominfobot",
   "turnitinbot",
+  "gptbot",
+  "meta-externalagent",
 ] as const;
 
 const ALLOWED_SEARCH_BOT_SIGNATURES = [

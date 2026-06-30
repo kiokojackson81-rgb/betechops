@@ -9,6 +9,12 @@ function normalizeOrigin(value: string | null | undefined) {
   return trimmed.replace(/\/+$/, "");
 }
 
+function normalizeHost(value: string | null | undefined) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return "";
+  return normalized.split(":")[0] || "";
+}
+
 export function getOpsBaseUrl() {
   return (
     normalizeOrigin(process.env.OPS_BASE_URL) ??
@@ -38,26 +44,23 @@ export function getAllowedAuthOrigins() {
 }
 
 export function isAgentsHost(host: string | null | undefined) {
-  if (!host) return false;
-  const normalizedHost = host.trim().toLowerCase();
+  const normalizedHost = normalizeHost(host);
   if (!normalizedHost) return false;
-  const agentsHost = new URL(getAgentsBaseUrl()).host.toLowerCase();
+  const agentsHost = normalizeHost(new URL(getAgentsBaseUrl()).host);
   return normalizedHost === agentsHost;
 }
 
 export function isOpsHost(host: string | null | undefined) {
-  if (!host) return false;
-  const normalizedHost = host.trim().toLowerCase();
+  const normalizedHost = normalizeHost(host);
   if (!normalizedHost) return false;
-  const opsHost = new URL(getOpsBaseUrl()).host.toLowerCase();
+  const opsHost = normalizeHost(new URL(getOpsBaseUrl()).host);
   return normalizedHost === opsHost;
 }
 
 export function isShopHost(host: string | null | undefined) {
-  if (!host) return false;
-  const normalizedHost = host.trim().toLowerCase();
+  const normalizedHost = normalizeHost(host);
   if (!normalizedHost) return false;
-  const shopHost = new URL(getShopBaseUrl()).host.toLowerCase();
+  const shopHost = normalizeHost(new URL(getShopBaseUrl()).host);
   return normalizedHost === shopHost;
 }
 

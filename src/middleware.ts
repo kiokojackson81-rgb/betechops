@@ -31,6 +31,19 @@ function applyRobotsHeaders(response: NextResponse, value: string) {
   return response;
 }
 
+function normalizeHostnameFromRequest(req: NextRequest) {
+  const host = req.headers.get("host") || req.nextUrl.hostname || "";
+  return host.split(":")[0].trim().toLowerCase();
+}
+
+function logBlockedRequest(hostname: string, pathname: string, userAgent: string | null | undefined) {
+  console.info("[bot-blocked]", {
+    hostname,
+    pathname,
+    userAgent: String(userAgent || ""),
+  });
+}
+
 // Combined middleware:
 // - Fast-fail unauthenticated requests to sensitive API routes (support/admin/pos)
 // - Avoid post-login rehydration redirect loops for marketing/attendant flows
@@ -39,6 +52,7 @@ export function middleware(req: NextRequest) {
     const pathname = req.nextUrl.pathname || "";
     const params = req.nextUrl.searchParams;
     const host = req.headers.get("host");
+    const hostname = normalizeHostnameFromRequest(req);
     const userAgent = req.headers.get("user-agent");
     const referralCode = normalizeReferralCode(params.get("ref"));
     const response = NextResponse.next();
@@ -53,10 +67,12 @@ export function middleware(req: NextRequest) {
     }
 
     if ((onAgentsHost || onOpsHost) && isCrawler && !isInternalAutomation) {
+      logBlockedRequest(hostname, pathname, userAgent);
       return new NextResponse("Forbidden", { status: 403 });
     }
 
     if (onShopHost && isBlockedCrawlerUserAgent(userAgent)) {
+      logBlockedRequest(hostname, pathname, userAgent);
       return new NextResponse("Forbidden", { status: 403 });
     }
 
@@ -69,6 +85,7 @@ export function middleware(req: NextRequest) {
       isLimitedPublicAiCrawlerUserAgent(userAgent) &&
       (!isAllowedPublicAiCrawlerPath(pathname, params) || isFilterLikeCatalogRequest(pathname, params))
     ) {
+      logBlockedRequest(hostname, pathname, userAgent);
       return new NextResponse("Forbidden", { status: 403 });
     }
 
@@ -77,6 +94,11 @@ export function middleware(req: NextRequest) {
       pathname.startsWith("/products") &&
       !hasSessionCookie(req)
     ) {
+      if (isCrawler) {
+        logBlockedRequest(hostname, pathname, userAgent);
+        return new NextResponse("Forbidden", { status: 403 });
+      }
+
       const loginUrl = req.nextUrl.clone();
       loginUrl.pathname = "/login";
       loginUrl.search = "";
@@ -119,7 +141,8 @@ export function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map|txt|xml)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map)$).*)",
+    "/api/shop/products/:path*",
     "/api/support/:path*",
     "/api/admin/:path*",
     "/api/pos-commissions/:path*",
