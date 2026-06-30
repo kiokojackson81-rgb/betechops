@@ -48,23 +48,6 @@ type VoiceConsoleTab = (typeof VOICE_CONSOLE_TABS)[number];
 const VOICE_DATE_FILTERS = ["today", "yesterday", "week", "period"] as const;
 type VoiceDateFilter = (typeof VOICE_DATE_FILTERS)[number];
 type VoiceQueueView = "all" | "waiting" | "missed";
-type HitTestDebugInfo = {
-  x: number;
-  y: number;
-  tag: string;
-  id: string | null;
-  className: string | null;
-  text: string;
-  position: string;
-  zIndex: string;
-  pointerEvents: string;
-  rect: {
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-  };
-};
 
 function getNairobiReportDate() {
   return new Intl.DateTimeFormat("en-CA", {
@@ -161,32 +144,6 @@ function statusTone(status: string | null | undefined) {
 
 function cardShell(extra = "") {
   return `rounded-[24px] border border-slate-800/90 bg-slate-950/96 ${extra}`.trim();
-}
-
-function describeHitTestTarget(target: Element | null, x: number, y: number): HitTestDebugInfo | null {
-  if (!(target instanceof HTMLElement)) return null;
-  const style = window.getComputedStyle(target);
-  const rect = target.getBoundingClientRect();
-  return {
-    x,
-    y,
-    tag: target.tagName,
-    id: target.id || null,
-    className: typeof target.className === "string" ? target.className : null,
-    text: String(target.textContent || "")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 140),
-    position: style.position,
-    zIndex: style.zIndex,
-    pointerEvents: style.pointerEvents,
-    rect: {
-      left: Math.round(rect.left),
-      top: Math.round(rect.top),
-      width: Math.round(rect.width),
-      height: Math.round(rect.height),
-    },
-  };
 }
 
 function getInitials(value: string | null | undefined) {
@@ -453,10 +410,8 @@ export default function VoiceConsoleClient({
   const [callAssignmentDrafts, setCallAssignmentDrafts] = useState<Record<string, string>>({});
   const [queueAssignmentDrafts, setQueueAssignmentDrafts] = useState<Record<string, string>>({});
   const [assignmentPendingKey, setAssignmentPendingKey] = useState<string | null>(null);
-  const [hitTestDebugInfo, setHitTestDebugInfo] = useState<HitTestDebugInfo | null>(null);
   const lastAnnouncedCallIdRef = useRef<string | null>(null);
   const liveStatusTimeoutRef = useRef<number | null>(null);
-  const debugHitEnabled = searchParams.get("debugHit") === "1";
 
   const visibleActiveCalls = useMemo(
     () => data.activeCalls.filter((call) => isMeaningfulVoicePhone(call.callerNumber)),
@@ -550,23 +505,6 @@ export default function VoiceConsoleClient({
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
   }, [detailModalOpen]);
-
-  useEffect(() => {
-    if (!debugHitEnabled) {
-      setHitTestDebugInfo(null);
-      return;
-    }
-
-    const handleDocumentClick = (event: MouseEvent) => {
-      const hit = document.elementFromPoint(event.clientX, event.clientY);
-      const info = describeHitTestTarget(hit, event.clientX, event.clientY);
-      setHitTestDebugInfo(info);
-      console.log("[voice.hit_test]", info);
-    };
-
-    document.addEventListener("click", handleDocumentClick, true);
-    return () => document.removeEventListener("click", handleDocumentClick, true);
-  }, [debugHitEnabled]);
 
   const switchTab = (tab: VoiceConsoleTab, nextQueueView?: VoiceQueueView | null) => {
     setActiveTab(tab);
@@ -1403,17 +1341,17 @@ export default function VoiceConsoleClient({
   };
 
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-slate-950 text-slate-100">
-      <main className="mx-auto box-border min-h-screen max-w-[1500px] overflow-x-hidden px-3 py-3 sm:px-4 lg:px-5">
+    <div className="relative z-0 w-full overflow-x-hidden bg-slate-950 text-slate-100">
+      <main className="relative z-0 mx-auto box-border max-w-[1500px] overflow-x-hidden px-3 py-3 sm:px-4 lg:px-5">
         {error ? (
           <div className="mb-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
             {error}
           </div>
         ) : null}
 
-        <section className={cardShell("min-h-[calc(100vh-1.5rem)] overflow-visible shadow-[0_30px_90px_rgba(0,0,0,0.35)]")}>
+        <section className={cardShell("relative z-0 overflow-hidden shadow-[0_30px_90px_rgba(0,0,0,0.35)]")}>
           <div className="grid min-h-0 lg:grid-cols-[220px_minmax(0,1fr)]">
-            <aside className="overflow-visible border-b border-slate-800/90 bg-[linear-gradient(180deg,rgba(12,18,32,0.98),rgba(7,13,24,0.98))] lg:border-b-0 lg:border-r">
+            <aside className="border-b border-slate-800/90 bg-[linear-gradient(180deg,rgba(12,18,32,0.98),rgba(7,13,24,0.98))] lg:border-b-0 lg:border-r">
               <div className="flex items-center gap-2 border-b border-slate-800/90 px-4 py-4">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-400/20 bg-cyan-500/10">
                   <PhoneCall className="h-4.5 w-4.5 text-cyan-100" />
@@ -1506,7 +1444,7 @@ export default function VoiceConsoleClient({
               </div>
             </aside>
 
-            <div className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-visible bg-[linear-gradient(180deg,rgba(9,16,30,0.98),rgba(4,8,18,1))]">
+            <div className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] bg-[linear-gradient(180deg,rgba(9,16,30,0.98),rgba(4,8,18,1))]">
               <div className="border-b border-slate-800/90 px-4 py-3 sm:px-4 lg:px-5">
                 <div className="flex flex-col gap-3">
                   <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -1635,9 +1573,9 @@ export default function VoiceConsoleClient({
                 </div>
               </div>
 
-              <div className="min-w-0 overflow-visible px-4 py-4 sm:px-4 lg:px-5">
+              <div className="min-w-0 px-4 py-4 sm:px-4 lg:px-5">
                 {activeTab === "operations" ? (
-                  <section className="grid h-full min-h-0 gap-4 overflow-visible xl:grid-cols-[minmax(0,1fr)_312px] xl:items-start">
+                  <section className="grid min-h-0 gap-4 xl:grid-cols-[minmax(0,1fr)_312px] xl:items-start">
                     <section className="min-w-0 space-y-4">
                       {activeInteractionCall ? (
                         <div className={cardShell("p-4")}>
@@ -2638,23 +2576,6 @@ export default function VoiceConsoleClient({
             </div>
           </div>
         </section>
-
-        {debugHitEnabled && hitTestDebugInfo ? (
-          <div className="pointer-events-none fixed bottom-4 left-4 z-[330] max-w-[min(32rem,calc(100vw-2rem))] rounded-2xl border border-amber-400/30 bg-slate-950/96 px-3 py-2 text-xs text-amber-50 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
-            <div className="font-semibold uppercase tracking-[0.18em] text-amber-300">Hit Test</div>
-            <div className="mt-1 break-all">
-              {hitTestDebugInfo.tag}
-              {hitTestDebugInfo.id ? `#${hitTestDebugInfo.id}` : ""}
-            </div>
-            <div className="mt-1 text-slate-300">{hitTestDebugInfo.className || "No class"}</div>
-            <div className="mt-1 text-slate-400">
-              pos {hitTestDebugInfo.position} · z {hitTestDebugInfo.zIndex || "auto"} · pe {hitTestDebugInfo.pointerEvents}
-            </div>
-            <div className="mt-1 text-slate-500">
-              rect {hitTestDebugInfo.rect.left},{hitTestDebugInfo.rect.top} {hitTestDebugInfo.rect.width}x{hitTestDebugInfo.rect.height}
-            </div>
-          </div>
-        ) : null}
 
         {detailModalOpen ? (
           <div className="pointer-events-none fixed inset-x-0 bottom-0 top-24 z-[100] px-4 pb-4 sm:top-28 sm:px-6">
