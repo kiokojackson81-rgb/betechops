@@ -123,6 +123,17 @@ type VoiceDeskSummary = {
   followUpCount: number;
 };
 
+type SalesActionCardItem = {
+  title: string;
+  count: number;
+  currentPeriod: number;
+  carriedForward: number;
+  onClick?: () => void;
+  href?: string;
+  currentLabel?: string;
+  carriedLabel?: string;
+};
+
 const kenyanLocale = "en-KE";
 const kenyaTimeZone = "Africa/Nairobi";
 
@@ -1818,6 +1829,8 @@ export default function DailyReportFinal() {
                   currentPeriod: voiceDeskSummary.missedCount,
                   carriedForward: voiceDeskSummary.followUpCount,
                   href: voiceFollowUpsHref,
+                  currentLabel: "Missed",
+                  carriedLabel: "Follow-ups",
                 },
                 {
                   title: "Quotation Requests",
@@ -1840,7 +1853,7 @@ export default function DailyReportFinal() {
                   carriedForward: salesActionBreakdown.pod.carried,
                   onClick: () => setCurrentView("receipts"),
                 },
-              ].map((item) => {
+              ].map((item: SalesActionCardItem) => {
                 const tone = pendingToneClasses(item.count);
                 const content = (
                   <>
@@ -1850,7 +1863,7 @@ export default function DailyReportFinal() {
                         <div className="text-4xl font-semibold text-white">{salesActionLoading ? "..." : item.count}</div>
                         <div className="mt-1 text-sm text-slate-400">Pending</div>
                         <div className="mt-2 text-[11px] text-slate-500">
-                          Current period {item.currentPeriod} · Carried forward {item.carriedForward}
+                          {item.currentLabel || "Current period"} {item.currentPeriod} · {item.carriedLabel || "Carried forward"} {item.carriedForward}
                         </div>
                       </div>
                       <span className={`rounded-full border px-3 py-1 text-xs font-medium ${tone}`}>Open</span>

@@ -46,16 +46,7 @@ const VOICE_DISPOSITIONS = ["SALE", "QUOTE", "SUPPORT", "WRONG_NUMBER", "FOLLOW_
 type VoiceConsoleTab = (typeof VOICE_CONSOLE_TABS)[number];
 const VOICE_DATE_FILTERS = ["today", "yesterday", "week", "period"] as const;
 type VoiceDateFilter = (typeof VOICE_DATE_FILTERS)[number];
-type VoiceQueueView = "all" | "waiting" | "missed";
-
-function getNairobiReportDate() {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Africa/Nairobi",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
-}
+type VoiceQueueView = "all" | "waiting" | "missed" | "contacted";
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "-";
@@ -165,7 +156,7 @@ function normalizeVoiceDateFilter(value: string | null): VoiceDateFilter {
 }
 
 function normalizeQueueView(value: string | null): VoiceQueueView {
-  return value === "waiting" || value === "missed" ? value : "all";
+  return value === "waiting" || value === "missed" || value === "contacted" ? value : "all";
 }
 
 function getVoiceDateFilterMeta(
@@ -464,12 +455,20 @@ export default function VoiceConsoleClient({
     [data.recentRecordings, dateFilter],
   );
 
-  const filteredFollowUps = useMemo(
+  const filteredFollowUps = useMemo(() => visibleCallQueue, [visibleCallQueue]);
+
+  const missedFollowUpsCount = useMemo(
     () =>
-      visibleCallQueue.filter((item: any) =>
-        isWithinVoiceDateFilter(item.dueAt || item.updatedAt || item.createdAt, dateFilter),
-      ),
-    [dateFilter, visibleCallQueue],
+      filteredFollowUps.filter((item: any) =>
+        ["pending", "open", "pending_follow_up"].includes(String(item.status || "").trim().toLowerCase()),
+      ).length,
+    [filteredFollowUps],
+  );
+
+  const contactedFollowUpsCount = useMemo(
+    () =>
+      filteredFollowUps.filter((item: any) => String(item.status || "").trim().toLowerCase() === "contacted").length,
+    [filteredFollowUps],
   );
 
   const filteredFollowUpsByView = useMemo(() => {
@@ -481,6 +480,9 @@ export default function VoiceConsoleClient({
         const normalizedStatus = String(item.status || "").trim().toLowerCase();
         return ["pending", "open", "pending_follow_up"].includes(normalizedStatus);
       });
+    }
+    if (queueView === "contacted") {
+      return filteredFollowUps.filter((item: any) => String(item.status || "").trim().toLowerCase() === "contacted");
     }
     return filteredFollowUps;
   }, [filteredFollowUps, queueView]);
@@ -1101,9 +1103,7 @@ export default function VoiceConsoleClient({
     filteredRecentCalls.filter((call) =>
       ["missed", "busy", "failed", "cancelled", "disconnected"].includes(String(call.status || "").trim().toLowerCase()),
     ).length +
-    filteredFollowUps.filter((item: any) =>
-      ["pending", "open", "pending_follow_up"].includes(String(item.status || "").trim().toLowerCase()),
-    ).length;
+    missedFollowUpsCount;
 
   const filteredAverageTalkTime =
     filteredRecentCalls.reduce((sum, call) => sum + Number(call.durationInSeconds || 0), 0) /
@@ -1219,29 +1219,16 @@ export default function VoiceConsoleClient({
         return ["pending", "open", "pending_follow_up"].includes(normalizedStatus);
       });
     }
+    if (queueView === "contacted") {
+      return queueItems.filter((item: any) => {
+        if (Boolean(item.callerNumber)) return false;
+        return String(item.status || "").trim().toLowerCase() === "contacted";
+      });
+    }
     return queueItems;
   }, [queueItems, queueView]);
 
-  const voiceHomeHref = useMemo(() => {
-    if (data.viewer.isAdmin) {
-      return "/admin";
-    }
-
-    const targetEmail = String(myPresence?.email || "").trim().toLowerCase();
-    if (targetEmail === "brendah@betech.co.ke") {
-      return "/attendant/daily-report";
-    }
-
-    if (data.viewer.targetAttendantCategory === "DIRECT_SALES_OPS") {
-      return `/marketing/tracker?reportDate=${getNairobiReportDate()}`;
-    }
-
-    if (data.viewer.targetAttendantCategory === "MARKETING_OPS") {
-      return "/marketing/receipts?tab=pos";
-    }
-
-    return "/attendant/daily-report";
-  }, [data.viewer.isAdmin, data.viewer.targetAttendantCategory, myPresence?.email]);
+  const voiceHomeHref = useMemo(() => backHref, [backHref]);
 
   const followUpsHref = useMemo(() => {
     const params = new URLSearchParams();
@@ -1897,7 +1884,8 @@ export default function VoiceConsoleClient({
                           {[
                             { key: "all", label: `All (${queueItems.length})` },
                             { key: "waiting", label: `Waiting (${visibleWaitingCalls.length})` },
-                            { key: "missed", label: `Missed (${filteredFollowUps.length})` },
+                            { key: "missed", label: `Missed (${missedFollowUpsCount})` },
+                            { key: "contacted", label: `Contacted (${contactedFollowUpsCount})` },
                           ].map((item) => (
                             <button
                               key={item.key}
@@ -2478,7 +2466,8 @@ export default function VoiceConsoleClient({
                     <div className="mt-4 flex flex-wrap gap-2">
                       {[
                         { key: "all", label: `All (${filteredFollowUps.length})` },
-                        { key: "missed", label: `Missed (${filteredFollowUps.filter((item: any) => ["pending", "open", "pending_follow_up"].includes(String(item.status || "").trim().toLowerCase())).length})` },
+                        { key: "missed", label: `Missed (${missedFollowUpsCount})` },
+                        { key: "contacted", label: `Contacted (${contactedFollowUpsCount})` },
                       ].map((item) => (
                         <button
                           key={item.key}

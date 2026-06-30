@@ -137,12 +137,16 @@ function PendingKpiCard({
   currentPeriodCount,
   carriedForwardCount,
   href,
+  breakdownLabel = "Current period",
+  secondaryBreakdownLabel = "Carried forward",
 }: {
   title: string;
   count: number;
   currentPeriodCount: number;
   carriedForwardCount: number;
   href: string;
+  breakdownLabel?: string;
+  secondaryBreakdownLabel?: string;
 }) {
   const tone = pendingToneClasses(count);
 
@@ -157,7 +161,7 @@ function PendingKpiCard({
           <div className="text-4xl font-semibold text-white">{count}</div>
           <div className="mt-1 text-sm text-slate-400">Pending</div>
           <div className="mt-2 text-[11px] text-slate-500">
-            Current period {currentPeriodCount} · Carried forward {carriedForwardCount}
+            {breakdownLabel} {currentPeriodCount} · {secondaryBreakdownLabel} {carriedForwardCount}
           </div>
         </div>
         <span className={`rounded-full border px-3 py-1 text-xs font-medium ${tone}`}>Open</span>
@@ -725,6 +729,8 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
               currentPeriodCount={voiceMissedCount}
               carriedForwardCount={voiceFollowUpCount}
               href="/attendant/voice?tab=followups"
+              breakdownLabel="Missed"
+              secondaryBreakdownLabel="Follow-ups"
             />
           </div>
 
