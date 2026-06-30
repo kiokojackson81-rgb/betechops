@@ -29,6 +29,20 @@ type VoiceRouteTarget = {
 
 const VOICE_PRESENCE_ROUTING_WINDOW_MS = 90 * 1000;
 
+function isRoutingBlockingVoiceStatus(status: string | null | undefined) {
+  return [
+    "queued",
+    "ringing",
+    "initiated",
+    "dialing",
+    "in_progress",
+    "answered",
+    "connected",
+    "processing",
+    "transferred",
+  ].includes(safeString(status).toLowerCase());
+}
+
 function isVoiceWebrtcEnabled() {
   return String(process.env.NEXT_PUBLIC_VOICE_WEBRTC_ENABLED || "").trim().toLowerCase() === "true";
 }
@@ -185,10 +199,40 @@ async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], Vo
           userId: true,
           status: true,
           lastSeenAt: true,
+          currentCallId: true,
         },
       })
     : [];
   const presenceByUserId = new Map(presences.map((presence) => [presence.userId, presence]));
+  const activeCalls = userIds.length
+    ? await prisma.voiceCall.findMany({
+        where: {
+          assignedToId: { in: userIds },
+          OR: [
+            { isActive: true },
+            {
+              status: {
+                in: ["queued", "ringing", "initiated", "dialing", "in_progress", "answered", "connected", "processing", "transferred"],
+              },
+            },
+          ],
+        },
+        select: {
+          id: true,
+          assignedToId: true,
+          isActive: true,
+          status: true,
+        },
+      })
+    : [];
+  const activeCallByUserId = new Map<string, string>();
+  for (const call of activeCalls) {
+    if (!call.assignedToId) continue;
+    if (!call.isActive && !isRoutingBlockingVoiceStatus(call.status)) continue;
+    if (!activeCallByUserId.has(call.assignedToId)) {
+      activeCallByUserId.set(call.assignedToId, call.id);
+    }
+  }
   const now = Date.now();
 
   const toTarget = (label: VoiceRouteTarget["label"], phoneNumber: string, userId: string | null): VoiceRouteTarget => {
@@ -196,6 +240,9 @@ async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], Vo
     const webRtcRegistration = userId ? isVoiceWebrtcClientReady(userId) : null;
     const presenceStatus = safeString(presence?.status).toUpperCase() || "OFFLINE";
     const lastSeenAt = presence?.lastSeenAt ?? null;
+    const currentCallId = safeString(presence?.currentCallId);
+    const assignedActiveCallId = userId ? activeCallByUserId.get(userId) ?? null : null;
+    const hasBusyCall = Boolean(currentCallId || assignedActiveCallId);
     const skipReasons: string[] = [];
     if (!phoneNumber) skipReasons.push("missing_mobile_fallback");
     if (!userId) skipReasons.push("missing_routing_user");
@@ -212,10 +259,14 @@ async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], Vo
         skipReasons.push("missing_last_seen");
       }
     }
+    if (hasBusyCall) {
+      skipReasons.push("active_call_in_progress");
+    }
     const isAvailable =
       presenceStatus === "AVAILABLE" &&
       Boolean(lastSeenAt) &&
-      now - (lastSeenAt?.getTime() ?? 0) <= VOICE_PRESENCE_ROUTING_WINDOW_MS;
+      now - (lastSeenAt?.getTime() ?? 0) <= VOICE_PRESENCE_ROUTING_WINDOW_MS &&
+      !hasBusyCall;
     const webRtcIdentity = webRtcRegistration?.identity ?? buildVoiceWebrtcIdentity(getDefaultWebrtcClientName(label)) ?? null;
     if (isVoiceWebrtcEnabled()) {
       if (!webRtcRegistration?.identity) skipReasons.push("missing_browser_identity");
@@ -243,6 +294,7 @@ async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], Vo
       userId,
       presenceStatus,
       lastSeenAt: lastSeenAt?.toISOString() ?? null,
+      currentCallId: currentCallId || assignedActiveCallId,
       isAvailable,
       isWebrtcRegistered: Boolean(webRtcRegistration?.identity),
       webRtcIdentity,
