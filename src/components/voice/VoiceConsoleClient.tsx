@@ -234,6 +234,16 @@ function isInternalVoiceHref(value: string | null | undefined) {
   return Boolean(value) && String(value).startsWith("/");
 }
 
+function buildInlineFollowUpTitle(call: {
+  callerNumber?: string | null;
+  customer?: { customerName?: string | null };
+  statusLabel?: string | null;
+}) {
+  const label = call.customer?.customerName || call.callerNumber || "customer";
+  const normalizedStatus = String(call.statusLabel || "").trim().toLowerCase();
+  return normalizedStatus === "missed" ? `Missed call follow-up for ${label}` : `Follow up with ${label}`;
+}
+
 type ChatraceActivityData = {
   found?: boolean;
   sourceError?: boolean;
@@ -399,6 +409,10 @@ export default function VoiceConsoleClient({
   const [dispositionPending, setDispositionPending] = useState(false);
   const [callAssignmentDrafts, setCallAssignmentDrafts] = useState<Record<string, string>>({});
   const [queueAssignmentDrafts, setQueueAssignmentDrafts] = useState<Record<string, string>>({});
+  const [historyNoteDrafts, setHistoryNoteDrafts] = useState<Record<string, string>>({});
+  const [historyFollowUpDrafts, setHistoryFollowUpDrafts] = useState<Record<string, string>>({});
+  const [historyNotePendingKey, setHistoryNotePendingKey] = useState<string | null>(null);
+  const [historyFollowUpPendingKey, setHistoryFollowUpPendingKey] = useState<string | null>(null);
   const [assignmentPendingKey, setAssignmentPendingKey] = useState<string | null>(null);
   const [routingPreferencePendingKey, setRoutingPreferencePendingKey] = useState<string | null>(null);
   const [routingConfigPending, setRoutingConfigPending] = useState(false);
@@ -850,23 +864,27 @@ export default function VoiceConsoleClient({
     }
   };
 
+  const saveCallNote = async (voiceCallId: string, note: string) => {
+    const response = await fetch(`${pollBaseHref.replace("/live", "/notes")}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        voiceCallId,
+        note,
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(String(payload.error || "note_failed"));
+    }
+  };
+
   const handleAddNote = async () => {
     if (!selectedCall?.id || !noteDraft.trim()) return;
     setSubmittingNote(true);
     setError(null);
     try {
-      const response = await fetch(`${pollBaseHref.replace("/live", "/notes")}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          voiceCallId: selectedCall.id,
-          note: noteDraft,
-        }),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(String(payload.error || "note_failed"));
-      }
+      await saveCallNote(selectedCall.id, noteDraft.trim());
       setNoteDraft("");
       await refreshSnapshot(selectedCallId, selectedPhone);
     } catch (noteError) {
@@ -903,26 +921,42 @@ export default function VoiceConsoleClient({
     }
   };
 
+  const createFollowUpTask = async (input: {
+    voiceCallId?: string | null;
+    phone?: string | null;
+    title: string;
+    dueAt?: string | null;
+    notes?: string | null;
+  }) => {
+    const response = await fetch(`${pollBaseHref.replace("/live", "/follow-ups")}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        voiceCallId: input.voiceCallId ?? null,
+        phone: input.phone ?? null,
+        title: input.title,
+        dueAt: input.dueAt || null,
+        notes: input.notes || null,
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(String(payload.error || "follow_up_failed"));
+    }
+  };
+
   const handleCreateFollowUp = async () => {
     if (!followUpTitle.trim()) return;
     setSubmittingFollowUp(true);
     setError(null);
     try {
-      const response = await fetch(`${pollBaseHref.replace("/live", "/follow-ups")}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          voiceCallId: selectedCall?.id ?? null,
-          phone: selectedPhone,
-          title: followUpTitle,
-          dueAt: followUpDueAt || null,
-          notes: followUpNotes || null,
-        }),
+      await createFollowUpTask({
+        voiceCallId: selectedCall?.id ?? null,
+        phone: selectedPhone,
+        title: followUpTitle.trim(),
+        dueAt: followUpDueAt || null,
+        notes: followUpNotes.trim() || null,
       });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(String(payload.error || "follow_up_failed"));
-      }
       setFollowUpTitle("");
       setFollowUpDueAt("");
       setFollowUpNotes("");
@@ -1369,6 +1403,45 @@ export default function VoiceConsoleClient({
     } catch (markError) {
       console.error("[voice.console.mark_contacted_failed]", markError);
       setError("Could not mark the customer as contacted.");
+    }
+  };
+
+  const handleSaveHistoryNote = async (callId: string) => {
+    const nextNote = historyNoteDrafts[callId]?.trim();
+    if (!nextNote) return;
+    setHistoryNotePendingKey(callId);
+    setError(null);
+    try {
+      await saveCallNote(callId, nextNote);
+      setHistoryNoteDrafts((current) => ({ ...current, [callId]: "" }));
+      await refreshSnapshot(selectedCallId, selectedPhone);
+    } catch (noteError) {
+      console.error("[voice.console.history_note_failed]", noteError);
+      setError("Could not save the call note.");
+    } finally {
+      setHistoryNotePendingKey(null);
+    }
+  };
+
+  const handleCreateHistoryFollowUp = async (call: any) => {
+    const nextNotes = historyFollowUpDrafts[call.id]?.trim();
+    if (!nextNotes) return;
+    setHistoryFollowUpPendingKey(call.id);
+    setError(null);
+    try {
+      await createFollowUpTask({
+        voiceCallId: call.id,
+        phone: call.callerNumber,
+        title: buildInlineFollowUpTitle(call),
+        notes: nextNotes,
+      });
+      setHistoryFollowUpDrafts((current) => ({ ...current, [call.id]: "" }));
+      await refreshSnapshot(selectedCallId, selectedPhone);
+    } catch (followUpError) {
+      console.error("[voice.console.history_follow_up_failed]", followUpError);
+      setError("Could not create the follow-up task.");
+    } finally {
+      setHistoryFollowUpPendingKey(null);
     }
   };
 
@@ -2283,6 +2356,67 @@ export default function VoiceConsoleClient({
                                                     })()}
                                                   </div>
                                                 ) : null}
+
+                                                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                                                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Customer Workspace</div>
+                                                  <div className="mt-2 text-sm text-slate-300">
+                                                    Keep the full customer history workflow here. Save a quick note or create a follow-up with one note and submit.
+                                                  </div>
+                                                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                                                    <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                                                      <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Customer details</div>
+                                                      <div className="mt-2 space-y-2 text-sm text-slate-300">
+                                                        <div>Location: {call.customer.location || "Not captured"}</div>
+                                                        <div>Total spent: {formatMoney(call.customer.totalPurchasesValue, "KES")}</div>
+                                                        <div>Receipts: {call.customer.linkedRecords.receipts || 0}</div>
+                                                        <div>Quotes: {call.customer.linkedRecords.quotations || 0}</div>
+                                                      </div>
+                                                    </div>
+                                                    <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                                                      <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Quick note</div>
+                                                      <textarea
+                                                        value={historyNoteDrafts[call.id] ?? ""}
+                                                        onChange={(event) =>
+                                                          setHistoryNoteDrafts((current) => ({ ...current, [call.id]: event.target.value }))
+                                                        }
+                                                        rows={4}
+                                                        placeholder="Add an internal note about this customer or call"
+                                                        className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-900/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/40"
+                                                      />
+                                                      <button
+                                                        type="button"
+                                                        disabled={!historyNoteDrafts[call.id]?.trim() || historyNotePendingKey === call.id}
+                                                        onClick={() => void handleSaveHistoryNote(call.id)}
+                                                        className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+                                                      >
+                                                        {historyNotePendingKey === call.id ? "Saving..." : "Save Note"}
+                                                      </button>
+                                                    </div>
+                                                  </div>
+                                                  <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                                                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Simple follow-up</div>
+                                                    <div className="mt-1 text-xs text-slate-500">
+                                                      Enter follow-up notes only. The system will create the task under this customer automatically.
+                                                    </div>
+                                                    <textarea
+                                                      value={historyFollowUpDrafts[call.id] ?? ""}
+                                                      onChange={(event) =>
+                                                        setHistoryFollowUpDrafts((current) => ({ ...current, [call.id]: event.target.value }))
+                                                      }
+                                                      rows={4}
+                                                      placeholder="Enter follow-up notes or callback instruction"
+                                                      className="mt-3 w-full rounded-2xl border border-slate-800 bg-slate-900/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/40"
+                                                    />
+                                                    <button
+                                                      type="button"
+                                                      disabled={!historyFollowUpDrafts[call.id]?.trim() || historyFollowUpPendingKey === call.id}
+                                                      onClick={() => void handleCreateHistoryFollowUp(call)}
+                                                      className="mt-3 w-full rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                                                    >
+                                                      {historyFollowUpPendingKey === call.id ? "Submitting..." : "Submit Follow-up"}
+                                                    </button>
+                                                  </div>
+                                                </div>
 
                                                 <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                                                   <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Follow-up Actions</div>
