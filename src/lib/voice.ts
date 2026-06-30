@@ -702,6 +702,8 @@ export function inferVoiceCompletionStatus(
   const hasBridgeEvidence =
     bridgeDuration > 0 ||
     dialDuration > 0 ||
+    Boolean(safeString(payload.recordingUrl)) ||
+    Boolean(safeString(payload.dialDestinationNumber || payload.lastDialDestinationNumber)) ||
     ["answered", "connected", "completed", "complete", "success", "successful", "transferred", "bridged"].includes(
       bridgeStatus,
     ) ||

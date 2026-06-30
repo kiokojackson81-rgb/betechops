@@ -283,6 +283,8 @@ function inferVoiceProviderOutcomeFromPayload(
   const hasBridgeEvidence =
     bridgeDuration > 0 ||
     dialDuration > 0 ||
+    Boolean(String(payload.recordingUrl || "").trim()) ||
+    Boolean(String(payload.dialDestinationNumber || payload.lastDialDestinationNumber || "").trim()) ||
     ["answered", "connected", "completed", "complete", "success", "successful", "transferred", "bridged"].includes(
       bridgeStatus,
     ) ||
