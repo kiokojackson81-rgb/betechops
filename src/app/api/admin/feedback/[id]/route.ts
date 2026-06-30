@@ -11,8 +11,9 @@ type RouteContext = {
 export async function GET(_req: NextRequest, context: RouteContext) {
   try {
     const session = await auth();
+    const userId = (session?.user as { id?: string } | undefined)?.id ?? null;
     const role = String((session?.user as { role?: string } | undefined)?.role || "").toUpperCase();
-    if (!session || !["ADMIN", "SUPERVISOR"].includes(role)) {
+    if (!session || !userId) {
       return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
 
@@ -22,7 +23,9 @@ export async function GET(_req: NextRequest, context: RouteContext) {
       return NextResponse.json({ ok: false, error: "Missing feedback id" }, { status: 400 });
     }
 
-    const detail = await getCallFeedbackDetail(id);
+    const detail = await getCallFeedbackDetail(id, {
+      agentId: ["ADMIN", "SUPERVISOR"].includes(role) ? null : userId,
+    });
     if (!detail) {
       return NextResponse.json({ ok: false, error: "Feedback not found" }, { status: 404 });
     }

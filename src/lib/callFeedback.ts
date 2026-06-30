@@ -386,10 +386,12 @@ export async function listCallFeedback(args: {
   lowRatingOnly?: boolean;
   startDate?: Date | null;
   endDate?: Date | null;
+  agentId?: string | null;
 }) {
   const page = Math.max(1, Number(args.page || 1));
   const pageSize = Math.min(50, Math.max(1, Number(args.pageSize || 20)));
   const where = buildFeedbackWhere(args);
+  if (args.agentId) where.agentId = args.agentId;
 
   const [total, rows, aggregates] = await Promise.all([
     prisma.voiceCallFeedback.count({ where }),
@@ -487,7 +489,7 @@ export async function listCallFeedback(args: {
   };
 }
 
-export async function getCallFeedbackDetail(id: string) {
+export async function getCallFeedbackDetail(id: string, options?: { agentId?: string | null }) {
   const feedback = await prisma.voiceCallFeedback.findUnique({
     where: { id },
     include: {
@@ -539,6 +541,9 @@ export async function getCallFeedbackDetail(id: string) {
   });
 
   if (!feedback) return null;
+  if (options?.agentId && feedback.agent?.id !== options.agentId && feedback.agentId !== options.agentId) {
+    return null;
+  }
 
   const recentCalls = await prisma.voiceCall.findMany({
     where: { callerNumber: feedback.normalizedPhone },

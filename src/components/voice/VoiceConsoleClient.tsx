@@ -400,7 +400,7 @@ export default function VoiceConsoleClient({
   const [expandedRecentCallId, setExpandedRecentCallId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<VoiceConsoleTab>(() => {
     const nextTab = normalizeVoiceTab(searchParams.get("tab"));
-    return mode === "admin" || nextTab !== "feedback" ? nextTab : "operations";
+    return mode === "admin" || nextTab !== "agents" ? nextTab : "operations";
   });
   const [dateFilter, setDateFilter] = useState<VoiceDateFilter>(() => normalizeVoiceDateFilter(searchParams.get("range")));
   const [queueView, setQueueView] = useState<VoiceQueueView>(() => normalizeQueueView(searchParams.get("queue")));
@@ -487,7 +487,7 @@ export default function VoiceConsoleClient({
 
   useEffect(() => {
     const nextTab = normalizeVoiceTab(searchParams.get("tab"));
-    setActiveTab(mode === "admin" || nextTab !== "feedback" ? nextTab : "operations");
+    setActiveTab(mode === "admin" || nextTab !== "agents" ? nextTab : "operations");
     setDateFilter(normalizeVoiceDateFilter(searchParams.get("range")));
     setQueueView(normalizeQueueView(searchParams.get("queue")));
   }, [mode, searchParams]);
@@ -1100,7 +1100,10 @@ export default function VoiceConsoleClient({
   const filteredMissedCount =
     filteredRecentCalls.filter((call) =>
       ["missed", "busy", "failed", "cancelled", "disconnected"].includes(String(call.status || "").trim().toLowerCase()),
-    ).length + filteredFollowUps.length;
+    ).length +
+    filteredFollowUps.filter((item: any) =>
+      ["pending", "open", "pending_follow_up"].includes(String(item.status || "").trim().toLowerCase()),
+    ).length;
 
   const filteredAverageTalkTime =
     filteredRecentCalls.reduce((sum, call) => sum + Number(call.durationInSeconds || 0), 0) /
@@ -1277,8 +1280,8 @@ export default function VoiceConsoleClient({
     { key: "recent", label: "Call History", icon: History },
     { key: "recordings", label: "Recordings", icon: Radio },
     { key: "followups", label: "Follow-ups", icon: ClipboardList },
-    { key: "agents", label: "Agents", icon: Users },
-    ...(mode === "admin" ? ([{ key: "feedback", label: "Feedback", icon: Star }] as const) : []),
+    ...(mode === "admin" ? ([{ key: "agents", label: "Agents", icon: Users }] as const) : []),
+    { key: "feedback", label: "Feedback", icon: Star },
     { key: "settings", label: "Settings", icon: Settings2 },
   ] as const;
 
@@ -1974,13 +1977,15 @@ export default function VoiceConsoleClient({
                           >
                             Open Follow-ups
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => switchTab("agents")}
-                            className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-semibold text-slate-100 transition hover:border-white/20"
-                          >
-                            Open Agents
-                          </button>
+                          {mode === "admin" ? (
+                            <button
+                              type="button"
+                              onClick={() => switchTab("agents")}
+                              className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-semibold text-slate-100 transition hover:border-white/20"
+                            >
+                              Open Agents
+                            </button>
+                          ) : null}
                         </div>
                       </div>
                     </aside>
@@ -2590,12 +2595,12 @@ export default function VoiceConsoleClient({
                   </section>
                 ) : null}
 
-                {activeTab === "agents" ? (
+                {activeTab === "agents" && mode === "admin" ? (
                   <section className={cardShell("flex h-full min-h-0 flex-col overflow-hidden p-5")}>
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Agents</div>
-                        <h2 className="mt-1 text-2xl font-semibold text-white">Routing status for Brendah, Jennifer, and Jackson</h2>
+                        <h2 className="mt-1 text-2xl font-semibold text-white">Routing status for active voice operators</h2>
                       </div>
                       <span className="rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1 text-xs text-slate-300">
                         {visibleAgents.length}
@@ -2749,7 +2754,7 @@ export default function VoiceConsoleClient({
 
                 {activeTab === "feedback" ? (
                   <section className={cardShell("h-full min-h-0 overflow-y-auto overflow-x-hidden p-5")}>
-                    <VoiceFeedbackPanel />
+                    <VoiceFeedbackPanel mode={mode} />
                   </section>
                 ) : null}
 

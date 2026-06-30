@@ -110,7 +110,18 @@ function formatDuration(seconds: number | null | undefined) {
   return `${mins}m ${secs}s`;
 }
 
-export default function VoiceFeedbackPanel() {
+function getEffectiveCallStatus(call: { status?: string | null; followUps?: Array<{ status?: string | null }> }) {
+  const baseStatus = String(call.status || "").trim().toLowerCase();
+  const followUpStatus = String(call.followUps?.[0]?.status || "").trim().toLowerCase();
+  if (!["missed", "busy", "failed", "cancelled", "disconnected", "unanswered", "no_answer"].includes(baseStatus)) {
+    return baseStatus || "unknown";
+  }
+  if (followUpStatus === "contacted") return "contacted";
+  if (["resolved", "closed"].includes(followUpStatus)) return "resolved";
+  return baseStatus || "unknown";
+}
+
+export default function VoiceFeedbackPanel({ mode = "admin" }: { mode?: "admin" | "staff" }) {
   const [items, setItems] = useState<FeedbackListItem[]>([]);
   const [stats, setStats] = useState<FeedbackStats>({
     smsSentCount: 0,
@@ -217,8 +228,14 @@ export default function VoiceFeedbackPanel() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Feedback Center</div>
-            <h2 className="mt-2 text-2xl font-semibold text-white">Secure customer call feedback</h2>
-            <p className="mt-1 text-sm text-slate-400">Review secure-link delivery, link opens, completed surveys, linked calls, and service recovery follow-ups.</p>
+            <h2 className="mt-2 text-2xl font-semibold text-white">
+              {mode === "admin" ? "Secure customer call feedback" : "Your customer call feedback"}
+            </h2>
+            <p className="mt-1 text-sm text-slate-400">
+              {mode === "admin"
+                ? "Review secure-link delivery, link opens, completed surveys, linked calls, and service recovery follow-ups."
+                : "Review only the feedback linked to your handled calls, including ratings, comments, and contact requests."}
+            </p>
           </div>
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
             <select
@@ -363,8 +380,8 @@ export default function VoiceFeedbackPanel() {
                                           <div key={call.id} className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-3">
                                             <div className="flex flex-wrap items-center justify-between gap-2">
                                               <div className="text-sm font-semibold text-white">{call.callerNumber}</div>
-                                              <span className={`rounded-full border px-2.5 py-1 text-[11px] ${badgeClass(String(call.status || ""))}`}>
-                                                {String(call.status || "").replace(/_/g, " ")}
+                                              <span className={`rounded-full border px-2.5 py-1 text-[11px] ${badgeClass(getEffectiveCallStatus(call))}`}>
+                                                {getEffectiveCallStatus(call).replace(/_/g, " ")}
                                               </span>
                                             </div>
                                             <div className="mt-2 text-sm text-slate-400">
@@ -404,7 +421,7 @@ export default function VoiceFeedbackPanel() {
                                   <div className="mt-3 space-y-2">
                                     {detail?.linkedCall ? (
                                       <Link
-                                        href={`/admin/communications/voice?tab=recent&selectedCallId=${encodeURIComponent(detail.linkedCall.id)}&selectedPhone=${encodeURIComponent(detail.linkedCall.callerNumber || "")}`}
+                                        href={`${mode === "admin" ? "/admin/communications/voice" : "/attendant/voice"}?tab=recent&selectedCallId=${encodeURIComponent(detail.linkedCall.id)}&selectedPhone=${encodeURIComponent(detail.linkedCall.callerNumber || "")}`}
                                         className="inline-flex w-full items-center justify-between rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm font-semibold text-white transition hover:border-cyan-500/30 hover:bg-cyan-500/10"
                                       >
                                         Open call history
@@ -423,7 +440,7 @@ export default function VoiceFeedbackPanel() {
                                       </Link>
                                     ) : null}
                                     <Link
-                                      href={`/admin/communications/voice?tab=followups${item.phone ? `&selectedPhone=${encodeURIComponent(item.phone)}` : ""}`}
+                                      href={`${mode === "admin" ? "/admin/communications/voice" : "/attendant/voice"}?tab=followups${item.phone ? `&selectedPhone=${encodeURIComponent(item.phone)}` : ""}`}
                                       className="inline-flex w-full items-center justify-between rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm font-semibold text-white transition hover:border-cyan-500/30 hover:bg-cyan-500/10"
                                     >
                                       Create follow-up

@@ -76,6 +76,10 @@ function isAnsweredStatus(status: string | null | undefined) {
   return ["answered", "connected", "transferred"].includes(normalizeStatus(status));
 }
 
+function isLiveActiveStatus(status: string | null | undefined) {
+  return ["answered", "connected", "transferred", "in_progress", "processing"].includes(normalizeStatus(status));
+}
+
 function isMissedStatus(status: string | null | undefined) {
   return [
     "missed",
@@ -934,6 +938,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
   const [
     callsTodayCount,
     activeCallsRaw,
+    waitingCallsRaw,
     recentCallsRaw,
     followUpsRaw,
     voiceLeadsRaw,
@@ -953,7 +958,18 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     prisma.voiceCall.findMany({
       where: {
         ...callWhere,
-        OR: [{ isActive: true }, { status: { in: ["queued", "ringing", "initiated", "dialing", "in_progress", "answered"] } }],
+        OR: [{ isActive: true }, { status: { in: ["in_progress", "answered", "connected", "transferred", "processing"] } }],
+      },
+      include: {
+        assignedTo: { select: { id: true, name: true, email: true } },
+      },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      take: 8,
+    }),
+    prisma.voiceCall.findMany({
+      where: {
+        ...callWhere,
+        status: { in: ["queued", "ringing", "initiated", "dialing", "new", "pending"] },
       },
       include: {
         assignedTo: { select: { id: true, name: true, email: true } },
@@ -1199,6 +1215,58 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     }),
   );
 
+  const waitingCalls = await Promise.all(
+    waitingCallsRaw.map(async (call) => {
+      const context = await getContextForPhone(call.callerNumber, false);
+      const contextSummary = serializeCustomerContextSummary(context);
+      const lastActivity = contextSummary.recentTimeline[0] ?? null;
+      const { displayStatus, providerStatus } = resolveVoiceProviderOutcome(call);
+      return {
+        id: call.id,
+        sessionId: call.sessionId,
+        callerNumber: call.callerNumber,
+        direction: call.direction,
+        status: displayStatus,
+        statusLabel: formatStatusLabel(displayStatus),
+        providerStatus,
+        providerStatusLabel: formatStatusLabel(providerStatus),
+        isActive: call.isActive || isCallActiveStatus(call.status),
+        routedTo: call.routedTo,
+        routeType: call.routeType,
+        assignedToId: call.assignedToId,
+        assignedToName: call.assignedTo?.name ?? null,
+        assignedToEmail: call.assignedTo?.email ?? null,
+        startedAt: toIso(call.startedAt),
+        createdAt: call.createdAt.toISOString(),
+        endedAt: toIso(call.endedAt),
+        durationInSeconds: call.durationInSeconds ?? 0,
+        waitingSeconds: getWaitingSeconds(call),
+        amount: Number(call.amount ?? 0),
+        currencyCode: call.currencyCode ?? "KES",
+        recordingUrl: call.recordingUrl,
+        queueReasonLabel: getCallQueueReasonLabel(call),
+        sla: {
+          ringSeconds: getRingSeconds(call),
+          talkSeconds: Number(call.durationInSeconds ?? 0),
+          firstResponseSeconds: getRingSeconds(call),
+        },
+        customer: contextSummary,
+        linkedSummaryText: `${contextSummary.linkedRecords.receipts} receipts · ${contextSummary.linkedRecords.webOrders} web orders · ${contextSummary.linkedRecords.quotations} quotes`,
+        lastActivityTitle: lastActivity?.title ?? null,
+        lastActivityAt: lastActivity?.at ?? null,
+        routedToDisplay: getVoiceRoutingLabel(call.routedTo),
+        links: {
+          customer: buildPhoneSearchHref(contextSummary.normalizedPhone || call.callerNumber, viewer.impersonateId),
+          receipt: buildReceiptHref(contextSummary.latestReceiptId, viewer.impersonateId),
+          quote: buildQuoteHref(contextSummary.latestQuotationId, viewer.impersonateId),
+          createReceipt: buildCreateReceiptHref(viewer.impersonateId),
+          agentOrders: buildVoiceHref("/marketing/agent-orders", viewer.impersonateId),
+          callBack: `tel:${call.callerNumber}`,
+        },
+      };
+    }),
+  );
+
   const followUps = await Promise.all(
     followUpsRaw.map(async (task) => {
       const context = await getContextForPhone(task.phone, false);
@@ -1278,9 +1346,10 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
   for (const call of activeCalls) {
     if (!call.assignedToId) continue;
     activeCallIdsByAgent.set(call.assignedToId, (activeCallIdsByAgent.get(call.assignedToId) ?? 0) + 1);
-    if (isWaitingStatus(call.status)) {
-      waitingCallIdsByAgent.set(call.assignedToId, (waitingCallIdsByAgent.get(call.assignedToId) ?? 0) + 1);
-    }
+  }
+  for (const call of waitingCalls) {
+    if (!call.assignedToId) continue;
+    waitingCallIdsByAgent.set(call.assignedToId, (waitingCallIdsByAgent.get(call.assignedToId) ?? 0) + 1);
   }
 
   const agents = voiceAgentsRaw
@@ -1294,13 +1363,14 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     .filter((agent) => (viewer.isAdmin ? agent.isRoutingAgent : true))
     .sort((left, right) => left.routingPriority - right.routingPriority || left.displayName.localeCompare(right.displayName));
 
-  const activeCallsCount = activeCalls.filter((call) => call.isActive).length;
-  const waitingCallsCount = activeCalls.filter((call) => isWaitingStatus(call.status)).length;
+  const activeCallsCount = activeCalls.filter((call) => isLiveActiveStatus(call.status)).length;
+  const waitingCallsCount = waitingCalls.filter((call) => isWaitingStatus(call.status)).length;
   const answeredCallsCount = recentCalls.filter((call) => isAnsweredStatus(call.status)).length;
   const missedCallsCount =
-    followUps.filter((task) => isMissedStatus(task.status) || task.status === "pending").length +
-    missedLeads.filter((lead) => isMissedStatus(lead.status) || lead.status === "pending_follow_up" || lead.status === "open").length;
-  const longestWaitingSeconds = activeCalls.reduce((max, call) => Math.max(max, call.waitingSeconds || 0), 0);
+    recentCalls.filter((call) => isMissedStatus(call.status)).length +
+    followUps.filter((task) => normalizeStatus(task.status) === "pending").length +
+    missedLeads.filter((lead) => ["pending_follow_up", "open"].includes(normalizeStatus(lead.status))).length;
+  const longestWaitingSeconds = waitingCalls.reduce((max, call) => Math.max(max, call.waitingSeconds || 0), 0);
   const callbackOverdueCount = followUps.filter((task) => Number(task.callbackOverdueSeconds || 0) > 0).length;
   const transferRate =
     recentCalls.length > 0
@@ -1449,7 +1519,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
           myAnsweredCalls: answeredCallsCount,
         },
     activeCalls,
-    waitingCalls: activeCalls.filter((call) => isWaitingStatus(call.status)),
+    waitingCalls,
     callQueue: [...followUps, ...missedLeads].sort((left, right) => {
       const leftAt = new Date(left.dueAt || left.updatedAt).getTime();
       const rightAt = new Date(right.dueAt || right.updatedAt).getTime();

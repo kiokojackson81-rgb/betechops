@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import RegistrationBadge from "@/components/voice/RegistrationBadge";
 import { useSoftphone } from "@/components/voice/SoftphoneProvider";
 
 function cardShell(extra = "") {
@@ -44,24 +43,21 @@ export default function VoiceSettingsClient() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-300">Voice Settings</div>
-            <h1 className="mt-2 text-3xl font-semibold text-white">Browser softphone foundation</h1>
+            <h1 className="mt-2 text-3xl font-semibold text-white">Operator audio controls</h1>
             <p className="mt-2 max-w-3xl text-sm text-slate-400">
-              Device controls, presence automation, and SIP configuration placeholders are ready. Once Africa&apos;s Talking provisions SIP accounts, only the transport client needs to be connected.
+              Keep this page focused on the browser controls Brendah and Jennifer actually use during calls.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <RegistrationBadge />
-            <Link
-              href="/admin/communications/voice"
-              className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/20"
-            >
-              Back to console
-            </Link>
-          </div>
+          <Link
+            href="/admin/communications/voice"
+            className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-100 transition hover:border-white/20"
+          >
+            Back to console
+          </Link>
         </div>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1fr_0.95fr]">
+      <section className="grid gap-6 xl:grid-cols-[1fr_0.88fr]">
         <div className={cardShell("p-6")}>
           <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Devices</div>
           <h2 className="mt-2 text-2xl font-semibold text-white">Microphone, speaker, and browser audio</h2>
@@ -104,7 +100,6 @@ export default function VoiceSettingsClient() {
           <div className="mt-6 grid gap-3 md:grid-cols-2">
             {[
               { label: "Auto answer", key: "autoAnswer" as const },
-              { label: "Auto register", key: "autoRegister" as const },
               { label: "Noise suppression", key: "noiseSuppression" as const },
               { label: "Echo cancellation", key: "echoCancellation" as const },
             ].map((item) => (
@@ -143,97 +138,30 @@ export default function VoiceSettingsClient() {
               Speaker test
             </button>
           </div>
+        </div>
 
-          <div className="mt-4 grid gap-2 text-xs text-slate-500">
-            <div>Microphone permission: {softphone.microphonePermission}</div>
-            <div>Mic input level: {softphone.microphoneLevel}%</div>
-            <div>Speaker output test: {softphone.outputLevel}%</div>
+        <section className={cardShell("p-6")}>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Device Status</div>
+          <h2 className="mt-2 text-2xl font-semibold text-white">What the browser sees right now</h2>
+
+          <div className="mt-5 space-y-3">
+            {[
+              ["Microphone permission", softphone.microphonePermission],
+              ["Mic input level", `${softphone.microphoneLevel}%`],
+              ["Speaker test level", `${softphone.outputLevel}%`],
+              ["Availability", softphone.availabilityLabel],
+            ].map(([label, value]) => (
+              <div key={String(label)} className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                <div className="text-sm text-slate-300">{label}</div>
+                <div className="text-sm font-semibold text-white">{String(value)}</div>
+              </div>
+            ))}
           </div>
-        </div>
 
-        <div className="space-y-6">
-          <section className={cardShell("p-6")}>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">SIP Configuration</div>
-            <h2 className="mt-2 text-2xl font-semibold text-white">Africa&apos;s Talking SIP placeholders</h2>
-            <p className="mt-2 text-sm text-slate-400">
-              These values are stored locally for UI readiness only. No registration attempt is made until real credentials and the SIP client are added.
-            </p>
-
-            <div className="mt-5 grid gap-4">
-              <input
-                value={softphone.sipConfig.username}
-                onChange={(event) => softphone.updateSipConfig({ username: event.target.value })}
-                placeholder="SIP Username"
-                className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500"
-              />
-              <input
-                value={softphone.sipConfig.password}
-                onChange={(event) => softphone.updateSipConfig({ password: event.target.value })}
-                placeholder="Password"
-                type="password"
-                className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500"
-              />
-              <input
-                value={softphone.sipConfig.domain}
-                onChange={(event) => softphone.updateSipConfig({ domain: event.target.value })}
-                placeholder="Domain"
-                className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500"
-              />
-              <input
-                value={softphone.sipConfig.wssServer}
-                onChange={(event) => softphone.updateSipConfig({ wssServer: event.target.value })}
-                placeholder="WSS Server"
-                className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500"
-              />
-            </div>
-
-            <div className="mt-5 flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => void softphone.register()}
-                className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-100 transition hover:border-emerald-400"
-              >
-                Register
-              </button>
-              <button
-                type="button"
-                onClick={() => void softphone.unregister()}
-                className="rounded-full border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-rose-100 transition hover:border-rose-400"
-              >
-                Disconnect
-              </button>
-            </div>
-
-            <div className="mt-4 grid gap-2 text-xs text-slate-500">
-              <div>Connection status: {softphone.connectionStatus}</div>
-              <div>Registration state: {softphone.stateLabel}</div>
-              <div>Availability state: {softphone.availabilityLabel}</div>
-            </div>
-          </section>
-
-          <section className={cardShell("p-6")}>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Presence automation</div>
-            <h2 className="mt-2 text-2xl font-semibold text-white">State machine and heartbeat</h2>
-            <div className="mt-5 grid gap-3">
-              {[
-                "LOGIN -> AVAILABLE",
-                "INACTIVE -> AWAY",
-                "INCOMING -> RINGING",
-                "ANSWERED -> TALKING",
-                "HOLD -> BREAK",
-                "HANG UP -> AVAILABLE",
-                "UNREGISTER -> OFFLINE",
-              ].map((step) => (
-                <div key={step} className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-200">
-                  {step}
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 text-xs text-slate-500">
-              Last heartbeat {softphone.lastHeartbeatAt ? new Date(softphone.lastHeartbeatAt).toLocaleString("en-KE", { timeZone: "Africa/Nairobi" }) : "pending"}
-            </div>
-          </section>
-        </div>
+          <div className="mt-5 rounded-2xl border border-cyan-500/15 bg-cyan-500/5 px-4 py-4 text-sm text-slate-300">
+            This page no longer shows local SIP placeholders, registration buttons, or heartbeat debug text. It is intentionally limited to daily operator controls.
+          </div>
+        </section>
       </section>
     </div>
   );

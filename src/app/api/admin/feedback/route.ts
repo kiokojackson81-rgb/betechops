@@ -21,8 +21,9 @@ function parseDate(value: string | null, boundary: "start" | "end") {
 export async function GET(req: NextRequest) {
   try {
     const session = await auth();
+    const userId = (session?.user as { id?: string } | undefined)?.id ?? null;
     const role = String((session?.user as { role?: string } | undefined)?.role || "").toUpperCase();
-    if (!session || !["ADMIN", "SUPERVISOR"].includes(role)) {
+    if (!session || !userId) {
       return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
 
@@ -45,6 +46,7 @@ export async function GET(req: NextRequest) {
       lowRatingOnly,
       startDate,
       endDate,
+      agentId: ["ADMIN", "SUPERVISOR"].includes(role) ? null : userId,
     });
 
     return NextResponse.json({
