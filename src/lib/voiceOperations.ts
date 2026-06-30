@@ -229,6 +229,106 @@ function normalizeCallDisplayStatus(input: {
   return normalized ? normalized.toUpperCase() : "UNKNOWN";
 }
 
+function inferVoiceProviderOutcomeFromPayload(
+  payload: Record<string, string>,
+  options?: {
+    treatZeroDurationSuccessAsNoAnswer?: boolean;
+    treatInboundSuccessWithoutBridgeAsNoAnswer?: boolean;
+  },
+) {
+  const hangupCause = String(payload.lastBridgeHangupCause || payload.bridgeHangupCause || payload.hangupCause || "")
+    .trim()
+    .toUpperCase();
+  if (hangupCause === "USER_BUSY" || hangupCause === "BUSY") return "busy";
+  if (hangupCause === "NO_ANSWER" || hangupCause === "NO ANSWER") return "no_answer";
+
+  const normalizedStatus = String(payload.status || "").trim().toLowerCase();
+  const normalizedSessionState = String(payload.callSessionState || "").trim().toLowerCase();
+  const duration = Number(payload.durationInSeconds || payload.duration || 0) || 0;
+  const direction = String(payload.direction || "INBOUND").trim().toUpperCase() || "INBOUND";
+  const treatZeroDurationSuccessAsNoAnswer = options?.treatZeroDurationSuccessAsNoAnswer !== false;
+  const treatInboundSuccessWithoutBridgeAsNoAnswer = options?.treatInboundSuccessWithoutBridgeAsNoAnswer === true;
+  const isProviderTerminalSuccess =
+    ["success", "successful", "completed", "complete"].includes(normalizedStatus) ||
+    ["completed", "complete"].includes(normalizedSessionState);
+  const bridgeStatus = String(
+    payload.dialCallStatus ||
+      payload.lastBridgeDialStatus ||
+      payload.bridgeStatus ||
+      payload.lastBridgeStatus ||
+      payload.bridgeCallStatus ||
+      "",
+  )
+    .trim()
+    .toLowerCase();
+  const bridgeDuration =
+    Number(
+      payload.bridgeDurationInSeconds ||
+        payload.lastBridgeDurationInSeconds ||
+        payload.talkDurationInSeconds ||
+        payload.conversationDurationInSeconds ||
+        0,
+    ) || 0;
+  const hasBridgeEvidence =
+    bridgeDuration > 0 ||
+    ["answered", "connected", "completed", "complete", "success", "successful", "transferred", "bridged"].includes(
+      bridgeStatus,
+    ) ||
+    Boolean(hangupCause && !["USER_BUSY", "BUSY", "NO_ANSWER", "NO ANSWER"].includes(hangupCause));
+
+  if (isProviderTerminalSuccess && treatZeroDurationSuccessAsNoAnswer && duration <= 0) {
+    return "no_answer";
+  }
+
+  if (isProviderTerminalSuccess && direction === "INBOUND" && duration > 0) {
+    if (treatInboundSuccessWithoutBridgeAsNoAnswer && !hasBridgeEvidence) {
+      return "no_answer";
+    }
+    return "answered";
+  }
+
+  return String(
+    payload.status ||
+      payload.callSessionState ||
+      payload.callStatus ||
+      payload.state ||
+      "completed",
+  ).trim();
+}
+
+function resolveVoiceProviderOutcome(call: {
+  status: string | null | undefined;
+  durationInSeconds?: number | null;
+  isActive?: boolean | null;
+  routeType?: string | null;
+  routedTo?: string | null;
+  rawPayloadJson?: unknown;
+}) {
+  const payload =
+    call.rawPayloadJson && typeof call.rawPayloadJson === "object"
+      ? Object.fromEntries(
+          Object.entries(call.rawPayloadJson as Record<string, unknown>).map(([key, value]) => [key, String(value ?? "")]),
+        )
+      : null;
+  const isRoutedInboundCall = Boolean(String(call.routeType || "").trim() || String(call.routedTo || "").trim());
+  const providerStatus =
+    payload
+      ? inferVoiceProviderOutcomeFromPayload(payload, {
+          treatZeroDurationSuccessAsNoAnswer: isRoutedInboundCall,
+          treatInboundSuccessWithoutBridgeAsNoAnswer: isRoutedInboundCall,
+        })
+      : String(call.status || "");
+  const displayStatus = normalizeCallDisplayStatus({
+    status: providerStatus || call.status,
+    durationInSeconds: call.durationInSeconds,
+    isActive: call.isActive,
+  });
+  return {
+    providerStatus,
+    displayStatus,
+  };
+}
+
 function toIso(value: Date | null | undefined) {
   return value ? value.toISOString() : null;
 }
@@ -851,11 +951,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
       const context = await getContextForPhone(call.callerNumber, false);
       const contextSummary = serializeCustomerContextSummary(context);
       const lastActivity = contextSummary.recentTimeline[0] ?? null;
-      const displayStatus = normalizeCallDisplayStatus({
-        status: call.status,
-        durationInSeconds: call.durationInSeconds,
-        isActive: call.isActive,
-      });
+      const { displayStatus, providerStatus } = resolveVoiceProviderOutcome(call);
       return {
         id: call.id,
         sessionId: call.sessionId,
@@ -863,8 +959,8 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
         direction: call.direction,
         status: displayStatus,
         statusLabel: formatStatusLabel(displayStatus),
-        providerStatus: call.status,
-        providerStatusLabel: formatStatusLabel(call.status),
+        providerStatus,
+        providerStatusLabel: formatStatusLabel(providerStatus),
         isActive: call.isActive || isCallActiveStatus(call.status),
         routedTo: call.routedTo,
         routeType: call.routeType,
@@ -907,11 +1003,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
       const context = await getContextForPhone(call.callerNumber, false);
       const contextSummary = serializeCustomerContextSummary(context);
       const lastActivity = contextSummary.recentTimeline[0] ?? null;
-      const displayStatus = normalizeCallDisplayStatus({
-        status: call.status,
-        durationInSeconds: call.durationInSeconds,
-        isActive: call.isActive,
-      });
+      const { displayStatus, providerStatus } = resolveVoiceProviderOutcome(call);
       return {
         id: call.id,
         sessionId: call.sessionId,
@@ -919,8 +1011,8 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
         direction: call.direction,
         status: displayStatus,
         statusLabel: formatStatusLabel(displayStatus),
-        providerStatus: call.status,
-        providerStatusLabel: formatStatusLabel(call.status),
+        providerStatus,
+        providerStatusLabel: formatStatusLabel(providerStatus),
         isActive: call.isActive || isCallActiveStatus(call.status),
         routedTo: call.routedTo,
         routeType: call.routeType,
@@ -1200,24 +1292,19 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     selectedContext,
     selectedCallDetail: selectedCallDetail
       ? {
+          ...(function () {
+            const { displayStatus, providerStatus } = resolveVoiceProviderOutcome(selectedCallDetail);
+            return {
+              status: displayStatus,
+              statusLabel: formatStatusLabel(displayStatus),
+              providerStatus,
+              providerStatusLabel: formatStatusLabel(providerStatus),
+            };
+          })(),
           id: selectedCallDetail.id,
           sessionId: selectedCallDetail.sessionId,
           callerNumber: selectedCallDetail.callerNumber,
           direction: selectedCallDetail.direction,
-          status: normalizeCallDisplayStatus({
-            status: selectedCallDetail.status,
-            durationInSeconds: selectedCallDetail.durationInSeconds,
-            isActive: selectedCallDetail.isActive,
-          }),
-          statusLabel: formatStatusLabel(
-            normalizeCallDisplayStatus({
-              status: selectedCallDetail.status,
-              durationInSeconds: selectedCallDetail.durationInSeconds,
-              isActive: selectedCallDetail.isActive,
-            }),
-          ),
-          providerStatus: selectedCallDetail.status,
-          providerStatusLabel: formatStatusLabel(selectedCallDetail.status),
           queueReasonLabel: getCallQueueReasonLabel(selectedCallDetail),
           routedTo: selectedCallDetail.routedTo,
           assignedToName: selectedCallDetail.assignedTo?.name ?? null,

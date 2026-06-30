@@ -660,6 +660,7 @@ export function inferVoiceCompletionStatus(
   payload: VoicePayload,
   options?: {
     treatZeroDurationSuccessAsNoAnswer?: boolean;
+    treatInboundSuccessWithoutBridgeAsNoAnswer?: boolean;
   },
 ) {
   const hangupCause = safeString(payload.lastBridgeHangupCause || payload.bridgeHangupCause || payload.hangupCause).toUpperCase();
@@ -671,15 +672,39 @@ export function inferVoiceCompletionStatus(
   const duration = parseInteger(payload.durationInSeconds || payload.duration) ?? 0;
   const direction = safeString(payload.direction || "INBOUND").toUpperCase() || "INBOUND";
   const treatZeroDurationSuccessAsNoAnswer = options?.treatZeroDurationSuccessAsNoAnswer !== false;
+  const treatInboundSuccessWithoutBridgeAsNoAnswer = options?.treatInboundSuccessWithoutBridgeAsNoAnswer === true;
   const isProviderTerminalSuccess =
     ["success", "successful", "completed", "complete"].includes(normalizedStatus) ||
     ["completed", "complete"].includes(normalizedSessionState);
+  const bridgeStatus = safeString(
+    payload.dialCallStatus ||
+      payload.lastBridgeDialStatus ||
+      payload.bridgeStatus ||
+      payload.lastBridgeStatus ||
+      payload.bridgeCallStatus,
+  ).toLowerCase();
+  const bridgeDuration =
+    parseInteger(
+      payload.bridgeDurationInSeconds ||
+        payload.lastBridgeDurationInSeconds ||
+        payload.talkDurationInSeconds ||
+        payload.conversationDurationInSeconds,
+    ) ?? 0;
+  const hasBridgeEvidence =
+    bridgeDuration > 0 ||
+    ["answered", "connected", "completed", "complete", "success", "successful", "transferred", "bridged"].includes(
+      bridgeStatus,
+    ) ||
+    Boolean(hangupCause && !["USER_BUSY", "BUSY", "NO_ANSWER", "NO ANSWER"].includes(hangupCause));
 
   if (isProviderTerminalSuccess && treatZeroDurationSuccessAsNoAnswer && duration <= 0) {
     return "no_answer";
   }
 
   if (isProviderTerminalSuccess && direction === "INBOUND" && duration > 0) {
+    if (treatInboundSuccessWithoutBridgeAsNoAnswer && !hasBridgeEvidence) {
+      return "no_answer";
+    }
     return "answered";
   }
 
@@ -924,9 +949,26 @@ export async function upsertVoiceCallFromPayload(payload: VoicePayload, input?: 
     throw new Error("missing_session_id");
   }
 
+  const existingCall = await prisma.voiceCall.findUnique({
+    where: { sessionId },
+    select: {
+      status: true,
+      routeType: true,
+      routedTo: true,
+    },
+  });
+
   const callerNumber = normalizeVoiceNumber(payload.callerNumber || payload.caller || payload.from);
   const destinationNumber = normalizeVoiceNumber(payload.destinationNumber || payload.to || payload.calledNumber);
-  const status = normalizeVoiceStatus(payload);
+  const isRoutedInboundCall = Boolean(
+    safeString(input?.routeType ?? existingCall?.routeType) ||
+      safeString(input?.routedTo ?? existingCall?.routedTo),
+  );
+  const inferredStatus = inferVoiceCompletionStatus(payload, {
+    treatZeroDurationSuccessAsNoAnswer: isRoutedInboundCall,
+    treatInboundSuccessWithoutBridgeAsNoAnswer: isRoutedInboundCall,
+  });
+  const status = inferredStatus || normalizeVoiceStatus(payload);
   const isActive = isVoiceCallActive(payload);
   const customerLink = callerNumber ? await resolveVoiceCustomerLinkByPhone(callerNumber) : null;
   const customerId = customerLink?.matchedCustomer?.id ?? null;

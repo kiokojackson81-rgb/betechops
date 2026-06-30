@@ -59,6 +59,7 @@ function isTrustedVoiceCallback(payload: Record<string, string>) {
 function inferTerminalStatus(payload: Record<string, string>, plan: VoiceRoutePlan | null) {
   return inferVoiceCompletionStatus(payload, {
     treatZeroDurationSuccessAsNoAnswer: Boolean(plan?.hops.length),
+    treatInboundSuccessWithoutBridgeAsNoAnswer: Boolean(plan?.hops.length),
   });
 }
 
