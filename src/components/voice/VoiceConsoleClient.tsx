@@ -25,7 +25,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import DialPad from "@/components/voice/DialPad";
 import VoiceFeedbackPanel from "@/components/voice/VoiceFeedbackPanel";
 import VoiceSettingsClient from "@/components/voice/VoiceSettingsClient";
-import { withImpersonateId } from "@/lib/impersonation";
 import { useSoftphone } from "@/components/voice/SoftphoneProvider";
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
@@ -1189,25 +1188,6 @@ export default function VoiceConsoleClient({
     return `${pathname}?${params.toString()}`;
   }, [data.viewer.impersonateId, pathname]);
 
-  const workspaceNav = useMemo(() => {
-    if (data.viewer.isAdmin) {
-      return [
-        { href: withImpersonateId("/admin", data.viewer.impersonateId), label: "Admin Home", icon: Grip },
-        { href: withImpersonateId("/admin/agents", data.viewer.impersonateId), label: "Agents", icon: Users },
-        { href: withImpersonateId("/admin/orders", data.viewer.impersonateId), label: "Orders", icon: ClipboardList },
-        { href: withImpersonateId("/receipts", data.viewer.impersonateId), label: "Receipts", icon: History },
-        { href: withImpersonateId("/admin/customers", data.viewer.impersonateId), label: "Customers", icon: Search },
-      ] as const;
-    }
-
-    return [
-      { href: voiceHomeHref, label: "Go Home", icon: Grip },
-      { href: withImpersonateId("/attendant/voice", data.viewer.impersonateId), label: "Voice Desk", icon: PhoneCall },
-      { href: withImpersonateId("/marketing/receipts?tab=pos", data.viewer.impersonateId), label: "Receipts", icon: History },
-      { href: withImpersonateId("/marketing/tracker", data.viewer.impersonateId), label: "Tracker", icon: ClipboardList },
-    ] as const;
-  }, [data.viewer.impersonateId, data.viewer.isAdmin, voiceHomeHref]);
-
   const missedCallsHref = useMemo(() => {
     const params = new URLSearchParams();
     params.set("tab", "followups");
@@ -1365,25 +1345,6 @@ export default function VoiceConsoleClient({
               </div>
 
               <div className="space-y-5 px-3 py-4">
-                <div>
-                  <div className="px-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Workspace</div>
-                  <div className="mt-2 space-y-1">
-                    {workspaceNav.map((item) => {
-                      const Icon = item.icon;
-                      return (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          className="flex w-full items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-left text-slate-300 transition hover:border-white/10 hover:bg-white/[0.03]"
-                        >
-                          <Icon className="h-4 w-4 shrink-0" />
-                          <span className="text-[13px] font-medium">{item.label}</span>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </div>
-
                 <div>
                   <div className="px-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Voice Console</div>
                   <div className="mt-2 space-y-1">
