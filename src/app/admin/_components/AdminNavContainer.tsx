@@ -60,7 +60,7 @@ export default function AdminNavContainer() {
   }, [open]);
 
   return (
-    <div className="max-w-7xl mx-auto px-2 md:px-4 py-2">
+    <div className="relative z-[210] isolate mx-auto max-w-7xl overflow-visible px-2 py-2 pointer-events-auto md:px-4">
       <div className="flex items-center gap-3">
       <button
         data-nav-toggle="1"
@@ -81,7 +81,7 @@ export default function AdminNavContainer() {
         <AdminUserMenu />
       </div>
       </div>
-      <div className="mt-2 hidden md:block overflow-visible">
+      <div className="relative z-[1] mt-2 hidden overflow-visible md:block">
         <AdminTopNav />
       </div>
 
