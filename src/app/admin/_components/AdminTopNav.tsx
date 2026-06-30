@@ -1,7 +1,6 @@
 "use client";
 // src/app/admin/_components/AdminTopNav.tsx
 import React, { useMemo } from "react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV } from "./adminNav";
 
@@ -48,7 +47,7 @@ export default function AdminTopNav({ mobile = false, className = "" }: Props) {
         {NAV.map(({ href, label, icon: Icon, children }) => {
           const active = isItemActive(href, children);
           return (
-            <Link
+            <a
               key={href}
               href={href}
               aria-current={active ? "page" : undefined}
@@ -68,7 +67,7 @@ export default function AdminTopNav({ mobile = false, className = "" }: Props) {
                   (active ? "scale-x-100 opacity-90" : "scale-x-0 opacity-0 group-hover:opacity-60 group-hover:scale-x-100")
                 }
               />
-            </Link>
+            </a>
           );
         })}
       </nav>
@@ -92,7 +91,7 @@ export default function AdminTopNav({ mobile = false, className = "" }: Props) {
                 const [childPath] = child.href.split("?");
                 const childActive = pathname === childPath || pathname.startsWith(childPath + "/");
                 return (
-                  <Link
+                  <a
                     key={child.href}
                     href={child.href}
                     aria-current={childActive ? "page" : undefined}
@@ -104,7 +103,7 @@ export default function AdminTopNav({ mobile = false, className = "" }: Props) {
                     }
                   >
                     {child.label}
-                  </Link>
+                  </a>
                 );
               })}
             </nav>

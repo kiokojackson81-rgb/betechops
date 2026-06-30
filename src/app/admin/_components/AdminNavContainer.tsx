@@ -1,6 +1,5 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
-import Link from "next/link";
 import AdminTopNav from "./AdminTopNav";
 import AdminTopbarBadges from "./AdminTopbarBadges";
 import AdminUserMenu from "./AdminUserMenu";
@@ -75,7 +74,7 @@ export default function AdminNavContainer() {
           <span className={"block h-[2px] w-5 bg-white transition-transform " + (open ? "-translate-y-[5px] -rotate-45" : "")}></span>
         </div>
       </button>
-      <Link href="/admin" className="font-semibold tracking-tight text-base md:text-lg shrink-0 whitespace-nowrap">BetechOps — Unified Admin</Link>
+      <a href="/admin" className="font-semibold tracking-tight text-base md:text-lg shrink-0 whitespace-nowrap">BetechOps — Unified Admin</a>
       <div className="ml-auto hidden md:flex items-center gap-2">
         <AdminTopbarBadges />
         <AdminUserMenu />
