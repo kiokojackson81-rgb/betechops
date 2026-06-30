@@ -98,6 +98,8 @@ model User {
   assignedVoiceLeads                   VoiceLead[]                     @relation("VoiceLeadAssignedTo")
   customerVoiceLeads                   VoiceLead[]                     @relation("VoiceLeadCustomer")
   voicePresence                        VoiceAgentPresence?             @relation("VoicePresenceUser")
+  voiceRoutingPreference               VoiceAgentRoutingPreference?    @relation("VoiceRoutingPreferenceUser")
+  voiceRoutingOverflowConfigs          VoiceRoutingConfig[]            @relation("VoiceRoutingOverflowUser")
   authoredVoiceCallNotes               VoiceCallNote[]                 @relation("VoiceCallNoteAuthor")
   customerVoiceCallNotes               VoiceCallNote[]                 @relation("VoiceCallNoteCustomer")
   assignedVoiceFollowUps               VoiceFollowUp[]                 @relation("VoiceFollowUpAssignee")
@@ -1613,6 +1615,30 @@ model VoiceAgentPresence {
   @@index([status, updatedAt])
   @@index([currentCallId])
   @@index([dismissedPopupCallId])
+}
+
+model VoiceAgentRoutingPreference {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  routingEnabled      Boolean  @default(true)
+  allowAfterHoursCalls Boolean @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  user                User     @relation("VoiceRoutingPreferenceUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([routingEnabled, allowAfterHoursCalls])
+}
+
+model VoiceRoutingConfig {
+  id             String   @id @default(cuid())
+  key            String   @unique @default("default")
+  overflowUserId String?
+  overflowPhone  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  overflowUser   User?    @relation("VoiceRoutingOverflowUser", fields: [overflowUserId], references: [id], onDelete: SetNull)
+
+  @@index([overflowUserId])
 }
 
 model VoiceCallNote {

@@ -35,7 +35,9 @@ export function isVoiceOperationsSchemaMissingError(error: unknown) {
   return (
     message.includes("VoiceAgentPresence") ||
     message.includes("VoiceCallNote") ||
-    message.includes("VoiceFollowUp")
+    message.includes("VoiceFollowUp") ||
+    message.includes("VoiceAgentRoutingPreference") ||
+    message.includes("VoiceRoutingConfig")
   );
 }
 
@@ -721,8 +723,49 @@ async function listVoiceAgents() {
           updatedAt: true,
         },
       },
+      voiceRoutingPreference: {
+        select: {
+          routingEnabled: true,
+          allowAfterHoursCalls: true,
+          updatedAt: true,
+        },
+      },
     },
     orderBy: [{ role: "asc" }, { name: "asc" }],
+  });
+}
+
+async function listVoiceRoutingCandidates() {
+  return prisma.user.findMany({
+    where: {
+      isActive: true,
+      phone: { not: null },
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      role: true,
+      attendantCategory: true,
+    },
+    orderBy: [{ name: "asc" }, { email: "asc" }],
+  });
+}
+
+async function getVoiceRoutingConfig() {
+  return prisma.voiceRoutingConfig.findUnique({
+    where: { key: "default" },
+    include: {
+      overflowUser: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+        },
+      },
+    },
   });
 }
 
@@ -817,6 +860,8 @@ function serializePresenceRow(
   const webRtcRegistry = getVoiceWebrtcRegistryEntry(agent.id);
 
   const effectiveStatus = effectivePresenceStatus(agent.voicePresence?.status);
+  const routingEnabled = agent.voiceRoutingPreference?.routingEnabled ?? true;
+  const allowAfterHoursCalls = agent.voiceRoutingPreference?.allowAfterHoursCalls ?? false;
 
   return {
     id: agent.id,
@@ -842,9 +887,12 @@ function serializePresenceRow(
     currentCallId: agent.voicePresence?.currentCallId ?? null,
     dismissedPopupCallId: agent.voicePresence?.dismissedPopupCallId ?? null,
     dismissedPopupAt: toIso(agent.voicePresence?.dismissedPopupAt),
+    routingEnabled,
+    allowAfterHoursCalls,
+    routingPreferenceUpdatedAt: toIso(agent.voiceRoutingPreference?.updatedAt),
     activeCallCount,
     waitingCallCount,
-    isAvailableForRouting: isAgentAvailableForRouting(effectiveStatus, agent.voicePresence?.lastSeenAt),
+    isAvailableForRouting: routingEnabled && isAgentAvailableForRouting(effectiveStatus, agent.voicePresence?.lastSeenAt),
     webRtcClientName,
     webRtcIdentity,
     isWebrtcRegistered: Boolean(webRtcRegistry),
@@ -872,6 +920,8 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     callCostAggregate,
     avgTalkAggregate,
     newVoiceLeadsCount,
+    voiceRoutingConfigRaw,
+    routingCandidatesRaw,
   ] = await Promise.all([
     prisma.voiceCall.count({
       where: {
@@ -949,6 +999,8 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
         createdAt: { gte: todayStart },
       },
     }),
+    viewer.isAdmin ? getVoiceRoutingConfig() : Promise.resolve(null),
+    viewer.isAdmin ? listVoiceRoutingCandidates() : Promise.resolve([]),
   ]);
 
   const contextCache = new Map<string, Promise<Awaited<ReturnType<typeof getVoiceCustomerContext>>>>();
@@ -1186,6 +1238,19 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     }, {}),
   ).sort((left, right) => right.count - left.count);
   const availableAgentsCount = agents.filter((agent) => agent.isAvailableForRouting).length;
+  const routingCandidates = routingCandidatesRaw.map((candidate) => ({
+    id: candidate.id,
+    name: candidate.name,
+    email: candidate.email,
+    phone: candidate.phone,
+    role: candidate.role,
+    attendantCategory: candidate.attendantCategory,
+    label:
+      String(candidate.name || "").trim() ||
+      String(candidate.email || "").trim() ||
+      String(candidate.phone || "").trim() ||
+      "Unnamed user",
+  }));
 
   const selectedCall =
     (input.selectedCallId ? activeCalls.find((call) => call.id === input.selectedCallId) || recentCalls.find((call) => call.id === input.selectedCallId) : null) ||
@@ -1257,6 +1322,17 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
       scope,
       popupDismissedCallId: agents.find((agent) => agent.id === viewer.targetUserId)?.dismissedPopupCallId ?? null,
     },
+    routingConfig: {
+      overflowUserId: voiceRoutingConfigRaw?.overflowUserId ?? null,
+      overflowPhone: voiceRoutingConfigRaw?.overflowPhone ?? null,
+      overflowUserLabel:
+        voiceRoutingConfigRaw?.overflowUser?.name ||
+        voiceRoutingConfigRaw?.overflowUser?.email ||
+        voiceRoutingConfigRaw?.overflowUser?.phone ||
+        null,
+      updatedAt: toIso(voiceRoutingConfigRaw?.updatedAt),
+    },
+    routingCandidates,
     summary: viewer.isAdmin
       ? {
           callsToday: callsTodayCount,
@@ -1476,6 +1552,90 @@ export async function updateVoicePopupDismissal(input: {
   });
 
   return presence;
+}
+
+export async function updateVoiceAgentRoutingPreference(input: {
+  userId: string;
+  routingEnabled?: boolean | null;
+  allowAfterHoursCalls?: boolean | null;
+}) {
+  const existingUser = await prisma.user.findUnique({
+    where: { id: input.userId },
+    select: { id: true, isActive: true },
+  });
+  if (!existingUser?.isActive) {
+    throw new Error("voice_routing_user_not_found");
+  }
+
+  const preference = await prisma.voiceAgentRoutingPreference.upsert({
+    where: { userId: input.userId },
+    create: {
+      userId: input.userId,
+      routingEnabled: input.routingEnabled ?? true,
+      allowAfterHoursCalls: input.allowAfterHoursCalls ?? false,
+    },
+    update: {
+      routingEnabled: input.routingEnabled ?? undefined,
+      allowAfterHoursCalls: input.allowAfterHoursCalls ?? undefined,
+    },
+  });
+
+  publishVoiceLiveEvent({
+    type: "presence",
+    reason: "voice_agent_routing_preference_updated",
+    userId: input.userId,
+  });
+
+  return preference;
+}
+
+export async function updateVoiceRoutingConfig(input: {
+  overflowUserId?: string | null;
+  overflowPhone?: string | null;
+}) {
+  const overflowUserId = String(input.overflowUserId || "").trim() || null;
+  const overflowPhone = normalizeKenyanPhone(String(input.overflowPhone || "").trim()) || null;
+
+  if (overflowUserId) {
+    const overflowUser = await prisma.user.findUnique({
+      where: { id: overflowUserId },
+      select: { id: true, isActive: true },
+    });
+    if (!overflowUser?.isActive) {
+      throw new Error("voice_overflow_user_not_found");
+    }
+  }
+
+  const config = await prisma.voiceRoutingConfig.upsert({
+    where: { key: "default" },
+    create: {
+      key: "default",
+      overflowUserId,
+      overflowPhone,
+    },
+    update: {
+      overflowUserId,
+      overflowPhone,
+    },
+    include: {
+      overflowUser: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+        },
+      },
+    },
+  });
+
+  publishVoiceLiveEvent({
+    type: "presence",
+    reason: "voice_routing_config_updated",
+    userId: overflowUserId ?? undefined,
+  });
+
+  return config;
 }
 
 export async function reassignVoiceWork(input: {

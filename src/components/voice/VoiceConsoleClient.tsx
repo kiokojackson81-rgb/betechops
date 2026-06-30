@@ -409,6 +409,10 @@ export default function VoiceConsoleClient({
   const [callAssignmentDrafts, setCallAssignmentDrafts] = useState<Record<string, string>>({});
   const [queueAssignmentDrafts, setQueueAssignmentDrafts] = useState<Record<string, string>>({});
   const [assignmentPendingKey, setAssignmentPendingKey] = useState<string | null>(null);
+  const [routingPreferencePendingKey, setRoutingPreferencePendingKey] = useState<string | null>(null);
+  const [routingConfigPending, setRoutingConfigPending] = useState(false);
+  const [overflowUserIdDraft, setOverflowUserIdDraft] = useState(initialData.routingConfig?.overflowUserId ?? "");
+  const [overflowPhoneDraft, setOverflowPhoneDraft] = useState(initialData.routingConfig?.overflowPhone ?? "");
   const lastAnnouncedCallIdRef = useRef<string | null>(null);
   const liveStatusTimeoutRef = useRef<number | null>(null);
 
@@ -663,6 +667,11 @@ export default function VoiceConsoleClient({
     setTransferAssigneeId("");
     setTransferPhone("");
   }, [activeInteractionCall]);
+
+  useEffect(() => {
+    setOverflowUserIdDraft(data.routingConfig?.overflowUserId ?? "");
+    setOverflowPhoneDraft(data.routingConfig?.overflowPhone ?? "");
+  }, [data.routingConfig?.overflowPhone, data.routingConfig?.overflowUserId]);
 
   const groupedRecentCalls = useMemo(() => {
     const groups = new Map<string, typeof filteredRecentCalls>();
@@ -1031,6 +1040,59 @@ export default function VoiceConsoleClient({
     }
   };
 
+  const handleUpdateAgentRouting = async (
+    userId: string,
+    patch: { routingEnabled?: boolean; allowAfterHoursCalls?: boolean },
+  ) => {
+    setRoutingPreferencePendingKey(userId);
+    setError(null);
+    try {
+      const response = await fetch(`${pollBaseHref.replace("/live", "/routing")}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          ...patch,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(String(payload.error || "voice_routing_preference_failed"));
+      }
+      await refreshSnapshot(selectedCallId, selectedPhone);
+    } catch (routingError) {
+      console.error("[voice.console.routing_preference_failed]", routingError);
+      setError("Could not update the agent routing setting.");
+    } finally {
+      setRoutingPreferencePendingKey(null);
+    }
+  };
+
+  const handleSaveOverflowRouting = async () => {
+    setRoutingConfigPending(true);
+    setError(null);
+    try {
+      const response = await fetch(`${pollBaseHref.replace("/live", "/routing")}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          overflowUserId: overflowUserIdDraft || null,
+          overflowPhone: overflowPhoneDraft || null,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(String(payload.error || "voice_routing_config_failed"));
+      }
+      await refreshSnapshot(selectedCallId, selectedPhone);
+    } catch (routingError) {
+      console.error("[voice.console.routing_config_failed]", routingError);
+      setError("Could not save the overflow routing target.");
+    } finally {
+      setRoutingConfigPending(false);
+    }
+  };
+
   const filteredAnsweredCount = filteredRecentCalls.filter((call) =>
     ["answered", "connected", "transferred"].includes(String(call.status || "").trim().toLowerCase()),
   ).length;
@@ -1094,7 +1156,7 @@ export default function VoiceConsoleClient({
         return {
           ...agent,
           status: normalizedCurrentStatus,
-          isAvailableForRouting: normalizedCurrentStatus === "AVAILABLE",
+          isAvailableForRouting: (agent as any).routingEnabled !== false && normalizedCurrentStatus === "AVAILABLE",
           lastSeenAt: softphone.lastHeartbeatAt || (agent as any).lastSeenAt,
           isWebrtcRegistered:
             softphone.transportMode === "webrtc"
@@ -2467,10 +2529,55 @@ export default function VoiceConsoleClient({
                         {visibleAgents.length}
                       </span>
                     </div>
+                    <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Overflow Routing</div>
+                          <div className="mt-1 text-base font-semibold text-white">Backup destination when main routing is unavailable</div>
+                          <div className="mt-1 text-sm text-slate-400">
+                            Use this when admin is off, agents are out of office, or you need a manual after-hours receiver.
+                          </div>
+                        </div>
+                        <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] text-slate-300">
+                          {data.routingConfig?.overflowUserLabel || data.routingConfig?.overflowPhone || "Not configured"}
+                        </span>
+                      </div>
+                      <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                        <select
+                          value={overflowUserIdDraft}
+                          onChange={(event) => setOverflowUserIdDraft(event.target.value)}
+                          className="rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-slate-100 outline-none"
+                        >
+                          <option value="">No fallback user selected</option>
+                          {data.routingCandidates
+                            .filter((candidate: any) => candidate.phone)
+                            .map((candidate: any) => (
+                              <option key={candidate.id} value={candidate.id}>
+                                {candidate.label} · {candidate.phone}
+                              </option>
+                            ))}
+                        </select>
+                        <input
+                          value={overflowPhoneDraft}
+                          onChange={(event) => setOverflowPhoneDraft(event.target.value)}
+                          placeholder="Optional direct fallback number"
+                          className="rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-white outline-none placeholder:text-slate-500"
+                        />
+                        <button
+                          type="button"
+                          disabled={routingConfigPending}
+                          onClick={() => void handleSaveOverflowRouting()}
+                          className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {routingConfigPending ? "Saving..." : "Save Overflow"}
+                        </button>
+                      </div>
+                    </div>
                     <div className="mt-4 grid min-h-0 flex-1 gap-4 overflow-y-auto overflow-x-hidden pr-1 lg:grid-cols-3">
                       {visibleAgents.length ? (
                         visibleAgents.map((agent) => {
                           const row = agent as any;
+                          const routingPending = routingPreferencePendingKey === row.id;
                           return (
                             <div key={row.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                               <div className="flex items-center gap-3">
@@ -2508,6 +2615,52 @@ export default function VoiceConsoleClient({
                                 <div className="flex items-center justify-between gap-3">
                                   <span>Last seen</span>
                                   <span className="text-right text-slate-400">{formatDateTime(row.lastSeenAt)}</span>
+                                </div>
+                              </div>
+                              <div className="mt-4 space-y-3 border-t border-slate-800 pt-4">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div>
+                                    <div className="text-sm font-semibold text-white">Receive calls</div>
+                                    <div className="text-xs text-slate-500">Switch routing on or off for this agent.</div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    disabled={routingPending}
+                                    onClick={() =>
+                                      void handleUpdateAgentRouting(row.id, {
+                                        routingEnabled: !row.routingEnabled,
+                                      })
+                                    }
+                                    className={`rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                                      row.routingEnabled
+                                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100 hover:border-emerald-400"
+                                        : "border-rose-500/30 bg-rose-500/10 text-rose-100 hover:border-rose-400"
+                                    } disabled:cursor-not-allowed disabled:opacity-50`}
+                                  >
+                                    {routingPending ? "Saving..." : row.routingEnabled ? "On" : "Off"}
+                                  </button>
+                                </div>
+                                <div className="flex items-center justify-between gap-3">
+                                  <div>
+                                    <div className="text-sm font-semibold text-white">After hours</div>
+                                    <div className="text-xs text-slate-500">Allow this fallback line to receive calls outside working hours.</div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    disabled={routingPending}
+                                    onClick={() =>
+                                      void handleUpdateAgentRouting(row.id, {
+                                        allowAfterHoursCalls: !row.allowAfterHoursCalls,
+                                      })
+                                    }
+                                    className={`rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                                      row.allowAfterHoursCalls
+                                        ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-100 hover:border-cyan-400"
+                                        : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20"
+                                    } disabled:cursor-not-allowed disabled:opacity-50`}
+                                  >
+                                    {routingPending ? "Saving..." : row.allowAfterHoursCalls ? "Allowed" : "Blocked"}
+                                  </button>
                                 </div>
                               </div>
                             </div>

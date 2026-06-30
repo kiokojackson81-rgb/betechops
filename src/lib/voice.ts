@@ -12,13 +12,16 @@ import { maybeSendMissedCallSms } from "@/lib/voiceSmsNotifications";
 const NAIROBI_TIMEZONE = "Africa/Nairobi";
 
 type VoicePayload = Record<string, string>;
+type VoiceRouteLabel = "BRENDAH" | "JENNIFER" | "ADMIN" | "OVERFLOW";
 
 type VoiceRouteTarget = {
-  label: "BRENDAH" | "JENNIFER" | "ADMIN";
+  label: VoiceRouteLabel;
   phoneNumber: string;
   userId: string | null;
   presenceStatus: string;
   isAvailable: boolean;
+  routingEnabled: boolean;
+  allowAfterHoursCalls: boolean;
   lastSeenAt: Date | null;
   webRtcIdentity: string | null;
   isWebrtcRegistered: boolean;
@@ -50,6 +53,7 @@ function isVoiceWebrtcEnabled() {
 function getDefaultWebrtcClientName(label: VoiceRouteTarget["label"]) {
   if (label === "BRENDAH") return "brendah";
   if (label === "JENNIFER") return "jennifer";
+  if (label === "OVERFLOW") return "overflow";
   return "jackson";
 }
 
@@ -191,19 +195,57 @@ async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], Vo
   const jenniferUserId = routingUsers.JENNIFER;
   const adminUserId = routingUsers.ADMIN;
 
-  const userIds = [brendahUserId, jenniferUserId, adminUserId].filter((value): value is string => Boolean(value));
-  const presences = userIds.length
-    ? await prisma.voiceAgentPresence.findMany({
-        where: { userId: { in: userIds } },
+  const voiceRoutingConfig = await prisma.voiceRoutingConfig.findUnique({
+    where: { key: "default" },
+    include: {
+      overflowUser: {
         select: {
-          userId: true,
-          status: true,
-          lastSeenAt: true,
-          currentCallId: true,
+          id: true,
+          phone: true,
         },
-      })
-    : [];
-  const presenceByUserId = new Map(presences.map((presence) => [presence.userId, presence]));
+      },
+    },
+  });
+  const overflowUserId = voiceRoutingConfig?.overflowUserId ?? null;
+  const overflowPhone = normalizeVoiceNumber(voiceRoutingConfig?.overflowPhone || voiceRoutingConfig?.overflowUser?.phone || "");
+
+  const userIds = [brendahUserId, jenniferUserId, adminUserId, overflowUserId].filter(
+    (value): value is string => Boolean(value),
+  );
+  const [presences, routingPreferences]: [
+    Array<{ userId: string; status: string; lastSeenAt: Date; currentCallId: string | null }>,
+    Array<{ userId: string; routingEnabled: boolean; allowAfterHoursCalls: boolean }>,
+  ] = await Promise.all([
+    userIds.length
+      ? prisma.voiceAgentPresence.findMany({
+          where: { userId: { in: userIds } },
+          select: {
+            userId: true,
+            status: true,
+            lastSeenAt: true,
+            currentCallId: true,
+          },
+        })
+      : Promise.resolve([]),
+    userIds.length
+      ? prisma.voiceAgentRoutingPreference.findMany({
+          where: { userId: { in: userIds } },
+          select: {
+            userId: true,
+            routingEnabled: true,
+            allowAfterHoursCalls: true,
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+  const presenceByUserId = new Map<string, (typeof presences)[number]>();
+  for (const presence of presences) {
+    presenceByUserId.set(presence.userId, presence);
+  }
+  const routingPreferenceByUserId = new Map<string, (typeof routingPreferences)[number]>();
+  for (const preference of routingPreferences) {
+    routingPreferenceByUserId.set(preference.userId, preference);
+  }
   const activeCalls = userIds.length
     ? await prisma.voiceCall.findMany({
         where: {
@@ -235,40 +277,55 @@ async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], Vo
   }
   const now = Date.now();
 
-  const toTarget = (label: VoiceRouteTarget["label"], phoneNumber: string, userId: string | null): VoiceRouteTarget => {
+  const toTarget = (
+    label: VoiceRouteTarget["label"],
+    phoneNumber: string,
+    userId: string | null,
+    options?: { alwaysDial?: boolean; defaultAllowAfterHoursCalls?: boolean },
+  ): VoiceRouteTarget => {
     const presence = userId ? presenceByUserId.get(userId) : null;
+    const routingPreference = userId ? routingPreferenceByUserId.get(userId) : null;
     const webRtcRegistration = userId ? isVoiceWebrtcClientReady(userId) : null;
     const presenceStatus = safeString(presence?.status).toUpperCase() || "OFFLINE";
     const lastSeenAt = presence?.lastSeenAt ?? null;
     const currentCallId = safeString(presence?.currentCallId);
     const assignedActiveCallId = userId ? activeCallByUserId.get(userId) ?? null : null;
     const hasBusyCall = Boolean(currentCallId || assignedActiveCallId);
+    const routingEnabled = routingPreference?.routingEnabled ?? true;
+    const allowAfterHoursCalls = routingPreference?.allowAfterHoursCalls ?? Boolean(options?.defaultAllowAfterHoursCalls);
     const skipReasons: string[] = [];
     if (!phoneNumber) skipReasons.push("missing_mobile_fallback");
-    if (!userId) skipReasons.push("missing_routing_user");
-    if (!presence) {
-      skipReasons.push("missing_presence");
-    } else {
-      if (presenceStatus !== "AVAILABLE") {
-        skipReasons.push(`status_${presenceStatus.toLowerCase()}`);
+    if (!routingEnabled) skipReasons.push("routing_disabled");
+    if (!userId && label !== "OVERFLOW") skipReasons.push("missing_routing_user");
+    if (!options?.alwaysDial) {
+      if (!presence) {
+        skipReasons.push("missing_presence");
+      } else {
+        if (presenceStatus !== "AVAILABLE") {
+          skipReasons.push(`status_${presenceStatus.toLowerCase()}`);
+        }
+        if (lastSeenAt && now - lastSeenAt.getTime() > VOICE_PRESENCE_ROUTING_WINDOW_MS) {
+          skipReasons.push("stale_presence");
+        }
+        if (!lastSeenAt) {
+          skipReasons.push("missing_last_seen");
+        }
       }
-      if (lastSeenAt && now - lastSeenAt.getTime() > VOICE_PRESENCE_ROUTING_WINDOW_MS) {
-        skipReasons.push("stale_presence");
+      if (hasBusyCall) {
+        skipReasons.push("active_call_in_progress");
       }
-      if (!lastSeenAt) {
-        skipReasons.push("missing_last_seen");
-      }
-    }
-    if (hasBusyCall) {
-      skipReasons.push("active_call_in_progress");
     }
     const isAvailable =
-      presenceStatus === "AVAILABLE" &&
-      Boolean(lastSeenAt) &&
-      now - (lastSeenAt?.getTime() ?? 0) <= VOICE_PRESENCE_ROUTING_WINDOW_MS &&
-      !hasBusyCall;
+      routingEnabled &&
+      Boolean(phoneNumber) &&
+      (options?.alwaysDial
+        ? true
+        : presenceStatus === "AVAILABLE" &&
+          Boolean(lastSeenAt) &&
+          now - (lastSeenAt?.getTime() ?? 0) <= VOICE_PRESENCE_ROUTING_WINDOW_MS &&
+          !hasBusyCall);
     const webRtcIdentity = webRtcRegistration?.identity ?? buildVoiceWebrtcIdentity(getDefaultWebrtcClientName(label)) ?? null;
-    if (isVoiceWebrtcEnabled()) {
+    if (isVoiceWebrtcEnabled() && !options?.alwaysDial) {
       if (!webRtcRegistration?.identity) skipReasons.push("missing_browser_identity");
       if (!webRtcRegistration) skipReasons.push("browser_not_registered");
     }
@@ -280,6 +337,8 @@ async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], Vo
       userId,
       presenceStatus,
       isAvailable,
+      routingEnabled,
+      allowAfterHoursCalls,
       lastSeenAt,
       webRtcIdentity,
       isWebrtcRegistered: Boolean(webRtcRegistration?.identity),
@@ -296,6 +355,8 @@ async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], Vo
       lastSeenAt: lastSeenAt?.toISOString() ?? null,
       currentCallId: currentCallId || assignedActiveCallId,
       isAvailable,
+      routingEnabled,
+      allowAfterHoursCalls,
       isWebrtcRegistered: Boolean(webRtcRegistration?.identity),
       webRtcIdentity,
       dialValues,
@@ -310,6 +371,10 @@ async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], Vo
     BRENDAH: toTarget("BRENDAH", brendahPhone, brendahUserId),
     JENNIFER: toTarget("JENNIFER", jenniferPhone, jenniferUserId),
     ADMIN: toTarget("ADMIN", adminPhone, adminUserId),
+    OVERFLOW: toTarget("OVERFLOW", overflowPhone, overflowUserId, {
+      alwaysDial: true,
+      defaultAllowAfterHoursCalls: true,
+    }),
   };
 }
 
@@ -485,14 +550,14 @@ function buildWorkingHoursSelection(input: {
   const orderedTargets = (
     input.preferAdminFirst
       ? [
-          ...(input.adminTarget.phoneNumber ? [input.adminTarget] : []),
+          ...(input.adminTarget.phoneNumber && input.adminTarget.routingEnabled ? [input.adminTarget] : []),
           ...(input.preferredTarget?.phoneNumber ? [input.preferredTarget] : []),
           ...alternateTargets.filter((target) => Boolean(target.phoneNumber)),
         ]
       : [
           ...(input.preferredTarget?.phoneNumber ? [input.preferredTarget] : []),
           ...alternateTargets.filter((target) => Boolean(target.phoneNumber)),
-          ...(input.adminTarget.phoneNumber ? [input.adminTarget] : []),
+          ...(input.adminTarget.phoneNumber && input.adminTarget.routingEnabled ? [input.adminTarget] : []),
         ]
   ).filter((target, index, array) => array.findIndex((candidate) => candidate.label === target.label) === index);
 
@@ -507,14 +572,26 @@ export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerN
   const date = input instanceof Date ? input : input?.date ?? new Date();
   const callerNumber = normalizeVoiceNumber(input instanceof Date ? "" : input?.callerNumber || "");
   const targets = await buildVoiceTargets();
-  const allConfiguredTargets = [targets.BRENDAH, targets.JENNIFER, targets.ADMIN].filter((target) => target.phoneNumber);
-  const agentTargets = [targets.BRENDAH, targets.JENNIFER].filter((target) => target.phoneNumber);
+  const allConfiguredTargets = [targets.BRENDAH, targets.JENNIFER, targets.ADMIN, targets.OVERFLOW].filter(
+    (target) => target.phoneNumber,
+  );
+  const agentTargets = [targets.BRENDAH, targets.JENNIFER].filter(
+    (target) => target.phoneNumber && target.routingEnabled,
+  );
   const adminTarget = targets.ADMIN;
-  const directFallbackTargets = [adminTarget].filter((target) => target.phoneNumber);
+  const overflowTarget = targets.OVERFLOW;
+  const directFallbackTargets = [adminTarget, overflowTarget].filter(
+    (target) => target.phoneNumber && target.routingEnabled,
+  );
 
   if (!isWithinVoiceWorkingHours(date)) {
-    const fallbackTargets = [adminTarget].filter((target) => target.phoneNumber && target.isAvailable);
-    const orderedTargets = fallbackTargets.length ? fallbackTargets : [adminTarget].filter((target) => target.phoneNumber);
+    const afterHoursTargets = [adminTarget, targets.BRENDAH, targets.JENNIFER, overflowTarget].filter(
+      (target) =>
+        target.phoneNumber &&
+        target.routingEnabled &&
+        (target.label === "ADMIN" || target.label === "OVERFLOW" || target.allowAfterHoursCalls),
+    );
+    const orderedTargets = afterHoursTargets;
     return {
       routeType: "AFTER_HOURS",
       orderedTargets,
@@ -523,7 +600,7 @@ export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerN
       unavailableTargets: allConfiguredTargets.filter((target) => !orderedTargets.includes(target)),
       hasAvailableTarget: orderedTargets.some((target) => target.isAvailable),
       hasRoutableTarget: orderedTargets.length > 0,
-      usedMobileFallback: false,
+      usedMobileFallback: orderedTargets.some((target) => target.label === "OVERFLOW"),
       routeReason: "after_hours" as const,
     };
   }
@@ -582,7 +659,7 @@ export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerN
   const workingTargets = [targets.BRENDAH, targets.JENNIFER, targets.ADMIN];
   const orderedTargets = selection.orderedTargets.length
     ? selection.orderedTargets
-    : [adminTarget].filter((target) => target.phoneNumber);
+    : directFallbackTargets;
   const availableTargets = workingTargets.filter((target) => target.phoneNumber && target.isAvailable);
   const hasRoutableTarget = orderedTargets.length > 0;
   const primaryTarget =
@@ -623,7 +700,7 @@ export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerN
     unavailableTargets: workingTargets.filter((target) => target.phoneNumber && !target.isAvailable),
     hasAvailableTarget: availableTargets.length > 0,
     hasRoutableTarget,
-    usedMobileFallback: Boolean(orderedTargets.length) && orderedTargets[orderedTargets.length - 1]?.label === "ADMIN",
+    usedMobileFallback: Boolean(orderedTargets.find((target) => target.label === "ADMIN" || target.label === "OVERFLOW")),
     routeReason: selection.routeReason,
   };
 }
