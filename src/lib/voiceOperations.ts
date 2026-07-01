@@ -139,7 +139,7 @@ function formatVoiceTimelineEvent(input: {
   const isAttemptedFinalStatus =
     normalizedFinalStatus === "attempted_call" || normalizedFinalStatus === "attempted call";
 
-  if (isAttemptedFinalStatus && ["answered", "connected", "in_progress", "processing"].includes(normalizedRawStatus)) {
+  if (isAttemptedFinalStatus && ["answered", "connected", "in_progress", "processing", "active"].includes(normalizedRawStatus)) {
     return {
       id: `event-${input.event.id}`,
       type: "EVENT",
@@ -240,6 +240,31 @@ function getRingSeconds(input: {
   if (!end) return 0;
   const totalSeconds = Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000));
   return Math.max(0, totalSeconds - Number(input.durationInSeconds ?? 0));
+}
+
+function getVoiceSlaBreakdown(input: {
+  status: string | null | undefined;
+  startedAt: Date | null;
+  endedAt: Date | null;
+  createdAt: Date;
+  durationInSeconds?: number | null;
+  isActive?: boolean | null;
+}) {
+  const totalDurationSeconds = Math.max(0, Number(input.durationInSeconds ?? 0));
+  if (isAttemptedCallStatus(input.status)) {
+    return {
+      firstResponseSeconds: totalDurationSeconds,
+      ringSeconds: totalDurationSeconds,
+      talkSeconds: 0,
+    };
+  }
+
+  const ringSeconds = getRingSeconds(input);
+  return {
+    firstResponseSeconds: ringSeconds,
+    ringSeconds,
+    talkSeconds: totalDurationSeconds,
+  };
 }
 
 function getCallbackOverdueSeconds(item: {
@@ -1620,11 +1645,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
           currencyCode: selectedCallDetail.currencyCode ?? "KES",
           startedAt: toIso(selectedCallDetail.startedAt),
           endedAt: toIso(selectedCallDetail.endedAt),
-          sla: {
-            firstResponseSeconds: getRingSeconds(selectedCallDetail),
-            ringSeconds: getRingSeconds(selectedCallDetail),
-            talkSeconds: Number(selectedCallDetail.durationInSeconds ?? 0),
-          },
+          sla: getVoiceSlaBreakdown(selectedCallDetail),
           hopAudit: buildHopAudit(selectedCallDetail.events),
           disposition:
             selectedCallDetail.callNotes
