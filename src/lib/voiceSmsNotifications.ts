@@ -21,6 +21,10 @@ const MISSED_CALL_STATUSES = new Set([
   "canceled",
   "disconnected",
 ]);
+const WORKING_HOURS_MISSED_CALL_SMS =
+  "Thank you for calling Betech Solar Solutions. We sincerely apologize for missing your call. Your call is important to us, and we will call you back shortly. Thank you for your patience.";
+const AFTER_HOURS_MISSED_CALL_SMS =
+  "Thank you for calling Betech Solar Solutions. We sincerely apologize for missing your call. Our office is currently closed, but your call is important to us. We will call you back during our next working hours. Thank you for your patience.";
 
 type VoiceSmsEligibleCall = Pick<
   VoiceCall,
@@ -240,5 +244,47 @@ export async function sendVoiceSmsOncePerDay(input: {
 }
 
 export async function maybeSendMissedCallSms(call: VoiceSmsEligibleCall) {
-  return { sent: false, reason: isMissedCallSmsEligible(call) ? "disabled" : "call_not_eligible" } as const;
+  if (!isMissedCallSmsEligible(call)) {
+    return { sent: false, reason: "call_not_eligible" } as const;
+  }
+
+  if (call.id) {
+    const attemptedSmsLog = await prisma.voiceSmsNotificationLog.findFirst({
+      where: {
+        voiceCallId: call.id,
+        notificationType: "ATTEMPTED_CALL_SMS",
+        status: { in: ["PROCESSING", "SENT", "SKIPPED_DUPLICATE"] },
+      },
+      select: { id: true, status: true, reason: true },
+    });
+    if (attemptedSmsLog) {
+      return { sent: false, reason: "attempted_call_sms_already_handled" } as const;
+    }
+  }
+
+  const normalizedPhone = getCustomerPhoneForCall(call);
+  if (!normalizedPhone) {
+    return { sent: false, reason: "missing_external_phone" } as const;
+  }
+
+  const messageBody = isWithinVoiceWorkingHours(call.startedAt ?? new Date())
+    ? WORKING_HOURS_MISSED_CALL_SMS
+    : AFTER_HOURS_MISSED_CALL_SMS;
+
+  try {
+    return await sendVoiceSmsOncePerDay({
+      phoneNumber: call.callerNumber,
+      normalizedPhoneNumber: normalizedPhone,
+      notificationType: "MISSED_CALL_SMS",
+      voiceCallId: call.id,
+      messageBody,
+    });
+  } catch (error) {
+    console.error("[voice.sms.missed_call_failed]", {
+      callId: call.id,
+      phone: normalizedPhone,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return { sent: false, reason: "provider_failed" } as const;
+  }
 }
