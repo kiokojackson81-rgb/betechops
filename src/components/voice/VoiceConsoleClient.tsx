@@ -264,6 +264,11 @@ function buildInlineFollowUpTitle(call: {
   return normalizedStatus === "missed" ? `Missed call follow-up for ${label}` : `Follow up with ${label}`;
 }
 
+function isMissedVoiceOutcome(status: string | null | undefined) {
+  const normalized = String(status || "").trim().toLowerCase();
+  return ["missed", "no answer", "no_answer", "unanswered", "not answered", "not_answered", "busy", "failed"].includes(normalized);
+}
+
 type ChatraceActivityData = {
   found?: boolean;
   sourceError?: boolean;
@@ -2180,9 +2185,11 @@ export default function VoiceConsoleClient({
                                           <div className="min-w-0">
                                             <div className="truncate text-sm text-slate-200">{call.routedToDisplay || call.assignedToName || call.assignedToEmail || "-"}</div>
                                             <div className="truncate text-xs text-slate-500">
-                                              {call.providerStatusLabel && call.providerStatusLabel !== call.statusLabel
-                                                ? `Provider ${call.providerStatusLabel}`
-                                                : call.routeType || "Direct route"}
+                                              {isMissedVoiceOutcome(call.statusLabel || call.status)
+                                                ? `Callback owner ${call.assignedToName || call.assignedToEmail || "Unassigned"}`
+                                                : call.providerStatusLabel && call.providerStatusLabel !== call.statusLabel
+                                                  ? `Provider ${call.providerStatusLabel}`
+                                                  : call.routeType || "Direct route"}
                                             </div>
                                           </div>
                                           <div>
@@ -2213,6 +2220,11 @@ export default function VoiceConsoleClient({
                                                       <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
                                                         Talk {formatDuration((call as any).sla?.talkSeconds)}
                                                       </span>
+                                                      {isMissedVoiceOutcome(call.statusLabel || call.status) ? (
+                                                        <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 font-semibold text-cyan-100">
+                                                          Callback owner {call.assignedToName || call.assignedToEmail || "Unassigned"}
+                                                        </span>
+                                                      ) : null}
                                                     </div>
                                                   </div>
                                                   <div className="flex flex-wrap gap-2">
@@ -2265,9 +2277,15 @@ export default function VoiceConsoleClient({
 
                                                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                                                   <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-                                                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Who received</div>
+                                                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                                      {isMissedVoiceOutcome(call.statusLabel || call.status) ? "Assigned Callback Owner" : "Who received"}
+                                                    </div>
                                                     <div className="mt-2 text-sm font-semibold text-white">{call.assignedToName || call.assignedToEmail || call.routedToDisplay || "Unassigned"}</div>
-                                                    <div className="mt-1 text-xs text-slate-500">{call.queueReasonLabel || call.routeType || "Direct route"}</div>
+                                                    <div className="mt-1 text-xs text-slate-500">
+                                                      {isMissedVoiceOutcome(call.statusLabel || call.status)
+                                                        ? "This is the agent responsible for the callback follow-up."
+                                                        : call.queueReasonLabel || call.routeType || "Direct route"}
+                                                    </div>
                                                   </div>
                                                   <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                                                     <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Disposition</div>
@@ -2654,7 +2672,9 @@ export default function VoiceConsoleClient({
                                 </div>
                                 <div className="mt-1 text-sm text-slate-400">{item.phone} · {item.title}</div>
                                 <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-500">
-                                  <span>{item.assignedAgentLabel}</span>
+                                  <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
+                                    Assigned to {item.assignedAgentLabel}
+                                  </span>
                                   <span>Opened {formatDateTime(item.createdAt)}</span>
                                   <span>{item.dueAt ? `Due ${formatDateTime(item.dueAt)}` : `Updated ${formatDateTime(item.updatedAt)}`}</span>
                                   {(item as any).callbackRequestedAt ? (
