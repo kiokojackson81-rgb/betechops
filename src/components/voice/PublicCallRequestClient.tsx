@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AlertCircle, CheckCircle2, Headphones, ArrowRight } from "lucide-react";
+import { AlertCircle, CheckCircle2, ArrowRight } from "lucide-react";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
 import ProductCard from "@/app/shop/_components/ProductCard";
 import ShopFooter from "@/app/shop/_components/ShopFooter";
@@ -9,12 +9,16 @@ import ShopHeader from "@/app/shop/_components/ShopHeader";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { shopNavLinks, type ShopProduct } from "@/app/shop/shopData";
-import { SHOP_ALL_PRODUCTS_HREF, SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
 
 type PublicCallRequestClientProps = {
   state: "requested" | "expired" | "invalid";
   popularProducts: ShopProduct[];
 };
+
+const BETECH_ALL_PRODUCTS_URL = "https://www.betech.co.ke/all-products";
+const BETECH_WHATSAPP_URL = "https://wa.me/254722151083?text=hello%20betech%20solar%20solution";
+const BETECH_AGENTS_URL = "https://agents.betech.co.ke/";
+const BETECH_PROJECTS_URL = "https://www.tiktok.com/@betechsolarprojects";
 
 export default function PublicCallRequestClient({ state, popularProducts }: PublicCallRequestClientProps) {
   const isInvalid = state === "invalid";
@@ -39,7 +43,7 @@ export default function PublicCallRequestClient({ state, popularProducts }: Publ
                     Popular customer picks across recent purchases, enquiries, and demand in our solar catalogue.
                   </p>
                 </div>
-                <Link href={SHOP_ALL_PRODUCTS_HREF} className="inline-flex items-center gap-2 text-sm font-black text-[#7a0000] transition hover:text-[#560000]">
+                <Link href={BETECH_ALL_PRODUCTS_URL} className="inline-flex items-center gap-2 text-sm font-black text-[#7a0000] transition hover:text-[#560000]">
                   See all products
                   <ArrowRight className="h-4 w-4" />
                 </Link>
@@ -74,29 +78,28 @@ function RequestedCard() {
         </div>
       </div>
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        <Link href={SHOP_HOME_HREF} className={`${shopStyles.primaryButton} flex-1`}>
-          Shop Solar Products
+        <Link href={BETECH_ALL_PRODUCTS_URL} className={`${shopStyles.primaryButton} flex-1`}>
+          See Our Solar Products
         </Link>
         <TrackedWhatsAppLink
-          href="https://wa.me/254722151083?text=Hello%20Betech%20Solar%20Solution"
+          href={BETECH_WHATSAPP_URL}
           className={`${shopStyles.whatsappButton} flex-1`}
           label="Voice callback request whatsapp support"
           context="voice_callback_request"
           ariaLabel="Talk to Betech Solar on WhatsApp"
         >
-          WhatsApp Support
-        </TrackedWhatsAppLink>
-        <TrackedWhatsAppLink
-          href="https://wa.me/254722151083?text=Hello%20Betech%20Solar%20Solution"
-          className={`${shopStyles.whatsappButton} flex-1`}
-          label="Voice callback request whatsapp products"
-          context="voice_callback_request"
-          ariaLabel="Shop Betech Solar products on WhatsApp"
-        >
-          Shop WhatsApp Products
+          Chat With Us On WhatsApp
         </TrackedWhatsAppLink>
         <Link
-          href="https://www.tiktok.com/@betechsolarsolutionske"
+          href={BETECH_AGENTS_URL}
+          target="_blank"
+          rel="noreferrer"
+          className={`${shopStyles.secondaryButton} flex-1`}
+        >
+          Refer And Earn
+        </Link>
+        <Link
+          href={BETECH_PROJECTS_URL}
           target="_blank"
           rel="noreferrer"
           className={`${shopStyles.goldButton} flex-1`}
@@ -126,24 +129,32 @@ function UnavailableCard({ isExpired, isInvalid }: { isExpired: boolean; isInval
       </div>
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         <TrackedWhatsAppLink
-          href="https://wa.me/254722151083?text=Hello%20Betech%20Solar%20Solution"
+          href={BETECH_WHATSAPP_URL}
           className={`${shopStyles.whatsappButton} flex-1`}
           label="Voice callback invalid whatsapp support"
           context="voice_callback_invalid"
           ariaLabel="Talk to Betech Solar on WhatsApp"
         >
-          WhatsApp Support
+          Chat With Us On WhatsApp
         </TrackedWhatsAppLink>
-        <Link href={SHOP_HOME_HREF} className={`${shopStyles.primaryButton} flex-1`}>
-          Shop Solar Products
+        <Link href={BETECH_ALL_PRODUCTS_URL} className={`${shopStyles.primaryButton} flex-1`}>
+          See Our Solar Products
         </Link>
         <Link
-          href="https://www.tiktok.com/@betechsolarsolutionske"
+          href={BETECH_AGENTS_URL}
           target="_blank"
           rel="noreferrer"
-          className={`${shopStyles.goldButton} flex-1 sm:col-span-2`}
+          className={`${shopStyles.secondaryButton} flex-1`}
         >
-          Follow us on TikTok
+          Refer And Earn
+        </Link>
+        <Link
+          href={BETECH_PROJECTS_URL}
+          target="_blank"
+          rel="noreferrer"
+          className={`${shopStyles.goldButton} flex-1`}
+        >
+          See Our Recent Projects
         </Link>
       </div>
     </div>

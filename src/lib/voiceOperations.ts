@@ -228,6 +228,36 @@ function getQueueReasonLabelForLead(source: string | null | undefined, title?: s
   return "Follow-up queue";
 }
 
+function getFollowUpReasonMeta(input: {
+  itemType: "task" | "lead";
+  source?: string | null;
+  title?: string | null;
+  notes?: string | null;
+  voiceCallId?: string | null;
+  voiceLeadId?: string | null;
+}) {
+  const normalizedSource = String(input.source || "").trim().toUpperCase();
+  const normalizedTitle = String(input.title || "").trim().toLowerCase();
+  const normalizedNotes = String(input.notes || "").trim().toLowerCase();
+
+  if (normalizedNotes.includes("attempted call") || normalizedTitle.includes("requested callback")) {
+    return { kind: "attempted_call", label: "Call Attempt" } as const;
+  }
+  if (input.itemType === "lead" && normalizedSource === "VOICE_MISSED_CALL") {
+    return { kind: "missed_call", label: "Missed Call" } as const;
+  }
+  if (normalizedNotes.includes("auto-created after missed call") || normalizedNotes.includes("auto-created after no answer")) {
+    return { kind: "missed_call", label: "Missed Call" } as const;
+  }
+  if (!input.voiceCallId && !input.voiceLeadId && input.itemType === "task") {
+    return { kind: "admin_follow_up", label: "Admin Follow-up" } as const;
+  }
+  if (input.itemType === "task") {
+    return { kind: "task_follow_up", label: "Follow-up Task" } as const;
+  }
+  return { kind: "voice_lead", label: "Voice Lead" } as const;
+}
+
 function getRingSeconds(input: {
   startedAt: Date | null;
   endedAt: Date | null;
@@ -1350,6 +1380,13 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     followUpsRaw.map(async (task) => {
       const context = await getContextForPhone(task.phone, false);
       const contextSummary = serializeCustomerContextSummary(context);
+      const reasonMeta = getFollowUpReasonMeta({
+        itemType: "task",
+        title: task.title,
+        notes: task.notes,
+        voiceCallId: task.voiceCallId,
+        voiceLeadId: task.voiceLeadId,
+      });
       return {
         id: task.id,
         type: "task" as const,
@@ -1362,6 +1399,8 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
         createdAt: task.createdAt.toISOString(),
         updatedAt: task.updatedAt.toISOString(),
         queueReasonLabel: getQueueReasonLabelForLead("VOICE_FOLLOW_UP", task.title),
+        queueReasonKind: reasonMeta.kind,
+        queueReasonDisplayLabel: reasonMeta.label,
         callbackOverdueSeconds: getCallbackOverdueSeconds({
           dueAt: toIso(task.dueAt),
           status: task.status,
@@ -1371,6 +1410,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
         assignedToEmail: task.assignedTo?.email ?? null,
         voiceCallId: task.voiceCallId,
         voiceLeadId: task.voiceLeadId,
+        source: null,
         customer: contextSummary,
         links: {
           customer: buildPhoneSearchHref(contextSummary.normalizedPhone || task.phone, viewer.impersonateId),
@@ -1390,6 +1430,12 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
       .map(async (lead) => {
         const context = await getContextForPhone(lead.phone, false);
         const contextSummary = serializeCustomerContextSummary(context);
+        const reasonMeta = getFollowUpReasonMeta({
+          itemType: "lead",
+          source: lead.source,
+          title: lead.name,
+          voiceLeadId: lead.id,
+        });
         return {
           id: lead.id,
           type: "lead" as const,
@@ -1402,12 +1448,15 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
           createdAt: lead.createdAt.toISOString(),
           updatedAt: lead.updatedAt.toISOString(),
           queueReasonLabel: getQueueReasonLabelForLead(lead.source, lead.name),
+          queueReasonKind: reasonMeta.kind,
+          queueReasonDisplayLabel: reasonMeta.label,
           callbackOverdueSeconds: 0,
           assignedToId: lead.assignedToId,
           assignedToName: lead.assignedTo?.name ?? null,
           assignedToEmail: lead.assignedTo?.email ?? null,
           voiceCallId: null,
           voiceLeadId: lead.id,
+          source: lead.source,
           customer: contextSummary,
         links: {
           customer: buildPhoneSearchHref(contextSummary.normalizedPhone || lead.phone, viewer.impersonateId),

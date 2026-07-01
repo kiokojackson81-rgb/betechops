@@ -12,7 +12,6 @@ import ShopHeader from "@/app/shop/_components/ShopHeader";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { shopNavLinks, type ShopProduct } from "@/app/shop/shopData";
-import { SHOP_ALL_PRODUCTS_HREF, SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
 
 const contactReasons = [
   "Solar System",
@@ -41,7 +40,7 @@ export default function PublicFeedbackClient({ token = "", initialState, popular
   const router = useRouter();
   const supportWhatsAppHref = "https://wa.me/254722151083?text=Hello%20Betech%20Solar%20Solution";
   const referAndEarnHref = "https://agents.betech.co.ke/";
-  const tiktokHref = "https://www.tiktok.com/@betechsolarsolutionske";
+  const tiktokHref = "https://www.tiktok.com/@betechsolarprojects";
   const [form, setForm] = useState({
     rating: 0,
     contactReason: "",
@@ -416,7 +415,7 @@ Junction of Munyu Road and Sheikh Karume Road`}
                     bulletItems={[
                       { icon: <Phone className="h-4 w-4" />, label: "0722151083 / +254711082542" },
                       { icon: <Mail className="h-4 w-4" />, label: "info@betech.co.ke" },
-                      { icon: <Star className="h-4 w-4" />, label: "@betechsolarsolutionske" },
+                      { icon: <Star className="h-4 w-4" />, label: "@betechsolarprojects" },
                     ]}
                   />
                 ) : null}
@@ -431,7 +430,7 @@ Junction of Munyu Road and Sheikh Karume Road`}
                     Popular customer picks across recent purchases, search interest, enquiries, and demand in our solar catalogue.
                   </p>
                 </div>
-                <Link href={SHOP_ALL_PRODUCTS_HREF} className="inline-flex items-center gap-2 text-sm font-black text-[#7a0000] transition hover:text-[#560000]">
+                <Link href="https://www.betech.co.ke/all-products" className="inline-flex items-center gap-2 text-sm font-black text-[#7a0000] transition hover:text-[#560000]">
                   See all products
                   <ArrowRight className="h-4 w-4" />
                 </Link>
@@ -466,26 +465,17 @@ function ThankYouCard() {
         </div>
       </div>
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        <Link href={SHOP_HOME_HREF} className={`${shopStyles.primaryButton} flex-1`}>
-          Shop Solar Products
+        <Link href="https://www.betech.co.ke/all-products" className={`${shopStyles.primaryButton} flex-1`}>
+          See Our Solar Products
         </Link>
         <TrackedWhatsAppLink
-          href="https://wa.me/254722151083?text=Hello%20Betech%20Solar%20Solution"
-          className={`${shopStyles.whatsappButton} flex-1`}
-          label="Feedback success shop whatsapp products"
-          context="feedback_success"
-          ariaLabel="Shop Betech Solar products on WhatsApp"
-        >
-          Shop WhatsApp Products
-        </TrackedWhatsAppLink>
-        <TrackedWhatsAppLink
-          href="https://wa.me/254722151083?text=Hello%20Betech%20Solar%20Solution"
+          href="https://wa.me/254722151083?text=hello%20betech%20solar%20solution"
           className={`${shopStyles.whatsappButton} flex-1`}
           label="Feedback success WhatsApp support"
           context="feedback_success"
           ariaLabel="Talk to Betech Solar on WhatsApp"
         >
-          WhatsApp Support
+          Chat With Us On WhatsApp
         </TrackedWhatsAppLink>
         <Link
           href="https://agents.betech.co.ke/"
@@ -493,21 +483,13 @@ function ThankYouCard() {
           rel="noreferrer"
           className={`${shopStyles.secondaryButton} flex-1`}
         >
-          Refer & Earn
+          Refer And Earn
         </Link>
         <Link
-          href="https://www.tiktok.com/@betechsolarsolutionske"
+          href="https://www.tiktok.com/@betechsolarprojects"
           target="_blank"
           rel="noreferrer"
           className={`${shopStyles.goldButton} flex-1`}
-        >
-          Follow us on TikTok
-        </Link>
-        <Link
-          href="https://www.tiktok.com/@betechsolarsolutionske"
-          target="_blank"
-          rel="noreferrer"
-          className={`${shopStyles.goldButton} flex-1 sm:col-span-2`}
         >
           See Our Recent Projects
         </Link>

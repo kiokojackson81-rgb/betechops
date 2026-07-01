@@ -132,6 +132,23 @@ function statusTone(status: string | null | undefined) {
   return "border-white/10 bg-white/[0.04] text-slate-200";
 }
 
+function followUpReasonTone(kind: string | null | undefined) {
+  const normalized = String(kind || "").trim().toLowerCase();
+  if (normalized === "missed_call") {
+    return "border-rose-500/30 bg-rose-500/10 text-rose-100";
+  }
+  if (normalized === "attempted_call") {
+    return "border-amber-500/30 bg-amber-500/10 text-amber-100";
+  }
+  if (normalized === "admin_follow_up") {
+    return "border-cyan-500/30 bg-cyan-500/10 text-cyan-100";
+  }
+  if (normalized === "task_follow_up") {
+    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-100";
+  }
+  return "border-white/10 bg-white/[0.03] text-slate-200";
+}
+
 function cardShell(extra = "") {
   return `rounded-[24px] border border-slate-800/90 bg-slate-950/96 ${extra}`.trim();
 }
@@ -2621,11 +2638,17 @@ export default function VoiceConsoleClient({
                           <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                               <div className="min-w-0">
-                                <div className="truncate font-semibold text-white">{item.customer.customerName || item.phone}</div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <div className="truncate font-semibold text-white">{item.customer.customerName || item.phone}</div>
+                                  <span className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${followUpReasonTone((item as any).queueReasonKind)}`}>
+                                    {(item as any).queueReasonDisplayLabel || (item as any).queueReasonLabel || "Follow-up"}
+                                  </span>
+                                </div>
                                 <div className="mt-1 text-sm text-slate-400">{item.phone} · {item.title}</div>
                                 <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-500">
                                   <span>{item.assignedAgentLabel}</span>
-                                  <span>{formatDateTime(item.dueAt || item.updatedAt)}</span>
+                                  <span>Opened {formatDateTime(item.createdAt)}</span>
+                                  <span>{item.dueAt ? `Due ${formatDateTime(item.dueAt)}` : `Updated ${formatDateTime(item.updatedAt)}`}</span>
                                   <span>{(item as any).queueReasonLabel || "Follow-up queue"}</span>
                                 </div>
                               </div>
