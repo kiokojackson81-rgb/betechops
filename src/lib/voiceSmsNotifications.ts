@@ -21,11 +21,6 @@ const MISSED_CALL_STATUSES = new Set([
   "disconnected",
 ]);
 
-const WORKING_HOURS_MISSED_CALL_SMS =
-  "Thank you for calling Betech Solar Solutions. We sincerely apologize for missing your call. Your call is important to us, and we will call you back shortly. Thank you for your patience.";
-const AFTER_HOURS_MISSED_CALL_SMS =
-  "Thank you for calling Betech Solar Solutions. We sincerely apologize for missing your call. Our office is currently closed, but your call is important to us. We will call you back during our next working hours. Thank you for your patience.";
-
 type VoiceSmsEligibleCall = Pick<
   VoiceCall,
   "id" | "direction" | "callerNumber" | "destinationNumber" | "status" | "durationInSeconds" | "startedAt"
@@ -236,33 +231,5 @@ export async function sendVoiceSmsOncePerDay(input: {
 }
 
 export async function maybeSendMissedCallSms(call: VoiceSmsEligibleCall) {
-  if (!isMissedCallSmsEligible(call)) {
-    return { sent: false, reason: "call_not_eligible" } as const;
-  }
-
-  const normalizedPhone = getCustomerPhoneForCall(call);
-  if (!normalizedPhone) {
-    return { sent: false, reason: "missing_external_phone" } as const;
-  }
-
-  const messageBody = isWithinVoiceWorkingHours(call.startedAt ?? new Date())
-    ? WORKING_HOURS_MISSED_CALL_SMS
-    : AFTER_HOURS_MISSED_CALL_SMS;
-
-  try {
-    return await sendVoiceSmsOncePerDay({
-      phoneNumber: call.callerNumber,
-      normalizedPhoneNumber: normalizedPhone,
-      notificationType: "MISSED_CALL_SMS",
-      voiceCallId: call.id,
-      messageBody,
-    });
-  } catch (error) {
-    console.error("[voice.sms.missed_call_failed]", {
-      callId: call.id,
-      phone: normalizedPhone,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return { sent: false, reason: "provider_failed" } as const;
-  }
+  return { sent: false, reason: isMissedCallSmsEligible(call) ? "disabled" : "call_not_eligible" } as const;
 }
