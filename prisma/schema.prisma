@@ -105,6 +105,7 @@ model User {
   assignedVoiceFollowUps               VoiceFollowUp[]                 @relation("VoiceFollowUpAssignee")
   customerVoiceFollowUps               VoiceFollowUp[]                 @relation("VoiceFollowUpCustomer")
   assignedVoiceCallFeedback            VoiceCallFeedback[]             @relation("VoiceCallFeedbackAgent")
+  assignedVoiceCallbackRequests        VoiceCallbackRequest[]          @relation("VoiceCallbackRequestAgent")
 }
 
 model OtpCode {
@@ -1557,6 +1558,7 @@ model VoiceCall {
   callNotes         VoiceCallNote[]
   followUps         VoiceFollowUp[]
   feedbackSessions  VoiceCallFeedback[]
+  callbackRequests  VoiceCallbackRequest[]
   smsNotifications  VoiceSmsNotificationLog[]
   presenceAssignments VoiceAgentPresence[] @relation("VoicePresenceCurrentCall")
 
@@ -1723,6 +1725,7 @@ model CallFeedbackSmsLog {
 enum VoiceSmsNotificationType {
   MISSED_CALL_SMS
   CALL_FEEDBACK_SMS
+  ATTEMPTED_CALL_SMS
 }
 
 enum VoiceSmsNotificationStatus {
@@ -1794,6 +1797,36 @@ model VoiceCallFeedback {
   @@index([agentId])
   @@index([token])
   @@index([submitted, createdAt])
+}
+
+model VoiceCallbackRequest {
+  id              String   @id @default(cuid())
+  token           String   @unique
+  phoneNumber     String
+  normalizedPhone String
+  voiceCallId     String?
+  agentId         String?
+  callStartedAt   DateTime?
+  callEndedAt     DateTime?
+  smsSent         Boolean  @default(false)
+  smsSentAt       DateTime?
+  openedCount     Int      @default(0)
+  openedAt        DateTime?
+  lastOpenedAt    DateTime?
+  requestedAt     DateTime?
+  expiresAt       DateTime
+  followUpCreated Boolean  @default(false)
+  followUpTaskId  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  voiceCall       VoiceCall? @relation(fields: [voiceCallId], references: [id], onDelete: SetNull)
+  agent           User?      @relation("VoiceCallbackRequestAgent", fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@index([token])
+  @@index([voiceCallId])
+  @@index([agentId])
+  @@index([normalizedPhone])
+  @@index([requestedAt, createdAt])
 }
 
 model Branding {

@@ -123,7 +123,7 @@ function statusTone(status: string | null | undefined) {
   if (["available", "answered", "completed", "resolved", "contacted", "registered", "live", "success"].includes(normalized)) {
     return "border-emerald-500/30 bg-emerald-500/10 text-emerald-100";
   }
-  if (["busy", "ringing", "queued", "pending", "in_progress", "pending_follow_up", "away", "waiting", "connecting"].includes(normalized)) {
+  if (["busy", "ringing", "queued", "pending", "in_progress", "pending_follow_up", "away", "waiting", "connecting", "attempted_call", "attempted call"].includes(normalized)) {
     return "border-amber-500/30 bg-amber-500/10 text-amber-100";
   }
   if (["offline", "break", "missed", "aborted", "failed", "closed", "error", "cancelled", "disconnected"].includes(normalized)) {
@@ -469,7 +469,13 @@ export default function VoiceConsoleClient({
     [data.recentRecordings, dateFilter],
   );
 
-  const filteredFollowUps = useMemo(() => visibleCallQueue, [visibleCallQueue]);
+  const filteredFollowUps = useMemo(
+    () =>
+      visibleCallQueue.filter((item: any) =>
+        ["pending", "open", "pending_follow_up"].includes(String(item.status || "").trim().toLowerCase()),
+      ),
+    [visibleCallQueue],
+  );
 
   const missedFollowUpsCount = useMemo(
     () =>
@@ -479,14 +485,11 @@ export default function VoiceConsoleClient({
     [filteredFollowUps],
   );
 
-  const contactedFollowUpsCount = useMemo(
-    () =>
-      filteredFollowUps.filter((item: any) => String(item.status || "").trim().toLowerCase() === "contacted").length,
-    [filteredFollowUps],
-  );
-
   const filteredFollowUpsByView = useMemo(() => {
     if (queueView === "waiting") {
+      return [] as typeof filteredFollowUps;
+    }
+    if (queueView === "contacted") {
       return [] as typeof filteredFollowUps;
     }
     if (queueView === "missed") {
@@ -494,9 +497,6 @@ export default function VoiceConsoleClient({
         const normalizedStatus = String(item.status || "").trim().toLowerCase();
         return ["pending", "open", "pending_follow_up"].includes(normalizedStatus);
       });
-    }
-    if (queueView === "contacted") {
-      return filteredFollowUps.filter((item: any) => String(item.status || "").trim().toLowerCase() === "contacted");
     }
     return filteredFollowUps;
   }, [filteredFollowUps, queueView]);
@@ -1958,7 +1958,6 @@ export default function VoiceConsoleClient({
                             { key: "all", label: `All (${queueItems.length})` },
                             { key: "waiting", label: `Waiting (${visibleWaitingCalls.length})` },
                             { key: "missed", label: `Missed (${missedFollowUpsCount})` },
-                            { key: "contacted", label: `Contacted (${contactedFollowUpsCount})` },
                           ].map((item) => (
                             <button
                               key={item.key}
@@ -2601,7 +2600,6 @@ export default function VoiceConsoleClient({
                       {[
                         { key: "all", label: `All (${filteredFollowUps.length})` },
                         { key: "missed", label: `Missed (${missedFollowUpsCount})` },
-                        { key: "contacted", label: `Contacted (${contactedFollowUpsCount})` },
                       ].map((item) => (
                         <button
                           key={item.key}

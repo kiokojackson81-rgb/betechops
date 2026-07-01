@@ -7,9 +7,13 @@ import { buildVoiceWebrtcIdentity } from "@/lib/voiceOperations";
 import { toSpeechText } from "@/lib/voiceSpeech";
 import { isVoiceWebrtcClientReady } from "@/lib/voiceWebrtc/registry";
 import { maybeSendCallFeedbackSms } from "@/lib/feedbackSms";
-import { maybeSendMissedCallSms } from "@/lib/voiceSmsNotifications";
+import { generateFeedbackToken } from "@/lib/feedbackToken";
+import { getShopBaseUrl } from "@/lib/runtimeUrls";
+import { isInternalVoicePhone, maybeSendMissedCallSms, sendVoiceSmsOncePerDay } from "@/lib/voiceSmsNotifications";
 
 const NAIROBI_TIMEZONE = "Africa/Nairobi";
+const ATTEMPTED_CALL_THRESHOLD_SECONDS = 14;
+const CALLBACK_REQUEST_TOKEN_EXPIRY_DAYS = 14;
 
 type VoicePayload = Record<string, string>;
 type VoiceRouteLabel = "BRENDAH" | "JENNIFER" | "ADMIN" | "OVERFLOW";
@@ -840,7 +844,7 @@ export function inferVoiceCompletionStatus(
   }
   if (normalizedStatus === "answered") {
     if (direction === "INBOUND" && duration > 0 && treatInboundSuccessWithoutBridgeAsNoAnswer && !hasBridgeEvidence) {
-      return "no_answer";
+      return duration < ATTEMPTED_CALL_THRESHOLD_SECONDS ? "attempted_call" : "no_answer";
     }
     return normalizedStatus;
   }
@@ -851,7 +855,7 @@ export function inferVoiceCompletionStatus(
 
   if (isProviderTerminalSuccess && direction === "INBOUND" && duration > 0) {
     if (treatInboundSuccessWithoutBridgeAsNoAnswer && !hasBridgeEvidence) {
-      return "no_answer";
+      return duration < ATTEMPTED_CALL_THRESHOLD_SECONDS ? "attempted_call" : "no_answer";
     }
     return "answered";
   }
@@ -880,9 +884,262 @@ function getCustomerContactPhones(call: {
   return Array.from(new Set(values));
 }
 
+function isAttemptedCallStatus(status: string | null | undefined) {
+  const normalized = safeString(status).toLowerCase();
+  return normalized === "attempted_call" || normalized === "attempted call";
+}
+
 function isAnsweredBusinessStatus(status: string | null | undefined) {
   const normalized = safeString(status).toLowerCase();
   return ["answered", "connected", "completed", "complete", "successful", "success", "transferred"].includes(normalized);
+}
+
+function getVoiceCallbackRequestPublicUrl(token: string) {
+  return `${getShopBaseUrl()}/call/${encodeURIComponent(token)}`;
+}
+
+function getVoiceCallbackRequestExpiryDate(now = new Date()) {
+  const expires = new Date(now);
+  expires.setDate(expires.getDate() + CALLBACK_REQUEST_TOKEN_EXPIRY_DAYS);
+  return expires;
+}
+
+async function createUniqueVoiceCallbackRequestToken(tx: Prisma.TransactionClient | typeof prisma) {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const token = generateFeedbackToken(attempt >= 4 ? 6 : 5);
+    const existing = await tx.voiceCallbackRequest.findUnique({
+      where: { token },
+      select: { id: true },
+    });
+    if (!existing) return token;
+  }
+  throw new Error("voice_callback_request_token_generation_failed");
+}
+
+async function resolveVoiceCallbackOwnerIdForPhone(phone: string, assignedToId?: string | null) {
+  const routingUsers = await resolveRoutingUsers();
+  const routingTargets = await buildVoiceTargets();
+  const candidateTargets = [routingTargets.BRENDAH, routingTargets.JENNIFER].filter(
+    (target) => target.label !== "ADMIN" && target.userId,
+  );
+
+  if (!candidateTargets.length) return null;
+  if (assignedToId && assignedToId !== routingUsers.ADMIN) {
+    return candidateTargets.find((target) => target.userId === assignedToId)?.userId ?? assignedToId;
+  }
+
+  const stickyTarget = await findStickyOwnerTarget(phone, candidateTargets);
+  if (stickyTarget?.userId) return stickyTarget.userId;
+
+  const roundRobinTarget = await findRoundRobinTarget(candidateTargets);
+  return roundRobinTarget?.userId ?? null;
+}
+
+export function isVoiceCallbackRequestSchemaMissingError(error: unknown) {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
+  if (error.code !== "P2021") return false;
+  return String(error.message || "").includes("VoiceCallbackRequest");
+}
+
+async function ensureVoiceCallbackRequestSession(input: {
+  phoneNumber: string;
+  voiceCallId?: string | null;
+  agentId?: string | null;
+  callStartedAt?: Date | null;
+  callEndedAt?: Date | null;
+}) {
+  const normalizedPhone = normalizeVoiceNumber(input.phoneNumber);
+  if (!normalizedPhone || isInternalVoicePhone(normalizedPhone)) return null;
+
+  if (input.voiceCallId) {
+    const existing = await prisma.voiceCallbackRequest.findFirst({
+      where: { voiceCallId: input.voiceCallId },
+    });
+    if (existing) return existing;
+  }
+
+  const token = await createUniqueVoiceCallbackRequestToken(prisma);
+  const resolvedAgentId = await resolveVoiceCallbackOwnerIdForPhone(normalizedPhone, input.agentId);
+  return prisma.voiceCallbackRequest.create({
+    data: {
+      token,
+      phoneNumber: input.phoneNumber,
+      normalizedPhone,
+      voiceCallId: input.voiceCallId ?? null,
+      agentId: resolvedAgentId,
+      callStartedAt: input.callStartedAt ?? null,
+      callEndedAt: input.callEndedAt ?? null,
+      expiresAt: getVoiceCallbackRequestExpiryDate(),
+    },
+  });
+}
+
+async function maybeSendAttemptedCallSms(call: {
+  id: string;
+  direction: string;
+  callerNumber: string;
+  destinationNumber?: string | null;
+  status: string;
+  durationInSeconds?: number | null;
+  assignedToId?: string | null;
+  startedAt?: Date | null;
+  endedAt?: Date | null;
+}) {
+  if (!isAttemptedCallStatus(call.status)) {
+    return { sent: false, reason: "call_not_eligible" } as const;
+  }
+
+  const targetPhone =
+    String(call.direction || "").trim().toUpperCase() === "OUTBOUND"
+      ? call.destinationNumber || call.callerNumber || ""
+      : call.callerNumber || call.destinationNumber || "";
+  const normalizedPhone = normalizeVoiceNumber(targetPhone);
+  if (!normalizedPhone) return { sent: false, reason: "missing_phone" } as const;
+  if (isInternalVoicePhone(normalizedPhone)) return { sent: false, reason: "internal_phone" } as const;
+
+  const session = await ensureVoiceCallbackRequestSession({
+    phoneNumber: normalizedPhone,
+    voiceCallId: call.id,
+    agentId: call.assignedToId ?? null,
+    callStartedAt: call.startedAt ?? null,
+    callEndedAt: call.endedAt ?? null,
+  });
+
+  if (!session) return { sent: false, reason: "session_not_created" } as const;
+  if (session.smsSent) return { sent: false, reason: "already_sent_for_call" } as const;
+
+  const callbackUrl = getVoiceCallbackRequestPublicUrl(session.token);
+  const message =
+    `We noticed you tried to call Betech Solar Solutions but the call was unsuccessful. ` +
+    `If you would like our team to call you back, tap here: ${callbackUrl}`;
+
+  const sendResult = await sendVoiceSmsOncePerDay({
+    phoneNumber: targetPhone,
+    normalizedPhoneNumber: normalizedPhone,
+    notificationType: "ATTEMPTED_CALL_SMS",
+    voiceCallId: call.id,
+    messageBody: message,
+  });
+
+  if (!sendResult.sent) {
+    return sendResult;
+  }
+
+  await prisma.voiceCallbackRequest.update({
+    where: { id: session.id },
+    data: {
+      smsSent: true,
+      smsSentAt: new Date(),
+    },
+  });
+
+  return {
+    sent: true,
+    reason: "sent",
+    token: session.token,
+    providerMessageId: sendResult.providerMessageId,
+  } as const;
+}
+
+export async function getPublicVoiceCallbackRequestByToken(token: string) {
+  const trimmedToken = safeString(token);
+  if (!trimmedToken) return null;
+
+  const session = await prisma.voiceCallbackRequest.findUnique({
+    where: { token: trimmedToken },
+    include: {
+      voiceCall: {
+        select: {
+          id: true,
+          startedAt: true,
+          endedAt: true,
+          durationInSeconds: true,
+          callerNumber: true,
+          direction: true,
+          status: true,
+          assignedTo: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!session) return null;
+
+  const now = new Date();
+  const isExpired = session.expiresAt.getTime() < now.getTime();
+  return {
+    session,
+    state: session.followUpCreated ? "requested" : isExpired ? "expired" : "active",
+  } as const;
+}
+
+export async function fulfillVoiceCallbackRequestByToken(token: string) {
+  const trimmedToken = safeString(token);
+  if (!trimmedToken) {
+    return { ok: false, error: "invalid_token" } as const;
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const session = await tx.voiceCallbackRequest.findUnique({
+      where: { token: trimmedToken },
+      select: {
+        id: true,
+        token: true,
+        phoneNumber: true,
+        normalizedPhone: true,
+        voiceCallId: true,
+        agentId: true,
+        followUpCreated: true,
+        followUpTaskId: true,
+        expiresAt: true,
+        openedAt: true,
+        openedCount: true,
+      },
+    });
+
+    if (!session) return { ok: false, error: "invalid_token" } as const;
+    if (session.expiresAt.getTime() < Date.now()) return { ok: false, error: "expired_token" } as const;
+
+    const now = new Date();
+    let followUpTaskId = session.followUpTaskId;
+
+    if (!session.followUpCreated) {
+      if (!session.voiceCallId) return { ok: false, error: "missing_voice_call" } as const;
+      const assignedToId = session.agentId ?? (await resolveVoiceCallbackOwnerIdForPhone(session.normalizedPhone, null));
+      const followUp = await ensureAutoCallbackFollowUp({
+        voiceCallId: session.voiceCallId,
+        phone: session.normalizedPhone || session.phoneNumber,
+        assignedToId,
+        status: "attempted_call",
+        title: "Customer requested callback",
+        notes: "Customer clicked the callback request link after an attempted call.",
+      });
+      followUpTaskId = followUp?.id ?? null;
+    }
+
+    const updated = await tx.voiceCallbackRequest.update({
+      where: { token: trimmedToken },
+      data: {
+        openedCount: { increment: 1 },
+        openedAt: session.openedAt ?? now,
+        lastOpenedAt: now,
+        requestedAt: now,
+        followUpCreated: Boolean(followUpTaskId),
+        followUpTaskId,
+      },
+      select: {
+        id: true,
+        token: true,
+        followUpCreated: true,
+        followUpTaskId: true,
+      },
+    });
+
+    return { ok: true, request: updated } as const;
+  });
 }
 
 async function ensureAutoCallbackFollowUp(input: {
@@ -891,6 +1148,8 @@ async function ensureAutoCallbackFollowUp(input: {
   phone: string;
   assignedToId?: string | null;
   status: string;
+  title?: string | null;
+  notes?: string | null;
 }) {
   const phoneVariants = getKenyanPhoneVariants(input.phone);
   if (!phoneVariants.length) return null;
@@ -908,8 +1167,9 @@ async function ensureAutoCallbackFollowUp(input: {
     orderBy: [{ updatedAt: "desc" }],
   });
 
-  const notes = `Auto-created after ${safeString(input.status).replace(/_/g, " ") || "missed"} call.`;
+  const notes = input.notes?.trim() || `Auto-created after ${safeString(input.status).replace(/_/g, " ") || "missed"} call.`;
   const dueAt = new Date(Date.now() + 15 * 60 * 1000);
+  const title = input.title?.trim() || "Call back customer";
 
   if (existing) {
     return prisma.voiceFollowUp.update({
@@ -918,6 +1178,7 @@ async function ensureAutoCallbackFollowUp(input: {
         voiceCallId: input.voiceCallId,
         voiceLeadId: input.voiceLeadId ?? existing.voiceLeadId,
         assignedToId: input.assignedToId ?? existing.assignedToId,
+        title,
         dueAt: existing.dueAt ?? dueAt,
         notes: existing.notes || notes,
       },
@@ -930,7 +1191,7 @@ async function ensureAutoCallbackFollowUp(input: {
       voiceLeadId: input.voiceLeadId ?? null,
       assignedToId: input.assignedToId ?? null,
       phone: input.phone,
-      title: "Call back customer",
+      title,
       status: "pending",
       dueAt,
       notes,
@@ -995,6 +1256,24 @@ export async function syncVoiceCallAutomation(input: {
   durationInSeconds?: number | null;
 }) {
   const normalizedStatus = safeString(input.status).toLowerCase();
+
+  if (isAttemptedCallStatus(normalizedStatus)) {
+    await maybeSendAttemptedCallSms({
+      id: input.id,
+      direction: input.direction,
+      callerNumber: input.callerNumber,
+      destinationNumber: input.destinationNumber ?? null,
+      status: normalizedStatus,
+      durationInSeconds: input.durationInSeconds ?? null,
+      assignedToId: input.assignedToId ?? null,
+      startedAt: input.startedAt ?? null,
+      endedAt: input.endedAt ?? null,
+    }).catch((smsError) => {
+      console.warn("[voice.sms.attempted_call_skipped]", smsError instanceof Error ? smsError.message : smsError);
+    });
+
+    return;
+  }
 
   if (shouldCreateMissedLead(normalizedStatus)) {
     const lead = await createOrUpdateMissedVoiceLead({
@@ -1233,24 +1512,11 @@ export async function createOrUpdateMissedVoiceLead(call: {
   const customerLink = phone ? await resolveVoiceCustomerLinkByPhone(phone) : null;
   const customerId = customerLink?.matchedCustomer?.id ?? null;
   const callerName = customerLink?.matchedCustomer?.name ?? null;
-  const routingUsers = await resolveRoutingUsers();
-  const routingTargets = await buildVoiceTargets();
   const existing = await prisma.voiceLead.findFirst({
     where: { phone, status: { in: ["open", "pending_follow_up"] } },
     orderBy: { updatedAt: "desc" },
   });
-
-  const candidateTargets = Object.values(routingTargets).filter(
-    (target) => target.label !== "ADMIN" && target.userId,
-  );
-  const nonAdminAssignedToId =
-    call.assignedToId && call.assignedToId !== routingUsers.ADMIN ? call.assignedToId : null;
-  const currentOwnerTarget =
-    nonAdminAssignedToId
-      ? candidateTargets.find((target) => target.userId === nonAdminAssignedToId) ?? null
-      : await findAssignedLeadTarget(phone, candidateTargets);
-  const roundRobinTarget = currentOwnerTarget ? null : await findRoundRobinTarget(candidateTargets);
-  const leadOwnerId = currentOwnerTarget?.userId ?? roundRobinTarget?.userId ?? existing?.assignedToId ?? null;
+  const leadOwnerId = (await resolveVoiceCallbackOwnerIdForPhone(phone, call.assignedToId)) ?? existing?.assignedToId ?? null;
 
   if (existing) {
     const lead = await prisma.voiceLead.update({

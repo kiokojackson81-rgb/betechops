@@ -7,6 +7,7 @@ import { getVoiceWebrtcRegistryEntry } from "@/lib/voiceWebrtc/registry";
 
 export const VOICE_ALLOWED_ATTENDANT_CATEGORIES = ["DIRECT_SALES_OPS", "MARKETING_OPS"] as const;
 export const VOICE_PRESENCE_STATUSES = ["AVAILABLE", "AWAY", "BUSY", "BREAK", "OFFLINE"] as const;
+const ATTEMPTED_CALL_THRESHOLD_SECONDS = 14;
 const VOICE_PRESENCE_STALE_MS = 90 * 1000;
 const VOICE_PRESENCE_WRITE_DEBOUNCE_MS = 20 * 1000;
 
@@ -96,6 +97,11 @@ function isMissedStatus(status: string | null | undefined) {
   ].includes(normalizeStatus(status));
 }
 
+function isAttemptedCallStatus(status: string | null | undefined) {
+  const normalized = normalizeStatus(status);
+  return normalized === "attempted_call" || normalized === "attempted call";
+}
+
 function isAgentAvailableForRouting(status: string | null | undefined, lastSeenAt: Date | null | undefined) {
   if (String(status || "").trim().toUpperCase() !== "AVAILABLE") return false;
   if (!lastSeenAt) return false;
@@ -116,7 +122,7 @@ function getFollowUpReviewStatus(
   baseStatus: string | null | undefined,
   items: Array<{ status?: string | null; updatedAt?: Date | null }>,
 ) {
-  if (!isMissedStatus(baseStatus)) return null;
+  if (!isMissedStatus(baseStatus) && !isAttemptedCallStatus(baseStatus)) return null;
   const latestItem = [...items]
     .filter((item) => item?.status)
     .sort((left, right) => (right.updatedAt?.getTime() ?? 0) - (left.updatedAt?.getTime() ?? 0))[0];
@@ -249,6 +255,7 @@ function normalizeCallDisplayStatus(input: {
   if (["missed", "no_answer", "no answer", "unanswered", "not_answered", "not answered"].includes(normalized)) {
     return "MISSED";
   }
+  if (["attempted_call", "attempted call"].includes(normalized)) return "ATTEMPTED_CALL";
   if (["answered", "connected", "in_progress"].includes(normalized)) return "ANSWERED";
   if (["completed", "success", "successful", "complete"].includes(normalized)) {
     return durationInSeconds > 0 ? "ANSWERED" : "MISSED";
@@ -319,7 +326,7 @@ function inferVoiceProviderOutcomeFromPayload(
   }
   if (normalizedStatus === "answered") {
     if (direction === "INBOUND" && duration > 0 && treatInboundSuccessWithoutBridgeAsNoAnswer && !hasBridgeEvidence) {
-      return "no_answer";
+      return duration < ATTEMPTED_CALL_THRESHOLD_SECONDS ? "attempted_call" : "no_answer";
     }
     return normalizedStatus;
   }
@@ -330,7 +337,7 @@ function inferVoiceProviderOutcomeFromPayload(
 
   if (isProviderTerminalSuccess && direction === "INBOUND" && duration > 0) {
     if (treatInboundSuccessWithoutBridgeAsNoAnswer && !hasBridgeEvidence) {
-      return "no_answer";
+      return duration < ATTEMPTED_CALL_THRESHOLD_SECONDS ? "attempted_call" : "no_answer";
     }
     return "answered";
   }
