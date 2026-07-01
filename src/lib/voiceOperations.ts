@@ -235,11 +235,15 @@ function getFollowUpReasonMeta(input: {
   notes?: string | null;
   voiceCallId?: string | null;
   voiceLeadId?: string | null;
+  callbackRequestedAt?: string | null;
 }) {
   const normalizedSource = String(input.source || "").trim().toUpperCase();
   const normalizedTitle = String(input.title || "").trim().toLowerCase();
   const normalizedNotes = String(input.notes || "").trim().toLowerCase();
 
+  if (input.callbackRequestedAt) {
+    return { kind: "requested_callback", label: "Requested Callback" } as const;
+  }
   if (normalizedNotes.includes("attempted call") || normalizedTitle.includes("requested callback")) {
     return { kind: "attempted_call", label: "Call Attempt" } as const;
   }
@@ -1165,6 +1169,60 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     viewer.isAdmin ? listVoiceRoutingCandidates() : Promise.resolve([]),
   ]);
 
+  const callbackRequestTaskIds = followUpsRaw.map((task) => task.id);
+  const callbackRequestCallIds = Array.from(
+    new Set(
+      followUpsRaw
+        .map((task) => task.voiceCallId)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+  const callbackRequestPhones = Array.from(
+    new Set(
+      [...followUpsRaw.map((task) => task.phone), ...voiceLeadsRaw.map((lead) => lead.phone)].flatMap((phone) =>
+        getKenyanPhoneVariants(phone),
+      ),
+    ),
+  );
+  const callbackRequestFilters = [
+    callbackRequestTaskIds.length ? { followUpTaskId: { in: callbackRequestTaskIds } } : null,
+    callbackRequestCallIds.length ? { voiceCallId: { in: callbackRequestCallIds } } : null,
+    callbackRequestPhones.length ? { normalizedPhone: { in: callbackRequestPhones } } : null,
+  ].filter(Boolean) as Array<Record<string, unknown>>;
+  const callbackRequestsRaw = callbackRequestFilters.length
+    ? await prisma.voiceCallbackRequest.findMany({
+        where: {
+          requestedAt: { not: null },
+          OR: callbackRequestFilters,
+        },
+        select: {
+          id: true,
+          normalizedPhone: true,
+          voiceCallId: true,
+          followUpTaskId: true,
+          openedAt: true,
+          requestedAt: true,
+          openedCount: true,
+          createdAt: true,
+        },
+        orderBy: [{ requestedAt: "desc" }, { createdAt: "desc" }],
+      })
+    : [];
+  const callbackRequestByTaskId = new Map<string, (typeof callbackRequestsRaw)[number]>();
+  const callbackRequestByCallId = new Map<string, (typeof callbackRequestsRaw)[number]>();
+  const callbackRequestByPhone = new Map<string, (typeof callbackRequestsRaw)[number]>();
+  for (const request of callbackRequestsRaw) {
+    if (request.followUpTaskId && !callbackRequestByTaskId.has(request.followUpTaskId)) {
+      callbackRequestByTaskId.set(request.followUpTaskId, request);
+    }
+    if (request.voiceCallId && !callbackRequestByCallId.has(request.voiceCallId)) {
+      callbackRequestByCallId.set(request.voiceCallId, request);
+    }
+    if (request.normalizedPhone && !callbackRequestByPhone.has(request.normalizedPhone)) {
+      callbackRequestByPhone.set(request.normalizedPhone, request);
+    }
+  }
+
   const contextCache = new Map<string, Promise<Awaited<ReturnType<typeof getVoiceCustomerContext>>>>();
   const getContextForPhone = (phone: string, includeChatrace = false) => {
     const key = `${includeChatrace ? "live" : "local"}:${phone}`;
@@ -1380,12 +1438,19 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     followUpsRaw.map(async (task) => {
       const context = await getContextForPhone(task.phone, false);
       const contextSummary = serializeCustomerContextSummary(context);
+      const normalizedTaskPhone = normalizeKenyanPhone(task.phone);
+      const callbackRequest =
+        callbackRequestByTaskId.get(task.id) ||
+        (task.voiceCallId ? callbackRequestByCallId.get(task.voiceCallId) : null) ||
+        (normalizedTaskPhone ? callbackRequestByPhone.get(normalizedTaskPhone) : null) ||
+        null;
       const reasonMeta = getFollowUpReasonMeta({
         itemType: "task",
         title: task.title,
         notes: task.notes,
         voiceCallId: task.voiceCallId,
         voiceLeadId: task.voiceLeadId,
+        callbackRequestedAt: callbackRequest?.requestedAt?.toISOString() ?? null,
       });
       return {
         id: task.id,
@@ -1411,6 +1476,9 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
         voiceCallId: task.voiceCallId,
         voiceLeadId: task.voiceLeadId,
         source: null,
+        callbackRequestedAt: callbackRequest?.requestedAt?.toISOString() ?? null,
+        callbackOpenedAt: callbackRequest?.openedAt?.toISOString() ?? null,
+        callbackRequestClicks: callbackRequest?.openedCount ?? 0,
         customer: contextSummary,
         links: {
           customer: buildPhoneSearchHref(contextSummary.normalizedPhone || task.phone, viewer.impersonateId),
@@ -1430,11 +1498,14 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
       .map(async (lead) => {
         const context = await getContextForPhone(lead.phone, false);
         const contextSummary = serializeCustomerContextSummary(context);
+        const normalizedLeadPhone = normalizeKenyanPhone(lead.phone);
+        const callbackRequest = normalizedLeadPhone ? callbackRequestByPhone.get(normalizedLeadPhone) ?? null : null;
         const reasonMeta = getFollowUpReasonMeta({
           itemType: "lead",
           source: lead.source,
           title: lead.name,
           voiceLeadId: lead.id,
+          callbackRequestedAt: callbackRequest?.requestedAt?.toISOString() ?? null,
         });
         return {
           id: lead.id,
@@ -1457,6 +1528,9 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
           voiceCallId: null,
           voiceLeadId: lead.id,
           source: lead.source,
+          callbackRequestedAt: callbackRequest?.requestedAt?.toISOString() ?? null,
+          callbackOpenedAt: callbackRequest?.openedAt?.toISOString() ?? null,
+          callbackRequestClicks: callbackRequest?.openedCount ?? 0,
           customer: contextSummary,
         links: {
           customer: buildPhoneSearchHref(contextSummary.normalizedPhone || lead.phone, viewer.impersonateId),

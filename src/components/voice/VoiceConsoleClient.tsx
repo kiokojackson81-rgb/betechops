@@ -134,6 +134,9 @@ function statusTone(status: string | null | undefined) {
 
 function followUpReasonTone(kind: string | null | undefined) {
   const normalized = String(kind || "").trim().toLowerCase();
+  if (normalized === "requested_callback") {
+    return "border-lime-500/30 bg-lime-500/10 text-lime-100";
+  }
   if (normalized === "missed_call") {
     return "border-rose-500/30 bg-rose-500/10 text-rose-100";
   }
@@ -2643,12 +2646,20 @@ export default function VoiceConsoleClient({
                                   <span className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${followUpReasonTone((item as any).queueReasonKind)}`}>
                                     {(item as any).queueReasonDisplayLabel || (item as any).queueReasonLabel || "Follow-up"}
                                   </span>
+                                  {(item as any).callbackRequestedAt ? (
+                                    <span className="rounded-full border border-lime-500/30 bg-lime-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-lime-100">
+                                      Client Clicked Callback Link
+                                    </span>
+                                  ) : null}
                                 </div>
                                 <div className="mt-1 text-sm text-slate-400">{item.phone} · {item.title}</div>
                                 <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-500">
                                   <span>{item.assignedAgentLabel}</span>
                                   <span>Opened {formatDateTime(item.createdAt)}</span>
                                   <span>{item.dueAt ? `Due ${formatDateTime(item.dueAt)}` : `Updated ${formatDateTime(item.updatedAt)}`}</span>
+                                  {(item as any).callbackRequestedAt ? (
+                                    <span>Requested {formatDateTime((item as any).callbackRequestedAt)}</span>
+                                  ) : null}
                                   <span>{(item as any).queueReasonLabel || "Follow-up queue"}</span>
                                 </div>
                               </div>
