@@ -1171,23 +1171,10 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
   ]);
 
   const followUpsByCallId = new Map<string, typeof recentCallFollowUpsRaw>();
-  const reviewItemsByPhone = new Map<
-    string,
-    Array<{ status: string; updatedAt: Date; voiceCallId?: string | null; phone?: string | null }>
-  >();
 
   for (const item of recentCallFollowUpsRaw) {
     if (item.voiceCallId) {
       followUpsByCallId.set(item.voiceCallId, [...(followUpsByCallId.get(item.voiceCallId) || []), item]);
-    }
-    for (const key of getStatusTrackingKeys(item.phone)) {
-      reviewItemsByPhone.set(key, [...(reviewItemsByPhone.get(key) || []), item]);
-    }
-  }
-
-  for (const item of recentCallLeadsRaw) {
-    for (const key of getStatusTrackingKeys(item.phone)) {
-      reviewItemsByPhone.set(key, [...(reviewItemsByPhone.get(key) || []), item]);
     }
   }
 
@@ -1249,10 +1236,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
       const contextSummary = serializeCustomerContextSummary(context);
       const lastActivity = contextSummary.recentTimeline[0] ?? null;
       const { displayStatus, providerStatus } = resolveVoiceProviderOutcome(call);
-      const reviewStatus = getFollowUpReviewStatus(displayStatus, [
-        ...(followUpsByCallId.get(call.id) || []),
-        ...getStatusTrackingKeys(call.callerNumber).flatMap((key) => reviewItemsByPhone.get(key) || []),
-      ]);
+      const reviewStatus = getFollowUpReviewStatus(displayStatus, followUpsByCallId.get(call.id) || []);
       const effectiveStatus = reviewStatus || displayStatus;
       return {
         id: call.id,
