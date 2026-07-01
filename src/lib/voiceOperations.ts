@@ -951,6 +951,12 @@ function serializePresenceRow(
   agent: Awaited<ReturnType<typeof listVoiceAgents>>[number],
   activeCallCount: number,
   waitingCallCount: number,
+  metrics?: {
+    receivedCallsToday?: number;
+    answeredCallsToday?: number;
+    missedCallsToday?: number;
+    attemptedCallsToday?: number;
+  },
 ) {
   const routingDefinition = buildRoutingAgentDefinitions().find((definition) => definition.match(agent));
   const phone = routingDefinition?.phone ?? agent.phone ?? null;
@@ -1002,6 +1008,10 @@ function serializePresenceRow(
     routingPreferenceUpdatedAt: toIso(agent.voiceRoutingPreference?.updatedAt),
     activeCallCount,
     waitingCallCount,
+    receivedCallsToday: metrics?.receivedCallsToday ?? 0,
+    answeredCallsToday: metrics?.answeredCallsToday ?? 0,
+    missedCallsToday: metrics?.missedCallsToday ?? 0,
+    attemptedCallsToday: metrics?.attemptedCallsToday ?? 0,
     isAvailableForRouting: routingEnabled && isAgentAvailableForRouting(effectiveStatus, agent.voicePresence?.lastSeenAt),
     webRtcClientName,
     webRtcIdentity,
@@ -1421,12 +1431,57 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     waitingCallIdsByAgent.set(call.assignedToId, (waitingCallIdsByAgent.get(call.assignedToId) ?? 0) + 1);
   }
 
+  const agentIds = voiceAgentsRaw.map((agent) => agent.id);
+  const todayAssignedInboundCalls = agentIds.length
+    ? await prisma.voiceCall.findMany({
+        where: {
+          ...callWhere,
+          assignedToId: { in: agentIds },
+          direction: "INBOUND",
+          createdAt: { gte: todayStart },
+        },
+        select: {
+          assignedToId: true,
+          status: true,
+        },
+      })
+    : [];
+
+  const agentTodayMetrics = todayAssignedInboundCalls.reduce<
+    Map<
+      string,
+      {
+        receivedCallsToday: number;
+        answeredCallsToday: number;
+        missedCallsToday: number;
+        attemptedCallsToday: number;
+      }
+    >
+  >((accumulator, call) => {
+    if (!call.assignedToId) return accumulator;
+    const current = accumulator.get(call.assignedToId) ?? {
+      receivedCallsToday: 0,
+      answeredCallsToday: 0,
+      missedCallsToday: 0,
+      attemptedCallsToday: 0,
+    };
+
+    current.receivedCallsToday += 1;
+    if (isAnsweredStatus(call.status)) current.answeredCallsToday += 1;
+    if (isMissedStatus(call.status)) current.missedCallsToday += 1;
+    if (isAttemptedCallStatus(call.status)) current.attemptedCallsToday += 1;
+
+    accumulator.set(call.assignedToId, current);
+    return accumulator;
+  }, new Map());
+
   const agents = voiceAgentsRaw
     .map((agent) =>
       serializePresenceRow(
         agent,
         activeCallIdsByAgent.get(agent.id) ?? 0,
         waitingCallIdsByAgent.get(agent.id) ?? 0,
+        agentTodayMetrics.get(agent.id),
       ),
     )
     .filter((agent) => (viewer.isAdmin ? agent.isRoutingAgent : true))

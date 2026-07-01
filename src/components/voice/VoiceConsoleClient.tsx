@@ -2815,6 +2815,22 @@ export default function VoiceConsoleClient({
                                   <span className="text-right text-slate-400">{formatDateTime(row.lastSeenAt)}</span>
                                 </div>
                               </div>
+                              <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Today</div>
+                                <div className="mt-3 grid grid-cols-2 gap-3">
+                                  {[
+                                    ["Received", row.receivedCallsToday],
+                                    ["Answered", row.answeredCallsToday],
+                                    ["Missed", row.missedCallsToday],
+                                    ["Attempted", row.attemptedCallsToday],
+                                  ].map(([label, value]) => (
+                                    <div key={String(label)} className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2.5">
+                                      <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">{label}</div>
+                                      <div className="mt-1 text-base font-semibold text-white">{value}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
                               <div className="mt-4 space-y-3 border-t border-slate-800 pt-4">
                                 <div className="flex items-center justify-between gap-3">
                                   <div>
