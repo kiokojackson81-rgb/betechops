@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 
 const NAIROBI_TIMEZONE = "Africa/Nairobi";
 const VOICE_SMS_PROVIDER = "AFRICASTALKING";
+const ATTEMPTED_CALL_SMS_COOLDOWN_MS = 60 * 60 * 1000;
 const MISSED_CALL_STATUSES = new Set([
   "missed",
   "no_answer",
@@ -113,6 +114,8 @@ async function reserveVoiceSmsNotification(input: {
   messageBody: string;
 }) {
   const dayKey = formatNairobiDayKey();
+  const isAttemptedCallSms = input.notificationType === "ATTEMPTED_CALL_SMS";
+  const attemptedCallCooldownCutoff = new Date(Date.now() - ATTEMPTED_CALL_SMS_COOLDOWN_MS);
 
   if (input.voiceCallId) {
     const existingForCall = await prisma.voiceSmsNotificationLog.findFirst({
@@ -146,8 +149,14 @@ async function reserveVoiceSmsNotification(input: {
         id: { not: log.id },
         normalizedPhoneNumber: input.normalizedPhoneNumber,
         notificationType: input.notificationType,
-        dayKey,
         status: "SENT",
+        ...(isAttemptedCallSms
+          ? {
+              sentAt: { gte: attemptedCallCooldownCutoff },
+            }
+          : {
+              dayKey,
+            }),
       },
       orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
     });
@@ -160,10 +169,10 @@ async function reserveVoiceSmsNotification(input: {
       where: { id: log.id },
       data: {
         status: "SKIPPED_DUPLICATE",
-        reason: "already_sent_today",
+        reason: isAttemptedCallSms ? "already_sent_within_1h" : "already_sent_today",
       },
     });
-    return { ok: false as const, reason: "already_sent_today" };
+    return { ok: false as const, reason: isAttemptedCallSms ? "already_sent_within_1h" : "already_sent_today" };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       return { ok: false as const, reason: "already_processed_for_call" };
