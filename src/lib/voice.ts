@@ -1041,6 +1041,38 @@ async function maybeSendAttemptedCallSms(call: {
   } as const;
 }
 
+function logAttemptedCallSmsResult(call: {
+  id: string;
+  direction: string;
+  callerNumber: string;
+  destinationNumber?: string | null;
+  status: string;
+  durationInSeconds?: number | null;
+  assignedToId?: string | null;
+}, result: { sent: boolean; reason: string; providerMessageId?: string | null; token?: string }) {
+  console.info("[voice.sms.attempted_call_result]", {
+    callId: call.id,
+    direction: call.direction,
+    callerNumber: call.callerNumber,
+    destinationNumber: call.destinationNumber ?? null,
+    status: call.status,
+    durationInSeconds: call.durationInSeconds ?? null,
+    assignedToId: call.assignedToId ?? null,
+    sent: result.sent,
+    reason: result.reason,
+    providerMessageId: result.providerMessageId ?? null,
+    token: result.token ?? null,
+    skippedBecauseInternalPhone:
+      result.reason === "internal_phone"
+        ? normalizeVoiceNumber(
+            String(call.direction || "").trim().toUpperCase() === "OUTBOUND"
+              ? call.destinationNumber || call.callerNumber || ""
+              : call.callerNumber || call.destinationNumber || "",
+          )
+        : null,
+  });
+}
+
 export async function getPublicVoiceCallbackRequestByToken(token: string) {
   const trimmedToken = safeString(token);
   if (!trimmedToken) return null;
@@ -1258,7 +1290,7 @@ export async function syncVoiceCallAutomation(input: {
   const normalizedStatus = safeString(input.status).toLowerCase();
 
   if (isAttemptedCallStatus(normalizedStatus)) {
-    await maybeSendAttemptedCallSms({
+    const attemptedSmsResult = await maybeSendAttemptedCallSms({
       id: input.id,
       direction: input.direction,
       callerNumber: input.callerNumber,
@@ -1270,7 +1302,22 @@ export async function syncVoiceCallAutomation(input: {
       endedAt: input.endedAt ?? null,
     }).catch((smsError) => {
       console.warn("[voice.sms.attempted_call_skipped]", smsError instanceof Error ? smsError.message : smsError);
+      return null;
     });
+    if (attemptedSmsResult) {
+      logAttemptedCallSmsResult(
+        {
+          id: input.id,
+          direction: input.direction,
+          callerNumber: input.callerNumber,
+          destinationNumber: input.destinationNumber ?? null,
+          status: normalizedStatus,
+          durationInSeconds: input.durationInSeconds ?? null,
+          assignedToId: input.assignedToId ?? null,
+        },
+        attemptedSmsResult,
+      );
+    }
 
     return;
   }
@@ -1294,7 +1341,7 @@ export async function syncVoiceCallAutomation(input: {
         voiceCallId: input.id,
         voiceLeadId: lead?.id ?? null,
         phone: callbackPhone,
-        assignedToId: input.assignedToId ?? lead?.assignedToId ?? null,
+        assignedToId: lead?.assignedToId ?? input.assignedToId ?? null,
         status: normalizedStatus,
       });
 
@@ -1517,6 +1564,15 @@ export async function createOrUpdateMissedVoiceLead(call: {
     orderBy: { updatedAt: "desc" },
   });
   const leadOwnerId = (await resolveVoiceCallbackOwnerIdForPhone(phone, call.assignedToId)) ?? existing?.assignedToId ?? null;
+
+  if (call.voiceCallId && leadOwnerId && leadOwnerId !== call.assignedToId) {
+    await prisma.voiceCall.updateMany({
+      where: { id: call.voiceCallId },
+      data: {
+        assignedToId: leadOwnerId,
+      },
+    });
+  }
 
   if (existing) {
     const lead = await prisma.voiceLead.update({
