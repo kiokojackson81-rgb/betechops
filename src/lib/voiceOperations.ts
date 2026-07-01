@@ -112,6 +112,52 @@ function formatStatusLabel(status: string | null | undefined) {
   return String(status || "unknown").replace(/_/g, " ");
 }
 
+function getVoiceTimelineEventStatus(event: {
+  eventType?: string | null;
+  payloadJson?: unknown;
+}) {
+  if (event.payloadJson && typeof event.payloadJson === "object") {
+    const payload = event.payloadJson as Record<string, unknown>;
+    const payloadStatus = String(payload.status || payload.callSessionState || "").trim();
+    if (payloadStatus) return payloadStatus;
+  }
+  return String(event.eventType || "").trim();
+}
+
+function formatVoiceTimelineEvent(input: {
+  event: {
+    id: string;
+    eventType: string;
+    payloadJson?: unknown;
+    createdAt: Date;
+  };
+  finalStatus: string | null | undefined;
+}) {
+  const rawStatus = getVoiceTimelineEventStatus(input.event);
+  const normalizedRawStatus = normalizeStatus(rawStatus);
+  const normalizedFinalStatus = normalizeStatus(input.finalStatus);
+  const isAttemptedFinalStatus =
+    normalizedFinalStatus === "attempted_call" || normalizedFinalStatus === "attempted call";
+
+  if (isAttemptedFinalStatus && ["answered", "connected", "in_progress", "processing"].includes(normalizedRawStatus)) {
+    return {
+      id: `event-${input.event.id}`,
+      type: "EVENT",
+      title: "ATTEMPTED CALL",
+      detail: "Call did not reach the bridged talk stage",
+      at: input.event.createdAt.toISOString(),
+    };
+  }
+
+  return {
+    id: `event-${input.event.id}`,
+    type: "EVENT",
+    title: input.event.eventType.replace(/_/g, " "),
+    detail: rawStatus,
+    at: input.event.createdAt.toISOString(),
+  };
+}
+
 function getStatusTrackingKeys(phone: string | null | undefined) {
   const normalizedPhone = normalizeKenyanPhone(phone || "");
   const variants = phone ? getKenyanPhoneVariants(phone) : [];
@@ -1585,15 +1631,12 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
               .map((note) => extractDisposition(note.note))
               .find(Boolean) ?? null,
           timeline: [
-            ...selectedCallDetail.events.map((event) => ({
-              id: `event-${event.id}`,
-              type: "EVENT",
-              title: event.eventType.replace(/_/g, " "),
-              detail: event.payloadJson && typeof event.payloadJson === "object"
-                ? String((event.payloadJson as Record<string, unknown>).status || (event.payloadJson as Record<string, unknown>).callSessionState || "")
-                : "",
-              at: event.createdAt.toISOString(),
-            })),
+            ...selectedCallDetail.events.map((event) =>
+              formatVoiceTimelineEvent({
+                event,
+                finalStatus: selectedCallDetail.status,
+              }),
+            ),
             ...selectedCallDetail.followUps.map((task) => ({
               id: `followup-${task.id}`,
               type: "FOLLOW_UP",
