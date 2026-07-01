@@ -148,10 +148,18 @@ export async function POST(request: Request) {
       })());
     const currentHop = effectiveRoutePlan.hops[hopIndex] ?? null;
     const hasRoutableTarget = effectiveRoutePlan.hops.length > 0;
-    const routeAnnotatedPayload = {
-      ...resolvedPayload,
-      routeReason: effectiveRoutePlan.routeReason || "",
-    };
+    const routeAwareStatus = inferTerminalStatus(normalizedPayload, effectiveRoutePlan);
+    const routeAnnotatedPayload =
+      routeAwareStatus === safeString(normalizedPayload.status || normalizedPayload.callSessionState || normalizedPayload.callStatus)
+        ? {
+            ...normalizedPayload,
+            routeReason: effectiveRoutePlan.routeReason || "",
+          }
+        : {
+            ...normalizedPayload,
+            status: routeAwareStatus,
+            routeReason: effectiveRoutePlan.routeReason || "",
+          };
 
     const voiceCall = await upsertVoiceCallFromPayload(routeAnnotatedPayload, {
       routeType: effectiveRoutePlan.routeType,
@@ -177,7 +185,7 @@ export async function POST(request: Request) {
       direction: voiceCall.direction,
       callerNumber: voiceCall.callerNumber,
       destinationNumber: voiceCall.destinationNumber,
-      status: status,
+      status: voiceCall.status,
       startedAt: voiceCall.startedAt,
       endedAt: voiceCall.endedAt,
       assignedToId: voiceCall.assignedToId,

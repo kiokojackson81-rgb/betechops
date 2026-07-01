@@ -272,9 +272,6 @@ function inferVoiceProviderOutcomeFromPayload(
 
   const normalizedStatus = String(payload.status || "").trim().toLowerCase();
   const normalizedSessionState = String(payload.callSessionState || "").trim().toLowerCase();
-  if (["answered", "connected", "in_progress", "transferred"].includes(normalizedStatus)) {
-    return normalizedStatus;
-  }
   const duration = Number(payload.durationInSeconds || payload.duration || 0) || 0;
   const direction = String(payload.direction || "INBOUND").trim().toUpperCase() || "INBOUND";
   const treatZeroDurationSuccessAsNoAnswer = options?.treatZeroDurationSuccessAsNoAnswer !== false;
@@ -316,6 +313,16 @@ function inferVoiceProviderOutcomeFromPayload(
       bridgeStatus,
     ) ||
     Boolean(hangupCause && !["USER_BUSY", "BUSY", "NO_ANSWER", "NO ANSWER"].includes(hangupCause));
+
+  if (["connected", "in_progress", "transferred"].includes(normalizedStatus)) {
+    return normalizedStatus;
+  }
+  if (normalizedStatus === "answered") {
+    if (direction === "INBOUND" && duration > 0 && treatInboundSuccessWithoutBridgeAsNoAnswer && !hasBridgeEvidence) {
+      return "no_answer";
+    }
+    return normalizedStatus;
+  }
 
   if (isProviderTerminalSuccess && treatZeroDurationSuccessAsNoAnswer && duration <= 0) {
     return "no_answer";
