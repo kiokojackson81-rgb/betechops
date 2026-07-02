@@ -279,6 +279,12 @@ type ChatraceActivityData = {
   tags?: string[];
   lastMessagePreview?: string | null;
   profileUrl?: string | null;
+  inboxUrl?: string | null;
+  recentMessages?: Array<{
+    text?: string | null;
+    at?: string | null;
+    sender?: string | null;
+  }>;
 };
 
 function formatChatraceLastChat(value: string | null | undefined) {
@@ -312,6 +318,9 @@ function ChatraceActivityCard({
 }) {
   const tags = Array.isArray(data?.tags) ? data?.tags.filter(Boolean) : [];
   const hasPreview = Boolean(data?.lastMessagePreview);
+  const recentMessages = Array.isArray(data?.recentMessages)
+    ? data.recentMessages.filter((item) => String(item?.text || "").trim())
+    : [];
   const isFound = Boolean(data?.found);
   const isUnavailable = Boolean(data?.sourceError) && !isFound;
 
@@ -365,22 +374,52 @@ function ChatraceActivityCard({
         </div>
       ) : null}
 
+      {recentMessages.length ? (
+        <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-3">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Recent Messages</div>
+          <div className="mt-2 space-y-2">
+            {recentMessages.slice(0, 5).map((message, index) => (
+              <div key={`${message.text}-${index}`} className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-3">
+                <div className="text-sm text-slate-200">{message.text}</div>
+                {message.sender || message.at ? (
+                  <div className="mt-1 text-[11px] text-slate-500">
+                    {[message.sender, message.at ? formatDateTime(message.at) : null].filter(Boolean).join(" · ")}
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {!hasPreview && !isFound && !isUnavailable ? (
         <div className="mt-3 rounded-2xl border border-dashed border-slate-800 px-3 py-5 text-sm text-slate-500">
           No recent Chatrace chat found for this caller.
         </div>
       ) : null}
 
-      {data?.profileUrl ? (
-        <div className="mt-3">
-          <a
-            href={data.profileUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400"
-          >
-            Open in Chatrace
-          </a>
+      {data?.profileUrl || data?.inboxUrl ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {data?.profileUrl ? (
+            <a
+              href={data.profileUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400"
+            >
+              Open in Chatrace
+            </a>
+          ) : null}
+          {data?.inboxUrl ? (
+            <a
+              href={data.inboxUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-semibold text-slate-100 transition hover:border-white/20"
+            >
+              Open Chatrace Inbox
+            </a>
+          ) : null}
         </div>
       ) : null}
     </div>

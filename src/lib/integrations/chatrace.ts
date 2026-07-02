@@ -18,6 +18,12 @@ export type ChatraceCustomFieldSummary = {
   value: string;
 };
 
+export type ChatraceRecentMessage = {
+  text: string;
+  at?: string;
+  sender?: string;
+};
+
 export type ChatraceLookupResult = {
   found: boolean;
   normalizedPhone: string;
@@ -30,6 +36,8 @@ export type ChatraceLookupResult = {
   customFields?: ChatraceCustomFieldSummary[];
   lastMessagePreview?: string | null;
   profileUrl?: string | null;
+  inboxUrl?: string | null;
+  recentMessages?: ChatraceRecentMessage[];
   sourceError?: boolean;
   rateLimited?: boolean;
 };
@@ -518,6 +526,8 @@ export function buildChatraceLookupBaseResult(
     customFields: [],
     lastMessagePreview: null,
     profileUrl: null,
+    inboxUrl: null,
+    recentMessages: [],
     sourceError: false,
     rateLimited: false,
     ...overrides,
@@ -646,13 +656,83 @@ function extractMessagePreview(candidate: unknown, customFields: ChatraceCustomF
   return snippet(raw);
 }
 
-function buildChatraceProfileUrl(baseUrl: string, accountId: string, contactId: number | null) {
-  if (!contactId) return null;
+function extractRecentMessages(candidate: unknown, customFields: ChatraceCustomFieldSummary[]): ChatraceRecentMessage[] {
+  const candidates = [
+    candidate,
+    ...customFields
+      .filter((field) =>
+        [
+          "chat_history",
+          "chat history",
+          "recent_messages",
+          "recent messages",
+          "messages",
+          "message_history",
+          "message history",
+          "conversation_history",
+          "conversation history",
+          "last_message",
+          "last message",
+        ].includes(field.name.trim().toLowerCase()),
+      )
+      .map((field) => field.value),
+  ];
+
+  for (const item of candidates) {
+    const raw = toLookupString(item).trim();
+    if (!raw) continue;
+
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      const asArray = Array.isArray(parsed)
+        ? parsed
+        : parsed && typeof parsed === "object"
+          ? [parsed]
+          : [];
+      const mapped = asArray
+        .map((entry) => {
+          if (!entry) return null;
+          if (typeof entry === "string") {
+            const text = snippet(entry, 240);
+            return text ? { text } : null;
+          }
+          if (typeof entry !== "object") return null;
+          const record = entry as Record<string, unknown>;
+          const text = snippet(
+            toLookupString(record.message || record.text || record.body || record.content || record.preview),
+            240,
+          );
+          if (!text) return null;
+          return {
+            text,
+            at: toLookupString(record.at || record.time || record.timestamp || record.created_at) || undefined,
+            sender: toLookupString(record.sender || record.from || record.role || record.author) || undefined,
+          } satisfies ChatraceRecentMessage;
+        })
+        .filter((entry): entry is ChatraceRecentMessage => Boolean(entry));
+      if (mapped.length) {
+        return mapped.slice(-5).reverse();
+      }
+    } catch {
+      const lines = raw
+        .split(/\r?\n+/)
+        .map((line) => snippet(line, 240))
+        .filter(Boolean);
+      if (lines.length) {
+        return lines.slice(-5).reverse().map((text) => ({ text }));
+      }
+    }
+  }
+
+  return [];
+}
+
+function buildChatraceInboxUrl(baseUrl: string, accountId: string) {
+  if (!accountId) return null;
   try {
     const base = new URL(baseUrl);
-    const appHost = base.hostname.startsWith("api.") ? base.hostname.replace(/^api\./, "app.") : base.hostname;
-    const accountSegment = accountId ? `/accounts/${encodeURIComponent(accountId)}` : "";
-    return `${base.protocol}//${appHost}${accountSegment}/contacts/${contactId}`;
+    const appHost = base.hostname === "api.chatrace.com" ? "chatrace.com" : base.hostname.replace(/^api\./, "");
+    return `${base.protocol}//${appHost}/en/inbox?acc=${encodeURIComponent(accountId)}#`;
   } catch {
     return null;
   }
@@ -720,6 +800,13 @@ function mapChatraceContactToLookup(input: {
     customFields.find((field) => field.name.trim().toLowerCase() === "phone")?.value ||
     input.normalizedPhone;
   const tags = toTagList(input.contact.tags);
+  const recentMessages = extractRecentMessages(
+    input.contact.last_messages ||
+      input.contact.recent_messages ||
+      input.contact.messages ||
+      input.contact.chat_history,
+    customFields,
+  );
 
   return {
     found: true,
@@ -741,9 +828,9 @@ function mapChatraceContactToLookup(input: {
         input.contact.last_message_text,
       customFields,
     ),
-    profileUrl:
-      toLookupString(input.contact.profile_url || input.contact.url || input.contact.link) ||
-      buildChatraceProfileUrl(input.config.baseUrl, input.config.accountId, contactId),
+    profileUrl: toLookupString(input.contact.profile_url || input.contact.url || input.contact.link) || null,
+    inboxUrl: buildChatraceInboxUrl(input.config.baseUrl, input.config.accountId),
+    recentMessages,
   } satisfies ChatraceLookupResult;
 }
 
