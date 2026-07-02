@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import ActionMarkPicked from "./_actions/ActionMarkPicked";
+import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 
 function fmtKsh(n: number) {
   return `Ksh ${n.toLocaleString()}`;
@@ -62,6 +63,10 @@ export default async function ReturnDetailPage({ params }: { params: Promise<{ i
   const cost = order.items.reduce((sum, it) => sum + ((it.product?.lastBuyingPrice ?? 0) * it.quantity), 0);
   const gross = total - cost;
   const picked = ret.status === "picked_up" || Boolean(ret.pickedAt);
+  const customerHref = buildAdminCustomerProfileHref({
+    phone: order.customerPhone || null,
+    displayName: order.customerName || null,
+  });
 
   return (
     <div className="mx-auto max-w-5xl p-6">
@@ -80,8 +85,10 @@ export default async function ReturnDetailPage({ params }: { params: Promise<{ i
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
           <div className="text-sm text-slate-400">Customer</div>
-          <div className="mt-1 font-medium">{order.customerName || "—"}</div>
-          <div className="text-slate-400 text-sm">{order.customerName || "—"}</div>
+          <Link href={customerHref} className="mt-1 block font-medium transition hover:text-cyan-300">
+            {order.customerName || "—"}
+          </Link>
+          <div className="text-slate-400 text-sm">{order.customerPhone || "—"}</div>
         </div>
         <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
           <div className="text-sm text-slate-400">Shop</div>

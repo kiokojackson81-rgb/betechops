@@ -25,6 +25,7 @@ import {
   type SerializedQuoteRequest,
 } from "@/lib/quoteRequests";
 import { getVoiceLiveSnapshot, resolveVoiceViewer } from "@/lib/voiceOperations";
+import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 
 export const dynamic = "force-dynamic";
 
@@ -122,6 +123,7 @@ type QueueItem = {
   type: "Web Order" | "Agent Order" | "Quotation" | "POD";
   customerName: string;
   phone: string | null;
+  customerHref: string;
   amount: number | null;
   status: string;
   createdAt: string | Date | null;
@@ -185,6 +187,8 @@ type TrackerWebsiteOrder = {
   id: string;
   customerName: string;
   customerPhone: string | null;
+  customerEmail: string | null;
+  customerUserId: string | null;
   total: number;
   status: WebsiteOrderStatus;
   createdAt: Date;
@@ -232,6 +236,8 @@ async function listTrackerWebsiteOrders(): Promise<TrackerWebsiteOrder[]> {
       id: true,
       customerName: true,
       customerPhone: true,
+      customerEmail: true,
+      customerUserId: true,
       total: true,
       status: true,
       createdAt: true,
@@ -244,6 +250,8 @@ async function listTrackerWebsiteOrders(): Promise<TrackerWebsiteOrder[]> {
     id: row.id,
     customerName: row.customerName,
     customerPhone: row.customerPhone,
+    customerEmail: row.customerEmail,
+    customerUserId: row.customerUserId,
     total: Number(row.total ?? 0),
     status: row.status,
     createdAt: row.createdAt,
@@ -334,7 +342,7 @@ async function listVisibleQuoteRequests(input: {
     })) as Array<
       Pick<
         SerializedQuoteRequest,
-        "id" | "customerName" | "customerPhone" | "customerEmail" | "customerLocation" | "county" | "town" | "projectType" | "status" | "assignedAttendant" | "quoteTitle" | "createdAt" | "updatedAt"
+        "id" | "customerName" | "customerPhone" | "customerEmail" | "customerUserId" | "customerLocation" | "county" | "town" | "projectType" | "status" | "assignedAttendant" | "quoteTitle" | "createdAt" | "updatedAt"
       >
     >;
   }
@@ -566,6 +574,12 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
       type: "Web Order" as const,
       customerName: order.customerName,
       phone: order.customerPhone,
+      customerHref: buildAdminCustomerProfileHref({
+        customerUserId: order.customerUserId,
+        phone: order.customerPhone,
+        email: order.customerEmail,
+        displayName: order.customerName,
+      }),
       amount: order.total,
       status: websiteStatusLabel(order.status),
       createdAt: order.createdAt,
@@ -583,6 +597,10 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
       type: "Agent Order" as const,
       customerName: sale.customerName,
       phone: sale.customerPhone,
+      customerHref: buildAdminCustomerProfileHref({
+        phone: sale.customerPhone,
+        displayName: sale.customerName,
+      }),
       amount: sale.totalAmount,
       status: sale.statusMeta.label,
       createdAt: sale.createdAt,
@@ -600,6 +618,12 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
       type: "Quotation" as const,
       customerName: request.customerName,
       phone: request.customerPhone,
+      customerHref: buildAdminCustomerProfileHref({
+        customerUserId: request.customerUserId,
+        phone: request.customerPhone,
+        email: request.customerEmail,
+        displayName: request.customerName,
+      }),
       amount: null,
       status: quoteStatusLabel(request.status),
       createdAt: request.createdAt,
@@ -617,6 +641,10 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
       type: "POD" as const,
       customerName: item.customerName,
       phone: item.customerPhone,
+      customerHref: buildAdminCustomerProfileHref({
+        phone: item.customerPhone,
+        displayName: item.customerName,
+      }),
       amount: item.total,
       status: item.status.replace(/_/g, " ").toLowerCase(),
       createdAt: item.createdAt,
@@ -764,7 +792,9 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
                     ) : null}
                   </div>
                   <div>
-                    <div className="font-semibold text-white">{item.customerName}</div>
+                    <Link href={item.customerHref} className="font-semibold text-white transition hover:text-cyan-200">
+                      {item.customerName}
+                    </Link>
                     <div className="mt-1 text-sm text-slate-400">{item.phone || "No phone captured"}</div>
                   </div>
                   <div className="text-sm text-slate-300">

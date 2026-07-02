@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
+import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 
 type ReceiptDetail = {
   id: string;
@@ -8,6 +10,7 @@ type ReceiptDetail = {
   docType?: string | null;
   createdAt: string;
   customerName?: string | null;
+  customerPhone?: string | null;
   attendantName?: string | null;
   total?: number | null;
   items?: { id: string; title?: string; quantity?: number; sellingPrice?: number }[];
@@ -66,11 +69,26 @@ export default function ReceiptDetailsDrawer({ id, open, onClose }: { id: string
           {error && <div className="text-sm text-rose-400">{error}</div>}
           {!loading && !error && detail && (
             <div className="space-y-3">
+              {(() => {
+                const customerProfileHref = buildAdminCustomerProfileHref({
+                  phone: detail.customerPhone,
+                  displayName: detail.customerName,
+                });
+                return (
+                  <>
               <div>
                 <div className="text-sm text-slate-400">{detail.docType ?? "Receipt"}</div>
                 <div className="text-md font-semibold">{detail.orderRef ?? detail.id}</div>
                 <div className="text-xs text-slate-500">{new Date(detail.createdAt).toLocaleString()}</div>
                 <div className="text-xs text-slate-500">{detail.customerName ?? "Customer"} — {detail.attendantName ?? "Attendant"}</div>
+                <div className="mt-3">
+                  <Link
+                    href={customerProfileHref}
+                    className="inline-flex rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-100 transition hover:border-cyan-300/30 hover:bg-cyan-400/15"
+                  >
+                    Open customer profile
+                  </Link>
+                </div>
               </div>
 
               <div className="rounded-lg border border-white/5 bg-slate-950/50 p-3">
@@ -98,6 +116,9 @@ export default function ReceiptDetailsDrawer({ id, open, onClose }: { id: string
                   )}
                 </div>
               </div>
+                  </>
+                );
+              })()}
             </div>
           )}
         </div>

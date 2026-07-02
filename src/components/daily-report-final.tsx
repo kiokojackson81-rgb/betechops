@@ -19,6 +19,7 @@ import useTradingPeriodQueryState from "@/app/_components/useTradingPeriodQueryS
 import { withImpersonateId } from "@/lib/impersonation";
 import { mapPayrollToEarningsSummary } from "@/lib/payrollMapping";
 import PosManagementClient from "@/app/admin/pos-management/PosManagementClient";
+import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 import {
   isCarriedForwardPendingItem,
   isOpenAgentOrderStatus,
@@ -56,6 +57,8 @@ type SalesActionWebsiteOrder = {
   id: string;
   customerName: string;
   customerPhone: string | null;
+  customerEmail?: string | null;
+  customerUserId?: string | null;
   total: number;
   status: string;
   createdAt: string;
@@ -67,6 +70,8 @@ type SalesActionQuoteRequest = {
   id: string;
   customerName: string;
   customerPhone: string | null;
+  customerEmail?: string | null;
+  customerUserId?: string | null;
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -90,6 +95,7 @@ type SalesActionReceipt = {
   id: string;
   customerName?: string | null;
   customerPhone?: string | null;
+  customerEmail?: string | null;
   total?: number | null;
   status?: string | null;
   paymentStatus?: string | null;
@@ -106,6 +112,7 @@ type SalesActionQueueItem = {
   type: "WEB ORDER" | "POS" | "QUOTATION" | "AGENT ORDER" | "POD";
   customerName: string;
   phone: string | null;
+  customerHref?: string | null;
   amount: number | null;
   status: string;
   createdAt: string | null;
@@ -139,6 +146,22 @@ const kenyaTimeZone = "Africa/Nairobi";
 
 const formatKES = (value?: number | null) =>
   `KES ${Number(value ?? 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
+
+function buildCustomerProfileHref(input: {
+  customerUserId?: string | null;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
+  customerName?: string | null;
+  impersonateId?: string | null;
+}) {
+  return buildAdminCustomerProfileHref({
+    customerUserId: input.customerUserId,
+    phone: input.customerPhone,
+    email: input.customerEmail,
+    displayName: input.customerName,
+    impersonateId: input.impersonateId,
+  });
+}
 
 const toLocalIsoDate = (d: Date) => {
   const y = d.getFullYear();
@@ -1271,6 +1294,13 @@ export default function DailyReportFinal() {
         type: "WEB ORDER" as const,
         customerName: order.customerName,
         phone: order.customerPhone,
+        customerHref: buildCustomerProfileHref({
+          customerUserId: order.customerUserId,
+          customerPhone: order.customerPhone,
+          customerEmail: order.customerEmail,
+          customerName: order.customerName,
+          impersonateId,
+        }),
         amount: order.total,
         status: String(order.status).replace(/_/g, " ").toLowerCase(),
         createdAt: order.createdAt,
@@ -1289,6 +1319,12 @@ export default function DailyReportFinal() {
         type: "POS" as const,
         customerName: receipt.customerName || receipt.receiptNumber || "POS customer",
         phone: receipt.customerPhone || null,
+        customerHref: buildCustomerProfileHref({
+          customerPhone: receipt.customerPhone || null,
+          customerEmail: receipt.customerEmail || null,
+          customerName: receipt.customerName || receipt.receiptNumber || "POS customer",
+          impersonateId,
+        }),
         amount: Number(receipt.total ?? 0),
         status: String(receipt.paymentStatus || receipt.status || "pending").replace(/_/g, " ").toLowerCase(),
         createdAt: receipt.createdAt,
@@ -1307,6 +1343,13 @@ export default function DailyReportFinal() {
         type: "QUOTATION" as const,
         customerName: request.customerName,
         phone: request.customerPhone,
+        customerHref: buildCustomerProfileHref({
+          customerUserId: request.customerUserId,
+          customerPhone: request.customerPhone,
+          customerEmail: request.customerEmail,
+          customerName: request.customerName,
+          impersonateId,
+        }),
         amount: null,
         status: String(request.status).replace(/_/g, " ").toLowerCase(),
         createdAt: request.createdAt,
@@ -1325,6 +1368,11 @@ export default function DailyReportFinal() {
         type: "AGENT ORDER" as const,
         customerName: sale.customerName,
         phone: sale.customerPhone,
+        customerHref: buildCustomerProfileHref({
+          customerPhone: sale.customerPhone,
+          customerName: sale.customerName,
+          impersonateId,
+        }),
         amount: sale.totalAmount,
         status: sale.statusMeta?.label || String(sale.status).replace(/_/g, " ").toLowerCase(),
         createdAt: sale.createdAt,
@@ -1343,6 +1391,12 @@ export default function DailyReportFinal() {
         type: "POD" as const,
         customerName: receipt.customerName || receipt.receiptNumber || "POD customer",
         phone: receipt.customerPhone || null,
+        customerHref: buildCustomerProfileHref({
+          customerPhone: receipt.customerPhone || null,
+          customerEmail: receipt.customerEmail || null,
+          customerName: receipt.customerName || receipt.receiptNumber || "POD customer",
+          impersonateId,
+        }),
         amount: Number(receipt.total ?? 0),
         status: String(receipt.podDeliveryStatus || "pending").replace(/_/g, " ").toLowerCase(),
         createdAt: receipt.createdAt,
@@ -1926,7 +1980,16 @@ export default function DailyReportFinal() {
                       ) : null}
                     </div>
                     <div>
-                      <div className="font-semibold text-white">{item.customerName}</div>
+                      {item.customerHref ? (
+                        <Link
+                          href={item.customerHref}
+                          className="font-semibold text-white transition hover:text-cyan-200"
+                        >
+                          {item.customerName}
+                        </Link>
+                      ) : (
+                        <div className="font-semibold text-white">{item.customerName}</div>
+                      )}
                       <div className="mt-1 text-sm text-slate-400">{item.phone || "No phone captured"}</div>
                     </div>
                     <div className="text-sm text-slate-300">

@@ -1,12 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import toast from '@/lib/toast';
+import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 
 type OrderRow = {
   id: string;
   orderNumber: string;
   customerName?: string | null;
+  customerPhone?: string | null;
   itemsCount: number;
   sellingTotal: number;
   hasBuyingPrice: boolean;
@@ -116,9 +119,17 @@ export default function QueueList({ shopId }: { shopId?: string }) {
         <ul className="divide-y divide-white/5">
           {filtered.map((o) => (
             <li key={o.id} className="py-3">
+              {(() => {
+                const customerProfileHref = buildAdminCustomerProfileHref({
+                  phone: o.customerPhone,
+                  displayName: o.customerName,
+                });
+                return (
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <div className="sm:w-1/2">
-                  <div className="text-sm text-slate-400">#{o.orderNumber} • {o.customerName || "Walk-in"}</div>
+                  <div className="text-sm text-slate-400">
+                    #{o.orderNumber} • <Link href={customerProfileHref} className="transition hover:text-cyan-300">{o.customerName || "Walk-in"}</Link>
+                  </div>
                   <div className="text-xs text-slate-500">{o.itemsCount} items · {timeAgo(o.createdAt)}</div>
                 </div>
 
@@ -134,6 +145,8 @@ export default function QueueList({ shopId }: { shopId?: string }) {
                   <button onClick={() => markPacked(o.id)} className="rounded-lg bg-white/10 px-3 py-1.5 text-xs hover:bg-white/20">Mark Packed</button>
                 </div>
               </div>
+                );
+              })()}
             </li>
           ))}
         </ul>

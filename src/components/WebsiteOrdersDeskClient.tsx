@@ -16,6 +16,7 @@ import {
   isPendingWebOrderStatus,
   shouldShowPendingWorkItem,
 } from "@/lib/operationsWorkQueue";
+import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 
 type WebsiteOrderStatusFilter =
   | "ALL"
@@ -110,6 +111,22 @@ function buildProductShopHref(productName: string, productId?: string | null) {
   return `${SHOP_BASE_URL}${getShopProductHref(slug, normalizedProductId)}`;
 }
 
+function buildCustomerProfileHref(
+  order: Pick<
+    SerializedWebsiteOrder,
+    "customerUserId" | "customerPhone" | "customerEmail" | "customerName"
+  >,
+  impersonateId?: string | null,
+) {
+  return buildAdminCustomerProfileHref({
+    customerUserId: order.customerUserId,
+    phone: order.customerPhone,
+    email: order.customerEmail,
+    displayName: order.customerName,
+    impersonateId,
+  });
+}
+
 export default function WebsiteOrdersDeskClient({
   initialOrders = [],
   apiBasePath,
@@ -138,6 +155,7 @@ export default function WebsiteOrdersDeskClient({
   const [message, setMessage] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const impersonateId = apiQueryParams?.impersonateId ?? null;
 
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
@@ -364,6 +382,7 @@ export default function WebsiteOrdersDeskClient({
           {filteredOrders.length ? (
             filteredOrders.map((order) => {
               const open = expandedId === order.id;
+              const customerProfileHref = buildCustomerProfileHref(order, impersonateId);
               return (
                 <div key={order.id} className="rounded-[22px] border border-white/10 bg-white/[0.03]">
                   <div className="grid gap-3 p-4 lg:grid-cols-[140px_1.3fr_1fr_160px_140px_150px] lg:items-center">
@@ -378,7 +397,9 @@ export default function WebsiteOrdersDeskClient({
                       ) : null}
                     </div>
                     <div className="min-w-0">
-                      <div className="font-semibold text-white">{order.customerName}</div>
+                      <Link href={customerProfileHref} className="font-semibold text-white transition hover:text-cyan-200">
+                        {order.customerName}
+                      </Link>
                       <div className="mt-1 text-xs text-slate-400">{order.customerPhone}</div>
                       <div className="mt-1 text-xs text-slate-500">{order.orderRef}</div>
                     </div>
@@ -428,6 +449,15 @@ export default function WebsiteOrdersDeskClient({
                               <div><span className="text-slate-500">Referred by:</span> {order.referredByAgent?.name || "-"}</div>
                               <div><span className="text-slate-500">Referral code:</span> {order.attributionCodeUsed || order.referredByAgent?.referralCode || "-"}</div>
                               <div><span className="text-slate-500">Receipt:</span> {order.receipt?.receiptNumber || "-"}</div>
+                            </div>
+                            <div className="mt-4">
+                              <Link
+                                href={customerProfileHref}
+                                className="inline-flex items-center gap-2 rounded-lg border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-300/30 hover:bg-cyan-400/15"
+                              >
+                                Open customer profile
+                                <ExternalLink className="h-4 w-4" />
+                              </Link>
                             </div>
                           </div>
                           <div className="rounded-xl border border-white/10 bg-white/5 p-4">
@@ -534,6 +564,7 @@ export default function WebsiteOrdersDeskClient({
         {filteredOrders.length ? (
           filteredOrders.map((order) => {
             const open = expandedId === order.id;
+            const customerProfileHref = buildCustomerProfileHref(order, impersonateId);
             return (
               <div key={order.id} className="border-b border-white/10 last:border-b-0">
                 <div className="grid grid-cols-[56px_minmax(220px,1.5fr)_minmax(120px,0.8fr)_minmax(150px,1fr)_minmax(130px,0.9fr)_minmax(120px,0.8fr)_minmax(120px,0.8fr)_minmax(120px,0.8fr)] gap-3 px-4 py-4 text-sm">
@@ -549,7 +580,9 @@ export default function WebsiteOrdersDeskClient({
                     )}
                   </button>
                   <div>
-                    <div className="font-semibold text-white">{order.customerName}</div>
+                    <Link href={customerProfileHref} className="font-semibold text-white transition hover:text-cyan-200">
+                      {order.customerName}
+                    </Link>
                     <div className="mt-1 text-xs text-slate-400">{order.orderRef}</div>
                     <div className="mt-1 text-xs text-slate-500">{formatDateTime(order.createdAt)}</div>
                   </div>
@@ -617,6 +650,15 @@ export default function WebsiteOrdersDeskClient({
                               <span className="text-slate-500">Receipt:</span>{" "}
                               {order.receipt?.receiptNumber || "-"}
                             </div>
+                          </div>
+                          <div className="mt-4">
+                            <Link
+                              href={customerProfileHref}
+                              className="inline-flex items-center gap-2 rounded-lg border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-300/30 hover:bg-cyan-400/15"
+                            >
+                              Open customer profile
+                              <ExternalLink className="h-4 w-4" />
+                            </Link>
                           </div>
                         </div>
                         <div className="rounded-xl border border-white/10 bg-white/5 p-4">

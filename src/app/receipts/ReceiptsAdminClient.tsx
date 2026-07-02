@@ -8,6 +8,7 @@ import RowActions from "./list/RowActions";
 import MarkdownRendererClient, { RichFormattingToggle } from "@/components/MarkdownRendererClient";
 import { showToast } from "@/lib/ui/toast";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 
 type ReceiptRow = {
   id: string;
@@ -15,6 +16,7 @@ type ReceiptRow = {
   docType: string;
   createdAt: string;
   customerName?: string | null;
+  customerPhone?: string | null;
   attendantName?: string | null;
   total?: number | string | null;
   buyingTotal?: number | string | null;
@@ -1897,6 +1899,10 @@ export default function ReceiptsAdminClient({
               {displayRows.map((row) => {
                 const isPodPending = row.isPodDelivery && String(row.podDeliveryStatus ?? "").toLowerCase() === "pending";
                 const isSelected = row.id === selected?.id && drawerOpen;
+                const customerProfileHref = buildAdminCustomerProfileHref({
+                  phone: row.customerPhone,
+                  displayName: row.customerName,
+                });
                 return (
                   <tr
                     key={row.id}
@@ -1913,7 +1919,9 @@ export default function ReceiptsAdminClient({
                     </span>
                   </td>
                   <td className="px-3 py-3">
-                    <div className="text-white">{row.customerName || "Walk-in"}</div>
+                    <Link href={customerProfileHref} className="text-white transition hover:text-cyan-200">
+                      {row.customerName || "Walk-in"}
+                    </Link>
                   </td>
                     <td className="px-3 py-3 text-slate-300">{row.attendantName || "-"}</td>
                     <td className="px-3 py-3 font-semibold text-emerald-300">{formatCurrency(row.total)}</td>
@@ -2032,11 +2040,20 @@ export default function ReceiptsAdminClient({
             {!detailLoading && detail?.receipt && (
               <div className="mt-6 space-y-4">
                 <div className="rounded-2xl border border-white/5 bg-slate-900/60 p-4 text-sm">
+                  {(() => {
+                    const customerProfileHref = buildAdminCustomerProfileHref({
+                      phone: detail.receipt.order?.customerPhone || detail.receipt.data?.customerPhone || null,
+                      displayName: detail.receipt.order?.customerName || detail.receipt.data?.customerName || null,
+                    });
+                    return (
+                      <>
                   <div className="flex flex-wrap gap-4 text-slate-300">
                     <div>
                       <p className="text-xs text-slate-500">Customer</p>
                       <p className="text-base text-white">
-                        {detail.receipt.order?.customerName || detail.receipt.data?.customerName || "Walk-in"}
+                        <Link href={customerProfileHref} className="transition hover:text-cyan-200">
+                          {detail.receipt.order?.customerName || detail.receipt.data?.customerName || "Walk-in"}
+                        </Link>
                       </p>
                     </div>
                     <div>
@@ -2052,6 +2069,14 @@ export default function ReceiptsAdminClient({
                       <p>{detail.receipt.docType}</p>
                     </div>
                   </div>
+                  <div className="mt-3">
+                    <Link href={customerProfileHref} className="inline-flex rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-100 transition hover:border-cyan-300/30 hover:bg-cyan-400/15">
+                      Open customer profile
+                    </Link>
+                  </div>
+                      </>
+                    );
+                  })()}
                   <div className="mt-4 rounded-xl border border-white/5 bg-slate-950/40 p-3 text-sm">
                     <div className="flex flex-wrap gap-4">
                       <div>

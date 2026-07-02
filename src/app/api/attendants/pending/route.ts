@@ -42,6 +42,7 @@ export async function GET(req: Request) {
       id: o.id,
       orderNumber: o.orderNumber,
       customerName: o.customerName ?? null,
+      customerPhone: o.customerPhone ?? null,
       itemsCount,
       sellingTotal,
       hasBuyingPrice,

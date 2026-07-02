@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 
 type SaleDetail = {
   id: string;
@@ -211,6 +212,10 @@ export default function AgentSaleDetailAdminClient({
   const [receiptNumber, setReceiptNumber] = useState(sale.receiptNumber || "");
   const [busy, setBusy] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+  const customerProfileHref = buildAdminCustomerProfileHref({
+    phone: sale.customerPhone,
+    displayName: sale.customerName,
+  });
 
   async function patchStatus(
     status: string,
@@ -325,6 +330,14 @@ export default function AgentSaleDetailAdminClient({
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6">
               <h2 className="text-xl font-semibold text-white">Customer and product</h2>
+              <div className="mt-4">
+                <Link
+                  href={customerProfileHref}
+                  className="inline-flex items-center rounded-full border border-cyan-400/20 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300/30 hover:bg-cyan-400/15"
+                >
+                  Open customer profile
+                </Link>
+              </div>
               <div className="mt-5 grid gap-3 md:grid-cols-2">
                 <DetailStat label="Customer" value={sale.customerName} />
                 <DetailStat label="Phone" value={sale.customerPhone} />

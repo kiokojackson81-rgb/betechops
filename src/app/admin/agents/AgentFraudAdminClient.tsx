@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Eye } from "lucide-react";
+import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 
 type FraudRow = {
   id: string;
@@ -71,6 +73,10 @@ export default function AgentFraudAdminClient({ rows }: { rows: FraudRow[] }) {
         <div className="divide-y divide-white/5">
           {rows.map((row) => {
             const expanded = expandedIds.includes(row.id);
+            const customerHref = buildAdminCustomerProfileHref({
+              phone: row.phone,
+              displayName: row.customerNames[0] || row.title,
+            });
             return (
               <div key={row.id} className="transition hover:bg-white/[0.02]">
                 <div className="grid grid-cols-[56px_minmax(250px,1.5fr)_180px_200px_120px_140px_160px] items-center gap-3 px-4 py-4">
@@ -86,7 +92,9 @@ export default function AgentFraudAdminClient({ rows }: { rows: FraudRow[] }) {
                   <div className="truncate whitespace-nowrap text-slate-100">{row.phone || "No phone"}</div>
                   <div className="min-w-0">
                     <div className="truncate whitespace-nowrap text-slate-100">{row.agents.join(", ") || "No agents"}</div>
-                    <div className="truncate whitespace-nowrap text-xs text-slate-500">{row.customerNames.join(", ") || "No customers"}</div>
+                    <Link href={customerHref} className="truncate whitespace-nowrap text-xs text-cyan-200 transition hover:text-cyan-100">
+                      {row.customerNames.join(", ") || "No customers"}
+                    </Link>
                   </div>
                   <div>
                     <span className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${riskBadge(row.riskLevel)}`}>
@@ -133,6 +141,9 @@ export default function AgentFraudAdminClient({ rows }: { rows: FraudRow[] }) {
                     </div>
 
                     <div className="mt-4 flex flex-wrap gap-3">
+                      <Link href={customerHref} className="rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-100">
+                        Open customer
+                      </Link>
                       <button className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200">Clear</button>
                       <button className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200">Hold Commission</button>
                       <button className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200">Suspend Agent</button>
@@ -150,12 +161,19 @@ export default function AgentFraudAdminClient({ rows }: { rows: FraudRow[] }) {
       <div className="space-y-4 lg:hidden">
         {rows.map((row) => {
           const expanded = expandedIds.includes(row.id);
+          const customerHref = buildAdminCustomerProfileHref({
+            phone: row.phone,
+            displayName: row.customerNames[0] || row.title,
+          });
           return (
             <article key={row.id} className="rounded-[26px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.94),rgba(2,6,23,.98))] p-5 text-slate-200 shadow-[0_18px_45px_rgba(0,0,0,0.28)]">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="truncate text-lg font-semibold text-white">{row.title}</div>
                   <div className="mt-1 truncate text-sm text-slate-400">{queueLabel(row.queue)} · {row.phone || "No phone"}</div>
+                  <Link href={customerHref} className="mt-2 inline-flex text-sm text-cyan-200 transition hover:text-cyan-100">
+                    {row.customerNames.join(", ") || "No customers"}
+                  </Link>
                 </div>
                 <button onClick={() => toggleExpanded(row.id)} className="rounded-xl border border-white/10 p-2 text-slate-200">
                   {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}

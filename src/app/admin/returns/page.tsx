@@ -3,6 +3,7 @@ import { resolveShopScopeForServer } from "@/lib/scope";
 import { syncReturnOrders } from "@/lib/jobs/jumia";
 import type { Prisma } from "@prisma/client";
 import Link from "next/link";
+import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 import { AlertTriangle } from "lucide-react";
 import AutoRefresh from "@/app/_components/AutoRefresh";
 
@@ -52,6 +53,7 @@ async function fetchReturns(where: Prisma.ReturnCaseWhereInput, page: number, si
           id: true,
           orderNumber: true,
           customerName: true,
+          customerPhone: true,
           createdAt: true,
           paidAmount: true,
           items: {
@@ -181,11 +183,17 @@ export default async function ReturnsPage({
               const itemsCount = items.reduce((sum, it) => sum + it.quantity, 0);
               const value = items.reduce((sum, it) => sum + (Number(it.sellingPrice || 0) * it.quantity), 0);
               const picked = ret.status === "picked_up" || Boolean(ret.pickedAt);
+              const customerHref = buildAdminCustomerProfileHref({
+                phone: order?.customerPhone || null,
+                displayName: order?.customerName || null,
+              });
               return (
                 <tr key={ret.id} className="[&>td]:px-3 [&>td]:py-3">
                   <td className="font-mono">{order?.orderNumber || "—"}</td>
                   <td>
-                    <div className="font-medium">{order?.customerName || "—"}</div>
+                    <Link href={customerHref} className="font-medium transition hover:text-cyan-300">
+                      {order?.customerName || "—"}
+                    </Link>
                   </td>
                   <td>{ret.shop?.name || "—"}</td>
                   <td>{itemsCount}</td>

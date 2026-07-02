@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 
 type DailyReportReceiptRow = {
   id: string;
@@ -74,6 +76,14 @@ const formatDateTime = (value?: string | null) => {
     timeZone: kenyaTimeZone,
   });
 };
+
+function buildCustomerProfileHref(receipt: Pick<DailyReportReceiptRow, "customerName" | "customerPhone" | "customerEmail">) {
+  return buildAdminCustomerProfileHref({
+    phone: receipt.customerPhone,
+    email: receipt.customerEmail,
+    displayName: receipt.customerName,
+  });
+}
 
 const NAIROBI_OFFSET_MS = 3 * 60 * 60 * 1000; // UTC+03:00
 
@@ -531,7 +541,9 @@ export default function DailyReportReceiptsPanel({
 
         {!!receipts.length && (
           <div className="space-y-2">
-            {receipts.map((receipt) => (
+            {receipts.map((receipt) => {
+              const customerProfileHref = buildCustomerProfileHref(receipt);
+              return (
               <div
                 key={receipt.id}
                 className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4"
@@ -549,7 +561,9 @@ export default function DailyReportReceiptsPanel({
                     </span>
                   </div>
                   <div className="min-w-0">
-                    <div className="font-semibold text-white">{receipt.customerName ?? "-"}</div>
+                    <Link href={customerProfileHref} className="font-semibold text-white transition hover:text-cyan-200">
+                      {receipt.customerName ?? "-"}
+                    </Link>
                     <div className="mt-1 text-xs text-slate-400">{receipt.customerPhone || "-"}</div>
                     <div className="mt-1 text-xs text-slate-500">{receipt.orderRef ?? receipt.receiptNumber ?? receipt.docType ?? receipt.id}</div>
                   </div>
@@ -599,6 +613,9 @@ export default function DailyReportReceiptsPanel({
                     ) : (
                       <span className="text-xs text-slate-500">Unavailable</span>
                     )}
+                    <Link href={customerProfileHref} className="inline-flex items-center rounded-full border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-300/30 hover:bg-cyan-500/20">
+                      Open customer
+                    </Link>
                   </div>
                 </div>
                 {receipt.podDeliveryNote ? (
@@ -610,7 +627,8 @@ export default function DailyReportReceiptsPanel({
                   </a>
                 ) : null}
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
       </div>

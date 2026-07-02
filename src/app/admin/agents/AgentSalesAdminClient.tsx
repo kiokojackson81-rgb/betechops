@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Fragment, useMemo, useState, useTransition } from "react";
 import { ChevronDown, ChevronRight, Download, Eye, ShieldAlert } from "lucide-react";
+import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 
 type AdminSaleRow = {
   id: string;
@@ -391,6 +392,10 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
               {sales.map((sale) => {
                 const expanded = expandedIds.includes(sale.id);
                 const action = quickAction(sale);
+                const customerHref = buildAdminCustomerProfileHref({
+                  phone: sale.customerPhone,
+                  displayName: sale.customerName,
+                });
                 return (
                   <Fragment key={sale.id}>
                     <tr className="border-b border-white/5 align-middle transition hover:bg-white/[0.025]">
@@ -412,7 +417,9 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
                       </td>
                       <td className="px-3 py-4">
                         <div className="max-w-[220px]">
-                          <div className="truncate font-semibold text-white">{sale.customerName}</div>
+                          <Link href={customerHref} className="truncate font-semibold text-white transition hover:text-cyan-200">
+                            {sale.customerName}
+                          </Link>
                           <div className="mt-1 truncate text-xs text-slate-500">{sale.customerPhone}</div>
                         </div>
                       </td>
@@ -455,6 +462,11 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
                             <div className="grid gap-4 xl:grid-cols-4">
                               <section className="rounded-[22px] border border-white/10 bg-white/[0.04] p-4">
                                 <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Customer Information</div>
+                                <div className="mt-3">
+                                  <Link href={customerHref} className="inline-flex rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-100">
+                                    Open customer
+                                  </Link>
+                                </div>
                                 <div className="mt-3 space-y-2 text-sm text-slate-300">
                                   <div><span className="text-slate-500">Full Name:</span> {sale.customerName}</div>
                                   <div><span className="text-slate-500">Phone:</span> {sale.customerPhone}</div>
@@ -621,6 +633,10 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
         {sales.map((sale) => {
           const expanded = expandedIds.includes(sale.id);
           const action = quickAction(sale);
+          const customerHref = buildAdminCustomerProfileHref({
+            phone: sale.customerPhone,
+            displayName: sale.customerName,
+          });
           return (
             <article
               key={sale.id}
@@ -643,7 +659,9 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="truncate text-lg font-semibold text-white">{sale.customerName}</div>
+                        <Link href={customerHref} className="truncate text-lg font-semibold text-white transition hover:text-cyan-200">
+                          {sale.customerName}
+                        </Link>
                         <div className="mt-1 truncate text-sm text-slate-400">{sale.productName}</div>
                       </div>
                       <span className={`inline-flex shrink-0 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${stageBadge(sale.status)}`}>
@@ -696,6 +714,11 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
                     <div className="grid gap-4">
                       <section className="rounded-[20px] border border-white/10 bg-white/[0.04] p-4">
                         <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Customer Information</div>
+                        <div className="mt-3">
+                          <Link href={customerHref} className="inline-flex rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-100">
+                            Open customer
+                          </Link>
+                        </div>
                         <div className="mt-3 space-y-2 text-sm text-slate-300">
                           <div>Full Name: {sale.customerName}</div>
                           <div>Phone: {sale.customerPhone}</div>

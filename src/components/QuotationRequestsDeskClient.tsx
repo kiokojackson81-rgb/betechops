@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Loader2, Plus, RefreshCcw, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink, Loader2, Plus, RefreshCcw, Trash2 } from "lucide-react";
 import type {
   QuoteContactMethod,
   QuoteContactTime,
@@ -28,6 +29,7 @@ import {
   isOpenQuotationStatus,
   shouldShowPendingWorkItem,
 } from "@/lib/operationsWorkQueue";
+import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 
 type QuoteRequestStatusFilter = "ALL" | QuoteRequestStatus;
 
@@ -101,6 +103,22 @@ function isCarriedForwardQuote(
     status: request.status,
     createdAt: request.createdAt,
     periodStart: new Date(`${start}T00:00:00`),
+  });
+}
+
+function buildCustomerProfileHref(
+  request: Pick<
+    SerializedQuoteRequest,
+    "customerUserId" | "customerPhone" | "customerEmail" | "customerName"
+  >,
+  impersonateId?: string | null,
+) {
+  return buildAdminCustomerProfileHref({
+    customerUserId: request.customerUserId,
+    phone: request.customerPhone,
+    email: request.customerEmail,
+    displayName: request.customerName,
+    impersonateId,
   });
 }
 
@@ -289,6 +307,7 @@ export default function QuotationRequestsDeskClient({
   const [saving, setSaving] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const impersonateId = apiQueryParams?.impersonateId ?? null;
 
   const expandedRequest = useMemo(
     () => requests.find((request) => request.id === expandedId) ?? null,
@@ -572,7 +591,12 @@ export default function QuotationRequestsDeskClient({
                         ) : null}
                       </div>
                       <div className="min-w-0">
-                        <div className="font-semibold text-white">{request.customerName}</div>
+                        <Link
+                          href={buildCustomerProfileHref(request, impersonateId)}
+                          className="font-semibold text-white transition hover:text-cyan-200"
+                        >
+                          {request.customerName}
+                        </Link>
                         <div className="mt-1 text-xs text-slate-400">{request.customerPhone}</div>
                         <div className="mt-1 text-xs text-slate-500">{request.quoteRef}</div>
                       </div>
@@ -617,7 +641,12 @@ export default function QuotationRequestsDeskClient({
                           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
                             Open quotation request
                           </div>
-                          <div className="mt-2 text-2xl font-semibold text-white">{request.customerName}</div>
+                          <Link
+                            href={buildCustomerProfileHref(request, impersonateId)}
+                            className="mt-2 block text-2xl font-semibold text-white transition hover:text-cyan-200"
+                          >
+                            {request.customerName}
+                          </Link>
                           <div className="mt-1 text-sm text-slate-400">{request.quoteRef}</div>
                           <div className="mt-2 grid gap-1 text-sm text-slate-300 md:grid-cols-2 xl:grid-cols-3">
                             <div>{request.customerPhone}</div>
@@ -641,6 +670,15 @@ export default function QuotationRequestsDeskClient({
                         <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
                           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
                             Customer request
+                          </div>
+                          <div className="mt-3">
+                            <Link
+                              href={buildCustomerProfileHref(request, impersonateId)}
+                              className="inline-flex items-center gap-2 rounded-lg border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-300/30 hover:bg-cyan-400/15"
+                            >
+                              Open customer profile
+                              <ExternalLink className="h-4 w-4" />
+                            </Link>
                           </div>
                           <div className="mt-3 grid gap-3 text-sm text-slate-200 sm:grid-cols-2">
                             <div>
