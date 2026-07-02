@@ -1278,7 +1278,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
 
   const activeCalls = await Promise.all(
     activeCallsRaw.map(async (call) => {
-      const context = await getContextForPhone(call.callerNumber, false);
+      const context = await getContextForPhone(call.callerNumber, true);
       const contextSummary = serializeCustomerContextSummary(context);
       const lastActivity = contextSummary.recentTimeline[0] ?? null;
       const { displayStatus, providerStatus } = resolveVoiceProviderOutcome(call);
@@ -1330,7 +1330,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
 
   const recentCalls = await Promise.all(
     recentCallsRaw.map(async (call) => {
-      const context = await getContextForPhone(call.callerNumber, false);
+      const context = await getContextForPhone(call.callerNumber, true);
       const contextSummary = serializeCustomerContextSummary(context);
       const lastActivity = contextSummary.recentTimeline[0] ?? null;
       const { displayStatus, providerStatus } = resolveVoiceProviderOutcome(call);
@@ -1384,7 +1384,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
 
   const waitingCalls = await Promise.all(
     waitingCallsRaw.map(async (call) => {
-      const context = await getContextForPhone(call.callerNumber, false);
+      const context = await getContextForPhone(call.callerNumber, true);
       const contextSummary = serializeCustomerContextSummary(context);
       const lastActivity = contextSummary.recentTimeline[0] ?? null;
       const { displayStatus, providerStatus } = resolveVoiceProviderOutcome(call);
@@ -1436,7 +1436,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
 
   const followUps = await Promise.all(
     followUpsRaw.map(async (task) => {
-      const context = await getContextForPhone(task.phone, false);
+      const context = await getContextForPhone(task.phone, true);
       const contextSummary = serializeCustomerContextSummary(context);
       const normalizedTaskPhone = normalizeKenyanPhone(task.phone);
       const callbackRequest =
@@ -1496,7 +1496,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     voiceLeadsRaw
       .filter((lead) => !taskLeadPhoneSet.has(lead.phone))
       .map(async (lead) => {
-        const context = await getContextForPhone(lead.phone, false);
+        const context = await getContextForPhone(lead.phone, true);
         const contextSummary = serializeCustomerContextSummary(context);
         const normalizedLeadPhone = normalizeKenyanPhone(lead.phone);
         const callbackRequest = normalizedLeadPhone ? callbackRequestByPhone.get(normalizedLeadPhone) ?? null : null;
