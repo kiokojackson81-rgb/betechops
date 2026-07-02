@@ -318,9 +318,6 @@ function ChatraceActivityCard({
 }) {
   const tags = Array.isArray(data?.tags) ? data?.tags.filter(Boolean) : [];
   const hasPreview = Boolean(data?.lastMessagePreview);
-  const recentMessages = Array.isArray(data?.recentMessages)
-    ? data.recentMessages.filter((item) => String(item?.text || "").trim())
-    : [];
   const isFound = Boolean(data?.found);
   const isUnavailable = Boolean(data?.sourceError) && !isFound;
 
@@ -374,27 +371,15 @@ function ChatraceActivityCard({
         </div>
       ) : null}
 
-      {recentMessages.length ? (
-        <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-3">
-          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Recent Messages</div>
-          <div className="mt-2 space-y-2">
-            {recentMessages.slice(0, 5).map((message, index) => (
-              <div key={`${message.text}-${index}`} className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-3">
-                <div className="text-sm text-slate-200">{message.text}</div>
-                {message.sender || message.at ? (
-                  <div className="mt-1 text-[11px] text-slate-500">
-                    {[message.sender, message.at ? formatDateTime(message.at) : null].filter(Boolean).join(" · ")}
-                  </div>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
       {!hasPreview && !isFound && !isUnavailable ? (
         <div className="mt-3 rounded-2xl border border-dashed border-slate-800 px-3 py-5 text-sm text-slate-500">
           No recent Chatrace chat found for this caller.
+        </div>
+      ) : null}
+
+      {!hasPreview && isFound ? (
+        <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-4 text-sm text-slate-300">
+          Chatrace interaction found for this contact. Open the inbox to review the full conversation history.
         </div>
       ) : null}
 
