@@ -2,7 +2,19 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronRight, Mail, Phone, Receipt, ShoppingBag, Store, UserRound } from "lucide-react";
+import {
+  ArrowUpRight,
+  ChevronDown,
+  ChevronRight,
+  History,
+  Mail,
+  MessageCircle,
+  Phone,
+  Receipt,
+  ShoppingBag,
+  Store,
+  UserRound,
+} from "lucide-react";
 import type { AdminCustomerRow } from "@/lib/adminCustomers";
 
 type CustomerRow = Omit<AdminCustomerRow, "firstPurchaseAt" | "lastPurchaseAt" | "orders"> & {
@@ -11,6 +23,71 @@ type CustomerRow = Omit<AdminCustomerRow, "firstPurchaseAt" | "lastPurchaseAt" |
   orders: Array<Omit<AdminCustomerRow["orders"][number], "createdAt" | "receiptGeneratedAt"> & {
     createdAt: string;
     receiptGeneratedAt: string | null;
+  }>;
+};
+
+type CustomerContext = {
+  profile: {
+    displayName: string;
+    accountUserId: string | null;
+    phones: string[];
+    emails: string[];
+    location: string | null;
+    customerSince: string | null;
+  };
+  account: {
+    exists: boolean;
+    lastLoginMethod: string | null;
+    phoneVerifiedAt: string | null;
+    emailVerifiedAt: string | null;
+    hasPortalAccess: boolean;
+    createdAt: string | null;
+  };
+  voice: {
+    totalCalls: number;
+    answeredCalls: number;
+    missedCalls: number;
+    attemptedCalls: number;
+    openFollowUps: number;
+    callbackRequests: number;
+    requestedCallbacks: number;
+    lastCallAt: string | null;
+    lastCallStatusLabel: string | null;
+    lastCallAgent: string | null;
+    latestAssignedAgent: string | null;
+    lastRequestedCallbackAt: string | null;
+  };
+  sales: {
+    totalPurchasesValue: number;
+    openQuotations: number;
+    pendingWebOrders: number;
+    pendingPod: number;
+    lastPurchaseAt: string | null;
+  };
+  chatrace: {
+    found: boolean;
+    lastInteractionAt: string | null;
+    tags: string[];
+    inboxUrl: string | null;
+    channel: string | null;
+    sourceError: boolean;
+  };
+  quickLinks: {
+    voiceHistoryHref: string | null;
+    lastCallHref: string | null;
+    receiptDeskHref: string | null;
+    lastReceiptHref: string | null;
+    quotationHref: string | null;
+    webOrdersHref: string | null;
+    chatraceInboxHref: string | null;
+  };
+  timeline: Array<{
+    id: string;
+    title: string;
+    detail: string;
+    at: string;
+    href: string | null;
+    tone: "voice" | "sales" | "account" | "support" | "chatrace";
   }>;
 };
 
@@ -50,8 +127,79 @@ function MetricCard({ label, value }: { label: string; value: string }) {
   );
 }
 
+function ContextBadge({
+  label,
+  tone = "slate",
+}: {
+  label: string;
+  tone?: "emerald" | "amber" | "rose" | "cyan" | "violet" | "slate";
+}) {
+  const toneClass =
+    tone === "emerald"
+      ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-100"
+      : tone === "amber"
+        ? "border-amber-400/25 bg-amber-400/10 text-amber-100"
+        : tone === "rose"
+          ? "border-rose-400/25 bg-rose-400/10 text-rose-100"
+          : tone === "cyan"
+            ? "border-cyan-400/25 bg-cyan-400/10 text-cyan-100"
+            : tone === "violet"
+              ? "border-violet-400/25 bg-violet-400/10 text-violet-100"
+              : "border-white/10 bg-white/[0.03] text-slate-200";
+  return <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${toneClass}`}>{label}</span>;
+}
+
+function QuickLink({ href, label }: { href: string | null | undefined; label: string }) {
+  if (!href) {
+    return <span className="inline-flex rounded-full border border-white/5 px-3 py-1.5 text-xs text-slate-600">{label}</span>;
+  }
+
+  if (href.startsWith("http")) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-white/20 hover:text-white"
+      >
+        {label}
+        <ArrowUpRight className="h-3 w-3" />
+      </a>
+    );
+  }
+
+  return (
+    <Link
+      href={href}
+      className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-white/20 hover:text-white"
+    >
+      {label}
+      <ArrowUpRight className="h-3 w-3" />
+    </Link>
+  );
+}
+
+function timelineToneClass(tone: CustomerContext["timeline"][number]["tone"]) {
+  if (tone === "voice") return "border-cyan-400/20 bg-cyan-400/10 text-cyan-100";
+  if (tone === "sales") return "border-emerald-400/20 bg-emerald-400/10 text-emerald-100";
+  if (tone === "account") return "border-violet-400/20 bg-violet-400/10 text-violet-100";
+  if (tone === "support") return "border-amber-400/20 bg-amber-400/10 text-amber-100";
+  return "border-fuchsia-400/20 bg-fuchsia-400/10 text-fuchsia-100";
+}
+
+function statusTone(value: string | null | undefined) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (["answered", "connected", "contacted", "resolved"].includes(normalized)) return "emerald" as const;
+  if (["attempted call", "attempted_call", "pending"].includes(normalized)) return "amber" as const;
+  if (["missed", "failed", "no answer", "no_answer"].includes(normalized)) return "rose" as const;
+  return "slate" as const;
+}
+
 export default function CustomersAdminClient({ customers }: { customers: CustomerRow[] }) {
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
+  const [detailsById, setDetailsById] = useState<Record<string, CustomerContext | null>>({});
+  const [loadingIds, setLoadingIds] = useState<string[]>([]);
+  const [detailErrors, setDetailErrors] = useState<Record<string, string | null>>({});
 
   const totals = useMemo(
     () =>
@@ -69,10 +217,40 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
     [customers],
   );
 
-  function toggleExpanded(customerId: string) {
+  async function loadCustomerDetail(customer: CustomerRow) {
+    if (detailsById[customer.id] || loadingIds.includes(customer.id)) return;
+    setLoadingIds((current) => [...current, customer.id]);
+    setDetailErrors((current) => ({ ...current, [customer.id]: null }));
+    try {
+      const params = new URLSearchParams();
+      if (customer.customerUserId) params.set("customerUserId", customer.customerUserId);
+      if (customer.displayName) params.set("displayName", customer.displayName);
+      if (customer.phones.length) params.set("phones", customer.phones.join(","));
+      if (customer.emails.length) params.set("emails", customer.emails.join(","));
+      const response = await fetch(`/api/admin/customers/context?${params.toString()}`, {
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        throw new Error(`context_${response.status}`);
+      }
+      const payload = (await response.json()) as CustomerContext;
+      setDetailsById((current) => ({ ...current, [customer.id]: payload }));
+    } catch (error) {
+      console.error("[admin.customers.context_failed]", error);
+      setDetailErrors((current) => ({ ...current, [customer.id]: "Could not load full customer context." }));
+    } finally {
+      setLoadingIds((current) => current.filter((id) => id !== customer.id));
+    }
+  }
+
+  function toggleExpanded(customer: CustomerRow) {
+    const willExpand = !expandedIds.includes(customer.id);
     setExpandedIds((current) =>
-      current.includes(customerId) ? current.filter((id) => id !== customerId) : [...current, customerId],
+      current.includes(customer.id) ? current.filter((id) => id !== customer.id) : [...current, customer.id],
     );
+    if (willExpand) {
+      void loadCustomerDetail(customer);
+    }
   }
 
   if (!customers.length) {
@@ -107,12 +285,13 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
         <div className="divide-y divide-white/5">
           {customers.map((customer) => {
             const expanded = expandedIds.includes(customer.id);
+            const detail = detailsById[customer.id];
             return (
               <div key={customer.id} className="transition hover:bg-white/[0.02]">
                 <div className="grid grid-cols-[56px_minmax(260px,1.9fr)_190px_110px_120px_160px_170px] items-center gap-3 px-4 py-4">
                   <div>
                     <button
-                      onClick={() => toggleExpanded(customer.id)}
+                      onClick={() => toggleExpanded(customer)}
                       className="rounded-xl border border-white/10 p-2 text-slate-200 transition hover:border-white/20"
                       aria-label={expanded ? "Collapse customer row" : "Expand customer row"}
                     >
@@ -139,6 +318,59 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
                   <div className="border-t border-white/5 bg-slate-950/45 px-4 py-5">
                     <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
                       <div className="space-y-4">
+                        {loadingIds.includes(customer.id) ? (
+                          <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-sm text-slate-400">
+                            Loading full customer context...
+                          </div>
+                        ) : null}
+                        {detailErrors[customer.id] ? (
+                          <div className="rounded-2xl border border-rose-400/25 bg-rose-400/10 p-4 text-sm text-rose-100">
+                            {detailErrors[customer.id]}
+                          </div>
+                        ) : null}
+                        {detail ? (
+                          <div className="rounded-2xl border border-cyan-400/15 bg-slate-950/60 p-4">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Customer 360</div>
+                                <div className="mt-1 text-lg font-semibold text-white">
+                                  {detail.profile.displayName}
+                                </div>
+                                <div className="mt-1 text-sm text-slate-400">
+                                  {detail.profile.location || "No location recorded"}
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {detail.voice.lastCallStatusLabel ? (
+                                  <ContextBadge
+                                    label={detail.voice.lastCallStatusLabel || "Voice"}
+                                    tone={statusTone(detail.voice.lastCallStatusLabel)}
+                                  />
+                                ) : null}
+                                <ContextBadge
+                                  label={detail.account.hasPortalAccess ? "Portal Active" : "Portal Pending"}
+                                  tone={detail.account.hasPortalAccess ? "emerald" : "slate"}
+                                />
+                                {detail.chatrace.found ? <ContextBadge label="Chatrace Found" tone="violet" /> : null}
+                              </div>
+                            </div>
+                            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                              <MetricCard label="Calls" value={String(detail.voice.totalCalls || 0)} />
+                              <MetricCard label="Last call" value={dateTime(detail.voice.lastCallAt)} />
+                              <MetricCard label="Voice owner" value={detail.voice.latestAssignedAgent || "Unassigned"} />
+                              <MetricCard label="Customer since" value={dateTime(detail.profile.customerSince)} />
+                            </div>
+                            <div className="mt-4 flex flex-wrap gap-2">
+                              <QuickLink href={detail.quickLinks.lastCallHref} label="Open last call" />
+                              <QuickLink href={detail.quickLinks.voiceHistoryHref} label="Open voice history" />
+                              <QuickLink href={detail.quickLinks.lastReceiptHref} label="Open last receipt" />
+                              <QuickLink href={detail.quickLinks.receiptDeskHref} label="Open receipts desk" />
+                              <QuickLink href={detail.quickLinks.quotationHref} label="Open quotations" />
+                              <QuickLink href={detail.quickLinks.webOrdersHref} label="Open web orders" />
+                              <QuickLink href={detail.quickLinks.chatraceInboxHref} label="Open Chatrace inbox" />
+                            </div>
+                          </div>
+                        ) : null}
                         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
                           <MetricCard label="Average order value" value={money(customer.averageOrderValue)} />
                           <MetricCard label="Outstanding balance" value={money(customer.outstandingBalance)} />
@@ -196,6 +428,105 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
                       </div>
 
                       <div className="space-y-4">
+                        {detail ? (
+                          <div className="grid gap-4 xl:grid-cols-2">
+                            <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Voice and support</div>
+                                <History className="h-4 w-4 text-cyan-300" />
+                              </div>
+                              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                                <MetricCard label="Answered" value={String(detail.voice.answeredCalls || 0)} />
+                                <MetricCard label="Missed" value={String(detail.voice.missedCalls || 0)} />
+                                <MetricCard label="Attempted" value={String(detail.voice.attemptedCalls || 0)} />
+                                <MetricCard label="Open follow-ups" value={String(detail.voice.openFollowUps || 0)} />
+                              </div>
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {detail.voice.lastRequestedCallbackAt ? (
+                                  <ContextBadge label="Requested Callback" tone="emerald" />
+                                ) : null}
+                                <ContextBadge
+                                  label={`Callback Requests ${detail.voice.callbackRequests || 0}`}
+                                  tone="amber"
+                                />
+                              </div>
+                              <div className="mt-3 space-y-2 text-sm text-slate-300">
+                                <div>Last call agent: {detail.voice.lastCallAgent || "No agent recorded"}</div>
+                                <div>Last callback request: {dateTime(detail.voice.lastRequestedCallbackAt)}</div>
+                                <div>Requested by: {detail.voice.lastRequestedCallbackBy || "No callback request yet"}</div>
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Portal and Chatrace</div>
+                                <MessageCircle className="h-4 w-4 text-violet-300" />
+                              </div>
+                              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                                <MetricCard label="Portal" value={detail.account.exists ? "Linked" : "Not linked"} />
+                                <MetricCard label="Sign-in method" value={detail.account.lastLoginMethod || "Not recorded"} />
+                                <MetricCard label="Phone verified" value={dateTime(detail.account.phoneVerifiedAt)} />
+                                <MetricCard label="Last Chatrace" value={dateTime(detail.chatrace.lastInteractionAt)} />
+                              </div>
+                              <div className="mt-3 space-y-2 text-sm text-slate-300">
+                                <div>Email verified: {dateTime(detail.account.emailVerifiedAt)}</div>
+                                <div>Portal created: {dateTime(detail.account.createdAt)}</div>
+                                <div>Chatrace channel: {detail.chatrace.channel || "Not recorded"}</div>
+                                <div>Tags: {detail.chatrace.tags.join(", ") || "No tags"}</div>
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {detail ? (
+                          <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Cross-system timeline</div>
+                              <div className="text-xs text-slate-500">{detail.timeline.length} recent events</div>
+                            </div>
+                            <div className="mt-4 space-y-3">
+                              {detail.timeline.length ? (
+                                detail.timeline.map((item) => (
+                                  <div key={item.id} className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
+                                    <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                                      <div className="min-w-0">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <ContextBadge
+                                            label={item.tone}
+                                            tone={
+                                              item.tone === "voice"
+                                                ? "cyan"
+                                                : item.tone === "sales"
+                                                  ? "emerald"
+                                                  : item.tone === "account"
+                                                    ? "violet"
+                                                    : item.tone === "support"
+                                                      ? "amber"
+                                                      : "rose"
+                                            }
+                                          />
+                                          <div className="font-semibold text-white">{item.title}</div>
+                                        </div>
+                                        <div className="mt-2 text-sm text-slate-300">{item.detail}</div>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <div className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${timelineToneClass(item.tone)}`}>
+                                          {dateTime(item.at)}
+                                        </div>
+                                        <QuickLink href={item.href} label="Open" />
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-sm text-slate-500">
+                                  No cross-system events found for this customer yet.
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ) : null}
+
                         <div className="grid gap-4 xl:grid-cols-2">
                           <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
                             <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Top purchased items</div>
@@ -327,6 +658,7 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
       <div className="space-y-3 lg:hidden">
         {customers.map((customer) => {
           const expanded = expandedIds.includes(customer.id);
+          const detail = detailsById[customer.id];
           return (
             <div key={customer.id} className="rounded-[26px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.96))] p-4">
               <div className="flex items-start justify-between gap-3">
@@ -335,7 +667,7 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
                   <div className="mt-1 text-sm text-slate-400">{customer.primaryPhone || customer.primaryEmail || "No contact details"}</div>
                 </div>
                 <button
-                  onClick={() => toggleExpanded(customer.id)}
+                  onClick={() => toggleExpanded(customer)}
                   className="rounded-xl border border-white/10 p-2 text-slate-200"
                   aria-label={expanded ? "Collapse customer row" : "Expand customer row"}
                 >
@@ -352,6 +684,38 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
 
               {expanded ? (
                 <div className="mt-4 space-y-4 border-t border-white/10 pt-4">
+                  {loadingIds.includes(customer.id) ? (
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4 text-sm text-slate-400">
+                      Loading full customer context...
+                    </div>
+                  ) : null}
+                  {detailErrors[customer.id] ? (
+                    <div className="rounded-2xl border border-rose-400/25 bg-rose-400/10 p-4 text-sm text-rose-100">
+                      {detailErrors[customer.id]}
+                    </div>
+                  ) : null}
+                  {detail ? (
+                    <div className="rounded-2xl border border-cyan-400/15 bg-slate-950/50 p-4">
+                      <div className="flex flex-wrap gap-2">
+                        {detail.voice.lastCallStatusLabel ? (
+                          <ContextBadge label={detail.voice.lastCallStatusLabel} tone={statusTone(detail.voice.lastCallStatusLabel)} />
+                        ) : null}
+                        <ContextBadge label={detail.account.hasPortalAccess ? "Portal Active" : "Portal Pending"} tone={detail.account.hasPortalAccess ? "emerald" : "slate"} />
+                        {detail.voice.lastRequestedCallbackAt ? <ContextBadge label="Requested Callback" tone="emerald" /> : null}
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-3">
+                        <MetricCard label="Calls" value={String(detail.voice.totalCalls)} />
+                        <MetricCard label="Missed" value={String(detail.voice.missedCalls)} />
+                        <MetricCard label="Attempted" value={String(detail.voice.attemptedCalls)} />
+                        <MetricCard label="Last Chatrace" value={dateTime(detail.chatrace.lastInteractionAt)} />
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <QuickLink href={detail.quickLinks.lastCallHref} label="Open last call" />
+                        <QuickLink href={detail.quickLinks.receiptDeskHref} label="Receipts desk" />
+                        <QuickLink href={detail.quickLinks.chatraceInboxHref} label="Chatrace" />
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4 text-sm text-slate-200">
                     <div className="font-medium text-white">Purchased items</div>
                     <div className="mt-3 flex flex-wrap gap-2">
@@ -417,6 +781,24 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
                       </div>
                     ))}
                   </div>
+                  {detail?.timeline?.length ? (
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+                      <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Recent timeline</div>
+                      <div className="mt-3 space-y-3">
+                        {detail.timeline.slice(0, 5).map((item) => (
+                          <div key={item.id} className="rounded-xl border border-white/5 bg-white/[0.03] px-3 py-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="truncate font-medium text-white">{item.title}</div>
+                                <div className="mt-1 text-xs text-slate-400">{item.detail}</div>
+                              </div>
+                              <div className="text-right text-[11px] text-slate-500">{dateTime(item.at)}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </div>

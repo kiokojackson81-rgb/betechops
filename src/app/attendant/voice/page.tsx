@@ -10,7 +10,7 @@ import {
 export const dynamic = "force-dynamic";
 
 type PageProps = {
-  searchParams?: Promise<{ impersonateId?: string }>;
+  searchParams?: Promise<{ impersonateId?: string; selectedCallId?: string; selectedPhone?: string }>;
 };
 
 export default async function AttendantVoicePage({ searchParams }: PageProps) {
@@ -27,7 +27,11 @@ export default async function AttendantVoicePage({ searchParams }: PageProps) {
       : withImpersonateId("/attendant/daily-report", viewer.impersonateId);
 
   try {
-    const initialData = await getVoiceLiveSnapshot({ viewer });
+    const initialData = await getVoiceLiveSnapshot({
+      viewer,
+      selectedCallId: params.selectedCallId,
+      selectedPhone: params.selectedPhone,
+    });
     const pollBaseHref = withImpersonateId("/api/voice/live", viewer.impersonateId);
 
     return (

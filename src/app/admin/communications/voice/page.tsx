@@ -8,13 +8,22 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminVoiceDashboardPage() {
+export default async function AdminVoiceDashboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ selectedCallId?: string; selectedPhone?: string }>;
+}) {
   const viewer = await resolveVoiceViewer();
   if (!viewer) redirect("/admin/login");
   if (!viewer.isAdmin) redirect("/not-authorized");
+  const params = (await searchParams) || {};
 
   try {
-    const initialData = await getVoiceLiveSnapshot({ viewer });
+    const initialData = await getVoiceLiveSnapshot({
+      viewer,
+      selectedCallId: params.selectedCallId,
+      selectedPhone: params.selectedPhone,
+    });
 
     return (
         <VoiceConsoleClient

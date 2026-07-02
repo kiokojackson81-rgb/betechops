@@ -456,7 +456,7 @@ function inferVoiceProviderOutcomeFromPayload(
   ).trim();
 }
 
-function resolveVoiceProviderOutcome(call: {
+export function resolveVoiceProviderOutcome(call: {
   status: string | null | undefined;
   durationInSeconds?: number | null;
   isActive?: boolean | null;
