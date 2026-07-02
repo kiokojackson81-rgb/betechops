@@ -433,7 +433,7 @@ export async function getAdminCustomerContext(
         accountProfile?.name ||
         voiceContext?.summary.customerName ||
         "Unnamed customer",
-      accountUserId: accountProfile?.id ?? resolvedUserId || null,
+      accountUserId: (accountProfile?.id ?? resolvedUserId) || null,
       phones: profilePhones,
       emails: profileEmails,
       location: buildLocation([
