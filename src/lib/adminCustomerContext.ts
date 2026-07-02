@@ -210,26 +210,30 @@ function mapChatrace(input: ChatraceLookupResult) {
 export async function getAdminCustomerContext(
   input: AdminCustomerContextInput,
 ): Promise<AdminCustomerContextResponse> {
+  const inputCanonicalPhones = uniqueStrings(
+    (input.phones || [])
+      .map((phone) => normalizeKenyanPhone(phone || ""))
+      .filter(Boolean),
+  );
   const normalizedPhones = Array.from(
     new Set(
-      (input.phones || [])
+      inputCanonicalPhones
         .flatMap((phone) => {
-          const normalized = normalizeKenyanPhone(phone || "");
-          return normalized ? getKenyanPhoneVariants(normalized) : [];
+          return getKenyanPhoneVariants(phone);
         })
         .filter(Boolean),
     ),
   );
   const normalizedEmails = uniqueStrings(input.emails || []).map((email) => email.toLowerCase());
 
-  const basePhone = normalizedPhones[0] ?? null;
-  const voiceContext = basePhone
-    ? await getVoiceCustomerContext(basePhone, { take: 8, includeChatrace: true })
+  const initialPhone = inputCanonicalPhones[0] ?? null;
+  const initialVoiceContext = initialPhone
+    ? await getVoiceCustomerContext(initialPhone, { take: 8, includeChatrace: true })
     : null;
 
   const resolvedUserId =
     String(input.customerUserId || "").trim() ||
-    voiceContext?.matchedCustomer?.id ||
+    initialVoiceContext?.matchedCustomer?.id ||
     "";
 
   const accountProfile = resolvedUserId
@@ -256,10 +260,25 @@ export async function getAdminCustomerContext(
       })
     : null;
 
-  const phoneWhere = normalizedPhones.length
+  const knownCanonicalPhones = uniqueStrings([
+    ...inputCanonicalPhones,
+    normalizeKenyanPhone(fullUser?.phone || ""),
+    normalizeKenyanPhone(fullUser?.whatsappNumber || ""),
+    normalizeKenyanPhone(initialVoiceContext?.matchedCustomer?.phone || ""),
+    normalizeKenyanPhone(initialVoiceContext?.matchedCustomer?.whatsappNumber || ""),
+  ]);
+  const allPhoneVariants = Array.from(
+    new Set(
+      knownCanonicalPhones
+        .flatMap((phone) => getKenyanPhoneVariants(phone))
+        .filter(Boolean),
+    ),
+  );
+
+  const phoneWhere = allPhoneVariants.length
     ? [
-        { callerNumber: { in: normalizedPhones } },
-        { destinationNumber: { in: normalizedPhones } },
+        { callerNumber: { in: allPhoneVariants } },
+        { destinationNumber: { in: allPhoneVariants } },
       ]
     : [];
   const userWhere = resolvedUserId ? [{ customerId: resolvedUserId }] : [];
@@ -282,12 +301,22 @@ export async function getAdminCustomerContext(
         })
       : [];
 
+  const voiceAnchorPhone =
+    normalizeKenyanPhone(String(voiceCallRows[0]?.callerNumber || "").trim()) ||
+    initialPhone ||
+    knownCanonicalPhones[0] ||
+    null;
+  const voiceContext =
+    voiceAnchorPhone && voiceAnchorPhone !== initialPhone
+      ? await getVoiceCustomerContext(voiceAnchorPhone, { take: 8, includeChatrace: true })
+      : initialVoiceContext;
+
   const callbackRequests =
-    normalizedPhones.length || userWhere.length
+    allPhoneVariants.length || userWhere.length
       ? await prisma.voiceCallbackRequest.findMany({
           where: {
             OR: [
-              ...(normalizedPhones.length ? [{ normalizedPhone: { in: normalizedPhones } }] : []),
+              ...(allPhoneVariants.length ? [{ normalizedPhone: { in: allPhoneVariants } }] : []),
               ...(voiceCallRows.length ? [{ voiceCallId: { in: voiceCallRows.map((call) => call.id) } }] : []),
             ],
           },
@@ -324,11 +353,9 @@ export async function getAdminCustomerContext(
   const latestRequestedCallback = callbackRequests.find((request) => request.requestedAt) ?? null;
 
   const profilePhones = uniqueStrings([
-    ...normalizedPhones,
-    fullUser?.phone,
-    fullUser?.whatsappNumber,
-    voiceContext?.matchedCustomer?.phone,
-    voiceContext?.matchedCustomer?.whatsappNumber,
+    ...knownCanonicalPhones,
+    normalizeKenyanPhone(String(latestCall?.call.callerNumber || "").trim()),
+    normalizeKenyanPhone(String(latestCall?.call.destinationNumber || "").trim()),
   ]);
   const profileEmails = uniqueStrings([
     ...normalizedEmails,
@@ -528,7 +555,7 @@ export async function getAdminCustomerContext(
     chatrace: mapChatrace(
       voiceContext?.chatrace || {
         found: false,
-        normalizedPhone: basePhone || "",
+        normalizedPhone: voiceAnchorPhone || initialPhone || "",
         tags: [],
         customFields: [],
         lastMessagePreview: null,
@@ -536,12 +563,12 @@ export async function getAdminCustomerContext(
       },
     ),
     quickLinks: {
-      voiceHistoryHref: basePhone ? buildVoiceHref({ selectedPhone: basePhone, tab: "recent" }) : null,
+      voiceHistoryHref: voiceAnchorPhone ? buildVoiceHref({ selectedPhone: voiceAnchorPhone, tab: "recent" }) : null,
       lastCallHref:
-        latestCall?.call.id && basePhone
-          ? buildVoiceHref({ selectedPhone: basePhone, selectedCallId: latestCall.call.id, tab: "recent" })
-          : basePhone
-            ? buildVoiceHref({ selectedPhone: basePhone, tab: "recent" })
+        latestCall?.call.id && voiceAnchorPhone
+          ? buildVoiceHref({ selectedPhone: voiceAnchorPhone, selectedCallId: latestCall.call.id, tab: "recent" })
+          : voiceAnchorPhone
+            ? buildVoiceHref({ selectedPhone: voiceAnchorPhone, tab: "recent" })
             : null,
       receiptDeskHref: latestReceipt ? buildReceiptDeskHref(latestReceipt.id) : "/marketing/receipts?tab=pos",
       lastReceiptHref: latestReceipt ? `/receipts/${encodeURIComponent(latestReceipt.id)}` : null,
