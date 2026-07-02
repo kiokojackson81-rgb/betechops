@@ -220,7 +220,7 @@ export async function getAdminCustomerContext(
         .filter(Boolean),
     ),
   );
-  const normalizedEmails = uniqueStrings(input.emails).map((email) => email.toLowerCase());
+  const normalizedEmails = uniqueStrings(input.emails || []).map((email) => email.toLowerCase());
 
   const basePhone = normalizedPhones[0] ?? null;
   const voiceContext = basePhone
