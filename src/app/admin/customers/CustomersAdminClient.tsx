@@ -56,6 +56,7 @@ type CustomerContext = {
     lastCallAgent: string | null;
     latestAssignedAgent: string | null;
     lastRequestedCallbackAt: string | null;
+    lastRequestedCallbackBy: string | null;
   };
   sales: {
     totalPurchasesValue: number;
