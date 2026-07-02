@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 import { getKenyanPhoneVariants, normalizeKenyanPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { getVoiceCustomerContext } from "@/lib/voiceCustomerContext";
@@ -503,12 +504,19 @@ function getWaitingSeconds(call: { startedAt: Date | null; createdAt: Date; isAc
   return Math.max(0, Math.floor((Date.now() - anchor.getTime()) / 1000));
 }
 
-function buildPhoneSearchHref(phone: string, impersonateId?: string | null) {
-  const url = new URL("https://voice.local/admin/customers");
-  url.pathname = "/admin/customers";
-  url.searchParams.set("q", phone);
-  if (impersonateId) url.searchParams.set("impersonateId", impersonateId);
-  return `${url.pathname}?${url.searchParams.toString()}`;
+function buildCustomerProfileHrefFromContext(
+  contextSummary: ReturnType<typeof serializeCustomerContextSummary>,
+  fallbackPhone: string,
+  impersonateId?: string | null,
+) {
+  return buildAdminCustomerProfileHref({
+    customerUserId: contextSummary.matchedCustomerId,
+    phone: contextSummary.normalizedPhone || fallbackPhone,
+    phones: [contextSummary.normalizedPhone || fallbackPhone],
+    email: contextSummary.email,
+    displayName: contextSummary.customerName,
+    impersonateId,
+  });
 }
 
 function buildReceiptHref(receiptId: string | null | undefined, impersonateId?: string | null) {
@@ -1317,7 +1325,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
         lastActivityAt: lastActivity?.at ?? null,
         routedToDisplay: getVoiceRoutingLabel(call.routedTo),
         links: {
-          customer: buildPhoneSearchHref(contextSummary.normalizedPhone || call.callerNumber, viewer.impersonateId),
+          customer: buildCustomerProfileHrefFromContext(contextSummary, call.callerNumber, viewer.impersonateId),
           receipt: buildReceiptHref(contextSummary.latestReceiptId, viewer.impersonateId),
           quote: buildQuoteHref(contextSummary.latestQuotationId, viewer.impersonateId),
           createReceipt: buildCreateReceiptHref(viewer.impersonateId),
@@ -1371,7 +1379,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
         lastActivityAt: lastActivity?.at ?? null,
         routedToDisplay: getVoiceRoutingLabel(call.routedTo),
         links: {
-          customer: buildPhoneSearchHref(contextSummary.normalizedPhone || call.callerNumber, viewer.impersonateId),
+          customer: buildCustomerProfileHrefFromContext(contextSummary, call.callerNumber, viewer.impersonateId),
           receipt: buildReceiptHref(contextSummary.latestReceiptId, viewer.impersonateId),
           quote: buildQuoteHref(contextSummary.latestQuotationId, viewer.impersonateId),
           createReceipt: buildCreateReceiptHref(viewer.impersonateId),
@@ -1423,7 +1431,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
         lastActivityAt: lastActivity?.at ?? null,
         routedToDisplay: getVoiceRoutingLabel(call.routedTo),
         links: {
-          customer: buildPhoneSearchHref(contextSummary.normalizedPhone || call.callerNumber, viewer.impersonateId),
+          customer: buildCustomerProfileHrefFromContext(contextSummary, call.callerNumber, viewer.impersonateId),
           receipt: buildReceiptHref(contextSummary.latestReceiptId, viewer.impersonateId),
           quote: buildQuoteHref(contextSummary.latestQuotationId, viewer.impersonateId),
           createReceipt: buildCreateReceiptHref(viewer.impersonateId),
@@ -1481,7 +1489,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
         callbackRequestClicks: callbackRequest?.openedCount ?? 0,
         customer: contextSummary,
         links: {
-          customer: buildPhoneSearchHref(contextSummary.normalizedPhone || task.phone, viewer.impersonateId),
+          customer: buildCustomerProfileHrefFromContext(contextSummary, task.phone, viewer.impersonateId),
           quote: buildQuoteHref(contextSummary.latestQuotationId, viewer.impersonateId),
           receipt: buildReceiptHref(contextSummary.latestReceiptId, viewer.impersonateId),
           callBack: `tel:${task.phone}`,
@@ -1532,15 +1540,15 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
           callbackOpenedAt: callbackRequest?.openedAt?.toISOString() ?? null,
           callbackRequestClicks: callbackRequest?.openedCount ?? 0,
           customer: contextSummary,
-        links: {
-          customer: buildPhoneSearchHref(contextSummary.normalizedPhone || lead.phone, viewer.impersonateId),
-          quote: buildQuoteHref(contextSummary.latestQuotationId, viewer.impersonateId),
-          receipt: buildReceiptHref(contextSummary.latestReceiptId, viewer.impersonateId),
-          callBack: `tel:${lead.phone}`,
-        },
-        assignedAgentLabel: lead.assignedTo?.name ?? lead.assignedTo?.email ?? contextSummary.assignedAgent?.name ?? "Unassigned",
-      };
-    }),
+          links: {
+            customer: buildCustomerProfileHrefFromContext(contextSummary, lead.phone, viewer.impersonateId),
+            quote: buildQuoteHref(contextSummary.latestQuotationId, viewer.impersonateId),
+            receipt: buildReceiptHref(contextSummary.latestReceiptId, viewer.impersonateId),
+            callBack: `tel:${lead.phone}`,
+          },
+          assignedAgentLabel: lead.assignedTo?.name ?? lead.assignedTo?.email ?? contextSummary.assignedAgent?.name ?? "Unassigned",
+        };
+      }),
   );
 
   const activeCallIdsByAgent = new Map<string, number>();

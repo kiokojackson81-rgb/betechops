@@ -16,6 +16,7 @@ import {
   UserRound,
 } from "lucide-react";
 import type { AdminCustomerRow } from "@/lib/adminCustomers";
+import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 
 type CustomerRow = Omit<AdminCustomerRow, "firstPurchaseAt" | "lastPurchaseAt" | "orders"> & {
   firstPurchaseAt: string | null;
@@ -287,6 +288,14 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
           {customers.map((customer) => {
             const expanded = expandedIds.includes(customer.id);
             const detail = detailsById[customer.id];
+            const profileHref = buildAdminCustomerProfileHref({
+              customerUserId: customer.customerUserId,
+              phone: customer.primaryPhone,
+              phones: customer.phones,
+              email: customer.primaryEmail,
+              emails: customer.emails,
+              displayName: customer.displayName,
+            });
             return (
               <div key={customer.id} className="transition hover:bg-white/[0.02]">
                 <div className="grid grid-cols-[56px_minmax(260px,1.9fr)_190px_110px_120px_160px_170px] items-center gap-3 px-4 py-4">
@@ -300,7 +309,9 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
                     </button>
                   </div>
                   <div className="min-w-0">
-                    <div className="font-semibold text-white">{customer.displayName}</div>
+                    <Link href={profileHref} className="font-semibold text-white transition hover:text-cyan-200">
+                      {customer.displayName}
+                    </Link>
                     <div className="mt-1 truncate text-xs text-slate-500">
                       {customer.shops.slice(0, 2).join(" · ") || "No linked shop"}{customer.shops.length > 2 ? ` +${customer.shops.length - 2} more` : ""}
                     </div>
@@ -362,6 +373,7 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
                               <MetricCard label="Customer since" value={dateTime(detail.profile.customerSince)} />
                             </div>
                             <div className="mt-4 flex flex-wrap gap-2">
+                              <QuickLink href={profileHref} label="Open full profile" />
                               <QuickLink href={detail.quickLinks.lastCallHref} label="Open last call" />
                               <QuickLink href={detail.quickLinks.voiceHistoryHref} label="Open voice history" />
                               <QuickLink href={detail.quickLinks.lastReceiptHref} label="Open last receipt" />
@@ -660,11 +672,21 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
         {customers.map((customer) => {
           const expanded = expandedIds.includes(customer.id);
           const detail = detailsById[customer.id];
+          const profileHref = buildAdminCustomerProfileHref({
+            customerUserId: customer.customerUserId,
+            phone: customer.primaryPhone,
+            phones: customer.phones,
+            email: customer.primaryEmail,
+            emails: customer.emails,
+            displayName: customer.displayName,
+          });
           return (
             <div key={customer.id} className="rounded-[26px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.96))] p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="font-semibold text-white">{customer.displayName}</div>
+                  <Link href={profileHref} className="font-semibold text-white transition hover:text-cyan-200">
+                    {customer.displayName}
+                  </Link>
                   <div className="mt-1 text-sm text-slate-400">{customer.primaryPhone || customer.primaryEmail || "No contact details"}</div>
                 </div>
                 <button
@@ -711,6 +733,7 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
                         <MetricCard label="Last Chatrace" value={dateTime(detail.chatrace.lastInteractionAt)} />
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
+                        <QuickLink href={profileHref} label="Full profile" />
                         <QuickLink href={detail.quickLinks.lastCallHref} label="Open last call" />
                         <QuickLink href={detail.quickLinks.receiptDeskHref} label="Receipts desk" />
                         <QuickLink href={detail.quickLinks.chatraceInboxHref} label="Chatrace" />

@@ -26,6 +26,7 @@ import DialPad from "@/components/voice/DialPad";
 import VoiceFeedbackPanel from "@/components/voice/VoiceFeedbackPanel";
 import VoiceSettingsClient from "@/components/voice/VoiceSettingsClient";
 import { useSoftphone } from "@/components/voice/SoftphoneProvider";
+import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import type { VoiceLiveSnapshot } from "@/lib/voiceOperations";
@@ -782,10 +783,14 @@ export default function VoiceConsoleClient({
 
   const selectedCustomerLinks = useMemo(() => {
     const phone = selectedCall?.callerNumber || (isMeaningfulVoicePhone(selectedPhone) ? selectedPhone : "") || "";
-    const params = new URLSearchParams();
-    if (phone) params.set("q", phone);
-    if (data.viewer.impersonateId) params.set("impersonateId", data.viewer.impersonateId);
-    const customerHref = `/admin/customers${params.toString() ? `?${params.toString()}` : ""}`;
+    const customerHref = buildAdminCustomerProfileHref({
+      customerUserId: selectedCall?.customer?.matchedCustomerId || data.selectedContext?.matchedCustomerId || null,
+      phone,
+      phones: phone ? [phone] : [],
+      email: selectedCall?.customer?.email || data.selectedContext?.email || null,
+      displayName: selectedCall?.customer?.customerName || data.selectedContext?.customerName || null,
+      impersonateId: data.viewer.impersonateId,
+    });
 
     const receiptParams = new URLSearchParams();
     receiptParams.set("tab", "pos");

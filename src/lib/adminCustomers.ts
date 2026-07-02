@@ -74,6 +74,7 @@ type CustomerGroup = AdminCustomerRow & {
   _attendants: Set<string>;
   _productMap: Map<string, { name: string; quantity: number; spend: number; sku: string | null; category: string | null }>;
   _activitySet: Set<string>;
+  _dedupeKeys: Set<string>;
 };
 
 function normalizeEmail(value?: string | null) {
@@ -121,6 +122,7 @@ function makeGroup(id: string, displayName: string): CustomerGroup {
     _attendants: new Set<string>(),
     _productMap: new Map(),
     _activitySet: new Set(),
+    _dedupeKeys: new Set(),
   };
 }
 
@@ -204,41 +206,49 @@ function buildGroupId(args: {
   name?: string | null;
   fallbackPrefix: string;
   fallbackId: string;
+  userIdToGroup: Map<string, string>;
   phoneToGroup: Map<string, string>;
   emailToGroup: Map<string, string>;
   nameToGroup: Map<string, string>;
 }) {
+  const normalizedUserId = String(args.userId || "").trim();
   const normalizedPhone = normalizePhone(args.phone ?? undefined);
   const normalizedEmail = normalizeEmail(args.email);
   const normalizedName = normalizeName(args.name);
   const fallbackId =
-    args.userId ||
+    normalizedUserId ||
     normalizedPhone ||
     normalizedEmail ||
     normalizedName ||
     buildFallbackCustomerId(args.fallbackPrefix, args.fallbackId);
 
   const groupId =
-    args.userId ||
+    (normalizedUserId ? args.userIdToGroup.get(normalizedUserId) : undefined) ||
     (normalizedPhone ? args.phoneToGroup.get(normalizedPhone) : undefined) ||
     (normalizedEmail ? args.emailToGroup.get(normalizedEmail) : undefined) ||
     (normalizedName ? args.nameToGroup.get(normalizedName) : undefined) ||
+    normalizedUserId ||
     fallbackId;
 
-  return { groupId, normalizedPhone, normalizedEmail, normalizedName };
+  return { groupId, normalizedUserId, normalizedPhone, normalizedEmail, normalizedName };
 }
 
 function applyGroupIdentity(
   group: CustomerGroup,
   identity: {
+    normalizedUserId: string;
     normalizedPhone: string;
     normalizedEmail: string;
     normalizedName: string;
+    userIdToGroup: Map<string, string>;
     phoneToGroup: Map<string, string>;
     emailToGroup: Map<string, string>;
     nameToGroup: Map<string, string>;
   },
 ) {
+  if (identity.normalizedUserId) {
+    identity.userIdToGroup.set(identity.normalizedUserId, group.id);
+  }
   if (identity.normalizedPhone) {
     group._phones.add(identity.normalizedPhone);
     identity.phoneToGroup.set(identity.normalizedPhone, group.id);
@@ -258,7 +268,21 @@ function setGroupCustomerUserId(group: CustomerGroup, userId?: string | null) {
   group.customerUserId = normalizedUserId;
 }
 
+function buildOrderDedupeKey(orderDetail: CustomerOrderDetail) {
+  if (orderDetail.receiptId) return `receipt:${orderDetail.receiptId}`;
+  if (orderDetail.source === "WEBSITE" || orderDetail.source === "POS") return `website:${orderDetail.orderNumber}`;
+  if (orderDetail.source === "LEGACY") return `legacy:${orderDetail.orderNumber}`;
+  if (orderDetail.source === "AGENT") return `agent:${orderDetail.id}`;
+  return `${orderDetail.source}:${orderDetail.id}`;
+}
+
 function pushOrderIntoGroup(group: CustomerGroup, orderDetail: CustomerOrderDetail) {
+  const dedupeKey = buildOrderDedupeKey(orderDetail);
+  if (group._dedupeKeys.has(dedupeKey)) {
+    return;
+  }
+  group._dedupeKeys.add(dedupeKey);
+
   group.orders.push(orderDetail);
   group.totalOrders += 1;
   if (orderDetail.receiptNumber) group.totalReceipts += 1;
@@ -428,6 +452,7 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
   });
 
   const groups = new Map<string, CustomerGroup>();
+  const userIdToGroup = new Map<string, string>();
   const phoneToGroup = new Map<string, string>();
   const emailToGroup = new Map<string, string>();
   const nameToGroup = new Map<string, string>();
@@ -439,6 +464,7 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
       name: order.customerName || null,
       fallbackPrefix: "legacy-order",
       fallbackId: order.id,
+      userIdToGroup,
       phoneToGroup,
       emailToGroup,
       nameToGroup,
@@ -452,6 +478,7 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
 
     applyGroupIdentity(group, {
       ...identity,
+      userIdToGroup,
       phoneToGroup,
       emailToGroup,
       nameToGroup,
@@ -506,6 +533,7 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
       name: order.customerName || order.customerUser?.name || null,
       fallbackPrefix: "website-order",
       fallbackId: order.id,
+      userIdToGroup,
       phoneToGroup,
       emailToGroup,
       nameToGroup,
@@ -519,6 +547,7 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
 
     applyGroupIdentity(group, {
       ...identity,
+      userIdToGroup,
       phoneToGroup,
       emailToGroup,
       nameToGroup,
@@ -528,6 +557,9 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
       group.displayName = order.customerName.trim() || order.customerUser?.name || group.displayName;
     }
     setGroupCustomerUserId(group, order.customerUserId || order.customerUser?.id || null);
+    if (group.customerUserId) {
+      userIdToGroup.set(group.customerUserId, group.id);
+    }
 
     const paidAmount =
       order.status === WebsiteOrderStatus.CANCELLED
@@ -590,6 +622,7 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
       name: sale.customerName || sale.customerUser?.name || null,
       fallbackPrefix: "agent-sale",
       fallbackId: sale.id,
+      userIdToGroup,
       phoneToGroup,
       emailToGroup,
       nameToGroup,
@@ -603,6 +636,7 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
 
     applyGroupIdentity(group, {
       ...identity,
+      userIdToGroup,
       phoneToGroup,
       emailToGroup,
       nameToGroup,
@@ -612,6 +646,9 @@ export async function getAdminCustomersData(q = "", sort = "recent"): Promise<Ad
       group.displayName = sale.customerName.trim() || sale.customerUser?.name || group.displayName;
     }
     setGroupCustomerUserId(group, sale.customerUserId || sale.customerUser?.id || null);
+    if (group.customerUserId) {
+      userIdToGroup.set(group.customerUserId, group.id);
+    }
 
     const orderDetail: CustomerOrderDetail = {
       id: sale.id,

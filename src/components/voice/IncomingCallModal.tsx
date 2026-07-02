@@ -2,12 +2,19 @@
 
 import Link from "next/link";
 import { useSoftphone } from "@/components/voice/SoftphoneProvider";
+import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 
 export default function IncomingCallModal() {
   const softphone = useSoftphone();
   const call = softphone.incomingCall;
 
   if (!call) return null;
+
+  const customerHref = buildAdminCustomerProfileHref({
+    phone: call.remoteIdentity,
+    phones: [call.remoteIdentity],
+    displayName: call.customer?.name || call.displayName,
+  });
 
   return (
     <div className="pointer-events-none fixed bottom-3 right-3 z-[45] w-[calc(100vw-24px)] sm:bottom-5 sm:right-5 sm:w-auto">
@@ -47,7 +54,7 @@ export default function IncomingCallModal() {
             Decline
           </button>
           <Link
-            href={`/admin/customers?q=${encodeURIComponent(call.remoteIdentity)}`}
+            href={customerHref}
             className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-5 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-100 transition hover:border-cyan-400"
           >
             Open CRM
