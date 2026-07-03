@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   ShoppingBag,
   Store,
+  PhoneCall,
   UserRound,
   TrendingUp,
   TriangleAlert,
@@ -51,6 +52,9 @@ import { getUnpricedDailySalesForRange } from "@/lib/marketingUnpricedSales";
 import { groupMarketingUnpricedSales } from "@/lib/unpricedReceiptGrouping";
 import { buildStaffAttendantWhere } from "@/lib/staffUsers";
 import { computeEffectiveCashAdvanceRemainingBalance } from "@/lib/wellness";
+import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
+import { resolveVoiceProviderOutcome } from "@/lib/voiceOperations";
+import { normalizePhone } from "@/lib/phone";
 
 export const dynamic = "force-dynamic";
 
@@ -604,6 +608,29 @@ function queueSort<T extends { createdAt?: string | Date | null; updatedAt?: str
   });
 }
 
+function isOpenVoiceFollowUpStatus(status: string | null | undefined) {
+  const normalized = String(status || "").trim().toLowerCase();
+  return !["resolved", "closed"].includes(normalized);
+}
+
+function ageToneClass(value: string | Date | null | undefined) {
+  const date = safeDate(value);
+  if (!date) return "border-white/10 bg-white/[0.03]";
+  const diffHours = Math.max(0, Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60)));
+  if (diffHours >= 72) return "border-rose-500/30 bg-rose-500/10";
+  if (diffHours >= 24) return "border-amber-500/30 bg-amber-500/10";
+  return "border-emerald-500/20 bg-emerald-500/5";
+}
+
+function ageToneLabel(value: string | Date | null | undefined) {
+  const date = safeDate(value);
+  if (!date) return "No timestamp";
+  const diffHours = Math.max(0, Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60)));
+  if (diffHours >= 72) return "Overdue";
+  if (diffHours >= 24) return "Aging";
+  return "Fresh";
+}
+
 type AdminQuoteRow = {
   id: string;
   quoteRef: string;
@@ -776,6 +803,9 @@ async function getDashboardData(range: DashboardRange) {
     pendingPosOrdersRecent,
     recentPendingJumiaOrders,
     approvedAdvances,
+    voiceCallsPeriod,
+    voiceFollowUpsOpen,
+    voiceCallbackRequestsPeriod,
   ] = await Promise.all([
     prisma.product.count(),
     prisma.shop.count(),
@@ -953,6 +983,103 @@ async function getDashboardData(range: DashboardRange) {
         installments: {
           orderBy: [{ dueDate: "asc" }],
           take: 6,
+        },
+      },
+    }),
+    prisma.voiceCall.findMany({
+      where: { createdAt: { gte: range.start, lte: range.end } },
+      orderBy: [{ createdAt: "desc" }],
+      take: 160,
+      select: {
+        id: true,
+        callerNumber: true,
+        destinationNumber: true,
+        createdAt: true,
+        startedAt: true,
+        durationInSeconds: true,
+        status: true,
+        routeType: true,
+        routedTo: true,
+        rawPayloadJson: true,
+        assignedToId: true,
+        customerId: true,
+        assignedTo: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+        customer: {
+          select: {
+            name: true,
+            email: true,
+            phone: true,
+          },
+        },
+      },
+    }),
+    prisma.voiceFollowUp.findMany({
+      where: {
+        status: { notIn: ["resolved", "closed"] },
+        OR: [
+          { createdAt: { gte: range.start, lte: range.end } },
+          { updatedAt: { gte: range.start, lte: range.end } },
+        ],
+      },
+      orderBy: [{ updatedAt: "desc" }],
+      take: 80,
+      select: {
+        id: true,
+        voiceCallId: true,
+        voiceLeadId: true,
+        customerId: true,
+        assignedToId: true,
+        phone: true,
+        title: true,
+        status: true,
+        dueAt: true,
+        notes: true,
+        createdAt: true,
+        updatedAt: true,
+        assignedTo: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+        customer: {
+          select: {
+            name: true,
+            email: true,
+            phone: true,
+          },
+        },
+      },
+    }),
+    prisma.voiceCallbackRequest.findMany({
+      where: {
+        OR: [
+          { createdAt: { gte: range.start, lte: range.end } },
+          { requestedAt: { gte: range.start, lte: range.end } },
+        ],
+      },
+      orderBy: [{ updatedAt: "desc" }],
+      take: 80,
+      select: {
+        id: true,
+        voiceCallId: true,
+        normalizedPhone: true,
+        requestedAt: true,
+        openedAt: true,
+        openedCount: true,
+        createdAt: true,
+        updatedAt: true,
+        agentId: true,
+        agent: {
+          select: {
+            name: true,
+            email: true,
+          },
         },
       },
     }),
@@ -1322,6 +1449,283 @@ async function getDashboardData(range: DashboardRange) {
     .sort((left, right) => Number(right.remainingBalance ?? 0) - Number(left.remainingBalance ?? 0))
     .slice(0, 6);
 
+  const voiceStatuses = voiceCallsPeriod.map((call) => {
+    const outcome = resolveVoiceProviderOutcome(call);
+    return {
+      ...call,
+      displayStatus: String(outcome.displayStatus || "").trim().toLowerCase(),
+      providerStatus: String(outcome.providerStatus || "").trim().toLowerCase(),
+    };
+  });
+  const answeredVoiceCalls = voiceStatuses.filter((call) =>
+    ["answered", "connected", "transferred"].includes(call.displayStatus),
+  );
+  const missedVoiceCalls = voiceStatuses.filter((call) =>
+    ["missed", "no_answer", "busy", "failed", "aborted", "cancelled", "disconnected"].includes(call.displayStatus),
+  );
+  const attemptedVoiceCalls = voiceStatuses.filter((call) => call.displayStatus === "attempted_call");
+  const requestedCallbackCount = voiceCallbackRequestsPeriod.filter((request) => Boolean(request.requestedAt)).length;
+  const recentlyOpenedCallbackCount = voiceCallbackRequestsPeriod.filter((request) => Boolean(request.openedAt)).length;
+  const recentVoiceCalls = voiceStatuses.slice(0, 6).map((call) => {
+    const normalizedPhone =
+      normalizePhone(call.callerNumber || "") ||
+      normalizePhone(call.customer?.phone || "") ||
+      normalizePhone(call.destinationNumber || "");
+    const customerName =
+      String(call.customer?.name || "").trim() ||
+      normalizedPhone ||
+      "Voice caller";
+    return {
+      id: call.id,
+      customerName,
+      phone: normalizedPhone || call.callerNumber || "",
+      status: call.displayStatus,
+      agent:
+        call.assignedTo?.name ||
+        call.assignedTo?.email ||
+        "Routing queue",
+      at: call.startedAt ?? call.createdAt,
+      href: `/admin/communications/voice?tab=recent&selectedCallId=${encodeURIComponent(call.id)}${normalizedPhone ? `&selectedPhone=${encodeURIComponent(normalizedPhone)}` : ""}`,
+      customerHref: buildAdminCustomerProfileHref({
+        customerUserId: call.customerId,
+        phone: normalizedPhone,
+        phones: [normalizedPhone, call.callerNumber, call.destinationNumber, call.customer?.phone],
+        email: call.customer?.email,
+        displayName: customerName,
+      }),
+    };
+  });
+  const recentVoiceFollowUps = voiceFollowUpsOpen.slice(0, 6).map((item) => {
+    const normalizedPhone =
+      normalizePhone(item.phone || "") ||
+      normalizePhone(item.customer?.phone || "");
+    const customerName =
+      String(item.customer?.name || "").trim() ||
+      normalizedPhone ||
+      "Voice follow-up";
+    return {
+      id: item.id,
+      customerName,
+      phone: normalizedPhone || item.phone,
+      title: item.title,
+      status: String(item.status || "").replace(/_/g, " ").toLowerCase(),
+      assignedTo: item.assignedTo?.name || item.assignedTo?.email || "Unassigned",
+      at: item.updatedAt ?? item.createdAt,
+      href: `/admin/communications/voice?tab=followups&selectedPhone=${encodeURIComponent(normalizedPhone || item.phone)}`,
+      customerHref: buildAdminCustomerProfileHref({
+        customerUserId: item.customerId,
+        phone: normalizedPhone,
+        phones: [normalizedPhone, item.phone, item.customer?.phone],
+        email: item.customer?.email,
+        displayName: customerName,
+      }),
+      overdueTone: ageToneClass(item.dueAt ?? item.updatedAt ?? item.createdAt),
+      overdueLabel: ageToneLabel(item.dueAt ?? item.updatedAt ?? item.createdAt),
+    };
+  });
+
+  const voiceWorkloadByAgent = new Map<
+    string,
+    {
+      agentKey: string;
+      agentName: string;
+      answered: number;
+      missed: number;
+      attempted: number;
+      openFollowUps: number;
+      callbackRequests: number;
+      lastAt: Date | null;
+    }
+  >();
+  const ensureVoiceAgent = (agentKey: string, agentName: string) => {
+    const existing = voiceWorkloadByAgent.get(agentKey);
+    if (existing) return existing;
+    const created = {
+      agentKey,
+      agentName,
+      answered: 0,
+      missed: 0,
+      attempted: 0,
+      openFollowUps: 0,
+      callbackRequests: 0,
+      lastAt: null as Date | null,
+    };
+    voiceWorkloadByAgent.set(agentKey, created);
+    return created;
+  };
+  for (const call of voiceStatuses) {
+    const agentName = call.assignedTo?.name || call.assignedTo?.email || "Routing queue";
+    const agentKey = String(call.assignedToId || agentName);
+    const bucket = ensureVoiceAgent(agentKey, agentName);
+    if (["answered", "connected", "transferred"].includes(call.displayStatus)) bucket.answered += 1;
+    if (["missed", "no_answer", "busy", "failed", "aborted", "cancelled", "disconnected"].includes(call.displayStatus)) bucket.missed += 1;
+    if (call.displayStatus === "attempted_call") bucket.attempted += 1;
+    const at = safeDate(call.startedAt ?? call.createdAt);
+    if (at && (!bucket.lastAt || at.getTime() > bucket.lastAt.getTime())) bucket.lastAt = at;
+  }
+  for (const item of voiceFollowUpsOpen) {
+    const agentName = item.assignedTo?.name || item.assignedTo?.email || "Unassigned";
+    const agentKey = String(item.assignedToId || agentName);
+    const bucket = ensureVoiceAgent(agentKey, agentName);
+    bucket.openFollowUps += 1;
+    const at = safeDate(item.updatedAt ?? item.createdAt);
+    if (at && (!bucket.lastAt || at.getTime() > bucket.lastAt.getTime())) bucket.lastAt = at;
+  }
+  for (const request of voiceCallbackRequestsPeriod) {
+    const agentName = request.agent?.name || request.agent?.email || "Unassigned";
+    const agentKey = String(request.agentId || agentName);
+    const bucket = ensureVoiceAgent(agentKey, agentName);
+    if (request.requestedAt) bucket.callbackRequests += 1;
+    const at = safeDate(request.requestedAt ?? request.updatedAt ?? request.createdAt);
+    if (at && (!bucket.lastAt || at.getTime() > bucket.lastAt.getTime())) bucket.lastAt = at;
+  }
+  const voiceAgentWorkload = Array.from(voiceWorkloadByAgent.values())
+    .sort((left, right) => {
+      const rightWeight = right.openFollowUps * 5 + right.missed * 3 + right.callbackRequests * 2 + right.attempted;
+      const leftWeight = left.openFollowUps * 5 + left.missed * 3 + left.callbackRequests * 2 + left.attempted;
+      if (rightWeight !== leftWeight) return rightWeight - leftWeight;
+      return (right.lastAt?.getTime() || 0) - (left.lastAt?.getTime() || 0);
+    })
+    .slice(0, 4);
+
+  const customerHotspotMap = new Map<
+    string,
+    {
+      key: string;
+      displayName: string;
+      phone: string;
+      customerUserId: string | null;
+      email: string | null;
+      sources: Set<string>;
+      openItems: number;
+      lastAt: Date | null;
+      lastVoiceStatus: string | null;
+      sourceLinks: {
+        voice: boolean;
+        web: boolean;
+        quote: boolean;
+        pos: boolean;
+        pod: boolean;
+      };
+    }
+  >();
+  const upsertCustomerHotspot = (input: {
+    phone?: string | null;
+    displayName?: string | null;
+    customerUserId?: string | null;
+    email?: string | null;
+    source: string;
+    at?: string | Date | null;
+    lastVoiceStatus?: string | null;
+  }) => {
+    const normalizedPhone = normalizePhone(input.phone || "");
+    if (!normalizedPhone) return;
+    const key = String(input.customerUserId || "").trim() || normalizedPhone;
+    const current = customerHotspotMap.get(key) ?? {
+      key,
+      displayName: String(input.displayName || "").trim() || normalizedPhone,
+      phone: normalizedPhone,
+      customerUserId: input.customerUserId ?? null,
+      email: input.email ?? null,
+      sources: new Set<string>(),
+      openItems: 0,
+      lastAt: null as Date | null,
+      lastVoiceStatus: null as string | null,
+      sourceLinks: {
+        voice: false,
+        web: false,
+        quote: false,
+        pos: false,
+        pod: false,
+      },
+    };
+    current.sources.add(input.source);
+    current.openItems += 1;
+    const nextAt = safeDate(input.at);
+    if (nextAt && (!current.lastAt || nextAt.getTime() > current.lastAt.getTime())) {
+      current.lastAt = nextAt;
+    }
+    if (input.lastVoiceStatus) current.lastVoiceStatus = input.lastVoiceStatus;
+    if (!current.displayName || current.displayName === current.phone) {
+      current.displayName = String(input.displayName || "").trim() || current.displayName;
+    }
+    if (!current.email && input.email) current.email = input.email;
+    if (!current.customerUserId && input.customerUserId) current.customerUserId = input.customerUserId;
+    if (input.source === "Voice") current.sourceLinks.voice = true;
+    if (input.source === "Web order") current.sourceLinks.web = true;
+    if (input.source === "Quotation") current.sourceLinks.quote = true;
+    if (input.source === "POS order") current.sourceLinks.pos = true;
+    if (input.source === "POD follow-up") current.sourceLinks.pod = true;
+    customerHotspotMap.set(key, current);
+  };
+
+  for (const order of pendingWebsiteOrders) {
+    upsertCustomerHotspot({
+      phone: order.customerPhone,
+      displayName: order.customerName,
+      source: "Web order",
+      at: order.updatedAt,
+    });
+  }
+  for (const order of pendingPosOrders) {
+    upsertCustomerHotspot({
+      phone: order.customerPhone,
+      displayName: order.customerName,
+      source: "POS order",
+      at: order.updatedAt,
+    });
+  }
+  for (const quote of openQuoteRows) {
+    upsertCustomerHotspot({
+      phone: quote.customerPhone,
+      displayName: quote.customerName,
+      source: "Quotation",
+      at: quote.updatedAt,
+    });
+  }
+  for (const row of pendingPodRows) {
+    upsertCustomerHotspot({
+      phone: row.customerPhone,
+      displayName: row.customerName,
+      source: "POD follow-up",
+      at: row.updatedAt ?? row.createdAt,
+    });
+  }
+  for (const call of voiceStatuses) {
+    upsertCustomerHotspot({
+      phone: call.callerNumber,
+      displayName: call.customer?.name || call.callerNumber,
+      customerUserId: call.customerId,
+      email: call.customer?.email,
+      source: "Voice",
+      at: call.startedAt ?? call.createdAt,
+      lastVoiceStatus: call.displayStatus,
+    });
+  }
+  const customerHotspots = Array.from(customerHotspotMap.values())
+    .sort((left, right) => {
+      if ((right.openItems || 0) !== (left.openItems || 0)) return right.openItems - left.openItems;
+      return (right.lastAt?.getTime() || 0) - (left.lastAt?.getTime() || 0);
+    })
+    .slice(0, 8)
+    .map((item) => ({
+      ...item,
+      href: buildAdminCustomerProfileHref({
+        customerUserId: item.customerUserId,
+        phone: item.phone,
+        phones: [item.phone],
+        email: item.email,
+        displayName: item.displayName,
+      }),
+      sourceSummary: Array.from(item.sources).join(" · "),
+      urgencyTone: ageToneClass(item.lastAt),
+      urgencyLabel: ageToneLabel(item.lastAt),
+      voiceHref: `/admin/communications/voice?tab=recent&selectedPhone=${encodeURIComponent(item.phone)}`,
+      webHref: `/marketing/receipts?tab=web-orders&q=${encodeURIComponent(item.phone)}`,
+      quoteHref: `/marketing/receipts?tab=quotations&q=${encodeURIComponent(item.phone)}`,
+      posHref: `/admin/customers?q=${encodeURIComponent(item.phone)}`,
+    }));
+
   return {
     range,
     periodLabel: range.label,
@@ -1490,6 +1894,22 @@ async function getDashboardData(range: DashboardRange) {
       ),
       outstandingAdvances,
     },
+    voice: {
+      totalCalls: voiceStatuses.length,
+      answeredCalls: answeredVoiceCalls.length,
+      missedCalls: missedVoiceCalls.length,
+      attemptedCalls: attemptedVoiceCalls.length,
+      openFollowUps: voiceFollowUpsOpen.length,
+      callbackRequests: voiceCallbackRequestsPeriod.length,
+      requestedCallbacks: requestedCallbackCount,
+      openedCallbackLinks: recentlyOpenedCallbackCount,
+      recentCalls: recentVoiceCalls,
+      recentFollowUps: recentVoiceFollowUps,
+      agentWorkload: voiceAgentWorkload,
+    },
+    customers: {
+      hotspots: customerHotspots,
+    },
     trends: Array.from(trendMap.values()),
   };
 }
@@ -1497,21 +1917,47 @@ async function getDashboardData(range: DashboardRange) {
 export default async function AdminOverviewPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ range?: string; from?: string; to?: string }>;
+  searchParams?: Promise<{ range?: string; from?: string; to?: string; customerSource?: string }>;
 }) {
   const params = (await searchParams) || {};
   const range = resolveDashboardRange(params);
   const dashboard = await getDashboardData(range);
+  const customerSourceFilter = String(params.customerSource || "all").trim().toLowerCase();
 
   const buildRangeHref = (preset: DashboardRangePreset) => {
     const next = new URLSearchParams();
     next.set("range", preset);
+    if (customerSourceFilter !== "all") next.set("customerSource", customerSourceFilter);
     if (preset === "custom") {
       next.set("from", range.fromValue);
       next.set("to", range.toValue);
     }
     return `/admin${next.toString() ? `?${next.toString()}` : ""}`;
   };
+
+  const buildDashboardHref = (overrides: Partial<{ customerSource: string; range: string; from: string; to: string }>) => {
+    const next = new URLSearchParams();
+    next.set("range", overrides.range ?? range.preset);
+    if ((overrides.customerSource ?? customerSourceFilter) !== "all") {
+      next.set("customerSource", overrides.customerSource ?? customerSourceFilter);
+    }
+    const effectiveRange = overrides.range ?? range.preset;
+    if (effectiveRange === "custom") {
+      next.set("from", overrides.from ?? range.fromValue);
+      next.set("to", overrides.to ?? range.toValue);
+    }
+    return `/admin${next.toString() ? `?${next.toString()}` : ""}`;
+  };
+
+  const filteredCustomerHotspots = dashboard.customers.hotspots.filter((item) => {
+    if (customerSourceFilter === "all") return true;
+    if (customerSourceFilter === "voice") return item.sources.has("Voice");
+    if (customerSourceFilter === "web") return item.sources.has("Web order");
+    if (customerSourceFilter === "quotation") return item.sources.has("Quotation");
+    if (customerSourceFilter === "pos") return item.sources.has("POS order");
+    if (customerSourceFilter === "pod") return item.sources.has("POD follow-up");
+    return true;
+  });
 
   const quickLinks: LinkGroup[] = [
     {
@@ -1566,11 +2012,12 @@ export default async function AdminOverviewPage({
         <div className="grid gap-8 xl:grid-cols-[1.4fr_0.9fr]">
           <div className="space-y-6">
             <div className="flex flex-wrap gap-2">
-              <a href="#executive" className={sectionPill}>Executive</a>
-              <a href="#sales" className={sectionPill}>Sales</a>
-              <a href="#operations" className={sectionPill}>Operations</a>
+              <a href="#overview" className={sectionPill}>Overview</a>
+              <a href="#action-queue" className={sectionPill}>Action Queue</a>
+              <a href="#voice" className={sectionPill}>Voice</a>
+              <a href="#orders" className={sectionPill}>Orders</a>
+              <a href="#customers" className={sectionPill}>Customers</a>
               <a href="#marketplace" className={sectionPill}>Jumia</a>
-              <a href="#pricing" className={sectionPill}>Pricing</a>
               <a href="#wellness" className={sectionPill}>Wellness</a>
               <a href="#people" className={sectionPill}>People</a>
               <a href="#resources" className={sectionPill}>Resources</a>
@@ -1611,6 +2058,7 @@ export default async function AdminOverviewPage({
               </div>
               <form className="mt-3 flex flex-wrap items-end gap-3" action="/admin" method="get">
                 <input type="hidden" name="range" value="custom" />
+                {customerSourceFilter !== "all" ? <input type="hidden" name="customerSource" value={customerSourceFilter} /> : null}
                 <label className="text-xs uppercase tracking-[0.18em] text-slate-500">
                   From
                   <input
@@ -1705,7 +2153,7 @@ export default async function AdminOverviewPage({
         </div>
       </section>
 
-      <section className="space-y-4">
+      <section id="overview" className="space-y-4">
         <SectionHeader
           eyebrow="Live business pulse"
           title="Selected range, live queues, and pending workload"
@@ -1726,7 +2174,140 @@ export default async function AdminOverviewPage({
         </div>
       </section>
 
-      <section className="space-y-4">
+      <section id="voice" className="space-y-4">
+        <SectionHeader
+          eyebrow="Voice command"
+          title="Calls, callback demand, and follow-up pressure"
+          description="This lane keeps call-center pressure visible from the admin homepage: answered, missed, attempted, callback link requests, and live follow-up ownership."
+          action={
+            <Link
+              href="/admin/communications/voice"
+              className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-emerald-400/30 hover:text-emerald-200"
+            >
+              Open voice desk
+            </Link>
+          }
+        />
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-7">
+          <StatCard title="Voice calls" value={`${dashboard.voice.totalCalls}`} sub={`In ${dashboard.range.shortLabel.toLowerCase()}`} icon={PhoneCall} accent="from-cyan-500/20 via-sky-500/10 to-transparent" />
+          <StatCard title="Answered" value={`${dashboard.voice.answeredCalls}`} sub="Bridged or completed answered calls" icon={ClipboardCheck} accent="from-emerald-500/20 via-teal-500/10 to-transparent" />
+          <StatCard title="Missed" value={`${dashboard.voice.missedCalls}`} sub="Missed or no-answer sessions" icon={TriangleAlert} accent="from-rose-500/20 via-orange-500/10 to-transparent" />
+          <StatCard title="Attempted" value={`${dashboard.voice.attemptedCalls}`} sub="Calls that did not reach bridged talk stage" icon={RefreshCcw} accent="from-amber-500/20 via-yellow-500/10 to-transparent" />
+          <StatCard title="Open follow-ups" value={`${dashboard.voice.openFollowUps}`} sub="Voice tasks still unresolved" icon={CircleAlert} accent="from-violet-500/20 via-fuchsia-500/10 to-transparent" />
+          <StatCard title="Callback requests" value={`${dashboard.voice.requestedCallbacks}`} sub={`${dashboard.voice.openedCallbackLinks} customers opened the callback link`} icon={HeartHandshake} accent="from-emerald-500/20 via-lime-500/10 to-transparent" />
+          <StatCard title="Voice leads" value={`${dashboard.voice.callbackRequests}`} sub="Attempted-call sessions and callback records" icon={Users} accent="from-indigo-500/20 via-cyan-500/10 to-transparent" />
+        </div>
+        <div className="grid gap-4 xl:grid-cols-2">
+          <div className={`${subtleCard} p-5`}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-lg font-semibold text-white">Recent call outcomes</div>
+                <div className="mt-1 text-sm text-slate-400">Fast jump into the exact call review or customer profile.</div>
+              </div>
+              <Link href="/admin/communications/voice?tab=recent" className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-emerald-400/30 hover:text-emerald-200">Open history</Link>
+            </div>
+            <div className="mt-4 grid gap-3">
+              {dashboard.voice.recentCalls.length ? dashboard.voice.recentCalls.map((call) => (
+                <div key={call.id} className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <Link href={call.customerHref} className="font-semibold text-white transition hover:text-emerald-200">{call.customerName}</Link>
+                      <div className="mt-1 text-sm text-slate-400">{call.phone || "No phone captured"} · {call.agent}</div>
+                    </div>
+                    <span className="inline-flex rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-100">
+                      {call.status.replace(/_/g, " ")}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+                    <span>{format(call.at, "dd MMM, HH:mm")}</span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Link href={call.href} className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100 transition hover:border-white/20">Open call</Link>
+                    <Link href={call.customerHref} className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-100 transition hover:border-emerald-400">Open customer</Link>
+                  </div>
+                </div>
+              )) : (
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-400">No voice calls recorded for this range.</div>
+              )}
+            </div>
+          </div>
+          <div className={`${subtleCard} p-5`}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-lg font-semibold text-white">Open voice follow-ups</div>
+                <div className="mt-1 text-sm text-slate-400">Shows the ownership trail for callbacks and unresolved voice work.</div>
+              </div>
+              <Link href="/admin/communications/voice?tab=followups" className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-emerald-400/30 hover:text-emerald-200">Open follow-ups</Link>
+            </div>
+            <div className="mt-4 grid gap-3">
+              {dashboard.voice.recentFollowUps.length ? dashboard.voice.recentFollowUps.map((item) => (
+                <div key={item.id} className={`rounded-[22px] border p-4 ${item.overdueTone}`}>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <Link href={item.customerHref} className="font-semibold text-white transition hover:text-emerald-200">{item.customerName}</Link>
+                      <div className="mt-1 text-sm text-slate-400">{item.phone || "No phone captured"} · {item.assignedTo}</div>
+                    </div>
+                    <span className="inline-flex rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-100">
+                      {item.status}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-sm text-slate-300">{item.title}</div>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+                    <span>{format(item.at, "dd MMM, HH:mm")}</span>
+                    <span>{item.overdueLabel}</span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Link href={item.href} className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100 transition hover:border-white/20">Open queue</Link>
+                    <Link href={item.customerHref} className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-100 transition hover:border-emerald-400">Open customer</Link>
+                  </div>
+                </div>
+              )) : (
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-400">No open voice follow-ups in this range.</div>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className={`${subtleCard} p-5`}>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-lg font-semibold text-white">Per-agent voice workload</div>
+              <div className="mt-1 text-sm text-slate-400">Shows who is carrying missed calls, attempted-call callbacks, and unresolved voice follow-up pressure.</div>
+            </div>
+            <Link href="/admin/communications/voice?tab=agents" className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-emerald-400/30 hover:text-emerald-200">Open agents</Link>
+          </div>
+          <div className="mt-4 grid gap-4 xl:grid-cols-4">
+            {dashboard.voice.agentWorkload.length ? dashboard.voice.agentWorkload.map((agent) => (
+              <div key={agent.agentKey} className={`rounded-[22px] border p-4 ${ageToneClass(agent.lastAt)}`}>
+                <div className="text-lg font-semibold text-white">{agent.agentName}</div>
+                <div className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">{agent.lastAt ? `${ageToneLabel(agent.lastAt)} · ${format(agent.lastAt, "dd MMM, HH:mm")}` : "No recent activity"}</div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Answered</div>
+                    <div className="mt-1 text-lg font-semibold text-white">{agent.answered}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Missed</div>
+                    <div className="mt-1 text-lg font-semibold text-white">{agent.missed}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Attempted</div>
+                    <div className="mt-1 text-lg font-semibold text-white">{agent.attempted}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Open follow-ups</div>
+                    <div className="mt-1 text-lg font-semibold text-white">{agent.openFollowUps}</div>
+                  </div>
+                </div>
+                <div className="mt-3 text-sm text-slate-400">{agent.callbackRequests} customer callback requests currently tied to this owner.</div>
+              </div>
+            )) : (
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-400 xl:col-span-4">No voice agent workload recorded for this range.</div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section id="action-queue" className="space-y-4">
         <SectionHeader
           eyebrow="Unified queue"
           title="Urgent action queue"
@@ -1861,7 +2442,7 @@ export default async function AdminOverviewPage({
         </div>
       </section>
 
-      <section className="space-y-4">
+      <section id="orders" className="space-y-4">
         <SectionHeader
           eyebrow="Sales activity center"
           title="Channel control boards"
@@ -1874,6 +2455,91 @@ export default async function AdminOverviewPage({
           <ControlCenterCard title="Quotations" count={dashboard.salesActivity.quotations.count} amount={dashboard.salesActivity.quotations.sales} pending={dashboard.salesActivity.quotations.pending} href="/marketing/receipts?tab=quotations" note={`Current period ${dashboard.pendingBreakdown.quotations.current} · Carried forward ${dashboard.pendingBreakdown.quotations.carried}`} />
           <ControlCenterCard title="POD Follow-up" count={dashboard.salesActivity.pod.count} amount={dashboard.salesActivity.pod.sales} pending={dashboard.salesActivity.pod.pending} href="/marketing/receipts?tab=pos&podStatus=pending" note={`Current period ${dashboard.pendingBreakdown.pod.current} · Carried forward ${dashboard.pendingBreakdown.pod.carried}`} />
           <ControlCenterCard title="Marketplace Orders" count={dashboard.salesActivity.marketplace.count} amount={dashboard.salesActivity.marketplace.sales} pending={dashboard.salesActivity.marketplace.pending} href="/admin/online/summary" note="Jumia and Kilimall order movement." />
+        </div>
+      </section>
+
+      <section id="customers" className="space-y-4">
+        <SectionHeader
+          eyebrow="Customer hotspots"
+          title="Customers currently driving work across the company"
+          description="This block ties voice, web, POS, quotes, and POD follow-up back to the same canonical customer profile so admin can understand the customer before taking action."
+          action={
+            <Link
+              href="/admin/customers"
+              className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-emerald-400/30 hover:text-emerald-200"
+            >
+              Open customer desk
+            </Link>
+          }
+        />
+        <div className="grid gap-4 xl:grid-cols-2">
+          <div className="xl:col-span-2 flex flex-wrap gap-2">
+            {([
+              ["all", "All hotspots"],
+              ["voice", "Voice"],
+              ["web", "Web orders"],
+              ["quotation", "Quotations"],
+              ["pos", "POS"],
+              ["pod", "POD"],
+            ] as const).map(([key, label]) => (
+              <Link
+                key={key}
+                href={buildDashboardHref({ customerSource: key })}
+                className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
+                  customerSourceFilter === key
+                    ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-100"
+                    : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20"
+                }`}
+              >
+                {label}
+              </Link>
+            ))}
+          </div>
+          {filteredCustomerHotspots.length ? filteredCustomerHotspots.map((customer) => (
+            <div
+              key={customer.key}
+              className={`${subtleCard} p-5`}
+            >
+              <div className={`rounded-[22px] border p-4 ${customer.urgencyTone}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-xl font-semibold text-white">{customer.displayName}</div>
+                  <div className="mt-1 text-sm text-slate-400">{customer.phone}</div>
+                </div>
+                <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">
+                  {customer.openItems} open
+                </div>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                  <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Active sources</div>
+                  <div className="mt-1 text-sm font-semibold text-white">{customer.sourceSummary}</div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                  <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Last seen</div>
+                  <div className="mt-1 text-sm font-semibold text-white">{customer.lastAt ? format(customer.lastAt, "dd MMM, HH:mm") : "—"}</div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                  <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Last voice outcome</div>
+                  <div className="mt-1 text-sm font-semibold text-white">{customer.lastVoiceStatus ? customer.lastVoiceStatus.replace(/_/g, " ") : "No voice log"}</div>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                <span>{customer.urgencyLabel}</span>
+                <span>{customer.lastAt ? ageLabel(customer.lastAt) : "No activity age"}</span>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Link href={customer.href} className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-100 transition hover:border-emerald-400">Customer</Link>
+                {customer.sourceLinks.voice ? <Link href={customer.voiceHref} className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100 transition hover:border-white/20">Voice</Link> : null}
+                {customer.sourceLinks.web ? <Link href={customer.webHref} className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100 transition hover:border-white/20">Web</Link> : null}
+                {customer.sourceLinks.quote ? <Link href={customer.quoteHref} className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100 transition hover:border-white/20">Quotes</Link> : null}
+                {(customer.sourceLinks.pos || customer.sourceLinks.pod) ? <Link href={customer.posHref} className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-100 transition hover:border-white/20">POS</Link> : null}
+              </div>
+              </div>
+            </div>
+          )) : (
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-400 xl:col-span-2">No customer hotspots detected for this filter and range.</div>
+          )}
         </div>
       </section>
 
