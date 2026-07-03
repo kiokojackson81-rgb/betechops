@@ -11,6 +11,7 @@ import {
   Briefcase,
   Building2,
   ChartColumnBig,
+  ChevronDown,
   CircleAlert,
   ClipboardCheck,
   HeartHandshake,
@@ -483,6 +484,41 @@ function TrendCard({ points }: { points: TrendPoint[] }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function CollapsibleSection({
+  id,
+  eyebrow,
+  title,
+  description,
+  action,
+  defaultOpen = false,
+  children,
+}: {
+  id?: string;
+  eyebrow: string;
+  title: string;
+  description: string;
+  action?: ReactNode;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <details id={id} open={defaultOpen} className={`${subtleCard} group p-4 md:p-5`}>
+      <summary className="flex cursor-pointer list-none items-start justify-between gap-4 [&::-webkit-details-marker]:hidden">
+        <div className="space-y-2">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.34em] text-emerald-300/90">{eyebrow}</div>
+          <div className="flex items-center gap-3">
+            <h2 className="text-2xl font-semibold tracking-tight text-white">{title}</h2>
+            <ChevronDown className="h-5 w-5 text-slate-500 transition group-open:rotate-180" />
+          </div>
+          <p className="max-w-3xl text-sm text-slate-400">{description}</p>
+        </div>
+        {action ? <div className="shrink-0">{action}</div> : null}
+      </summary>
+      <div className="mt-5 space-y-4">{children}</div>
+    </details>
   );
 }
 
@@ -1466,7 +1502,7 @@ async function getDashboardData(range: DashboardRange) {
   const attemptedVoiceCalls = voiceStatuses.filter((call) => call.displayStatus === "attempted_call");
   const requestedCallbackCount = voiceCallbackRequestsPeriod.filter((request) => Boolean(request.requestedAt)).length;
   const recentlyOpenedCallbackCount = voiceCallbackRequestsPeriod.filter((request) => Boolean(request.openedAt)).length;
-  const recentVoiceCalls = voiceStatuses.slice(0, 6).map((call) => {
+  const recentVoiceCalls = voiceStatuses.slice(0, 4).map((call) => {
     const normalizedPhone =
       normalizePhone(call.callerNumber || "") ||
       normalizePhone(call.customer?.phone || "") ||
@@ -1495,7 +1531,7 @@ async function getDashboardData(range: DashboardRange) {
       }),
     };
   });
-  const recentVoiceFollowUps = voiceFollowUpsOpen.slice(0, 6).map((item) => {
+  const recentVoiceFollowUps = voiceFollowUpsOpen.slice(0, 4).map((item) => {
     const normalizedPhone =
       normalizePhone(item.phone || "") ||
       normalizePhone(item.customer?.phone || "");
@@ -1707,7 +1743,7 @@ async function getDashboardData(range: DashboardRange) {
       if ((right.openItems || 0) !== (left.openItems || 0)) return right.openItems - left.openItems;
       return (right.lastAt?.getTime() || 0) - (left.lastAt?.getTime() || 0);
     })
-    .slice(0, 8)
+    .slice(0, 4)
     .map((item) => ({
       ...item,
       href: buildAdminCustomerProfileHref({
@@ -1837,7 +1873,7 @@ async function getDashboardData(range: DashboardRange) {
       orderValue: webOrderValue,
       pendingOrderValue: pendingWebOrderValue,
       recentOrders: webRecentRows,
-      quoteRequests: openQuoteRows.slice(0, 6).map((quote) => ({
+      quoteRequests: openQuoteRows.slice(0, 4).map((quote) => ({
         ...quote,
         carriedForward: isCarriedForwardPendingItem({
           status: quote.status,
@@ -1857,7 +1893,7 @@ async function getDashboardData(range: DashboardRange) {
       staffRows: payrollRows
         .slice()
         .sort((left, right) => Number(right.totalSales ?? 0) - Number(left.totalSales ?? 0))
-        .slice(0, 6),
+        .slice(0, 4),
     },
     lowStockItems,
     queues: {
@@ -1880,7 +1916,7 @@ async function getDashboardData(range: DashboardRange) {
       pod: { current: periodPendingPodRows.length, carried: carriedPendingPodRows.length },
     },
     pricingQueue,
-    pricingRows: groupedUnpriced.slice(0, 6),
+    pricingRows: groupedUnpriced.slice(0, 4),
     jumia: {
       pendingRows: jumiaPendingRows,
     },
@@ -2426,7 +2462,7 @@ export default async function AdminOverviewPage({
               updatedAt: null,
               href: "/admin/online/summary",
             },
-          ]).slice(0, 14).map((item) => (
+          ]).slice(0, 10).map((item) => (
             <QueueRow
               key={item.id}
               badge={item.badge}
@@ -2458,20 +2494,21 @@ export default async function AdminOverviewPage({
         </div>
       </section>
 
-      <section id="customers" className="space-y-4">
-        <SectionHeader
-          eyebrow="Customer hotspots"
-          title="Customers currently driving work across the company"
-          description="This block ties voice, web, POS, quotes, and POD follow-up back to the same canonical customer profile so admin can understand the customer before taking action."
-          action={
-            <Link
-              href="/admin/customers"
-              className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-emerald-400/30 hover:text-emerald-200"
-            >
-              Open customer desk
-            </Link>
-          }
-        />
+      <CollapsibleSection
+        id="customers"
+        defaultOpen={false}
+        eyebrow="Customer hotspots"
+        title="Customers currently driving work across the company"
+        description="This block ties voice, web, POS, quotes, and POD follow-up back to the same canonical customer profile so admin can understand the customer before taking action."
+        action={
+          <Link
+            href="/admin/customers"
+            className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-emerald-400/30 hover:text-emerald-200"
+          >
+            Open customer desk
+          </Link>
+        }
+      >
         <div className="grid gap-4 xl:grid-cols-2">
           <div className="xl:col-span-2 flex flex-wrap gap-2">
             {([
@@ -2541,8 +2578,14 @@ export default async function AdminOverviewPage({
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-400 xl:col-span-2">No customer hotspots detected for this filter and range.</div>
           )}
         </div>
-      </section>
+      </CollapsibleSection>
 
+      <CollapsibleSection
+        defaultOpen={false}
+        eyebrow="Agent and web activity"
+        title="Affiliate, agent, and website movement"
+        description="These support lanes stay available on the homepage, but they stay collapsed until admin needs to inspect agent order pressure or live website flow."
+      >
       <section className="grid gap-6 xl:grid-cols-2">
         <div className="space-y-4">
           <SectionHeader
@@ -2643,8 +2686,16 @@ export default async function AdminOverviewPage({
           </div>
         </div>
       </section>
+      </CollapsibleSection>
 
-      <section id="marketplace" className="grid gap-6 xl:grid-cols-2">
+      <CollapsibleSection
+        id="marketplace"
+        defaultOpen={false}
+        eyebrow="Marketplace and wellness"
+        title="Marketplace pressure, Jumia backlog, and staff welfare risk"
+        description="Marketplace work and wellness risk are still on the dashboard, but they stay folded until admin needs to inspect vendor backlog or people-side approvals."
+      >
+      <section className="grid gap-6 xl:grid-cols-2">
         <div className="space-y-4">
           <SectionHeader
             eyebrow="Marketplace watch"
@@ -2723,8 +2774,16 @@ export default async function AdminOverviewPage({
           </div>
         </div>
       </section>
+      </CollapsibleSection>
 
-      <section id="pricing" className="grid gap-6 xl:grid-cols-2">
+      <CollapsibleSection
+        id="pricing"
+        defaultOpen={false}
+        eyebrow="Pricing and staff output"
+        title="Unpriced receipts, POS risk, and staff scoreboard"
+        description="Pricing backlog and staff output stay one click away without stretching the homepage vertically by default."
+      >
+      <section className="grid gap-6 xl:grid-cols-2">
         <div className="space-y-4">
           <SectionHeader
             eyebrow="Pricing control"
@@ -2824,71 +2883,14 @@ export default async function AdminOverviewPage({
           </div>
         </div>
       </section>
+      </CollapsibleSection>
 
-      <section id="executive" className="space-y-4">
-        <SectionHeader
-          eyebrow="Executive strip"
-          title="Money and company movement"
-          description="These top cards answer the first admin questions: how much came in, how much is left as profit, what Jumia is doing, how strong POS is, and what payroll is carrying."
-        />
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-          <StatCard title="Trading period sales" value={formatKES(dashboard.combinedPeriodSales)} sub="Recorded sales across all major channels" icon={Wallet} />
-          <StatCard title="Trading period profit" value={formatKES(dashboard.combinedPeriodProfit)} sub="Net recorded profit across available buying totals" icon={TrendingUp} accent="from-cyan-500/20 via-emerald-500/10 to-transparent" />
-          <StatCard title="Jumia sales" value={formatKES(dashboard.marketplace.jumiaSales)} sub={`${dashboard.counts.pendingJumiaOrders} Jumia orders still pending`} icon={Store} accent="from-amber-500/20 via-orange-500/10 to-transparent" />
-          <StatCard title="POS direct sales" value={formatKES(dashboard.pos.sales)} sub={`${dashboard.pos.receipts} receipts in the current period`} icon={Receipt} accent="from-sky-500/20 via-cyan-500/10 to-transparent" />
-          <StatCard title="Payroll due" value={formatKES(dashboard.payroll.net)} sub={`${dashboard.payroll.staff} active staff on the payroll sheet`} icon={Users} accent="from-fuchsia-500/20 via-violet-500/10 to-transparent" />
-          <StatCard title="Commission due" value={formatKES(dashboard.payroll.commission)} sub="Period commission across direct, marketplace, and POS work" icon={BadgeDollarSign} accent="from-emerald-500/20 via-lime-500/10 to-transparent" />
-        </div>
-      </section>
-
-      <section id="sales" className="space-y-4">
-        <SectionHeader
-          eyebrow="Sales channels"
-          title="Channel performance block"
-          description="Keep every major revenue stream visible separately so leadership can see where money is coming from instead of relying on one blended total."
-        />
-        <div className="grid gap-4 xl:grid-cols-2">
-          <ChannelCard
-            title="POS / direct sales"
-            sales={dashboard.pos.sales}
-            profit={dashboard.pos.profit}
-            volume={`${dashboard.pos.receipts} receipts`}
-            note="Receipts and direct customer walk-in / delivery activity."
-            href="/admin/receipts"
-          />
-          <ChannelCard
-            title="Marketplace online"
-            sales={dashboard.marketplace.sales}
-            profit={dashboard.marketplace.profit}
-            volume={`${dashboard.marketplace.orders} orders`}
-            note={`Jumia ${formatCompactKES(dashboard.marketplace.jumiaSales)} · Kilimall ${formatCompactKES(dashboard.marketplace.kilimallSales)}`}
-            href="/admin/online/summary"
-          />
-          <ChannelCard
-            title="Marketing desk"
-            sales={dashboard.marketing.sales}
-            profit={dashboard.marketing.profit}
-            volume={`${dashboard.marketing.receipts} receipts`}
-            note="Marketing-report receipts and manually captured desk conversions."
-            href="/admin/marketing-report"
-          />
-          <ChannelCard
-            title="Support desk"
-            sales={dashboard.support.sales}
-            profit={dashboard.support.profit}
-            volume={`${dashboard.support.receipts} receipts`}
-            note="Support-side receipts, battery work, and direct service sales."
-            href="/admin/support-report"
-          />
-        </div>
-      </section>
-
-      <section id="operations" className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+      <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-4">
           <SectionHeader
-            eyebrow="Operations center"
-            title="Pending work and risk area"
-            description="This section is for action, not passive reading. Anything here should lead to a decision or a click into a real working page."
+            eyebrow="Trend watch"
+            title="Sales movement and operating pressure"
+            description="A compact view of the last 7 days plus the highest-risk operational items that still need action."
           />
           <div className={`${subtleCard} grid gap-4 p-5 sm:grid-cols-2`}>
             <ActionItem
@@ -2929,12 +2931,13 @@ export default async function AdminOverviewPage({
         <TrendCard points={dashboard.trends} />
       </section>
 
-      <section id="people" className="space-y-4">
-        <SectionHeader
-          eyebrow="People and payroll"
-          title="Staff cost, payouts, and performance"
-          description="Put salaries, commissions, deductions, and staff leaders in one lane so admin can connect sales movement to real payroll impact."
-        />
+      <CollapsibleSection
+        id="people"
+        defaultOpen={false}
+        eyebrow="People and payroll"
+        title="Staff cost, payouts, and performance"
+        description="Put salaries, commissions, deductions, and staff leaders in one lane so admin can connect sales movement to real payroll impact."
+      >
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
           <StatCard title="Top sales performer" value={dashboard.staffSnapshot.topSalesPerformer?.name || "No data"} sub={dashboard.staffSnapshot.topSalesPerformer ? formatKES(Number(dashboard.staffSnapshot.topSalesPerformer.totalSales ?? 0)) : "Waiting for linked sales"} icon={TrendingUp} accent="from-cyan-500/20 via-sky-500/10 to-transparent" />
           <StatCard title="Top commission" value={dashboard.staffSnapshot.topCommissionPerformer?.name || "No data"} sub={dashboard.staffSnapshot.topCommissionPerformer ? formatKES(Number(dashboard.staffSnapshot.topCommissionPerformer.commissionTotal ?? 0)) : "Waiting for commission summary"} icon={BadgeDollarSign} accent="from-emerald-500/20 via-lime-500/10 to-transparent" />
@@ -2986,60 +2989,23 @@ export default async function AdminOverviewPage({
             </div>
           </div>
         </div>
-      </section>
+      </CollapsibleSection>
 
-      <section id="resources" className="space-y-4">
-        <SectionHeader
-          eyebrow="Company links"
-          title="Quick access boards for the whole company"
-          description="These grouped links make the homepage a real control room. Money, people, operations, and system controls each get their own board."
-          action={<AdminPrivacyToggle />}
-        />
+      <CollapsibleSection
+        id="resources"
+        defaultOpen={false}
+        eyebrow="Company links"
+        title="Quick access boards for the whole company"
+        description="These grouped links make the homepage a real control room. Money, people, operations, and system controls each get their own board."
+        action={<AdminPrivacyToggle />}
+      >
         <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-4">
           {quickLinks.map((group) => (
             <LinkGroupCard key={group.title} {...group} />
           ))}
         </div>
-      </section>
+      </CollapsibleSection>
 
-      <section className={`${subtleCard} grid gap-4 p-5 xl:grid-cols-4`}>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-emerald-500/10 p-3 text-emerald-200"><ClipboardCheck className="h-5 w-5" /></div>
-            <div>
-              <div className="text-sm font-semibold text-white">Pending pricing</div>
-              <div className="text-sm text-slate-400">{dashboard.pricingQueue.support} support receipts still in queue</div>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-cyan-500/10 p-3 text-cyan-200"><ChartColumnBig className="h-5 w-5" /></div>
-            <div>
-              <div className="text-sm font-semibold text-white">Marketplace split</div>
-              <div className={`text-sm text-slate-400 ${sensitiveClass}`}>Jumia {formatCompactKES(dashboard.marketplace.jumiaSales)} · Kilimall {formatCompactKES(dashboard.marketplace.kilimallSales)}</div>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-fuchsia-500/10 p-3 text-fuchsia-200"><ShieldCheck className="h-5 w-5" /></div>
-            <div>
-              <div className="text-sm font-semibold text-white">Wellness approvals</div>
-              <div className={`text-sm text-slate-400 ${sensitiveClass}`}>{dashboard.counts.pendingLeave} leave · {dashboard.counts.pendingCashAdvance} cash advance</div>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-amber-500/10 p-3 text-amber-200"><Activity className="h-5 w-5" /></div>
-            <div>
-              <div className="text-sm font-semibold text-white">System safety</div>
-              <div className="text-sm text-slate-400">Use the health-checks and settings pages for platform diagnostics and credentials.</div>
-            </div>
-          </div>
-        </div>
-      </section>
     </div>
   );
 }
