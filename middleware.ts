@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getReferralCookieMaxAge, normalizeReferralCode, REFERRAL_COOKIE_NAME } from "@/lib/attribution";
 import {
+  isAllowedSearchCrawlerUserAgent,
   isBlockedCrawlerUserAgent,
   isFilterLikeCatalogRequest,
   isInternalAllowedAutomationUserAgent,
@@ -10,6 +11,11 @@ import {
   isAllowedPublicAiCrawlerPath,
   shouldApplyNoIndexToPublicRequest,
 } from "@/lib/botTrafficPolicy";
+import {
+  assessCatalogTraffic,
+  getRequestIp,
+  isPublicCatalogueListingPath,
+} from "@/lib/catalogTrafficProtection";
 import { isAgentsHost, isOpsHost, isShopHost } from "@/lib/runtimeUrls";
 
 function hasSessionCookie(req: NextRequest) {
@@ -44,6 +50,30 @@ function logBlockedRequest(hostname: string, pathname: string, userAgent: string
   });
 }
 
+function logSuspiciousCatalogTraffic(input: {
+  hostname: string;
+  pathname: string;
+  queryParamsCount: number;
+  userAgent: string | null | undefined;
+  referrer: string | null | undefined;
+  ip: string | null;
+  score: number;
+  action: string;
+  reasons?: string[];
+}) {
+  console.info("[suspicious-catalog-traffic]", {
+    hostname: input.hostname,
+    pathname: input.pathname,
+    queryParamsCount: input.queryParamsCount,
+    userAgent: String(input.userAgent || ""),
+    referrer: String(input.referrer || ""),
+    ip: input.ip,
+    score: input.score,
+    action: input.action,
+    reasons: input.reasons || [],
+  });
+}
+
 export function middleware(req: NextRequest) {
   try {
     const pathname = req.nextUrl.pathname || "";
@@ -51,6 +81,8 @@ export function middleware(req: NextRequest) {
     const host = req.headers.get("host");
     const hostname = normalizeHostnameFromRequest(req);
     const userAgent = req.headers.get("user-agent");
+    const referrer = req.headers.get("referer");
+    const ip = getRequestIp(req.headers);
     const referralCode = normalizeReferralCode(params.get("ref"));
     const response = NextResponse.next();
     const onAgentsHost = isAgentsHost(host);
@@ -58,6 +90,8 @@ export function middleware(req: NextRequest) {
     const onShopHost = isShopHost(host);
     const isCrawler = isKnownCrawlerUserAgent(userAgent);
     const isInternalAutomation = isInternalAllowedAutomationUserAgent(userAgent);
+    const isSearchBot = isAllowedSearchCrawlerUserAgent(userAgent);
+    const hasSession = hasSessionCookie(req);
 
     if ((onAgentsHost || onOpsHost) && !pathname.startsWith("/api")) {
       applyRobotsHeaders(response, "noindex, nofollow, noarchive, nosnippet");
@@ -69,6 +103,19 @@ export function middleware(req: NextRequest) {
     }
 
     if (onShopHost && isBlockedCrawlerUserAgent(userAgent)) {
+      if (isPublicCatalogueListingPath(pathname)) {
+        logSuspiciousCatalogTraffic({
+          hostname,
+          pathname,
+          queryParamsCount: params.size,
+          userAgent,
+          referrer,
+          ip,
+          score: 99,
+          action: "forbid",
+          reasons: ["known_bad_bot"],
+        });
+      }
       logBlockedRequest(hostname, pathname, userAgent);
       return new NextResponse("Forbidden", { status: 403 });
     }
@@ -86,7 +133,52 @@ export function middleware(req: NextRequest) {
       return new NextResponse("Forbidden", { status: 403 });
     }
 
-    if (onAgentsHost && pathname.startsWith("/products") && !hasSessionCookie(req)) {
+    if (onShopHost && isPublicCatalogueListingPath(pathname)) {
+      const catalogAssessment = assessCatalogTraffic({
+        pathname,
+        searchParams: params,
+        userAgent,
+        referrer,
+        ip,
+        hasSessionCookie: hasSession,
+        isTrustedAutomation: isSearchBot || isInternalAutomation,
+        isKnownBadBot: isBlockedCrawlerUserAgent(userAgent),
+      });
+
+      if (catalogAssessment.score > 0 || catalogAssessment.action !== "allow") {
+        logSuspiciousCatalogTraffic({
+          hostname,
+          pathname,
+          queryParamsCount: params.size,
+          userAgent,
+          referrer,
+          ip,
+          score: catalogAssessment.score,
+          action: catalogAssessment.action,
+          reasons: catalogAssessment.reasons,
+        });
+      }
+
+      if (catalogAssessment.action === "forbid") {
+        return new NextResponse("Forbidden", { status: 403 });
+      }
+
+      if (catalogAssessment.action === "rate_limit") {
+        return new NextResponse("Too Many Requests", {
+          status: 429,
+          headers: {
+            "Retry-After": "120",
+          },
+        });
+      }
+
+      if (catalogAssessment.action === "cache") {
+        response.headers.set("Cache-Control", "public, max-age=0, s-maxage=120, stale-while-revalidate=600");
+        response.headers.set("X-Betech-Catalog-Guard", "medium-risk-cache");
+      }
+    }
+
+    if (onAgentsHost && pathname.startsWith("/products") && !hasSession) {
       if (isCrawler) {
         logBlockedRequest(hostname, pathname, userAgent);
         return new NextResponse("Forbidden", { status: 403 });
@@ -119,7 +211,7 @@ export function middleware(req: NextRequest) {
       pathname.startsWith("/api/admin") ||
       pathname.startsWith("/api/pos-commissions")
     ) {
-      if (!hasSessionCookie(req)) {
+      if (!hasSession) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
     }
