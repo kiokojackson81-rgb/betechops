@@ -47,9 +47,10 @@ import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { buildPayrollRow } from "@/lib/adminPayroll";
 import { applyCanonicalPayrollOverrides } from "@/lib/payrollCanonical";
 import { payrollEligibleUserWhere } from "@/lib/payrollEligibility";
-import { getUnpricedDailySalesForCurrentPeriod } from "@/lib/marketingUnpricedSales";
+import { getUnpricedDailySalesForRange } from "@/lib/marketingUnpricedSales";
 import { groupMarketingUnpricedSales } from "@/lib/unpricedReceiptGrouping";
 import { buildStaffAttendantWhere } from "@/lib/staffUsers";
+import { computeEffectiveCashAdvanceRemainingBalance } from "@/lib/wellness";
 
 export const dynamic = "force-dynamic";
 
@@ -99,6 +100,19 @@ type LinkGroup = {
   title: string;
   tone: string;
   items: LinkItem[];
+};
+
+type DashboardRangePreset = "today" | "yesterday" | "trading_period" | "custom";
+
+type DashboardRange = {
+  preset: DashboardRangePreset;
+  start: Date;
+  end: Date;
+  label: string;
+  shortLabel: string;
+  description: string;
+  fromValue: string;
+  toValue: string;
 };
 
 const shellCard =
@@ -157,8 +171,12 @@ function dayKey(date: Date) {
   return format(date, "yyyy-MM-dd");
 }
 
-function buildTrendSeed() {
-  const today = new Date();
+function toInputDate(date: Date) {
+  return format(date, "yyyy-MM-dd");
+}
+
+function buildTrendSeed(anchorDate: Date) {
+  const today = anchorDate;
   return Array.from({ length: 7 }, (_, index) => {
     const date = subDays(today, 6 - index);
     return {
@@ -174,6 +192,81 @@ function buildTrendSeed() {
       marketplaceOrders: 0,
     } satisfies TrendPoint;
   });
+}
+
+function resolveDashboardRange(params?: {
+  range?: string;
+  from?: string;
+  to?: string;
+}): DashboardRange {
+  const now = new Date();
+  const tradingPeriod = getTradingPeriodFor(now);
+  const normalizedPreset = String(params?.range || "trading_period").trim().toLowerCase();
+
+  const parseDate = (value?: string, fallback?: Date, boundary: "start" | "end" = "start") => {
+    if (!value) return fallback ?? now;
+    const parsed = new Date(`${value}T00:00:00.000`);
+    if (Number.isNaN(parsed.getTime())) return fallback ?? now;
+    if (boundary === "end") {
+      return endOfDay(parsed);
+    }
+    return startOfDay(parsed);
+  };
+
+  if (normalizedPreset === "today") {
+    return {
+      preset: "today",
+      start: startOfDay(now),
+      end: endOfDay(now),
+      label: `Today · ${format(now, "dd MMM yyyy")}`,
+      shortLabel: "Today",
+      description: "Same-day operations only.",
+      fromValue: toInputDate(now),
+      toValue: toInputDate(now),
+    };
+  }
+
+  if (normalizedPreset === "yesterday") {
+    const date = subDays(now, 1);
+    return {
+      preset: "yesterday",
+      start: startOfDay(date),
+      end: endOfDay(date),
+      label: `Yesterday · ${format(date, "dd MMM yyyy")}`,
+      shortLabel: "Yesterday",
+      description: "Previous day performance and pending carry-forward.",
+      fromValue: toInputDate(date),
+      toValue: toInputDate(date),
+    };
+  }
+
+  if (normalizedPreset === "custom") {
+    const start = parseDate(params?.from, tradingPeriod.start, "start");
+    const end = parseDate(params?.to, tradingPeriod.end, "end");
+    const safeStart = start.getTime() <= end.getTime() ? start : startOfDay(end);
+    const safeEnd = end.getTime() >= start.getTime() ? end : endOfDay(start);
+    return {
+      preset: "custom",
+      start: safeStart,
+      end: safeEnd,
+      label: `${format(safeStart, "dd MMM yyyy")} – ${format(safeEnd, "dd MMM yyyy")}`,
+      shortLabel: "Custom range",
+      description: "Manual window for audits and management review.",
+      fromValue: toInputDate(safeStart),
+      toValue: toInputDate(safeEnd),
+    };
+  }
+
+  return {
+    preset: "trading_period",
+    start: tradingPeriod.start,
+    end: tradingPeriod.end,
+    label: tradingPeriod.label,
+    shortLabel: "Trading period",
+    description: "Current 25th-to-24th trading period.",
+    fromValue: toInputDate(tradingPeriod.start),
+    toValue: toInputDate(tradingPeriod.end),
+  };
 }
 
 function scoreTone(value: number) {
@@ -633,13 +726,18 @@ function LinkGroupCard({ title, tone, items }: LinkGroup) {
   );
 }
 
-async function getDashboardData() {
+async function getDashboardData(range: DashboardRange) {
   const now = new Date();
   const todayStart = startOfDay(now);
   const todayEnd = endOfDay(now);
-  const tradingPeriod = getTradingPeriodFor(now);
-  const trendStart = startOfDay(subDays(now, 6));
-  const periodBounds = { start: tradingPeriod.start, end: tradingPeriod.end };
+  const trendStart = startOfDay(subDays(range.end, 6));
+  const periodBounds = { start: range.start, end: range.end };
+  const payrollPeriod = {
+    ...getTradingPeriodFor(range.end),
+    start: range.start,
+    end: range.end,
+    label: range.label,
+  };
 
   const [
     productsCount,
@@ -650,6 +748,7 @@ async function getDashboardData() {
     pendingJumiaOrders,
     pendingLeaveCount,
     pendingCashAdvanceCount,
+    pendingAdjustmentRequestCount,
     pendingPosCommissionCandidates,
     posReceiptsPeriod,
     posReceiptsToday,
@@ -674,6 +773,9 @@ async function getDashboardData() {
     openAgentOrders,
     periodAgentOrders,
     lowStockItems,
+    pendingPosOrdersRecent,
+    recentPendingJumiaOrders,
+    approvedAdvances,
   ] = await Promise.all([
     prisma.product.count(),
     prisma.shop.count(),
@@ -692,12 +794,13 @@ async function getDashboardData() {
     prisma.jumiaOrder.count({ where: { status: "PENDING" } }).catch(() => 0),
     prisma.leaveRequest.count({ where: { status: "PENDING" } }),
     prisma.cashAdvance.count({ where: { status: "PENDING" } }),
+    (prisma as any).payrollAdjustmentRequest.count({ where: { status: "PENDING" } }),
     prisma.commissionEarning.findMany({
       where: { status: { in: ["PENDING", "PENDING_APPROVAL"] } },
       select: { id: true, basis: true, calcDetail: true },
     }),
     prisma.receipt.findMany({
-      where: { generatedAt: { gte: tradingPeriod.start, lte: tradingPeriod.end } },
+      where: { generatedAt: { gte: range.start, lte: range.end } },
       select: {
         generatedAt: true,
         totals: true,
@@ -724,7 +827,7 @@ async function getDashboardData() {
       },
     }),
     prisma.marketingReceipt.findMany({
-      where: { createdAt: { gte: tradingPeriod.start, lte: tradingPeriod.end } },
+      where: { createdAt: { gte: range.start, lte: range.end } },
       select: { createdAt: true, sellingTotal: true, buyingTotal: true, paymentMethod: true },
     }),
     prisma.marketingReceipt.findMany({
@@ -736,7 +839,7 @@ async function getDashboardData() {
       select: { createdAt: true, sellingTotal: true, buyingTotal: true, paymentMethod: true },
     }),
     prisma.supportReceipt.findMany({
-      where: { createdAt: { gte: tradingPeriod.start, lte: tradingPeriod.end } },
+      where: { createdAt: { gte: range.start, lte: range.end } },
       select: { createdAt: true, sellingTotal: true, buyingTotal: true, paymentMethod: true },
     }),
     prisma.supportReceipt.findMany({
@@ -748,7 +851,7 @@ async function getDashboardData() {
       select: { createdAt: true, sellingTotal: true, buyingTotal: true, paymentMethod: true },
     }),
     prisma.marketplaceOrder.findMany({
-      where: { orderedAt: { gte: tradingPeriod.start, lte: tradingPeriod.end } },
+      where: { orderedAt: { gte: range.start, lte: range.end } },
       select: { orderedAt: true, platform: true, sellingPrice: true, profit: true, status: true },
     }),
     prisma.marketplaceOrder.findMany({
@@ -766,7 +869,7 @@ async function getDashboardData() {
     }),
     prisma.dailyReport.count({
       where: {
-        date: { gte: todayStart, lte: todayEnd },
+        date: { gte: range.start, lte: range.end },
         user: { is: { AND: [buildStaffAttendantWhere(), { isActive: true }] } },
       },
     }),
@@ -799,8 +902,8 @@ async function getDashboardData() {
     safeLoad(
       () =>
         getAdminAgentSales({
-          start: format(tradingPeriod.start, "yyyy-MM-dd"),
-          end: format(tradingPeriod.end, "yyyy-MM-dd"),
+          start: format(range.start, "yyyy-MM-dd"),
+          end: format(range.end, "yyyy-MM-dd"),
         }),
       [] as Awaited<ReturnType<typeof getAdminAgentSales>>,
     ),
@@ -810,10 +913,55 @@ async function getDashboardData() {
       take: 8,
       select: { id: true, name: true, stockQuantity: true, minStockLevel: true },
     }),
+    prisma.order.findMany({
+      where: { status: { in: ["PENDING", "PROCESSING"] } },
+      orderBy: [{ updatedAt: "desc" }],
+      take: 80,
+      select: {
+        id: true,
+        orderNumber: true,
+        customerName: true,
+        customerPhone: true,
+        totalAmount: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    }),
+    prisma.jumiaOrder.findMany({
+      where: { status: "PENDING" },
+      orderBy: [{ updatedAtJumia: "desc" }, { updatedAt: "desc" }],
+      take: 8,
+      select: {
+        id: true,
+        number: true,
+        status: true,
+        pendingSince: true,
+        totalAmountLocalCurrency: true,
+        totalAmountLocalValue: true,
+        updatedAtJumia: true,
+        createdAtJumia: true,
+        shopName: true,
+      },
+    }).catch(() => []),
+    prisma.cashAdvance.findMany({
+      where: { status: "APPROVED" },
+      orderBy: [{ approvedAt: "desc" }],
+      take: 12,
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        installments: {
+          orderBy: [{ dueDate: "asc" }],
+          take: 6,
+        },
+      },
+    }),
   ]);
 
   const payrollRows = await Promise.all(
-    payrollUsers.map(async (user) => applyCanonicalPayrollOverrides(await buildPayrollRow(user, tradingPeriod), tradingPeriod)),
+    payrollUsers.map(async (user) =>
+      applyCanonicalPayrollOverrides(await buildPayrollRow(user, payrollPeriod), payrollPeriod),
+    ),
   );
   const payrollTotals = payrollRows.reduce(
     (acc, row) => {
@@ -901,7 +1049,7 @@ async function getDashboardData() {
     supportToday +
     marketplaceToday;
 
-  const trendMap = new Map(buildTrendSeed().map((point) => [point.key, point]));
+  const trendMap = new Map(buildTrendSeed(range.end).map((point) => [point.key, point]));
   for (const receipt of posTrendReceipts) {
     const key = dayKey(receipt.generatedAt);
     const point = trendMap.get(key);
@@ -958,6 +1106,27 @@ async function getDashboardData() {
   );
   const webOrderValue = periodWebsiteOrders.reduce((sum, order) => sum + toNumber(order.total), 0);
   const pendingWebOrderValue = pendingWebsiteOrders.reduce((sum, order) => sum + toNumber(order.total), 0);
+
+  const pendingPosOrders = pendingPosOrdersRecent.filter((order) =>
+    shouldShowPendingWorkItem({
+      status: order.status,
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+      periodStart: periodBounds.start,
+      periodEnd: periodBounds.end,
+    }),
+  );
+  const periodPendingPosOrders = pendingPosOrders.filter((order) =>
+    wasCreatedOrUpdatedInPeriod(order.createdAt, order.updatedAt, periodBounds),
+  );
+  const carriedPendingPosOrders = pendingPosOrders.filter((order) =>
+    isCarriedForwardPendingItem({
+      status: order.status,
+      createdAt: order.createdAt,
+      periodStart: periodBounds.start,
+    }) && !wasCreatedOrUpdatedInPeriod(order.createdAt, order.updatedAt, periodBounds),
+  );
+  const pendingPosOrderValue = pendingPosOrders.reduce((sum, order) => sum + toNumber(order.totalAmount), 0);
 
   const openQuoteRows = quoteRows.filter((row) =>
     isOpenQuotationStatus(row.status) &&
@@ -1083,12 +1252,17 @@ async function getDashboardData() {
     if (point) point.agentOrders += 1;
   }
   for (const quote of quoteRows) {
-    const key = dayKey(new Date(quote.updatedAt));
+    const updatedAt = safeDate(quote.updatedAt);
+    if (!updatedAt) continue;
+    const key = dayKey(updatedAt);
     const point = trendMap.get(key);
     if (point && isOpenQuotationStatus(quote.status)) point.quotations += 1;
   }
 
-  const unpricedSales = await getUnpricedDailySalesForCurrentPeriod();
+  const unpricedSales = await getUnpricedDailySalesForRange({
+    startDate: range.start,
+    endDate: range.end,
+  });
   const groupedUnpriced = groupMarketingUnpricedSales(unpricedSales);
   const pricingQueue = groupedUnpriced.reduce(
     (acc, sale) => {
@@ -1109,9 +1283,49 @@ async function getDashboardData() {
     return item.basis === "product_flat" || detail?.reason === "pos_product_commission";
   }).length;
 
+  const recentPendingPosRows = queueSort(
+    pendingPosOrders.map((order) => ({
+      id: order.id,
+      orderRef: order.orderNumber,
+      customerName: order.customerName,
+      phone: order.customerPhone,
+      amount: toNumber(order.totalAmount),
+      status: String(order.status).replace(/_/g, " ").toLowerCase(),
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+      href: `/admin/customers?q=${encodeURIComponent(order.orderNumber || order.customerName)}`,
+      carriedForward: isCarriedForwardPendingItem({
+        status: order.status,
+        createdAt: order.createdAt,
+        periodStart: periodBounds.start,
+      }),
+    })),
+  ).slice(0, 6);
+
+  const jumiaPendingRows = recentPendingJumiaOrders.map((order) => ({
+    id: order.id,
+    orderRef: order.number ? `Jumia #${order.number}` : order.id,
+    shopName: order.shopName || "Jumia shop",
+    amount: toNumber(order.totalAmountLocalValue),
+    status: String(order.status || "PENDING").toLowerCase(),
+    createdAt: order.createdAtJumia ?? null,
+    updatedAt: order.updatedAtJumia ?? null,
+    pendingSince: order.pendingSince,
+  }));
+
+  const outstandingAdvances = approvedAdvances
+    .map((advance) => ({
+      ...advance,
+      remainingBalance: computeEffectiveCashAdvanceRemainingBalance(advance),
+    }))
+    .filter((advance) => Number(advance.remainingBalance ?? 0) > 0)
+    .sort((left, right) => Number(right.remainingBalance ?? 0) - Number(left.remainingBalance ?? 0))
+    .slice(0, 6);
+
   return {
-    periodLabel: tradingPeriod.label,
-    periodStart: tradingPeriod.start,
+    range,
+    periodLabel: range.label,
+    periodStart: range.start,
     todaySales,
     combinedPeriodSales,
     combinedPeriodProfit,
@@ -1124,6 +1338,7 @@ async function getDashboardData() {
       pendingJumiaOrders,
       pendingLeave: pendingLeaveCount,
       pendingCashAdvance: pendingCashAdvanceCount,
+      pendingAdjustments: pendingAdjustmentRequestCount,
       pendingPosCommission: pendingPosCommissionCount,
     },
     livePulse: {
@@ -1131,6 +1346,7 @@ async function getDashboardData() {
       currentPeriodSales: combinedPeriodSales,
       currentPeriodProfit: combinedPeriodProfit,
       posReceipts: posReceiptsPeriod.length + marketingReceiptsPeriod.length + supportReceiptsPeriod.length,
+      posOrders: pendingPosOrders.length,
       webOrders: pendingWebsiteOrders.length,
       agentOrders: visibleOpenAgentOrders.length,
       quotations: openQuoteRows.length,
@@ -1174,7 +1390,7 @@ async function getDashboardData() {
       pos: {
         count: posReceiptsPeriod.length,
         sales: posPeriod.sales,
-        pending: pendingPodRows.length,
+        pending: pendingPosOrders.length + pendingPodRows.length,
       },
       web: {
         count: pendingWebsiteOrders.length,
@@ -1225,6 +1441,7 @@ async function getDashboardData() {
           periodStart: periodBounds.start,
         }),
       })),
+      posOrders: recentPendingPosRows,
     },
     staffSnapshot: {
       topSalesPerformer: topSalesRow,
@@ -1233,6 +1450,10 @@ async function getDashboardData() {
       submittedDailyReports: dailyReportsToday,
       missingDailyReports: Math.max(0, activeStaffCount - dailyReportsToday),
       payrollDue: payrollTotals.net,
+      staffRows: payrollRows
+        .slice()
+        .sort((left, right) => Number(right.totalSales ?? 0) - Number(left.totalSales ?? 0))
+        .slice(0, 6),
     },
     lowStockItems,
     queues: {
@@ -1248,18 +1469,49 @@ async function getDashboardData() {
       pod: pendingPodRows,
     },
     pendingBreakdown: {
+      pos: { current: periodPendingPosOrders.length, carried: carriedPendingPosOrders.length },
       web: { current: periodWebsiteOrders.length, carried: carriedWebsiteOrders.length },
       agent: { current: periodOpenAgentOrders.length, carried: carriedOpenAgentOrders.length },
       quotations: { current: periodQuoteRows.length, carried: carriedQuoteRows.length },
       pod: { current: periodPendingPodRows.length, carried: carriedPendingPodRows.length },
     },
     pricingQueue,
+    pricingRows: groupedUnpriced.slice(0, 6),
+    jumia: {
+      pendingRows: jumiaPendingRows,
+    },
+    wellness: {
+      pendingLeaveCount,
+      pendingCashAdvanceCount,
+      pendingAdjustmentRequestCount,
+      outstandingAdvanceBalance: outstandingAdvances.reduce(
+        (sum, advance) => sum + Number(advance.remainingBalance ?? 0),
+        0,
+      ),
+      outstandingAdvances,
+    },
     trends: Array.from(trendMap.values()),
   };
 }
 
-export default async function AdminOverviewPage() {
-  const dashboard = await getDashboardData();
+export default async function AdminOverviewPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ range?: string; from?: string; to?: string }>;
+}) {
+  const params = (await searchParams) || {};
+  const range = resolveDashboardRange(params);
+  const dashboard = await getDashboardData(range);
+
+  const buildRangeHref = (preset: DashboardRangePreset) => {
+    const next = new URLSearchParams();
+    next.set("range", preset);
+    if (preset === "custom") {
+      next.set("from", range.fromValue);
+      next.set("to", range.toValue);
+    }
+    return `/admin${next.toString() ? `?${next.toString()}` : ""}`;
+  };
 
   const quickLinks: LinkGroup[] = [
     {
@@ -1317,6 +1569,9 @@ export default async function AdminOverviewPage() {
               <a href="#executive" className={sectionPill}>Executive</a>
               <a href="#sales" className={sectionPill}>Sales</a>
               <a href="#operations" className={sectionPill}>Operations</a>
+              <a href="#marketplace" className={sectionPill}>Jumia</a>
+              <a href="#pricing" className={sectionPill}>Pricing</a>
+              <a href="#wellness" className={sectionPill}>Wellness</a>
               <a href="#people" className={sectionPill}>People</a>
               <a href="#resources" className={sectionPill}>Resources</a>
             </div>
@@ -1331,16 +1586,68 @@ export default async function AdminOverviewPage() {
               </p>
             </div>
 
+            <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                {([
+                  ["today", "Today"],
+                  ["yesterday", "Yesterday"],
+                  ["trading_period", "Trading period"],
+                ] as const).map(([preset, label]) => (
+                  <Link
+                    key={preset}
+                    href={buildRangeHref(preset)}
+                    className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition ${
+                      range.preset === preset
+                        ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-100"
+                        : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20"
+                    }`}
+                  >
+                    {label}
+                  </Link>
+                ))}
+                <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-100">
+                  {dashboard.range.shortLabel}
+                </span>
+              </div>
+              <form className="mt-3 flex flex-wrap items-end gap-3" action="/admin" method="get">
+                <input type="hidden" name="range" value="custom" />
+                <label className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                  From
+                  <input
+                    type="date"
+                    name="from"
+                    defaultValue={dashboard.range.fromValue}
+                    className="mt-2 block rounded-xl border border-white/10 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 outline-none"
+                  />
+                </label>
+                <label className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                  To
+                  <input
+                    type="date"
+                    name="to"
+                    defaultValue={dashboard.range.toValue}
+                    className="mt-2 block rounded-xl border border-white/10 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 outline-none"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-semibold text-slate-100 transition hover:border-emerald-400/40 hover:text-emerald-100"
+                >
+                  Apply range
+                </button>
+              </form>
+            </div>
+
             <div className="grid gap-4 md:grid-cols-3">
               <div className="rounded-[24px] border border-emerald-500/20 bg-emerald-500/10 p-5">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-200">Trading period</div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-200">Active range</div>
                 <div className="mt-2 text-2xl font-semibold text-white">{dashboard.periodLabel}</div>
-                <div className="mt-2 text-sm text-emerald-100/80">Auto-refreshing control view for the live business day.</div>
+                <div className="mt-2 text-sm text-emerald-100/80">{dashboard.range.description}</div>
               </div>
               <div className="rounded-[24px] border border-cyan-500/20 bg-cyan-500/10 p-5">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-200">Today recorded sales</div>
-                <div className={`mt-2 text-2xl font-semibold text-white ${sensitiveClass}`}>{formatKES(dashboard.todaySales)}</div>
-                <div className="mt-2 text-sm text-cyan-100/80">Across POS, support, marketing desk, and marketplace channels.</div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-200">Selected-range sales</div>
+                <div className={`mt-2 text-2xl font-semibold text-white ${sensitiveClass}`}>{formatKES(dashboard.combinedPeriodSales)}</div>
+                <div className="mt-2 text-sm text-cyan-100/80">Across POS, support, marketing desk, website, and marketplace channels.</div>
               </div>
               <div className="rounded-[24px] border border-fuchsia-500/20 bg-fuchsia-500/10 p-5">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-fuchsia-200">Net payroll due</div>
@@ -1401,14 +1708,15 @@ export default async function AdminOverviewPage() {
       <section className="space-y-4">
         <SectionHeader
           eyebrow="Live business pulse"
-          title="Today, current period, and pending workload"
-          description="This strip is the first management scan: what sold today, what the current period looks like, and where the active workload is building up."
+          title="Selected range, live queues, and pending workload"
+          description="This strip is the first management scan for the chosen range: what sold, what is still pending, and where operations pressure is building."
         />
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5 2xl:grid-cols-10">
-          <StatCard title="Today sales" value={formatKES(dashboard.livePulse.todaySales)} sub="Clearly labeled today-only total" icon={Wallet} />
-          <StatCard title="Current period sales" value={formatKES(dashboard.livePulse.currentPeriodSales)} sub={dashboard.periodLabel} icon={TrendingUp} accent="from-cyan-500/20 via-emerald-500/10 to-transparent" />
-          <StatCard title="Current period profit" value={formatKES(dashboard.livePulse.currentPeriodProfit)} sub="Recorded margin across major channels" icon={ChartColumnBig} accent="from-sky-500/20 via-cyan-500/10 to-transparent" />
+          <StatCard title="Today sales" value={formatKES(dashboard.livePulse.todaySales)} sub="Separate same-day pulse for quick comparison" icon={Wallet} />
+          <StatCard title="Selected range sales" value={formatKES(dashboard.livePulse.currentPeriodSales)} sub={dashboard.periodLabel} icon={TrendingUp} accent="from-cyan-500/20 via-emerald-500/10 to-transparent" />
+          <StatCard title="Selected range profit" value={formatKES(dashboard.livePulse.currentPeriodProfit)} sub="Recorded margin across major channels" icon={ChartColumnBig} accent="from-sky-500/20 via-cyan-500/10 to-transparent" />
           <StatCard title="POS receipts" value={`${dashboard.livePulse.posReceipts}`} sub="POS, marketing, and support receipts" icon={Receipt} accent="from-indigo-500/20 via-cyan-500/10 to-transparent" />
+          <StatCard title="POS orders" value={`${dashboard.livePulse.posOrders}`} sub={`Current ${dashboard.pendingBreakdown.pos.current} · Carried ${dashboard.pendingBreakdown.pos.carried}`} icon={Package} accent="from-violet-500/20 via-slate-500/10 to-transparent" />
           <StatCard title="Web orders" value={`${dashboard.livePulse.webOrders}`} sub={`Current period ${dashboard.pendingBreakdown.web.current} · Carried forward ${dashboard.pendingBreakdown.web.carried}`} icon={ShoppingBag} accent="from-emerald-500/20 via-teal-500/10 to-transparent" />
           <StatCard title="Agent orders" value={`${dashboard.livePulse.agentOrders}`} sub={`Current period ${dashboard.pendingBreakdown.agent.current} · Carried forward ${dashboard.pendingBreakdown.agent.carried}`} icon={Users} accent="from-violet-500/20 via-fuchsia-500/10 to-transparent" />
           <StatCard title="Quotations" value={`${dashboard.livePulse.quotations}`} sub={`Current period ${dashboard.pendingBreakdown.quotations.current} · Carried forward ${dashboard.pendingBreakdown.quotations.carried}`} icon={ClipboardCheck} accent="from-cyan-500/20 via-sky-500/10 to-transparent" />
@@ -1426,6 +1734,18 @@ export default async function AdminOverviewPage() {
         />
         <div className="grid gap-3">
           {queueSort([
+            ...dashboard.web.posOrders.map((order) => ({
+              id: `pos-${order.id}`,
+              badge: "POS ORDER",
+              title: `${order.customerName} · ${order.orderRef}`,
+              note: order.phone || "No phone captured",
+              amount: order.amount,
+              status: order.status,
+              createdAt: order.createdAt,
+              updatedAt: order.updatedAt,
+              href: order.href,
+              carriedForward: Boolean((order as { carriedForward?: boolean }).carriedForward),
+            })),
             ...dashboard.queues.websiteOrders.map((order) => ({
               id: `web-${order.id}`,
               badge: "WEB ORDER",
@@ -1548,7 +1868,7 @@ export default async function AdminOverviewPage() {
           description="Each revenue lane shows its live volume, value, pending pressure, and direct entry point into the operating page."
         />
         <div className="grid gap-4 xl:grid-cols-3">
-          <ControlCenterCard title="POS / Direct Sales" count={dashboard.salesActivity.pos.count} amount={dashboard.salesActivity.pos.sales} pending={dashboard.salesActivity.pos.pending} href="/admin/receipts" note="Direct POS receipts and desk-recorded sales." />
+          <ControlCenterCard title="POS / Direct Sales" count={dashboard.salesActivity.pos.count} amount={dashboard.salesActivity.pos.sales} pending={dashboard.salesActivity.pos.pending} href="/admin/receipts" note={`Receipts plus ${dashboard.livePulse.posOrders} open POS orders / POD actions.`} />
           <ControlCenterCard title="Web Orders" count={dashboard.salesActivity.web.count} amount={dashboard.salesActivity.web.sales} pending={dashboard.salesActivity.web.pending} href="/marketing/receipts?tab=web-orders" note={`Current period ${dashboard.pendingBreakdown.web.current} · Carried forward ${dashboard.pendingBreakdown.web.carried}`} />
           <ControlCenterCard title="Agent Orders" count={dashboard.salesActivity.agent.count} amount={dashboard.salesActivity.agent.sales} pending={dashboard.salesActivity.agent.pending} href="/marketing/agent-orders" note={`Current period ${dashboard.pendingBreakdown.agent.current} · Carried forward ${dashboard.pendingBreakdown.agent.carried}`} />
           <ControlCenterCard title="Quotations" count={dashboard.salesActivity.quotations.count} amount={dashboard.salesActivity.quotations.sales} pending={dashboard.salesActivity.quotations.pending} href="/marketing/receipts?tab=quotations" note={`Current period ${dashboard.pendingBreakdown.quotations.current} · Carried forward ${dashboard.pendingBreakdown.quotations.carried}`} />
@@ -1653,6 +1973,187 @@ export default async function AdminOverviewPage() {
               {!dashboard.web.recentOrders.length && !dashboard.web.quoteRequests.length ? (
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-400">No open website order or quotation activity right now.</div>
               ) : null}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="marketplace" className="grid gap-6 xl:grid-cols-2">
+        <div className="space-y-4">
+          <SectionHeader
+            eyebrow="Marketplace watch"
+            title="Jumia and marketplace pressure"
+            description="Keep Jumia visible as its own operating lane so pending vendor work, account backlog, and current-period revenue are never buried under other sales channels."
+          />
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard title="Jumia sales" value={formatKES(dashboard.marketplace.jumiaSales)} sub="Selected range Jumia revenue" icon={Store} accent="from-amber-500/20 via-orange-500/10 to-transparent" />
+            <StatCard title="Kilimall sales" value={formatKES(dashboard.marketplace.kilimallSales)} sub="Selected range Kilimall revenue" icon={Store} accent="from-yellow-500/20 via-amber-500/10 to-transparent" />
+            <StatCard title="Marketplace orders" value={`${dashboard.salesActivity.marketplace.count}`} sub="Selected range synced marketplace orders" icon={ShoppingBag} accent="from-cyan-500/20 via-sky-500/10 to-transparent" />
+            <StatCard title="Jumia pending" value={`${dashboard.counts.pendingJumiaOrders}`} sub="Live vendor queue still unresolved" icon={CircleAlert} accent="from-rose-500/20 via-orange-500/10 to-transparent" />
+          </div>
+          <div className={`${subtleCard} p-5`}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-lg font-semibold text-white">Recent Jumia pending orders</div>
+                <div className="mt-1 text-sm text-slate-400">Most recent vendor-side pending orders so admin can see where marketplace activity is stalling.</div>
+              </div>
+              <Link href="/admin/orders" className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-emerald-400/30 hover:text-emerald-200">Open orders</Link>
+            </div>
+            <div className="mt-4 grid gap-3">
+              {dashboard.jumia.pendingRows.length ? dashboard.jumia.pendingRows.map((row) => (
+                <QueueRow
+                  key={row.id}
+                  badge="JUMIA"
+                  title={`${row.orderRef} · ${row.shopName}`}
+                  note={row.pendingSince ? `Pending since ${row.pendingSince}` : "Awaiting vendor progression"}
+                  amount={row.amount}
+                  status={row.status}
+                  age={ageLabel(row.updatedAt || row.createdAt)}
+                  href={`/admin/orders?q=${encodeURIComponent(row.orderRef)}`}
+                />
+              )) : (
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-400">No recent Jumia pending orders were returned from the local sync tables.</div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div id="wellness" className="space-y-4">
+          <SectionHeader
+            eyebrow="Wellness and payroll risk"
+            title="Leave, cash advance, and HR action board"
+            description="Operational health is part of the company view. These cards keep pending people actions, outstanding advances, and payroll-side requests visible to admin."
+          />
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard title="Leave approvals" value={`${dashboard.wellness.pendingLeaveCount}`} sub="Pending leave requests" icon={HeartHandshake} accent="from-emerald-500/20 via-teal-500/10 to-transparent" />
+            <StatCard title="Cash advances" value={`${dashboard.wellness.pendingCashAdvanceCount}`} sub="New cash advance approvals pending" icon={Wallet} accent="from-fuchsia-500/20 via-violet-500/10 to-transparent" />
+            <StatCard title="Payroll adjustments" value={`${dashboard.wellness.pendingAdjustmentRequestCount}`} sub="Pending deduction / adjustment reviews" icon={TriangleAlert} accent="from-amber-500/20 via-orange-500/10 to-transparent" />
+            <StatCard title="Outstanding advances" value={formatKES(dashboard.wellness.outstandingAdvanceBalance)} sub="Approved balances still unrecovered" icon={Briefcase} accent="from-rose-500/20 via-orange-500/10 to-transparent" />
+          </div>
+          <div className={`${subtleCard} p-5`}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-lg font-semibold text-white">Outstanding cash advances</div>
+                <div className="mt-1 text-sm text-slate-400">Largest approved balances still sitting on the books.</div>
+              </div>
+              <Link href="/admin/wellness" className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-emerald-400/30 hover:text-emerald-200">Open wellness</Link>
+            </div>
+            <div className="mt-4 grid gap-3">
+              {dashboard.wellness.outstandingAdvances.length ? dashboard.wellness.outstandingAdvances.map((advance) => (
+                <QueueRow
+                  key={advance.id}
+                  badge="ADVANCE"
+                  title={advance.user?.name || advance.user?.email || "Staff member"}
+                  note={advance.reason || "Cash advance still outstanding"}
+                  amount={advance.remainingBalance}
+                  status="outstanding"
+                  age={ageLabel(advance.approvedAt || advance.createdAt)}
+                  href="/admin/wellness"
+                />
+              )) : (
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-400">No outstanding approved cash advances right now.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="pricing" className="grid gap-6 xl:grid-cols-2">
+        <div className="space-y-4">
+          <SectionHeader
+            eyebrow="Pricing control"
+            title="Unpriced receipts and POS risk"
+            description="This block is for receipts that still lack buying prices or cost completion. It protects margin, staff commissions, and reporting accuracy."
+          />
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard title="Unpriced receipts" value={`${dashboard.pricingQueue.receipts}`} sub="Grouped receipts still blocked by missing cost" icon={RefreshCcw} accent="from-amber-500/20 via-orange-500/10 to-transparent" />
+            <StatCard title="Items pending cost" value={`${dashboard.pricingQueue.items}`} sub="Individual line items still not costed" icon={Boxes} accent="from-rose-500/20 via-orange-500/10 to-transparent" />
+            <StatCard title="Support queue" value={`${dashboard.pricingQueue.support}`} sub="Support receipts waiting for buying price" icon={ShieldCheck} accent="from-cyan-500/20 via-sky-500/10 to-transparent" />
+            <StatCard title="Low stock items" value={`${dashboard.counts.lowStock}`} sub="Products at or below the minimum level" icon={Package} accent="from-violet-500/20 via-fuchsia-500/10 to-transparent" />
+          </div>
+          <div className={`${subtleCard} p-5`}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-lg font-semibold text-white">Unpriced receipt queue</div>
+                <div className="mt-1 text-sm text-slate-400">Selected-range pricing backlog grouped by receipt so admin can clear the queue faster.</div>
+              </div>
+              <Link href="/admin/marketing-report" className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-emerald-400/30 hover:text-emerald-200">Open pricing desk</Link>
+            </div>
+            <div className="mt-4 grid gap-3">
+              {dashboard.pricingRows.length ? dashboard.pricingRows.map((row) => (
+                <QueueRow
+                  key={row.id}
+                  badge={row.source === "support" ? "SUPPORT" : "POS"}
+                  title={row.productName}
+                  note={`${row.attendantName} · ${row.receiptNumber || "No receipt number"}`}
+                  amount={row.sellingPrice}
+                  status={`${row.itemsPending || 1} item${Number(row.itemsPending || 1) === 1 ? "" : "s"} pending`}
+                  age={ageLabel(row.saleDate)}
+                  href="/admin/marketing-report"
+                />
+              )) : (
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-400">No unpriced receipts found for the selected range.</div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <SectionHeader
+            eyebrow="Staff scoreboard"
+            title="Sales, commission, and salary leaders"
+            description="A compact people table so admin can compare staff output, commission exposure, and projected net pay without opening payroll first."
+          />
+          <div className={`${subtleCard} overflow-hidden`}>
+            <div className="grid grid-cols-[minmax(0,1.2fr)_120px_140px_140px] gap-3 border-b border-white/10 px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+              <div>Staff</div>
+              <div>Sales</div>
+              <div>Commission</div>
+              <div>Net Pay</div>
+            </div>
+            {dashboard.staffSnapshot.staffRows.length ? dashboard.staffSnapshot.staffRows.map((row) => (
+              <Link
+                key={row.attendantId}
+                href={`/admin/attendants/${encodeURIComponent(row.attendantId)}/payroll`}
+                className="grid grid-cols-[minmax(0,1.2fr)_120px_140px_140px] gap-3 border-b border-white/10 px-5 py-4 text-sm transition hover:bg-white/[0.03] last:border-b-0"
+              >
+                <div className="min-w-0">
+                  <div className="truncate font-semibold text-white">{row.name || row.email || "Staff member"}</div>
+                  <div className="truncate text-xs text-slate-500">{row.attendantCategory || "Staff"}</div>
+                </div>
+                <div className={`text-slate-200 ${sensitiveClass}`}>{formatCompactKES(Number(row.totalSales ?? 0))}</div>
+                <div className={`text-slate-200 ${sensitiveClass}`}>{formatCompactKES(Number(row.commissionTotal ?? 0))}</div>
+                <div className={`text-slate-200 ${sensitiveClass}`}>{formatCompactKES(Number(row.netPay ?? 0))}</div>
+              </Link>
+            )) : (
+              <div className="px-5 py-6 text-sm text-slate-400">No payroll-linked staff data found for the selected range.</div>
+            )}
+          </div>
+
+          <div className={`${subtleCard} p-5`}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-lg font-semibold text-white">Open POS orders</div>
+                <div className="mt-1 text-sm text-slate-400">Pending and processing local POS orders that still need action or conversion into completed receipts.</div>
+              </div>
+              <Link href="/admin/customers" className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-emerald-400/30 hover:text-emerald-200">Open customer desk</Link>
+            </div>
+            <div className="mt-4 grid gap-3">
+              {dashboard.web.posOrders.length ? dashboard.web.posOrders.map((row) => (
+                <QueueRow
+                  key={row.id}
+                  badge="POS ORDER"
+                  title={`${row.customerName} · ${row.orderRef}`}
+                  note={row.phone || "No phone captured"}
+                  amount={row.amount}
+                  status={row.status}
+                  age={ageLabel(row.updatedAt)}
+                  href={row.href}
+                  carriedForward={Boolean((row as { carriedForward?: boolean }).carriedForward)}
+                />
+              )) : (
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-400">No open POS orders match the selected range.</div>
+              )}
             </div>
           </div>
         </div>
@@ -1771,9 +2272,9 @@ export default async function AdminOverviewPage() {
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
           <StatCard title="Top sales performer" value={dashboard.staffSnapshot.topSalesPerformer?.name || "No data"} sub={dashboard.staffSnapshot.topSalesPerformer ? formatKES(Number(dashboard.staffSnapshot.topSalesPerformer.totalSales ?? 0)) : "Waiting for linked sales"} icon={TrendingUp} accent="from-cyan-500/20 via-sky-500/10 to-transparent" />
           <StatCard title="Top commission" value={dashboard.staffSnapshot.topCommissionPerformer?.name || "No data"} sub={dashboard.staffSnapshot.topCommissionPerformer ? formatKES(Number(dashboard.staffSnapshot.topCommissionPerformer.commissionTotal ?? 0)) : "Waiting for commission summary"} icon={BadgeDollarSign} accent="from-emerald-500/20 via-lime-500/10 to-transparent" />
-          <StatCard title="Active staff today" value={`${dashboard.staffSnapshot.activeStaffToday}`} sub="Filtered to real attendants/staff only" icon={Users} accent="from-fuchsia-500/20 via-violet-500/10 to-transparent" />
-          <StatCard title="Submitted daily reports" value={`${dashboard.staffSnapshot.submittedDailyReports}`} sub="Daily reports received today" icon={ClipboardCheck} accent="from-emerald-500/20 via-teal-500/10 to-transparent" />
-          <StatCard title="Missing daily reports" value={`${dashboard.staffSnapshot.missingDailyReports}`} sub="Expected staff still missing a report today" icon={TriangleAlert} accent="from-amber-500/20 via-orange-500/10 to-transparent" />
+          <StatCard title="Active staff" value={`${dashboard.staffSnapshot.activeStaffToday}`} sub="Filtered to real attendants/staff only" icon={Users} accent="from-fuchsia-500/20 via-violet-500/10 to-transparent" />
+          <StatCard title="Submitted daily reports" value={`${dashboard.staffSnapshot.submittedDailyReports}`} sub={`Reports received in ${dashboard.range.shortLabel.toLowerCase()}`} icon={ClipboardCheck} accent="from-emerald-500/20 via-teal-500/10 to-transparent" />
+          <StatCard title="Missing daily reports" value={`${dashboard.staffSnapshot.missingDailyReports}`} sub="Expected active staff still missing a report" icon={TriangleAlert} accent="from-amber-500/20 via-orange-500/10 to-transparent" />
           <StatCard title="Payroll due" value={formatKES(dashboard.staffSnapshot.payrollDue)} sub="Current net payroll exposure" icon={Briefcase} accent="from-indigo-500/20 via-sky-500/10 to-transparent" />
         </div>
 

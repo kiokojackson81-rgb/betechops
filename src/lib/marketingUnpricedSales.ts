@@ -27,6 +27,11 @@ export type UnpricedSale = {
   itemsTotal?: number;
 };
 
+type UnpricedRangeInput = {
+  startDate: Date;
+  endDate: Date;
+};
+
 type LinkedReceiptOrderItem = {
   name: string;
   productId: string | null;
@@ -66,8 +71,10 @@ function normalizeProductName(value: string | null | undefined) {
     .trim();
 }
 
-export async function getUnpricedDailySalesForCurrentPeriod(): Promise<UnpricedSale[]> {
-  const { startDate, endDate } = await getCurrentTradingPeriodFor(nowInNairobi());
+export async function getUnpricedDailySalesForRange({
+  startDate,
+  endDate,
+}: UnpricedRangeInput): Promise<UnpricedSale[]> {
   const [dailyReportSales, supportReceipts] = await Promise.all([
     prisma.dailySale.findMany({
       where: {
@@ -338,4 +345,9 @@ export async function getUnpricedDailySalesForCurrentPeriod(): Promise<UnpricedS
   const filteredSupportSales = supportSales.filter((s) => (s.receiptTotal ?? 0) > 0);
 
   return [...marketingSales, ...filteredSupportSales];
+}
+
+export async function getUnpricedDailySalesForCurrentPeriod(): Promise<UnpricedSale[]> {
+  const { startDate, endDate } = await getCurrentTradingPeriodFor(nowInNairobi());
+  return getUnpricedDailySalesForRange({ startDate, endDate });
 }
