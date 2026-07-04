@@ -311,15 +311,17 @@ function StatCard({
   sub,
   icon: Icon,
   accent = "from-emerald-500/20 via-cyan-500/10 to-transparent",
+  href,
 }: {
   title: string;
   value: string;
   sub: string;
   icon: LucideIcon;
   accent?: string;
+  href?: string;
 }) {
-  return (
-    <div className={`relative overflow-hidden rounded-[26px] border border-white/10 bg-slate-950/80 p-5`}>
+  const content = (
+    <>
       <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${accent}`} />
       <div className="relative flex items-start justify-between gap-4">
         <div className="space-y-2">
@@ -327,12 +329,25 @@ function StatCard({
           <div className={`text-2xl font-semibold text-white ${sensitiveClass}`}>{value}</div>
           <div className="text-sm text-slate-400">{sub}</div>
         </div>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-emerald-200">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-emerald-200 transition group-hover:border-emerald-400/30 group-hover:text-emerald-100">
           <Icon className="h-5 w-5" />
         </div>
       </div>
-    </div>
+    </>
   );
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className="group relative overflow-hidden rounded-[26px] border border-white/10 bg-slate-950/80 p-5 transition hover:border-emerald-400/30 hover:bg-slate-950"
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  return <div className="relative overflow-hidden rounded-[26px] border border-white/10 bg-slate-950/80 p-5">{content}</div>;
 }
 
 function ChannelCard({
@@ -1985,6 +2000,20 @@ export default async function AdminOverviewPage({
     return `/admin${next.toString() ? `?${next.toString()}` : ""}`;
   };
 
+  const withDashboardRange = (href: string, options?: { includeCustomerSource?: boolean }) => {
+    if (!href.startsWith("/")) return href;
+    const [hrefWithoutHash, hash = ""] = href.split("#");
+    const [pathname, rawQuery = ""] = hrefWithoutHash.split("?");
+    const next = new URLSearchParams(rawQuery);
+    if (!next.has("range")) next.set("range", range.preset);
+    if (!next.has("from")) next.set("from", range.fromValue);
+    if (!next.has("to")) next.set("to", range.toValue);
+    if (options?.includeCustomerSource && customerSourceFilter !== "all" && !next.has("customerSource")) {
+      next.set("customerSource", customerSourceFilter);
+    }
+    return `${pathname}${next.toString() ? `?${next.toString()}` : ""}${hash ? `#${hash}` : ""}`;
+  };
+
   const filteredCustomerHotspots = dashboard.customers.hotspots.filter((item) => {
     if (customerSourceFilter === "all") return true;
     if (customerSourceFilter === "voice") return item.sources.has("Voice");
@@ -2000,41 +2029,41 @@ export default async function AdminOverviewPage({
       title: "Core operations",
       tone: "Run the floor",
       items: [
-        { href: "/admin/orders", label: "Orders", meta: "Dispatch, pack, payment, and order status flow" },
-        { href: "/admin/receipts", label: "Receipts", meta: "POS receipts, PDFs, downloads, and direct-sale history" },
-        { href: "/admin/communications/voice", label: "Voice calls", meta: "Live incoming calls, agent availability, and missed-call follow-up" },
-        { href: "/admin/pending-pricing", label: "Pending pricing", meta: "Clear missing buying prices and unblock profits" },
-        { href: "/admin/returns", label: "Returns", meta: "Pickup, receive, approve, and resolve return cases" },
+        { href: withDashboardRange("/admin/orders"), label: "Orders", meta: "Dispatch, pack, payment, and order status flow" },
+        { href: withDashboardRange("/admin/receipts"), label: "Receipts", meta: "POS receipts, PDFs, downloads, and direct-sale history" },
+        { href: withDashboardRange("/admin/communications/voice"), label: "Voice calls", meta: "Live incoming calls, agent availability, and missed-call follow-up" },
+        { href: withDashboardRange("/admin/pending-pricing"), label: "Pending pricing", meta: "Clear missing buying prices and unblock profits" },
+        { href: withDashboardRange("/admin/returns"), label: "Returns", meta: "Pickup, receive, approve, and resolve return cases" },
       ],
     },
     {
       title: "Sales and growth",
       tone: "Grow revenue",
       items: [
-        { href: "/admin/marketing-report", label: "Marketing report", meta: "Daily desk sales, profitability, and manual pricing queue" },
-        { href: "/admin/online/summary", label: "Online summary", meta: "Marketplace performance, accounts, and divided views" },
-        { href: "/admin/online/performance", label: "Online performance", meta: "Capture week profit and monitor channel outcomes" },
-        { href: "/admin/support-report", label: "Support report", meta: "Support desk sales, receipts, and battery work" },
+        { href: withDashboardRange("/admin/marketing-report"), label: "Marketing report", meta: "Daily desk sales, profitability, and manual pricing queue" },
+        { href: withDashboardRange("/admin/online/summary"), label: "Online summary", meta: "Marketplace performance, accounts, and divided views" },
+        { href: withDashboardRange("/admin/online/performance"), label: "Online performance", meta: "Capture week profit and monitor channel outcomes" },
+        { href: withDashboardRange("/admin/support-report"), label: "Support report", meta: "Support desk sales, receipts, and battery work" },
       ],
     },
     {
       title: "People and payroll",
       tone: "Run the team",
       items: [
-        { href: "/admin/attendants", label: "Attendants", meta: "Edit staff, comp plans, payroll pages, and profiles" },
-        { href: "/admin/payroll", label: "Payroll", meta: "Current trading-period pay, deductions, and payouts" },
-        { href: "/admin/wellness", label: "Wellness", meta: "Leave, cash advances, and deduction follow-up" },
-        { href: "/admin/users", label: "Users", meta: "User accounts, roles, passwords, and access control" },
+        { href: withDashboardRange("/admin/attendants"), label: "Attendants", meta: "Edit staff, comp plans, payroll pages, and profiles" },
+        { href: withDashboardRange("/admin/payroll"), label: "Payroll", meta: "Current trading-period pay, deductions, and payouts" },
+        { href: withDashboardRange("/admin/wellness"), label: "Wellness", meta: "Leave, cash advances, and deduction follow-up" },
+        { href: withDashboardRange("/admin/users"), label: "Users", meta: "User accounts, roles, passwords, and access control" },
       ],
     },
     {
       title: "Inventory and control",
       tone: "Keep systems clean",
       items: [
-        { href: "/admin/pos-management", label: "POS management", meta: "Catalogue, commissions, warranties, and product cleanup" },
-        { href: "/admin/shops", label: "Shops", meta: "Branches, assignments, credentials, and ownership" },
-        { href: "/admin/settings", label: "Settings", meta: "System controls, API credentials, and config" },
-        { href: "/admin/health-checks", label: "Health checks", meta: "Service health, database readiness, and diagnostics" },
+        { href: withDashboardRange("/admin/pos-management"), label: "POS management", meta: "Catalogue, commissions, warranties, and product cleanup" },
+        { href: withDashboardRange("/admin/shops"), label: "Shops", meta: "Branches, assignments, credentials, and ownership" },
+        { href: withDashboardRange("/admin/settings"), label: "Settings", meta: "System controls, API credentials, and config" },
+        { href: withDashboardRange("/admin/health-checks"), label: "Health checks", meta: "Service health, database readiness, and diagnostics" },
       ],
     },
   ];
@@ -2156,7 +2185,7 @@ export default async function AdminOverviewPage({
                 title="Manual pricing queue"
                 value={`${dashboard.pricingQueue.receipts}`}
                 note={`${dashboard.pricingQueue.items} items still need buying price attention.`}
-                href="/admin/marketing-report"
+                href={withDashboardRange("/admin/marketing-report")}
                 icon={CircleAlert}
                 danger={dashboard.pricingQueue.receipts > 0}
               />
@@ -2164,7 +2193,7 @@ export default async function AdminOverviewPage({
                 title="POS commission approvals"
                 value={`${dashboard.counts.pendingPosCommission}`}
                 note="Release or reject staff commission requests from POS catalogue sales."
-                href="/admin/pos-management"
+                href={withDashboardRange("/admin/pos-management")}
                 icon={BadgeDollarSign}
                 danger={dashboard.counts.pendingPosCommission > 0}
               />
@@ -2172,7 +2201,7 @@ export default async function AdminOverviewPage({
                 title="Wellness approvals"
                 value={`${dashboard.counts.pendingLeave + dashboard.counts.pendingCashAdvance}`}
                 note={`${dashboard.counts.pendingLeave} leave requests and ${dashboard.counts.pendingCashAdvance} cash advances pending.`}
-                href="/admin/wellness"
+                href={withDashboardRange("/admin/wellness")}
                 icon={HeartHandshake}
                 danger={dashboard.counts.pendingLeave + dashboard.counts.pendingCashAdvance > 0}
               />
@@ -2180,7 +2209,7 @@ export default async function AdminOverviewPage({
                 title="Low stock risk"
                 value={`${dashboard.counts.lowStock}`}
                 note="Products at or below minimum stock level need attention."
-                href="/admin/pos-management"
+                href={withDashboardRange("/admin/pos-management")}
                 icon={Package}
                 danger={dashboard.counts.lowStock > 0}
               />
@@ -2196,17 +2225,23 @@ export default async function AdminOverviewPage({
           description="This strip is the first management scan for the chosen range: what sold, what is still pending, and where operations pressure is building."
         />
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5 2xl:grid-cols-10">
-          <StatCard title="Today sales" value={formatKES(dashboard.livePulse.todaySales)} sub="Separate same-day pulse for quick comparison" icon={Wallet} />
-          <StatCard title="Selected range sales" value={formatKES(dashboard.livePulse.currentPeriodSales)} sub={dashboard.periodLabel} icon={TrendingUp} accent="from-cyan-500/20 via-emerald-500/10 to-transparent" />
-          <StatCard title="Selected range profit" value={formatKES(dashboard.livePulse.currentPeriodProfit)} sub="Recorded margin across major channels" icon={ChartColumnBig} accent="from-sky-500/20 via-cyan-500/10 to-transparent" />
-          <StatCard title="POS receipts" value={`${dashboard.livePulse.posReceipts}`} sub="POS, marketing, and support receipts" icon={Receipt} accent="from-indigo-500/20 via-cyan-500/10 to-transparent" />
-          <StatCard title="POS orders" value={`${dashboard.livePulse.posOrders}`} sub={`Current ${dashboard.pendingBreakdown.pos.current} · Carried ${dashboard.pendingBreakdown.pos.carried}`} icon={Package} accent="from-violet-500/20 via-slate-500/10 to-transparent" />
-          <StatCard title="Web orders" value={`${dashboard.livePulse.webOrders}`} sub={`Current period ${dashboard.pendingBreakdown.web.current} · Carried forward ${dashboard.pendingBreakdown.web.carried}`} icon={ShoppingBag} accent="from-emerald-500/20 via-teal-500/10 to-transparent" />
-          <StatCard title="Agent orders" value={`${dashboard.livePulse.agentOrders}`} sub={`Current period ${dashboard.pendingBreakdown.agent.current} · Carried forward ${dashboard.pendingBreakdown.agent.carried}`} icon={Users} accent="from-violet-500/20 via-fuchsia-500/10 to-transparent" />
-          <StatCard title="Quotations" value={`${dashboard.livePulse.quotations}`} sub={`Current period ${dashboard.pendingBreakdown.quotations.current} · Carried forward ${dashboard.pendingBreakdown.quotations.carried}`} icon={ClipboardCheck} accent="from-cyan-500/20 via-sky-500/10 to-transparent" />
-          <StatCard title="POD pending" value={`${dashboard.livePulse.podPending}`} sub={`Current period ${dashboard.pendingBreakdown.pod.current} · Carried forward ${dashboard.pendingBreakdown.pod.carried}`} icon={Truck} accent="from-amber-500/20 via-orange-500/10 to-transparent" />
-          <StatCard title="Jumia pending" value={`${dashboard.livePulse.jumiaPending}`} sub="Marketplace pending order backlog" icon={Store} accent="from-amber-500/20 via-yellow-500/10 to-transparent" />
-          <StatCard title="Low stock items" value={`${dashboard.livePulse.lowStockItems}`} sub="Items at or below minimum stock" icon={Boxes} accent="from-rose-500/20 via-orange-500/10 to-transparent" />
+          <StatCard title="Today sales" value={formatKES(dashboard.livePulse.todaySales)} sub="Separate same-day pulse for quick comparison" icon={Wallet} href={withDashboardRange("/admin/receipts")} />
+          <StatCard title="Selected range sales" value={formatKES(dashboard.livePulse.currentPeriodSales)} sub={dashboard.periodLabel} icon={TrendingUp} accent="from-cyan-500/20 via-emerald-500/10 to-transparent" href={withDashboardRange("/admin/receipts")} />
+          <StatCard title="Selected range profit" value={formatKES(dashboard.livePulse.currentPeriodProfit)} sub="Recorded margin across major channels" icon={ChartColumnBig} accent="from-sky-500/20 via-cyan-500/10 to-transparent" href={withDashboardRange("/admin/marketing-report")} />
+          <StatCard title="POS receipts" value={`${dashboard.livePulse.posReceipts}`} sub="POS, marketing, and support receipts" icon={Receipt} accent="from-indigo-500/20 via-cyan-500/10 to-transparent" href={withDashboardRange("/admin/receipts")} />
+          <StatCard title="POS orders" value={`${dashboard.livePulse.posOrders}`} sub={`Current ${dashboard.pendingBreakdown.pos.current} · Carried ${dashboard.pendingBreakdown.pos.carried}`} icon={Package} accent="from-violet-500/20 via-slate-500/10 to-transparent" href={withDashboardRange("/marketing/receipts?tab=pos")} />
+          <StatCard title="Web orders" value={`${dashboard.livePulse.webOrders}`} sub={`Current period ${dashboard.pendingBreakdown.web.current} · Carried forward ${dashboard.pendingBreakdown.web.carried}`} icon={ShoppingBag} accent="from-emerald-500/20 via-teal-500/10 to-transparent" href={withDashboardRange("/marketing/receipts?tab=web-orders")} />
+          <StatCard title="Agent orders" value={`${dashboard.livePulse.agentOrders}`} sub={`Current period ${dashboard.pendingBreakdown.agent.current} · Carried forward ${dashboard.pendingBreakdown.agent.carried}`} icon={Users} accent="from-violet-500/20 via-fuchsia-500/10 to-transparent" href={withDashboardRange("/marketing/agent-orders")} />
+          <StatCard title="Quotations" value={`${dashboard.livePulse.quotations}`} sub={`Current period ${dashboard.pendingBreakdown.quotations.current} · Carried forward ${dashboard.pendingBreakdown.quotations.carried}`} icon={ClipboardCheck} accent="from-cyan-500/20 via-sky-500/10 to-transparent" href={withDashboardRange("/marketing/receipts?tab=quotations")} />
+          <StatCard title="POD pending" value={`${dashboard.livePulse.podPending}`} sub={`Current period ${dashboard.pendingBreakdown.pod.current} · Carried forward ${dashboard.pendingBreakdown.pod.carried}`} icon={Truck} accent="from-amber-500/20 via-orange-500/10 to-transparent" href={withDashboardRange("/marketing/receipts?tab=pos&podStatus=pending")} />
+          <StatCard title="Jumia pending" value={`${dashboard.livePulse.jumiaPending}`} sub="Marketplace pending order backlog" icon={Store} accent="from-amber-500/20 via-yellow-500/10 to-transparent" href={withDashboardRange("/admin/orders")} />
+          <StatCard title="Low stock items" value={`${dashboard.livePulse.lowStockItems}`} sub="Items at or below minimum stock" icon={Boxes} accent="from-rose-500/20 via-orange-500/10 to-transparent" href={withDashboardRange("/admin/pos-management")} />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link href={withDashboardRange("/admin/receipts")} className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-emerald-400/30 hover:text-emerald-200">POS receipts</Link>
+          <Link href={withDashboardRange("/marketing/receipts?tab=pos")} className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-emerald-400/30 hover:text-emerald-200">POS orders</Link>
+          <Link href={withDashboardRange("/admin/communications/voice?tab=recent")} className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-emerald-400/30 hover:text-emerald-200">Voice history</Link>
+          <Link href={withDashboardRange("/admin/communications/voice?tab=followups")} className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-emerald-400/30 hover:text-emerald-200">Voice follow-ups</Link>
         </div>
       </section>
 
@@ -2217,7 +2252,7 @@ export default async function AdminOverviewPage({
           description="This lane keeps call-center pressure visible from the admin homepage: answered, missed, attempted, callback link requests, and live follow-up ownership."
           action={
             <Link
-              href="/admin/communications/voice"
+              href={withDashboardRange("/admin/communications/voice")}
               className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-emerald-400/30 hover:text-emerald-200"
             >
               Open voice desk
@@ -2225,13 +2260,13 @@ export default async function AdminOverviewPage({
           }
         />
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-7">
-          <StatCard title="Voice calls" value={`${dashboard.voice.totalCalls}`} sub={`In ${dashboard.range.shortLabel.toLowerCase()}`} icon={PhoneCall} accent="from-cyan-500/20 via-sky-500/10 to-transparent" />
-          <StatCard title="Answered" value={`${dashboard.voice.answeredCalls}`} sub="Bridged or completed answered calls" icon={ClipboardCheck} accent="from-emerald-500/20 via-teal-500/10 to-transparent" />
-          <StatCard title="Missed" value={`${dashboard.voice.missedCalls}`} sub="Missed or no-answer sessions" icon={TriangleAlert} accent="from-rose-500/20 via-orange-500/10 to-transparent" />
-          <StatCard title="Attempted" value={`${dashboard.voice.attemptedCalls}`} sub="Calls that did not reach bridged talk stage" icon={RefreshCcw} accent="from-amber-500/20 via-yellow-500/10 to-transparent" />
-          <StatCard title="Open follow-ups" value={`${dashboard.voice.openFollowUps}`} sub="Voice tasks still unresolved" icon={CircleAlert} accent="from-violet-500/20 via-fuchsia-500/10 to-transparent" />
-          <StatCard title="Callback requests" value={`${dashboard.voice.requestedCallbacks}`} sub={`${dashboard.voice.openedCallbackLinks} customers opened the callback link`} icon={HeartHandshake} accent="from-emerald-500/20 via-lime-500/10 to-transparent" />
-          <StatCard title="Voice leads" value={`${dashboard.voice.callbackRequests}`} sub="Attempted-call sessions and callback records" icon={Users} accent="from-indigo-500/20 via-cyan-500/10 to-transparent" />
+          <StatCard title="Voice calls" value={`${dashboard.voice.totalCalls}`} sub={`In ${dashboard.range.shortLabel.toLowerCase()}`} icon={PhoneCall} accent="from-cyan-500/20 via-sky-500/10 to-transparent" href={withDashboardRange("/admin/communications/voice?tab=recent")} />
+          <StatCard title="Answered" value={`${dashboard.voice.answeredCalls}`} sub="Bridged or completed answered calls" icon={ClipboardCheck} accent="from-emerald-500/20 via-teal-500/10 to-transparent" href={withDashboardRange("/admin/communications/voice?tab=recent")} />
+          <StatCard title="Missed" value={`${dashboard.voice.missedCalls}`} sub="Missed or no-answer sessions" icon={TriangleAlert} accent="from-rose-500/20 via-orange-500/10 to-transparent" href={withDashboardRange("/admin/communications/voice?tab=followups&queue=missed")} />
+          <StatCard title="Attempted" value={`${dashboard.voice.attemptedCalls}`} sub="Calls that did not reach bridged talk stage" icon={RefreshCcw} accent="from-amber-500/20 via-yellow-500/10 to-transparent" href={withDashboardRange("/admin/communications/voice?tab=recent")} />
+          <StatCard title="Open follow-ups" value={`${dashboard.voice.openFollowUps}`} sub="Voice tasks still unresolved" icon={CircleAlert} accent="from-violet-500/20 via-fuchsia-500/10 to-transparent" href={withDashboardRange("/admin/communications/voice?tab=followups")} />
+          <StatCard title="Callback requests" value={`${dashboard.voice.requestedCallbacks}`} sub={`${dashboard.voice.openedCallbackLinks} customers opened the callback link`} icon={HeartHandshake} accent="from-emerald-500/20 via-lime-500/10 to-transparent" href={withDashboardRange("/admin/communications/voice?tab=followups")} />
+          <StatCard title="Voice leads" value={`${dashboard.voice.callbackRequests}`} sub="Attempted-call sessions and callback records" icon={Users} accent="from-indigo-500/20 via-cyan-500/10 to-transparent" href={withDashboardRange("/admin/communications/voice?tab=followups")} />
         </div>
         <div className="grid gap-4 xl:grid-cols-2">
           <div className={`${subtleCard} p-5`}>
@@ -2240,7 +2275,7 @@ export default async function AdminOverviewPage({
                 <div className="text-lg font-semibold text-white">Recent call outcomes</div>
                 <div className="mt-1 text-sm text-slate-400">Fast jump into the exact call review or customer profile.</div>
               </div>
-              <Link href="/admin/communications/voice?tab=recent" className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-emerald-400/30 hover:text-emerald-200">Open history</Link>
+              <Link href={withDashboardRange("/admin/communications/voice?tab=recent")} className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-emerald-400/30 hover:text-emerald-200">Open history</Link>
             </div>
             <div className="mt-4 grid gap-3">
               {dashboard.voice.recentCalls.length ? dashboard.voice.recentCalls.map((call) => (
@@ -2273,7 +2308,7 @@ export default async function AdminOverviewPage({
                 <div className="text-lg font-semibold text-white">Open voice follow-ups</div>
                 <div className="mt-1 text-sm text-slate-400">Shows the ownership trail for callbacks and unresolved voice work.</div>
               </div>
-              <Link href="/admin/communications/voice?tab=followups" className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-emerald-400/30 hover:text-emerald-200">Open follow-ups</Link>
+              <Link href={withDashboardRange("/admin/communications/voice?tab=followups")} className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-emerald-400/30 hover:text-emerald-200">Open follow-ups</Link>
             </div>
             <div className="mt-4 grid gap-3">
               {dashboard.voice.recentFollowUps.length ? dashboard.voice.recentFollowUps.map((item) => (
@@ -2309,7 +2344,7 @@ export default async function AdminOverviewPage({
               <div className="text-lg font-semibold text-white">Per-agent voice workload</div>
               <div className="mt-1 text-sm text-slate-400">Shows who is carrying missed calls, attempted-call callbacks, and unresolved voice follow-up pressure.</div>
             </div>
-            <Link href="/admin/communications/voice?tab=agents" className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-emerald-400/30 hover:text-emerald-200">Open agents</Link>
+            <Link href={withDashboardRange("/admin/communications/voice?tab=agents")} className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-emerald-400/30 hover:text-emerald-200">Open agents</Link>
           </div>
           <div className="mt-4 grid gap-4 xl:grid-cols-4">
             {dashboard.voice.agentWorkload.length ? dashboard.voice.agentWorkload.map((agent) => (
@@ -2485,12 +2520,12 @@ export default async function AdminOverviewPage({
           description="Each revenue lane shows its live volume, value, pending pressure, and direct entry point into the operating page."
         />
         <div className="grid gap-4 xl:grid-cols-3">
-          <ControlCenterCard title="POS / Direct Sales" count={dashboard.salesActivity.pos.count} amount={dashboard.salesActivity.pos.sales} pending={dashboard.salesActivity.pos.pending} href="/admin/receipts" note={`Receipts plus ${dashboard.livePulse.posOrders} open POS orders / POD actions.`} />
-          <ControlCenterCard title="Web Orders" count={dashboard.salesActivity.web.count} amount={dashboard.salesActivity.web.sales} pending={dashboard.salesActivity.web.pending} href="/marketing/receipts?tab=web-orders" note={`Current period ${dashboard.pendingBreakdown.web.current} · Carried forward ${dashboard.pendingBreakdown.web.carried}`} />
-          <ControlCenterCard title="Agent Orders" count={dashboard.salesActivity.agent.count} amount={dashboard.salesActivity.agent.sales} pending={dashboard.salesActivity.agent.pending} href="/marketing/agent-orders" note={`Current period ${dashboard.pendingBreakdown.agent.current} · Carried forward ${dashboard.pendingBreakdown.agent.carried}`} />
-          <ControlCenterCard title="Quotations" count={dashboard.salesActivity.quotations.count} amount={dashboard.salesActivity.quotations.sales} pending={dashboard.salesActivity.quotations.pending} href="/marketing/receipts?tab=quotations" note={`Current period ${dashboard.pendingBreakdown.quotations.current} · Carried forward ${dashboard.pendingBreakdown.quotations.carried}`} />
-          <ControlCenterCard title="POD Follow-up" count={dashboard.salesActivity.pod.count} amount={dashboard.salesActivity.pod.sales} pending={dashboard.salesActivity.pod.pending} href="/marketing/receipts?tab=pos&podStatus=pending" note={`Current period ${dashboard.pendingBreakdown.pod.current} · Carried forward ${dashboard.pendingBreakdown.pod.carried}`} />
-          <ControlCenterCard title="Marketplace Orders" count={dashboard.salesActivity.marketplace.count} amount={dashboard.salesActivity.marketplace.sales} pending={dashboard.salesActivity.marketplace.pending} href="/admin/online/summary" note="Jumia and Kilimall order movement." />
+          <ControlCenterCard title="POS / Direct Sales" count={dashboard.salesActivity.pos.count} amount={dashboard.salesActivity.pos.sales} pending={dashboard.salesActivity.pos.pending} href={withDashboardRange("/admin/receipts")} note={`Receipts plus ${dashboard.livePulse.posOrders} open POS orders / POD actions.`} />
+          <ControlCenterCard title="Web Orders" count={dashboard.salesActivity.web.count} amount={dashboard.salesActivity.web.sales} pending={dashboard.salesActivity.web.pending} href={withDashboardRange("/marketing/receipts?tab=web-orders")} note={`Current period ${dashboard.pendingBreakdown.web.current} · Carried forward ${dashboard.pendingBreakdown.web.carried}`} />
+          <ControlCenterCard title="Agent Orders" count={dashboard.salesActivity.agent.count} amount={dashboard.salesActivity.agent.sales} pending={dashboard.salesActivity.agent.pending} href={withDashboardRange("/marketing/agent-orders")} note={`Current period ${dashboard.pendingBreakdown.agent.current} · Carried forward ${dashboard.pendingBreakdown.agent.carried}`} />
+          <ControlCenterCard title="Quotations" count={dashboard.salesActivity.quotations.count} amount={dashboard.salesActivity.quotations.sales} pending={dashboard.salesActivity.quotations.pending} href={withDashboardRange("/marketing/receipts?tab=quotations")} note={`Current period ${dashboard.pendingBreakdown.quotations.current} · Carried forward ${dashboard.pendingBreakdown.quotations.carried}`} />
+          <ControlCenterCard title="POD Follow-up" count={dashboard.salesActivity.pod.count} amount={dashboard.salesActivity.pod.sales} pending={dashboard.salesActivity.pod.pending} href={withDashboardRange("/marketing/receipts?tab=pos&podStatus=pending")} note={`Current period ${dashboard.pendingBreakdown.pod.current} · Carried forward ${dashboard.pendingBreakdown.pod.carried}`} />
+          <ControlCenterCard title="Marketplace Orders" count={dashboard.salesActivity.marketplace.count} amount={dashboard.salesActivity.marketplace.sales} pending={dashboard.salesActivity.marketplace.pending} href={withDashboardRange("/admin/online/summary")} note="Jumia and Kilimall order movement." />
         </div>
       </section>
 
