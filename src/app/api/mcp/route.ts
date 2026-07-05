@@ -170,6 +170,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = isAuthorizedApiRequest(request.headers);
   if (!auth.ok) {
+    console.warn("[MCP request unauthorized]", {
+      hasAuthorizationHeader: Boolean(request.headers.get("authorization")),
+      userAgent: String(request.headers.get("user-agent") || ""),
+    });
     return jsonRpcError(null, -32001, "Unauthorized", 401);
   }
 
@@ -183,8 +187,16 @@ export async function POST(request: NextRequest) {
   const id = body.id ?? null;
   const method = String(body.method || "");
   const { origin } = new URL(request.url);
+  console.info("[MCP request received]", {
+    method,
+    id,
+    requestOrigin: origin,
+    userAgent: String(request.headers.get("user-agent") || ""),
+    toolName: String(body.params?.name || ""),
+  });
 
   if (method === "initialize") {
+    console.info("[MCP initialize]", { id, requestOrigin: origin });
     return jsonRpc(
       id,
       {
@@ -203,10 +215,12 @@ export async function POST(request: NextRequest) {
   }
 
   if (method === "notifications/initialized") {
+    console.info("[MCP notifications/initialized]", { id, requestOrigin: origin });
     return new NextResponse(null, { status: 202 });
   }
 
   if (method === "tools/list") {
+    console.info("[MCP tools/list]", { id, requestOrigin: origin });
     return jsonRpc(id, {
       tools: [
         {
@@ -238,6 +252,7 @@ export async function POST(request: NextRequest) {
   if (method === "tools/call") {
     const toolName = String(body.params?.name || "");
     if (toolName !== TOOL_NAME) {
+      console.warn("[MCP unknown tool]", { id, method, toolName, requestOrigin: origin });
       return jsonRpcError(id, -32602, `Unknown tool: ${toolName}`, 404);
     }
 
@@ -281,5 +296,6 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  console.warn("[MCP method not found]", { id, method, requestOrigin: origin });
   return jsonRpcError(id, -32601, `Method not found: ${method}`, 404);
 }
