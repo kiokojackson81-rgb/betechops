@@ -52,10 +52,6 @@ type RankedCatalogMatch = {
 
 const QUERY_TYPE_CATEGORY_PATTERNS = [
   {
-    matcher: ["full kit", "solar full kit", "starter solar kit", "small solar kit", "home solar kit", "home backup kit"],
-    searchTerms: ["starter solar kit", "solar full kit", "gel solar kit", "lithium solar kit", "home backup kit"],
-  },
-  {
     matcher: ["solar pump", "pump prices", "water pump"],
     searchTerms: ["solar water pump", "dc solar water pump", "ac solar water pump", "submersible pump", "surface pump"],
   },
@@ -74,6 +70,8 @@ const QUERY_TYPE_CATEGORY_PATTERNS = [
 ];
 
 const PREMIUM_KEYWORDS = ["premium", "heavy duty", "industrial", "commercial", "large", "big", "5kw", "10kw"];
+const ACCESSORY_KEYWORDS = ["cable", "clamp", "mc4", "breaker", "rail", "lug", "trunking", "conduit", "connector", "clip"];
+const KIT_KEYWORDS = ["kit", "full kit", "solar full kit"];
 
 function normalizeText(value: string) {
   return value
@@ -139,6 +137,53 @@ function buildSearchHaystacks(product: ShopProduct) {
 
 function getDeliveryInstallNotes(product: ShopProduct) {
   return compactText(product.checkoutAvailabilityMessage || product.availabilityMessage || "");
+}
+
+function normalizedCategory(product: ShopProduct) {
+  return normalizeText([product.category, product.subcategory || ""].join(" "));
+}
+
+function isAccessoryProduct(product: ShopProduct) {
+  const haystack = normalizeText(
+    [
+      product.name,
+      product.slug,
+      product.category,
+      product.subcategory || "",
+      product.brand || "",
+      ...(product.tags || []),
+      ...(product.specs || []),
+    ].join(" "),
+  );
+  return ACCESSORY_KEYWORDS.some((needle) => haystack.includes(needle));
+}
+
+function isFullKitProduct(product: ShopProduct) {
+  const category = normalizedCategory(product);
+  const haystack = normalizeText(
+    [
+      product.name,
+      product.slug,
+      product.category,
+      product.subcategory || "",
+      ...(product.tags || []),
+    ].join(" "),
+  );
+  return category.includes("solar full kits") || KIT_KEYWORDS.some((needle) => haystack.includes(needle));
+}
+
+function looksLikeSpecificKitQuery(query: string) {
+  const normalized = normalizeText(query);
+  const tokens = getNormalizedTokens(query);
+  const hasKit = KIT_KEYWORDS.some((needle) => normalized.includes(needle));
+  const hasWattage = /\b\d+\s*w\b/.test(normalized) || /\b\d+w\b/.test(collapseNormalizedText(query));
+  const hasBrandOrSpecificity = tokens.length >= 3;
+  return hasKit && hasWattage && hasBrandOrSpecificity;
+}
+
+function wantsKitResults(query: string) {
+  const normalized = normalizeText(query);
+  return KIT_KEYWORDS.some((needle) => normalized.includes(needle));
 }
 
 function countTokenMatches(queryTokens: string[], candidateTokens: string[]) {
@@ -238,6 +283,26 @@ function scoreCatalogProduct(query: string, product: ShopProduct): RankedCatalog
     score += 1.75;
     containsBoosts.push("full_token_coverage");
   }
+  if (normalizeText(product.name) === normalizedQuery) {
+    score += 7;
+    containsBoosts.push("exact_title_match");
+  }
+  if (normalizeText(product.slug) === normalizedQuery || collapseNormalizedText(product.slug) === collapsedQuery) {
+    score += 6.5;
+    containsBoosts.push("exact_slug_match");
+  }
+  if (normalizeText(product.sku || "") === normalizedQuery || collapseNormalizedText(product.sku || "") === collapsedQuery) {
+    score += 6;
+    containsBoosts.push("exact_sku_match");
+  }
+  if (wantsKitResults(query) && isFullKitProduct(product)) {
+    score += 3.75;
+    containsBoosts.push("full_kit_category_boost");
+  }
+  if (wantsKitResults(query) && isAccessoryProduct(product)) {
+    score -= 7.5;
+    containsBoosts.push("accessory_penalty_for_kit_query");
+  }
 
   const matchedFields = Object.entries(fieldScores)
     .filter(([, value]) => value > 0.25)
@@ -315,6 +380,10 @@ function isNeedBasedQuery(query: string) {
 
 function getCategoryListTerms(query: string) {
   const normalized = normalizeText(query);
+  if (looksLikeSpecificKitQuery(query)) return null;
+  if (KIT_KEYWORDS.some((needle) => normalized.includes(needle))) {
+    return ["starter solar kit", "solar full kit", "gel solar kit", "lithium solar kit", "home backup kit"];
+  }
   for (const entry of QUERY_TYPE_CATEGORY_PATTERNS) {
     if (entry.matcher.some((needle) => normalized.includes(needle))) return entry.searchTerms;
   }
