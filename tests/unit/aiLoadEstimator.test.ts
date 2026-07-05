@@ -21,6 +21,7 @@ describe("estimateNeedBasedLoad", () => {
     expect(result).not.toBeNull();
     expect(result?.runningLoadWatts).toBe(75);
     expect(result?.dailyEnergyWh).toBe(1800);
+    expect(result?.dailyEnergyKWh).toBe(1.8);
     expect(result?.recommendedSearchQuery).toBe("1KW lithium solar kit");
   });
 
@@ -29,5 +30,13 @@ describe("estimateNeedBasedLoad", () => {
     expect(result).not.toBeNull();
     expect(result?.needsSizing).toBe(true);
     expect(result?.recommendationClass).toBe("system_quote");
+  });
+
+  it("asks sizing questions for vague home requests", () => {
+    const result = estimateNeedBasedLoad("I need solar for 3 bedroom house");
+    expect(result).not.toBeNull();
+    expect(result?.needsMoreInfo).toBe(true);
+    expect(result?.questionsToAsk.length).toBeGreaterThan(0);
+    expect(result?.recommendedSearchQuery).toBe("");
   });
 });

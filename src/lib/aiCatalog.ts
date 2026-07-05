@@ -3,6 +3,7 @@ import { getShopProductHref } from "@/app/shop/storefrontPaths";
 import type { ShopProduct } from "@/app/shop/shopData";
 import { estimateNeedBasedLoad, type AiNeedEstimate, type LoadEstimateQueryType } from "@/lib/aiLoadEstimator";
 import { getProductSimilarityScore } from "@/lib/posProductSimilarity";
+import { prisma } from "@/lib/prisma";
 
 export type CatalogSearchResultItem = {
   productName: string;
@@ -18,6 +19,17 @@ export type CatalogSearchResultItem = {
   deliveryInstallNotes: string | null;
   relevanceScore: number;
   category: string;
+  recommendedScore?: number;
+};
+
+export type CatalogSalesSignals = {
+  recentSalesCount: number;
+  lastSoldAt: string | null;
+  monthlySalesCount: number;
+  totalSoldCount: number;
+  popularProduct: boolean;
+  frequentlyQuoted: boolean;
+  recommendedScore: number;
 };
 
 export type LiveCatalogSearchResponse = {
@@ -32,11 +44,16 @@ export type LiveCatalogSearchResponse = {
   alternatives: CatalogSearchResultItem[];
   estimate?: AiNeedEstimate;
   needsSizing?: boolean;
+  needsMoreInfo: boolean;
+  questionsToAsk: string[];
+  recommendationReason: string;
+  salesSignals: CatalogSalesSignals;
 };
 
 type RankedCatalogMatch = {
   product: ShopProduct;
   score: number;
+  recommendedScore?: number;
   normalizedName: string;
   coverage: number;
   debug: {
@@ -47,6 +64,8 @@ type RankedCatalogMatch = {
     exactTitleMatch: boolean;
     titleContainsQuery: boolean;
     slugContainsQuery: boolean;
+    recommendationReason?: string;
+    salesSignals?: CatalogSalesSignals;
   };
 };
 
@@ -72,6 +91,25 @@ const QUERY_TYPE_CATEGORY_PATTERNS = [
 const PREMIUM_KEYWORDS = ["premium", "heavy duty", "industrial", "commercial", "large", "big", "5kw", "10kw"];
 const ACCESSORY_KEYWORDS = ["cable", "clamp", "mc4", "breaker", "rail", "lug", "trunking", "conduit", "connector", "clip"];
 const KIT_KEYWORDS = ["kit", "full kit", "solar full kit"];
+const SYSTEM_KEYWORDS = ["system", "backup", "home solar", "lithium solar", "solar for house", "solar for home", "solar for business"];
+const INVERTER_KEYWORDS = ["inverter", "hybrid inverter"];
+const BATTERY_KEYWORDS = ["battery", "lithium battery", "gel battery"];
+const PANEL_KEYWORDS = ["panel", "solar panel"];
+const PUMP_KEYWORDS = ["pump", "borehole"];
+const ACCESSORY_SEARCH_KEYWORDS = ["solar cable", "cable", "mc4", "breaker", "clamp", "rail", "lug", "trunking", "conduit", "connector"];
+
+type CatalogQueryIntent = {
+  normalized: string;
+  wantsKit: boolean;
+  wantsSystem: boolean;
+  wantsInverter: boolean;
+  wantsBattery: boolean;
+  wantsPanel: boolean;
+  wantsPump: boolean;
+  wantsAccessories: boolean;
+  wantsHomeSolar: boolean;
+  sizeToken: string | null;
+};
 
 function normalizeText(value: string) {
   return value
@@ -144,6 +182,7 @@ function normalizedCategory(product: ShopProduct) {
 }
 
 function isAccessoryProduct(product: ShopProduct) {
+  if (isFullKitProduct(product)) return false;
   const haystack = normalizeText(
     [
       product.name,
@@ -184,6 +223,59 @@ function looksLikeSpecificKitQuery(query: string) {
 function wantsKitResults(query: string) {
   const normalized = normalizeText(query);
   return KIT_KEYWORDS.some((needle) => normalized.includes(needle));
+}
+
+function wantsAccessoryResults(query: string) {
+  const normalized = normalizeText(query);
+  return ACCESSORY_SEARCH_KEYWORDS.some((needle) => normalized.includes(needle));
+}
+
+function parseSizeToken(query: string) {
+  const normalized = normalizeText(query);
+  const match = normalized.match(/\b(\d+(?:\.\d+)?)\s*(kw|kva|w)\b/i);
+  if (!match) return null;
+  return `${match[1]}${match[2].toUpperCase()}`;
+}
+
+function getQueryIntent(query: string): CatalogQueryIntent {
+  const normalized = normalizeText(query);
+  const wantsAccessories = wantsAccessoryResults(query);
+  const wantsKit = wantsKitResults(query) || normalized.includes("lithium solar");
+  const wantsSystem = wantsKit || SYSTEM_KEYWORDS.some((needle) => normalized.includes(needle)) || /\b\d+(?:\.\d+)?\s*(kw|kva)\b/i.test(normalized);
+  return {
+    normalized,
+    wantsKit,
+    wantsSystem,
+    wantsInverter: !wantsAccessories && INVERTER_KEYWORDS.some((needle) => normalized.includes(needle)),
+    wantsBattery: !wantsAccessories && BATTERY_KEYWORDS.some((needle) => normalized.includes(needle)),
+    wantsPanel: !wantsAccessories && PANEL_KEYWORDS.some((needle) => normalized.includes(needle)),
+    wantsPump: !wantsAccessories && PUMP_KEYWORDS.some((needle) => normalized.includes(needle)),
+    wantsAccessories,
+    wantsHomeSolar: normalized.includes("home solar") || normalized.includes("for home") || normalized.includes("for house") || normalized.includes("bedroom"),
+    sizeToken: parseSizeToken(query),
+  };
+}
+
+function isInverterProduct(product: ShopProduct) {
+  return normalizedCategory(product).includes("inverter");
+}
+
+function isBatteryProduct(product: ShopProduct) {
+  const category = normalizedCategory(product);
+  return category.includes("battery") || category.includes("lithium");
+}
+
+function isPanelProduct(product: ShopProduct) {
+  return normalizedCategory(product).includes("panel");
+}
+
+function isPumpProduct(product: ShopProduct) {
+  return normalizedCategory(product).includes("pump");
+}
+
+function isSystemIntent(query: string) {
+  const intent = getQueryIntent(query);
+  return intent.wantsSystem || intent.wantsHomeSolar;
 }
 
 function countTokenMatches(queryTokens: string[], candidateTokens: string[]) {
@@ -230,6 +322,7 @@ function scoreCatalogProduct(query: string, product: ShopProduct): RankedCatalog
   const normalizedQuery = normalizeText(query);
   const collapsedQuery = collapseNormalizedText(query);
   const queryTokens = getNormalizedTokens(query);
+  const intent = getQueryIntent(query);
 
   const fieldScores = {
     title: scoreField(query, fields.title, 5.5),
@@ -295,13 +388,48 @@ function scoreCatalogProduct(query: string, product: ShopProduct): RankedCatalog
     score += 6;
     containsBoosts.push("exact_sku_match");
   }
-  if (wantsKitResults(query) && isFullKitProduct(product)) {
+  if ((intent.wantsKit || intent.wantsSystem || intent.wantsHomeSolar) && isFullKitProduct(product)) {
     score += 3.75;
     containsBoosts.push("full_kit_category_boost");
   }
-  if (wantsKitResults(query) && isAccessoryProduct(product)) {
+  if ((intent.wantsKit || intent.wantsSystem || intent.wantsHomeSolar || intent.wantsInverter || intent.wantsBattery || intent.wantsPanel || intent.wantsPump) && !intent.wantsAccessories && isAccessoryProduct(product)) {
     score -= 7.5;
-    containsBoosts.push("accessory_penalty_for_kit_query");
+    containsBoosts.push("accessory_penalty_for_non_accessory_query");
+  }
+  if (intent.wantsInverter && isInverterProduct(product)) {
+    score += 4.25;
+    containsBoosts.push("inverter_intent_boost");
+  }
+  if (intent.wantsInverter && !isInverterProduct(product) && !isAccessoryProduct(product)) {
+    score -= 2.75;
+    containsBoosts.push("non_inverter_penalty");
+  }
+  if (intent.wantsBattery && isBatteryProduct(product)) {
+    score += 4;
+    containsBoosts.push("battery_intent_boost");
+  }
+  if (intent.wantsPanel && isPanelProduct(product)) {
+    score += 4;
+    containsBoosts.push("panel_intent_boost");
+  }
+  if (intent.wantsPump && isPumpProduct(product)) {
+    score += 4;
+    containsBoosts.push("pump_intent_boost");
+  }
+  if (intent.wantsAccessories && isAccessoryProduct(product)) {
+    score += 8;
+    containsBoosts.push("accessory_intent_boost");
+  }
+  if (intent.wantsAccessories && !isAccessoryProduct(product)) {
+    score -= 10;
+    containsBoosts.push("non_accessory_penalty");
+  }
+  if (intent.sizeToken) {
+    const normalizedSize = normalizeText(intent.sizeToken);
+    if (normalizeText(product.name).includes(normalizedSize) || normalizeText(product.slug).includes(normalizedSize)) {
+      score += 3.2;
+      containsBoosts.push("size_token_match");
+    }
   }
 
   const matchedFields = Object.entries(fieldScores)
@@ -373,14 +501,68 @@ function toCatalogItem(product: ShopProduct, score: number, origin: string): Cat
 
 function isNeedBasedQuery(query: string) {
   const normalized = normalizeText(query);
-  return ["bulb", "light", "tv", "fridge", "starlink", "wifi", "router", "phone charging", "freezer", "shop backup", "cctv", "electric fence", "pump", "microwave", "washing machine"].some((needle) =>
-    normalized.includes(needle),
-  );
+  return [
+    "bulb",
+    "light",
+    "tv",
+    "fridge",
+    "starlink",
+    "wifi",
+    "router",
+    "phone charging",
+    "freezer",
+    "shop backup",
+    "cctv",
+    "electric fence",
+    "pump",
+    "microwave",
+    "washing machine",
+    "iron",
+    "bedroom",
+    "house",
+    "for my home",
+    "for home",
+    "for business",
+    "i need solar",
+    "want solar",
+  ].some((needle) => normalized.includes(needle));
 }
 
 function getCategoryListTerms(query: string) {
   const normalized = normalizeText(query);
+  const intent = getQueryIntent(query);
   if (looksLikeSpecificKitQuery(query)) return null;
+  if (intent.wantsAccessories) {
+    return ["solar cable", "pv cable", "battery cable", "mc4 connector", "solar breaker"];
+  }
+  if (intent.wantsInverter && intent.sizeToken) {
+    return [`${intent.sizeToken} hybrid inverter`, `${intent.sizeToken} inverter`];
+  }
+  if (intent.wantsBattery && intent.sizeToken) {
+    return [`${intent.sizeToken} lithium battery`, `${intent.sizeToken} battery`];
+  }
+  if (intent.wantsPanel && intent.sizeToken) {
+    return [`${intent.sizeToken} solar panel`, `${intent.sizeToken} panel`];
+  }
+  if ((intent.wantsSystem || intent.wantsKit) && intent.sizeToken) {
+    return [
+      `${intent.sizeToken} lithium solar kit`,
+      `${intent.sizeToken} solar full kit`,
+      `${intent.sizeToken} hybrid inverter`,
+    ];
+  }
+  if (intent.wantsInverter) {
+    return ["hybrid inverter", "solar inverter"];
+  }
+  if (intent.wantsBattery) {
+    return ["lithium battery", "gel battery", "solar battery"];
+  }
+  if (intent.wantsPanel) {
+    return ["solar panel", "monocrystalline solar panel", "bifacial solar panel"];
+  }
+  if (intent.wantsPump) {
+    return ["solar water pump", "dc solar water pump", "submersible pump"];
+  }
   if (KIT_KEYWORDS.some((needle) => normalized.includes(needle))) {
     return ["starter solar kit", "solar full kit", "gel solar kit", "lithium solar kit", "home backup kit"];
   }
@@ -409,6 +591,223 @@ function toSearchableProductDebug(product: ShopProduct) {
     longDescription: compactText(product.fullDescription || ""),
     imageExtractedText: compactText(product.imageExtractedText || ""),
   };
+}
+
+function emptySalesSignals(): CatalogSalesSignals {
+  return {
+    recentSalesCount: 0,
+    lastSoldAt: null,
+    monthlySalesCount: 0,
+    totalSoldCount: 0,
+    popularProduct: false,
+    frequentlyQuoted: false,
+    recommendedScore: 0,
+  };
+}
+
+function mergeSalePoint(
+  current: CatalogSalesSignals,
+  quantity: number,
+  soldAt: Date | string | null | undefined,
+  now: Date,
+) {
+  const next = { ...current };
+  const when = soldAt ? new Date(soldAt) : null;
+  const qty = Math.max(1, Number(quantity || 0));
+  next.totalSoldCount += qty;
+  if (when && !Number.isNaN(when.getTime())) {
+    const daysAgo = (now.getTime() - when.getTime()) / (1000 * 60 * 60 * 24);
+    if (daysAgo <= 30) next.monthlySalesCount += qty;
+    if (daysAgo <= 14) next.recentSalesCount += qty;
+    if (!next.lastSoldAt || when.getTime() > new Date(next.lastSoldAt).getTime()) {
+      next.lastSoldAt = when.toISOString();
+    }
+  }
+  return next;
+}
+
+async function getSalesSignalsForProducts(products: ShopProduct[]) {
+  const signalMap = new Map<string, CatalogSalesSignals>();
+  const candidateProducts = products.filter((product) => product.opsProductId);
+  for (const product of candidateProducts) {
+    signalMap.set(product.id, emptySalesSignals());
+  }
+  if (!candidateProducts.length) return signalMap;
+
+  const productIds = candidateProducts.map((product) => product.opsProductId!).filter(Boolean);
+  const productNames = candidateProducts.map((product) => product.name);
+  const now = new Date();
+
+  try {
+    const [posItems, webItems, marketingItems, supportItems] = await Promise.all([
+      prisma.orderItem.findMany({
+        where: { productId: { in: productIds } },
+        select: {
+          productId: true,
+          quantity: true,
+          order: { select: { createdAt: true } },
+        },
+      }),
+      prisma.websiteOrderItem.findMany({
+        where: {
+          OR: [
+            { productId: { in: productIds } },
+            { productName: { in: productNames } },
+          ],
+        },
+        select: {
+          productId: true,
+          productName: true,
+          quantity: true,
+          websiteOrder: { select: { createdAt: true } },
+        },
+      }),
+      prisma.marketingReceiptItem.findMany({
+        where: { productName: { in: productNames } },
+        select: { productName: true, createdAt: true },
+      }),
+      prisma.supportReceiptItem.findMany({
+        where: { productName: { in: productNames } },
+        select: { productName: true, createdAt: true },
+      }),
+    ]);
+
+    const byProductId = new Map(candidateProducts.map((product) => [product.opsProductId!, product]));
+    const byProductName = new Map(candidateProducts.map((product) => [product.name, product]));
+
+    for (const item of posItems) {
+      const product = byProductId.get(item.productId);
+      if (!product) continue;
+      signalMap.set(product.id, mergeSalePoint(signalMap.get(product.id) || emptySalesSignals(), item.quantity, item.order.createdAt, now));
+    }
+
+    for (const item of webItems) {
+      const product = (item.productId ? byProductId.get(item.productId) : null) || byProductName.get(item.productName);
+      if (!product) continue;
+      signalMap.set(product.id, mergeSalePoint(signalMap.get(product.id) || emptySalesSignals(), item.quantity, item.websiteOrder.createdAt, now));
+    }
+
+    for (const item of marketingItems) {
+      const product = byProductName.get(item.productName);
+      if (!product) continue;
+      signalMap.set(product.id, mergeSalePoint(signalMap.get(product.id) || emptySalesSignals(), 1, item.createdAt, now));
+    }
+
+    for (const item of supportItems) {
+      const product = byProductName.get(item.productName);
+      if (!product) continue;
+      signalMap.set(product.id, mergeSalePoint(signalMap.get(product.id) || emptySalesSignals(), 1, item.createdAt, now));
+    }
+
+    for (const [productId, signal] of signalMap.entries()) {
+      signalMap.set(productId, {
+        ...signal,
+        popularProduct: signal.monthlySalesCount >= 3 || signal.totalSoldCount >= 6,
+        frequentlyQuoted: signal.monthlySalesCount >= 2 || signal.totalSoldCount >= 4,
+      });
+    }
+  } catch (error) {
+    console.error("[catalog-search.sales-signals_failed]", error);
+  }
+
+  return signalMap;
+}
+
+function withRecommendedScore(
+  match: RankedCatalogMatch,
+  query: string,
+  salesSignal: CatalogSalesSignals,
+  estimate?: AiNeedEstimate | null,
+) {
+  const intent = getQueryIntent(query);
+  let recommendedScore = match.score;
+  const boosts: string[] = [];
+
+  if (match.product.stockStatus === "in_stock") {
+    recommendedScore += 2.2;
+    boosts.push("availability_in_stock");
+  } else if (match.product.stockStatus === "limited_stock") {
+    recommendedScore += 1.1;
+    boosts.push("availability_limited_stock");
+  } else if (match.product.stockStatus === "quote_only" && !intent.wantsSystem) {
+    recommendedScore -= 0.8;
+    boosts.push("quote_only_penalty");
+  }
+
+  if ((intent.wantsSystem || intent.wantsKit) && isFullKitProduct(match.product)) {
+    recommendedScore += 2.8;
+    boosts.push("system_over_accessory");
+  }
+  if ((intent.wantsSystem || intent.wantsKit) && isInverterProduct(match.product) && !isFullKitProduct(match.product)) {
+    recommendedScore -= 0.9;
+    boosts.push("inverter_after_kit_penalty");
+  }
+
+  recommendedScore += Math.min(4, salesSignal.recentSalesCount * 0.55);
+  recommendedScore += Math.min(3, salesSignal.monthlySalesCount * 0.35);
+  recommendedScore += Math.min(2.5, salesSignal.totalSoldCount * 0.15);
+  if (salesSignal.popularProduct) {
+    recommendedScore += 1.25;
+    boosts.push("popular_product");
+  }
+  if (estimate?.recommendedSystemSize) {
+    const sizeNeedle = normalizeText(estimate.recommendedSystemSize);
+    const productSizingText = normalizeText(
+      [match.product.name, match.product.slug, ...(match.product.specs || [])].join(" "),
+    );
+    if (productSizingText.includes(sizeNeedle)) {
+      recommendedScore += 4.5;
+      boosts.push("estimated_system_size_match");
+    } else if (isFullKitProduct(match.product)) {
+      recommendedScore -= 1.25;
+      boosts.push("estimated_system_size_mismatch");
+    }
+  }
+
+  return {
+    ...match,
+    recommendedScore,
+    debug: {
+      ...match.debug,
+      containsBoosts: [...match.debug.containsBoosts, ...boosts],
+      salesSignals: {
+        ...salesSignal,
+        recommendedScore: roundScore(recommendedScore),
+      },
+    },
+  };
+}
+
+function buildRecommendationReason(
+  query: string,
+  queryType: LoadEstimateQueryType,
+  match: RankedCatalogMatch | null,
+  estimate?: AiNeedEstimate | null,
+) {
+  if (!match) return "No suitable live catalog product matched this request yet.";
+  const signal = match.debug.salesSignals || emptySalesSignals();
+  const reasons: string[] = [];
+  const intent = getQueryIntent(query);
+
+  if (queryType === "need_based_recommendation" && estimate?.recommendedSystemSize) {
+    reasons.push(`best fit for the estimated ${estimate.recommendedSystemSize} solar requirement`);
+  }
+  if (match.debug.exactTitleMatch || match.debug.slugContainsQuery) {
+    reasons.push("closest exact catalog match");
+  }
+  if ((intent.wantsSystem || intent.wantsKit) && isFullKitProduct(match.product)) {
+    reasons.push("complete system ranked above accessories");
+  }
+  if (signal.recentSalesCount > 0) {
+    reasons.push(`recently sold ${signal.recentSalesCount} time${signal.recentSalesCount === 1 ? "" : "s"}`);
+  } else if (signal.monthlySalesCount > 0) {
+    reasons.push("commonly sold in recent orders");
+  }
+  if (match.product.stockStatus === "in_stock") {
+    reasons.push("currently available at shop");
+  }
+
+  return reasons.length ? reasons.join(", ") : "strongest available live catalog match for this query";
 }
 
 function buildSearchableIndexHits(products: ShopProduct[], query: string) {
@@ -460,6 +859,7 @@ function logCatalogSearch(
       slug: entry.product.slug,
       sku: entry.product.sku || null,
       score: roundScore(entry.score),
+      recommendedScore: roundScore(entry.recommendedScore ?? entry.score),
       stockStatus: entry.product.stockStatus,
       whyMatched: entry.debug.matchedFields,
       containsBoosts: entry.debug.containsBoosts,
@@ -467,6 +867,9 @@ function logCatalogSearch(
       exactTitleMatch: entry.debug.exactTitleMatch,
       titleContainsQuery: entry.debug.titleContainsQuery,
       slugContainsQuery: entry.debug.slugContainsQuery,
+      recommendationReason: entry.debug.recommendationReason || null,
+      recentSalesCount: entry.debug.salesSignals?.recentSalesCount ?? 0,
+      totalSoldCount: entry.debug.salesSignals?.totalSoldCount ?? 0,
       searchable: toSearchableProductDebug(entry.product),
     })),
     topRejected: rejected.slice(0, 10).map((entry) => ({
@@ -489,7 +892,13 @@ function logCatalogSearch(
       ? {
           runningLoadWatts: estimate.runningLoadWatts,
           dailyEnergyWh: estimate.dailyEnergyWh,
+          dailyEnergyKWh: estimate.dailyEnergyKWh,
           recommendedSearchQuery: estimate.recommendedSearchQuery,
+          recommendedSystemSize: estimate.recommendedSystemSize,
+          recommendedBatteryKWh: estimate.recommendedBatteryKWh,
+          recommendedPanelWatts: estimate.recommendedPanelWatts,
+          needsMoreInfo: estimate.needsMoreInfo,
+          questionsToAsk: estimate.questionsToAsk,
         }
       : null,
   });
@@ -508,6 +917,12 @@ function buildEmptyResponse(query: string, queryType: LoadEstimateQueryType, est
     alternatives: [],
     estimate,
     needsSizing,
+    needsMoreInfo: Boolean(estimate?.needsMoreInfo || needsSizing),
+    questionsToAsk: estimate?.questionsToAsk || [],
+    recommendationReason: estimate?.needsMoreInfo
+      ? "More sizing information is required before recommending a live catalog system."
+      : "No matching live catalog products were found yet.",
+    salesSignals: emptySalesSignals(),
   };
 }
 
@@ -533,9 +948,9 @@ function rankCategoryList(products: ShopProduct[], searchTerms: string[], query:
       .filter((match) => match.score >= 1.1)
       .sort((left, right) => {
         if (premium) {
-          return right.product.price - left.product.price || right.score - left.score;
+          return right.score - left.score || right.product.price - left.product.price;
         }
-        return left.product.price - right.product.price || right.score - left.score;
+        return right.score - left.score || left.product.price - right.product.price;
       })
       .slice(0, limit),
     rejected: scored
@@ -559,9 +974,19 @@ export async function searchLiveCatalog(input: {
   if (estimate?.needsSizing) {
     return buildEmptyResponse(query, "need_based_recommendation", estimate, true);
   }
+  if (estimate?.needsMoreInfo && !estimate.recommendedSearchQuery) {
+    return buildEmptyResponse(query, "need_based_recommendation", estimate, false);
+  }
 
   const categoryTerms = getCategoryListTerms(query);
-  const queryType: LoadEstimateQueryType = estimate ? "need_based_recommendation" : categoryTerms ? "category_list" : "single_product";
+  const normalizedQuery = normalizeText(query);
+  const queryType: LoadEstimateQueryType = estimate
+    ? "need_based_recommendation"
+    : categoryTerms
+      ? "category_list"
+      : ["solar", "system", "power"].includes(normalizedQuery)
+        ? "unclear"
+        : "single_product";
   const effectiveLimit = queryType === "category_list" ? Math.min(8, Math.max(normalizedLimit, 8)) : normalizedLimit;
   const searchQuery = estimate?.recommendedSearchQuery || (categoryTerms ? categoryTerms.join(" ") : query);
 
@@ -569,14 +994,32 @@ export async function searchLiveCatalog(input: {
     queryType === "category_list" && categoryTerms
       ? rankCategoryList(products, categoryTerms, query, effectiveLimit)
       : rankSingleProduct(products, searchQuery, effectiveLimit);
-  const rankedMatches = ranking.ranked;
+  const candidatePool = ranking.ranked.slice(0, Math.max(effectiveLimit, 12));
+  const salesSignals = await getSalesSignalsForProducts(candidatePool.map((entry) => entry.product));
+  const rankedMatches = candidatePool
+    .map((entry) => withRecommendedScore(entry, query, salesSignals.get(entry.product.id) || emptySalesSignals(), estimate || undefined))
+    .sort((left, right) => (right.recommendedScore ?? right.score) - (left.recommendedScore ?? left.score) || right.score - left.score)
+    .slice(0, effectiveLimit)
+    .map((entry) => ({
+      ...entry,
+      debug: {
+        ...entry.debug,
+        recommendationReason: buildRecommendationReason(query, queryType, entry, estimate || undefined),
+      },
+    }));
   const rejectedMatches = ranking.rejected;
 
   logCatalogSearch(query, queryType, products, rankedMatches, rejectedMatches, estimate || undefined);
 
-  const catalogItems = rankedMatches.map(({ product, score }) => toCatalogItem(product, score, input.origin));
+  const catalogItems = rankedMatches.map(({ product, score, recommendedScore }) => ({
+    ...toCatalogItem(product, score, input.origin),
+    recommendedScore: roundScore(recommendedScore ?? score),
+  }));
   const primary = catalogItems[0] ?? null;
   const alternatives = catalogItems.slice(1, 3);
+  const primaryMatch = rankedMatches[0] ?? null;
+  const primarySignals = primaryMatch?.debug.salesSignals || emptySalesSignals();
+  const recommendationReason = primaryMatch?.debug.recommendationReason || buildRecommendationReason(query, queryType, null, estimate || undefined);
 
   return {
     query,
@@ -590,5 +1033,14 @@ export async function searchLiveCatalog(input: {
     alternatives,
     estimate: estimate || undefined,
     needsSizing: Boolean(estimate?.needsSizing),
+    needsMoreInfo: Boolean(estimate?.needsMoreInfo),
+    questionsToAsk: estimate?.questionsToAsk || [],
+    recommendationReason,
+    salesSignals: primary
+      ? {
+          ...primarySignals,
+          recommendedScore: roundScore(primary.recommendedScore ?? primarySignals.recommendedScore),
+        }
+      : emptySalesSignals(),
   };
 }

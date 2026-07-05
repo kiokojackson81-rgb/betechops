@@ -16,6 +16,18 @@ type CatalogSearchApiResponse = {
   found?: boolean;
   queryType?: string;
   resultCount?: number;
+  recommendationReason?: string;
+  needsMoreInfo?: boolean;
+  questionsToAsk?: string[];
+  salesSignals?: {
+    recentSalesCount?: number;
+    lastSoldAt?: string | null;
+    monthlySalesCount?: number;
+    totalSoldCount?: number;
+    popularProduct?: boolean;
+    frequentlyQuoted?: boolean;
+    recommendedScore?: number;
+  };
   products?: Array<{
     productName?: string;
     price?: number;
@@ -109,6 +121,10 @@ function buildCatalogToolPayload(catalog: CatalogSearchApiResponse) {
     products,
     estimate: catalog.estimate ?? null,
     needsSizing: Boolean(catalog.needsSizing),
+    needsMoreInfo: Boolean(catalog.needsMoreInfo),
+    questionsToAsk: Array.isArray(catalog.questionsToAsk) ? catalog.questionsToAsk : [],
+    recommendationReason: String(catalog.recommendationReason || ""),
+    salesSignals: catalog.salesSignals ?? null,
   };
 }
 
@@ -123,6 +139,7 @@ function buildCatalogToolText(payload: ReturnType<typeof buildCatalogToolPayload
     `First: ${first.productName}`,
     `Price: KSh ${Number(first.price || 0).toLocaleString("en-KE")}`,
     `Availability: ${first.availability || "Not specified"}`,
+    payload.recommendationReason ? `Why: ${payload.recommendationReason}` : "",
     `Origin: ${payload.origin}`,
     `Catalog source: ${payload.catalogSource}`,
   ].join(" ");
@@ -155,9 +172,13 @@ function getServerPrompt() {
     "If queryType is single_product and resultCount is greater than 1 for an exact product phrase, list up to 4 matching variants immediately using productName, price, and availability. Do not ask the customer to wait.",
     "When catalog_result has products, never say: let us check, allow us a moment, we'll confirm shortly, or checking exact listing.",
     "For exact product phrase matches with multiple variants, use this style: Yes, we have {product family} options available. 1. {productName} Price: KSh {price} Availability: {availability}. Continue for up to 4 options. End with: Would you like delivery or shop pickup?",
-    "For queryType category_list: list available products from the products array in plain text with price and availability. Do not ask unnecessary clarification when products are already listed.",
-    "For queryType need_based_recommendation: explain the estimate in plain text first using runningLoadWatts, dailyEnergyWh, and assumptions, then recommend primary. If needsSizing is true, tell the customer this requires a custom quotation and transfer to human or system_quote.",
+    "For queryType category_list: use primary first, explain recommendationReason in one line, then list useful alternatives from the products array with price and availability.",
+    "For queryType need_based_recommendation: explain the estimate in plain text first using runningLoadWatts, dailyEnergyKWh, recommendedSystemSize, recommendedBatteryKWh, recommendedPanelWatts, and assumptions. Then recommend primary if available.",
+    "If needsMoreInfo is true, ask the questions from questionsToAsk instead of guessing a final quotation.",
+    "If needsSizing is true, tell the customer this requires a custom quotation and transfer to human or system_quote.",
     "If imageUrl exists and the client supports image responses, it may use it, but the text reply must remain plain text.",
+    "Always mention recommendationReason when primary exists.",
+    "If salesSignals.recentSalesCount or salesSignals.monthlySalesCount is above zero, mention that the product is recently sold or commonly chosen.",
     "If alternatives exist, mention up to two after the primary match.",
     "Never ask unnecessary clarification questions when an exact or suitable product match already exists.",
     "Only ask follow-up questions if no suitable product was found.",

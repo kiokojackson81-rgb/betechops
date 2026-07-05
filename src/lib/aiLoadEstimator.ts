@@ -1,13 +1,19 @@
-export type LoadEstimateQueryType = "single_product" | "category_list" | "need_based_recommendation";
+export type LoadEstimateQueryType = "single_product" | "category_list" | "need_based_recommendation" | "unclear";
 
 export type AiNeedEstimate = {
   runningLoadWatts: number;
   dailyEnergyWh: number;
+  dailyEnergyKWh: number;
   recommendedSearchQuery: string;
   recommendationClass: string;
   assumptions: string[];
   detectedAppliances: string[];
   needsSizing: boolean;
+  needsMoreInfo: boolean;
+  questionsToAsk: string[];
+  recommendedSystemSize: string | null;
+  recommendedBatteryKWh: number | null;
+  recommendedPanelWatts: number | null;
 };
 
 type ApplianceEstimate = {
@@ -46,6 +52,72 @@ function includesAny(value: string, needles: string[]) {
 
 function roundNumber(value: number) {
   return Math.round(value);
+}
+
+function roundToSingleDecimal(value: number) {
+  return Number(value.toFixed(1));
+}
+
+function isVagueSolarSizingRequest(normalized: string) {
+  return includesAny(normalized, [
+    "solar for ",
+    "3 bedroom",
+    "4 bedroom",
+    "bedroom house",
+    "for my home",
+    "for home",
+    "for business",
+    "for shop",
+    "backup only",
+    "full time solar",
+    "power my home",
+    "home solar",
+    "business solar",
+    "i need solar",
+    "want solar",
+  ]);
+}
+
+function buildSizingQuestions(query: string) {
+  const normalized = normalizeText(query);
+  const questions = [
+    "Is this backup only or full-time solar?",
+    "Which appliances do you want to power?",
+    "How many lights do you have?",
+    "Do you have a fridge, freezer, washing machine, microwave, pump, or iron box?",
+    "What location is the installation site?",
+    "Do you have a budget range in mind?",
+  ];
+
+  if (includesAny(normalized, ["lights", "bulbs", "tv", "fridge", "freezer", "router", "wifi", "starlink", "pump"])) {
+    return questions.filter((question) => !question.startsWith("Which appliances"));
+  }
+
+  return questions;
+}
+
+function deriveSystemSizing(dailyEnergyWh: number, runningLoadWatts: number) {
+  const dailyEnergyKWh = Number((dailyEnergyWh / 1000).toFixed(2));
+  const batteryKWh = roundToSingleDecimal(Math.max(1, dailyEnergyKWh * 1.25));
+  const panelWatts = Math.max(200, Math.ceil((dailyEnergyWh / 4.5) / 100) * 100);
+
+  let recommendedSystemSize = "1KW";
+  if (runningLoadWatts > 4500 || dailyEnergyWh > 9000) {
+    recommendedSystemSize = "8KW";
+  } else if (runningLoadWatts > 3200 || dailyEnergyWh > 6500) {
+    recommendedSystemSize = "5KW";
+  } else if (runningLoadWatts > 1800 || dailyEnergyWh > 3500) {
+    recommendedSystemSize = "3KW";
+  } else if (runningLoadWatts > 900 || dailyEnergyWh > 1800) {
+    recommendedSystemSize = "2KW";
+  }
+
+  return {
+    dailyEnergyKWh,
+    recommendedSystemSize,
+    recommendedBatteryKWh: batteryKWh,
+    recommendedPanelWatts: panelWatts,
+  };
 }
 
 function buildBulbEstimate(query: string, normalized: string): ApplianceEstimate | null {
@@ -154,6 +226,7 @@ export function estimateNeedBasedLoad(rawQuery: string): AiNeedEstimate | null {
   const query = String(rawQuery || "").trim();
   const normalized = ` ${normalizeText(query)} `;
   const estimates: ApplianceEstimate[] = [];
+  const vagueSizingRequest = isVagueSolarSizingRequest(normalized);
 
   const bulbEstimate = buildBulbEstimate(query, normalized);
   if (bulbEstimate) estimates.push(bulbEstimate);
@@ -303,7 +376,24 @@ export function estimateNeedBasedLoad(rawQuery: string): AiNeedEstimate | null {
   );
   if (electricFence) estimates.push(electricFence);
 
-  if (!estimates.length) return null;
+  if (!estimates.length) {
+    if (!vagueSizingRequest) return null;
+    return {
+      runningLoadWatts: 0,
+      dailyEnergyWh: 0,
+      dailyEnergyKWh: 0,
+      recommendedSearchQuery: "",
+      recommendationClass: "needs_more_info",
+      assumptions: ["Home or business solar sizing needs appliance details before a final system can be recommended."],
+      detectedAppliances: [],
+      needsSizing: false,
+      needsMoreInfo: true,
+      questionsToAsk: buildSizingQuestions(query),
+      recommendedSystemSize: null,
+      recommendedBatteryKWh: null,
+      recommendedPanelWatts: null,
+    };
+  }
 
   const runningLoadWatts = roundNumber(estimates.reduce((sum, item) => sum + item.runningWatts, 0));
   const dailyEnergyWh = roundNumber(estimates.reduce((sum, item) => sum + item.dailyEnergyWh, 0));
@@ -318,11 +408,15 @@ export function estimateNeedBasedLoad(rawQuery: string): AiNeedEstimate | null {
   let recommendedSearchQuery = "100W solar full kit";
   let recommendationClass = "starter_100w";
   let needsSizing = false;
+  let needsMoreInfo = false;
+  let questionsToAsk: string[] = [];
 
   if (hasPump || normalized.includes("full house") || (hasMicrowave && hasFridge && hasPump)) {
     recommendedSearchQuery = "";
     recommendationClass = "system_quote";
     needsSizing = true;
+    needsMoreInfo = true;
+    questionsToAsk = buildSizingQuestions(query);
     assumptions.push("Heavy-duty or pump-based request should be sized by a human solar specialist");
   } else if (hasFridge && (hasFreezer || hasWashingMachine)) {
     recommendedSearchQuery = "5KW lithium solar kit";
@@ -353,21 +447,40 @@ export function estimateNeedBasedLoad(rawQuery: string): AiNeedEstimate | null {
     recommendationClass = "lithium_5kw";
   }
 
+  if (vagueSizingRequest && detectedAppliances.length < 2) {
+    needsMoreInfo = true;
+    questionsToAsk = buildSizingQuestions(query);
+    assumptions.push("A final home or business system size still depends on the appliances and whether the customer wants backup-only or full-time solar.");
+  }
+
+  const derivedSizing = deriveSystemSizing(dailyEnergyWh, runningLoadWatts);
+
   console.info("[AI need estimate]", {
     rawQuery: query,
     detectedAppliances,
     runningLoadWatts,
     dailyEnergyWh,
+    dailyEnergyKWh: derivedSizing.dailyEnergyKWh,
     recommendedSearchQuery,
+    recommendedSystemSize: derivedSizing.recommendedSystemSize,
+    recommendedBatteryKWh: derivedSizing.recommendedBatteryKWh,
+    recommendedPanelWatts: derivedSizing.recommendedPanelWatts,
+    needsMoreInfo,
   });
 
   return {
     runningLoadWatts,
     dailyEnergyWh,
+    dailyEnergyKWh: derivedSizing.dailyEnergyKWh,
     recommendedSearchQuery,
     recommendationClass,
     assumptions,
     detectedAppliances,
     needsSizing,
+    needsMoreInfo,
+    questionsToAsk,
+    recommendedSystemSize: derivedSizing.recommendedSystemSize,
+    recommendedBatteryKWh: derivedSizing.recommendedBatteryKWh,
+    recommendedPanelWatts: derivedSizing.recommendedPanelWatts,
   };
 }
