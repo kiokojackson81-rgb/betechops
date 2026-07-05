@@ -38,6 +38,16 @@ type RankedCatalogMatch = {
   product: ShopProduct;
   score: number;
   normalizedName: string;
+  coverage: number;
+  debug: {
+    matchedFields: string[];
+    fieldScores: Record<string, number>;
+    containsBoosts: string[];
+    coverage: number;
+    exactTitleMatch: boolean;
+    titleContainsQuery: boolean;
+    slugContainsQuery: boolean;
+  };
 };
 
 const QUERY_TYPE_CATEGORY_PATTERNS = [
@@ -114,6 +124,7 @@ function buildAbsoluteUrl(origin: string, pathOrUrl: string | null | undefined) 
 function buildSearchHaystacks(product: ShopProduct) {
   return {
     title: product.name,
+    slug: product.slug,
     shortDescription: product.shortDescription || "",
     longDescription: product.fullDescription || "",
     category: product.category,
@@ -175,17 +186,20 @@ function scoreCatalogProduct(query: string, product: ShopProduct): RankedCatalog
   const collapsedQuery = collapseNormalizedText(query);
   const queryTokens = getNormalizedTokens(query);
 
-  const fieldScore =
-    scoreField(query, fields.title, 5.5) +
-    scoreField(query, fields.shortDescription, 2.8) +
-    scoreField(query, fields.longDescription, 2.2) +
-    scoreField(query, fields.category, 1.5) +
-    scoreField(query, fields.subcategory, 1.2) +
-    scoreField(query, fields.brand, 1.2) +
-    scoreField(query, fields.tags, 1.3) +
-    scoreField(query, fields.sku, 1.3) +
-    scoreField(query, fields.specs, 1.8) +
-    scoreField(query, fields.imageExtractedText, 2.1);
+  const fieldScores = {
+    title: scoreField(query, fields.title, 5.5),
+    slug: scoreField(query, fields.slug, 4.4),
+    shortDescription: scoreField(query, fields.shortDescription, 2.8),
+    longDescription: scoreField(query, fields.longDescription, 2.2),
+    category: scoreField(query, fields.category, 1.5),
+    subcategory: scoreField(query, fields.subcategory, 1.2),
+    brand: scoreField(query, fields.brand, 1.2),
+    tags: scoreField(query, fields.tags, 1.3),
+    sku: scoreField(query, fields.sku, 1.3),
+    specs: scoreField(query, fields.specs, 1.8),
+    imageExtractedText: scoreField(query, fields.imageExtractedText, 2.1),
+  };
+  const fieldScore = Object.values(fieldScores).reduce((sum, value) => sum + value, 0);
 
   const allSearchText = Object.values(fields).join(" ");
   const normalizedAll = normalizeText(allSearchText);
@@ -193,15 +207,60 @@ function scoreCatalogProduct(query: string, product: ShopProduct): RankedCatalog
   const allTokens = getNormalizedTokens(allSearchText);
   const tokenMatchCount = countTokenMatches(queryTokens, allTokens);
   const coverage = queryTokens.length ? tokenMatchCount / queryTokens.length : 0;
+  const containsBoosts: string[] = [];
 
   let score = fieldScore + coverage * 3.5;
-  if (normalizedAll.includes(normalizedQuery)) score += 1.8;
-  if (collapsedAll.includes(collapsedQuery)) score += 1.6;
-  if (normalizeText(product.name).includes(normalizedQuery)) score += 1.5;
-  if (collapseNormalizedText(product.name).includes(collapsedQuery)) score += 1.4;
-  if (coverage === 1) score += 1.75;
+  if (normalizedAll.includes(normalizedQuery)) {
+    score += 1.8;
+    containsBoosts.push("all_text_contains_query");
+  }
+  if (collapsedAll.includes(collapsedQuery)) {
+    score += 1.6;
+    containsBoosts.push("collapsed_text_contains_query");
+  }
+  if (normalizeText(product.name).includes(normalizedQuery)) {
+    score += 1.5;
+    containsBoosts.push("title_contains_query");
+  }
+  if (collapseNormalizedText(product.name).includes(collapsedQuery)) {
+    score += 1.4;
+    containsBoosts.push("collapsed_title_contains_query");
+  }
+  if (normalizeText(product.slug).includes(normalizedQuery)) {
+    score += 1.35;
+    containsBoosts.push("slug_contains_query");
+  }
+  if (collapseNormalizedText(product.slug).includes(collapsedQuery)) {
+    score += 1.2;
+    containsBoosts.push("collapsed_slug_contains_query");
+  }
+  if (coverage === 1) {
+    score += 1.75;
+    containsBoosts.push("full_token_coverage");
+  }
 
-  return { product, score, normalizedName: normalizeText(product.name) };
+  const matchedFields = Object.entries(fieldScores)
+    .filter(([, value]) => value > 0.25)
+    .sort((left, right) => right[1] - left[1])
+    .map(([field, value]) => `${field}:${roundScore(value)}`);
+
+  return {
+    product,
+    score,
+    normalizedName: normalizeText(product.name),
+    coverage,
+    debug: {
+      matchedFields,
+      fieldScores: Object.fromEntries(
+        Object.entries(fieldScores).map(([field, value]) => [field, roundScore(value)]),
+      ),
+      containsBoosts,
+      coverage: roundScore(coverage),
+      exactTitleMatch: normalizeText(product.name) === normalizedQuery,
+      titleContainsQuery: normalizeText(product.name).includes(normalizedQuery),
+      slugContainsQuery: normalizeText(product.slug).includes(normalizedQuery),
+    },
+  };
 }
 
 function shouldKeepMatch(query: string, match: RankedCatalogMatch) {
@@ -267,16 +326,95 @@ function wantsPremiumOrdering(query: string) {
   return PREMIUM_KEYWORDS.some((needle) => normalized.includes(needle));
 }
 
-function logCatalogSearch(query: string, queryType: LoadEstimateQueryType, ranked: RankedCatalogMatch[], estimate?: AiNeedEstimate) {
+function toSearchableProductDebug(product: ShopProduct) {
+  return {
+    title: product.name,
+    slug: product.slug,
+    price: Number(product.price),
+    availability: product.availabilityMessage || product.stockStatus,
+    brand: product.brand || "",
+    category: product.category,
+    sku: product.sku || "",
+    tags: product.tags || [],
+    shortDescription: compactText(product.shortDescription || ""),
+    longDescription: compactText(product.fullDescription || ""),
+    imageExtractedText: compactText(product.imageExtractedText || ""),
+  };
+}
+
+function buildSearchableIndexHits(products: ShopProduct[], query: string) {
+  const normalizedQuery = normalizeText(query);
+  const collapsedQuery = collapseNormalizedText(query);
+  return products.filter((product) => {
+    const title = normalizeText(product.name);
+    const slug = normalizeText(product.slug);
+    const description = normalizeText(
+      [
+        product.shortDescription || "",
+        product.fullDescription || "",
+        product.sku || "",
+        product.imageExtractedText || "",
+      ].join(" "),
+    );
+    return (
+      title.includes(normalizedQuery) ||
+      slug.includes(normalizedQuery) ||
+      description.includes(normalizedQuery) ||
+      collapseNormalizedText(product.name).includes(collapsedQuery) ||
+      collapseNormalizedText(product.slug).includes(collapsedQuery)
+    );
+  });
+}
+
+function logCatalogSearch(
+  query: string,
+  queryType: LoadEstimateQueryType,
+  products: ShopProduct[],
+  ranked: RankedCatalogMatch[],
+  rejected: RankedCatalogMatch[],
+  estimate?: AiNeedEstimate,
+) {
+  const indexedHits = buildSearchableIndexHits(products, query);
   console.info("[catalog-search]", {
     query,
+    originalQuery: query,
     queryType,
     normalizedQuery: normalizeText(query),
-    matches: ranked.map((entry) => ({
+    indexedProductCount: products.length,
+    indexedHitCount: indexedHits.length,
+    indexedHits: indexedHits.slice(0, 10).map(toSearchableProductDebug),
+    candidateCount: products.length,
+    keptCandidateCount: ranked.length,
+    rejectedCandidateCount: rejected.length,
+    topMatches: ranked.slice(0, 10).map((entry) => ({
       name: entry.product.name,
+      slug: entry.product.slug,
       sku: entry.product.sku || null,
       score: roundScore(entry.score),
       stockStatus: entry.product.stockStatus,
+      whyMatched: entry.debug.matchedFields,
+      containsBoosts: entry.debug.containsBoosts,
+      coverage: entry.debug.coverage,
+      exactTitleMatch: entry.debug.exactTitleMatch,
+      titleContainsQuery: entry.debug.titleContainsQuery,
+      slugContainsQuery: entry.debug.slugContainsQuery,
+      searchable: toSearchableProductDebug(entry.product),
+    })),
+    topRejected: rejected.slice(0, 10).map((entry) => ({
+      name: entry.product.name,
+      slug: entry.product.slug,
+      sku: entry.product.sku || null,
+      score: roundScore(entry.score),
+      stockStatus: entry.product.stockStatus,
+      whyRejected:
+        entry.score < 1.15 && entry.coverage < 0.45
+          ? "score_below_threshold_and_low_token_coverage"
+          : entry.score < 1.15
+            ? "score_below_threshold"
+            : "token_coverage_below_threshold",
+      whyMatched: entry.debug.matchedFields,
+      containsBoosts: entry.debug.containsBoosts,
+      coverage: entry.debug.coverage,
     })),
     estimate: estimate
       ? {
@@ -305,26 +443,36 @@ function buildEmptyResponse(query: string, queryType: LoadEstimateQueryType, est
 }
 
 function rankSingleProduct(products: ShopProduct[], query: string, limit: number) {
-  return products
-    .map((product) => scoreCatalogProduct(query, product))
-    .filter((match) => shouldKeepMatch(query, match))
-    .sort((left, right) => right.score - left.score || left.product.name.localeCompare(right.product.name))
-    .slice(0, limit);
+  const scored = products.map((product) => scoreCatalogProduct(query, product));
+  return {
+    ranked: scored
+      .filter((match) => shouldKeepMatch(query, match))
+      .sort((left, right) => right.score - left.score || left.product.name.localeCompare(right.product.name))
+      .slice(0, limit),
+    rejected: scored
+      .filter((match) => !shouldKeepMatch(query, match))
+      .sort((left, right) => right.score - left.score || left.product.name.localeCompare(right.product.name)),
+  };
 }
 
 function rankCategoryList(products: ShopProduct[], searchTerms: string[], query: string, limit: number) {
   const premium = wantsPremiumOrdering(query);
   const termQuery = searchTerms.join(" ");
-  return products
-    .map((product) => scoreCatalogProduct(termQuery, product))
-    .filter((match) => match.score >= 1.1)
-    .sort((left, right) => {
-      if (premium) {
-        return right.product.price - left.product.price || right.score - left.score;
-      }
-      return left.product.price - right.product.price || right.score - left.score;
-    })
-    .slice(0, limit);
+  const scored = products.map((product) => scoreCatalogProduct(termQuery, product));
+  return {
+    ranked: scored
+      .filter((match) => match.score >= 1.1)
+      .sort((left, right) => {
+        if (premium) {
+          return right.product.price - left.product.price || right.score - left.score;
+        }
+        return left.product.price - right.product.price || right.score - left.score;
+      })
+      .slice(0, limit),
+    rejected: scored
+      .filter((match) => match.score < 1.1)
+      .sort((left, right) => right.score - left.score || left.product.name.localeCompare(right.product.name)),
+  };
 }
 
 export async function searchLiveCatalog(input: {
@@ -348,12 +496,14 @@ export async function searchLiveCatalog(input: {
   const effectiveLimit = queryType === "category_list" ? Math.min(8, Math.max(normalizedLimit, 8)) : normalizedLimit;
   const searchQuery = estimate?.recommendedSearchQuery || (categoryTerms ? categoryTerms.join(" ") : query);
 
-  const rankedMatches =
+  const ranking =
     queryType === "category_list" && categoryTerms
       ? rankCategoryList(products, categoryTerms, query, effectiveLimit)
       : rankSingleProduct(products, searchQuery, effectiveLimit);
+  const rankedMatches = ranking.ranked;
+  const rejectedMatches = ranking.rejected;
 
-  logCatalogSearch(query, queryType, rankedMatches, estimate || undefined);
+  logCatalogSearch(query, queryType, products, rankedMatches, rejectedMatches, estimate || undefined);
 
   const catalogItems = rankedMatches.map(({ product, score }) => toCatalogItem(product, score, input.origin));
   const primary = catalogItems[0] ?? null;
