@@ -112,6 +112,22 @@ function buildCatalogToolPayload(catalog: CatalogSearchApiResponse) {
   };
 }
 
+function buildCatalogToolText(payload: ReturnType<typeof buildCatalogToolPayload>) {
+  if (!payload.found || !payload.primary) {
+    return `Found 0 products for "${payload.debugQuery || ""}".`;
+  }
+
+  const first = payload.primary;
+  return [
+    `Found ${payload.resultCount} product${payload.resultCount === 1 ? "" : "s"}.`,
+    `First: ${first.productName}`,
+    `Price: KSh ${Number(first.price || 0).toLocaleString("en-KE")}`,
+    `Availability: ${first.availability || "Not specified"}`,
+    `Origin: ${payload.origin}`,
+    `Catalog source: ${payload.catalogSource}`,
+  ].join(" ");
+}
+
 function jsonRpc(id: JsonRpcRequest["id"], result: unknown, status = 200) {
   return NextResponse.json({ jsonrpc: "2.0", id: id ?? null, result }, { status });
 }
@@ -272,6 +288,7 @@ export async function POST(request: NextRequest) {
     toolPayload.debugQuery = query;
     toolPayload.debugResultCount = toolPayload.resultCount;
     toolPayload.debugFirstProduct = toolPayload.primary?.productName || "";
+    const toolText = buildCatalogToolText(toolPayload);
     console.info(
       "[MCP search_catalog_product called]",
       `queryType=${toolPayload.queryType}`,
@@ -281,12 +298,18 @@ export async function POST(request: NextRequest) {
       `firstProductName=${toolPayload.primary?.productName || ""}`,
       `firstProductPrice=${toolPayload.primary?.price ?? ""}`,
     );
+    console.info("[Returning MCP Result]", {
+      toolName,
+      query,
+      resultCount: toolPayload.resultCount,
+      responseJson: JSON.stringify(toolPayload),
+    });
 
     return jsonRpc(id, {
       content: [
         {
           type: "text",
-          text: JSON.stringify(toolPayload),
+          text: toolText,
         },
       ],
       structuredContent: {
