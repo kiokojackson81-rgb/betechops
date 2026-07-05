@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isAuthorizedApiRequest } from "@/lib/apiAuth";
 
 const TOOL_NAME = "search_catalog_product";
+const PRODUCTION_CATALOG_ORIGIN = "https://www.betech.co.ke";
 
 type JsonRpcRequest = {
   id?: string | number | null;
@@ -43,12 +44,11 @@ type CatalogSearchApiResponse = {
 };
 
 async function callLiveCatalogSearchEndpoint(input: {
-  origin: string;
   query: string;
   limit: number;
   authHeader: string;
 }) {
-  const url = new URL("/api/ai/catalog-search", input.origin);
+  const url = new URL("/api/ai/catalog-search", PRODUCTION_CATALOG_ORIGIN);
   url.searchParams.set("query", input.query);
   url.searchParams.set("limit", String(input.limit));
 
@@ -74,9 +74,14 @@ function buildCatalogToolPayload(catalog: CatalogSearchApiResponse) {
   const firstProduct = catalog.primary ?? products[0] ?? null;
   const resultCount = Math.max(Number(catalog.resultCount ?? 0), products.length, firstProduct ? 1 : 0);
   return {
+    origin: "www.betech.co.ke",
+    catalogSource: "production_live_catalog",
     found: Boolean(catalog.found ?? (resultCount > 0)),
     queryType: String(catalog.queryType || "single_product"),
     resultCount,
+    debugQuery: "",
+    debugResultCount: resultCount,
+    debugFirstProduct: firstProduct?.productName ?? "",
     primary: firstProduct
       ? {
           productName: firstProduct.productName ?? "",
@@ -241,17 +246,23 @@ export async function POST(request: NextRequest) {
     const limit = Number(args.limit || 8);
     const authHeader = String(request.headers.get("authorization") || "");
     console.info("[MCP search_catalog_product called]", `query=${query}`);
-    const catalog = await callLiveCatalogSearchEndpoint({
-      origin,
+    console.info("[MCP search_catalog_product origin]", {
+      requestOrigin: origin,
+      catalogOrigin: PRODUCTION_CATALOG_ORIGIN,
       query,
       limit,
-      authHeader,
     });
+    const catalog = await callLiveCatalogSearchEndpoint({ query, limit, authHeader });
     const toolPayload = buildCatalogToolPayload(catalog);
+    toolPayload.debugQuery = query;
+    toolPayload.debugResultCount = toolPayload.resultCount;
+    toolPayload.debugFirstProduct = toolPayload.primary?.productName || "";
     console.info(
       "[MCP search_catalog_product called]",
       `queryType=${toolPayload.queryType}`,
       `resultCount=${toolPayload.resultCount}`,
+      `origin=${toolPayload.origin}`,
+      `catalogSource=${toolPayload.catalogSource}`,
       `firstProductName=${toolPayload.primary?.productName || ""}`,
       `firstProductPrice=${toolPayload.primary?.price ?? ""}`,
     );
