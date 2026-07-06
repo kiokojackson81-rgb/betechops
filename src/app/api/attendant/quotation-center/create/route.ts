@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
   const parsed = manualQuotationCreateSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
-      { ok: false, error: "Invalid quotation draft payload.", issues: parsed.error.flatten() },
+      { ok: false, error: "Invalid quotation payload.", issues: parsed.error.flatten() },
       { status: 400 },
     );
   }
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!created) {
-      return NextResponse.json({ ok: false, error: "Unable to create quotation draft." }, { status: 500 });
+      return NextResponse.json({ ok: false, error: "Unable to save quotation." }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true, request: created });
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     const message =
       error instanceof Error && error.message.trim()
         ? error.message
-        : "Unable to create quotation draft.";
+        : "Unable to save quotation.";
     return NextResponse.json({ ok: false, error: message }, { status: 400 });
   }
 }

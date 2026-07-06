@@ -1573,7 +1573,7 @@ export async function createManualQuotation(
 ) {
   const quoteItems = sanitizeQuoteLineItems(input.quoteItems);
   if (!quoteItems.length) {
-    throw new Error("Add at least one quotation item before creating the draft.");
+    throw new Error("Add at least one quotation item before saving the quotation.");
   }
   const subtotal = calculateQuoteTotal(quoteItems);
   const paymentBreakdown = normalizeQuotePaymentBreakdown({
@@ -1589,7 +1589,7 @@ export async function createManualQuotation(
 
   const created = await createQuoteRequest({
     ...input,
-    status: input.status || (approvalPolicy.requiresApproval ? "PENDING_APPROVAL" : "DRAFT"),
+    status: input.status || (approvalPolicy.requiresApproval ? "PENDING_APPROVAL" : "QUOTED"),
     source: input.source || "MANUAL",
     requiresApproval: approvalPolicy.requiresApproval,
     quoteTitle: input.quoteTitle || input.preferredProducts || input.projectType.replace(/_/g, " "),
@@ -1620,7 +1620,7 @@ export async function createManualQuotation(
     await appendQuotationEvent({
       quoteRequestId: created.id,
       eventType: "MANUAL_CREATED",
-      eventLabel: "Manual quotation draft created",
+      eventLabel: "Manual quotation saved",
       eventDetail: created.quoteTitle || created.preferredProducts || null,
       actorUserId: actor.id,
       actorName: actor.name ?? actor.email ?? "Quotation attendant",
