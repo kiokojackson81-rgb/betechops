@@ -92,8 +92,11 @@ const DEFAULT_TERMS = [
 const DEFAULT_PREPARED_BY =
   "Prepared by Betech Solar Solutions Quotations Team. For clarifications, call 0722 151 083 or 0705 663 175.";
 
+const DEFAULT_SIMILAR_PROJECTS =
+  "View similar Betech solar projects here: https://www.tiktok.com/@betechsolarprojects";
+
 const DEFAULT_PROJECT_REFERENCES =
-  "See our recent projects and installations at www.betech.co.ke and our official marketing channels upon request.";
+  "Product catalogue: https://www.betech.co.ke/all-products\nRecent projects: https://www.tiktok.com/@betechsolarprojects";
 
 function normalizeProjectTypeLabel(projectType: QuoteProjectType) {
   return projectType.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
@@ -115,8 +118,7 @@ export function getProjectTypeDefaultSections(projectType: QuoteProjectType): Qu
       afterSalesSupport: DEFAULT_AFTER_SALES_SUPPORT,
       importantNotes: DEFAULT_IMPORTANT_NOTES,
       scopeExclusions: DEFAULT_SCOPE_EXCLUSIONS,
-      similarProjects:
-        "Betech has delivered similar solar pumping solutions for homes, farms, livestock projects, irrigation setups, and borehole installations across Kenya.",
+      similarProjects: DEFAULT_SIMILAR_PROJECTS,
       termsAndConditions: DEFAULT_TERMS,
       preparedByDetails: DEFAULT_PREPARED_BY,
       companyLegalDetails: QUOTATION_COMPANY_DETAILS,
@@ -138,8 +140,7 @@ export function getProjectTypeDefaultSections(projectType: QuoteProjectType): Qu
       afterSalesSupport: DEFAULT_AFTER_SALES_SUPPORT,
       importantNotes: DEFAULT_IMPORTANT_NOTES,
       scopeExclusions: DEFAULT_SCOPE_EXCLUSIONS,
-      similarProjects:
-        "Betech has installed solar water heaters for residential homes, rentals, hospitality properties, and institutions.",
+      similarProjects: DEFAULT_SIMILAR_PROJECTS,
       termsAndConditions: DEFAULT_TERMS,
       preparedByDetails: DEFAULT_PREPARED_BY,
       companyLegalDetails: QUOTATION_COMPANY_DETAILS,
@@ -161,8 +162,7 @@ export function getProjectTypeDefaultSections(projectType: QuoteProjectType): Qu
       afterSalesSupport: DEFAULT_AFTER_SALES_SUPPORT,
       importantNotes: DEFAULT_IMPORTANT_NOTES,
       scopeExclusions: DEFAULT_SCOPE_EXCLUSIONS,
-      similarProjects:
-        "Betech has supported borehole and high-lift pumping installations for homes, farms, schools, and commercial water users.",
+      similarProjects: DEFAULT_SIMILAR_PROJECTS,
       termsAndConditions: DEFAULT_TERMS,
       preparedByDetails: DEFAULT_PREPARED_BY,
       companyLegalDetails: QUOTATION_COMPANY_DETAILS,
@@ -184,8 +184,7 @@ export function getProjectTypeDefaultSections(projectType: QuoteProjectType): Qu
       afterSalesSupport: DEFAULT_AFTER_SALES_SUPPORT,
       importantNotes: DEFAULT_IMPORTANT_NOTES,
       scopeExclusions: DEFAULT_SCOPE_EXCLUSIONS,
-      similarProjects:
-        "Betech has supplied solar solutions for shops, offices, schools, farms, and mixed-use commercial sites across Kenya.",
+      similarProjects: DEFAULT_SIMILAR_PROJECTS,
       termsAndConditions: DEFAULT_TERMS,
       preparedByDetails: DEFAULT_PREPARED_BY,
       companyLegalDetails: QUOTATION_COMPANY_DETAILS,
@@ -207,8 +206,7 @@ export function getProjectTypeDefaultSections(projectType: QuoteProjectType): Qu
       afterSalesSupport: DEFAULT_AFTER_SALES_SUPPORT,
       importantNotes: DEFAULT_IMPORTANT_NOTES,
       scopeExclusions: DEFAULT_SCOPE_EXCLUSIONS,
-      similarProjects:
-        "Betech has delivered CCTV-plus-solar solutions for residential compounds, shops, offices, schools, and perimeter security projects.",
+      similarProjects: DEFAULT_SIMILAR_PROJECTS,
       termsAndConditions: DEFAULT_TERMS,
       preparedByDetails: DEFAULT_PREPARED_BY,
       companyLegalDetails: QUOTATION_COMPANY_DETAILS,
@@ -230,8 +228,7 @@ export function getProjectTypeDefaultSections(projectType: QuoteProjectType): Qu
       afterSalesSupport: DEFAULT_AFTER_SALES_SUPPORT,
       importantNotes: DEFAULT_IMPORTANT_NOTES,
       scopeExclusions: DEFAULT_SCOPE_EXCLUSIONS,
-      similarProjects:
-        "Betech has supported outdoor and perimeter solar lighting projects for homes, institutions, and commercial properties.",
+      similarProjects: DEFAULT_SIMILAR_PROJECTS,
       termsAndConditions: DEFAULT_TERMS,
       preparedByDetails: DEFAULT_PREPARED_BY,
       companyLegalDetails: QUOTATION_COMPANY_DETAILS,
@@ -251,8 +248,7 @@ export function getProjectTypeDefaultSections(projectType: QuoteProjectType): Qu
     afterSalesSupport: DEFAULT_AFTER_SALES_SUPPORT,
     importantNotes: DEFAULT_IMPORTANT_NOTES,
     scopeExclusions: DEFAULT_SCOPE_EXCLUSIONS,
-    similarProjects:
-      "Betech has delivered similar solar, backup power, and water-related energy projects across residential, commercial, and institutional environments.",
+    similarProjects: DEFAULT_SIMILAR_PROJECTS,
     termsAndConditions: DEFAULT_TERMS,
     preparedByDetails: DEFAULT_PREPARED_BY,
     companyLegalDetails: QUOTATION_COMPANY_DETAILS,
@@ -317,4 +313,3 @@ export function buildWarrantyAiSummary(items: StoredQuoteLineItem[], mode: Quote
 
   return lines.join("\n");
 }
-

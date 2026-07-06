@@ -30,9 +30,6 @@ export async function POST(request: NextRequest) {
   if (!guard.ok) {
     return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
   }
-  if (!guard.isElevatedActor) {
-    return NextResponse.json({ ok: false, error: "Only admin can create quotation templates." }, { status: 403 });
-  }
 
   const body = await request.json().catch(() => null);
   const parsed = quotationTemplateSchema.safeParse(body);

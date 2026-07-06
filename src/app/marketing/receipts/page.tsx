@@ -663,6 +663,7 @@ export default function MarketingReceiptsPage() {
               start={filters.start}
               end={filters.end}
               compactMode
+              allowTemplateManager
             />
           )}
         </Card>

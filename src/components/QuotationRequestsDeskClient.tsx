@@ -115,6 +115,8 @@ const INSTALLATION_OPTIONS: QuoteInstallationStatus[] = [
   "REPAIR_OR_REPLACEMENT",
 ];
 
+const CATALOG_SEARCH_MIN_CHARS = 2;
+
 function buildApiUrl(
   apiBasePath: string,
   apiQueryParams: Props["apiQueryParams"],
@@ -368,6 +370,89 @@ function createDefaultQuotationDraft(): CreateQuotationDraft {
     depositAmount: "",
     balanceAmount: "",
     followUpNotes: "",
+  };
+}
+
+function dedupeItemNames(items: Array<{ itemName: string }>) {
+  return Array.from(
+    new Set(
+      items
+        .map((item) => item.itemName.trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function summarizeSelectedProducts(items: Array<{ itemName: string }>) {
+  const itemNames = dedupeItemNames(items);
+  if (!itemNames.length) return "";
+  if (itemNames.length === 1) return itemNames[0];
+  if (itemNames.length === 2) return itemNames.join(" + ");
+  return `${itemNames[0]} + ${itemNames.length - 1} more items`;
+}
+
+function generateQuoteTitleFromItems(
+  items: Array<{ itemName: string }>,
+  projectType: QuoteProjectType,
+) {
+  const itemNames = dedupeItemNames(items);
+  if (!itemNames.length) return formatProjectType(projectType);
+  if (itemNames.length === 1) return `${itemNames[0]} quotation`;
+  return `${itemNames[0]} + ${itemNames.length - 1} more items quotation`;
+}
+
+function applyTemplateToCreateDraft(
+  current: CreateQuotationDraft,
+  nextTemplate: SerializedQuotationTemplate | null,
+) {
+  if (!nextTemplate) {
+    return { ...current, templateId: "" };
+  }
+
+  const templateItems = nextTemplate.items?.length
+    ? nextTemplate.items.map((item) =>
+        hydrateQuoteItemDraft({
+          itemName: item.itemName,
+          quantity: String(item.quantity),
+          unitPrice: String(item.unitPrice),
+          defaultWarranty: item.defaultWarranty || nextTemplate.warranty || "",
+          warranty: item.warranty || item.defaultWarranty || nextTemplate.warranty || "",
+          warrantyNotes: item.warrantyNotes || "",
+          warrantySource: item.warrantySource || "TEMPLATE_DEFAULT",
+        }),
+      )
+    : current.quoteItems;
+  const preferredProducts = summarizeSelectedProducts(templateItems);
+
+  return {
+    ...current,
+    templateId: nextTemplate.id,
+    quoteTitle: nextTemplate.templateName || generateQuoteTitleFromItems(templateItems, current.projectType),
+    quoteMessage: nextTemplate.projectOverview || nextTemplate.scopeOfWork || current.quoteMessage,
+    quoteItems: templateItems,
+    preferredProducts,
+    warrantyMode: current.warrantyMode === "PER_ITEM" ? current.warrantyMode : "PER_ITEM",
+    fullSystemWarranty: nextTemplate.warranty || current.fullSystemWarranty,
+    projectOverview: nextTemplate.projectOverview || current.projectOverview,
+    whatItCanPower: nextTemplate.whatItCanPower || current.whatItCanPower,
+    whatPriceIncludes: nextTemplate.scopeOfWork || current.whatPriceIncludes,
+    deliveryTimeline: nextTemplate.deliveryTimeline || current.deliveryTimeline,
+    installationTimeline: nextTemplate.installationTimeline || current.installationTimeline,
+    afterSalesSupport: nextTemplate.afterSalesSupport || current.afterSalesSupport,
+    termsAndConditions: nextTemplate.terms || current.termsAndConditions,
+    followUpNotes: nextTemplate.internalNotes || current.followUpNotes,
+    paymentMethod: nextTemplate.defaultPaymentMethod || current.paymentMethod,
+    paymentTerms: nextTemplate.defaultPaymentTerms || current.paymentTerms,
+    depositAmount:
+      nextTemplate.defaultDepositAmount !== null &&
+      nextTemplate.defaultDepositAmount !== undefined
+        ? String(nextTemplate.defaultDepositAmount)
+        : current.depositAmount,
+    balanceAmount:
+      nextTemplate.defaultBalanceAmount !== null &&
+      nextTemplate.defaultBalanceAmount !== undefined
+        ? String(nextTemplate.defaultBalanceAmount)
+        : current.balanceAmount,
   };
 }
 
@@ -896,6 +981,7 @@ export default function QuotationRequestsDeskClient({
   const [templates, setTemplates] = useState<SerializedQuotationTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [createSaving, setCreateSaving] = useState(false);
+  const [templateSaving, setTemplateSaving] = useState(false);
   const [draftOpening, setDraftOpening] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -1160,6 +1246,76 @@ export default function QuotationRequestsDeskClient({
     }
   }
 
+  async function handleSaveTemplateFromDraft() {
+    setTemplateSaving(true);
+    setMessage(null);
+    try {
+      const quoteItems = createDraft.quoteItems
+        .map((item) => ({
+          itemName: item.itemName.trim(),
+          quantity: parseMoneyInput(item.quantity),
+          unitPrice: parseMoneyInput(item.unitPrice),
+          defaultWarranty: item.defaultWarranty.trim() || undefined,
+          warranty: item.warranty.trim() || undefined,
+          warrantyNotes: item.warrantyNotes.trim() || undefined,
+          warrantySource: item.warrantySource,
+        }))
+        .filter((item) => item.itemName.length > 0);
+      if (!quoteItems.length) {
+        throw new Error("Add at least one quotation item before saving a template.");
+      }
+
+      const templateName =
+        createDraft.quoteTitle.trim() ||
+        generateQuoteTitleFromItems(createDraft.quoteItems, createDraft.projectType);
+
+      const response = await fetch(buildApiUrl(templateApiPath, apiQueryParams), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          templateName,
+          projectOverview: createDraft.projectOverview.trim() || createDraft.quoteMessage.trim() || undefined,
+          whatItCanPower: createDraft.whatItCanPower.trim() || undefined,
+          scopeOfWork: createDraft.whatPriceIncludes.trim() || undefined,
+          deliveryTimeline: createDraft.deliveryTimeline.trim() || undefined,
+          installationTimeline: createDraft.installationTimeline.trim() || undefined,
+          warranty:
+            (createDraft.warrantyMode === "FULL_SYSTEM"
+              ? createDraft.fullSystemWarranty
+              : createDraft.customWarranty).trim() || undefined,
+          afterSalesSupport: createDraft.afterSalesSupport.trim() || undefined,
+          terms: createDraft.termsAndConditions.trim() || undefined,
+          internalNotes: createDraft.followUpNotes.trim() || undefined,
+          defaultPaymentMethod: createDraft.paymentMethod || undefined,
+          defaultPaymentTerms: createDraft.paymentTerms,
+          defaultDepositAmount:
+            createDraft.paymentTerms === "DEPOSIT_AND_BALANCE" && createDraft.depositAmount.trim()
+              ? parseMoneyInput(createDraft.depositAmount)
+              : undefined,
+          defaultBalanceAmount:
+            createDraft.paymentTerms === "DEPOSIT_AND_BALANCE" && createDraft.balanceAmount.trim()
+              ? parseMoneyInput(createDraft.balanceAmount)
+              : undefined,
+          items: quoteItems,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Failed to save quotation template.");
+      }
+      await refreshTemplates();
+      if (data.template?.id) {
+        setCreateMode("template");
+        setCreateDraft((current) => ({ ...current, templateId: data.template.id }));
+      }
+      setMessage("Quotation template saved. You can now reuse it from prepared templates.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Failed to save quotation template.");
+    } finally {
+      setTemplateSaving(false);
+    }
+  }
+
   async function searchCatalog(
     searchQuery: string,
     options: {
@@ -1197,10 +1353,9 @@ export default function QuotationRequestsDeskClient({
   }
 
   function addCreateCatalogItem(product: CatalogQuoteProduct) {
-    setCreateDraft((current) => ({
-      ...current,
-      preferredProducts: current.preferredProducts || product.productName,
-      quoteItems: [
+    setCreateDraft((current) => {
+      const previousAutoTitle = generateQuoteTitleFromItems(current.quoteItems, current.projectType);
+      const nextItems = [
         ...current.quoteItems,
         hydrateQuoteItemDraft({
           itemName: product.productName,
@@ -1210,14 +1365,26 @@ export default function QuotationRequestsDeskClient({
           warranty: product.warranty || suggestWarrantyForItem(product.productName),
           warrantySource: "PRODUCT_DEFAULT",
         }),
-      ],
-    }));
+      ];
+      return {
+        ...current,
+        preferredProducts: summarizeSelectedProducts(nextItems),
+        quoteTitle:
+          !current.quoteTitle.trim() || current.quoteTitle.trim() === previousAutoTitle
+            ? generateQuoteTitleFromItems(nextItems, current.projectType)
+            : current.quoteTitle,
+        quoteItems: nextItems,
+      };
+    });
+    setCreateCatalogQuery("");
+    setCreateCatalogResults([]);
   }
 
   function addResponseCatalogItem(product: CatalogQuoteProduct) {
-    setFormState((current) => ({
-      ...current,
-      quoteItems: [
+    setFormState((current) => {
+      const projectType = expandedRequest?.projectType || "SOLAR_HOME_SYSTEM";
+      const previousAutoTitle = generateQuoteTitleFromItems(current.quoteItems, projectType);
+      const nextItems = [
         ...current.quoteItems,
         hydrateQuoteItemDraft({
           itemName: product.productName,
@@ -1227,8 +1394,18 @@ export default function QuotationRequestsDeskClient({
           warranty: product.warranty || suggestWarrantyForItem(product.productName),
           warrantySource: "PRODUCT_DEFAULT",
         }),
-      ],
-    }));
+      ];
+      return {
+        ...current,
+        quoteTitle:
+          !current.quoteTitle.trim() || current.quoteTitle.trim() === previousAutoTitle
+            ? generateQuoteTitleFromItems(nextItems, projectType)
+            : current.quoteTitle,
+        quoteItems: nextItems,
+      };
+    });
+    setResponseCatalogQuery("");
+    setResponseCatalogResults([]);
   }
 
   useEffect(() => {
@@ -1259,6 +1436,42 @@ export default function QuotationRequestsDeskClient({
   }, [showCreatePanel]);
 
   useEffect(() => {
+    const normalizedQuery = createCatalogQuery.trim();
+    if (normalizedQuery.length < CATALOG_SEARCH_MIN_CHARS) {
+      setCreateCatalogLoading(false);
+      setCreateCatalogResults([]);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void searchCatalog(normalizedQuery, {
+        setLoading: setCreateCatalogLoading,
+        setResults: setCreateCatalogResults,
+      });
+    }, 250);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [createCatalogQuery]);
+
+  useEffect(() => {
+    const normalizedQuery = responseCatalogQuery.trim();
+    if (normalizedQuery.length < CATALOG_SEARCH_MIN_CHARS) {
+      setResponseCatalogLoading(false);
+      setResponseCatalogResults([]);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void searchCatalog(normalizedQuery, {
+        setLoading: setResponseCatalogLoading,
+        setResults: setResponseCatalogResults,
+      });
+    }, 250);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [responseCatalogQuery]);
+
+  useEffect(() => {
     if (!showCreatePanel) return;
     setCreateDraft((current) => {
       const selectedTemplate = templates.find((template) => template.id === current.templateId) ?? null;
@@ -1285,6 +1498,26 @@ export default function QuotationRequestsDeskClient({
       };
     });
   }, [createDraft.projectType, createDraft.templateId, showCreatePanel, templates]);
+
+  useEffect(() => {
+    if (!showCreatePanel) return;
+    setCreateDraft((current) => {
+      const preferredProducts = summarizeSelectedProducts(current.quoteItems);
+      const autoTitle = generateQuoteTitleFromItems(current.quoteItems, current.projectType);
+      const shouldReplaceTitle = !current.quoteTitle.trim();
+      if (
+        current.preferredProducts === preferredProducts &&
+        (!shouldReplaceTitle || current.quoteTitle === autoTitle)
+      ) {
+        return current;
+      }
+      return {
+        ...current,
+        preferredProducts,
+        quoteTitle: shouldReplaceTitle ? autoTitle : current.quoteTitle,
+      };
+    });
+  }, [createDraft.projectType, createDraft.quoteItems, showCreatePanel]);
 
   useEffect(() => {
     setQuery(q);
@@ -1569,7 +1802,7 @@ export default function QuotationRequestsDeskClient({
               <div className="flex flex-wrap gap-2">
                 {([
                   ["manual", "Manual quotation"],
-                  ["template", "From prepared template"],
+                  ["template", "Use saved template"],
                 ] as Array<[CreateQuotationMode, string]>).map(([mode, label]) => (
                   <button
                     key={mode}
@@ -1639,6 +1872,7 @@ export default function QuotationRequestsDeskClient({
                 <input
                   value={createDraft.quoteTitle}
                   onChange={(event) => setCreateDraft((current) => ({ ...current, quoteTitle: event.target.value }))}
+                  placeholder="Auto-generated from selected quotation items"
                   className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
                 />
               </label>
@@ -1664,42 +1898,7 @@ export default function QuotationRequestsDeskClient({
                     onChange={(event) => {
                       const nextId = event.target.value;
                       const nextTemplate = templates.find((template) => template.id === nextId) ?? null;
-                      setCreateDraft((current) => ({
-                        ...current,
-                        templateId: nextId,
-                        quoteTitle: nextTemplate?.templateName || current.quoteTitle,
-                        quoteMessage:
-                          nextTemplate?.projectOverview ||
-                          nextTemplate?.scopeOfWork ||
-                          current.quoteMessage,
-                        quoteItems:
-                          nextTemplate?.items?.length
-                            ? nextTemplate.items.map((item) =>
-                                hydrateQuoteItemDraft({
-                                  itemName: item.itemName,
-                                  quantity: String(item.quantity),
-                                  unitPrice: String(item.unitPrice),
-                                  defaultWarranty: item.defaultWarranty || nextTemplate.warranty || "",
-                                  warranty:
-                                    item.warranty || item.defaultWarranty || nextTemplate.warranty || "",
-                                  warrantyNotes: item.warrantyNotes || "",
-                                  warrantySource: item.warrantySource || "TEMPLATE_DEFAULT",
-                                }),
-                              )
-                            : current.quoteItems,
-                        paymentMethod: nextTemplate?.defaultPaymentMethod || current.paymentMethod,
-                        paymentTerms: nextTemplate?.defaultPaymentTerms || current.paymentTerms,
-                        depositAmount:
-                          nextTemplate?.defaultDepositAmount !== null &&
-                          nextTemplate?.defaultDepositAmount !== undefined
-                            ? String(nextTemplate.defaultDepositAmount)
-                            : current.depositAmount,
-                        balanceAmount:
-                          nextTemplate?.defaultBalanceAmount !== null &&
-                          nextTemplate?.defaultBalanceAmount !== undefined
-                            ? String(nextTemplate.defaultBalanceAmount)
-                            : current.balanceAmount,
-                      }));
+                      setCreateDraft((current) => applyTemplateToCreateDraft(current, nextTemplate));
                     }}
                     className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
                   >
@@ -1712,15 +1911,6 @@ export default function QuotationRequestsDeskClient({
                   </select>
                 </label>
               ) : null}
-              <label className="text-xs uppercase tracking-wide text-slate-400 lg:col-span-2">
-                Customer requirement / notes
-                <textarea
-                  value={createDraft.notes}
-                  onChange={(event) => setCreateDraft((current) => ({ ...current, notes: event.target.value }))}
-                  rows={4}
-                  className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
-                />
-              </label>
               <div className="lg:col-span-2 rounded-2xl border border-white/10 bg-slate-900/70 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
@@ -1751,9 +1941,9 @@ export default function QuotationRequestsDeskClient({
                     Add from live catalog
                   </div>
                   <div className="mt-1 text-sm text-slate-300">
-                    Search a product name from the Betech catalog, add it directly, or keep typing items manually below.
+                    Start typing a product name to see live catalog suggestions, add it directly, or keep typing items manually below.
                   </div>
-                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
                     <div className="relative flex-1">
                       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                       <input
@@ -1763,18 +1953,13 @@ export default function QuotationRequestsDeskClient({
                         className="w-full rounded-xl border border-slate-800 bg-slate-950/70 py-2 pl-9 pr-3 text-sm text-slate-100 outline-none"
                       />
                     </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        void searchCatalog(createCatalogQuery, {
-                          setLoading: setCreateCatalogLoading,
-                          setResults: setCreateCatalogResults,
-                        })
-                      }
-                      className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
-                    >
-                      {createCatalogLoading ? "Searching..." : "Search catalog"}
-                    </button>
+                    <div className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                      {createCatalogLoading
+                        ? "Searching..."
+                        : createCatalogQuery.trim().length >= CATALOG_SEARCH_MIN_CHARS
+                          ? `${createCatalogResults.length} match${createCatalogResults.length === 1 ? "" : "es"}`
+                          : `Type ${CATALOG_SEARCH_MIN_CHARS}+ letters`}
+                    </div>
                   </div>
                   {createCatalogResults.length ? (
                     <div className="mt-3 space-y-2">
@@ -1812,6 +1997,13 @@ export default function QuotationRequestsDeskClient({
                           </div>
                         </div>
                       ))}
+                    </div>
+                  ) : null}
+                  {!createCatalogLoading &&
+                  createCatalogQuery.trim().length >= CATALOG_SEARCH_MIN_CHARS &&
+                  !createCatalogResults.length ? (
+                    <div className="mt-3 rounded-2xl border border-dashed border-white/10 px-3 py-3 text-xs text-slate-500">
+                      No catalog suggestions found for that search yet.
                     </div>
                   ) : null}
                 </div>
@@ -2088,6 +2280,16 @@ export default function QuotationRequestsDeskClient({
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2">
+              {allowTemplateManager ? (
+                <button
+                  type="button"
+                  disabled={templateSaving}
+                  onClick={() => void handleSaveTemplateFromDraft()}
+                  className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-200 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {templateSaving ? "Saving Template..." : "Save As Template"}
+                </button>
+              ) : null}
               <button
                 type="button"
                 disabled={
@@ -2391,9 +2593,9 @@ export default function QuotationRequestsDeskClient({
                                   Add from live catalog
                                 </div>
                                 <div className="mt-1 text-sm text-slate-300">
-                                  Search the catalog, add the product into this quotation, or continue editing items manually.
+                                  Start typing to search the catalog, add the product into this quotation, or continue editing items manually.
                                 </div>
-                                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
                                   <div className="relative flex-1">
                                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                                     <input
@@ -2403,18 +2605,13 @@ export default function QuotationRequestsDeskClient({
                                       className="w-full rounded-xl border border-slate-800 bg-slate-950/70 py-2 pl-9 pr-3 text-sm text-slate-100 outline-none"
                                     />
                                   </div>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      void searchCatalog(responseCatalogQuery, {
-                                        setLoading: setResponseCatalogLoading,
-                                        setResults: setResponseCatalogResults,
-                                      })
-                                    }
-                                    className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
-                                  >
-                                    {responseCatalogLoading ? "Searching..." : "Search catalog"}
-                                  </button>
+                                  <div className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                                    {responseCatalogLoading
+                                      ? "Searching..."
+                                      : responseCatalogQuery.trim().length >= CATALOG_SEARCH_MIN_CHARS
+                                        ? `${responseCatalogResults.length} match${responseCatalogResults.length === 1 ? "" : "es"}`
+                                        : `Type ${CATALOG_SEARCH_MIN_CHARS}+ letters`}
+                                  </div>
                                 </div>
                                 {responseCatalogResults.length ? (
                                   <div className="mt-3 space-y-2">
@@ -2452,6 +2649,13 @@ export default function QuotationRequestsDeskClient({
                                         </div>
                                       </div>
                                     ))}
+                                  </div>
+                                ) : null}
+                                {!responseCatalogLoading &&
+                                responseCatalogQuery.trim().length >= CATALOG_SEARCH_MIN_CHARS &&
+                                !responseCatalogResults.length ? (
+                                  <div className="mt-3 rounded-2xl border border-dashed border-white/10 px-3 py-3 text-xs text-slate-500">
+                                    No catalog suggestions found for that search yet.
                                   </div>
                                 ) : null}
                               </div>
