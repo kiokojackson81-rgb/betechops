@@ -821,6 +821,22 @@ export default function VoiceConsoleClient({
 
   const selectedChatraceActivity = selectedContextData?.chatrace || selectedCall?.customer?.chatrace || null;
 
+  const buildVoiceCustomerProfileHref = (input: {
+    customerUserId?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    displayName?: string | null;
+  }) => {
+    return buildAdminCustomerProfileHref({
+      customerUserId: input.customerUserId ?? null,
+      phone: input.phone ?? null,
+      phones: input.phone ? [input.phone] : [],
+      email: input.email ?? null,
+      displayName: input.displayName ?? null,
+      impersonateId: data.viewer.impersonateId,
+    });
+  };
+
   useEffect(() => {
     if (selectedCall?.customer && isMeaningfulVoicePhone(selectedCall.callerNumber)) {
       softphone.seedCustomerContext({
@@ -1913,7 +1929,20 @@ export default function VoiceConsoleClient({
                               <div key={call.id} className="grid grid-cols-[88px_minmax(0,1.2fr)_minmax(0,0.8fr)_110px_96px] gap-3 border-b border-slate-800/80 px-3 py-3 text-sm last:border-b-0">
                                 <div className="whitespace-nowrap text-slate-300">{formatTimeOnly(call.startedAt || call.createdAt)}</div>
                                 <div className="min-w-0">
-                                  <div className="truncate font-semibold text-white">{call.customer.customerName || call.callerNumber}</div>
+                                  {mode === "admin" ? (
+                                    <Link
+                                      href={buildVoiceCustomerProfileHref({
+                                        customerUserId: call.customer?.matchedCustomerId || null,
+                                        phone: call.callerNumber,
+                                        displayName: call.customer?.customerName || null,
+                                      })}
+                                      className="block truncate font-semibold text-white transition hover:text-cyan-200"
+                                    >
+                                      {call.customer.customerName || call.callerNumber}
+                                    </Link>
+                                  ) : (
+                                    <div className="truncate font-semibold text-white">{call.customer.customerName || call.callerNumber}</div>
+                                  )}
                                   <div className="truncate text-xs text-slate-400">{call.callerNumber}</div>
                                 </div>
                                 <div className="truncate text-slate-300">{call.assignedToName || call.routedToDisplay || "Unassigned"}</div>
@@ -2043,7 +2072,20 @@ export default function VoiceConsoleClient({
                                 <div key={`${isCall ? "call" : "queue"}-${id}`} className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
                                   <div className="flex items-center justify-between gap-2">
                                     <div className="min-w-0">
-                                      <div className="truncate text-sm font-semibold text-white">{queueItem.customer?.customerName || phone}</div>
+                                      {mode === "admin" ? (
+                                        <Link
+                                          href={buildVoiceCustomerProfileHref({
+                                            customerUserId: queueItem.customer?.matchedCustomerId || null,
+                                            phone,
+                                            displayName: queueItem.customer?.customerName || null,
+                                          })}
+                                          className="block truncate text-sm font-semibold text-white transition hover:text-cyan-200"
+                                        >
+                                          {queueItem.customer?.customerName || phone}
+                                        </Link>
+                                      ) : (
+                                        <div className="truncate text-sm font-semibold text-white">{queueItem.customer?.customerName || phone}</div>
+                                      )}
                                       <div className="truncate text-xs text-slate-400">
                                         {(queueItem.assignedToName || queueItem.assignedToEmail || queueItem.routedToDisplay || "Unassigned") +
                                           " · " +
@@ -2208,7 +2250,20 @@ export default function VoiceConsoleClient({
                                           <div className="whitespace-nowrap text-sm text-slate-200">{formatTimeOnly(call.startedAt || call.createdAt)}</div>
                                           <div className="min-w-0">
                                             <div className="flex items-center gap-2">
-                                              <div className="truncate font-semibold text-white">{call.customer.customerName || call.callerNumber}</div>
+                                              {mode === "admin" ? (
+                                                <Link
+                                                  href={buildVoiceCustomerProfileHref({
+                                                    customerUserId: call.customer?.matchedCustomerId || null,
+                                                    phone: call.callerNumber,
+                                                    displayName: call.customer?.customerName || null,
+                                                  })}
+                                                  className="truncate font-semibold text-white transition hover:text-cyan-200"
+                                                >
+                                                  {call.customer.customerName || call.callerNumber}
+                                                </Link>
+                                              ) : (
+                                                <div className="truncate font-semibold text-white">{call.customer.customerName || call.callerNumber}</div>
+                                              )}
                                               {call.isTestNumber ? (
                                                 <span className={`inline-flex shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${testNumberTone(call.isTestNumber)}`}>
                                                   {call.testNumberLabel || "Test number"}
@@ -2246,7 +2301,20 @@ export default function VoiceConsoleClient({
                                                 <div className="flex flex-wrap items-start justify-between gap-3">
                                                   <div>
                                                     <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Call review</div>
-                                                    <div className="mt-1 text-xl font-semibold text-white">{call.customer.customerName || call.callerNumber}</div>
+                                                    {mode === "admin" ? (
+                                                      <Link
+                                                        href={buildVoiceCustomerProfileHref({
+                                                          customerUserId: call.customer?.matchedCustomerId || null,
+                                                          phone: call.callerNumber,
+                                                          displayName: call.customer?.customerName || null,
+                                                        })}
+                                                        className="mt-1 block text-xl font-semibold text-white transition hover:text-cyan-200"
+                                                      >
+                                                        {call.customer.customerName || call.callerNumber}
+                                                      </Link>
+                                                    ) : (
+                                                      <div className="mt-1 text-xl font-semibold text-white">{call.customer.customerName || call.callerNumber}</div>
+                                                    )}
                                                     <div className="mt-1 text-sm text-slate-400">
                                                       {call.callerNumber} · {call.direction} · {call.statusLabel}
                                                     </div>
@@ -2631,7 +2699,20 @@ export default function VoiceConsoleClient({
                           <div key={call.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                <div className="truncate font-semibold text-white">{call.customer.customerName || call.callerNumber}</div>
+                                {mode === "admin" ? (
+                                  <Link
+                                    href={buildVoiceCustomerProfileHref({
+                                      customerUserId: call.customer?.matchedCustomerId || null,
+                                      phone: call.callerNumber,
+                                      displayName: call.customer?.customerName || null,
+                                    })}
+                                    className="block truncate font-semibold text-white transition hover:text-cyan-200"
+                                  >
+                                    {call.customer.customerName || call.callerNumber}
+                                  </Link>
+                                ) : (
+                                  <div className="truncate font-semibold text-white">{call.customer.customerName || call.callerNumber}</div>
+                                )}
                                 <div className="mt-1 text-sm text-slate-400">{call.callerNumber}</div>
                                 <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-400">
                                   <span>{call.assignedToName || call.assignedToEmail || call.routedToDisplay || "Unassigned"}</span>
@@ -2705,7 +2786,20 @@ export default function VoiceConsoleClient({
                             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                               <div className="min-w-0">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <div className="truncate font-semibold text-white">{item.customer.customerName || item.phone}</div>
+                                  {mode === "admin" ? (
+                                    <Link
+                                      href={buildVoiceCustomerProfileHref({
+                                        customerUserId: item.customer?.matchedCustomerId || null,
+                                        phone: item.phone,
+                                        displayName: item.customer?.customerName || null,
+                                      })}
+                                      className="truncate font-semibold text-white transition hover:text-cyan-200"
+                                    >
+                                      {item.customer.customerName || item.phone}
+                                    </Link>
+                                  ) : (
+                                    <div className="truncate font-semibold text-white">{item.customer.customerName || item.phone}</div>
+                                  )}
                                   <span className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${followUpReasonTone((item as any).queueReasonKind)}`}>
                                     {(item as any).queueReasonDisplayLabel || (item as any).queueReasonLabel || "Follow-up"}
                                   </span>
