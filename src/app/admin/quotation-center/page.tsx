@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 
 type AdminQuote = {
   id: string;
@@ -196,12 +197,21 @@ export default function AdminQuotationCenterPage() {
             {requests.length ? (
               requests.map((request) => {
                 const total = Number(request.quotationData?.total || 0);
+                const customerHref = buildAdminCustomerProfileHref({
+                  phone: request.customerPhone,
+                  displayName: request.customerName,
+                });
                 return (
                   <div key={request.id} className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <div className="text-lg font-semibold text-white">{request.customerName}</div>
+                          <Link
+                            href={customerHref}
+                            className="text-lg font-semibold text-white transition hover:text-cyan-200"
+                          >
+                            {request.customerName}
+                          </Link>
                           <span className="rounded-full border border-white/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-300">
                             {statusLabel(request.source)}
                           </span>

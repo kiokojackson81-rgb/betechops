@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import ReceiptFormClient from "./ReceiptFormClient";
 import DailyReportReceiptsPanel from "@/components/daily-report-receipts";
+import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 
 type ReceiptRow = {
@@ -519,12 +520,21 @@ export default function ReceiptsPageClient({
             {results.length === 0 ? (
               <p className="text-sm text-slate-400">No receipts found. Try a different query.</p>
             ) : (
-              results.map((r) => (
+              results.map((r) => {
+                const customerProfileHref = buildAdminCustomerProfileHref({
+                  phone: (r as any).customerPhone ?? null,
+                  email: (r as any).customerEmail ?? null,
+                  displayName: r.customerName ?? null,
+                });
+                return (
                 <div key={r.id} className="flex items-center justify-between rounded-md bg-slate-950/40 p-3">
                   <div>
                     <div className="text-sm font-semibold">{r.orderRef || r.id}</div>
                     <div className="text-xs text-slate-400">
-                      {r.customerName || "-"} - {(r as any).customerPhone || "-"}
+                      <Link href={customerProfileHref} className="transition hover:text-cyan-300">
+                        {r.customerName || "-"}
+                      </Link>{" "}
+                      - {(r as any).customerPhone || "-"}
                     </div>
                   </div>
                 {r.detailUrl ? (
@@ -540,7 +550,7 @@ export default function ReceiptsPageClient({
                   <span className="text-xs text-slate-400">Receipt preview unavailable</span>
                 )}
                 </div>
-              ))
+              )})
             )}
           </div>
 

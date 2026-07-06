@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 import { findSimilarProducts } from "@/lib/posProductSimilarity";
 import { showToast } from "@/lib/ui/toast";
 import { getAcceptedImageUploadHint, getAcceptedImageUploadValue } from "@/lib/images/uploadImageFormat";
@@ -2056,7 +2057,11 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
 
           <div className="mt-4 space-y-3">
             {approvals.length ? (
-              approvals.map((approval) => (
+              approvals.map((approval) => {
+                const customerHref = buildAdminCustomerProfileHref({
+                  displayName: approval.orderItem?.order?.customerName || null,
+                });
+                return (
                 <div key={approval.id} className="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-4">
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="space-y-1">
@@ -2067,7 +2072,10 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                         Staff: {approval.staff?.name || approval.staff?.email || "Unknown"}
                       </div>
                       <div className="text-xs text-slate-400">
-                        Receipt: {approval.orderItem?.order?.orderNumber || "-"} · Customer: {approval.orderItem?.order?.customerName || "-"}
+                        Receipt: {approval.orderItem?.order?.orderNumber || "-"} · Customer:{" "}
+                        <Link href={customerHref} className="transition hover:text-cyan-300">
+                          {approval.orderItem?.order?.customerName || "-"}
+                        </Link>
                       </div>
                     </div>
                     <div className="flex gap-2">
@@ -2090,7 +2098,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                     </div>
                   </div>
                 </div>
-              ))
+              )})
             ) : (
               <div className="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-6 text-sm text-slate-400">
                 No commission approvals are waiting right now.
@@ -2110,7 +2118,11 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
             </div>
             <div className="space-y-3">
               {releasedApprovals.length ? (
-                releasedApprovals.map((approval) => (
+                releasedApprovals.map((approval) => {
+                  const customerHref = buildAdminCustomerProfileHref({
+                    displayName: approval.orderItem?.order?.customerName || null,
+                  });
+                  return (
                   <div key={approval.id} className="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-4">
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="space-y-1">
@@ -2121,7 +2133,10 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                           Staff: {approval.staff?.name || approval.staff?.email || "Unknown"}
                         </div>
                         <div className="text-xs text-slate-400">
-                          Receipt: {approval.orderItem?.order?.orderNumber || "-"} · Customer: {approval.orderItem?.order?.customerName || "-"}
+                          Receipt: {approval.orderItem?.order?.orderNumber || "-"} · Customer:{" "}
+                          <Link href={customerHref} className="transition hover:text-cyan-300">
+                            {approval.orderItem?.order?.customerName || "-"}
+                          </Link>
                         </div>
                       </div>
                       <button
@@ -2134,7 +2149,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                       </button>
                     </div>
                   </div>
-                ))
+                )})
               ) : (
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-6 text-sm text-slate-400">
                   No released POS commissions found.
