@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   ensureQuoteRequestAssignments,
   ensureQuoteRequestsSchema,
+  listAllQuoteRequests,
   listAssignedQuoteRequests,
   requireQuoteRequestsStaffActor,
   type QuoteRequestStatus,
@@ -32,11 +33,17 @@ export async function GET(request: NextRequest) {
   const status = parseStatus(request.nextUrl.searchParams.get("status"));
   const q = (request.nextUrl.searchParams.get("q") || "").trim();
 
-  const requests = await listAssignedQuoteRequests({
-    userId: guard.userId,
-    status,
-    q,
-  });
+  const requests =
+    guard.isElevatedActor && !request.nextUrl.searchParams.get("impersonateId")
+      ? await listAllQuoteRequests({
+          status,
+          q,
+        })
+      : await listAssignedQuoteRequests({
+          userId: guard.userId,
+          status,
+          q,
+        });
 
   return NextResponse.json({
     ok: true,
