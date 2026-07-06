@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   quoteRequestResponseSchema,
   getAssignedQuoteRequestById,
+  getQuoteRequestById,
   requireQuoteRequestsStaffActor,
   updateQuoteRequestResponse,
 } from "@/lib/quoteRequests";
@@ -214,7 +215,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     return NextResponse.json({ ok: false, error: "Invalid quotation response payload." }, { status: 400 });
   }
 
-  const existing = await getAssignedQuoteRequestById(id, guard.userId);
+  const existing =
+    guard.isElevatedActor && !request.nextUrl.searchParams.get("impersonateId")
+      ? await getQuoteRequestById(id)
+      : await getAssignedQuoteRequestById(id, guard.userId);
   if (!existing) {
     return NextResponse.json({ ok: false, error: "Quotation request not found." }, { status: 404 });
   }

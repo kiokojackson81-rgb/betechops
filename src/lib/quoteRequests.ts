@@ -1349,6 +1349,17 @@ export async function getAssignedQuoteRequestById(id: string, userId: string) {
   return rows[0] ? serializeQuoteRequest(rows[0]) : null;
 }
 
+export async function getQuoteRequestById(id: string) {
+  await ensureQuoteRequestsSchema();
+  const rows = await prisma.$queryRaw<QuoteRequestRow[]>(Prisma.sql`
+    SELECT ${QUOTE_REQUEST_SELECT_SQL}
+    FROM "QuoteRequest"
+    WHERE "id" = ${id}
+    LIMIT 1
+  `);
+  return rows[0] ? serializeQuoteRequest(rows[0]) : null;
+}
+
 export async function updateQuoteRequestResponse(
   id: string,
   user: { id: string; name: string | null; email: string | null },

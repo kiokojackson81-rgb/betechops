@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
   getAssignedQuoteRequestById,
+  getQuoteRequestById,
   recordQuotationEvent,
   requireQuoteRequestsStaffActor,
 } from "@/lib/quoteRequests";
@@ -86,7 +87,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     return NextResponse.json({ ok: false, error: "Invalid quotation draft payload." }, { status: 400 });
   }
 
-  const quoteRequest = await getAssignedQuoteRequestById(id, guard.userId);
+  const quoteRequest =
+    guard.isElevatedActor && !request.nextUrl.searchParams.get("impersonateId")
+      ? await getQuoteRequestById(id)
+      : await getAssignedQuoteRequestById(id, guard.userId);
   if (!quoteRequest) {
     return NextResponse.json({ ok: false, error: "Quotation request not found." }, { status: 404 });
   }

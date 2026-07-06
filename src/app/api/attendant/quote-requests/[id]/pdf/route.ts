@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   getAssignedQuoteRequestById,
+  getQuoteRequestById,
   requireQuoteRequestsStaffActor,
 } from "@/lib/quoteRequests";
 import { parseStoredQuoteProposal } from "@/lib/quoteProposal";
@@ -17,7 +18,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   }
 
   const { id } = await context.params;
-  const quoteRequest = await getAssignedQuoteRequestById(id, guard.userId);
+  const quoteRequest =
+    guard.isElevatedActor && !request.nextUrl.searchParams.get("impersonateId")
+      ? await getQuoteRequestById(id)
+      : await getAssignedQuoteRequestById(id, guard.userId);
   if (!quoteRequest) {
     return NextResponse.json({ ok: false, error: "Quotation request not found." }, { status: 404 });
   }
