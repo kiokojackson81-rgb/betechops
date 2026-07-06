@@ -24,15 +24,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const created = await createManualQuotation(parsed.data, {
-    id: guard.userId,
-    name: guard.name,
-    email: guard.email,
-  });
+  try {
+    const created = await createManualQuotation(parsed.data, {
+      id: guard.userId,
+      name: guard.name,
+      email: guard.email,
+    });
 
-  if (!created) {
-    return NextResponse.json({ ok: false, error: "Unable to create quotation draft." }, { status: 500 });
+    if (!created) {
+      return NextResponse.json({ ok: false, error: "Unable to create quotation draft." }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true, request: created });
+  } catch (error) {
+    const message =
+      error instanceof Error && error.message.trim()
+        ? error.message
+        : "Unable to create quotation draft.";
+    return NextResponse.json({ ok: false, error: message }, { status: 400 });
   }
-
-  return NextResponse.json({ ok: true, request: created });
 }

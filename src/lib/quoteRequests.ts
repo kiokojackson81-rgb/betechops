@@ -1572,6 +1572,9 @@ export async function createManualQuotation(
   actor: { id: string; name: string | null; email: string | null },
 ) {
   const quoteItems = sanitizeQuoteLineItems(input.quoteItems);
+  if (!quoteItems.length) {
+    throw new Error("Add at least one quotation item before creating the draft.");
+  }
   const subtotal = calculateQuoteTotal(quoteItems);
   const paymentBreakdown = normalizeQuotePaymentBreakdown({
     total: subtotal,
