@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 import { getKenyanPhoneVariants, normalizeKenyanPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
+import { getVoiceTestNumberLabel, isVoiceAdminTestPhone } from "@/lib/voiceTestNumbers";
 import { getVoiceCustomerContext } from "@/lib/voiceCustomerContext";
 import { publishVoiceLiveEvent } from "@/lib/voiceLiveEvents";
 import { getVoiceWebrtcRegistryEntry } from "@/lib/voiceWebrtc/registry";
@@ -190,11 +191,15 @@ function extractDisposition(note: string | null | undefined) {
 }
 
 function getCallQueueReasonLabel(call: {
+  callerNumber?: string | null;
   routeType?: string | null;
   menuOption?: string | null;
   rawPayloadJson?: unknown;
   assignedToId?: string | null;
 }) {
+  if (isVoiceAdminTestPhone(call.callerNumber)) {
+    return "Test number";
+  }
   const payload = call.rawPayloadJson && typeof call.rawPayloadJson === "object"
     ? (call.rawPayloadJson as Record<string, unknown>)
     : null;
@@ -1290,6 +1295,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
       const contextSummary = serializeCustomerContextSummary(context);
       const lastActivity = contextSummary.recentTimeline[0] ?? null;
       const { displayStatus, providerStatus } = resolveVoiceProviderOutcome(call);
+      const testNumberLabel = getVoiceTestNumberLabel(call.callerNumber);
       return {
         id: call.id,
         sessionId: call.sessionId,
@@ -1314,6 +1320,8 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
         currencyCode: call.currencyCode ?? "KES",
         recordingUrl: call.recordingUrl,
         queueReasonLabel: getCallQueueReasonLabel(call),
+        testNumberLabel,
+        isTestNumber: Boolean(testNumberLabel),
         sla: {
           ringSeconds: getRingSeconds(call),
           talkSeconds: Number(call.durationInSeconds ?? 0),
@@ -1342,8 +1350,11 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
       const contextSummary = serializeCustomerContextSummary(context);
       const lastActivity = contextSummary.recentTimeline[0] ?? null;
       const { displayStatus, providerStatus } = resolveVoiceProviderOutcome(call);
-      const reviewStatus = getFollowUpReviewStatus(displayStatus, followUpsByCallId.get(call.id) || []);
+      const reviewStatus = isVoiceAdminTestPhone(call.callerNumber)
+        ? null
+        : getFollowUpReviewStatus(displayStatus, followUpsByCallId.get(call.id) || []);
       const effectiveStatus = reviewStatus || displayStatus;
+      const testNumberLabel = getVoiceTestNumberLabel(call.callerNumber);
       return {
         id: call.id,
         sessionId: call.sessionId,
@@ -1368,6 +1379,8 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
         currencyCode: call.currencyCode ?? "KES",
         recordingUrl: call.recordingUrl,
         queueReasonLabel: getCallQueueReasonLabel(call),
+        testNumberLabel,
+        isTestNumber: Boolean(testNumberLabel),
         sla: {
           ringSeconds: getRingSeconds(call),
           talkSeconds: Number(call.durationInSeconds ?? 0),
@@ -1396,6 +1409,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
       const contextSummary = serializeCustomerContextSummary(context);
       const lastActivity = contextSummary.recentTimeline[0] ?? null;
       const { displayStatus, providerStatus } = resolveVoiceProviderOutcome(call);
+      const testNumberLabel = getVoiceTestNumberLabel(call.callerNumber);
       return {
         id: call.id,
         sessionId: call.sessionId,
@@ -1420,6 +1434,8 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
         currencyCode: call.currencyCode ?? "KES",
         recordingUrl: call.recordingUrl,
         queueReasonLabel: getCallQueueReasonLabel(call),
+        testNumberLabel,
+        isTestNumber: Boolean(testNumberLabel),
         sla: {
           ringSeconds: getRingSeconds(call),
           talkSeconds: Number(call.durationInSeconds ?? 0),
@@ -1444,6 +1460,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
 
   const followUps = await Promise.all(
     followUpsRaw.map(async (task) => {
+      if (isVoiceAdminTestPhone(task.phone)) return null;
       const context = await getContextForPhone(task.phone, true);
       const contextSummary = serializeCustomerContextSummary(context);
       const normalizedTaskPhone = normalizeKenyanPhone(task.phone);
@@ -1497,13 +1514,14 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
         assignedAgentLabel: task.assignedTo?.name ?? task.assignedTo?.email ?? contextSummary.assignedAgent?.name ?? "Unassigned",
       };
     }),
-  );
+  ).then((items) => items.filter((item): item is NonNullable<typeof item> => Boolean(item)));
 
   const taskLeadPhoneSet = new Set(followUps.map((task) => task.phone));
   const missedLeads = await Promise.all(
     voiceLeadsRaw
       .filter((lead) => !taskLeadPhoneSet.has(lead.phone))
       .map(async (lead) => {
+        if (isVoiceAdminTestPhone(lead.phone)) return null;
         const context = await getContextForPhone(lead.phone, true);
         const contextSummary = serializeCustomerContextSummary(context);
         const normalizedLeadPhone = normalizeKenyanPhone(lead.phone);
@@ -1549,7 +1567,7 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
           assignedAgentLabel: lead.assignedTo?.name ?? lead.assignedTo?.email ?? contextSummary.assignedAgent?.name ?? "Unassigned",
         };
       }),
-  );
+  ).then((items) => items.filter((item): item is NonNullable<typeof item> => Boolean(item)));
 
   const activeCallIdsByAgent = new Map<string, number>();
   const waitingCallIdsByAgent = new Map<string, number>();
@@ -1799,6 +1817,8 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
               statusLabel: formatStatusLabel(effectiveStatus),
               providerStatus,
               providerStatusLabel: formatStatusLabel(providerStatus),
+              testNumberLabel: getVoiceTestNumberLabel(selectedCallDetail.callerNumber),
+              isTestNumber: isVoiceAdminTestPhone(selectedCallDetail.callerNumber),
             };
           })(),
           id: selectedCallDetail.id,
@@ -2265,6 +2285,7 @@ export async function saveVoiceFollowUp(input: {
   }
 
   if (!phone) throw new Error("phone_required");
+  if (isVoiceAdminTestPhone(phone)) throw new Error("voice_test_number_follow_up_blocked");
   if (!input.title?.trim()) throw new Error("title_required");
 
   const followUp = await prisma.voiceFollowUp.create({

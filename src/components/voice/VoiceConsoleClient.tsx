@@ -157,6 +157,10 @@ function cardShell(extra = "") {
   return `rounded-[24px] border border-slate-800/90 bg-slate-950/96 ${extra}`.trim();
 }
 
+function testNumberTone(isTestNumber: boolean | null | undefined) {
+  return isTestNumber ? "border-sky-500/30 bg-sky-500/10 text-sky-100" : "";
+}
+
 function getInitials(value: string | null | undefined) {
   const text = String(value || "")
     .trim()
@@ -2203,7 +2207,14 @@ export default function VoiceConsoleClient({
                                           </div>
                                           <div className="whitespace-nowrap text-sm text-slate-200">{formatTimeOnly(call.startedAt || call.createdAt)}</div>
                                           <div className="min-w-0">
-                                            <div className="truncate font-semibold text-white">{call.customer.customerName || call.callerNumber}</div>
+                                            <div className="flex items-center gap-2">
+                                              <div className="truncate font-semibold text-white">{call.customer.customerName || call.callerNumber}</div>
+                                              {call.isTestNumber ? (
+                                                <span className={`inline-flex shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${testNumberTone(call.isTestNumber)}`}>
+                                                  {call.testNumberLabel || "Test number"}
+                                                </span>
+                                              ) : null}
+                                            </div>
                                             <div className="whitespace-nowrap text-sm text-slate-400">{call.callerNumber}</div>
                                           </div>
                                           <div>
@@ -2240,6 +2251,11 @@ export default function VoiceConsoleClient({
                                                       {call.callerNumber} · {call.direction} · {call.statusLabel}
                                                     </div>
                                                     <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-300">
+                                                      {call.isTestNumber ? (
+                                                        <span className={`rounded-full border px-3 py-1 font-semibold uppercase tracking-[0.16em] ${testNumberTone(call.isTestNumber)}`}>
+                                                          {call.testNumberLabel || "Test number"}
+                                                        </span>
+                                                      ) : null}
                                                       <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
                                                         {call.queueReasonLabel || "Live queue"}
                                                       </span>

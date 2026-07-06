@@ -10,6 +10,7 @@ import { maybeSendCallFeedbackSms } from "@/lib/feedbackSms";
 import { generateFeedbackToken } from "@/lib/feedbackToken";
 import { getShopBaseUrl } from "@/lib/runtimeUrls";
 import { isInternalVoicePhone, maybeSendMissedCallSms, sendVoiceSmsOncePerDay } from "@/lib/voiceSmsNotifications";
+import { getVoiceAdminTestNumber, isVoiceAdminTestPhone } from "@/lib/voiceTestNumbers";
 
 const NAIROBI_TIMEZONE = "Africa/Nairobi";
 const ATTEMPTED_CALL_THRESHOLD_SECONDS = 14;
@@ -125,7 +126,9 @@ function getConfiguredPhone(label: "BRENDAH" | "JENNIFER" | "ADMIN") {
       : label === "JENNIFER"
         ? "BETECH_VOICE_JENNIFER_NUMBER"
         : "BETECH_VOICE_ADMIN_NUMBER";
-  return normalizeVoiceNumber(process.env[envKey]);
+  const configured = normalizeVoiceNumber(process.env[envKey]);
+  if (label === "ADMIN") return configured || getVoiceAdminTestNumber();
+  return configured;
 }
 
 function normalizeCompareValue(value: string | null | undefined) {
@@ -587,6 +590,20 @@ export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerN
   const directFallbackTargets = [adminTarget, overflowTarget].filter(
     (target) => target.phoneNumber && target.routingEnabled,
   );
+
+  if (isVoiceAdminTestPhone(callerNumber) && adminTarget.phoneNumber) {
+    return {
+      routeType: "DIRECT_FALLBACK",
+      orderedTargets: [adminTarget],
+      primaryTarget: adminTarget,
+      availableTargets: adminTarget.isAvailable ? [adminTarget] : [],
+      unavailableTargets: allConfiguredTargets.filter((target) => target.label !== "ADMIN"),
+      hasAvailableTarget: adminTarget.isAvailable,
+      hasRoutableTarget: true,
+      usedMobileFallback: false,
+      routeReason: "admin_only" as const,
+    };
+  }
 
   if (!isWithinVoiceWorkingHours(date)) {
     const afterHoursTargets = [adminTarget, targets.BRENDAH, targets.JENNIFER, overflowTarget].filter(
@@ -1556,6 +1573,7 @@ export async function createOrUpdateMissedVoiceLead(call: {
   if (!shouldCreateMissedLead(call.status) || !call.callerNumber) return null;
 
   const phone = normalizeVoiceNumber(call.callerNumber) || call.callerNumber;
+  if (isVoiceAdminTestPhone(phone)) return null;
   const customerLink = phone ? await resolveVoiceCustomerLinkByPhone(phone) : null;
   const customerId = customerLink?.matchedCustomer?.id ?? null;
   const callerName = customerLink?.matchedCustomer?.name ?? null;
@@ -1622,6 +1640,7 @@ export async function ensureVoiceLeadForCaller(call: {
   if (!call.callerNumber) return null;
 
   const phone = normalizeVoiceNumber(call.callerNumber) || call.callerNumber;
+  if (isVoiceAdminTestPhone(phone)) return null;
   const customerLink = call.customerId ? null : await resolveVoiceCustomerLinkByPhone(phone);
   const customerId = call.customerId ?? customerLink?.matchedCustomer?.id ?? null;
   if (customerId) return null;
