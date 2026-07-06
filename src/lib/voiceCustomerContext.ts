@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getKenyanPhoneVariants, normalizeKenyanPhone } from "@/lib/phone";
 import {
+  QUOTE_REQUEST_SELECT_SQL,
   ensureQuoteRequestsSchema,
   serializeQuoteRequest,
   type SerializedQuoteRequest,
@@ -367,7 +368,7 @@ async function listVoiceQuoteRequests(input: {
   if (!conditions.length) return [] as SerializedQuoteRequest[];
 
   const rows = await prisma.$queryRaw<QuoteRequestRow[]>(Prisma.sql`
-    SELECT *
+    SELECT ${QUOTE_REQUEST_SELECT_SQL}
     FROM "QuoteRequest"
     WHERE (${Prisma.join(conditions, " OR ")})
     ORDER BY "updatedAt" DESC, "createdAt" DESC

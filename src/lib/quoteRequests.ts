@@ -509,6 +509,61 @@ type QuoteRequestRow = {
   updatedAt: Date | string;
 };
 
+export const QUOTE_REQUEST_SELECT_SQL = Prisma.sql`
+  "id",
+  "quoteRef",
+  "customerUserId",
+  "customerName",
+  "customerPhone",
+  "customerEmail",
+  "customerLocation",
+  "county",
+  "town",
+  "specificLocation",
+  "projectType",
+  "propertyType",
+  "preferredContactMethod",
+  "bestTimeToContact",
+  "urgency",
+  "installationStatus",
+  "loadDescription",
+  "budgetRange",
+  "preferredProducts",
+  "notes",
+  "answersJson",
+  "status",
+  "source",
+  "assignedAttendantId",
+  "assignedAttendantEmail",
+  "assignedAttendantName",
+  "templateId",
+  "templateName",
+  "requiresApproval",
+  "approvedAt",
+  "approvedById",
+  "approvedByName",
+  "submittedForApprovalAt",
+  "submittedForApprovalById",
+  "versionNumber",
+  "parentQuoteRequestId",
+  "validUntil",
+  "viewedAt",
+  "customerActionAt",
+  "manualCustomerName",
+  "manualCustomerPhone",
+  "manualCustomerEmail",
+  "approvalReason",
+  "quoteTitle",
+  "quoteMessage",
+  "quotationData",
+  "responseMetadata",
+  "respondedAt",
+  "respondedById",
+  "metadata",
+  "createdAt",
+  "updatedAt"
+`;
+
 export type SerializedQuoteRequest = {
   id: string;
   quoteRef: string;
@@ -689,6 +744,34 @@ type QuotationTemplateRow = {
   updatedAt: Date | string;
 };
 
+export const QUOTATION_TEMPLATE_SELECT_SQL = Prisma.sql`
+  "id",
+  "templateName",
+  "category",
+  "systemSize",
+  "brand",
+  "projectOverview",
+  "whatItCanPower",
+  "scopeOfWork",
+  "deliveryTimeline",
+  "installationTimeline",
+  "warranty",
+  "afterSalesSupport",
+  "terms",
+  "internalNotes",
+  "defaultPaymentMethod",
+  "defaultPaymentTerms",
+  "defaultDepositAmount",
+  "defaultBalanceAmount",
+  "defaultPdfLayout",
+  "isActive",
+  "templateData",
+  "createdById",
+  "updatedById",
+  "createdAt",
+  "updatedAt"
+`;
+
 type QuotationEventRow = {
   id: string;
   quoteRequestId: string;
@@ -700,6 +783,18 @@ type QuotationEventRow = {
   metadata: Prisma.JsonValue | null;
   createdAt: Date | string;
 };
+
+export const QUOTATION_EVENT_SELECT_SQL = Prisma.sql`
+  "id",
+  "quoteRequestId",
+  "eventType",
+  "eventLabel",
+  "eventDetail",
+  "actorUserId",
+  "actorName",
+  "metadata",
+  "createdAt"
+`;
 
 function serializeQuotationTemplate(row: QuotationTemplateRow): SerializedQuotationTemplate {
   const templateData = asJsonObject(row.templateData);
@@ -1161,7 +1256,7 @@ export async function createQuoteRequest(input: QuoteRequestCreateInput) {
   `);
 
   const rows = await prisma.$queryRaw<QuoteRequestRow[]>(Prisma.sql`
-    SELECT *
+    SELECT ${QUOTE_REQUEST_SELECT_SQL}
     FROM "QuoteRequest"
     WHERE "id" = ${id}
     LIMIT 1
@@ -1205,7 +1300,7 @@ export async function listAssignedQuoteRequests(input: {
   await ensureQuoteRequestsSchema();
   const query = (input.q || "").trim();
   const rows = await prisma.$queryRaw<QuoteRequestRow[]>(Prisma.sql`
-    SELECT *
+    SELECT ${QUOTE_REQUEST_SELECT_SQL}
     FROM "QuoteRequest"
     WHERE "assignedAttendantId" = ${input.userId}
       ${buildStatusWhere(input.status || "ALL")}
@@ -1245,7 +1340,7 @@ export async function listAssignedQuoteRequests(input: {
 export async function getAssignedQuoteRequestById(id: string, userId: string) {
   await ensureQuoteRequestsSchema();
   const rows = await prisma.$queryRaw<QuoteRequestRow[]>(Prisma.sql`
-    SELECT *
+    SELECT ${QUOTE_REQUEST_SELECT_SQL}
     FROM "QuoteRequest"
     WHERE "id" = ${id}
       AND "assignedAttendantId" = ${userId}
@@ -1321,7 +1416,7 @@ export async function updateQuoteRequestResponse(
   `);
 
   const rows = await prisma.$queryRaw<QuoteRequestRow[]>(Prisma.sql`
-    SELECT *
+    SELECT ${QUOTE_REQUEST_SELECT_SQL}
     FROM "QuoteRequest"
     WHERE "id" = ${id}
     LIMIT 1
@@ -1410,7 +1505,7 @@ export async function listCustomerQuoteRequests(input: {
   const take = Math.max(1, Math.min(20, Number(input.take ?? 5)));
 
   const rows = await prisma.$queryRaw<QuoteRequestRow[]>(Prisma.sql`
-    SELECT *
+    SELECT ${QUOTE_REQUEST_SELECT_SQL}
     FROM "QuoteRequest"
     WHERE (${Prisma.join(conditions, " OR ")})
     ORDER BY "createdAt" DESC
@@ -1429,7 +1524,7 @@ export async function listAllQuoteRequests(input?: {
   await ensureQuoteRequestsSchema();
   const query = String(input?.q || "").trim();
   const rows = await prisma.$queryRaw<QuoteRequestRow[]>(Prisma.sql`
-    SELECT *
+    SELECT ${QUOTE_REQUEST_SELECT_SQL}
     FROM "QuoteRequest"
     WHERE 1 = 1
       ${buildStatusWhere(input?.status || "ALL")}
@@ -1464,7 +1559,7 @@ export async function listAllQuoteRequests(input?: {
 export async function listQuotationEvents(quoteRequestId: string) {
   await ensureQuoteRequestsSchema();
   const rows = await prisma.$queryRaw<QuotationEventRow[]>(Prisma.sql`
-    SELECT *
+    SELECT ${QUOTATION_EVENT_SELECT_SQL}
     FROM "QuotationEvent"
     WHERE "quoteRequestId" = ${quoteRequestId}
     ORDER BY "createdAt" DESC
@@ -1602,7 +1697,7 @@ export async function createQuotationTemplate(
   `);
 
   const rows = await prisma.$queryRaw<QuotationTemplateRow[]>(Prisma.sql`
-    SELECT *
+    SELECT ${QUOTATION_TEMPLATE_SELECT_SQL}
     FROM "QuotationTemplate"
     WHERE "id" = ${id}
     LIMIT 1
@@ -1617,7 +1712,7 @@ export async function listQuotationTemplates(options?: {
   await ensureQuoteRequestsSchema();
   const query = String(options?.q || "").trim();
   const rows = await prisma.$queryRaw<QuotationTemplateRow[]>(Prisma.sql`
-    SELECT *
+    SELECT ${QUOTATION_TEMPLATE_SELECT_SQL}
     FROM "QuotationTemplate"
     WHERE 1 = 1
       ${options?.activeOnly ? Prisma.sql`AND "isActive" = TRUE` : Prisma.empty}
@@ -1641,7 +1736,7 @@ export async function duplicateQuotationTemplate(
   actor: { id: string; name: string | null; email: string | null },
 ) {
   const templates = await prisma.$queryRaw<QuotationTemplateRow[]>(Prisma.sql`
-    SELECT *
+    SELECT ${QUOTATION_TEMPLATE_SELECT_SQL}
     FROM "QuotationTemplate"
     WHERE "id" = ${templateId}
     LIMIT 1
