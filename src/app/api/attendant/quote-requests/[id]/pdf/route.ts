@@ -46,6 +46,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     depositAmount: proposal.depositAmount,
     balanceAmount: proposal.balanceAmount,
     quoteMessage: quoteRequest.quoteMessage,
+    warrantyMode: proposal.warrantyMode,
+    fullSystemWarranty: proposal.fullSystemWarranty,
+    customWarranty: proposal.customWarranty,
+    warrantyGeneralNotes: proposal.warrantyGeneralNotes,
+    aiWarrantySummary: proposal.aiWarrantySummary,
+    proposalSections: proposal.proposalSections,
+    proposalVisibility: proposal.proposalVisibility,
   });
 
   return new NextResponse(quotationPdf, {

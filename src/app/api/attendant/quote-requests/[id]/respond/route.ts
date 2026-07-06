@@ -255,6 +255,13 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     depositAmount: proposal.depositAmount,
     balanceAmount: proposal.balanceAmount,
     quoteMessage: updated.quoteMessage,
+    warrantyMode: proposal.warrantyMode,
+    fullSystemWarranty: proposal.fullSystemWarranty,
+    customWarranty: proposal.customWarranty,
+    warrantyGeneralNotes: proposal.warrantyGeneralNotes,
+    aiWarrantySummary: proposal.aiWarrantySummary,
+    proposalSections: proposal.proposalSections,
+    proposalVisibility: proposal.proposalVisibility,
   });
 
   const notifications: Array<{ channel: "email" | "sms"; ok: boolean; error?: string }> = [];

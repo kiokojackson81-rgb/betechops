@@ -33,11 +33,22 @@ import {
   getQuotePaymentTermsLabel,
   parseStoredQuoteProposal,
   PAYMENT_METHOD_DETAILS,
+  QUOTE_WARRANTY_MODES,
+  QUOTE_WARRANTY_SOURCES,
   QUOTE_PAYMENT_METHODS,
   QUOTE_PAYMENT_TERMS,
   type QuotePaymentMethod,
   type QuotePaymentTerms,
+  type QuoteWarrantyMode,
+  type QuoteWarrantySource,
 } from "@/lib/quoteProposal";
+import {
+  buildItemDrivenPowerSummary,
+  buildWarrantyAiSummary,
+  getProjectTypeDefaultSections,
+  type QuoteProposalSections,
+  type QuoteSectionVisibility,
+} from "@/lib/quoteProposalSections";
 import {
   isCarriedForwardPendingItem,
   isOpenQuotationStatus,
@@ -172,6 +183,10 @@ type QuoteItemDraft = {
   itemName: string;
   quantity: string;
   unitPrice: string;
+  defaultWarranty: string;
+  warranty: string;
+  warrantyNotes: string;
+  warrantySource: QuoteWarrantySource;
 };
 
 type QuoteDeskFormState = {
@@ -179,6 +194,25 @@ type QuoteDeskFormState = {
   quoteTitle: string;
   quoteMessage: string;
   quoteItems: QuoteItemDraft[];
+  warrantyMode: QuoteWarrantyMode;
+  fullSystemWarranty: string;
+  customWarranty: string;
+  warrantyGeneralNotes: string;
+  aiWarrantySummary: string;
+  projectOverview: string;
+  whatPriceIncludes: string;
+  whatItCanPower: string;
+  deliveryTimeline: string;
+  installationTimeline: string;
+  afterSalesSupport: string;
+  importantNotes: string;
+  scopeExclusions: string;
+  similarProjects: string;
+  termsAndConditions: string;
+  preparedByDetails: string;
+  companyLegalDetails: string;
+  projectReferenceLinks: string;
+  proposalVisibility: QuoteSectionVisibility;
   paymentMethod: QuotePaymentMethod | "";
   paymentTerms: QuotePaymentTerms;
   depositAmount: string;
@@ -219,6 +253,25 @@ type CreateQuotationDraft = {
   quoteMessage: string;
   templateId: string;
   quoteItems: QuoteItemDraft[];
+  warrantyMode: QuoteWarrantyMode;
+  fullSystemWarranty: string;
+  customWarranty: string;
+  warrantyGeneralNotes: string;
+  aiWarrantySummary: string;
+  projectOverview: string;
+  whatPriceIncludes: string;
+  whatItCanPower: string;
+  deliveryTimeline: string;
+  installationTimeline: string;
+  afterSalesSupport: string;
+  importantNotes: string;
+  scopeExclusions: string;
+  similarProjects: string;
+  termsAndConditions: string;
+  preparedByDetails: string;
+  companyLegalDetails: string;
+  projectReferenceLinks: string;
+  proposalVisibility: QuoteSectionVisibility;
   paymentMethod: QuotePaymentMethod | "";
   paymentTerms: QuotePaymentTerms;
   depositAmount: string;
@@ -231,15 +284,47 @@ function createEmptyQuoteItem(): QuoteItemDraft {
     itemName: "",
     quantity: "1",
     unitPrice: "",
+    defaultWarranty: "",
+    warranty: "",
+    warrantyNotes: "",
+    warrantySource: "CUSTOM",
+  };
+}
+
+function createProposalSectionDraft(projectType: QuoteProjectType) {
+  const defaults = getProjectTypeDefaultSections(projectType);
+  return {
+    projectOverview: defaults.projectOverview,
+    whatPriceIncludes: defaults.whatPriceIncludes,
+    whatItCanPower: defaults.whatItCanPower,
+    deliveryTimeline: defaults.deliveryTimeline,
+    installationTimeline: defaults.installationTimeline,
+    afterSalesSupport: defaults.afterSalesSupport,
+    importantNotes: defaults.importantNotes,
+    scopeExclusions: defaults.scopeExclusions,
+    similarProjects: defaults.similarProjects,
+    termsAndConditions: defaults.termsAndConditions,
+    preparedByDetails: defaults.preparedByDetails,
+    companyLegalDetails: defaults.companyLegalDetails,
+    projectReferenceLinks: defaults.projectReferenceLinks,
+    proposalVisibility: defaults.visibility,
   };
 }
 
 function createDefaultFormState(status: QuoteRequestStatus): QuoteDeskFormState {
+  const defaults = createProposalSectionDraft("SOLAR_HOME_SYSTEM");
   return {
     status,
     quoteTitle: "",
     quoteMessage: "",
     quoteItems: [createEmptyQuoteItem()],
+    warrantyMode: "PER_ITEM",
+    fullSystemWarranty: "",
+    customWarranty: "",
+    warrantyGeneralNotes:
+      "Warranty applies under normal use, correct installation, and manufacturer operating conditions.",
+    aiWarrantySummary: "",
+    ...defaults,
     paymentMethod: "",
     paymentTerms: "FULL_PAYMENT",
     depositAmount: "",
@@ -251,6 +336,7 @@ function createDefaultFormState(status: QuoteRequestStatus): QuoteDeskFormState 
 }
 
 function createDefaultQuotationDraft(): CreateQuotationDraft {
+  const defaults = createProposalSectionDraft("SOLAR_HOME_SYSTEM");
   return {
     customerName: "",
     customerPhone: "",
@@ -270,6 +356,13 @@ function createDefaultQuotationDraft(): CreateQuotationDraft {
     quoteMessage: "",
     templateId: "",
     quoteItems: [createEmptyQuoteItem()],
+    warrantyMode: "PER_ITEM",
+    fullSystemWarranty: "",
+    customWarranty: "",
+    warrantyGeneralNotes:
+      "Warranty applies under normal use, correct installation, and manufacturer operating conditions.",
+    aiWarrantySummary: "",
+    ...defaults,
     paymentMethod: "",
     paymentTerms: "FULL_PAYMENT",
     depositAmount: "",
@@ -285,12 +378,63 @@ function parseMoneyInput(value: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function suggestWarrantyForItem(itemName: string) {
+  const normalized = itemName.trim().toLowerCase();
+  if (!normalized) return "";
+  if (/\b(jinko|solar panel|panel|mono crystalline|bifacial)\b/.test(normalized)) {
+    return "25 Years performance warranty";
+  }
+  if (/\b(srne|hybrid inverter|inverter)\b/.test(normalized)) {
+    return "10 Years manufacturer warranty";
+  }
+  if (/\b(lithium|battery|lifepo4)\b/.test(normalized)) {
+    return "10 Years manufacturer warranty";
+  }
+  if (/\b(controller|charge controller)\b/.test(normalized)) {
+    return "12 months manufacturer warranty";
+  }
+  if (/\b(installation|workmanship|commissioning|testing)\b/.test(normalized)) {
+    return "12 months workmanship warranty";
+  }
+  if (/\b(pump|borehole|water heater|purifier|cctv)\b/.test(normalized)) {
+    return "Manufacturer warranty";
+  }
+  return "Manufacturer warranty";
+}
+
+function resolveWarrantyBySource(input: {
+  source: QuoteWarrantySource;
+  itemName: string;
+  productWarranty?: string;
+  templateWarranty?: string;
+  fullSystemWarranty?: string;
+  currentWarranty?: string;
+}) {
+  if (input.source === "PRODUCT_DEFAULT") {
+    return input.productWarranty?.trim() || suggestWarrantyForItem(input.itemName);
+  }
+  if (input.source === "TEMPLATE_DEFAULT") {
+    return input.templateWarranty?.trim() || suggestWarrantyForItem(input.itemName);
+  }
+  if (input.source === "FULL_SYSTEM") {
+    return input.fullSystemWarranty?.trim() || "Covered under full system warranty";
+  }
+  if (input.source === "AI_SUGGESTED") {
+    return suggestWarrantyForItem(input.itemName);
+  }
+  return input.currentWarranty?.trim() || "";
+}
+
 function buildQuoteRequestPayload(formState: QuoteDeskFormState): QuoteRequestResponseInput {
   const quoteItems = formState.quoteItems
     .map((item) => ({
       itemName: item.itemName.trim(),
       quantity: parseMoneyInput(item.quantity),
       unitPrice: parseMoneyInput(item.unitPrice),
+      defaultWarranty: item.defaultWarranty.trim() || undefined,
+      warranty: item.warranty.trim() || undefined,
+      warrantyNotes: item.warrantyNotes.trim() || undefined,
+      warrantySource: item.warrantySource,
     }))
     .filter((item) => item.itemName.length > 0);
 
@@ -299,6 +443,25 @@ function buildQuoteRequestPayload(formState: QuoteDeskFormState): QuoteRequestRe
     quoteTitle: formState.quoteTitle.trim() || undefined,
     quoteMessage: formState.quoteMessage.trim() || undefined,
     quoteItems,
+    warrantyMode: formState.warrantyMode,
+    fullSystemWarranty: formState.fullSystemWarranty.trim() || undefined,
+    customWarranty: formState.customWarranty.trim() || undefined,
+    warrantyGeneralNotes: formState.warrantyGeneralNotes.trim() || undefined,
+    aiWarrantySummary: formState.aiWarrantySummary.trim() || undefined,
+    projectOverview: formState.projectOverview.trim() || undefined,
+    whatPriceIncludes: formState.whatPriceIncludes.trim() || undefined,
+    whatItCanPower: formState.whatItCanPower.trim() || undefined,
+    deliveryTimeline: formState.deliveryTimeline.trim() || undefined,
+    installationTimeline: formState.installationTimeline.trim() || undefined,
+    afterSalesSupport: formState.afterSalesSupport.trim() || undefined,
+    importantNotes: formState.importantNotes.trim() || undefined,
+    scopeExclusions: formState.scopeExclusions.trim() || undefined,
+    similarProjects: formState.similarProjects.trim() || undefined,
+    termsAndConditions: formState.termsAndConditions.trim() || undefined,
+    preparedByDetails: formState.preparedByDetails.trim() || undefined,
+    companyLegalDetails: formState.companyLegalDetails.trim() || undefined,
+    projectReferenceLinks: formState.projectReferenceLinks.trim() || undefined,
+    proposalVisibility: formState.proposalVisibility,
     paymentMethod: formState.paymentMethod || undefined,
     paymentTerms: formState.paymentTerms,
     depositAmount:
@@ -312,6 +475,29 @@ function buildQuoteRequestPayload(formState: QuoteDeskFormState): QuoteRequestRe
     followUpNotes: formState.followUpNotes.trim() || undefined,
     sendEmail: formState.sendEmail,
     sendSms: formState.sendSms,
+  };
+}
+
+function applyProposalDefaults(
+  projectType: QuoteProjectType,
+  overrides?: Partial<QuoteProposalSections> | null,
+) {
+  const defaults = getProjectTypeDefaultSections(projectType);
+  return {
+    projectOverview: overrides?.projectOverview?.trim() || defaults.projectOverview,
+    whatPriceIncludes: overrides?.whatPriceIncludes?.trim() || defaults.whatPriceIncludes,
+    whatItCanPower: overrides?.whatItCanPower?.trim() || defaults.whatItCanPower,
+    deliveryTimeline: overrides?.deliveryTimeline?.trim() || defaults.deliveryTimeline,
+    installationTimeline: overrides?.installationTimeline?.trim() || defaults.installationTimeline,
+    afterSalesSupport: overrides?.afterSalesSupport?.trim() || defaults.afterSalesSupport,
+    importantNotes: overrides?.importantNotes?.trim() || defaults.importantNotes,
+    scopeExclusions: overrides?.scopeExclusions?.trim() || defaults.scopeExclusions,
+    similarProjects: overrides?.similarProjects?.trim() || defaults.similarProjects,
+    termsAndConditions: overrides?.termsAndConditions?.trim() || defaults.termsAndConditions,
+    preparedByDetails: overrides?.preparedByDetails?.trim() || defaults.preparedByDetails,
+    companyLegalDetails: overrides?.companyLegalDetails?.trim() || defaults.companyLegalDetails,
+    projectReferenceLinks: overrides?.projectReferenceLinks?.trim() || defaults.projectReferenceLinks,
+    proposalVisibility: overrides?.visibility || defaults.visibility,
   };
 }
 
@@ -343,6 +529,26 @@ function formatUrgency(value: QuoteUrgency | string | null | undefined) {
 function formatInstallationStatus(value: QuoteInstallationStatus | string | null | undefined) {
   if (!value) return "-";
   return value.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function hydrateQuoteItemDraft(input: {
+  itemName: string;
+  quantity?: string;
+  unitPrice?: string;
+  defaultWarranty?: string | null;
+  warranty?: string | null;
+  warrantyNotes?: string | null;
+  warrantySource?: QuoteWarrantySource;
+}) {
+  return {
+    itemName: input.itemName,
+    quantity: input.quantity ?? "1",
+    unitPrice: input.unitPrice ?? "",
+    defaultWarranty: input.defaultWarranty?.trim() || "",
+    warranty: input.warranty?.trim() || "",
+    warrantyNotes: input.warrantyNotes?.trim() || "",
+    warrantySource: input.warrantySource ?? "CUSTOM",
+  } satisfies QuoteItemDraft;
 }
 
 function renderAnswerValue(value: unknown): string {
@@ -415,6 +621,248 @@ function renderAnswerBlock(title: string, answers?: Record<string, unknown> | nu
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+type ProposalEditorState = Pick<
+  QuoteDeskFormState,
+  | "warrantyMode"
+  | "fullSystemWarranty"
+  | "customWarranty"
+  | "warrantyGeneralNotes"
+  | "aiWarrantySummary"
+  | "projectOverview"
+  | "whatPriceIncludes"
+  | "whatItCanPower"
+  | "deliveryTimeline"
+  | "installationTimeline"
+  | "afterSalesSupport"
+  | "importantNotes"
+  | "scopeExclusions"
+  | "similarProjects"
+  | "termsAndConditions"
+  | "preparedByDetails"
+  | "companyLegalDetails"
+  | "projectReferenceLinks"
+  | "proposalVisibility"
+> & {
+  quoteItems: QuoteItemDraft[];
+};
+
+type ProposalEditorProps = {
+  state: ProposalEditorState;
+  onChange: (updater: (current: ProposalEditorState) => ProposalEditorState) => void;
+};
+
+function ProposalEditor({ state, onChange }: ProposalEditorProps) {
+  const visibilityEntries = [
+    ["projectOverview", "Project Overview"],
+    ["whatPriceIncludes", "What Price Includes"],
+    ["whatItCanPower", "What It Can Power"],
+    ["deliveryAndInstallation", "Delivery & Installation"],
+    ["warranty", "Warranty"],
+    ["afterSalesSupport", "After-sales Support"],
+    ["scopeExclusions", "Scope Exclusions"],
+    ["importantNotes", "Important Notes"],
+    ["similarProjects", "Similar Projects"],
+    ["termsAndConditions", "Terms & Conditions"],
+  ] as const;
+
+  const applyAiWarranty = () => {
+    onChange((current) => {
+      const nextItems = current.quoteItems.map((item) => ({
+        ...item,
+        warrantySource: item.warrantySource === "CUSTOM" ? "AI_SUGGESTED" : item.warrantySource,
+        warranty:
+          item.warrantySource === "CUSTOM" || !item.warranty.trim()
+            ? suggestWarrantyForItem(item.itemName)
+            : item.warranty,
+      }));
+      return {
+        ...current,
+        quoteItems: nextItems,
+        aiWarrantySummary: buildWarrantyAiSummary(
+          nextItems.map((item) => ({
+            itemName: item.itemName,
+            quantity: parseMoneyInput(item.quantity),
+            unitPrice: parseMoneyInput(item.unitPrice),
+            defaultWarranty: item.defaultWarranty || undefined,
+            warranty: item.warranty || undefined,
+            warrantyNotes: item.warrantyNotes || undefined,
+            warrantySource: item.warrantySource,
+            lineTotal: parseMoneyInput(item.quantity) * parseMoneyInput(item.unitPrice),
+          })),
+          current.warrantyMode,
+        ),
+      };
+    });
+  };
+
+  return (
+    <div className="space-y-4 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+            Proposal Structure
+          </div>
+          <div className="mt-1 text-sm text-slate-300">
+            Build a complete quotation proposal with editable sections and flexible warranty wording.
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={applyAiWarranty}
+          className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
+        >
+          Check Warranty With AI
+        </button>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <label className="text-xs uppercase tracking-wide text-slate-400">
+          Warranty mode
+          <select
+            value={state.warrantyMode}
+            onChange={(event) =>
+              onChange((current) => ({
+                ...current,
+                warrantyMode: event.target.value as QuoteWarrantyMode,
+              }))
+            }
+            className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
+          >
+            {QUOTE_WARRANTY_MODES.map((mode) => (
+              <option key={mode} value={mode}>
+                {mode.replace(/_/g, " ")}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs uppercase tracking-wide text-slate-400 md:col-span-2">
+          Full system warranty
+          <input
+            value={state.fullSystemWarranty}
+            onChange={(event) =>
+              onChange((current) => ({ ...current, fullSystemWarranty: event.target.value }))
+            }
+            placeholder="Equipment covered under manufacturer warranty. Installation workmanship covered for 12 months."
+            className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
+          />
+        </label>
+        <label className="text-xs uppercase tracking-wide text-slate-400">
+          AI warranty summary
+          <textarea
+            rows={4}
+            value={state.aiWarrantySummary}
+            onChange={(event) =>
+              onChange((current) => ({ ...current, aiWarrantySummary: event.target.value }))
+            }
+            className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 outline-none"
+          />
+        </label>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <label className="text-xs uppercase tracking-wide text-slate-400">
+          Custom warranty
+          <textarea
+            rows={4}
+            value={state.customWarranty}
+            onChange={(event) =>
+              onChange((current) => ({ ...current, customWarranty: event.target.value }))
+            }
+            placeholder="Battery warranty subject to correct usage, approved installation, and operation within manufacturer limits."
+            className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 outline-none"
+          />
+        </label>
+        <label className="text-xs uppercase tracking-wide text-slate-400">
+          Warranty general notes
+          <textarea
+            rows={4}
+            value={state.warrantyGeneralNotes}
+            onChange={(event) =>
+              onChange((current) => ({ ...current, warrantyGeneralNotes: event.target.value }))
+            }
+            className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 outline-none"
+          />
+        </label>
+      </div>
+
+      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+        {visibilityEntries.map(([key, label]) => (
+          <label key={key} className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2 text-sm text-slate-200">
+            <input
+              type="checkbox"
+              checked={state.proposalVisibility[key]}
+              onChange={(event) =>
+                onChange((current) => ({
+                  ...current,
+                  proposalVisibility: {
+                    ...current.proposalVisibility,
+                    [key]: event.target.checked,
+                  },
+                }))
+              }
+              className="h-4 w-4 rounded border-white/20 bg-slate-900"
+            />
+            <span>{label}</span>
+          </label>
+        ))}
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        {[
+          ["projectOverview", "Project Overview", 4],
+          ["whatPriceIncludes", "What Price Includes", 4],
+          ["whatItCanPower", "What It Can Power", 4],
+          ["afterSalesSupport", "After-sales Support", 4],
+          ["importantNotes", "Important Notes", 4],
+          ["scopeExclusions", "Scope Exclusions", 4],
+          ["similarProjects", "Similar Projects", 4],
+          ["termsAndConditions", "Terms & Conditions", 5],
+          ["preparedByDetails", "Prepared By Details", 3],
+          ["companyLegalDetails", "Company Legal Details", 4],
+          ["projectReferenceLinks", "Project Reference Links", 3],
+        ].map(([key, label, rows]) => (
+          <label key={key} className="text-xs uppercase tracking-wide text-slate-400">
+            {label}
+            <textarea
+              rows={rows as number}
+              value={state[key as keyof ProposalEditorState] as string}
+              onChange={(event) =>
+                onChange((current) => ({
+                  ...current,
+                  [key]: event.target.value,
+                }))
+              }
+              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 outline-none"
+            />
+          </label>
+        ))}
+        <label className="text-xs uppercase tracking-wide text-slate-400">
+          Delivery timeline
+          <textarea
+            rows={3}
+            value={state.deliveryTimeline}
+            onChange={(event) =>
+              onChange((current) => ({ ...current, deliveryTimeline: event.target.value }))
+            }
+            className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 outline-none"
+          />
+        </label>
+        <label className="text-xs uppercase tracking-wide text-slate-400">
+          Installation timeline
+          <textarea
+            rows={3}
+            value={state.installationTimeline}
+            onChange={(event) =>
+              onChange((current) => ({ ...current, installationTimeline: event.target.value }))
+            }
+            className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 outline-none"
+          />
+        </label>
       </div>
     </div>
   );
@@ -616,6 +1064,10 @@ export default function QuotationRequestsDeskClient({
           itemName: item.itemName.trim(),
           quantity: parseMoneyInput(item.quantity),
           unitPrice: parseMoneyInput(item.unitPrice),
+          defaultWarranty: item.defaultWarranty.trim() || undefined,
+          warranty: item.warranty.trim() || undefined,
+          warrantyNotes: item.warrantyNotes.trim() || undefined,
+          warrantySource: item.warrantySource,
         }))
         .filter((item) => item.itemName.length > 0);
       if (!quoteItems.length) {
@@ -651,6 +1103,25 @@ export default function QuotationRequestsDeskClient({
           selectedTemplate?.scopeOfWork ||
           undefined,
         quoteItems,
+        warrantyMode: createDraft.warrantyMode,
+        fullSystemWarranty: createDraft.fullSystemWarranty.trim() || undefined,
+        customWarranty: createDraft.customWarranty.trim() || undefined,
+        warrantyGeneralNotes: createDraft.warrantyGeneralNotes.trim() || undefined,
+        aiWarrantySummary: createDraft.aiWarrantySummary.trim() || undefined,
+        projectOverview: createDraft.projectOverview.trim() || undefined,
+        whatPriceIncludes: createDraft.whatPriceIncludes.trim() || undefined,
+        whatItCanPower: createDraft.whatItCanPower.trim() || undefined,
+        deliveryTimeline: createDraft.deliveryTimeline.trim() || undefined,
+        installationTimeline: createDraft.installationTimeline.trim() || undefined,
+        afterSalesSupport: createDraft.afterSalesSupport.trim() || undefined,
+        importantNotes: createDraft.importantNotes.trim() || undefined,
+        scopeExclusions: createDraft.scopeExclusions.trim() || undefined,
+        similarProjects: createDraft.similarProjects.trim() || undefined,
+        termsAndConditions: createDraft.termsAndConditions.trim() || undefined,
+        preparedByDetails: createDraft.preparedByDetails.trim() || undefined,
+        companyLegalDetails: createDraft.companyLegalDetails.trim() || undefined,
+        projectReferenceLinks: createDraft.projectReferenceLinks.trim() || undefined,
+        proposalVisibility: createDraft.proposalVisibility,
         paymentMethod: createDraft.paymentMethod || undefined,
         paymentTerms: createDraft.paymentTerms,
         depositAmount:
@@ -731,11 +1202,14 @@ export default function QuotationRequestsDeskClient({
       preferredProducts: current.preferredProducts || product.productName,
       quoteItems: [
         ...current.quoteItems,
-        {
+        hydrateQuoteItemDraft({
           itemName: product.productName,
           quantity: "1",
           unitPrice: String(product.price),
-        },
+          defaultWarranty: product.warranty || suggestWarrantyForItem(product.productName),
+          warranty: product.warranty || suggestWarrantyForItem(product.productName),
+          warrantySource: "PRODUCT_DEFAULT",
+        }),
       ],
     }));
   }
@@ -745,11 +1219,14 @@ export default function QuotationRequestsDeskClient({
       ...current,
       quoteItems: [
         ...current.quoteItems,
-        {
+        hydrateQuoteItemDraft({
           itemName: product.productName,
           quantity: "1",
           unitPrice: String(product.price),
-        },
+          defaultWarranty: product.warranty || suggestWarrantyForItem(product.productName),
+          warranty: product.warranty || suggestWarrantyForItem(product.productName),
+          warrantySource: "PRODUCT_DEFAULT",
+        }),
       ],
     }));
   }
@@ -782,23 +1259,84 @@ export default function QuotationRequestsDeskClient({
   }, [showCreatePanel]);
 
   useEffect(() => {
+    if (!showCreatePanel) return;
+    setCreateDraft((current) => {
+      const selectedTemplate = templates.find((template) => template.id === current.templateId) ?? null;
+      const sectionDraft = applyProposalDefaults(current.projectType, selectedTemplate
+        ? {
+            projectOverview: selectedTemplate.projectOverview || undefined,
+            whatItCanPower: selectedTemplate.whatItCanPower || undefined,
+            whatPriceIncludes: selectedTemplate.scopeOfWork || undefined,
+            deliveryTimeline: selectedTemplate.deliveryTimeline || undefined,
+            installationTimeline: selectedTemplate.installationTimeline || undefined,
+            afterSalesSupport: selectedTemplate.afterSalesSupport || undefined,
+            termsAndConditions: selectedTemplate.terms || undefined,
+          }
+        : null);
+
+      return {
+        ...current,
+        ...sectionDraft,
+        quoteMessage:
+          current.quoteMessage ||
+          selectedTemplate?.projectOverview ||
+          selectedTemplate?.scopeOfWork ||
+          sectionDraft.projectOverview,
+      };
+    });
+  }, [createDraft.projectType, createDraft.templateId, showCreatePanel, templates]);
+
+  useEffect(() => {
     setQuery(q);
   }, [q]);
 
   useEffect(() => {
     if (!expandedRequest) return;
     const storedProposal = parseStoredQuoteProposal(expandedRequest.quotationData);
+    const proposalDefaults = applyProposalDefaults(
+      (expandedRequest.projectType as QuoteProjectType | null) || "SOLAR_HOME_SYSTEM",
+      {
+        projectOverview: storedProposal.proposalSections.projectOverview || undefined,
+        whatPriceIncludes: storedProposal.proposalSections.whatPriceIncludes || undefined,
+        whatItCanPower: storedProposal.proposalSections.whatItCanPower || undefined,
+        deliveryTimeline: storedProposal.proposalSections.deliveryTimeline || undefined,
+        installationTimeline: storedProposal.proposalSections.installationTimeline || undefined,
+        afterSalesSupport: storedProposal.proposalSections.afterSalesSupport || undefined,
+        importantNotes: storedProposal.proposalSections.importantNotes || undefined,
+        scopeExclusions: storedProposal.proposalSections.scopeExclusions || undefined,
+        similarProjects: storedProposal.proposalSections.similarProjects || undefined,
+        termsAndConditions: storedProposal.proposalSections.termsAndConditions || undefined,
+        preparedByDetails: storedProposal.proposalSections.preparedByDetails || undefined,
+        companyLegalDetails: storedProposal.proposalSections.companyLegalDetails || undefined,
+        projectReferenceLinks: storedProposal.proposalSections.projectReferenceLinks || undefined,
+        visibility: storedProposal.proposalVisibility,
+      },
+    );
     setFormState({
       status: expandedRequest.status,
       quoteTitle: expandedRequest.quoteTitle || "",
       quoteMessage: expandedRequest.quoteMessage || "",
       quoteItems: storedProposal.items.length
-        ? storedProposal.items.map((item) => ({
-            itemName: item.itemName,
-            quantity: String(item.quantity),
-            unitPrice: String(item.unitPrice),
-          }))
+        ? storedProposal.items.map((item) =>
+            hydrateQuoteItemDraft({
+              itemName: item.itemName,
+              quantity: String(item.quantity),
+              unitPrice: String(item.unitPrice),
+              defaultWarranty: item.defaultWarranty || "",
+              warranty: item.warranty || "",
+              warrantyNotes: item.warrantyNotes || "",
+              warrantySource: item.warrantySource || "CUSTOM",
+            }),
+          )
         : [createEmptyQuoteItem()],
+      warrantyMode: storedProposal.warrantyMode || "PER_ITEM",
+      fullSystemWarranty: storedProposal.fullSystemWarranty || "",
+      customWarranty: storedProposal.customWarranty || "",
+      warrantyGeneralNotes:
+        storedProposal.warrantyGeneralNotes ||
+        "Warranty applies under normal use, correct installation, and manufacturer operating conditions.",
+      aiWarrantySummary: storedProposal.aiWarrantySummary || "",
+      ...proposalDefaults,
       paymentMethod: storedProposal.paymentMethod || "",
       paymentTerms: storedProposal.paymentTerms || "FULL_PAYMENT",
       depositAmount:
@@ -1136,11 +1674,18 @@ export default function QuotationRequestsDeskClient({
                           current.quoteMessage,
                         quoteItems:
                           nextTemplate?.items?.length
-                            ? nextTemplate.items.map((item) => ({
-                                itemName: item.itemName,
-                                quantity: String(item.quantity),
-                                unitPrice: String(item.unitPrice),
-                              }))
+                            ? nextTemplate.items.map((item) =>
+                                hydrateQuoteItemDraft({
+                                  itemName: item.itemName,
+                                  quantity: String(item.quantity),
+                                  unitPrice: String(item.unitPrice),
+                                  defaultWarranty: item.defaultWarranty || nextTemplate.warranty || "",
+                                  warranty:
+                                    item.warranty || item.defaultWarranty || nextTemplate.warranty || "",
+                                  warrantyNotes: item.warrantyNotes || "",
+                                  warrantySource: item.warrantySource || "TEMPLATE_DEFAULT",
+                                }),
+                              )
                             : current.quoteItems,
                         paymentMethod: nextTemplate?.defaultPaymentMethod || current.paymentMethod,
                         paymentTerms: nextTemplate?.defaultPaymentTerms || current.paymentTerms,
@@ -1347,6 +1892,74 @@ export default function QuotationRequestsDeskClient({
                           </button>
                         </div>
                       </div>
+                      <div className="mt-3 grid gap-3 md:grid-cols-3">
+                        <label className="text-xs uppercase tracking-wide text-slate-400">
+                          Warranty source
+                          <select
+                            value={item.warrantySource}
+                            onChange={(event) =>
+                              setCreateDraft((current) => ({
+                                ...current,
+                                quoteItems: current.quoteItems.map((entry, entryIndex) =>
+                                  entryIndex === index
+                                    ? {
+                                        ...entry,
+                                        warrantySource: event.target.value as QuoteWarrantySource,
+                                        warranty: resolveWarrantyBySource({
+                                          source: event.target.value as QuoteWarrantySource,
+                                          itemName: entry.itemName,
+                                          productWarranty: entry.defaultWarranty,
+                                          fullSystemWarranty: current.fullSystemWarranty,
+                                          currentWarranty: entry.warranty,
+                                        }),
+                                      }
+                                    : entry,
+                                ),
+                              }))
+                            }
+                            className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
+                          >
+                            {QUOTE_WARRANTY_SOURCES.map((source) => (
+                              <option key={source} value={source}>
+                                {source.replace(/_/g, " ")}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="text-xs uppercase tracking-wide text-slate-400 md:col-span-2">
+                          Warranty
+                          <input
+                            value={item.warranty}
+                            onChange={(event) =>
+                              setCreateDraft((current) => ({
+                                ...current,
+                                quoteItems: current.quoteItems.map((entry, entryIndex) =>
+                                  entryIndex === index
+                                    ? { ...entry, warranty: event.target.value, warrantySource: "CUSTOM" }
+                                    : entry,
+                                ),
+                              }))
+                            }
+                            className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
+                          />
+                        </label>
+                        <label className="text-xs uppercase tracking-wide text-slate-400 md:col-span-3">
+                          Warranty notes
+                          <textarea
+                            rows={2}
+                            value={item.warrantyNotes}
+                            onChange={(event) =>
+                              setCreateDraft((current) => ({
+                                ...current,
+                                quoteItems: current.quoteItems.map((entry, entryIndex) =>
+                                  entryIndex === index ? { ...entry, warrantyNotes: event.target.value } : entry,
+                                ),
+                              }))
+                            }
+                            className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 outline-none"
+                          />
+                        </label>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1442,6 +2055,17 @@ export default function QuotationRequestsDeskClient({
                     ) : null}
                   </div>
                 </div>
+              </div>
+              <div className="lg:col-span-2">
+                <ProposalEditor
+                  state={createDraft}
+                  onChange={(updater) =>
+                    setCreateDraft((current) => {
+                      const next = updater(current);
+                      return { ...current, ...next };
+                    })
+                  }
+                />
               </div>
               <label className="text-xs uppercase tracking-wide text-slate-400 lg:col-span-2">
                 Customer quotation message
@@ -1910,6 +2534,76 @@ export default function QuotationRequestsDeskClient({
                                         </button>
                                       </div>
                                     </div>
+                                    <div className="mt-3 grid gap-3 md:grid-cols-3">
+                                      <label className="text-xs uppercase tracking-wide text-slate-400">
+                                        Warranty source
+                                        <select
+                                          value={item.warrantySource}
+                                          onChange={(event) =>
+                                            setFormState((current) => ({
+                                              ...current,
+                                              quoteItems: current.quoteItems.map((entry, entryIndex) =>
+                                                entryIndex === index
+                                                  ? {
+                                                      ...entry,
+                                                      warrantySource: event.target.value as QuoteWarrantySource,
+                                                      warranty: resolveWarrantyBySource({
+                                                        source: event.target.value as QuoteWarrantySource,
+                                                        itemName: entry.itemName,
+                                                        productWarranty: entry.defaultWarranty,
+                                                        fullSystemWarranty: current.fullSystemWarranty,
+                                                        currentWarranty: entry.warranty,
+                                                      }),
+                                                    }
+                                                  : entry,
+                                              ),
+                                            }))
+                                          }
+                                          className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                                        >
+                                          {QUOTE_WARRANTY_SOURCES.map((source) => (
+                                            <option key={source} value={source}>
+                                              {source.replace(/_/g, " ")}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </label>
+                                      <label className="text-xs uppercase tracking-wide text-slate-400 md:col-span-2">
+                                        Warranty
+                                        <input
+                                          value={item.warranty}
+                                          onChange={(event) =>
+                                            setFormState((current) => ({
+                                              ...current,
+                                              quoteItems: current.quoteItems.map((entry, entryIndex) =>
+                                                entryIndex === index
+                                                  ? { ...entry, warranty: event.target.value, warrantySource: "CUSTOM" }
+                                                  : entry,
+                                              ),
+                                            }))
+                                          }
+                                          className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                                        />
+                                      </label>
+                                      <label className="text-xs uppercase tracking-wide text-slate-400 md:col-span-3">
+                                        Warranty notes
+                                        <textarea
+                                          rows={2}
+                                          value={item.warrantyNotes}
+                                          onChange={(event) =>
+                                            setFormState((current) => ({
+                                              ...current,
+                                              quoteItems: current.quoteItems.map((entry, entryIndex) =>
+                                                entryIndex === index
+                                                  ? { ...entry, warrantyNotes: event.target.value }
+                                                  : entry,
+                                              ),
+                                            }))
+                                          }
+                                          className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 focus:border-emerald-500 focus:outline-none"
+                                        />
+                                      </label>
+                                    </div>
                                   </div>
                                 ))}
                               </div>
@@ -2013,6 +2707,17 @@ export default function QuotationRequestsDeskClient({
                                   ) : null}
                                 </div>
                               </div>
+                            </div>
+                            <div className="md:col-span-2">
+                              <ProposalEditor
+                                state={formState}
+                                onChange={(updater) =>
+                                  setFormState((current) => {
+                                    const next = updater(current);
+                                    return { ...current, ...next };
+                                  })
+                                }
+                              />
                             </div>
                             <label className="text-xs uppercase tracking-wide text-slate-400 md:col-span-2">
                               Customer message

@@ -8,8 +8,11 @@ import {
   getQuotePaymentMethodLabel,
   getQuotePaymentTermsLabel,
   PAYMENT_METHOD_DETAILS,
+  type QuoteProposalSectionKey,
+  type QuoteProposalVisibilityKey,
   type QuotePaymentMethod,
   type QuotePaymentTerms,
+  type QuoteWarrantyMode,
   type StoredQuoteLineItem,
 } from "@/lib/quoteProposal";
 
@@ -29,6 +32,13 @@ type QuotePdfInput = {
   depositAmount?: number | null;
   balanceAmount?: number | null;
   quoteMessage?: string | null;
+  warrantyMode?: QuoteWarrantyMode | null;
+  fullSystemWarranty?: string | null;
+  customWarranty?: string | null;
+  warrantyGeneralNotes?: string | null;
+  aiWarrantySummary?: string | null;
+  proposalSections?: Partial<Record<QuoteProposalSectionKey, string | null>>;
+  proposalVisibility?: Partial<Record<QuoteProposalVisibilityKey, boolean>>;
 };
 
 const PAGE_WIDTH = 595.28;
@@ -141,6 +151,49 @@ function sanitizeMessageParagraphs(message?: string | null) {
     .split(/\r?\n+/)
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+function splitParagraphLines(value?: string | null) {
+  return String(value || "")
+    .split(/\r?\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function drawBulletSection(args: {
+  page: PDFPage;
+  title: string;
+  lines: string[];
+  cursorY: number;
+  font: PDFFont;
+  fontBold: PDFFont;
+  ensureSpace: (height: number) => void;
+}) {
+  if (!args.lines.length) return args.cursorY;
+  let cursorY = drawSectionTitle(args.page, args.title, args.cursorY, args.fontBold);
+  for (const note of args.lines) {
+    const bulletLines = wrapText(note, PAGE_WIDTH - MARGIN_X * 2 - 18, args.font, 9.5);
+    args.ensureSpace(bulletLines.length * 13 + 8);
+    args.page.drawText("•", {
+      x: MARGIN_X + 2,
+      y: cursorY,
+      size: 12,
+      font: args.fontBold,
+      color: COLORS.accent,
+    });
+    cursorY = drawTextLines({
+      page: args.page,
+      lines: bulletLines,
+      x: MARGIN_X + 14,
+      y: cursorY,
+      size: 9.5,
+      lineGap: 13,
+      font: args.font,
+      color: COLORS.text,
+    });
+    cursorY -= 4;
+  }
+  return cursorY;
 }
 
 function buildDefaultCommercialNotes(input: QuotePdfInput) {
@@ -290,6 +343,33 @@ export async function buildQuoteProposalPdfBuffer(input: QuotePdfInput) {
     proposalSummaryLines[0] ||
     "Thank you for the opportunity to submit our quotation. Please find below our proposed scope of supply, commercial summary, and payment details for your review.";
   const commercialNotes = buildDefaultCommercialNotes(input);
+  const sectionText = {
+    projectOverview: input.proposalSections?.projectOverview || summaryText,
+    whatPriceIncludes: input.proposalSections?.whatPriceIncludes || null,
+    whatItCanPower: input.proposalSections?.whatItCanPower || null,
+    deliveryTimeline: input.proposalSections?.deliveryTimeline || null,
+    installationTimeline: input.proposalSections?.installationTimeline || null,
+    afterSalesSupport: input.proposalSections?.afterSalesSupport || null,
+    importantNotes: input.proposalSections?.importantNotes || null,
+    scopeExclusions: input.proposalSections?.scopeExclusions || null,
+    similarProjects: input.proposalSections?.similarProjects || null,
+    termsAndConditions: input.proposalSections?.termsAndConditions || null,
+    preparedByDetails: input.proposalSections?.preparedByDetails || null,
+    companyLegalDetails: input.proposalSections?.companyLegalDetails || null,
+    projectReferenceLinks: input.proposalSections?.projectReferenceLinks || null,
+  };
+  const sectionVisibility = {
+    projectOverview: input.proposalVisibility?.projectOverview !== false,
+    whatPriceIncludes: input.proposalVisibility?.whatPriceIncludes !== false,
+    whatItCanPower: input.proposalVisibility?.whatItCanPower !== false,
+    deliveryAndInstallation: input.proposalVisibility?.deliveryAndInstallation !== false,
+    warranty: input.proposalVisibility?.warranty !== false,
+    afterSalesSupport: input.proposalVisibility?.afterSalesSupport !== false,
+    scopeExclusions: input.proposalVisibility?.scopeExclusions !== false,
+    importantNotes: input.proposalVisibility?.importantNotes !== false,
+    similarProjects: input.proposalVisibility?.similarProjects !== false,
+    termsAndConditions: input.proposalVisibility?.termsAndConditions !== false,
+  };
 
   ensureSpace(134);
   page.drawText("CUSTOMER QUOTATION", {
@@ -399,20 +479,38 @@ export async function buildQuoteProposalPdfBuffer(input: QuotePdfInput) {
   });
   cursorY -= cardHeight + 22;
 
-  ensureSpace(74);
-  cursorY = drawSectionTitle(page, "Project Overview", cursorY, fontBold);
-  const introLines = wrapText(summaryText, PAGE_WIDTH - MARGIN_X * 2, font, 10.5);
-  cursorY = drawTextLines({
-    page,
-    lines: introLines,
-    x: MARGIN_X,
-    y: cursorY,
-    size: 10.5,
-    lineGap: 15,
-    font,
-    color: COLORS.text,
-  });
-  cursorY -= 16;
+  if (sectionVisibility.projectOverview) {
+    ensureSpace(74);
+    cursorY = drawSectionTitle(page, "Project Overview", cursorY, fontBold);
+    const introLines = wrapText(sectionText.projectOverview || summaryText, PAGE_WIDTH - MARGIN_X * 2, font, 10.5);
+    cursorY = drawTextLines({
+      page,
+      lines: introLines,
+      x: MARGIN_X,
+      y: cursorY,
+      size: 10.5,
+      lineGap: 15,
+      font,
+      color: COLORS.text,
+    });
+    cursorY -= 16;
+  }
+
+  if (sectionVisibility.whatPriceIncludes && sectionText.whatPriceIncludes) {
+    ensureSpace(80);
+    cursorY = drawSectionTitle(page, "What Price Includes", cursorY, fontBold);
+    cursorY = drawTextLines({
+      page,
+      lines: wrapText(sectionText.whatPriceIncludes, PAGE_WIDTH - MARGIN_X * 2, font, 9.8),
+      x: MARGIN_X,
+      y: cursorY,
+      size: 9.8,
+      lineGap: 14,
+      font,
+      color: COLORS.text,
+    });
+    cursorY -= 14;
+  }
 
   ensureSpace(90);
   cursorY = drawSectionTitle(page, "Bill Of Quantities / Scope Of Supply", cursorY, fontBold);
@@ -583,6 +681,128 @@ export async function buildQuoteProposalPdfBuffer(input: QuotePdfInput) {
   }
   cursorY -= totalsHeight + 22;
 
+  if (sectionVisibility.whatItCanPower && sectionText.whatItCanPower) {
+    ensureSpace(84);
+    cursorY = drawSectionTitle(page, "What This Solution Can Support", cursorY, fontBold);
+    cursorY = drawTextLines({
+      page,
+      lines: wrapText(sectionText.whatItCanPower, PAGE_WIDTH - MARGIN_X * 2, font, 9.8),
+      x: MARGIN_X,
+      y: cursorY,
+      size: 9.8,
+      lineGap: 14,
+      font,
+      color: COLORS.text,
+    });
+    cursorY -= 14;
+  }
+
+  if (sectionVisibility.deliveryAndInstallation) {
+    const combined = [
+      sectionText.deliveryTimeline ? `Delivery: ${sectionText.deliveryTimeline}` : "",
+      sectionText.installationTimeline ? `Installation: ${sectionText.installationTimeline}` : "",
+    ].filter(Boolean);
+    if (combined.length) {
+      ensureSpace(80);
+      cursorY = drawSectionTitle(page, "Delivery And Installation", cursorY, fontBold);
+      cursorY = drawTextLines({
+        page,
+        lines: combined.flatMap((line) => wrapText(line, PAGE_WIDTH - MARGIN_X * 2, font, 9.8)),
+        x: MARGIN_X,
+        y: cursorY,
+        size: 9.8,
+        lineGap: 14,
+        font,
+        color: COLORS.text,
+      });
+      cursorY -= 14;
+    }
+  }
+
+  if (sectionVisibility.warranty) {
+    const warrantyRows = input.items
+      .map((item) => [
+        item.itemName,
+        item.warranty ||
+          item.defaultWarranty ||
+          (input.warrantyMode === "FULL_SYSTEM"
+            ? input.fullSystemWarranty || "Covered under full system warranty"
+            : input.warrantyMode === "CUSTOM"
+              ? input.customWarranty || "Custom warranty"
+              : "Manufacturer warranty"),
+        item.warrantyNotes || "",
+      ] as const)
+      .filter((row) => row[0] && row[1]);
+
+    if (warrantyRows.length || input.warrantyGeneralNotes || input.aiWarrantySummary) {
+      ensureSpace(120);
+      cursorY = drawSectionTitle(page, "Warranty Coverage", cursorY, fontBold);
+      const warrantyTableWidth = PAGE_WIDTH - MARGIN_X * 2;
+      const compWidth = 205;
+      const warrWidth = 170;
+      const noteWidth = warrantyTableWidth - compWidth - warrWidth;
+      page.drawRectangle({
+        x: MARGIN_X,
+        y: cursorY - 22,
+        width: warrantyTableWidth,
+        height: 22,
+        color: COLORS.tableHead,
+      });
+      let warrantyHeaderX = MARGIN_X;
+      for (const [label, width] of [
+        ["Component", compWidth],
+        ["Warranty", warrWidth],
+        ["Notes", noteWidth],
+      ] as const) {
+        page.drawText(label, {
+          x: warrantyHeaderX + 6,
+          y: cursorY - 15,
+          size: 9,
+          font: fontBold,
+          color: COLORS.white,
+        });
+        warrantyHeaderX += width;
+      }
+      cursorY -= 24;
+      for (const [component, warranty, notes] of warrantyRows) {
+        const componentLines = wrapText(component, compWidth - 10, font, 9);
+        const warrantyLines = wrapText(warranty, warrWidth - 10, font, 9);
+        const noteLines = wrapText(notes || "-", noteWidth - 10, font, 9);
+        const rowHeight = Math.max(componentLines.length, warrantyLines.length, noteLines.length) * 12 + 8;
+        ensureSpace(rowHeight + 8);
+        page.drawRectangle({
+          x: MARGIN_X,
+          y: cursorY - rowHeight,
+          width: warrantyTableWidth,
+          height: rowHeight,
+          borderColor: COLORS.border,
+          borderWidth: 1,
+          color: COLORS.panel,
+        });
+        drawTextLines({ page, lines: componentLines, x: MARGIN_X + 6, y: cursorY - 14, size: 9, lineGap: 12, font, color: COLORS.text });
+        drawTextLines({ page, lines: warrantyLines, x: MARGIN_X + compWidth + 6, y: cursorY - 14, size: 9, lineGap: 12, font, color: COLORS.text });
+        drawTextLines({ page, lines: noteLines, x: MARGIN_X + compWidth + warrWidth + 6, y: cursorY - 14, size: 9, lineGap: 12, font, color: COLORS.text });
+        cursorY -= rowHeight;
+      }
+      const warrantyNotes = [
+        ...splitParagraphLines(input.warrantyGeneralNotes),
+        ...splitParagraphLines(input.aiWarrantySummary),
+      ];
+      if (warrantyNotes.length) {
+        cursorY -= 10;
+        cursorY = drawBulletSection({
+          page,
+          title: "Warranty Notes",
+          lines: warrantyNotes,
+          cursorY,
+          font,
+          fontBold,
+          ensureSpace,
+        });
+      }
+    }
+  }
+
   ensureSpace(140);
   cursorY = drawSectionTitle(page, "Payment Details", cursorY, fontBold);
   const paymentSections = input.paymentMethod
@@ -622,29 +842,68 @@ export async function buildQuoteProposalPdfBuffer(input: QuotePdfInput) {
     cursorY -= boxHeight + 10;
   }
 
-  ensureSpace(130);
-  cursorY = drawSectionTitle(page, "Important Notes", cursorY, fontBold);
-  for (const note of commercialNotes) {
-    const bulletLines = wrapText(note, PAGE_WIDTH - MARGIN_X * 2 - 18, font, 9.5);
-    ensureSpace(bulletLines.length * 13 + 8);
-    page.drawText("•", {
-      x: MARGIN_X + 2,
-      y: cursorY,
-      size: 12,
-      font: fontBold,
-      color: COLORS.accent,
+  if (sectionVisibility.afterSalesSupport && sectionText.afterSalesSupport) {
+    cursorY = drawBulletSection({
+      page,
+      title: "After-sales Support",
+      lines: splitParagraphLines(sectionText.afterSalesSupport),
+      cursorY,
+      font,
+      fontBold,
+      ensureSpace,
     });
+  }
+
+  if (sectionVisibility.importantNotes) {
+    cursorY = drawBulletSection({
+      page,
+      title: "Important Notes",
+      lines: [...commercialNotes, ...splitParagraphLines(sectionText.importantNotes)],
+      cursorY,
+      font,
+      fontBold,
+      ensureSpace,
+    });
+  }
+
+  if (sectionVisibility.scopeExclusions && sectionText.scopeExclusions) {
+    cursorY = drawBulletSection({
+      page,
+      title: "Scope Exclusions",
+      lines: splitParagraphLines(sectionText.scopeExclusions),
+      cursorY,
+      font,
+      fontBold,
+      ensureSpace,
+    });
+  }
+
+  if (sectionVisibility.similarProjects && sectionText.similarProjects) {
+    ensureSpace(72);
+    cursorY = drawSectionTitle(page, "Similar Projects", cursorY, fontBold);
     cursorY = drawTextLines({
       page,
-      lines: bulletLines,
-      x: MARGIN_X + 14,
+      lines: wrapText(sectionText.similarProjects, PAGE_WIDTH - MARGIN_X * 2, font, 9.8),
+      x: MARGIN_X,
       y: cursorY,
-      size: 9.5,
-      lineGap: 13,
+      size: 9.8,
+      lineGap: 14,
       font,
       color: COLORS.text,
     });
-    cursorY -= 4;
+    cursorY -= 14;
+  }
+
+  if (sectionVisibility.termsAndConditions && sectionText.termsAndConditions) {
+    cursorY = drawBulletSection({
+      page,
+      title: "Terms And Conditions",
+      lines: splitParagraphLines(sectionText.termsAndConditions),
+      cursorY,
+      font,
+      fontBold,
+      ensureSpace,
+    });
   }
 
   const extraParagraphs = proposalSummaryLines.slice(1);
@@ -669,37 +928,40 @@ export async function buildQuoteProposalPdfBuffer(input: QuotePdfInput) {
     }
   }
 
-  ensureSpace(110);
-  cursorY -= 6;
-  page.drawText("Prepared by:", {
-    x: MARGIN_X,
-    y: cursorY,
-    size: 10,
-    font: fontBold,
-    color: COLORS.text,
-  });
-  page.drawText("Betech Solar Solutions Quotations Team", {
-    x: MARGIN_X + 74,
-    y: cursorY,
-    size: 10,
-    font,
-    color: COLORS.text,
-  });
-  cursorY -= 24;
+  if (sectionText.projectReferenceLinks) {
+    ensureSpace(56);
+    cursorY = drawSectionTitle(page, "Reference Links", cursorY, fontBold);
+    cursorY = drawTextLines({
+      page,
+      lines: wrapText(sectionText.projectReferenceLinks, PAGE_WIDTH - MARGIN_X * 2, font, 9.5),
+      x: MARGIN_X,
+      y: cursorY,
+      size: 9.5,
+      lineGap: 13,
+      font,
+      color: COLORS.text,
+    });
+    cursorY -= 10;
+  }
 
-  page.drawLine({
-    start: { x: MARGIN_X, y: cursorY },
-    end: { x: MARGIN_X + 180, y: cursorY },
-    thickness: 1,
-    color: COLORS.border,
-  });
-  page.drawText("Authorized Signature", {
-    x: MARGIN_X,
-    y: cursorY - 14,
-    size: 9,
-    font,
-    color: COLORS.muted,
-  });
+  if (sectionText.companyLegalDetails || sectionText.preparedByDetails) {
+    ensureSpace(72);
+    cursorY = drawSectionTitle(page, "Prepared By", cursorY, fontBold);
+    const footerNotes = [
+      ...splitParagraphLines(sectionText.preparedByDetails),
+      ...splitParagraphLines(sectionText.companyLegalDetails),
+    ];
+    cursorY = drawTextLines({
+      page,
+      lines: footerNotes.flatMap((line) => wrapText(line, PAGE_WIDTH - MARGIN_X * 2, font, 9.2)),
+      x: MARGIN_X,
+      y: cursorY,
+      size: 9.2,
+      lineGap: 13,
+      font,
+      color: COLORS.text,
+    });
+  }
 
   return Buffer.from(await pdf.save());
 }
