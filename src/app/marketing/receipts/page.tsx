@@ -477,7 +477,7 @@ export default function MarketingReceiptsPage() {
                     : "border-white/10 bg-white/[0.03] text-slate-100 hover:border-white/30 hover:bg-white/[0.06]"
                 }`}
               >
-                Quotation Requests
+                Quotations
               </button>
               <Link
                 href="/marketing/agent-orders"
@@ -592,14 +592,14 @@ export default function MarketingReceiptsPage() {
                   ? "POS Receipt Desk"
                   : viewMode === "web-orders"
                     ? "Web Orders Desk"
-                    : "Quotation Desk"}
+                    : "Quotation Center"}
               </h2>
               <p className="text-sm text-slate-400">
                 {viewMode === "receipts"
                   ? "Search receipts, manage POD updates, and capture delivery fees inside the selected range."
                   : viewMode === "web-orders"
                     ? "Process assigned website orders using the same lifecycle used in admin."
-                    : "Review assigned quotation requests and prepare customer quotations from one desk."}
+                    : "Review assigned quotation requests, create manual quotations, use prepared templates, and notify customers from one desk."}
               </p>
             </div>
           </div>
@@ -657,7 +657,7 @@ export default function MarketingReceiptsPage() {
               defaultStatusFilter="NEW"
               filterStorageKey="marketing:quote-requests:status"
               deskTitle="Assigned quotation requests"
-              deskDescription="Prepare customer quotations, recommend products, and notify customers from the same desk."
+              deskDescription="Prepare customer quotations, create manual drafts, use prepared templates, and notify customers from the same desk."
               emptyMessage="No assigned quotation requests found right now."
               q={filters.query}
               start={filters.start}

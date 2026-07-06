@@ -23,7 +23,20 @@ function isWithinPeriod(value: DateLike, period: PeriodBounds) {
 
 export function isOpenQuotationStatus(status: string | null | undefined) {
   const normalized = normalizeStatus(status);
-  return new Set(["new", "contacted", "pending", "follow_up", "quoted", "amount_pending"]).has(normalized);
+  return new Set([
+    "draft",
+    "new",
+    "contacted",
+    "pending",
+    "pending_approval",
+    "approved",
+    "sent",
+    "viewed",
+    "follow_up",
+    "quoted",
+    "amount_pending",
+    "accepted",
+  ]).has(normalized);
 }
 
 export function isPendingWebOrderStatus(status: string | null | undefined) {

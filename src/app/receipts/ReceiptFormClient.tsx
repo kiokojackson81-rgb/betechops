@@ -213,6 +213,15 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       const bytes = Uint8Array.from(decoded, (char) => char.charCodeAt(0));
       const parsed = JSON.parse(new TextDecoder().decode(bytes)) as any;
 
+      if (typeof parsed.serial === "string" && parsed.serial.trim()) {
+        setSerial(parsed.serial.trim());
+      }
+      if (
+        typeof parsed.docType === "string" &&
+        ["RECEIPT", "INVOICE", "QUOTATION", "LAYAWAY"].includes(parsed.docType.trim().toUpperCase())
+      ) {
+        setDocType(parsed.docType.trim().toUpperCase());
+      }
       if (parsed.websiteOrderId) setWebsiteOrderId(String(parsed.websiteOrderId));
       if (parsed.websiteOrderRef) setWebsiteOrderRef(String(parsed.websiteOrderRef));
       if (parsed.customerName) setCustomerName(String(parsed.customerName));

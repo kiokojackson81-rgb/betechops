@@ -1,0 +1,38 @@
+import { NextRequest, NextResponse } from "next/server";
+import {
+  createManualQuotation,
+  manualQuotationCreateSchema,
+  requireQuoteRequestsStaffActor,
+} from "@/lib/quoteRequests";
+
+export const dynamic = "force-dynamic";
+
+export async function POST(request: NextRequest) {
+  const guard = await requireQuoteRequestsStaffActor({
+    impersonateId: request.nextUrl.searchParams.get("impersonateId"),
+  });
+  if (!guard.ok) {
+    return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+  }
+
+  const body = await request.json().catch(() => null);
+  const parsed = manualQuotationCreateSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { ok: false, error: "Invalid quotation draft payload.", issues: parsed.error.flatten() },
+      { status: 400 },
+    );
+  }
+
+  const created = await createManualQuotation(parsed.data, {
+    id: guard.userId,
+    name: guard.name,
+    email: guard.email,
+  });
+
+  if (!created) {
+    return NextResponse.json({ ok: false, error: "Unable to create quotation draft." }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true, request: created });
+}

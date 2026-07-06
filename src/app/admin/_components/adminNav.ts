@@ -47,6 +47,7 @@ export const NAV: AdminNavItem[] = [
       { href: "/admin/pending-pricing", label: "Pricing" },
       { href: "/admin/returns", label: "Returns" },
       { href: "/admin/receipts?tab=website-orders", label: "Website Orders" },
+      { href: "/admin/quotation-center", label: "Quotation Center" },
     ],
   },
   { href: "/admin/online/summary", label: "Jumia Activities", icon: Truck },

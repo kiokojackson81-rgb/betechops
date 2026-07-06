@@ -3,6 +3,7 @@ import { getKenyanPhoneVariants, normalizeKenyanPhone } from "@/lib/phone";
 import { getVoiceCustomerContext, type VoiceTimelineItem } from "@/lib/voiceCustomerContext";
 import { resolveVoiceProviderOutcome } from "@/lib/voiceOperations";
 import { findSafeCustomerProfileByUserId } from "@/lib/customerProfile";
+import { listCustomerQuoteRequests, listQuotationEvents } from "@/lib/quoteRequests";
 import type { ChatraceLookupResult } from "@/lib/integrations/chatrace";
 
 export type AdminCustomerContextInput = {
@@ -373,8 +374,22 @@ export async function getAdminCustomerContext(
 
   const latestReceipt = voiceContext?.recentReceipts[0] ?? null;
   const latestWebOrder = voiceContext?.recentWebOrders[0] ?? null;
-  const latestQuotation = voiceContext?.recentQuotations[0] ?? null;
+  const recentCustomerQuotations = resolvedUserId
+    ? await listCustomerQuoteRequests({
+        userId: resolvedUserId,
+        phoneVariants: allPhoneVariants,
+        normalizedEmails: profileEmails,
+        take: 3,
+      })
+    : [];
+  const latestQuotation = recentCustomerQuotations[0] ?? voiceContext?.recentQuotations[0] ?? null;
   const latestAgentOrder = voiceContext?.recentAgentOrders[0] ?? null;
+  const recentQuotationEvents = await Promise.all(
+    recentCustomerQuotations.slice(0, 2).map(async (quotation) => ({
+      quotation,
+      events: (await listQuotationEvents(quotation.id)).slice(0, 2),
+    })),
+  );
 
   const timeline: AdminCustomerContextTimelineItem[] = [
     ...(voiceContext?.timeline || []).map((item) => ({
@@ -437,6 +452,26 @@ export async function getAdminCustomerContext(
           },
         ]
       : []),
+    ...recentCustomerQuotations.map((quotation) => ({
+      id: `quotation-${quotation.id}`,
+      title: quotation.quoteTitle || "Quotation request",
+      detail: `${quotation.quoteRef} · ${normalizeStatusLabel(quotation.status) || "Quotation"}${
+        quotation.templateName ? ` · ${quotation.templateName}` : ""
+      }`,
+      at: quotation.updatedAt || quotation.createdAt,
+      href: buildQuotationHref(quotation.id),
+      tone: "sales" as const,
+    })),
+    ...recentQuotationEvents.flatMap(({ quotation, events }) =>
+      events.map((event) => ({
+        id: `quotation-event-${event.id}`,
+        title: event.eventLabel,
+        detail: `${quotation.quoteRef}${event.eventDetail ? ` · ${event.eventDetail}` : ""}`,
+        at: event.createdAt,
+        href: buildQuotationHref(quotation.id),
+        tone: "sales" as const,
+      })),
+    ),
     ...(voiceContext?.chatrace.found && voiceContext.chatrace.lastInteractionAt
       ? [
           {

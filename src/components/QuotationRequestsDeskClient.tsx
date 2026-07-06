@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, ExternalLink, Loader2, Plus, RefreshCcw, Trash2 } from "lucide-react";
 import type {
+  ManualQuotationCreateInput,
   QuoteContactMethod,
   QuoteContactTime,
   QuoteInstallationStatus,
@@ -12,6 +13,7 @@ import type {
   QuoteRequestStatus,
   QuoteUrgency,
   SerializedQuoteRequest,
+  SerializedQuotationTemplate,
 } from "@/lib/quoteRequests";
 import {
   formatQuoteCurrency,
@@ -45,18 +47,50 @@ type Props = {
   start?: string;
   end?: string;
   compactMode?: boolean;
+  createApiPath?: string;
+  templateApiPath?: string;
+  enableCreate?: boolean;
+  allowTemplateManager?: boolean;
 };
 
 const QUOTE_REQUEST_STATUSES: QuoteRequestStatus[] = [
+  "DRAFT",
   "NEW",
+  "PENDING_APPROVAL",
+  "APPROVED",
   "CONTACTED",
+  "SENT",
+  "VIEWED",
   "QUOTED",
   "FOLLOW_UP",
+  "ACCEPTED",
+  "REJECTED",
   "CONVERTED",
   "CLOSED",
+  "EXPIRED",
 ];
 
 const STATUS_OPTIONS: QuoteRequestStatusFilter[] = ["ALL", ...QUOTE_REQUEST_STATUSES];
+
+const PROJECT_TYPE_OPTIONS: QuoteProjectType[] = [
+  "SOLAR_HOME_SYSTEM",
+  "SOLAR_WATER_PUMP",
+  "SOLAR_WATER_HEATER",
+  "BOREHOLE_SOLAR_SYSTEM",
+  "COMMERCIAL_SOLAR_SYSTEM",
+  "CCTV_PLUS_SOLAR",
+  "STREET_LIGHTS",
+  "OTHER",
+];
+
+const CONTACT_METHOD_OPTIONS: QuoteContactMethod[] = ["PHONE_CALL", "WHATSAPP", "EMAIL"];
+const CONTACT_TIME_OPTIONS: QuoteContactTime[] = ["ANYTIME", "MORNING", "AFTERNOON", "EVENING"];
+const URGENCY_OPTIONS: QuoteUrgency[] = ["TODAY", "THIS_WEEK", "THIS_MONTH", "JUST_RESEARCHING"];
+const INSTALLATION_OPTIONS: QuoteInstallationStatus[] = [
+  "NEW_INSTALLATION",
+  "UPGRADE_EXISTING_SYSTEM",
+  "REPAIR_OR_REPLACEMENT",
+];
 
 function buildApiUrl(
   apiBasePath: string,
@@ -142,6 +176,28 @@ type QuoteDeskFormState = {
   sendSms: boolean;
 };
 
+type CreateQuotationMode = "manual" | "template";
+
+type CreateQuotationDraft = {
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+  customerLocation: string;
+  county: string;
+  town: string;
+  specificLocation: string;
+  projectType: QuoteProjectType;
+  preferredContactMethod: QuoteContactMethod;
+  bestTimeToContact: QuoteContactTime;
+  urgency: QuoteUrgency;
+  installationStatus: QuoteInstallationStatus;
+  preferredProducts: string;
+  notes: string;
+  quoteTitle: string;
+  quoteMessage: string;
+  templateId: string;
+};
+
 function createEmptyQuoteItem(): QuoteItemDraft {
   return {
     itemName: "",
@@ -163,6 +219,28 @@ function createDefaultFormState(status: QuoteRequestStatus): QuoteDeskFormState 
     followUpNotes: "",
     sendEmail: true,
     sendSms: true,
+  };
+}
+
+function createDefaultQuotationDraft(): CreateQuotationDraft {
+  return {
+    customerName: "",
+    customerPhone: "",
+    customerEmail: "",
+    customerLocation: "",
+    county: "",
+    town: "",
+    specificLocation: "",
+    projectType: "SOLAR_HOME_SYSTEM",
+    preferredContactMethod: "PHONE_CALL",
+    bestTimeToContact: "ANYTIME",
+    urgency: "THIS_WEEK",
+    installationStatus: "NEW_INSTALLATION",
+    preferredProducts: "",
+    notes: "",
+    quoteTitle: "",
+    quoteMessage: "",
+    templateId: "",
   };
 }
 
@@ -298,12 +376,23 @@ export default function QuotationRequestsDeskClient({
   start,
   end,
   compactMode = false,
+  createApiPath = "/api/attendant/quotation-center/create",
+  templateApiPath = "/api/attendant/quotation-center/templates",
+  enableCreate = true,
+  allowTemplateManager = false,
 }: Props) {
   const [requests, setRequests] = useState<SerializedQuoteRequest[]>([]);
   const [statusFilter, setStatusFilter] = useState<QuoteRequestStatusFilter>(defaultStatusFilter);
   const [query, setQuery] = useState(q);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showCreatePanel, setShowCreatePanel] = useState(false);
+  const [createMode, setCreateMode] = useState<CreateQuotationMode>("manual");
+  const [createDraft, setCreateDraft] = useState<CreateQuotationDraft>(createDefaultQuotationDraft());
+  const [templates, setTemplates] = useState<SerializedQuotationTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [createSaving, setCreateSaving] = useState(false);
+  const [draftOpening, setDraftOpening] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -402,6 +491,89 @@ export default function QuotationRequestsDeskClient({
     }
   }
 
+  async function refreshTemplates() {
+    setTemplatesLoading(true);
+    try {
+      const response = await fetch(
+        buildApiUrl(templateApiPath, apiQueryParams, "", allowTemplateManager ? { all: "1" } : undefined),
+        { cache: "no-store" },
+      );
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Failed to load quotation templates.");
+      }
+      setTemplates(Array.isArray(data.templates) ? data.templates : []);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Failed to load quotation templates.");
+    } finally {
+      setTemplatesLoading(false);
+    }
+  }
+
+  async function handleCreateQuotation() {
+    setCreateSaving(true);
+    setMessage(null);
+    try {
+      const selectedTemplate = templates.find((template) => template.id === createDraft.templateId) ?? null;
+      const payload: ManualQuotationCreateInput = {
+        name: createDraft.customerName,
+        phone: createDraft.customerPhone,
+        email: createDraft.customerEmail || undefined,
+        location: createDraft.customerLocation || undefined,
+        county: createDraft.county || undefined,
+        town: createDraft.town || undefined,
+        specificLocation: createDraft.specificLocation || undefined,
+        projectType: createDraft.projectType,
+        preferredContactMethod: createDraft.preferredContactMethod,
+        bestTimeToContact: createDraft.bestTimeToContact,
+        urgency: createDraft.urgency,
+        installationStatus: createDraft.installationStatus,
+        preferredProducts: createDraft.preferredProducts || undefined,
+        notes: createDraft.notes || undefined,
+        propertyType: "",
+        source: createMode === "template" ? "TEMPLATE" : "MANUAL",
+        templateId: selectedTemplate?.id,
+        templateName: selectedTemplate?.templateName,
+        quoteTitle:
+          createDraft.quoteTitle ||
+          selectedTemplate?.templateName ||
+          createDraft.preferredProducts ||
+          formatProjectType(createDraft.projectType),
+        quoteMessage:
+          createDraft.quoteMessage ||
+          selectedTemplate?.projectOverview ||
+          selectedTemplate?.scopeOfWork ||
+          undefined,
+        quoteItems: selectedTemplate?.items || [],
+        paymentMethod: selectedTemplate?.defaultPaymentMethod || undefined,
+        paymentTerms: selectedTemplate?.defaultPaymentTerms || undefined,
+        depositAmount: selectedTemplate?.defaultDepositAmount ?? undefined,
+        balanceAmount: selectedTemplate?.defaultBalanceAmount ?? undefined,
+      };
+
+      const response = await fetch(buildApiUrl(createApiPath, apiQueryParams), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Failed to create quotation draft.");
+      }
+      setShowCreatePanel(false);
+      setCreateDraft(createDefaultQuotationDraft());
+      await refreshRequests("ALL", query);
+      if (data.request?.id) {
+        setExpandedId(data.request.id);
+      }
+      setMessage("Quotation draft created successfully.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Failed to create quotation draft.");
+    } finally {
+      setCreateSaving(false);
+    }
+  }
+
   useEffect(() => {
     if (filterStorageKey && typeof window !== "undefined") {
       const stored = window.localStorage.getItem(filterStorageKey);
@@ -421,6 +593,13 @@ export default function QuotationRequestsDeskClient({
     refreshRequests().catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!showCreatePanel) return;
+    if (templates.length) return;
+    refreshTemplates().catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showCreatePanel]);
 
   useEffect(() => {
     setQuery(q);
@@ -492,6 +671,33 @@ export default function QuotationRequestsDeskClient({
     }
   }
 
+  async function handleOpenReceiptDraft(
+    request: SerializedQuoteRequest,
+    mode: "receipt" | "quotation",
+  ) {
+    setDraftOpening(`${request.id}:${mode}`);
+    setMessage(null);
+    try {
+      const response = await fetch(
+        buildApiUrl(apiBasePath, apiQueryParams, `${request.id}/create-receipt-draft`),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode }),
+        },
+      );
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.ok || !data?.url) {
+        throw new Error(data?.error || "Failed to open the receipts desk draft.");
+      }
+      window.location.assign(data.url);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Failed to open the receipts desk draft.");
+    } finally {
+      setDraftOpening(null);
+    }
+  }
+
   return (
     <div className="space-y-4">
       {!compactMode ? (
@@ -505,6 +711,16 @@ export default function QuotationRequestsDeskClient({
             <p className="mt-1 text-sm text-slate-300">{deskDescription}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {enableCreate ? (
+              <button
+                type="button"
+                onClick={() => setShowCreatePanel((current) => !current)}
+                className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 hover:text-white"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Create Quotation
+              </button>
+            ) : null}
             <input
               type="search"
               value={query}
@@ -556,6 +772,18 @@ export default function QuotationRequestsDeskClient({
       </div>
       ) : (
         <>
+          {enableCreate ? (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowCreatePanel((current) => !current)}
+                className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 hover:text-white"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Create Quotation
+              </button>
+            </div>
+          ) : null}
           {loadError ? (
             <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
               {loadError}
@@ -569,10 +797,181 @@ export default function QuotationRequestsDeskClient({
         </>
       )}
 
+        {showCreatePanel ? (
+          <div className={`rounded-[28px] border border-emerald-500/20 bg-slate-950/60 ${compactMode ? "p-4" : "mt-5 p-5"}`}>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300">
+                  Quotation Center
+                </div>
+                <div className="mt-2 text-lg font-semibold text-white">
+                  Create quotation draft
+                </div>
+                <div className="mt-1 text-sm text-slate-300">
+                  Start a quotation for walk-in, WhatsApp, phone, or template-based customers without waiting for the website form.
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  ["manual", "Manual quotation"],
+                  ["template", "From prepared template"],
+                ] as Array<[CreateQuotationMode, string]>).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setCreateMode(mode)}
+                    className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                      createMode === mode
+                        ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
+                        : "border-white/10 text-slate-200 hover:border-white/25"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 lg:grid-cols-2">
+              <label className="text-xs uppercase tracking-wide text-slate-400">
+                Customer name
+                <input
+                  value={createDraft.customerName}
+                  onChange={(event) => setCreateDraft((current) => ({ ...current, customerName: event.target.value }))}
+                  className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
+                />
+              </label>
+              <label className="text-xs uppercase tracking-wide text-slate-400">
+                Phone number
+                <input
+                  value={createDraft.customerPhone}
+                  onChange={(event) => setCreateDraft((current) => ({ ...current, customerPhone: event.target.value }))}
+                  className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
+                />
+              </label>
+              <label className="text-xs uppercase tracking-wide text-slate-400">
+                Email
+                <input
+                  value={createDraft.customerEmail}
+                  onChange={(event) => setCreateDraft((current) => ({ ...current, customerEmail: event.target.value }))}
+                  className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
+                />
+              </label>
+              <label className="text-xs uppercase tracking-wide text-slate-400">
+                Project type
+                <select
+                  value={createDraft.projectType}
+                  onChange={(event) => setCreateDraft((current) => ({ ...current, projectType: event.target.value as QuoteProjectType }))}
+                  className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
+                >
+                  {PROJECT_TYPE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {formatProjectType(option)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-xs uppercase tracking-wide text-slate-400 lg:col-span-2">
+                Location
+                <input
+                  value={createDraft.customerLocation}
+                  onChange={(event) => setCreateDraft((current) => ({ ...current, customerLocation: event.target.value }))}
+                  className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
+                />
+              </label>
+              <label className="text-xs uppercase tracking-wide text-slate-400">
+                Quotation title
+                <input
+                  value={createDraft.quoteTitle}
+                  onChange={(event) => setCreateDraft((current) => ({ ...current, quoteTitle: event.target.value }))}
+                  className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
+                />
+              </label>
+              <label className="text-xs uppercase tracking-wide text-slate-400">
+                Preferred contact
+                <select
+                  value={createDraft.preferredContactMethod}
+                  onChange={(event) => setCreateDraft((current) => ({ ...current, preferredContactMethod: event.target.value as QuoteContactMethod }))}
+                  className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
+                >
+                  {CONTACT_METHOD_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {formatContactMethod(option)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {createMode === "template" ? (
+                <label className="text-xs uppercase tracking-wide text-slate-400 lg:col-span-2">
+                  Prepared quotation template
+                  <select
+                    value={createDraft.templateId}
+                    onChange={(event) => {
+                      const nextId = event.target.value;
+                      const nextTemplate = templates.find((template) => template.id === nextId) ?? null;
+                      setCreateDraft((current) => ({
+                        ...current,
+                        templateId: nextId,
+                        quoteTitle: current.quoteTitle || nextTemplate?.templateName || current.quoteTitle,
+                        quoteMessage: current.quoteMessage || nextTemplate?.projectOverview || current.quoteMessage,
+                      }));
+                    }}
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
+                  >
+                    <option value="">{templatesLoading ? "Loading templates..." : "Select template"}</option>
+                    {templates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.templateName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              <label className="text-xs uppercase tracking-wide text-slate-400 lg:col-span-2">
+                Customer requirement / notes
+                <textarea
+                  value={createDraft.notes}
+                  onChange={(event) => setCreateDraft((current) => ({ ...current, notes: event.target.value }))}
+                  rows={4}
+                  className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
+                />
+              </label>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={
+                  createSaving ||
+                  !createDraft.customerName.trim() ||
+                  !createDraft.customerPhone.trim() ||
+                  (createMode === "template" && !createDraft.templateId)
+                }
+                onClick={() => void handleCreateQuotation()}
+                className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {createSaving ? "Creating..." : "Create Draft"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCreatePanel(false);
+                  setCreateDraft(createDefaultQuotationDraft());
+                }}
+                className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-300 transition hover:border-white/20"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         <div className={compactMode ? "space-y-3" : "mt-5 space-y-4"}>
           {filteredRequests.length ? (
             filteredRequests.map((request) => {
               const expanded = request.id === expandedId;
+              const storedProposal = parseStoredQuoteProposal(request.quotationData);
+              const canOpenReceiptDraft = storedProposal.items.length > 0;
               return (
                 <div
                   key={request.id}
@@ -671,7 +1070,7 @@ export default function QuotationRequestsDeskClient({
                           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
                             Customer request
                           </div>
-                          <div className="mt-3">
+                          <div className="mt-3 flex flex-wrap gap-3">
                             <Link
                               href={buildCustomerProfileHref(request, impersonateId)}
                               className="inline-flex items-center gap-2 rounded-lg border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-300/30 hover:bg-cyan-400/15"
@@ -679,7 +1078,30 @@ export default function QuotationRequestsDeskClient({
                               Open customer profile
                               <ExternalLink className="h-4 w-4" />
                             </Link>
+                            <button
+                              type="button"
+                              disabled={!canOpenReceiptDraft || draftOpening === `${request.id}:quotation`}
+                              onClick={() => void handleOpenReceiptDraft(request, "quotation")}
+                              className="inline-flex items-center gap-2 rounded-lg border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-sm font-medium text-emerald-100 transition hover:border-emerald-300/30 hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {draftOpening === `${request.id}:quotation` ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                              Open quotation draft
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!canOpenReceiptDraft || draftOpening === `${request.id}:receipt`}
+                              onClick={() => void handleOpenReceiptDraft(request, "receipt")}
+                              className="inline-flex items-center gap-2 rounded-lg border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-sm font-medium text-amber-100 transition hover:border-amber-300/30 hover:bg-amber-400/15 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {draftOpening === `${request.id}:receipt` ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                              Convert to receipt draft
+                            </button>
                           </div>
+                          {!canOpenReceiptDraft ? (
+                            <div className="mt-3 text-xs text-amber-200">
+                              Save at least one quoted item first before opening the receipts desk.
+                            </div>
+                          ) : null}
                           <div className="mt-3 grid gap-3 text-sm text-slate-200 sm:grid-cols-2">
                             <div>
                               <div className="font-semibold text-white">Project type</div>
@@ -1071,6 +1493,16 @@ export default function QuotationRequestsDeskClient({
                           </div>
                           <div className="mt-3">
                             {request.assignedAttendant?.name || request.assignedAttendant?.email || "Unassigned"}
+                          </div>
+                          <div className="mt-3 rounded-2xl border border-white/10 bg-slate-950/50 p-3 text-xs text-slate-300">
+                            <div className="font-semibold uppercase tracking-[0.16em] text-slate-400">
+                              Conversion
+                            </div>
+                            <div className="mt-2">
+                              {canOpenReceiptDraft
+                                ? "Open a quotation print draft or convert this approved draft into the receipts desk."
+                                : "Quotation items are still empty. Build the quote first, then open the receipts desk."}
+                            </div>
                           </div>
                           {request.respondedAt ? (
                             <div className="mt-3 text-xs text-slate-400">
