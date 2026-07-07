@@ -957,52 +957,79 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
     data.afterSalesSupport.length <= 4 &&
     data.similarProjects.length <= 2;
 
-  pages.push({
-    title: "Cover",
-    body: `
-      <div class="cover-grid compact-grid">
-        <div class="cover-left">
-          ${
-            assets.letterheadUrl
-              ? `<img class="letterhead" src="${assets.letterheadUrl}" alt="Betech letterhead" />`
-              : `<div class="brand-kicker">Betech Solar Solutions</div>`
-          }
+  const receiptHeader = `
+    <div class="receipt-cover">
+      <div class="receipt-brand">
+        ${
+          assets.letterheadUrl
+            ? `<img class="letterhead" src="${assets.letterheadUrl}" alt="Betech letterhead" />`
+            : `<div class="brand-kicker">Betech Solar Solutions</div>`
+        }
+        <div class="cover-stack">
           <div class="brand-kicker">Official Customer Quotation</div>
           <h1 class="cover-title">Quotation</h1>
           <div class="cover-subject">${escapeHtml(data.subject)}</div>
-          <div class="meta-panel">${customerRows}${preparedByRows}</div>
-        </div>
-        <div class="cover-right">
-          ${assets.logoUrl ? `<img class="cover-logo" src="${assets.logoUrl}" alt="Betech logo" />` : ""}
-          <div class="hero-card break-inside-avoid">
-            <div class="section-title">Executive Summary</div>
-            <p class="body-copy">${escapeHtml(data.projectOverview || data.ai.executiveSummary)}</p>
-          </div>
-          <div class="summary-grid">
-            ${data.summaryCards
-              .map(
-                (card) => `
-                  <div class="summary-card break-inside-avoid">
-                    <div class="summary-icon">${escapeHtml(card.icon)}</div>
-                    <div class="summary-label">${escapeHtml(card.label)}</div>
-                    <div class="summary-value">${escapeHtml(card.value)}</div>
-                  </div>
-                `,
-              )
-              .join("")}
-          </div>
         </div>
       </div>
-      <div class="two-column two-column-tight">
-        <div>
-          ${renderSection("Key Benefits", renderList(data.ai.keyBenefits, "soft"))}
+      <div class="receipt-brand-aside">
+        ${assets.logoUrl ? `<img class="cover-logo" src="${assets.logoUrl}" alt="Betech logo" />` : ""}
+        <div class="quote-pill">${escapeHtml(input.quoteRef)}</div>
+      </div>
+    </div>
+  `;
+
+  const metaGrid = `
+    <div class="receipt-meta-grid">
+      <div class="meta-card">
+        <div class="section-title">Customer Information</div>
+        <div class="meta-panel">${customerRows}</div>
+      </div>
+      <div class="meta-card">
+        <div class="section-title">Quotation Details</div>
+        <div class="meta-panel">${preparedByRows}</div>
+      </div>
+      <div class="meta-card">
+        <div class="section-title">Company Information</div>
+        <div class="meta-panel">${companyRows}</div>
+      </div>
+      <div class="meta-card">
+        <div class="section-title">Commercial Snapshot</div>
+        <div class="meta-panel">${renderInfoGrid(commercialRows)}</div>
+      </div>
+    </div>
+  `;
+
+  pages.push({
+    title: "Quotation Summary",
+    body: `
+      ${receiptHeader}
+      ${metaGrid}
+      <div class="receipt-two-column">
+        <div class="receipt-main-column">
+          ${renderSection("Executive Summary", `<div class="panel"><p class="body-copy">${escapeHtml(data.projectOverview || data.ai.executiveSummary)}</p></div>`)}
+          ${renderSection(
+            "Solution Summary",
+            `<div class="receipt-summary-grid">
+              ${data.summaryCards
+                .map(
+                  (card) => `
+                    <div class="summary-card break-inside-avoid">
+                      <div class="summary-icon">${escapeHtml(card.icon)}</div>
+                      <div class="summary-label">${escapeHtml(card.label)}</div>
+                      <div class="summary-value">${escapeHtml(card.value)}</div>
+                    </div>
+                  `,
+                )
+                .join("")}
+            </div>`,
+          )}
           ${renderSection("What This System Can Power", renderPowerGrid(powerBlocks))}
-          ${renderSection("Practical Usage Note", `<div class="note-box">${escapeHtml(data.importantNotes[0] || "Actual supported appliances depend on simultaneous loading, solar production, and battery reserve management.")}</div>`)}
         </div>
-        <div>
-          ${renderSection("Company Information", `<div class="panel">${companyRows}</div>`)}
-          ${renderSection("Commercial Snapshot", renderCostBars(data.costBreakdown))}
+        <div class="receipt-side-column">
+          ${renderSection("Cost Breakdown", renderCostBars(data.costBreakdown))}
+          ${renderSection("Key Benefits", renderList(data.ai.keyBenefits, "soft"))}
           ${renderSection("Scope Of Supply", renderList(data.priceIncludes.length ? data.priceIncludes : ["Supply of quoted equipment as per BOQ.", "Professional delivery, installation, testing, and commissioning.", "System orientation and handover after completion."], "soft"))}
+          ${renderSection("Practical Usage Note", `<div class="note-box">${escapeHtml(data.importantNotes[0] || "Actual supported appliances depend on simultaneous loading, solar production, and battery reserve management.")}</div>`)}
         </div>
       </div>
     `,
@@ -1119,22 +1146,22 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
     title: "Commercial",
     body: compactCloseout
       ? `
-          <div class="two-column two-column-tight">
-            <div>
+          <div class="receipt-two-column">
+            <div class="receipt-main-column">
               ${boqBody}
             </div>
-            <div>
+            <div class="receipt-side-column">
               ${closeoutBody}
             </div>
           </div>
         `
       : `
-          <div class="two-column two-column-tight">
-            <div>
+          <div class="receipt-two-column">
+            <div class="receipt-main-column">
               ${boqBody}
             </div>
-            <div>
-              ${renderSection("Cost Breakdown", renderCostBars(data.costBreakdown))}
+            <div class="receipt-side-column">
+              ${closeoutBody}
               ${renderSection("Delivery And Installation", renderTimeline(data.timeline))}
               ${
                 data.afterSalesSupport.length
@@ -1160,11 +1187,8 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
     pages.push({
       title: "Closeout",
       body: `
-        <div class="two-column two-column-tight">
-          <div>
-            ${closeoutBody}
-          </div>
-          <div>
+        <div class="receipt-two-column">
+          <div class="receipt-main-column">
             ${
               data.additionalNotes.length
                 ? renderSection("Additional Notes", renderList(data.additionalNotes, "soft"))
@@ -1189,6 +1213,13 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
               `,
             )}
           </div>
+          <div class="receipt-side-column">
+            ${
+              data.afterSalesSupport.length
+                ? renderSection("After-Sales Support", renderList(data.afterSalesSupport, "soft"))
+                : ""
+            }
+          </div>
         </div>
       `,
     });
@@ -1198,7 +1229,7 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
     .map(
       (page, index) => `
         <section class="page">
-          <div class="sheet ${page.title === "Cover" ? "sheet-cover" : ""}">
+          <div class="sheet ${index === 0 ? "sheet-cover" : ""}">
             ${page.body}
             <div class="page-footer">
               <span>${escapeHtml(input.quoteRef)}</span>
@@ -1224,83 +1255,103 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
             margin: 0;
             padding: 0;
             color: #1f2933;
-            background: #f8f4ef;
-            font-family: Arial, Helvetica, sans-serif;
+            background: #f3f4f6;
+            font-family: "Segoe UI", Arial, Helvetica, sans-serif;
           }
-          body { font-size: 11px; line-height: 1.45; }
+          body { font-size: 10.5px; line-height: 1.42; padding: 2mm; }
           .page {
-            width: 210mm;
-            min-height: 297mm;
+            width: calc(210mm - 4mm);
+            min-height: calc(297mm - 4mm);
+            margin: 0 auto;
             page-break-after: always;
           }
           .page:last-child { page-break-after: auto; }
           .sheet {
-            width: 210mm;
-            min-height: 297mm;
-            padding: 10mm 10mm 8mm;
-            background:
-              linear-gradient(180deg, rgba(255,248,239,0.85), rgba(255,255,255,0.94)),
-              #ffffff;
+            width: calc(210mm - 4mm);
+            min-height: calc(297mm - 4mm);
+            padding: 6.5mm 7mm 8mm;
+            background: #ffffff;
+            border: 1px solid #d6d8de;
+            box-shadow: 0 16px 28px rgba(15, 23, 42, 0.12);
             position: relative;
+            overflow: hidden;
           }
           .sheet::before {
             content: "";
             position: absolute;
             inset: 0 0 auto 0;
-            height: 8mm;
+            height: 5mm;
             background: linear-gradient(90deg, #7a0f0f, #8b1212 60%, #d89a25);
           }
           .sheet-cover {
             background:
-              radial-gradient(circle at top right, rgba(216,154,37,0.14), transparent 28%),
+              radial-gradient(circle at top right, rgba(216,154,37,0.12), transparent 24%),
               linear-gradient(180deg, #fffaf4, #fffdfb);
           }
-          .cover-grid {
-            display: grid;
-            grid-template-columns: 1.05fr 0.95fr;
-            gap: 6mm;
-            padding-top: 7mm;
-          }
-          .compact-grid { align-items: start; }
           .letterhead {
-            max-height: 40px;
+            max-height: 38px;
             width: 100%;
             object-fit: contain;
             object-position: left center;
-            margin-bottom: 3mm;
+            margin-bottom: 2mm;
+          }
+          .receipt-cover {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            align-items: flex-start;
+            padding-top: 4mm;
+            margin-bottom: 6px;
+          }
+          .receipt-brand {
+            min-width: 0;
+            flex: 1 1 auto;
+          }
+          .cover-stack {
+            margin-top: 1px;
+          }
+          .receipt-brand-aside {
+            width: 120px;
+            flex: 0 0 120px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 6px;
+          }
+          .quote-pill {
+            padding: 5px 8px;
+            border-radius: 999px;
+            background: #fff8ef;
+            border: 1px solid #ead8c2;
+            color: #7a0f0f;
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
           }
           .brand-kicker {
             color: #8b1212;
-            font-size: 12px;
+            font-size: 10px;
             font-weight: 800;
-            letter-spacing: 0.18em;
+            letter-spacing: 0.16em;
             text-transform: uppercase;
           }
           .cover-title {
-            margin: 3mm 0 1mm;
-            font-size: 28px;
-            line-height: 0.96;
+            margin: 2mm 0 1mm;
+            font-size: 23px;
+            line-height: 0.98;
             color: #7a0f0f;
             text-transform: uppercase;
           }
           .cover-subject {
-            font-size: 15px;
+            font-size: 12.5px;
             font-weight: 800;
             color: #1f2933;
-            margin-bottom: 5mm;
-          }
-          .cover-right {
-            position: relative;
-            display: grid;
-            gap: 6px;
-            align-content: start;
+            margin-bottom: 0;
           }
           .cover-logo {
-            position: absolute;
-            right: 0;
-            top: -2mm;
-            width: 115px;
-            opacity: 0.12;
+            width: 92px;
+            opacity: 0.14;
           }
           .hero-card,
           .summary-card,
@@ -1317,20 +1368,45 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
           }
           .hero-card,
           .panel,
-          .note-box { padding: 8px 10px; }
+          .note-box { padding: 7px 8px; }
+          .receipt-meta-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 6px;
+            margin-bottom: 6px;
+          }
+          .meta-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            background: #fafafa;
+            padding: 7px 8px;
+          }
+          .receipt-two-column {
+            display: grid;
+            grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+            gap: 7px;
+            align-items: start;
+          }
+          .receipt-main-column,
+          .receipt-side-column {
+            display: grid;
+            gap: 6px;
+            align-content: start;
+          }
+          .receipt-summary-grid,
           .summary-grid,
           .kpi-grid {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 7px;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 6px;
           }
           .summary-card {
-            padding: 7px 8px;
-            min-height: 54px;
+            padding: 7px;
+            min-height: 0;
           }
           .summary-icon {
-            font-size: 14px;
-            margin-bottom: 4px;
+            font-size: 13px;
+            margin-bottom: 3px;
           }
           .summary-label,
           .kpi-label,
@@ -1338,7 +1414,7 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
           .method-title,
           .project-label {
             color: #8b1212;
-            font-size: 9px;
+            font-size: 8.5px;
             font-weight: 800;
             letter-spacing: 0.08em;
             text-transform: uppercase;
@@ -1346,8 +1422,8 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
           .summary-value,
           .kpi-value,
           .payment-value {
-            margin-top: 5px;
-            font-size: 11px;
+            margin-top: 4px;
+            font-size: 10px;
             font-weight: 700;
             color: #1f2933;
           }
@@ -1356,11 +1432,11 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
           }
           .section-title {
             color: #8b1212;
-            font-size: 12px;
+            font-size: 10.5px;
             font-weight: 800;
             letter-spacing: 0.08em;
             text-transform: uppercase;
-            margin-bottom: 5px;
+            margin-bottom: 4px;
             padding-bottom: 3px;
             border-bottom: 1px solid rgba(216,154,37,0.65);
           }
@@ -1370,44 +1446,35 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
             color: #334155;
           }
           .meta-panel {
-            border: 1px solid #ead8c2;
-            border-radius: 10px;
-            background: #fffdfa;
-            padding: 8px 9px;
+            display: grid;
+            gap: 0;
           }
           .info-row {
             display: grid;
-            grid-template-columns: 102px 1fr;
+            grid-template-columns: 88px 1fr;
             gap: 10px;
             padding: 3px 0;
-            border-bottom: 1px solid #f2e7da;
+            border-bottom: 1px solid #eceff3;
           }
           .info-row:last-child { border-bottom: 0; }
           .info-label {
             color: #8b1212;
-            font-size: 9px;
+            font-size: 8.5px;
             font-weight: 800;
             letter-spacing: 0.08em;
             text-transform: uppercase;
           }
           .info-value {
             color: #1f2933;
-            font-size: 10.5px;
+            font-size: 9.6px;
             white-space: pre-wrap;
           }
-          .two-column {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            padding-top: 4mm;
-          }
-          .two-column-tight { gap: 6px; padding-top: 3mm; }
           .list {
             display: grid;
             gap: 4px;
           }
           .list-soft {
-            padding: 8px 9px;
+            padding: 7px 8px;
             border: 1px solid #ead8c2;
             border-radius: 10px;
             background: #fff8ef;
@@ -1423,9 +1490,9 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
             font-weight: 800;
           }
           .boq-subtitle {
-            margin-bottom: 6px;
+            margin-bottom: 4px;
             color: #475569;
-            font-size: 10px;
+            font-size: 9px;
           }
           .boq-table {
             width: 100%;
@@ -1436,17 +1503,17 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
           .boq-table th {
             background: #7a0f0f;
             color: #ffffff;
-            padding: 8px 6px;
+            padding: 6px 5px;
             text-transform: uppercase;
             letter-spacing: 0.05em;
-            font-size: 9px;
+            font-size: 8px;
             text-align: left;
           }
           .boq-table td {
             border: 1px solid #ead8c2;
-            padding: 6px 5px;
+            padding: 5px 4px;
             vertical-align: top;
-            font-size: 9.5px;
+            font-size: 8.9px;
           }
           .boq-name {
             font-weight: 700;
@@ -1454,7 +1521,7 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
           }
           .boq-spec {
             color: #64748b;
-            font-size: 9.3px;
+            font-size: 8.2px;
             margin-top: 2px;
             line-height: 1.35;
           }
@@ -1472,7 +1539,7 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
             color: #1f2933;
           }
           .cost-track {
-            height: 9px;
+            height: 8px;
             background: #f3e9db;
             border-radius: 999px;
             overflow: hidden;
@@ -1489,20 +1556,20 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
           }
           .power-grid {
             display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 6px;
           }
           .power-card {
-            padding: 7px 6px;
+            padding: 6px 5px;
             text-align: center;
-            min-height: 54px;
+            min-height: 0;
           }
           .power-icon {
-            font-size: 15px;
-            margin-bottom: 5px;
+            font-size: 13px;
+            margin-bottom: 4px;
           }
           .power-label {
-            font-size: 10px;
+            font-size: 9px;
             color: #334155;
             font-weight: 700;
           }
@@ -1514,7 +1581,7 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
             display: grid;
             grid-template-columns: 30px 1fr;
             gap: 10px;
-            padding: 6px 8px;
+            padding: 5px 7px;
             border: 1px solid #ead8c2;
             border-radius: 10px;
             background: #fffdfa;
@@ -1555,14 +1622,12 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
             display: grid;
             gap: 6px;
           }
-          .payment-cards {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
+          .payment-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .payment-options {
             grid-template-columns: repeat(3, minmax(0, 1fr));
           }
           .payment-option {
-            padding: 8px 9px;
+            padding: 7px 8px;
             border: 1px solid #ead8c2;
             border-radius: 10px;
             background: #fffdfa;
@@ -1574,7 +1639,7 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
           .payment-card,
           .method-card,
           .project-card {
-            padding: 8px 9px;
+            padding: 7px 8px;
           }
           .approval-grid {
             display: grid;
@@ -1585,20 +1650,20 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
             border: 1px solid #ead8c2;
             border-radius: 12px;
             background: #fffdfa;
-            padding: 9px 10px;
+            padding: 8px 9px;
           }
           .method-lines,
           .project-link {
-            margin-top: 5px;
+            margin-top: 4px;
             color: #334155;
-            font-size: 10px;
-            line-height: 1.45;
+            font-size: 9.2px;
+            line-height: 1.35;
             word-break: break-word;
           }
           .approval-line {
-            padding: 4px 0;
+            padding: 3px 0;
             color: #334155;
-            font-size: 10.5px;
+            font-size: 9.6px;
           }
           .note-box {
             background: #fff8ef;
@@ -1606,20 +1671,37 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
           }
           .page-footer {
             position: absolute;
-            left: 10mm;
-            right: 10mm;
-            bottom: 5mm;
+            left: 7mm;
+            right: 7mm;
+            bottom: 4mm;
             display: flex;
             justify-content: space-between;
             gap: 10px;
             border-top: 1px solid #ead8c2;
-            padding-top: 4px;
+            padding-top: 3px;
             color: #6b7280;
-            font-size: 9px;
+            font-size: 8px;
           }
           .break-inside-avoid {
             break-inside: avoid;
             page-break-inside: avoid;
+          }
+          @media print {
+            html, body {
+              background: #fff;
+              padding: 0;
+            }
+            .page {
+              width: 210mm;
+              min-height: 297mm;
+              margin: 0;
+            }
+            .sheet {
+              width: 210mm;
+              min-height: 297mm;
+              border: 0;
+              box-shadow: none;
+            }
           }
         </style>
       </head>
