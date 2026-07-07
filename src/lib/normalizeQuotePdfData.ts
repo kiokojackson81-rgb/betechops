@@ -196,7 +196,7 @@ function splitLineItems(items: QuotePdfItemInput[]) {
         quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
         unitPrice: Number.isFinite(unitPrice) && unitPrice >= 0 ? unitPrice : 0,
         amount: Number.isFinite(amount) ? amount : 0,
-        warrantyText: sanitizeText(item.warrantyText) || "Contact Betech Solar for warranty guidance.",
+        warrantyText: sanitizeText(item.warrantyText) || "Standard warranty",
       };
     })
     .filter((item) => item.name);
@@ -226,8 +226,7 @@ export function normalizeQuotePdfData(input: QuotePdfInput): NormalizedQuotePdfD
   const rows = splitLineItems(input.items || []);
   const customerName = String(input.customer?.name || "").trim() || "Customer";
   const warrantyMode = input.warrantyMode || "PER_ITEM";
-  const wholeWarrantyText =
-    sanitizeText(input.wholeWarrantyText) || "Contact Betech Solar for warranty guidance.";
+  const wholeWarrantyText = sanitizeText(input.wholeWarrantyText) || "Standard warranty";
   const items =
     warrantyMode === "WHOLE_QUOTATION" || warrantyMode === "FULL_SYSTEM"
       ? rows.rows.map((item) => ({ ...item, warrantyText: wholeWarrantyText }))

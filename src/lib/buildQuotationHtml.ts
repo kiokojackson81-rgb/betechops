@@ -40,7 +40,6 @@ function renderPaymentMethods(
 
 function renderBoqRows(
   items: ReturnType<typeof normalizeQuotePdfData>["items"],
-  wholeWarrantyText: string | null,
 ) {
   return items
     .map(
@@ -54,7 +53,7 @@ function renderBoqRows(
           <td class="center">${escapeHtml(item.quantity)}</td>
           <td class="right">${escapeHtml(formatMoney(item.unitPrice))}</td>
           <td class="right">${escapeHtml(formatMoney(item.amount))}</td>
-          <td>${escapeHtml(wholeWarrantyText || item.warrantyText)}</td>
+          <td>${escapeHtml(item.warrantyText)}</td>
         </tr>
       `,
     )
@@ -68,10 +67,6 @@ export function buildQuotationHtml(
   },
 ) {
   const data = normalizeQuotePdfData(input);
-  const wholeWarrantyText =
-    data.warrantyMode === "WHOLE_QUOTATION" || data.warrantyMode === "FULL_SYSTEM"
-      ? data.items[0]?.warrantyText || null
-      : null;
   const costRows =
     data.items.length === 1 && data.installationTotal <= 0 && data.transportTotal <= 0
       ? ([["Quoted Item Value", data.equipmentTotal], ["Project Value", data.grandTotal]] as const)
@@ -119,7 +114,7 @@ export function buildQuotationHtml(
     margin-left: -8mm;
     display: block;
     border-bottom: 2px solid #8b1212;
-    max-height: 24mm;
+    max-height: 27mm;
     object-fit: contain;
     object-position: top center;
   }
@@ -373,7 +368,7 @@ export function buildQuotationHtml(
             </tr>
           </thead>
           <tbody>
-            ${renderBoqRows(data.items, wholeWarrantyText)}
+            ${renderBoqRows(data.items)}
           </tbody>
         </table>
       </div>
@@ -398,7 +393,7 @@ export function buildQuotationHtml(
           <div class="cost-note">
             ${
               data.items.length === 1 && data.installationTotal <= 0 && data.transportTotal <= 0
-                ? "This quotation covers the selected item value only. Delivery, installation, or other optional works can be added separately if required."
+                ? "This quotation covers the selected item value only. Optional delivery, transport, or installation can be added separately if required."
                 : "Project value reflects the quoted equipment together with any listed delivery, installation, and related project costs."
             }
           </div>
@@ -407,11 +402,7 @@ export function buildQuotationHtml(
       <div class="section">
         <div class="bar">Warranty Notes</div>
         <div class="content">
-          ${renderList(
-            wholeWarrantyText
-              ? [wholeWarrantyText, ...data.warrantyNotes]
-              : data.warrantyNotes,
-          )}
+          ${renderList(data.warrantyNotes)}
         </div>
       </div>
     </div>

@@ -34,7 +34,6 @@ import {
   parseStoredQuoteProposal,
   PAYMENT_METHOD_DETAILS,
   QUOTE_WARRANTY_MODES,
-  QUOTE_WARRANTY_SOURCES,
   QUOTE_PAYMENT_METHODS,
   QUOTE_PAYMENT_TERMS,
   type QuotePaymentMethod,
@@ -295,6 +294,15 @@ function createEmptyQuoteItem(): QuoteItemDraft {
   };
 }
 
+function createFeeQuoteItem(itemName: string): QuoteItemDraft {
+  return hydrateQuoteItemDraft({
+    itemName,
+    quantity: "1",
+    unitPrice: "0",
+    warrantySource: "CUSTOM",
+  });
+}
+
 function createProposalSectionDraft(projectType: QuoteProjectType) {
   const defaults = getProjectTypeDefaultSections(projectType);
   return {
@@ -488,29 +496,6 @@ function suggestWarrantyForItem(itemName: string) {
     return "Manufacturer warranty";
   }
   return "Manufacturer warranty";
-}
-
-function resolveWarrantyBySource(input: {
-  source: QuoteWarrantySource;
-  itemName: string;
-  productWarranty?: string;
-  templateWarranty?: string;
-  fullSystemWarranty?: string;
-  currentWarranty?: string;
-}) {
-  if (input.source === "PRODUCT_DEFAULT") {
-    return input.productWarranty?.trim() || suggestWarrantyForItem(input.itemName);
-  }
-  if (input.source === "TEMPLATE_DEFAULT") {
-    return input.templateWarranty?.trim() || suggestWarrantyForItem(input.itemName);
-  }
-  if (input.source === "FULL_SYSTEM") {
-    return input.fullSystemWarranty?.trim() || "Covered under full system warranty";
-  }
-  if (input.source === "AI_SUGGESTED") {
-    return suggestWarrantyForItem(input.itemName);
-  }
-  return input.currentWarranty?.trim() || "";
 }
 
 function buildQuoteRequestPayload(formState: QuoteDeskFormState): QuoteRequestResponseInput {
@@ -1418,7 +1403,7 @@ export default function QuotationRequestsDeskClient({
         ...current.quoteItems,
         hydrateQuoteItemDraft({
           itemName: product.productName,
-          description: product.shortDescription || "",
+          description: "",
           quantity: "1",
           unitPrice: String(product.price),
           defaultWarranty: product.warranty || suggestWarrantyForItem(product.productName),
@@ -1448,7 +1433,7 @@ export default function QuotationRequestsDeskClient({
         ...current.quoteItems,
         hydrateQuoteItemDraft({
           itemName: product.productName,
-          description: product.shortDescription || "",
+          description: "",
           quantity: "1",
           unitPrice: String(product.price),
           defaultWarranty: product.warranty || suggestWarrantyForItem(product.productName),
@@ -1983,6 +1968,35 @@ export default function QuotationRequestsDeskClient({
                     Add item
                   </button>
                 </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCreateDraft((current) => ({
+                        ...current,
+                        quoteItems: [...current.quoteItems, createFeeQuoteItem("Installation Fee")],
+                      }))
+                    }
+                    className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
+                  >
+                    Add installation fee
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCreateDraft((current) => ({
+                        ...current,
+                        quoteItems: [...current.quoteItems, createFeeQuoteItem("Transport Fee")],
+                      }))
+                    }
+                    className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
+                  >
+                    Add transport fee
+                  </button>
+                </div>
+                <div className="mt-2 text-xs text-slate-500">
+                  Leave installation or transport at `0` when the cost is already included in the project value.
+                </div>
 
                 <div className="mt-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
                   <div className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">
@@ -2086,7 +2100,7 @@ export default function QuotationRequestsDeskClient({
                                 ),
                               }))
                             }
-                            placeholder="Short BOQ description or specification"
+                            placeholder="Optional short BOQ note"
                             className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
                           />
                         </label>
@@ -2146,73 +2160,8 @@ export default function QuotationRequestsDeskClient({
                           </button>
                         </div>
                       </div>
-                      <div className="mt-3 grid gap-3 md:grid-cols-3">
-                        <label className="text-xs uppercase tracking-wide text-slate-400">
-                          Warranty source
-                          <select
-                            value={item.warrantySource}
-                            onChange={(event) =>
-                              setCreateDraft((current) => ({
-                                ...current,
-                                quoteItems: current.quoteItems.map((entry, entryIndex) =>
-                                  entryIndex === index
-                                    ? {
-                                        ...entry,
-                                        warrantySource: event.target.value as QuoteWarrantySource,
-                                        warranty: resolveWarrantyBySource({
-                                          source: event.target.value as QuoteWarrantySource,
-                                          itemName: entry.itemName,
-                                          productWarranty: entry.defaultWarranty,
-                                          fullSystemWarranty: current.fullSystemWarranty,
-                                          currentWarranty: entry.warranty,
-                                        }),
-                                      }
-                                    : entry,
-                                ),
-                              }))
-                            }
-                            className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
-                          >
-                            {QUOTE_WARRANTY_SOURCES.map((source) => (
-                              <option key={source} value={source}>
-                                {source.replace(/_/g, " ")}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="text-xs uppercase tracking-wide text-slate-400 md:col-span-2">
-                          Warranty
-                          <input
-                            value={item.warranty}
-                            onChange={(event) =>
-                              setCreateDraft((current) => ({
-                                ...current,
-                                quoteItems: current.quoteItems.map((entry, entryIndex) =>
-                                  entryIndex === index
-                                    ? { ...entry, warranty: event.target.value, warrantySource: "CUSTOM" }
-                                    : entry,
-                                ),
-                              }))
-                            }
-                            className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
-                          />
-                        </label>
-                        <label className="text-xs uppercase tracking-wide text-slate-400 md:col-span-3">
-                          Warranty notes
-                          <textarea
-                            rows={2}
-                            value={item.warrantyNotes}
-                            onChange={(event) =>
-                              setCreateDraft((current) => ({
-                                ...current,
-                                quoteItems: current.quoteItems.map((entry, entryIndex) =>
-                                  entryIndex === index ? { ...entry, warrantyNotes: event.target.value } : entry,
-                                ),
-                              }))
-                            }
-                            className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 outline-none"
-                          />
-                        </label>
+                      <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 text-xs text-slate-400">
+                        Standard Betech warranty notes will be applied automatically in the final quotation PDF.
                       </div>
                     </div>
                   ))}
@@ -2315,38 +2264,19 @@ export default function QuotationRequestsDeskClient({
                   Quotation Settings
                 </div>
                 <div className="mt-2 text-sm text-slate-300">
-                  The final PDF now uses a fixed Betech proposal structure. Staff only need to confirm warranty mode, payment structure, and any customer note.
+                  The final PDF uses the standard Betech warranty block automatically. Staff only need to confirm any similar-project link and customer note.
                 </div>
-                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <div className="mt-4 grid gap-3">
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 text-xs text-slate-400">
+                    Standard warranty note:
+                    <div className="mt-2 normal-case tracking-normal text-slate-300">
+                      Warranty applies under normal use, correct installation, and manufacturer operating conditions.
+                    </div>
+                    <div className="mt-1 normal-case tracking-normal text-slate-300">
+                      Warranty does not cover misuse, accidental damage, unauthorized modification, or force majeure events.
+                    </div>
+                  </div>
                   <label className="text-xs uppercase tracking-wide text-slate-400">
-                    Warranty mode
-                    <select
-                      value={createDraft.warrantyMode}
-                      onChange={(event) =>
-                        setCreateDraft((current) => ({
-                          ...current,
-                          warrantyMode: event.target.value as QuoteWarrantyMode,
-                        }))
-                      }
-                      className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
-                    >
-                      <option value="PER_ITEM">Per item warranty</option>
-                      <option value="FULL_SYSTEM">Whole quotation warranty</option>
-                      <option value="CUSTOM">Custom warranty text</option>
-                    </select>
-                  </label>
-                  <label className="text-xs uppercase tracking-wide text-slate-400">
-                    Whole quotation warranty
-                    <input
-                      value={createDraft.fullSystemWarranty}
-                      onChange={(event) =>
-                        setCreateDraft((current) => ({ ...current, fullSystemWarranty: event.target.value }))
-                      }
-                      placeholder="Manufacturer warranty plus workmanship cover"
-                      className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
-                    />
-                  </label>
-                  <label className="text-xs uppercase tracking-wide text-slate-400 md:col-span-2">
                     Similar project link (optional)
                     <input
                       value={createDraft.projectReferenceLinks}
@@ -2690,6 +2620,35 @@ export default function QuotationRequestsDeskClient({
                                   Add item
                                 </button>
                               </div>
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setFormState((current) => ({
+                                      ...current,
+                                      quoteItems: [...current.quoteItems, createFeeQuoteItem("Installation Fee")],
+                                    }))
+                                  }
+                                  className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
+                                >
+                                  Add installation fee
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setFormState((current) => ({
+                                      ...current,
+                                      quoteItems: [...current.quoteItems, createFeeQuoteItem("Transport Fee")],
+                                    }))
+                                  }
+                                  className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
+                                >
+                                  Add transport fee
+                                </button>
+                              </div>
+                              <div className="mt-2 text-xs text-slate-500">
+                                Leave installation or transport at `0` when the cost is already included in the quoted project value.
+                              </div>
 
                               <div className="mt-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
                                 <div className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">
@@ -2841,75 +2800,8 @@ export default function QuotationRequestsDeskClient({
                                         </button>
                                       </div>
                                     </div>
-                                    <div className="mt-3 grid gap-3 md:grid-cols-3">
-                                      <label className="text-xs uppercase tracking-wide text-slate-400">
-                                        Warranty source
-                                        <select
-                                          value={item.warrantySource}
-                                          onChange={(event) =>
-                                            setFormState((current) => ({
-                                              ...current,
-                                              quoteItems: current.quoteItems.map((entry, entryIndex) =>
-                                                entryIndex === index
-                                                  ? {
-                                                      ...entry,
-                                                      warrantySource: event.target.value as QuoteWarrantySource,
-                                                      warranty: resolveWarrantyBySource({
-                                                        source: event.target.value as QuoteWarrantySource,
-                                                        itemName: entry.itemName,
-                                                        productWarranty: entry.defaultWarranty,
-                                                        fullSystemWarranty: current.fullSystemWarranty,
-                                                        currentWarranty: entry.warranty,
-                                                      }),
-                                                    }
-                                                  : entry,
-                                              ),
-                                            }))
-                                          }
-                                          className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
-                                        >
-                                          {QUOTE_WARRANTY_SOURCES.map((source) => (
-                                            <option key={source} value={source}>
-                                              {source.replace(/_/g, " ")}
-                                            </option>
-                                          ))}
-                                        </select>
-                                      </label>
-                                      <label className="text-xs uppercase tracking-wide text-slate-400 md:col-span-2">
-                                        Warranty
-                                        <input
-                                          value={item.warranty}
-                                          onChange={(event) =>
-                                            setFormState((current) => ({
-                                              ...current,
-                                              quoteItems: current.quoteItems.map((entry, entryIndex) =>
-                                                entryIndex === index
-                                                  ? { ...entry, warranty: event.target.value, warrantySource: "CUSTOM" }
-                                                  : entry,
-                                              ),
-                                            }))
-                                          }
-                                          className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
-                                        />
-                                      </label>
-                                      <label className="text-xs uppercase tracking-wide text-slate-400 md:col-span-3">
-                                        Warranty notes
-                                        <textarea
-                                          rows={2}
-                                          value={item.warrantyNotes}
-                                          onChange={(event) =>
-                                            setFormState((current) => ({
-                                              ...current,
-                                              quoteItems: current.quoteItems.map((entry, entryIndex) =>
-                                                entryIndex === index
-                                                  ? { ...entry, warrantyNotes: event.target.value }
-                                                  : entry,
-                                              ),
-                                            }))
-                                          }
-                                          className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 focus:border-emerald-500 focus:outline-none"
-                                        />
-                                      </label>
+                                    <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 text-xs text-slate-400">
+                                      Standard Betech warranty notes will be applied automatically in the final quotation PDF.
                                     </div>
                                   </div>
                                 ))}
