@@ -402,15 +402,14 @@ export function buildQuotationHtml(
   }
   .letterhead-block {
     display: flex;
-    flex-direction: column;
+    justify-content: center;
     align-items: center;
-    gap: .7mm;
-    margin: 0 auto 2mm;
+    margin: 0 auto 1.4mm;
     max-width: 170mm;
   }
   .brand-mark {
-    width: 92mm;
-    height: 34mm;
+    width: 112mm;
+    height: 42mm;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -418,8 +417,8 @@ export function buildQuotationHtml(
   }
   .brand-mark img {
     width: auto;
-    max-width: 92mm;
-    max-height: 34mm;
+    max-width: 112mm;
+    max-height: 42mm;
     object-fit: contain;
   }
   .brand-fallback {
@@ -433,29 +432,6 @@ export function buildQuotationHtml(
     font-size: 15px;
     font-weight: 900;
     letter-spacing: .08em;
-  }
-  .letterhead-name {
-    color: #9b1111;
-    font-size: 20px;
-    font-weight: 900;
-    line-height: 1.05;
-    text-transform: uppercase;
-    letter-spacing: -.03em;
-  }
-  .letterhead-subtitle {
-    color: #8d2020;
-    font-size: 8.8px;
-    line-height: 1.15;
-    font-weight: 700;
-  }
-  .letterhead-contact {
-    color: #2b2b2b;
-    font-size: 8.4px;
-    line-height: 1.18;
-    font-weight: 700;
-  }
-  .letterhead-contact.secondary {
-    margin-top: -.2mm;
   }
   .hero-title {
     margin: 0;
@@ -1176,15 +1152,6 @@ export function buildQuotationHtml(
 <section class="sheet">
   <div class="page top-strip">
     <div class="hero-card">
-      <div class="badge-row">
-        <div class="badge-line"></div>
-        <div class="badge-pill">
-          <span class="icon-badge">${iconSvg("shield")}</span>
-          <span>Official Customer Quotation</span>
-        </div>
-        <div class="badge-line"></div>
-      </div>
-
       <div class="letterhead-block">
         <div class="brand-mark">
           ${
@@ -1193,10 +1160,15 @@ export function buildQuotationHtml(
               : `<div class="brand-fallback">BT</div>`
           }
         </div>
-        <div class="letterhead-name">Betech Solar Solutions</div>
-        <div class="letterhead-subtitle">Dealers in:Solar Solutions,Solar Products, e.t.c</div>
-        <div class="letterhead-contact">Tel:0722 151 083/0703 241 917&nbsp;&nbsp; Location:Pramukh Plaza 3rd Floor Shop No.3</div>
-        <div class="letterhead-contact secondary">Email:info@betech.co.ke&nbsp;&nbsp; Website:www.betech.co.ke</div>
+      </div>
+
+      <div class="badge-row">
+        <div class="badge-line"></div>
+        <div class="badge-pill">
+          <span class="icon-badge">${iconSvg("shield")}</span>
+          <span>Official Customer Quotation</span>
+        </div>
+        <div class="badge-line"></div>
       </div>
       <h1 class="hero-title">${renderTitleWithAccent(data.title)}</h1>
 

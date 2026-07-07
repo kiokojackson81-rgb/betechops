@@ -1273,11 +1273,19 @@ export default function QuotationRequestsDeskClient({
       if (!response.ok || !data?.ok) {
         throw new Error(data?.error || "Failed to save quotation.");
       }
+      setStatusFilter("ALL");
+      setQuery("");
+      if (data.request) {
+        setRequests((current) => {
+          const existing = current.filter((request) => request.id !== data.request.id);
+          return [data.request, ...existing];
+        });
+      }
       setShowCreatePanel(false);
       setCreateDraft(createDefaultQuotationDraft());
       setCreateCatalogQuery("");
       setCreateCatalogResults([]);
-      await refreshRequests("ALL", query);
+      await refreshRequests("ALL", "");
       if (data.request?.id) {
         setExpandedId(data.request.id);
       }
