@@ -404,13 +404,13 @@ export function buildQuotationHtml(
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 1.2mm;
-    margin: 0 auto 2.2mm;
-    max-width: 156mm;
+    gap: .7mm;
+    margin: 0 auto 2mm;
+    max-width: 170mm;
   }
   .brand-mark {
-    width: 50mm;
-    height: 22mm;
+    width: 92mm;
+    height: 34mm;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -418,8 +418,8 @@ export function buildQuotationHtml(
   }
   .brand-mark img {
     width: auto;
-    max-width: 50mm;
-    max-height: 22mm;
+    max-width: 92mm;
+    max-height: 34mm;
     object-fit: contain;
   }
   .brand-fallback {
@@ -436,22 +436,26 @@ export function buildQuotationHtml(
   }
   .letterhead-name {
     color: #9b1111;
-    font-size: 13.5px;
+    font-size: 20px;
     font-weight: 900;
     line-height: 1.05;
     text-transform: uppercase;
+    letter-spacing: -.03em;
   }
   .letterhead-subtitle {
-    color: #5b5b5b;
-    font-size: 8.1px;
-    line-height: 1.25;
-    font-weight: 600;
+    color: #8d2020;
+    font-size: 8.8px;
+    line-height: 1.15;
+    font-weight: 700;
   }
   .letterhead-contact {
     color: #2b2b2b;
-    font-size: 8px;
-    line-height: 1.25;
+    font-size: 8.4px;
+    line-height: 1.18;
     font-weight: 700;
+  }
+  .letterhead-contact.secondary {
+    margin-top: -.2mm;
   }
   .hero-title {
     margin: 0;
@@ -1203,9 +1207,10 @@ export function buildQuotationHtml(
               : `<div class="brand-fallback">BT</div>`
           }
         </div>
-        <div class="letterhead-name">${escapeHtml(data.company.name)}</div>
-        <div class="letterhead-subtitle">Dealers in Solar Products &amp; Electrical Solutions</div>
-        <div class="letterhead-contact">${escapeHtml(data.company.salesDesk)} &nbsp;&bull;&nbsp; ${escapeHtml(data.company.website)} &nbsp;&bull;&nbsp; ${escapeHtml(data.company.email)}</div>
+        <div class="letterhead-name">Betech Solar Solutions</div>
+        <div class="letterhead-subtitle">Dealers in:Solar Solutions,Solar Products, e.t.c</div>
+        <div class="letterhead-contact">Tel:0722 151 083/0703 241 917&nbsp;&nbsp; Location:Pramukh Plaza 3rd Floor Shop No.3</div>
+        <div class="letterhead-contact secondary">Email:info@betech.co.ke&nbsp;&nbsp; Website:www.betech.co.ke</div>
       </div>
       <h1 class="hero-title">${renderTitleWithAccent(data.title)}</h1>
       <div class="hero-rule"></div>
