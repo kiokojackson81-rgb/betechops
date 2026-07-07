@@ -16,6 +16,7 @@ import {
   type QuotePaymentTerms,
   type QuoteWarrantyMode,
 } from "@/lib/quoteProposal";
+import { applyQuotationAiEnrichment } from "@/lib/quotationAiSections";
 
 const quoteProposalVisibilitySchema = z.object({
   projectOverview: z.boolean().optional(),
@@ -1452,6 +1453,36 @@ export async function updateQuoteRequestResponse(
     depositAmount: input.depositAmount,
     balanceAmount: input.balanceAmount,
   });
+  const existingRows = await prisma.$queryRaw<QuoteRequestRow[]>(Prisma.sql`
+    SELECT ${QUOTE_REQUEST_SELECT_SQL}
+    FROM "QuoteRequest"
+    WHERE "id" = ${id}
+    LIMIT 1
+  `);
+  const existing = existingRows[0] ? serializeQuoteRequest(existingRows[0]) : null;
+  if (!existing) return null;
+  const enriched = applyQuotationAiEnrichment({
+    projectType: existing.projectType,
+    quoteTitle: input.quoteTitle,
+    items: sanitizedItems,
+    total: paymentBreakdown.total,
+    paymentTerms: paymentBreakdown.paymentTerms,
+    warrantyMode: (input.warrantyMode || "PER_ITEM") as QuoteWarrantyMode,
+    fullSystemWarranty: input.fullSystemWarranty,
+    customWarranty: input.customWarranty,
+    quoteMessage: input.quoteMessage,
+    customerNotes: input.followUpNotes,
+    customerLocation: existing.customerLocation || [existing.town, existing.county].filter(Boolean).join(", "),
+    projectOverview: input.projectOverview,
+    whatPriceIncludes: input.whatPriceIncludes,
+    whatItCanPower: input.whatItCanPower,
+    deliveryTimeline: input.deliveryTimeline,
+    installationTimeline: input.installationTimeline,
+    afterSalesSupport: input.afterSalesSupport,
+    importantNotes: input.importantNotes,
+    scopeExclusions: input.scopeExclusions,
+    aiWarrantySummary: input.aiWarrantySummary,
+  });
   const quotationData = {
     items: sanitizedItems,
     subtotal,
@@ -1460,20 +1491,21 @@ export async function updateQuoteRequestResponse(
     fullSystemWarranty: input.fullSystemWarranty?.trim() || null,
     customWarranty: input.customWarranty?.trim() || null,
     warrantyGeneralNotes: input.warrantyGeneralNotes?.trim() || null,
-    aiWarrantySummary: input.aiWarrantySummary?.trim() || null,
-    projectOverview: input.projectOverview?.trim() || null,
-    whatPriceIncludes: input.whatPriceIncludes?.trim() || null,
-    whatItCanPower: input.whatItCanPower?.trim() || null,
-    deliveryTimeline: input.deliveryTimeline?.trim() || null,
-    installationTimeline: input.installationTimeline?.trim() || null,
-    afterSalesSupport: input.afterSalesSupport?.trim() || null,
-    importantNotes: input.importantNotes?.trim() || null,
-    scopeExclusions: input.scopeExclusions?.trim() || null,
+    aiWarrantySummary: enriched.aiWarrantySummary?.trim() || null,
+    projectOverview: enriched.projectOverview?.trim() || null,
+    whatPriceIncludes: enriched.whatPriceIncludes?.trim() || null,
+    whatItCanPower: enriched.whatItCanPower?.trim() || null,
+    deliveryTimeline: enriched.deliveryTimeline?.trim() || null,
+    installationTimeline: enriched.installationTimeline?.trim() || null,
+    afterSalesSupport: enriched.afterSalesSupport?.trim() || null,
+    importantNotes: enriched.importantNotes?.trim() || null,
+    scopeExclusions: enriched.scopeExclusions?.trim() || null,
     similarProjects: input.similarProjects?.trim() || null,
     termsAndConditions: input.termsAndConditions?.trim() || null,
     preparedByDetails: input.preparedByDetails?.trim() || null,
     companyLegalDetails: input.companyLegalDetails?.trim() || null,
     projectReferenceLinks: input.projectReferenceLinks?.trim() || null,
+    aiGeneratedSections: enriched.generated,
     proposalVisibility: Object.fromEntries(
       QUOTE_PROPOSAL_VISIBILITY_KEYS.map((key) => [key, input.proposalVisibility?.[key] !== false]),
     ),
@@ -1693,6 +1725,28 @@ export async function createManualQuotation(
     depositAmount: input.depositAmount,
     balanceAmount: input.balanceAmount,
   });
+  const enriched = applyQuotationAiEnrichment({
+    projectType,
+    quoteTitle: input.quoteTitle || input.preferredProducts || projectType.replace(/_/g, " "),
+    items: quoteItems,
+    total: paymentBreakdown.total,
+    paymentTerms: paymentBreakdown.paymentTerms,
+    warrantyMode: (input.warrantyMode || "PER_ITEM") as QuoteWarrantyMode,
+    fullSystemWarranty: input.fullSystemWarranty,
+    customWarranty: input.customWarranty,
+    quoteMessage: input.quoteMessage,
+    customerNotes: input.notes,
+    customerLocation: [input.specificLocation, input.town, input.county].filter(Boolean).join(", "),
+    projectOverview: input.projectOverview,
+    whatPriceIncludes: input.whatPriceIncludes,
+    whatItCanPower: input.whatItCanPower,
+    deliveryTimeline: input.deliveryTimeline,
+    installationTimeline: input.installationTimeline,
+    afterSalesSupport: input.afterSalesSupport,
+    importantNotes: input.importantNotes,
+    scopeExclusions: input.scopeExclusions,
+    aiWarrantySummary: input.aiWarrantySummary,
+  });
   const approvalPolicy = getQuotationApprovalPolicy({
     total: paymentBreakdown.total,
     paymentTerms: input.paymentTerms,
@@ -1714,20 +1768,21 @@ export async function createManualQuotation(
       fullSystemWarranty: input.fullSystemWarranty?.trim() || null,
       customWarranty: input.customWarranty?.trim() || null,
       warrantyGeneralNotes: input.warrantyGeneralNotes?.trim() || null,
-      aiWarrantySummary: input.aiWarrantySummary?.trim() || null,
-      projectOverview: input.projectOverview?.trim() || null,
-      whatPriceIncludes: input.whatPriceIncludes?.trim() || null,
-      whatItCanPower: input.whatItCanPower?.trim() || null,
-      deliveryTimeline: input.deliveryTimeline?.trim() || null,
-      installationTimeline: input.installationTimeline?.trim() || null,
-      afterSalesSupport: input.afterSalesSupport?.trim() || null,
-      importantNotes: input.importantNotes?.trim() || null,
-      scopeExclusions: input.scopeExclusions?.trim() || null,
+      aiWarrantySummary: enriched.aiWarrantySummary?.trim() || null,
+      projectOverview: enriched.projectOverview?.trim() || null,
+      whatPriceIncludes: enriched.whatPriceIncludes?.trim() || null,
+      whatItCanPower: enriched.whatItCanPower?.trim() || null,
+      deliveryTimeline: enriched.deliveryTimeline?.trim() || null,
+      installationTimeline: enriched.installationTimeline?.trim() || null,
+      afterSalesSupport: enriched.afterSalesSupport?.trim() || null,
+      importantNotes: enriched.importantNotes?.trim() || null,
+      scopeExclusions: enriched.scopeExclusions?.trim() || null,
       similarProjects: input.similarProjects?.trim() || null,
       termsAndConditions: input.termsAndConditions?.trim() || null,
       preparedByDetails: input.preparedByDetails?.trim() || null,
       companyLegalDetails: input.companyLegalDetails?.trim() || null,
       projectReferenceLinks: input.projectReferenceLinks?.trim() || null,
+      aiGeneratedSections: enriched.generated,
       proposalVisibility: Object.fromEntries(
         QUOTE_PROPOSAL_VISIBILITY_KEYS.map((key) => [key, input.proposalVisibility?.[key] !== false]),
       ),

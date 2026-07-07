@@ -330,9 +330,11 @@ function inferPowerBlocks(summary: ShortSolutionSummary, providedLines: string[]
     }));
   }
 
-  const batteryKwh = Number(summary.batteryCapacity.match(/(\d+(?:\.\d+)?)/)?.[1] || 0);
-  const inverterKw = Number(summary.inverterCapacity.match(/(\d+(?:\.\d+)?)/)?.[1] || 0);
-  const solarKw = Number(summary.solarCapacity.match(/(\d+(?:\.\d+)?)/)?.[1] || 0);
+  const batteryKwh = Number(summary.batteryCapacity.match(/(\d+(?:\.\d+)?)\s*kwh/i)?.[1] || 0);
+  const inverterKw = Number(summary.inverterCapacity.match(/(\d+(?:\.\d+)?)\s*kw/i)?.[1] || 0);
+  const solarKwFromKw = Number(summary.solarCapacity.match(/(\d+(?:\.\d+)?)\s*kw/i)?.[1] || 0);
+  const solarKwFromW = Number(summary.solarCapacity.match(/(\d+(?:\.\d+)?)\s*w\b/i)?.[1] || 0) / 1000;
+  const solarKw = solarKwFromKw || solarKwFromW;
   const systemLevel = Math.max(batteryKwh, inverterKw, solarKw);
 
   const loads =
@@ -427,10 +429,19 @@ function deriveShortSolutionSummary(input: QuotePdfInput) {
       .filter((value): value is number => Boolean(value))
       .sort((left, right) => right - left)[0] || 0;
 
+  const topPanelWatt = panelItems
+    .map((item) => parseWattValue(item.itemName) || 0)
+    .sort((left, right) => right - left)[0] || 0;
+
   const systemSize =
     parseKwValue(input.quoteTitle || "") ||
     inverterKw ||
     (solarCapacityWatts >= 1000 ? Number((solarCapacityWatts / 1000).toFixed(1)) : 0);
+
+  const looksLikeSmallKit =
+    /full kit|solar kit|starter kit/i.test(String(input.quoteTitle || "")) ||
+    /full kit|solar kit|starter kit/i.test(input.items.map((item) => item.itemName).join(" ")) ||
+    (topPanelWatt > 0 && topPanelWatt <= 600 && input.items.length <= 8);
 
   const batteryLead =
     batteryItems[0]?.itemName && /lithium/i.test(batteryItems[0].itemName)
@@ -453,31 +464,65 @@ function deriveShortSolutionSummary(input: QuotePdfInput) {
     input.items.some((item) => classifyItemGroup(item.itemName) === "transport") ||
     Boolean(input.proposalSections?.deliveryTimeline)
       ? "Included"
-      : "As quoted";
+      : "Delivery arranged as agreed";
   const supportIncluded =
     input.proposalSections?.afterSalesSupport || input.quoteMessage ? "Included" : "Standard support";
 
-  return {
-    systemSize: systemSize ? `${formatCompactNumber(systemSize)} kW` : "Custom engineered",
-    solarCapacity:
-      solarCapacityWatts > 0
-        ? `${formatKw(solarCapacityWatts)}${panelCount ? ` (${panelCount} x panels)` : ""}`
+  const resolvedSystemSize = systemSize
+    ? `${formatCompactNumber(systemSize)} kW`
+    : looksLikeSmallKit && topPanelWatt
+      ? `${formatCompactNumber(topPanelWatt)}W Solar Kit`
+      : /pump/i.test(input.items.map((item) => item.itemName).join(" "))
+        ? "Solar pumping solution"
+        : batteryItems.length && !panelItems.length && !inverterItems.length
+          ? "Battery backup package"
+          : inverterItems.length && !panelItems.length
+            ? "Inverter power solution"
+            : "Engineered solar solution";
+
+  const resolvedSolarCapacity =
+    solarCapacityWatts > 0
+      ? `${formatKw(solarCapacityWatts)}${panelCount ? ` (${panelCount} x panels)` : ""}`
+      : looksLikeSmallKit && topPanelWatt
+        ? `${formatCompactNumber(topPanelWatt)}W Solar Panel`
         : panelCount
           ? `${panelCount} x solar panels`
-          : "As quoted",
-    batteryCapacity:
-      batteryKwh > 0
-        ? `${formatKwh(batteryKwh)} ${batteryLead}`.trim()
-        : batteryAh > 0
-          ? `${formatCompactNumber(batteryAh)} Ah ${batteryLead}`.trim()
-          : batteryLead || "Battery included as quoted",
-    inverterCapacity:
-      inverterKw > 0
-        ? `${formatCompactNumber(inverterKw)} kW ${inverterLead}`.trim()
-        : inverterLead || "Inverter included as quoted",
-    panelCount: panelCount ? String(panelCount) : panelItems.length ? String(panelItems.length) : "As quoted",
-    batteryType: batteryLead || "As quoted",
-    inverterType: inverterLead || "As quoted",
+          : inverterItems.length && !panelItems.length
+            ? "Solar panel not included in this option"
+            : "Included in selected package";
+
+  const resolvedBatteryCapacity =
+    batteryKwh > 0
+      ? `${formatKwh(batteryKwh)} ${batteryLead}`.trim()
+      : batteryAh > 0
+        ? `${formatCompactNumber(batteryAh)} Ah ${batteryLead}`.trim()
+        : batteryLead
+          ? batteryLead
+          : looksLikeSmallKit
+            ? "Battery included in kit package"
+            : /pump/i.test(input.items.map((item) => item.itemName).join(" "))
+              ? "Not part of this pump-only configuration"
+              : "Battery optional depending on backup requirement";
+
+  const resolvedInverterCapacity =
+    inverterKw > 0
+      ? `${formatCompactNumber(inverterKw)} kW ${inverterLead}`.trim()
+      : inverterLead
+        ? inverterLead
+        : looksLikeSmallKit
+          ? "Included where applicable"
+          : batteryItems.length && !inverterItems.length
+            ? "Use with existing inverter or backup setup"
+            : "Matched to final load profile";
+
+  return {
+    systemSize: resolvedSystemSize,
+    solarCapacity: resolvedSolarCapacity,
+    batteryCapacity: resolvedBatteryCapacity,
+    inverterCapacity: resolvedInverterCapacity,
+    panelCount: panelCount ? String(panelCount) : panelItems.length ? String(panelItems.length) : "Included in package",
+    batteryType: batteryLead || (looksLikeSmallKit ? "Included in kit package" : "Selected separately"),
+    inverterType: inverterLead || (looksLikeSmallKit ? "Included where applicable" : "Matched to final load profile"),
     installationIncluded,
     transportIncluded,
     supportIncluded,
@@ -1171,7 +1216,7 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
           .sheet {
             width: 210mm;
             min-height: 297mm;
-            padding: 12mm 12mm 10mm;
+            padding: 10mm 10mm 8mm;
             background:
               linear-gradient(180deg, rgba(255,248,239,0.85), rgba(255,255,255,0.94)),
               #ffffff;
@@ -1192,8 +1237,8 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
           .cover-grid {
             display: grid;
             grid-template-columns: 1.05fr 0.95fr;
-            gap: 10mm;
-            padding-top: 10mm;
+            gap: 8mm;
+            padding-top: 8mm;
           }
           .letterhead {
             max-height: 44px;
@@ -1255,11 +1300,11 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
           .kpi-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 8px;
+            gap: 7px;
           }
           .summary-card {
-            padding: 9px 10px;
-            min-height: 70px;
+            padding: 8px 9px;
+            min-height: 60px;
           }
           .summary-icon {
             font-size: 14px;
@@ -1285,7 +1330,7 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
             color: #1f2933;
           }
           .section {
-            margin-bottom: 10px;
+            margin-bottom: 8px;
           }
           .section-title {
             color: #8b1212;
@@ -1306,13 +1351,13 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
             border: 1px solid #ead8c2;
             border-radius: 10px;
             background: #fffdfa;
-            padding: 10px 12px;
+            padding: 9px 10px;
           }
           .info-row {
             display: grid;
             grid-template-columns: 102px 1fr;
             gap: 10px;
-            padding: 5px 0;
+            padding: 4px 0;
             border-bottom: 1px solid #f2e7da;
           }
           .info-row:last-child { border-bottom: 0; }
@@ -1331,15 +1376,15 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
           .two-column {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            padding-top: 8mm;
+            gap: 8px;
+            padding-top: 6mm;
           }
           .list {
             display: grid;
-            gap: 6px;
+            gap: 5px;
           }
           .list-soft {
-            padding: 10px 12px;
+            padding: 9px 10px;
             border: 1px solid #ead8c2;
             border-radius: 10px;
             background: #fff8ef;
@@ -1392,8 +1437,8 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
           }
           .cell-right { text-align: right; }
           .kpi-grid { margin-top: 4px; }
-          .kpi-card { padding: 9px 10px; }
-          .cost-bars { display: grid; gap: 8px; }
+          .kpi-card { padding: 8px 9px; }
+          .cost-bars { display: grid; gap: 7px; }
           .cost-head {
             display: flex;
             justify-content: space-between;
@@ -1422,12 +1467,12 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
           .power-grid {
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 8px;
+            gap: 7px;
           }
           .power-card {
-            padding: 10px 8px;
+            padding: 8px 7px;
             text-align: center;
-            min-height: 72px;
+            min-height: 62px;
           }
           .power-icon {
             font-size: 15px;
@@ -1440,13 +1485,13 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
           }
           .timeline {
             display: grid;
-            gap: 8px;
+            gap: 7px;
           }
           .timeline-step {
             display: grid;
             grid-template-columns: 30px 1fr;
             gap: 10px;
-            padding: 8px 10px;
+            padding: 7px 9px;
             border: 1px solid #ead8c2;
             border-radius: 10px;
             background: #fffdfa;
@@ -1484,7 +1529,7 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
           .payment-methods,
           .project-links {
             display: grid;
-            gap: 8px;
+            gap: 7px;
           }
           .payment-cards {
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1492,7 +1537,7 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
           .payment-card,
           .method-card,
           .project-card {
-            padding: 10px 11px;
+            padding: 8px 9px;
           }
           .method-lines,
           .project-link {
@@ -1513,9 +1558,9 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
           }
           .page-footer {
             position: absolute;
-            left: 12mm;
-            right: 12mm;
-            bottom: 7mm;
+            left: 10mm;
+            right: 10mm;
+            bottom: 5mm;
             display: flex;
             justify-content: space-between;
             gap: 10px;
