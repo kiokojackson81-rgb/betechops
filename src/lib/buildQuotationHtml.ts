@@ -286,35 +286,35 @@ export function buildQuotationHtml(
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>${escapeHtml(data.quoteRef)}</title>
 <style>
-  @page { size: A4; margin: 7mm; }
+  @page { size: A4; margin: 6mm; }
   * { box-sizing: border-box; }
   body {
     margin: 0;
     background: #f3f4f6;
     color: #2b2b2b;
     font-family: Inter, Arial, Helvetica, sans-serif;
-    font-size: 10px;
-    line-height: 1.45;
+    font-size: 9.6px;
+    line-height: 1.38;
   }
   .sheet {
     width: 210mm;
     min-height: 297mm;
     margin: 0 auto 10px;
     background: #fafafa;
-    padding: 6mm;
+    padding: 5mm;
     position: relative;
     overflow: hidden;
   }
   .sheet.page-break { break-before: page; }
   .page {
-    min-height: 281mm;
+    min-height: 285mm;
     display: flex;
     flex-direction: column;
-    gap: 4mm;
+    gap: 3mm;
   }
   .top-strip {
     border-top: 2px solid #9b1111;
-    padding-top: 3mm;
+    padding-top: 2.2mm;
   }
   .hero-card,
   .section-card,
@@ -323,7 +323,7 @@ export function buildQuotationHtml(
   .terms-card,
   .boq-shell,
   .footer-brand {
-    border-radius: 14px;
+    border-radius: 12px;
     background: #ffffff;
     border: 1px solid #e7e7e7;
     box-shadow: 0 2px 8px rgba(0,0,0,.05);
@@ -331,7 +331,7 @@ export function buildQuotationHtml(
     page-break-inside: avoid;
   }
   .hero-card {
-    padding: 4mm 5mm 5mm;
+    padding: 3.2mm 4.2mm 4mm;
     text-align: center;
     background:
       radial-gradient(circle at top right, rgba(155,17,17,0.05), transparent 30%),
@@ -341,8 +341,8 @@ export function buildQuotationHtml(
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    gap: 4mm;
-    margin-bottom: 4mm;
+    gap: 3mm;
+    margin-bottom: 3mm;
   }
   .badge-line {
     height: 2px;
@@ -353,18 +353,18 @@ export function buildQuotationHtml(
     display: inline-flex;
     align-items: center;
     gap: 3mm;
-    padding: 2.8mm 5mm;
+    padding: 2.4mm 4.4mm;
     border-radius: 999px;
     background: linear-gradient(90deg, #9b1111, #b71c1c);
     color: #fff;
     font-weight: 800;
-    font-size: 9.4px;
+    font-size: 8.9px;
     letter-spacing: .08em;
     text-transform: uppercase;
   }
   .badge-pill .icon-badge {
-    width: 10mm;
-    height: 10mm;
+    width: 9mm;
+    height: 9mm;
     border-radius: 999px;
     background: #fff;
     color: #9b1111;
@@ -374,15 +374,15 @@ export function buildQuotationHtml(
   }
   .logo-title {
     display: grid;
-    grid-template-columns: 28mm 1fr;
+    grid-template-columns: 24mm 1fr;
     align-items: center;
-    gap: 5mm;
+    gap: 4mm;
     max-width: 175mm;
     margin: 0 auto;
   }
   .brand-mark {
-    width: 28mm;
-    height: 28mm;
+    width: 24mm;
+    height: 24mm;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -390,7 +390,7 @@ export function buildQuotationHtml(
   }
   .brand-mark img {
     width: 100%;
-    max-height: 28mm;
+    max-height: 24mm;
     object-fit: contain;
   }
   .brand-fallback {
@@ -407,7 +407,7 @@ export function buildQuotationHtml(
   }
   .hero-title {
     margin: 0;
-    font-size: 25px;
+    font-size: 22px;
     line-height: 1.04;
     font-weight: 900;
     color: #202833;
@@ -417,22 +417,22 @@ export function buildQuotationHtml(
   }
   .hero-title .accent { color: #b71c1c; }
   .hero-rule {
-    width: 34mm;
+    width: 28mm;
     height: 2.5px;
     background: linear-gradient(90deg, transparent, #b71c1c, transparent);
     border-radius: 999px;
-    margin: 4mm auto 3mm;
+    margin: 2.8mm auto 2.2mm;
   }
   .hero-intro {
     margin: 0 auto;
-    max-width: 150mm;
-    font-size: 10.7px;
+    max-width: 146mm;
+    font-size: 9.8px;
     color: #2b2b2b;
-    line-height: 1.5;
+    line-height: 1.38;
   }
   .meta-card {
-    margin: 4mm auto 0;
-    max-width: 118mm;
+    margin: 3mm auto 0;
+    max-width: 112mm;
     display: grid;
     grid-template-columns: 1fr 1fr;
     overflow: hidden;
@@ -441,13 +441,13 @@ export function buildQuotationHtml(
     display: flex;
     align-items: center;
     gap: 3mm;
-    padding: 3.4mm 4mm;
+    padding: 2.8mm 3.5mm;
     border-right: 1px solid #ece0e0;
   }
   .meta-cell:last-child { border-right: 0; }
   .meta-icon {
-    width: 9mm;
-    height: 9mm;
+    width: 8mm;
+    height: 8mm;
     color: #9b1111;
     flex: 0 0 auto;
   }
@@ -462,25 +462,25 @@ export function buildQuotationHtml(
   .meta-value {
     margin-top: 1px;
     color: #202833;
-    font-size: 10.8px;
+    font-size: 10px;
     font-weight: 800;
   }
   .info-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 4mm;
+    gap: 3mm;
   }
   .info-card {
-    padding: 5mm 4mm 4mm;
+    padding: 4.2mm 3.4mm 3.2mm;
     position: relative;
   }
   .floating-icon {
     position: absolute;
     left: 50%;
-    top: -8mm;
+    top: -7mm;
     transform: translateX(-50%);
-    width: 16mm;
-    height: 16mm;
+    width: 14mm;
+    height: 14mm;
     border-radius: 999px;
     background: linear-gradient(180deg, #b71c1c, #9b1111);
     color: #fff;
@@ -490,31 +490,31 @@ export function buildQuotationHtml(
     box-shadow: 0 8px 18px rgba(155,17,17,.22);
   }
   .card-title {
-    margin-top: 5mm;
+    margin-top: 4mm;
     text-align: center;
     color: #9b1111;
-    font-size: 10px;
+    font-size: 9.3px;
     font-weight: 900;
     text-transform: uppercase;
   }
   .card-divider {
-    width: 26mm;
-    height: 2px;
-    margin: 2.5mm auto 3mm;
+    width: 22mm;
+    height: 1.8px;
+    margin: 2mm auto 2.4mm;
     background: linear-gradient(90deg, transparent, #b71c1c, transparent);
   }
   .detail-row {
     display: grid;
     grid-template-columns: 8mm 34mm minmax(0,1fr);
     align-items: center;
-    gap: 3mm;
-    padding: 2.4mm 0;
+    gap: 2.4mm;
+    padding: 1.9mm 0;
     border-top: 1px solid #f0e5e5;
   }
   .detail-row:first-child { border-top: 0; }
   .detail-icon {
-    width: 8mm;
-    height: 8mm;
+    width: 7mm;
+    height: 7mm;
     border-radius: 7px;
     background: #fff5f5;
     color: #9b1111;
@@ -525,27 +525,27 @@ export function buildQuotationHtml(
   .detail-label {
     color: #2b2b2b;
     font-weight: 700;
-    font-size: 8.9px;
+    font-size: 8.4px;
   }
   .detail-value {
     color: #2b2b2b;
     font-weight: 600;
-    font-size: 8.9px;
-    line-height: 1.35;
+    font-size: 8.3px;
+    line-height: 1.28;
     overflow-wrap: anywhere;
   }
   .section-head {
     display: flex;
     align-items: center;
-    gap: 3mm;
-    padding: 4mm 4.2mm;
-    border-radius: 14px 14px 0 0;
+    gap: 2.6mm;
+    padding: 3mm 3.4mm;
+    border-radius: 12px 12px 0 0;
     background: linear-gradient(90deg, #9b1111, #b71c1c);
     color: #fff;
   }
   .section-head-icon {
-    width: 11mm;
-    height: 11mm;
+    width: 9.5mm;
+    height: 9.5mm;
     border-radius: 999px;
     background: rgba(255,255,255,.15);
     display: flex;
@@ -553,12 +553,12 @@ export function buildQuotationHtml(
     justify-content: center;
   }
   .section-head-title {
-    font-size: 10.4px;
+    font-size: 9.7px;
     font-weight: 900;
     text-transform: uppercase;
     letter-spacing: .06em;
   }
-  .section-body { padding: 4mm; }
+  .section-body { padding: 3.1mm; }
   .boq-shell { overflow: hidden; }
   .boq {
     width: 100%;
@@ -568,17 +568,17 @@ export function buildQuotationHtml(
   .boq th {
     background: #9b1111;
     color: #fff;
-    font-size: 7.6px;
-    padding: 3.2mm 2.5mm;
+    font-size: 7.2px;
+    padding: 2.4mm 2.1mm;
     text-transform: uppercase;
     text-align: left;
     letter-spacing: .05em;
   }
   .boq td {
     border-bottom: 1px solid #efe8e8;
-    padding: 3mm 2.5mm;
+    padding: 2.2mm 2.1mm;
     vertical-align: top;
-    font-size: 8.7px;
+    font-size: 8.2px;
   }
   .boq-row-even td { background: #fff; }
   .boq-row-odd td { background: #fcf7f7; }
@@ -591,79 +591,37 @@ export function buildQuotationHtml(
     line-height: 1.35;
   }
   .item-desc {
-    margin-top: 1.2mm;
+    margin-top: .8mm;
     color: #666;
-    font-size: 7.9px;
-    line-height: 1.45;
+    font-size: 7.4px;
+    line-height: 1.3;
   }
   .warranty-pill {
     display: inline-flex;
-    padding: 1.1mm 2.2mm;
+    padding: .9mm 1.8mm;
     border-radius: 999px;
     background: #fff4f4;
     border: 1px solid #f0d5d5;
     color: #9b1111;
-    font-size: 7.6px;
+    font-size: 7.1px;
     font-weight: 700;
     line-height: 1.25;
   }
   .bottom-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 4mm;
+    gap: 3mm;
   }
   .cost-row {
     display: grid;
     grid-template-columns: 9mm 1fr auto;
     align-items: center;
-    gap: 3mm;
-    padding: 2.6mm 0;
+    gap: 2.4mm;
+    padding: 2mm 0;
     border-top: 1px solid #f0e4e4;
   }
   .cost-row:first-child { border-top: 0; }
   .cost-row-icon {
-    width: 9mm;
-    height: 9mm;
-    border-radius: 999px;
-    background: #fff3f3;
-    color: #9b1111;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .cost-row-label {
-    font-size: 9.2px;
-    font-weight: 700;
-    color: #2b2b2b;
-  }
-  .cost-row-value {
-    font-size: 9.5px;
-    font-weight: 800;
-    color: #202833;
-  }
-  .cost-row-total {
-    margin-top: 1mm;
-    padding: 3mm;
-    border-radius: 12px;
-    background: linear-gradient(90deg, rgba(155,17,17,.06), rgba(183,28,28,.1));
-    border: 1px solid #efd4d4;
-  }
-  .cost-note {
-    margin-top: 2.5mm;
-    color: #666;
-    font-size: 8.4px;
-    line-height: 1.45;
-  }
-  .mini-row {
-    display: grid;
-    grid-template-columns: 8mm 1fr;
-    gap: 3mm;
-    align-items: start;
-    padding: 2.2mm 0;
-    border-top: 1px solid #f0e5e5;
-  }
-  .mini-row:first-child { border-top: 0; }
-  .mini-icon {
     width: 8mm;
     height: 8mm;
     border-radius: 999px;
@@ -673,18 +631,60 @@ export function buildQuotationHtml(
     align-items: center;
     justify-content: center;
   }
-  .mini-text {
-    font-size: 8.8px;
+  .cost-row-label {
+    font-size: 8.7px;
+    font-weight: 700;
     color: #2b2b2b;
-    line-height: 1.45;
+  }
+  .cost-row-value {
+    font-size: 9px;
+    font-weight: 800;
+    color: #202833;
+  }
+  .cost-row-total {
+    margin-top: .6mm;
+    padding: 2.4mm;
+    border-radius: 12px;
+    background: linear-gradient(90deg, rgba(155,17,17,.06), rgba(183,28,28,.1));
+    border: 1px solid #efd4d4;
+  }
+  .cost-note {
+    margin-top: 1.6mm;
+    color: #666;
+    font-size: 8px;
+    line-height: 1.3;
+  }
+  .mini-row {
+    display: grid;
+    grid-template-columns: 8mm 1fr;
+    gap: 2.4mm;
+    align-items: start;
+    padding: 1.8mm 0;
+    border-top: 1px solid #f0e5e5;
+  }
+  .mini-row:first-child { border-top: 0; }
+  .mini-icon {
+    width: 7mm;
+    height: 7mm;
+    border-radius: 999px;
+    background: #fff3f3;
+    color: #9b1111;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .mini-text {
+    font-size: 8.2px;
+    color: #2b2b2b;
+    line-height: 1.3;
   }
   .full-card {
     overflow: hidden;
   }
   .links-layout {
     display: grid;
-    grid-template-columns: 1.45fr .75fr;
-    gap: 4mm;
+    grid-template-columns: 1.5fr .72fr;
+    gap: 3mm;
     align-items: stretch;
   }
   .links-list {
@@ -694,15 +694,15 @@ export function buildQuotationHtml(
   .link-row {
     display: grid;
     grid-template-columns: 22mm 1px 1fr;
-    gap: 4mm;
+    gap: 3mm;
     align-items: start;
-    padding: 3mm 0;
+    padding: 2.2mm 0;
     border-top: 1px solid #ece3e3;
   }
   .link-row:first-child { border-top: 0; }
   .link-circle {
-    width: 16mm;
-    height: 16mm;
+    width: 14mm;
+    height: 14mm;
     margin-left: 1mm;
     border-radius: 999px;
     border: 1.5px solid #b71c1c;
@@ -718,7 +718,7 @@ export function buildQuotationHtml(
   }
   .link-title {
     color: #9b1111;
-    font-size: 9.8px;
+    font-size: 9.2px;
     font-weight: 900;
     text-transform: uppercase;
     line-height: 1.3;
@@ -726,36 +726,36 @@ export function buildQuotationHtml(
   .link-subtitle {
     margin-top: .7mm;
     color: #2b2b2b;
-    font-size: 9px;
+    font-size: 8.5px;
   }
   .link-url {
-    margin-top: 1.5mm;
+    margin-top: 1.1mm;
     display: inline-flex;
     align-items: center;
     gap: 2mm;
-    padding: 1.4mm 2.4mm;
+    padding: 1.1mm 2mm;
     border-radius: 8px;
     background: #fff3f3;
     color: #9b1111;
-    font-size: 8.5px;
+    font-size: 8px;
     font-weight: 600;
     overflow-wrap: anywhere;
   }
   .link-note {
-    margin-top: 1.5mm;
+    margin-top: 1mm;
     color: #666;
-    font-size: 8.6px;
+    font-size: 8px;
   }
   .qr-card {
-    padding: 3mm;
+    padding: 2.4mm;
     background: linear-gradient(180deg, #fffefe, #fff7f7);
     display: flex;
     flex-direction: column;
-    gap: 2.5mm;
+    gap: 2mm;
     justify-content: space-between;
   }
   .qr-head {
-    padding: 2.8mm 3.2mm;
+    padding: 2.2mm 2.8mm;
     border-radius: 10px;
     background: linear-gradient(90deg, #9b1111, #b71c1c);
     color: #fff;
@@ -763,13 +763,13 @@ export function buildQuotationHtml(
     align-items: center;
     justify-content: center;
     gap: 2mm;
-    font-size: 9.4px;
+    font-size: 8.9px;
     font-weight: 900;
     text-transform: uppercase;
     letter-spacing: .04em;
   }
   .qr-box {
-    padding: 3mm;
+    padding: 2.2mm;
     border-radius: 12px;
     background: #fff;
     border: 1px solid #ead9d9;
@@ -778,24 +778,24 @@ export function buildQuotationHtml(
     justify-content: center;
   }
   .qr-box img {
-    width: 46mm;
-    height: 46mm;
+    width: 42mm;
+    height: 42mm;
     object-fit: contain;
   }
   .qr-icons {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 1.5mm;
+    gap: 1mm;
   }
   .qr-chip {
     text-align: center;
     color: #2b2b2b;
-    font-size: 7.7px;
+    font-size: 7.1px;
   }
   .qr-chip-icon {
-    width: 9mm;
-    height: 9mm;
-    margin: 0 auto 1mm;
+    width: 8mm;
+    height: 8mm;
+    margin: 0 auto .7mm;
     border-radius: 999px;
     border: 1px solid #dcbcbc;
     color: #9b1111;
@@ -806,21 +806,21 @@ export function buildQuotationHtml(
   .three-col-grid {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
-    gap: 4mm;
+    gap: 3mm;
   }
   .glance-row {
     display: grid;
     grid-template-columns: 18mm 1px 1fr 1fr;
-    gap: 3mm;
+    gap: 2.4mm;
     align-items: center;
-    padding: 2.7mm 0;
+    padding: 2mm 0;
     border-top: 1px solid #eee2e2;
   }
   .glance-row:first-child { border-top: 0; }
   .glance-divider { width: 1px; background: #ead9d9; height: 100%; }
   .glance-icon {
-    width: 13mm;
-    height: 13mm;
+    width: 11mm;
+    height: 11mm;
     margin-left: 1mm;
     border-radius: 999px;
     background: #fff1f1;
@@ -831,28 +831,28 @@ export function buildQuotationHtml(
   }
   .glance-label {
     color: #9b1111;
-    font-size: 8.9px;
+    font-size: 8.2px;
     font-weight: 900;
     text-transform: uppercase;
   }
   .glance-value {
     color: #2b2b2b;
-    font-size: 8.9px;
+    font-size: 8.2px;
     font-weight: 600;
-    line-height: 1.4;
+    line-height: 1.28;
   }
   .payment-option {
     display: grid;
     grid-template-columns: 12mm 1fr;
-    gap: 3mm;
+    gap: 2.4mm;
     align-items: center;
-    padding: 2.5mm 0;
+    padding: 2mm 0;
     border-top: 1px solid #eee2e2;
   }
   .payment-option:first-child { border-top: 0; }
   .payment-option-icon {
-    width: 12mm;
-    height: 12mm;
+    width: 10.5mm;
+    height: 10.5mm;
     border-radius: 999px;
     background: #fff3f3;
     color: #9b1111;
@@ -860,22 +860,22 @@ export function buildQuotationHtml(
     align-items: center;
     justify-content: center;
     font-weight: 900;
-    font-size: 8.6px;
+    font-size: 8px;
   }
   .payment-option-text {
     color: #2b2b2b;
-    font-size: 8.8px;
+    font-size: 8.2px;
     font-weight: 600;
-    line-height: 1.45;
+    line-height: 1.3;
   }
   .timeline {
     display: grid;
-    gap: 3mm;
+    gap: 2.4mm;
   }
   .timeline-step {
     display: grid;
     grid-template-columns: 12mm 14mm 1fr;
-    gap: 3mm;
+    gap: 2.4mm;
     align-items: start;
   }
   .timeline-track {
@@ -884,21 +884,21 @@ export function buildQuotationHtml(
     align-items: center;
   }
   .timeline-number {
-    width: 10mm;
-    height: 10mm;
+    width: 9mm;
+    height: 9mm;
     border-radius: 999px;
     background: #fff1f1;
     color: #9b1111;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 8.8px;
+    font-size: 8.1px;
     font-weight: 900;
   }
   .timeline-line {
     width: 1.2px;
     flex: 1;
-    min-height: 11mm;
+    min-height: 9mm;
     background: repeating-linear-gradient(
       to bottom,
       rgba(183,28,28,.35),
@@ -906,11 +906,11 @@ export function buildQuotationHtml(
       transparent 3px,
       transparent 6px
     );
-    margin-top: 1.4mm;
+    margin-top: 1mm;
   }
   .timeline-card-icon {
-    width: 14mm;
-    height: 14mm;
+    width: 12mm;
+    height: 12mm;
     border-radius: 999px;
     background: #fff5f5;
     color: #9b1111;
@@ -920,37 +920,37 @@ export function buildQuotationHtml(
   }
   .timeline-title {
     color: #9b1111;
-    font-size: 9px;
+    font-size: 8.4px;
     font-weight: 900;
     text-transform: uppercase;
-    margin-bottom: .7mm;
+    margin-bottom: .4mm;
   }
   .timeline-text {
     color: #2b2b2b;
-    font-size: 8.8px;
-    line-height: 1.45;
+    font-size: 8.1px;
+    line-height: 1.28;
     font-weight: 600;
   }
   .pay-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 2.5mm;
+    gap: 2mm;
   }
   .pay-card {
     border: 1px solid #eadfdf;
     border-radius: 12px;
     background: #fffdfd;
-    padding: 3mm;
+    padding: 2.4mm;
   }
   .pay-head {
     display: flex;
     align-items: center;
-    gap: 2.2mm;
-    margin-bottom: 2mm;
+    gap: 2mm;
+    margin-bottom: 1.4mm;
   }
   .pay-icon {
-    width: 9mm;
-    height: 9mm;
+    width: 8mm;
+    height: 8mm;
     border-radius: 999px;
     background: #fff1f1;
     color: #9b1111;
@@ -960,35 +960,35 @@ export function buildQuotationHtml(
   }
   .pay-title {
     color: #9b1111;
-    font-size: 8.7px;
+    font-size: 8.1px;
     font-weight: 900;
     text-transform: uppercase;
   }
   .pay-lines {
     display: grid;
-    gap: .8mm;
+    gap: .5mm;
     color: #2b2b2b;
-    font-size: 8.2px;
-    line-height: 1.4;
+    font-size: 7.8px;
+    line-height: 1.28;
     font-weight: 600;
   }
   .support-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 4mm;
+    gap: 3mm;
   }
   .notes-box {
     display: grid;
     grid-template-columns: 10mm 1fr;
-    gap: 3mm;
+    gap: 2.4mm;
     border-radius: 12px;
     background: #f8f8f8;
-    padding: 3.2mm;
-    min-height: 18mm;
+    padding: 2.6mm;
+    min-height: 15mm;
   }
   .notes-icon {
-    width: 10mm;
-    height: 10mm;
+    width: 9mm;
+    height: 9mm;
     border-radius: 999px;
     background: #fff1f1;
     color: #9b1111;
@@ -998,34 +998,34 @@ export function buildQuotationHtml(
   }
   .notes-text {
     color: #2b2b2b;
-    font-size: 8.7px;
-    line-height: 1.5;
+    font-size: 8.1px;
+    line-height: 1.34;
     white-space: pre-wrap;
   }
   .terms-stack {
     display: grid;
-    gap: 2.5mm;
+    gap: 2mm;
   }
   .terms-card {
     position: relative;
     display: grid;
     grid-template-columns: 11mm 40mm 1fr;
-    gap: 4mm;
+    gap: 3mm;
     align-items: center;
-    padding: 3.4mm 3.6mm 3.4mm 4.8mm;
+    padding: 2.6mm 3mm 2.6mm 4.2mm;
   }
   .terms-accent {
     position: absolute;
     left: 0;
     top: 0;
     bottom: 0;
-    width: 1.8mm;
-    border-radius: 14px 0 0 14px;
+    width: 1.5mm;
+    border-radius: 12px 0 0 12px;
     background: linear-gradient(180deg, #9b1111, #b71c1c);
   }
   .terms-icon {
-    width: 11mm;
-    height: 11mm;
+    width: 9.5mm;
+    height: 9.5mm;
     border-radius: 999px;
     background: #fff3f3;
     color: #9b1111;
@@ -1035,36 +1035,36 @@ export function buildQuotationHtml(
   }
   .terms-title {
     color: #9b1111;
-    font-size: 8.9px;
+    font-size: 8.2px;
     font-weight: 900;
     text-transform: uppercase;
   }
   .terms-content {
     color: #2b2b2b;
-    font-size: 8.8px;
-    line-height: 1.48;
+    font-size: 8.1px;
+    line-height: 1.3;
     font-weight: 600;
   }
-  .terms-body { line-height: 1.48; }
+  .terms-body { line-height: 1.3; }
   .terms-list { margin: 0; padding-left: 16px; }
-  .terms-list li { margin: 0 0 1mm; }
+  .terms-list li { margin: 0 0 .5mm; }
   .footer-brand {
     margin-top: auto;
-    padding: 3.2mm 4mm;
+    padding: 2.4mm 3mm;
     display: grid;
     grid-template-columns: 1fr auto;
-    gap: 4mm;
+    gap: 3mm;
     align-items: center;
   }
   .footer-brand-copy {
     display: grid;
-    grid-template-columns: 11mm 1fr;
-    gap: 3mm;
+    grid-template-columns: 10mm 1fr;
+    gap: 2.4mm;
     align-items: center;
   }
   .footer-brand-badge {
-    width: 11mm;
-    height: 11mm;
+    width: 10mm;
+    height: 10mm;
     border-radius: 999px;
     background: linear-gradient(180deg, #b71c1c, #9b1111);
     color: #fff;
@@ -1074,17 +1074,17 @@ export function buildQuotationHtml(
   }
   .footer-brand-title {
     color: #9b1111;
-    font-size: 9.4px;
+    font-size: 8.8px;
     font-weight: 900;
   }
   .footer-brand-subtitle {
     color: #2b2b2b;
-    font-size: 8.8px;
-    margin-top: .5mm;
+    font-size: 8.2px;
+    margin-top: .3mm;
   }
   .footer-logo {
     color: #9b1111;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 900;
     letter-spacing: .08em;
     text-transform: uppercase;
@@ -1092,19 +1092,19 @@ export function buildQuotationHtml(
   .footer {
     display: flex;
     justify-content: space-between;
-    gap: 8px;
-    margin-top: 2mm;
-    padding-top: 2mm;
+    gap: 6px;
+    margin-top: 1.3mm;
+    padding-top: 1.3mm;
     border-top: 1px solid #ead9d9;
     color: #666;
-    font-size: 7.6px;
+    font-size: 7.1px;
   }
-  .icon-svg { width: 5mm; height: 5mm; }
+  .icon-svg { width: 4.4mm; height: 4.4mm; }
   .section-head .icon-svg,
   .floating-icon .icon-svg,
   .badge-pill .icon-svg,
   .timeline-card-icon .icon-svg,
-  .brand-mark .icon-svg { width: 5.4mm; height: 5.4mm; }
+  .brand-mark .icon-svg { width: 5mm; height: 5mm; }
   .meta-icon .icon-svg,
   .glance-icon .icon-svg,
   .pay-icon .icon-svg,
@@ -1115,7 +1115,7 @@ export function buildQuotationHtml(
   .notes-icon .icon-svg,
   .mini-icon .icon-svg,
   .detail-icon .icon-svg,
-  .footer-brand-badge .icon-svg { width: 4.5mm; height: 4.5mm; }
+  .footer-brand-badge .icon-svg { width: 4.1mm; height: 4.1mm; }
   @media print {
     body { background: #fff; }
     .sheet {
