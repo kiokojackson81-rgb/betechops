@@ -471,22 +471,8 @@ export function buildQuotationHtml(
     margin-right: auto;
   }
   .hero-title .accent { color: #b71c1c; }
-  .hero-rule {
-    width: 24mm;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, #b71c1c, transparent);
-    border-radius: 999px;
-    margin: 1.8mm auto 1.4mm;
-  }
-  .hero-intro {
-    margin: 0 auto;
-    max-width: 152mm;
-    font-size: 8.9px;
-    color: #2b2b2b;
-    line-height: 1.25;
-  }
   .meta-card {
-    margin: 2mm auto 0;
+    margin: 1.6mm auto 0;
     max-width: 104mm;
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1213,8 +1199,6 @@ export function buildQuotationHtml(
         <div class="letterhead-contact secondary">Email:info@betech.co.ke&nbsp;&nbsp; Website:www.betech.co.ke</div>
       </div>
       <h1 class="hero-title">${renderTitleWithAccent(data.title)}</h1>
-      <div class="hero-rule"></div>
-      <div class="hero-intro">${escapeHtml(data.intro)}</div>
 
       <div class="meta-card section-card">
         <div class="meta-cell">
