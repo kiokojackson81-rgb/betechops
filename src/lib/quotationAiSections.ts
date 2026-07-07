@@ -173,8 +173,148 @@ function buildWarrantyRows(input: QuotationAiInput) {
   return input.items.map((item) => ({
     component: shortItemName(item.itemName),
     warranty: item.warranty || item.defaultWarranty || fallbackWarranty,
-    notes: item.warrantyNotes || "Standard coverage",
+    notes:
+      item.warrantyNotes ||
+      (/panel/i.test(item.itemName)
+        ? "Manufacturer performance coverage"
+        : /battery|lithium|gel|agm/i.test(item.itemName)
+          ? "Manufacturer battery coverage"
+          : /inverter|hybrid/i.test(item.itemName)
+            ? "Manufacturer equipment coverage"
+            : /install|commission|workmanship/i.test(item.itemName)
+              ? "Installation workmanship"
+              : "Standard equipment coverage"),
   }));
+}
+
+function parseSummaryMetric(value: string, pattern: RegExp) {
+  const match = String(value || "").match(pattern);
+  return match ? Number(match[1]) || 0 : 0;
+}
+
+function buildPracticalPowerLines(summary: ShortSolutionSummary, kind: string) {
+  const inverterKw = parseSummaryMetric(summary.inverterCapacity, /(\d+(?:\.\d+)?)\s*kw/i);
+  const solarKw = parseSummaryMetric(summary.solarCapacity, /(\d+(?:\.\d+)?)\s*kw/i);
+  const solarW = parseSummaryMetric(summary.solarCapacity, /(\d+(?:\.\d+)?)\s*w\b/i);
+  const batteryKwh = parseSummaryMetric(summary.batteryCapacity, /(\d+(?:\.\d+)?)\s*kwh/i);
+  const batteryAh = parseSummaryMetric(summary.batteryCapacity, /(\d+(?:\.\d+)?)\s*ah/i);
+  const effectiveLevel = Math.max(
+    inverterKw,
+    solarKw,
+    solarW ? solarW / 1000 : 0,
+    batteryKwh,
+    batteryAh >= 200 ? 1.5 : batteryAh >= 100 ? 0.8 : 0,
+  );
+
+  if (kind === "SOLAR_WATER_PUMP") {
+    return [
+      "Water pumping to storage tank",
+      "Farm or home water transfer",
+      "Livestock watering",
+      "Daytime irrigation support",
+      "Borehole or shallow-well pumping subject to site conditions",
+    ];
+  }
+
+  if (kind === "BATTERY_BACKUP") {
+    return effectiveLevel >= 4
+      ? [
+          "House lighting",
+          "TV and decoder",
+          "Wi-Fi router",
+          "Phone and laptop charging",
+          "Fridge backup for selected hours",
+          "CCTV and modem support",
+        ]
+      : [
+          "Lights during blackout",
+          "TV",
+          "Wi-Fi router",
+          "Phone charging",
+          "Small decoder or radio",
+        ];
+  }
+
+  if (kind === "INVERTER_ONLY") {
+    return effectiveLevel >= 5
+      ? [
+          "Lighting circuits",
+          "TVs and decoder",
+          "Fridge",
+          "Wi-Fi router",
+          "Laptops and office devices",
+          "Selected daytime socket loads",
+        ]
+      : [
+          "Lights",
+          "TV",
+          "Wi-Fi router",
+          "Phone charging",
+          "Small home backup loads",
+        ];
+  }
+
+  if (effectiveLevel >= 10) {
+    return [
+      "Full house lighting",
+      "Multiple TVs and decoder",
+      "Fridges and freezers",
+      "Wi-Fi router and CCTV",
+      "Washing machine",
+      "Microwave in controlled daytime use",
+      "Water pump where correctly sized",
+      "Laptops, phones, and office equipment",
+      "Small business daytime loads",
+      "Electric fence and security systems",
+    ];
+  }
+
+  if (effectiveLevel >= 5) {
+    return [
+      "Home lighting",
+      "TV and decoder",
+      "Fridge",
+      "Wi-Fi router",
+      "Phone and laptop charging",
+      "CCTV",
+      "Small water pump where correctly sized",
+      "Moderate daily home backup use",
+    ];
+  }
+
+  if (effectiveLevel >= 1.5) {
+    return [
+      "LED bulbs",
+      "TV",
+      "Wi-Fi router",
+      "Phone charging",
+      "Laptop charging",
+      "Small fridge depending on usage pattern",
+    ];
+  }
+
+  return [
+    "LED bulbs",
+    "Phone charging",
+    "Wi-Fi router",
+    "Small TV or decoder depending on kit rating",
+    "Basic night lighting backup",
+  ];
+}
+
+function buildStandardWarrantyNotes(input: QuotationAiInput) {
+  const notes = [
+    "Warranty applies under normal use, correct installation, and manufacturer operating conditions.",
+    "Warranty does not cover misuse, accidental damage, unauthorized modification, or force majeure events.",
+  ];
+
+  if (input.warrantyMode === "FULL_SYSTEM") {
+    notes.push("Full-system warranty is subject to the approved equipment, workmanship, and support scope in this quotation.");
+  } else if (input.warrantyMode === "CUSTOM" && input.customWarranty?.trim()) {
+    notes.push(input.customWarranty.trim());
+  }
+
+  return uniqueLines(notes);
 }
 
 function buildSummary(input: QuotationAiInput, kind: string) {
@@ -423,6 +563,7 @@ export function generateQuotationAiSections(input: QuotationAiInput): GeneratedQ
   const kind = classifySolutionKind(input, projectType);
   const summary = buildSummary(input, kind);
   const kindLines = linesForKind(kind, input);
+  const practicalPowerLines = buildPracticalPowerLines(summary, kind);
   const warrantyRows = buildWarrantyRows(input);
 
   const executiveSummary =
@@ -437,7 +578,7 @@ export function generateQuotationAiSections(input: QuotationAiInput): GeneratedQ
     ...splitParagraphLines(input.whatPriceIncludes),
     ...kindLines.scope,
     ...splitParagraphLines(defaults.whatPriceIncludes),
-  ]).slice(0, 7);
+  ]).slice(0, 6);
 
   const accessoriesIncluded = uniqueLines(
     input.items
@@ -447,8 +588,9 @@ export function generateQuotationAiSections(input: QuotationAiInput): GeneratedQ
 
   const whatSystemCanPower = uniqueLines([
     ...splitParagraphLines(input.whatItCanPower),
+    ...practicalPowerLines,
     ...kindLines.power,
-  ]).slice(0, 12);
+  ]).slice(0, 10);
 
   const keyBenefits = uniqueLines(kindLines.benefits).slice(0, 6);
 
@@ -474,7 +616,7 @@ export function generateQuotationAiSections(input: QuotationAiInput): GeneratedQ
     "Major civil works unless expressly listed",
     "Unplanned structural modifications",
     "Extra accessories outside the approved BOQ",
-  ]).slice(0, 6);
+  ]).slice(0, 5);
 
   const afterSalesSupport = uniqueLines([
     ...splitParagraphLines(input.afterSalesSupport),
@@ -482,10 +624,10 @@ export function generateQuotationAiSections(input: QuotationAiInput): GeneratedQ
   ]).slice(0, 7);
 
   const customerActionItems = uniqueLines([
-    "Review the proposed scope and total quotation value.",
+    "Confirm the final product scope and commercial approval.",
+    "Share exact site location and preferred installation date.",
+    "Arrange site access and any required pre-installation readiness.",
     `Confirm the preferred payment structure: ${getQuotePaymentTermsLabel(input.paymentTerms)}.`,
-    "Share final site access timing and exact installation location.",
-    "Approve the quotation so scheduling and dispatch can begin.",
   ]).slice(0, 5);
 
   return {
@@ -502,7 +644,10 @@ export function generateQuotationAiSections(input: QuotationAiInput): GeneratedQ
     warrantyRows,
     afterSalesSupport,
     customerActionItems,
-    practicalUsageNote: kindLines.usage,
+    practicalUsageNote:
+      kind === "SOLAR_HOME_SYSTEM" || kind === "COMMERCIAL_SOLAR_SYSTEM"
+        ? "Actual supported appliances depend on simultaneous usage, inverter surge handling, solar production, and battery reserve discipline."
+        : kindLines.usage,
   };
 }
 
@@ -524,6 +669,7 @@ export function applyQuotationAiEnrichment(input: QuotationAiInput) {
   const aiWarrantySummary = uniqueLines([
     ...splitParagraphLines(input.aiWarrantySummary),
     ...splitParagraphLines(buildWarrantyAiSummary(input.items, (input.warrantyMode || "PER_ITEM") as QuoteWarrantyMode)),
+    ...buildStandardWarrantyNotes(input),
   ]).join("\n");
 
   return {

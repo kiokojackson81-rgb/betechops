@@ -3,6 +3,7 @@ import "server-only";
 import fs from "fs/promises";
 import path from "path";
 import { launchChromiumBrowser } from "@/lib/pdf/chromium";
+import { generateQuotationAiSections as generateSharedQuotationAiSections } from "@/lib/quotationAiSections";
 import {
   formatQuoteCurrency,
   getQuotePaymentMethodLabel,
@@ -96,6 +97,7 @@ type GeneratedQuotationAiSections = {
   warrantySuggestion: string[];
   scopeExclusions: string[];
   customerNotes: string[];
+  customerActionItems: string[];
 };
 
 type QuotePdfRenderData = {
@@ -280,9 +282,58 @@ function buildWarrantyRows(input: QuotePdfInput): WarrantyRow[] {
     .map((item) => ({
       component: shortItemName(item.itemName),
       warranty: item.warranty || item.defaultWarranty || fallbackWarranty,
-      notes: item.warrantyNotes || "Standard coverage",
+      notes:
+        item.warrantyNotes ||
+        (/panel/i.test(item.itemName)
+          ? "Manufacturer performance warranty"
+          : /battery|lithium|gel|agm/i.test(item.itemName)
+            ? "Manufacturer battery warranty"
+            : /inverter|hybrid/i.test(item.itemName)
+              ? "Manufacturer equipment warranty"
+              : /install|commission|workmanship/i.test(item.itemName)
+                ? "Installation workmanship"
+                : "Standard coverage"),
     }))
     .filter((row) => row.component && row.warranty);
+}
+
+function getOrderedPaymentSections(selected?: QuotePaymentMethod | null) {
+  const order: QuotePaymentMethod[] = ["MPESA_PAYBILL", "ABSA_BANK", "EQUITY_BANK"];
+  const sections = order.map((key) => PAYMENT_METHOD_DETAILS[key]);
+  if (selected && PAYMENT_METHOD_DETAILS[selected]) {
+    const selectedSection = PAYMENT_METHOD_DETAILS[selected];
+    return [selectedSection, ...sections.filter((section) => section !== selectedSection)];
+  }
+  return sections;
+}
+
+function buildPaymentOptions(input: QuotePdfInput) {
+  const selectedDeposit =
+    typeof input.depositAmount === "number" && input.depositAmount > 0
+      ? formatQuoteCurrency(input.depositAmount)
+      : "30%";
+  const selectedBalance =
+    typeof input.balanceAmount === "number" && input.balanceAmount > 0
+      ? formatQuoteCurrency(input.balanceAmount)
+      : "70% balance";
+
+  return [
+    {
+      title: "Pre-installation full payment",
+      detail: "Customer clears 100% before delivery and installation.",
+      active: input.paymentTerms === "FULL_PAYMENT",
+    },
+    {
+      title: "Deposit then balance",
+      detail: `${selectedDeposit} deposit, then ${selectedBalance} after installation and testing.`,
+      active: input.paymentTerms === "DEPOSIT_AND_BALANCE",
+    },
+    {
+      title: "Full payment after installation",
+      detail: "Available only when approved by management.",
+      active: false,
+    },
+  ];
 }
 
 function classifyItemGroup(itemName: string) {
@@ -538,53 +589,55 @@ function deriveShortSolutionSummary(input: QuotePdfInput) {
 }
 
 export function generateQuotationAiSections(input: QuotePdfInput): GeneratedQuotationAiSections {
-  const shortSolutionSummary = deriveShortSolutionSummary(input);
-  const quoteLead = String(input.quoteTitle || "").trim() || "the proposed solar solution";
-  const executiveSummary =
-    input.proposalSections?.projectOverview?.trim() ||
-    `Based on the reviewed customer requirement, we are pleased to submit a professional proposal for ${quoteLead}. This solution is structured to deliver reliable performance, practical installation, and clear commercial terms for approval.`;
-
-  const keyBenefits = compactLineItems([
-    shortSolutionSummary.installationIncluded === "Included"
-      ? "Professional installation, testing, and commissioning included."
-      : "Installation scope structured clearly inside the quotation.",
-    shortSolutionSummary.transportIncluded === "Included"
-      ? "Transport and delivery planning included in the project flow."
-      : "Transport arranged as stated in the BOQ.",
-    shortSolutionSummary.supportIncluded === "Included"
-      ? "After-sales support and technical follow-up are included."
-      : "Support terms are defined in the proposal.",
-    shortSolutionSummary.warrantyLabel === "Per item"
-      ? "Each major component carries its own warranty coverage."
-      : `Warranty handled under ${shortSolutionSummary.warrantyLabel.toLowerCase()} mode.`,
-  ]);
-
-  const warrantySuggestion = compactLineItems([
-    ...buildWarrantyRows(input).map((row) => `${row.component}: ${row.warranty}${row.notes ? ` (${row.notes})` : ""}`),
-    "Warranty applies under normal use, correct installation, and manufacturer operating conditions.",
-  ]);
-
-  const scopeExclusions = compactLineItems([
-    ...splitParagraphLines(input.proposalSections?.scopeExclusions),
-    "Major civil works, roofing modifications, and structural repairs unless expressly listed.",
-    "Additional accessories, extended cable runs, and extra protection devices not itemized in this BOQ.",
-  ]);
-
-  const customerNotes = compactLineItems([
-    ...sanitizeMessageParagraphs(input.quoteMessage).slice(1),
-    ...splitParagraphLines(input.proposalSections?.importantNotes).slice(0, 3),
-  ]);
+  const shared = generateSharedQuotationAiSections({
+    projectType: null,
+    quoteTitle: input.quoteTitle,
+    items: input.items,
+    total: input.total,
+    paymentTerms: input.paymentTerms,
+    warrantyMode: input.warrantyMode,
+    fullSystemWarranty: input.fullSystemWarranty,
+    customWarranty: input.customWarranty,
+    quoteMessage: input.quoteMessage,
+    customerNotes: input.proposalSections?.importantNotes,
+    customerLocation: input.customerLocation,
+    projectOverview: input.proposalSections?.projectOverview,
+    whatPriceIncludes: input.proposalSections?.whatPriceIncludes,
+    whatItCanPower: input.proposalSections?.whatItCanPower,
+    deliveryTimeline: input.proposalSections?.deliveryTimeline,
+    installationTimeline: input.proposalSections?.installationTimeline,
+    afterSalesSupport: input.proposalSections?.afterSalesSupport,
+    importantNotes: input.proposalSections?.importantNotes,
+    scopeExclusions: input.proposalSections?.scopeExclusions,
+    aiWarrantySummary: input.aiWarrantySummary,
+  });
+  const derived = deriveShortSolutionSummary(input);
 
   return {
-    executiveSummary,
-    shortSolutionSummary,
-    whatSystemCanPower: inferPowerBlocks(shortSolutionSummary, splitParagraphLines(input.proposalSections?.whatItCanPower)).map(
-      (item) => item.label,
-    ),
-    keyBenefits,
-    warrantySuggestion,
-    scopeExclusions,
-    customerNotes,
+    executiveSummary: shared.executiveSummary,
+    shortSolutionSummary: {
+      ...derived,
+      systemSize: shared.shortSolutionSummary.systemSize || derived.systemSize,
+      solarCapacity: shared.shortSolutionSummary.solarCapacity || derived.solarCapacity,
+      batteryCapacity: shared.shortSolutionSummary.batteryCapacity || derived.batteryCapacity,
+      inverterCapacity: shared.shortSolutionSummary.inverterCapacity || derived.inverterCapacity,
+      installationIncluded: shared.shortSolutionSummary.installationIncluded || derived.installationIncluded,
+      transportIncluded: shared.shortSolutionSummary.transportIncluded || derived.transportIncluded,
+      warrantyLabel: shared.shortSolutionSummary.warrantySummary || derived.warrantyLabel,
+      supportIncluded: shared.shortSolutionSummary.supportIncluded || derived.supportIncluded,
+    },
+    whatSystemCanPower: shared.whatSystemCanPower,
+    keyBenefits: shared.keyBenefits,
+    warrantySuggestion: compactLineItems([
+      ...shared.warrantyRows.map((row) => `${row.component}: ${row.warranty}`),
+      "Warranty applies under normal use, correct installation, and manufacturer operating conditions.",
+    ]),
+    scopeExclusions: shared.scopeExclusions,
+    customerActionItems: shared.customerActionItems,
+    customerNotes: compactLineItems([
+      ...sanitizeMessageParagraphs(input.quoteMessage).slice(1),
+      ...splitParagraphLines(input.proposalSections?.importantNotes).slice(0, 3),
+    ]),
   };
 }
 
@@ -636,26 +689,30 @@ function normalizeQuotePdfData(input: QuotePdfInput): QuotePdfRenderData {
   const additionalNotes = compactLineItems(sanitizeMessageParagraphs(input.quoteMessage).slice(1));
   const referenceLinks = compactLineItems([
     ...splitParagraphLines(input.proposalSections?.projectReferenceLinks),
-    "https://www.betech.co.ke/all-products",
-    "https://wa.me/254722151083?text=Hello%20Betech%20Solar%20Solutions",
+    "View our recent projects here : https://www.tiktok.com/@betechsolarprojects",
+    "View all our products here : https://www.betech.co.ke/",
+    "Email : info@betech.co.ke",
+    "Technical sales : jackson@betech.co.ke",
   ]);
   const similarProjects =
     input.proposalVisibility?.similarProjects === false
       ? []
       : compactLineItems([
           ...splitParagraphLines(input.proposalSections?.similarProjects),
-          "https://www.tiktok.com/@betechsolarprojects",
         ]);
-  const paymentSections = input.paymentMethod
-    ? [PAYMENT_METHOD_DETAILS[input.paymentMethod]]
-    : Object.values(PAYMENT_METHOD_DETAILS);
+  const paymentSections = getOrderedPaymentSections(input.paymentMethod);
   const warrantyRows =
     input.proposalVisibility?.warranty === false ? [] : buildWarrantyRows(input);
-  const warrantyNotes = compactLineItems([
-    ...splitParagraphLines(input.warrantyGeneralNotes),
-    ...splitParagraphLines(input.aiWarrantySummary),
-    ...ai.warrantySuggestion,
-  ]);
+  const warrantyNotes = compactLineItems(
+    [
+      ...splitParagraphLines(input.warrantyGeneralNotes),
+      input.warrantyMode === "FULL_SYSTEM"
+        ? "Full-system warranty applies only to the approved equipment, workmanship, and support scope listed in this quotation."
+        : "",
+      "Warranty applies under normal use, correct installation, and manufacturer operating conditions.",
+      "Warranty does not cover misuse, accidental damage, unauthorized modification, or force majeure events.",
+    ].filter(Boolean),
+  );
   const projectOverview =
     input.proposalVisibility?.projectOverview === false
       ? null
@@ -810,6 +867,23 @@ function renderCostBars(rows: CostBreakdownRow[]) {
   `;
 }
 
+function renderPaymentOptionCards(input: QuotePdfInput) {
+  return `
+    <div class="payment-options">
+      ${buildPaymentOptions(input)
+        .map(
+          (option) => `
+            <div class="payment-option ${option.active ? "payment-option-active" : ""} break-inside-avoid">
+              <div class="payment-title">${escapeHtml(option.title)}</div>
+              <div class="method-lines">${escapeHtml(option.detail)}</div>
+            </div>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
 function renderWarrantyTable(rows: WarrantyRow[]) {
   if (!rows.length) return "";
   return `
@@ -877,11 +951,16 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
   ];
 
   const pages: Array<{ title: string; body: string }> = [];
+  const compactCloseout =
+    data.items.length <= 5 &&
+    data.timeline.length <= 4 &&
+    data.afterSalesSupport.length <= 4 &&
+    data.similarProjects.length <= 2;
 
   pages.push({
     title: "Cover",
     body: `
-      <div class="cover-grid">
+      <div class="cover-grid compact-grid">
         <div class="cover-left">
           ${
             assets.letterheadUrl
@@ -891,16 +970,13 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
           <div class="brand-kicker">Official Customer Quotation</div>
           <h1 class="cover-title">Quotation</h1>
           <div class="cover-subject">${escapeHtml(data.subject)}</div>
-          <div class="meta-panel">
-            ${customerRows}
-            ${preparedByRows}
-          </div>
+          <div class="meta-panel">${customerRows}${preparedByRows}</div>
         </div>
         <div class="cover-right">
           ${assets.logoUrl ? `<img class="cover-logo" src="${assets.logoUrl}" alt="Betech logo" />` : ""}
           <div class="hero-card break-inside-avoid">
             <div class="section-title">Executive Summary</div>
-            <p class="body-copy">${escapeHtml(data.ai.executiveSummary)}</p>
+            <p class="body-copy">${escapeHtml(data.projectOverview || data.ai.executiveSummary)}</p>
           </div>
           <div class="summary-grid">
             ${data.summaryCards
@@ -915,263 +991,208 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
               )
               .join("")}
           </div>
-          <div class="cost-panel break-inside-avoid">
-            <div class="section-title">Commercial Snapshot</div>
-            ${renderCostBars(data.costBreakdown)}
-          </div>
         </div>
       </div>
-    `,
-  });
-
-  pages.push({
-    title: "Summary",
-    body: `
-      <div class="two-column">
+      <div class="two-column two-column-tight">
         <div>
-          ${renderSection("Customer Information", `<div class="panel">${customerRows}</div>`)}
-          ${renderSection("Executive Summary", `<p class="body-copy">${escapeHtml(data.projectOverview || data.ai.executiveSummary)}</p>`)}
           ${renderSection("Key Benefits", renderList(data.ai.keyBenefits, "soft"))}
+          ${renderSection("What This System Can Power", renderPowerGrid(powerBlocks))}
+          ${renderSection("Practical Usage Note", `<div class="note-box">${escapeHtml(data.importantNotes[0] || "Actual supported appliances depend on simultaneous loading, solar production, and battery reserve management.")}</div>`)}
         </div>
         <div>
           ${renderSection("Company Information", `<div class="panel">${companyRows}</div>`)}
-          ${renderSection("Prepared Solution", `<div class="kpi-grid">
-            <div class="kpi-card"><div class="kpi-label">System Size</div><div class="kpi-value">${escapeHtml(data.ai.shortSolutionSummary.systemSize)}</div></div>
-            <div class="kpi-card"><div class="kpi-label">Solar Capacity</div><div class="kpi-value">${escapeHtml(data.ai.shortSolutionSummary.solarCapacity)}</div></div>
-            <div class="kpi-card"><div class="kpi-label">Battery</div><div class="kpi-value">${escapeHtml(data.ai.shortSolutionSummary.batteryCapacity)}</div></div>
-            <div class="kpi-card"><div class="kpi-label">Inverter</div><div class="kpi-value">${escapeHtml(data.ai.shortSolutionSummary.inverterCapacity)}</div></div>
-            <div class="kpi-card"><div class="kpi-label">Total</div><div class="kpi-value">${escapeHtml(data.ai.shortSolutionSummary.totalLabel)}</div></div>
-            <div class="kpi-card"><div class="kpi-label">Warranty</div><div class="kpi-value">${escapeHtml(data.ai.shortSolutionSummary.warrantyLabel)}</div></div>
-          </div>`)}
-        </div>
-      </div>
-    `,
-  });
-
-  pages.push({
-    title: "BOQ",
-    body: `
-      ${renderSection("Detailed Bill Of Quantities", `
-        <div class="boq-subtitle">${escapeHtml(data.boqTitle)}</div>
-        <table class="boq-table">
-          <thead>
-            <tr>
-              <th style="width:34px;">#</th>
-              <th>Description</th>
-              <th style="width:48px;">Qty</th>
-              <th style="width:95px;">Unit Price</th>
-              <th style="width:95px;">Amount</th>
-              <th style="width:92px;">Warranty</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${data.items
-              .map(
-                (item, index) => `
-                  <tr>
-                    <td>${index + 1}</td>
-                    <td>
-                      <div class="boq-name">${escapeHtml(item.shortName)}</div>
-                      ${item.specsText ? `<div class="boq-spec">${escapeHtml(item.specsText)}</div>` : ""}
-                    </td>
-                    <td>${escapeHtml(String(item.quantity))}</td>
-                    <td class="cell-right">${escapeHtml(formatQuoteCurrency(item.unitPrice))}</td>
-                    <td class="cell-right">${escapeHtml(formatQuoteCurrency(item.lineTotal))}</td>
-                    <td>${escapeHtml(item.warranty || item.defaultWarranty || "-")}</td>
-                  </tr>
-                `,
-              )
-              .join("")}
-          </tbody>
-        </table>
-      `)}
-      ${renderSection("Commercial Summary", `<div class="panel">${renderInfoGrid(commercialRows)}</div>`)}
-    `,
-  });
-
-  pages.push({
-    title: "Cost",
-    body: `
-      <div class="two-column">
-        <div>
-          ${renderSection("Cost Breakdown", renderCostBars(data.costBreakdown))}
+          ${renderSection("Commercial Snapshot", renderCostBars(data.costBreakdown))}
           ${renderSection("Scope Of Supply", renderList(data.priceIncludes.length ? data.priceIncludes : ["Supply of quoted equipment as per BOQ.", "Professional delivery, installation, testing, and commissioning.", "System orientation and handover after completion."], "soft"))}
         </div>
-        <div>
-          ${renderSection("Project Commercial Notes", renderList(data.importantNotes, "soft"))}
-          ${renderSection("Scope Exclusions", renderList(data.scopeExclusions))}
-        </div>
       </div>
     `,
   });
 
-  if (data.accessoriesIncluded.length || data.additionalNotes.length) {
-    pages.push({
-      title: "Accessories",
-      body: `
-        <div class="two-column">
-          <div>
-            ${renderSection("Accessories Included", renderList(data.accessoriesIncluded.length ? data.accessoriesIncluded : ["Accessories are included only where listed in the BOQ."], "soft"))}
-          </div>
-          <div>
-            ${renderSection("Customer Requirement Notes", renderList(data.ai.customerNotes.length ? data.ai.customerNotes : data.additionalNotes, "soft"))}
-          </div>
-        </div>
-      `,
-    });
-  }
+  const boqBody = `
+    ${renderSection("Detailed Bill Of Quantities", `
+      <div class="boq-subtitle">${escapeHtml(data.boqTitle)}</div>
+      <table class="boq-table">
+        <thead>
+          <tr>
+            <th style="width:34px;">#</th>
+            <th>Description</th>
+            <th style="width:48px;">Qty</th>
+            <th style="width:95px;">Unit Price</th>
+            <th style="width:95px;">Amount</th>
+            <th style="width:92px;">Warranty</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.items
+            .map(
+              (item, index) => `
+                <tr>
+                  <td>${index + 1}</td>
+                  <td>
+                    <div class="boq-name">${escapeHtml(item.shortName)}</div>
+                    ${item.specsText ? `<div class="boq-spec">${escapeHtml(item.specsText)}</div>` : ""}
+                  </td>
+                  <td>${escapeHtml(String(item.quantity))}</td>
+                  <td class="cell-right">${escapeHtml(formatQuoteCurrency(item.unitPrice))}</td>
+                  <td class="cell-right">${escapeHtml(formatQuoteCurrency(item.lineTotal))}</td>
+                  <td>${escapeHtml(item.warranty || item.defaultWarranty || "-")}</td>
+                </tr>
+              `,
+            )
+            .join("")}
+        </tbody>
+      </table>
+    `)}
+    ${renderSection("Commercial Summary", `<div class="panel">${renderInfoGrid(commercialRows)}</div>`)}
+  `;
 
-  pages.push({
-    title: "Power",
-    body: `
-      ${renderSection("What This System Can Power", renderPowerGrid(powerBlocks))}
-      ${renderSection("Practical Usage Note", `<div class="note-box">Actual performance depends on appliance loading pattern, starting surge, solar production conditions, and battery reserve management.</div>`)}
-    `,
-  });
-
-  pages.push({
-    title: "Timeline",
-    body: `
-      ${renderSection("Delivery And Installation Timeline", renderTimeline(data.timeline))}
-    `,
-  });
-
-  if (data.warrantyRows.length || data.warrantyNotes.length) {
-    pages.push({
-      title: "Warranty",
-      body: `
-        ${renderSection("Warranty Coverage", renderWarrantyTable(data.warrantyRows))}
-        ${renderSection("Warranty Notes", renderList(data.warrantyNotes.length ? data.warrantyNotes : ["Warranty applies under normal use, correct installation, and manufacturer operating conditions."], "soft"))}
-      `,
-    });
-  }
-
-  if (data.afterSalesSupport.length || data.termsAndConditions.length) {
-    pages.push({
-      title: "Support",
-      body: `
-        <div class="two-column">
-          <div>
-            ${renderSection("After-Sales Support", renderList(data.afterSalesSupport.length ? data.afterSalesSupport : ["Remote technical guidance after commissioning.", "Support escalation through the Betech customer care desk."], "soft"))}
-          </div>
-          <div>
-            ${renderSection("Terms And Conditions", renderList(data.termsAndConditions))}
-          </div>
-        </div>
-      `,
-    });
-  }
-
-  pages.push({
-    title: "Payment",
-    body: `
-      <div class="two-column">
-        <div>
-          ${renderSection("Payment Terms", `
-            <div class="payment-cards">
-              <div class="payment-card break-inside-avoid">
-                <div class="payment-title">Terms</div>
-                <div class="payment-value">${escapeHtml(getQuotePaymentTermsLabel(input.paymentTerms || null))}</div>
+  const closeoutBody = `
+    ${data.warrantyRows.length ? renderSection("Warranty Coverage", renderWarrantyTable(data.warrantyRows)) : ""}
+    ${renderSection("Warranty Notes", renderList(data.warrantyNotes, "soft"))}
+    ${renderSection("Payment Terms", renderPaymentOptionCards(input))}
+    ${renderSection("Payment Methods", `
+      <div class="payment-methods">
+        ${data.paymentSections
+          .map(
+            (section) => `
+              <div class="method-card break-inside-avoid">
+                <div class="method-title">${escapeHtml(section.label)}</div>
+                <div class="method-lines">${section.lines.map((line) => `<div>${escapeHtml(line)}</div>`).join("")}</div>
               </div>
-              <div class="payment-card break-inside-avoid">
-                <div class="payment-title">Method</div>
-                <div class="payment-value">${escapeHtml(getQuotePaymentMethodLabel(input.paymentMethod || null))}</div>
-              </div>
-              ${
-                typeof input.depositAmount === "number"
-                  ? `<div class="payment-card break-inside-avoid"><div class="payment-title">Deposit</div><div class="payment-value">${escapeHtml(formatQuoteCurrency(input.depositAmount))}</div></div>`
-                  : ""
-              }
-              ${
-                typeof input.balanceAmount === "number"
-                  ? `<div class="payment-card break-inside-avoid"><div class="payment-title">Balance</div><div class="payment-value">${escapeHtml(formatQuoteCurrency(input.balanceAmount))}</div></div>`
-                  : ""
-              }
-            </div>
-          `)}
-        </div>
-        <div>
-          ${renderSection("Payment Methods", `
-            <div class="payment-methods">
-              ${data.paymentSections
+            `,
+          )
+          .join("")}
+      </div>
+    `)}
+    ${
+      data.similarProjects.length
+        ? renderSection(
+            "Similar Projects",
+            `<div class="project-links">
+              ${data.similarProjects
                 .map(
-                  (section) => `
-                    <div class="method-card break-inside-avoid">
-                      <div class="method-title">${escapeHtml(section.label)}</div>
-                      <div class="method-lines">${section.lines.map((line) => `<div>${escapeHtml(line)}</div>`).join("")}</div>
+                  (link) => `
+                    <div class="project-card break-inside-avoid">
+                      <div class="project-label">View a Similar Installation</div>
+                      <div class="project-link">${escapeHtml(link)}</div>
                     </div>
                   `,
                 )
                 .join("")}
-            </div>
-          `)}
+            </div>`,
+          )
+        : ""
+    }
+    ${renderSection(
+      "Useful Links",
+      `<div class="project-links">
+        ${data.referenceLinks
+          .map(
+            (link) => `
+              <div class="project-card break-inside-avoid">
+                <div class="project-label">Useful Link</div>
+                <div class="project-link">${escapeHtml(link)}</div>
+              </div>
+            `,
+          )
+          .join("")}
+      </div>`,
+    )}
+    ${renderSection(
+      "Approval And Next Steps",
+      `
+        <div class="approval-grid">
+          <div class="approval-box">
+            <div class="approval-line"><strong>1.</strong> Review the proposal scope, pricing, and warranty coverage.</div>
+            <div class="approval-line"><strong>2.</strong> Confirm any item adjustments, preferred payment method, or project timing.</div>
+            <div class="approval-line"><strong>3.</strong> Share approval through phone, email, or WhatsApp so implementation planning can begin.</div>
+          </div>
+          <div class="approval-box">
+            ${data.ai.customerActionItems.map((item) => `<div class="approval-line">${escapeHtml(item)}</div>`).join("")}
+          </div>
         </div>
-      </div>
-    `,
+      `,
+    )}
+  `;
+
+  pages.push({
+    title: "Commercial",
+    body: compactCloseout
+      ? `
+          <div class="two-column two-column-tight">
+            <div>
+              ${boqBody}
+            </div>
+            <div>
+              ${closeoutBody}
+            </div>
+          </div>
+        `
+      : `
+          <div class="two-column two-column-tight">
+            <div>
+              ${boqBody}
+            </div>
+            <div>
+              ${renderSection("Cost Breakdown", renderCostBars(data.costBreakdown))}
+              ${renderSection("Delivery And Installation", renderTimeline(data.timeline))}
+              ${
+                data.afterSalesSupport.length
+                  ? renderSection("After-Sales Support", renderList(data.afterSalesSupport, "soft"))
+                  : ""
+              }
+              ${
+                data.accessoriesIncluded.length
+                  ? renderSection("Accessories Included", renderList(data.accessoriesIncluded, "soft"))
+                  : ""
+              }
+              ${
+                data.scopeExclusions.length
+                  ? renderSection("Scope Exclusions", renderList(data.scopeExclusions))
+                  : ""
+              }
+            </div>
+          </div>
+        `,
   });
 
-  if (data.similarProjects.length || data.referenceLinks.length) {
+  if (!compactCloseout) {
     pages.push({
-      title: "Projects",
+      title: "Closeout",
       body: `
-        <div class="two-column">
+        <div class="two-column two-column-tight">
           <div>
-            ${renderSection("Similar Projects", `
-              <div class="project-links">
-                ${data.similarProjects
-                  .map((link) => `<div class="project-card break-inside-avoid"><div class="project-label">Reference</div><div class="project-link">${escapeHtml(link)}</div></div>`)
-                  .join("")}
-              </div>
-            `)}
+            ${closeoutBody}
           </div>
           <div>
-            ${renderSection("Useful Links", `
-              <div class="project-links">
-                ${data.referenceLinks
-                  .map((link) => `<div class="project-card break-inside-avoid"><div class="project-label">Open</div><div class="project-link">${escapeHtml(link)}</div></div>`)
-                  .join("")}
-              </div>
-            `)}
+            ${
+              data.additionalNotes.length
+                ? renderSection("Additional Notes", renderList(data.additionalNotes, "soft"))
+                : ""
+            }
+            ${
+              data.termsAndConditions.length
+                ? renderSection("Terms And Conditions", renderList(data.termsAndConditions))
+                : ""
+            }
+            ${renderSection(
+              "Contact Betech",
+              `
+                <div class="panel">
+                  ${renderInfoGrid([
+                    { label: "Sales Desk", value: "0722 151 083" },
+                    { label: "Email", value: "info@betech.co.ke" },
+                    { label: "Technical Sales", value: "jackson@betech.co.ke" },
+                    { label: "Office", value: "Pramukh Plaza, 3rd Floor, Mombasa" },
+                  ])}
+                </div>
+              `,
+            )}
           </div>
         </div>
       `,
     });
   }
-
-  pages.push({
-    title: "Approval",
-    body: `
-      <div class="two-column">
-        <div>
-          ${renderSection("Approval And Next Steps", `
-            <div class="panel">
-              <div class="approval-line"><strong>1.</strong> Review the proposal scope, pricing, and warranty coverage.</div>
-              <div class="approval-line"><strong>2.</strong> Confirm any item adjustments, preferred payment method, or project timing.</div>
-              <div class="approval-line"><strong>3.</strong> Share approval through phone, email, or WhatsApp so implementation planning can begin.</div>
-            </div>
-          `)}
-          ${renderSection("Prepared By", `<div class="panel">${preparedByRows}</div>`)}
-        </div>
-        <div>
-          ${renderSection("Customer Action Items", renderList([
-            "Confirm the final product scope and commercial approval.",
-            "Share exact site location and preferred installation date.",
-            "Arrange site access and any required pre-installation readiness.",
-          ], "soft"))}
-          ${renderSection("Contact Betech", `
-            <div class="panel">
-              ${renderInfoGrid([
-                { label: "Sales Desk", value: "0722 151 083" },
-                { label: "Email", value: "info@betech.co.ke" },
-                { label: "Website", value: "www.betech.co.ke" },
-                { label: "Office", value: "Pramukh Plaza, 3rd Floor, Mombasa" },
-              ])}
-            </div>
-          `)}
-        </div>
-      </div>
-    `,
-  });
 
   const pageHtml = pages
     .map(
@@ -1237,15 +1258,16 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
           .cover-grid {
             display: grid;
             grid-template-columns: 1.05fr 0.95fr;
-            gap: 8mm;
-            padding-top: 8mm;
+            gap: 6mm;
+            padding-top: 7mm;
           }
+          .compact-grid { align-items: start; }
           .letterhead {
-            max-height: 44px;
+            max-height: 40px;
             width: 100%;
             object-fit: contain;
             object-position: left center;
-            margin-bottom: 5mm;
+            margin-bottom: 3mm;
           }
           .brand-kicker {
             color: #8b1212;
@@ -1255,8 +1277,8 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
             text-transform: uppercase;
           }
           .cover-title {
-            margin: 4mm 0 1mm;
-            font-size: 32px;
+            margin: 3mm 0 1mm;
+            font-size: 28px;
             line-height: 0.96;
             color: #7a0f0f;
             text-transform: uppercase;
@@ -1270,7 +1292,7 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
           .cover-right {
             position: relative;
             display: grid;
-            gap: 8px;
+            gap: 6px;
             align-content: start;
           }
           .cover-logo {
@@ -1295,7 +1317,7 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
           }
           .hero-card,
           .panel,
-          .note-box { padding: 10px 12px; }
+          .note-box { padding: 8px 10px; }
           .summary-grid,
           .kpi-grid {
             display: grid;
@@ -1303,8 +1325,8 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
             gap: 7px;
           }
           .summary-card {
-            padding: 8px 9px;
-            min-height: 60px;
+            padding: 7px 8px;
+            min-height: 54px;
           }
           .summary-icon {
             font-size: 14px;
@@ -1330,7 +1352,7 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
             color: #1f2933;
           }
           .section {
-            margin-bottom: 8px;
+            margin-bottom: 6px;
           }
           .section-title {
             color: #8b1212;
@@ -1338,8 +1360,8 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
             font-weight: 800;
             letter-spacing: 0.08em;
             text-transform: uppercase;
-            margin-bottom: 7px;
-            padding-bottom: 4px;
+            margin-bottom: 5px;
+            padding-bottom: 3px;
             border-bottom: 1px solid rgba(216,154,37,0.65);
           }
           .body-copy {
@@ -1351,13 +1373,13 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
             border: 1px solid #ead8c2;
             border-radius: 10px;
             background: #fffdfa;
-            padding: 9px 10px;
+            padding: 8px 9px;
           }
           .info-row {
             display: grid;
             grid-template-columns: 102px 1fr;
             gap: 10px;
-            padding: 4px 0;
+            padding: 3px 0;
             border-bottom: 1px solid #f2e7da;
           }
           .info-row:last-child { border-bottom: 0; }
@@ -1377,14 +1399,15 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 8px;
-            padding-top: 6mm;
+            padding-top: 4mm;
           }
+          .two-column-tight { gap: 6px; padding-top: 3mm; }
           .list {
             display: grid;
-            gap: 5px;
+            gap: 4px;
           }
           .list-soft {
-            padding: 9px 10px;
+            padding: 8px 9px;
             border: 1px solid #ead8c2;
             border-radius: 10px;
             background: #fff8ef;
@@ -1400,9 +1423,9 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
             font-weight: 800;
           }
           .boq-subtitle {
-            margin-bottom: 8px;
+            margin-bottom: 6px;
             color: #475569;
-            font-size: 11px;
+            font-size: 10px;
           }
           .boq-table {
             width: 100%;
@@ -1421,9 +1444,9 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
           }
           .boq-table td {
             border: 1px solid #ead8c2;
-            padding: 7px 6px;
+            padding: 6px 5px;
             vertical-align: top;
-            font-size: 10px;
+            font-size: 9.5px;
           }
           .boq-name {
             font-weight: 700;
@@ -1466,13 +1489,13 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
           }
           .power-grid {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 7px;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 6px;
           }
           .power-card {
-            padding: 8px 7px;
+            padding: 7px 6px;
             text-align: center;
-            min-height: 62px;
+            min-height: 54px;
           }
           .power-icon {
             font-size: 15px;
@@ -1485,13 +1508,13 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
           }
           .timeline {
             display: grid;
-            gap: 7px;
+            gap: 6px;
           }
           .timeline-step {
             display: grid;
             grid-template-columns: 30px 1fr;
             gap: 10px;
-            padding: 7px 9px;
+            padding: 6px 8px;
             border: 1px solid #ead8c2;
             border-radius: 10px;
             background: #fffdfa;
@@ -1526,18 +1549,43 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
             font-size: 10px;
           }
           .payment-cards,
+          .payment-options,
           .payment-methods,
           .project-links {
             display: grid;
-            gap: 7px;
+            gap: 6px;
           }
           .payment-cards {
             grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .payment-options {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+          .payment-option {
+            padding: 8px 9px;
+            border: 1px solid #ead8c2;
+            border-radius: 10px;
+            background: #fffdfa;
+          }
+          .payment-option-active {
+            border-color: rgba(216,154,37,0.95);
+            background: #fff8ef;
           }
           .payment-card,
           .method-card,
           .project-card {
             padding: 8px 9px;
+          }
+          .approval-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+          }
+          .approval-box {
+            border: 1px solid #ead8c2;
+            border-radius: 12px;
+            background: #fffdfa;
+            padding: 9px 10px;
           }
           .method-lines,
           .project-link {
@@ -1548,7 +1596,7 @@ function buildQuotationHtml(input: QuotePdfInput, assets: { letterheadUrl: strin
             word-break: break-word;
           }
           .approval-line {
-            padding: 5px 0;
+            padding: 4px 0;
             color: #334155;
             font-size: 10.5px;
           }

@@ -106,6 +106,14 @@ export const PAYMENT_METHOD_DETAILS: Record<
     label: "M-Pesa Paybill",
     lines: ["Paybill Number: 516600", "Account Number: 0710098001"],
   },
+  ABSA_BANK: {
+    label: "Absa Bank Transfer / Deposit",
+    lines: [
+      "Bank Name: Absa Bank Kenya",
+      "Account Name: Betech Solar Solution",
+      "Account Number: 2047639940",
+    ],
+  },
   EQUITY_BANK: {
     label: "Equity Bank Transfer / Deposit",
     lines: [
@@ -113,14 +121,6 @@ export const PAYMENT_METHOD_DETAILS: Record<
       "Account Name: Betech Technologies Limited",
       "Branch: Moi Avenue",
       "Account Number: 0470265072030",
-    ],
-  },
-  ABSA_BANK: {
-    label: "Absa Bank Transfer / Deposit",
-    lines: [
-      "Bank Name: Absa Bank Kenya",
-      "Account Name: Betech Solar Solution",
-      "Account Number: 2047639940",
     ],
   },
 };
