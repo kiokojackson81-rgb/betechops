@@ -55,10 +55,18 @@ export const QUOTATION_COMPANY_DETAILS = [
 ].join("\n");
 
 const DEFAULT_DELIVERY_TIMELINE =
-  "Delivery will be completed within 1 working day after order confirmation and payment confirmation.";
+  [
+    "Day 0 - Order confirmation and commercial approval",
+    "Day 1 - Equipment preparation and dispatch planning",
+    "Day 2 - Delivery to site or agreed collection point",
+  ].join("\n");
 
 const DEFAULT_INSTALLATION_TIMELINE =
-  "Installation will be completed within 1-3 working days depending on site conditions. Upon completion, the system will undergo testing, commissioning, performance verification and user training before handover.";
+  [
+    "Day 2 - Site readiness confirmation and installation scheduling",
+    "Day 3 - Professional installation and system setup",
+    "Day 4 - Testing, commissioning, and customer handover",
+  ].join("\n");
 
 const DEFAULT_AFTER_SALES_SUPPORT = [
   "Telephone and WhatsApp technical support",
@@ -72,31 +80,36 @@ const DEFAULT_AFTER_SALES_SUPPORT = [
 
 const DEFAULT_IMPORTANT_NOTES = [
   "Prices are subject to stock availability at the time of order confirmation.",
-  "Any civil works, special mounting fabrication, trenching, or extra accessories not listed in this quotation are billed separately if required on site.",
+  "Any civil works, trenching, special fabrication, or extra accessories not listed in this quotation are billed separately if required.",
   "Delivery and installation timelines may change where site readiness or access conditions require additional work.",
 ].join("\n");
 
 const DEFAULT_SCOPE_EXCLUSIONS = [
-  "Structural fabrication not specifically listed in the BOQ",
   "Major civil works unless expressly quoted",
-  "KESA / utility approvals where applicable unless expressly quoted",
+  "Structural fabrication not specifically listed in the BOQ",
+  "KPLC / utility approvals unless expressly quoted",
   "Any third-party equipment not supplied by Betech Solar Solutions",
 ].join("\n");
 
 const DEFAULT_TERMS = [
-  "Quotation validity: subject to confirmation at the time of order placement.",
-  "Payment may be full before delivery or deposit and balance as agreed in the quotation commercial summary.",
+  "Quotation validity is subject to confirmation at the time of order placement.",
+  "Standard payment options are full payment before installation, 30% deposit with balance after installation, or full payment after installation where approved by management.",
   "Warranty applies under normal use, correct installation, and manufacturer operating conditions.",
 ].join("\n");
 
 const DEFAULT_PREPARED_BY =
-  "Prepared by Betech Solar Solutions Quotations Team. For clarifications, call 0722 151 083 or 0705 663 175.";
+  "Prepared by Betech Solar Solutions Quotations Team\nTechnical sales: jackson@betech.co.ke\nSales desk: 0722 151 083";
 
 const DEFAULT_SIMILAR_PROJECTS =
-  "View similar Betech solar projects here: https://www.tiktok.com/@betechsolarprojects";
+  "View a similar installation: Paste TikTok, YouTube, or website project link here.";
 
 const DEFAULT_PROJECT_REFERENCES =
-  "Product catalogue: https://www.betech.co.ke/all-products\nRecent projects: https://www.tiktok.com/@betechsolarprojects";
+  [
+    "View our recent projects here : https://www.tiktok.com/@betechsolarprojects",
+    "View all our products here : https://www.betech.co.ke/",
+    "Email : info@betech.co.ke",
+    "Technical sales : jackson@betech.co.ke",
+  ].join("\n");
 
 function normalizeProjectTypeLabel(projectType: QuoteProjectType) {
   return projectType.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());

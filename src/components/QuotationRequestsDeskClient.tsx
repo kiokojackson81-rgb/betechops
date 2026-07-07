@@ -742,6 +742,7 @@ type ProposalEditorProps = {
 };
 
 function ProposalEditor({ state, onChange }: ProposalEditorProps) {
+  const [showAdvancedBlocks, setShowAdvancedBlocks] = useState(false);
   const visibilityEntries = [
     ["projectOverview", "Project Overview"],
     ["whatPriceIncludes", "What Price Includes"],
@@ -793,16 +794,43 @@ function ProposalEditor({ state, onChange }: ProposalEditorProps) {
             Proposal Structure
           </div>
           <div className="mt-1 text-sm text-slate-300">
-            Build a complete quotation proposal with editable sections and flexible warranty wording.
+            Build a complete quotation proposal with fixed Betech blocks already loaded so staff only edit the customer-specific parts.
           </div>
         </div>
-        <button
-          type="button"
-          onClick={applyAiWarranty}
-          className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
-        >
-          Check Warranty With AI
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setShowAdvancedBlocks((current) => !current)}
+            className="rounded-full border border-white/10 bg-slate-950/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-200 transition hover:border-white/20"
+          >
+            {showAdvancedBlocks ? "Hide standard blocks" : "Edit standard blocks"}
+          </button>
+          <button
+            type="button"
+            onClick={applyAiWarranty}
+            className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
+          >
+            Check Warranty With AI
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-slate-300">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200">
+          Auto-filled Betech blocks
+        </div>
+        <div className="mt-2 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+          {[
+            "Company details and prepared-by contact",
+            "Standard scope, exclusions, and support notes",
+            "Default payment terms and payment methods",
+            "Useful links and similar-project section",
+          ].map((line) => (
+            <div key={line} className="rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-xs text-slate-200">
+              {line}
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -902,13 +930,8 @@ function ProposalEditor({ state, onChange }: ProposalEditorProps) {
           ["projectOverview", "Project Overview", 4],
           ["whatPriceIncludes", "What Price Includes", 4],
           ["whatItCanPower", "What It Can Power", 4],
-          ["afterSalesSupport", "After-sales Support", 4],
           ["importantNotes", "Important Notes", 4],
-          ["scopeExclusions", "Scope Exclusions", 4],
           ["similarProjects", "Similar Projects", 4],
-          ["termsAndConditions", "Terms & Conditions", 5],
-          ["preparedByDetails", "Prepared By Details", 3],
-          ["companyLegalDetails", "Company Legal Details", 4],
           ["projectReferenceLinks", "Project Reference Links", 3],
         ].map(([key, label, rows]) => (
           <label key={key} className="text-xs uppercase tracking-wide text-slate-400">
@@ -926,29 +949,56 @@ function ProposalEditor({ state, onChange }: ProposalEditorProps) {
             />
           </label>
         ))}
-        <label className="text-xs uppercase tracking-wide text-slate-400">
-          Delivery timeline
-          <textarea
-            rows={3}
-            value={state.deliveryTimeline}
-            onChange={(event) =>
-              onChange((current) => ({ ...current, deliveryTimeline: event.target.value }))
-            }
-            className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 outline-none"
-          />
-        </label>
-        <label className="text-xs uppercase tracking-wide text-slate-400">
-          Installation timeline
-          <textarea
-            rows={3}
-            value={state.installationTimeline}
-            onChange={(event) =>
-              onChange((current) => ({ ...current, installationTimeline: event.target.value }))
-            }
-            className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 outline-none"
-          />
-        </label>
       </div>
+
+      {showAdvancedBlocks ? (
+        <div className="grid gap-3 md:grid-cols-2">
+          {[
+            ["afterSalesSupport", "After-sales Support", 4],
+            ["scopeExclusions", "Scope Exclusions", 4],
+            ["termsAndConditions", "Terms & Conditions", 5],
+            ["preparedByDetails", "Prepared By Details", 3],
+            ["companyLegalDetails", "Company Legal Details", 4],
+          ].map(([key, label, rows]) => (
+            <label key={key} className="text-xs uppercase tracking-wide text-slate-400">
+              {label}
+              <textarea
+                rows={rows as number}
+                value={state[key as keyof ProposalEditorState] as string}
+                onChange={(event) =>
+                  onChange((current) => ({
+                    ...current,
+                    [key]: event.target.value,
+                  }))
+                }
+                className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 outline-none"
+              />
+            </label>
+          ))}
+          <label className="text-xs uppercase tracking-wide text-slate-400">
+            Delivery timeline
+            <textarea
+              rows={3}
+              value={state.deliveryTimeline}
+              onChange={(event) =>
+                onChange((current) => ({ ...current, deliveryTimeline: event.target.value }))
+              }
+              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 outline-none"
+            />
+          </label>
+          <label className="text-xs uppercase tracking-wide text-slate-400">
+            Installation timeline
+            <textarea
+              rows={3}
+              value={state.installationTimeline}
+              onChange={(event) =>
+                onChange((current) => ({ ...current, installationTimeline: event.target.value }))
+              }
+              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 outline-none"
+            />
+          </label>
+        </div>
+      ) : null}
     </div>
   );
 }
