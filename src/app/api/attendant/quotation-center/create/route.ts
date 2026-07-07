@@ -18,6 +18,10 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const parsed = manualQuotationCreateSchema.safeParse(body);
   if (!parsed.success) {
+    console.error("[quotation-center.create.invalid]", {
+      issues: parsed.error.flatten(),
+      bodyKeys: body && typeof body === "object" ? Object.keys(body as Record<string, unknown>) : [],
+    });
     return NextResponse.json(
       { ok: false, error: "Invalid quotation payload.", issues: parsed.error.flatten() },
       { status: 400 },

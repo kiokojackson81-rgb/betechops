@@ -465,7 +465,31 @@ export const quotationTemplateSchema = z.object({
 
 export type QuotationTemplateInput = z.infer<typeof quotationTemplateSchema>;
 
-export const manualQuotationCreateSchema = quoteRequestCreateSchema.extend({
+const optionalEnumValue = <T extends readonly [string, ...string[]]>(values: T) =>
+  z.preprocess(
+    (value) => (value === "" || value === null || value === undefined ? undefined : value),
+    z.enum(values).optional(),
+  );
+
+export const manualQuotationCreateSchema = z.object({
+  name: z.string().trim().min(2),
+  phone: z.string().trim().min(7),
+  email: z.string().trim().email().optional().or(z.literal("")),
+  location: z.string().trim().optional(),
+  county: z.string().trim().optional(),
+  town: z.string().trim().optional(),
+  specificLocation: z.string().trim().optional(),
+  projectType: optionalEnumValue(QUOTE_PROJECT_TYPES).default("SOLAR_HOME_SYSTEM"),
+  propertyType: z.string().trim().optional(),
+  preferredContactMethod: optionalEnumValue(QUOTE_CONTACT_METHODS),
+  bestTimeToContact: optionalEnumValue(QUOTE_CONTACT_TIMES),
+  urgency: optionalEnumValue(QUOTE_URGENCY_LEVELS),
+  installationStatus: optionalEnumValue(QUOTE_INSTALLATION_STATUSES),
+  load: z.string().trim().optional(),
+  budgetRange: z.string().trim().optional(),
+  preferredProducts: z.string().trim().optional(),
+  notes: z.string().trim().optional(),
+  answers: quoteStructuredAnswersSchema.optional(),
   status: z.enum(QUOTE_REQUEST_STATUSES).optional(),
   source: z.enum(QUOTE_REQUEST_SOURCES).optional(),
   assignedAttendantId: z.string().trim().optional(),
@@ -1657,6 +1681,7 @@ export async function createManualQuotation(
   input: ManualQuotationCreateInput,
   actor: { id: string; name: string | null; email: string | null },
 ) {
+  const projectType = input.projectType || "SOLAR_HOME_SYSTEM";
   const quoteItems = sanitizeQuoteLineItems(input.quoteItems);
   if (!quoteItems.length) {
     throw new Error("Add at least one quotation item before saving the quotation.");
@@ -1678,7 +1703,8 @@ export async function createManualQuotation(
     status: input.status || (approvalPolicy.requiresApproval ? "PENDING_APPROVAL" : "QUOTED"),
     source: input.source || "MANUAL",
     requiresApproval: approvalPolicy.requiresApproval,
-    quoteTitle: input.quoteTitle || input.preferredProducts || input.projectType.replace(/_/g, " "),
+    projectType,
+    quoteTitle: input.quoteTitle || input.preferredProducts || projectType.replace(/_/g, " "),
     quoteMessage: input.quoteMessage,
     quotationData: {
       items: quoteItems,
