@@ -183,6 +183,7 @@ function buildCustomerProfileHref(
 
 type QuoteItemDraft = {
   itemName: string;
+  description: string;
   quantity: string;
   unitPrice: string;
   defaultWarranty: string;
@@ -284,6 +285,7 @@ type CreateQuotationDraft = {
 function createEmptyQuoteItem(): QuoteItemDraft {
   return {
     itemName: "",
+    description: "",
     quantity: "1",
     unitPrice: "",
     defaultWarranty: "",
@@ -413,6 +415,7 @@ function applyTemplateToCreateDraft(
     ? nextTemplate.items.map((item) =>
         hydrateQuoteItemDraft({
           itemName: item.itemName,
+          description: item.description || "",
           quantity: String(item.quantity),
           unitPrice: String(item.unitPrice),
           defaultWarranty: item.defaultWarranty || nextTemplate.warranty || "",
@@ -514,6 +517,7 @@ function buildQuoteRequestPayload(formState: QuoteDeskFormState): QuoteRequestRe
   const quoteItems = formState.quoteItems
     .map((item) => ({
       itemName: item.itemName.trim(),
+      description: item.description.trim() || undefined,
       quantity: parseMoneyInput(item.quantity),
       unitPrice: parseMoneyInput(item.unitPrice),
       defaultWarranty: item.defaultWarranty.trim() || undefined,
@@ -618,6 +622,7 @@ function formatInstallationStatus(value: QuoteInstallationStatus | string | null
 
 function hydrateQuoteItemDraft(input: {
   itemName: string;
+  description?: string | null;
   quantity?: string;
   unitPrice?: string;
   defaultWarranty?: string | null;
@@ -627,6 +632,7 @@ function hydrateQuoteItemDraft(input: {
 }) {
   return {
     itemName: input.itemName,
+    description: input.description?.trim() || "",
     quantity: input.quantity ?? "1",
     unitPrice: input.unitPrice ?? "",
     defaultWarranty: input.defaultWarranty?.trim() || "",
@@ -772,6 +778,7 @@ function ProposalEditor({ state, onChange }: ProposalEditorProps) {
         aiWarrantySummary: buildWarrantyAiSummary(
           nextItems.map((item) => ({
             itemName: item.itemName,
+            description: item.description || undefined,
             quantity: parseMoneyInput(item.quantity),
             unitPrice: parseMoneyInput(item.unitPrice),
             defaultWarranty: item.defaultWarranty || undefined,
@@ -1198,6 +1205,7 @@ export default function QuotationRequestsDeskClient({
       const quoteItems = createDraft.quoteItems
         .map((item) => ({
           itemName: item.itemName.trim(),
+          description: item.description.trim() || undefined,
           quantity: parseMoneyInput(item.quantity),
           unitPrice: parseMoneyInput(item.unitPrice),
           defaultWarranty: item.defaultWarranty.trim() || undefined,
@@ -1303,6 +1311,7 @@ export default function QuotationRequestsDeskClient({
       const quoteItems = createDraft.quoteItems
         .map((item) => ({
           itemName: item.itemName.trim(),
+          description: item.description.trim() || undefined,
           quantity: parseMoneyInput(item.quantity),
           unitPrice: parseMoneyInput(item.unitPrice),
           defaultWarranty: item.defaultWarranty.trim() || undefined,
@@ -1409,6 +1418,7 @@ export default function QuotationRequestsDeskClient({
         ...current.quoteItems,
         hydrateQuoteItemDraft({
           itemName: product.productName,
+          description: product.shortDescription || "",
           quantity: "1",
           unitPrice: String(product.price),
           defaultWarranty: product.warranty || suggestWarrantyForItem(product.productName),
@@ -1438,6 +1448,7 @@ export default function QuotationRequestsDeskClient({
         ...current.quoteItems,
         hydrateQuoteItemDraft({
           itemName: product.productName,
+          description: product.shortDescription || "",
           quantity: "1",
           unitPrice: String(product.price),
           defaultWarranty: product.warranty || suggestWarrantyForItem(product.productName),
@@ -1603,6 +1614,7 @@ export default function QuotationRequestsDeskClient({
         ? storedProposal.items.map((item) =>
             hydrateQuoteItemDraft({
               itemName: item.itemName,
+              description: item.description || "",
               quantity: String(item.quantity),
               unitPrice: String(item.unitPrice),
               defaultWarranty: item.defaultWarranty || "",
@@ -1917,29 +1929,6 @@ export default function QuotationRequestsDeskClient({
                   className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
                 />
               </label>
-              <label className="text-xs uppercase tracking-wide text-slate-400">
-                Quotation title
-                <input
-                  value={createDraft.quoteTitle}
-                  onChange={(event) => setCreateDraft((current) => ({ ...current, quoteTitle: event.target.value }))}
-                  placeholder="Auto-generated from selected quotation items"
-                  className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
-                />
-              </label>
-              <label className="text-xs uppercase tracking-wide text-slate-400">
-                Preferred contact
-                <select
-                  value={createDraft.preferredContactMethod}
-                  onChange={(event) => setCreateDraft((current) => ({ ...current, preferredContactMethod: event.target.value as QuoteContactMethod }))}
-                  className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
-                >
-                  {CONTACT_METHOD_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {formatContactMethod(option)}
-                    </option>
-                  ))}
-                </select>
-              </label>
               {createMode === "template" ? (
                 <label className="text-xs uppercase tracking-wide text-slate-400 lg:col-span-2">
                   Prepared quotation template
@@ -2076,6 +2065,20 @@ export default function QuotationRequestsDeskClient({
                               }))
                             }
                             className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
+                          />
+                          <textarea
+                            rows={2}
+                            value={item.description}
+                            onChange={(event) =>
+                              setCreateDraft((current) => ({
+                                ...current,
+                                quoteItems: current.quoteItems.map((entry, entryIndex) =>
+                                  entryIndex === index ? { ...entry, description: event.target.value } : entry,
+                                ),
+                              }))
+                            }
+                            placeholder="Short BOQ description or specification"
+                            className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
                           />
                         </label>
                         <label className="text-xs uppercase tracking-wide text-slate-400">
@@ -2298,23 +2301,53 @@ export default function QuotationRequestsDeskClient({
                   </div>
                 </div>
               </div>
-              <div className="lg:col-span-2">
-                <ProposalEditor
-                  state={createDraft}
-                  onChange={(updater) =>
-                    setCreateDraft((current) => {
-                      const next = updater(current);
-                      return { ...current, ...next };
-                    })
-                  }
-                />
+              <div className="lg:col-span-2 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  Quotation Settings
+                </div>
+                <div className="mt-2 text-sm text-slate-300">
+                  The final PDF now uses a fixed Betech proposal structure. Staff only need to confirm warranty mode, payment structure, and any customer note.
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <label className="text-xs uppercase tracking-wide text-slate-400">
+                    Warranty mode
+                    <select
+                      value={createDraft.warrantyMode}
+                      onChange={(event) =>
+                        setCreateDraft((current) => ({
+                          ...current,
+                          warrantyMode: event.target.value as QuoteWarrantyMode,
+                        }))
+                      }
+                      className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
+                    >
+                      <option value="PER_ITEM">Per item warranty</option>
+                      <option value="FULL_SYSTEM">Whole quotation warranty</option>
+                      <option value="CUSTOM">Custom warranty text</option>
+                    </select>
+                  </label>
+                  <label className="text-xs uppercase tracking-wide text-slate-400">
+                    Whole quotation warranty
+                    <input
+                      value={createDraft.fullSystemWarranty}
+                      onChange={(event) =>
+                        setCreateDraft((current) => ({ ...current, fullSystemWarranty: event.target.value }))
+                      }
+                      placeholder="Manufacturer warranty plus workmanship cover"
+                      className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
+                    />
+                  </label>
+                </div>
               </div>
               <label className="text-xs uppercase tracking-wide text-slate-400 lg:col-span-2">
-                Customer quotation message
+                Notes to customer (optional)
                 <textarea
                   value={createDraft.quoteMessage}
-                  onChange={(event) => setCreateDraft((current) => ({ ...current, quoteMessage: event.target.value }))}
-                  rows={5}
+                  onChange={(event) =>
+                    setCreateDraft((current) => ({ ...current, quoteMessage: event.target.value }))
+                  }
+                  rows={4}
+                  placeholder="Optional customer note to print in the quotation"
                   className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
                 />
               </label>

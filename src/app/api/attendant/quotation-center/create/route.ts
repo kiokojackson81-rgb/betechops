@@ -79,6 +79,7 @@ function normalizeCreateBody(body: unknown) {
         const unitPrice = normalizeNumber(rawItem.unitPrice);
         return {
           itemName: normalizeText(rawItem.itemName, 600),
+          description: normalizeText(rawItem.description, 4000),
           quantity: quantity && quantity > 0 ? quantity : 1,
           unitPrice: unitPrice && unitPrice >= 0 ? unitPrice : 0,
           defaultWarranty: normalizeText(rawItem.defaultWarranty, 4000),

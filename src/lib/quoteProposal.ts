@@ -11,6 +11,7 @@ export type QuotePaymentMethod = (typeof QUOTE_PAYMENT_METHODS)[number];
 export const QUOTE_PAYMENT_TERMS = [
   "FULL_PAYMENT",
   "DEPOSIT_AND_BALANCE",
+  "APPROVED_AFTER_INSTALLATION",
 ] as const;
 
 export type QuotePaymentTerms = (typeof QUOTE_PAYMENT_TERMS)[number];
@@ -78,6 +79,7 @@ function parseMoneyInput(value: unknown) {
 
 export const quoteLineItemSchema = z.object({
   itemName: z.string().trim().min(1).max(600),
+  description: z.string().trim().max(4000).optional(),
   quantity: z.preprocess(parseMoneyInput, z.number().positive().max(100000)),
   unitPrice: z.preprocess(parseMoneyInput, z.number().nonnegative().max(1000000000)),
   defaultWarranty: z.string().trim().max(4000).optional(),
@@ -133,6 +135,10 @@ export function sanitizeQuoteLineItems(items: QuoteLineItemInput[]): StoredQuote
   return items
     .map((item) => ({
       itemName: item.itemName.trim(),
+      description:
+        typeof item.description === "string" && item.description.trim()
+          ? item.description.trim()
+          : undefined,
       quantity: roundCurrency(Number(item.quantity || 0)),
       unitPrice: roundCurrency(Number(item.unitPrice || 0)),
       defaultWarranty:
@@ -217,6 +223,8 @@ export function parseStoredQuoteProposal(
           const record = item as Record<string, unknown>;
           accumulator.push({
             itemName: String(record.itemName ?? ""),
+            description:
+              typeof record.description === "string" ? String(record.description) : undefined,
             quantity: Number(record.quantity ?? 0),
             unitPrice: Number(record.unitPrice ?? 0),
             defaultWarranty:
@@ -326,6 +334,7 @@ export function getQuotePaymentMethodLabel(value: QuotePaymentMethod | null | un
 
 export function getQuotePaymentTermsLabel(value: QuotePaymentTerms | null | undefined) {
   if (value === "DEPOSIT_AND_BALANCE") return "Deposit and balance";
+  if (value === "APPROVED_AFTER_INSTALLATION") return "Full payment after installation";
   if (value === "FULL_PAYMENT") return "Full payment";
   return "Not specified";
 }
