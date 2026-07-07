@@ -37,6 +37,16 @@ export type QuotePdfInput = {
   proposalVisibility?: Record<string, boolean> | null;
 };
 
+function firstUrl(...values: Array<string | null | undefined>) {
+  for (const value of values) {
+    const text = String(value || "").trim();
+    if (!text) continue;
+    const match = text.match(/https?:\/\/[^\s)]+/i);
+    if (match?.[0]) return match[0];
+  }
+  return null;
+}
+
 async function loadImageAsDataUrl(filePath: string) {
   try {
     const buffer = await fs.readFile(path.join(process.cwd(), filePath));
@@ -73,6 +83,14 @@ function mapToCompactInput(input: QuotePdfInput): CompactQuotePdfInput {
         null,
     })),
     customerNotes: input.quoteMessage || null,
+    similarProjectUrl: firstUrl(
+      input.proposalSections?.projectReferenceLinks,
+      input.proposalSections?.similarProjects,
+    ),
+    similarProjectLabel:
+      input.proposalSections?.similarProjects ||
+      input.proposalSections?.projectReferenceLinks ||
+      null,
     warrantyMode:
       input.warrantyMode === "FULL_SYSTEM" || input.warrantyMode === "CUSTOM"
         ? "WHOLE_QUOTATION"

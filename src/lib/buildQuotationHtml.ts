@@ -72,12 +72,20 @@ export function buildQuotationHtml(
     data.warrantyMode === "WHOLE_QUOTATION" || data.warrantyMode === "FULL_SYSTEM"
       ? data.items[0]?.warrantyText || null
       : null;
-  const costRows = [
-    ["Equipment", data.equipmentTotal],
-    ["Installation", data.installationTotal],
-    ["Transport", data.transportTotal],
-    ["Project Value", data.grandTotal],
-  ] as const;
+  const costRows =
+    data.items.length === 1 && data.installationTotal <= 0 && data.transportTotal <= 0
+      ? ([["Quoted Item Value", data.equipmentTotal], ["Project Value", data.grandTotal]] as const)
+      : ([
+          ["Equipment", data.equipmentTotal],
+          ["Installation", data.installationTotal],
+          ["Transport", data.transportTotal],
+          ["Project Value", data.grandTotal],
+        ] as const);
+  const featuredProjectUrl = data.similarProjectUrl || data.company.projectsUrl;
+  const featuredProjectLabel = data.similarProjectUrl
+    ? data.similarProjectLabel || "Watch a similar Betech project"
+    : "View our recent projects";
+  const featuredProjectQr = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(featuredProjectUrl)}`;
 
   return `<!doctype html>
 <html lang="en">
@@ -111,8 +119,11 @@ export function buildQuotationHtml(
     margin-left: -8mm;
     display: block;
     border-bottom: 2px solid #8b1212;
+    max-height: 24mm;
+    object-fit: contain;
+    object-position: top center;
   }
-  .page-body { padding-top: 4.5mm; }
+  .page-body { padding-top: 3.5mm; }
   .kicker {
     letter-spacing: 3px;
     color: #8b1212;
@@ -136,35 +147,40 @@ export function buildQuotationHtml(
   }
   p { margin: 0; }
   .hero {
-    display: grid;
-    grid-template-columns: 1fr 49mm;
-    gap: 8mm;
-    align-items: start;
+    text-align: center;
     margin-bottom: 4mm;
   }
   .intro {
-    margin-top: 4px;
+    margin: 5px auto 0;
     font-size: 10px;
-    max-width: 128mm;
+    max-width: 150mm;
     font-weight: 600;
   }
-  .valid {
-    border: 1px solid #c7b5b5;
-    border-radius: 5px;
-    padding: 8px 10px;
-    text-align: center;
-    margin-top: 8mm;
+  .hero-meta {
+    margin-top: 4px;
+    font-size: 9px;
+    color: #6b7280;
+    font-weight: 700;
   }
-  .valid .label {
-    font-size: 10px;
-    color: #8b1212;
-    font-weight: 800;
-    margin-bottom: 4px;
+  .cost-note {
+    margin-top: 8px;
+    color: #475569;
+    font-size: 9px;
+    line-height: 1.35;
   }
-  .valid .date {
-    font-size: 16px;
-    font-weight: 800;
-    line-height: 1.14;
+  .link-feature {
+    display: grid;
+    grid-template-columns: 1fr 23mm;
+    gap: 8px;
+    align-items: center;
+  }
+  .link-feature img {
+    width: 23mm;
+    height: 23mm;
+    border: 1px solid #ddd4d4;
+    border-radius: 4px;
+    background: #fff;
+    object-fit: contain;
   }
   .cards3 {
     display: grid;
@@ -305,13 +321,10 @@ export function buildQuotationHtml(
   <div class="page-body">
     <div class="hero">
       <div>
-        <div class="kicker">Official Customer Quotation</div>
+        <div class="kicker">O F F I C I A L&nbsp;&nbsp;C U S T O M E R&nbsp;&nbsp;Q U O T A T I O N</div>
         <h1>${escapeHtml(data.title)}</h1>
         <p class="intro">${escapeHtml(data.intro)}</p>
-      </div>
-      <div class="valid">
-        <div class="label">VALID UNTIL</div>
-        <div class="date">${escapeHtml(data.validUntilLabel).replace(" ", "<br/>")}</div>
+        <div class="hero-meta">${escapeHtml(data.quoteRef)} &nbsp;•&nbsp; ${escapeHtml(data.quotationDateLabel)}</div>
       </div>
     </div>
 
@@ -373,15 +386,22 @@ export function buildQuotationHtml(
           <table class="mini-table">
             ${costRows
               .map(
-                ([label, amount]) => `
+                (row) => `
                   <tr>
-                    <td>${escapeHtml(label)}</td>
-                    <td>${escapeHtml(formatMoney(amount))}</td>
+                    <td>${escapeHtml(row[0])}</td>
+                    <td>${escapeHtml(formatMoney(row[1]))}</td>
                   </tr>
                 `,
               )
               .join("")}
           </table>
+          <div class="cost-note">
+            ${
+              data.items.length === 1 && data.installationTotal <= 0 && data.transportTotal <= 0
+                ? "This quotation covers the selected item value only. Delivery, installation, or other optional works can be added separately if required."
+                : "Project value reflects the quoted equipment together with any listed delivery, installation, and related project costs."
+            }
+          </div>
         </div>
       </div>
       <div class="section">
@@ -411,7 +431,6 @@ export function buildQuotationHtml(
         <div class="content">
           <table class="mini-table">
             <tr><td>Quotation Date</td><td>${escapeHtml(data.quotationDateLabel)}</td></tr>
-            <tr><td>Valid Until</td><td>${escapeHtml(data.validUntilLabel)}</td></tr>
             <tr><td>Payment Terms</td><td>${escapeHtml(data.paymentTermsLabel)}</td></tr>
             <tr><td>Delivery</td><td>${escapeHtml(data.deliveryText)}</td></tr>
             <tr><td>Installation</td><td>${escapeHtml(data.installationText)}</td></tr>
@@ -450,12 +469,19 @@ export function buildQuotationHtml(
       <div class="section">
         <div class="bar">Useful Links</div>
         <div class="content">
-          <ul>
-            <li>View recent projects: ${escapeHtml(data.company.projectsUrl)}</li>
-            <li>View all products: ${escapeHtml(data.company.website)}</li>
-            <li>Email: ${escapeHtml(data.company.email)}</li>
-            <li>Technical sales: jackson@betech.co.ke</li>
-          </ul>
+          <div class="link-feature">
+            <div>
+              <div class="pay-title">${escapeHtml(featuredProjectLabel)}</div>
+              <div>${escapeHtml(featuredProjectUrl)}</div>
+              <div style="margin-top:6px;color:#475569;font-size:9px;">Scan the QR code to open the project link directly on your phone.</div>
+              <div style="margin-top:8px;">
+                <div>View all our products here: ${escapeHtml(data.company.website)}</div>
+                <div>Email: ${escapeHtml(data.company.email)}</div>
+                <div>Technical sales: jackson@betech.co.ke</div>
+              </div>
+            </div>
+            <img src="${featuredProjectQr}" alt="Project QR code" />
+          </div>
         </div>
       </div>
     </div>
@@ -466,6 +492,7 @@ export function buildQuotationHtml(
         <div class="content">
           ${renderRows([
             ["Sales Desk", data.company.salesDesk],
+            ["Technical Support", "0705663175"],
             ["Email", data.company.email],
             ["Website", data.company.website],
             ["Office", data.company.office],
@@ -482,7 +509,7 @@ export function buildQuotationHtml(
       data.customerNotes
         ? `
           <div class="section">
-            <div class="bar">Optional Notes to Customer</div>
+            <div class="bar">Customer Notes</div>
             <div class="content"><div class="notes-box">${escapeHtml(data.customerNotes)}</div></div>
           </div>
         `

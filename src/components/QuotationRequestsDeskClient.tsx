@@ -1929,6 +1929,15 @@ export default function QuotationRequestsDeskClient({
                   className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
                 />
               </label>
+              <label className="text-xs uppercase tracking-wide text-slate-400 lg:col-span-2">
+                Quotation Name
+                <input
+                  value={createDraft.quoteTitle}
+                  onChange={(event) => setCreateDraft((current) => ({ ...current, quoteTitle: event.target.value }))}
+                  placeholder="Optional custom quotation name to print on the PDF"
+                  className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
+                />
+              </label>
               {createMode === "template" ? (
                 <label className="text-xs uppercase tracking-wide text-slate-400 lg:col-span-2">
                   Prepared quotation template
@@ -2335,6 +2344,17 @@ export default function QuotationRequestsDeskClient({
                       }
                       placeholder="Manufacturer warranty plus workmanship cover"
                       className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
+                    />
+                  </label>
+                  <label className="text-xs uppercase tracking-wide text-slate-400 md:col-span-2">
+                    Similar project link (optional)
+                    <input
+                      value={createDraft.projectReferenceLinks}
+                      onChange={(event) =>
+                        setCreateDraft((current) => ({ ...current, projectReferenceLinks: event.target.value }))
+                      }
+                      placeholder="Paste TikTok, website, or project video link to feature on the PDF"
+                      className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 outline-none"
                     />
                   </label>
                 </div>

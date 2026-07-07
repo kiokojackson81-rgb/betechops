@@ -39,6 +39,8 @@ export type QuotePdfInput = {
   warrantyMode?: QuotePdfWarrantyMode;
   wholeWarrantyText?: string | null;
   paymentStructure?: QuotePdfPaymentStructure;
+  similarProjectUrl?: string | null;
+  similarProjectLabel?: string | null;
   preparedBy?: {
     team?: string;
     leadTechnicianName?: string;
@@ -91,6 +93,8 @@ export type NormalizedQuotePdfData = {
   warrantyMode: QuotePdfWarrantyMode;
   warrantyNotes: string[];
   customerNotes: string | null;
+  similarProjectUrl: string | null;
+  similarProjectLabel: string | null;
   company: typeof BETECH_COMPANY;
   paymentMethods: typeof BETECH_PAYMENT_METHODS;
   afterSalesSupport: readonly string[];
@@ -156,6 +160,13 @@ function paymentTermsLabel(value: QuotePdfPaymentStructure) {
 function sanitizeText(value: string | null | undefined) {
   const text = String(value || "").trim();
   return text || null;
+}
+
+function sanitizeUrl(value: string | null | undefined) {
+  const text = String(value || "").trim();
+  if (!text) return null;
+  if (/^https?:\/\//i.test(text)) return text;
+  return null;
 }
 
 function inferTitle(inputTitle: string | null | undefined, items: QuotePdfItemInput[]) {
@@ -261,6 +272,8 @@ export function normalizeQuotePdfData(input: QuotePdfInput): NormalizedQuotePdfD
     warrantyMode,
     warrantyNotes: [...BETECH_WARRANTY_NOTES],
     customerNotes: sanitizeText(input.customerNotes),
+    similarProjectUrl: sanitizeUrl(input.similarProjectUrl),
+    similarProjectLabel: sanitizeText(input.similarProjectLabel) || "Watch a similar Betech project",
     company: BETECH_COMPANY,
     paymentMethods: BETECH_PAYMENT_METHODS,
     afterSalesSupport: BETECH_AFTER_SALES_SUPPORT,
