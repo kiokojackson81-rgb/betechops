@@ -140,22 +140,50 @@ function renderPaymentMethods(
 }
 
 function renderBoqRows(items: ReturnType<typeof normalizeQuotePdfData>["items"]) {
+  const splitItem = (name: string, description: string | null | undefined) => {
+    const trimmedName = String(name || "").trim();
+    const trimmedDescription = String(description || "").trim();
+
+    if (trimmedDescription) {
+      return { title: trimmedName, subtitle: trimmedDescription };
+    }
+
+    if (trimmedName.includes(" - ")) {
+      const [head, ...rest] = trimmedName.split(" - ");
+      return {
+        title: head.trim(),
+        subtitle: rest.join(" - ").split(" + ").map((part) => part.trim()).filter(Boolean).join(" • "),
+      };
+    }
+
+    if (trimmedName.includes(" + ")) {
+      const [head, ...rest] = trimmedName.split(" + ");
+      return {
+        title: head.trim(),
+        subtitle: rest.map((part) => part.trim()).filter(Boolean).join(" • "),
+      };
+    }
+
+    return { title: trimmedName, subtitle: "" };
+  };
+
   return items
-    .map(
-      (item, index) => `
+    .map((item, index) => {
+      const summary = splitItem(item.name, item.description);
+      return `
         <tr class="${index % 2 === 0 ? "boq-row-even" : "boq-row-odd"}">
           <td class="center">${item.index}</td>
           <td>
-            <div class="item-name">${escapeHtml(item.name)}</div>
-            ${item.description ? `<div class="item-desc">${escapeHtml(item.description)}</div>` : ""}
+            <div class="item-name">${escapeHtml(summary.title)}</div>
+            ${summary.subtitle ? `<div class="item-desc">${escapeHtml(summary.subtitle)}</div>` : ""}
           </td>
           <td class="center">${escapeHtml(item.quantity)}</td>
           <td class="right">${escapeHtml(formatMoney(item.unitPrice))}</td>
           <td class="right amount-cell">${escapeHtml(formatMoney(item.amount))}</td>
           <td><span class="warranty-pill">${escapeHtml(item.warrantyText)}</span></td>
         </tr>
-      `,
-    )
+      `;
+    })
     .join("");
 }
 
@@ -310,11 +338,11 @@ export function buildQuotationHtml(
     min-height: 285mm;
     display: flex;
     flex-direction: column;
-    gap: 3mm;
+    gap: 2.2mm;
   }
   .top-strip {
     border-top: 2px solid #9b1111;
-    padding-top: 2.2mm;
+    padding-top: 1.6mm;
   }
   .hero-card,
   .section-card,
@@ -331,7 +359,7 @@ export function buildQuotationHtml(
     page-break-inside: avoid;
   }
   .hero-card {
-    padding: 3.2mm 4.2mm 4mm;
+    padding: 2mm 3.6mm 2.8mm;
     text-align: center;
     background:
       radial-gradient(circle at top right, rgba(155,17,17,0.05), transparent 30%),
@@ -341,8 +369,8 @@ export function buildQuotationHtml(
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    gap: 3mm;
-    margin-bottom: 3mm;
+    gap: 2.2mm;
+    margin-bottom: 2.2mm;
   }
   .badge-line {
     height: 2px;
@@ -352,19 +380,19 @@ export function buildQuotationHtml(
   .badge-pill {
     display: inline-flex;
     align-items: center;
-    gap: 3mm;
-    padding: 2.4mm 4.4mm;
+    gap: 2.2mm;
+    padding: 1.9mm 3.8mm;
     border-radius: 999px;
     background: linear-gradient(90deg, #9b1111, #b71c1c);
     color: #fff;
     font-weight: 800;
-    font-size: 8.9px;
+    font-size: 8px;
     letter-spacing: .08em;
     text-transform: uppercase;
   }
   .badge-pill .icon-badge {
-    width: 9mm;
-    height: 9mm;
+    width: 7.4mm;
+    height: 7.4mm;
     border-radius: 999px;
     background: #fff;
     color: #9b1111;
@@ -372,67 +400,90 @@ export function buildQuotationHtml(
     align-items: center;
     justify-content: center;
   }
-  .logo-title {
-    display: grid;
-    grid-template-columns: 24mm 1fr;
+  .letterhead-block {
+    display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 4mm;
-    max-width: 175mm;
-    margin: 0 auto;
+    gap: 1.2mm;
+    margin: 0 auto 2.2mm;
+    max-width: 156mm;
   }
   .brand-mark {
-    width: 24mm;
-    height: 24mm;
+    width: 50mm;
+    height: 22mm;
     display: flex;
     align-items: center;
     justify-content: center;
     color: #9b1111;
   }
   .brand-mark img {
-    width: 100%;
-    max-height: 24mm;
+    width: auto;
+    max-width: 50mm;
+    max-height: 22mm;
     object-fit: contain;
   }
   .brand-fallback {
     width: 100%;
     height: 100%;
-    border-radius: 999px;
+    border-radius: 10px;
     background: rgba(155,17,17,0.08);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 17px;
+    font-size: 15px;
     font-weight: 900;
     letter-spacing: .08em;
   }
+  .letterhead-name {
+    color: #9b1111;
+    font-size: 13.5px;
+    font-weight: 900;
+    line-height: 1.05;
+    text-transform: uppercase;
+  }
+  .letterhead-subtitle {
+    color: #5b5b5b;
+    font-size: 8.1px;
+    line-height: 1.25;
+    font-weight: 600;
+  }
+  .letterhead-contact {
+    color: #2b2b2b;
+    font-size: 8px;
+    line-height: 1.25;
+    font-weight: 700;
+  }
   .hero-title {
     margin: 0;
-    font-size: 22px;
-    line-height: 1.04;
+    font-size: 18.5px;
+    line-height: 1.03;
     font-weight: 900;
     color: #202833;
     text-transform: uppercase;
     letter-spacing: -.03em;
-    text-align: left;
+    text-align: center;
+    max-width: 178mm;
+    margin-left: auto;
+    margin-right: auto;
   }
   .hero-title .accent { color: #b71c1c; }
   .hero-rule {
-    width: 28mm;
-    height: 2.5px;
+    width: 24mm;
+    height: 2px;
     background: linear-gradient(90deg, transparent, #b71c1c, transparent);
     border-radius: 999px;
-    margin: 2.8mm auto 2.2mm;
+    margin: 1.8mm auto 1.4mm;
   }
   .hero-intro {
     margin: 0 auto;
-    max-width: 146mm;
-    font-size: 9.8px;
+    max-width: 152mm;
+    font-size: 8.9px;
     color: #2b2b2b;
-    line-height: 1.38;
+    line-height: 1.25;
   }
   .meta-card {
-    margin: 3mm auto 0;
-    max-width: 112mm;
+    margin: 2mm auto 0;
+    max-width: 104mm;
     display: grid;
     grid-template-columns: 1fr 1fr;
     overflow: hidden;
@@ -441,7 +492,7 @@ export function buildQuotationHtml(
     display: flex;
     align-items: center;
     gap: 3mm;
-    padding: 2.8mm 3.5mm;
+    padding: 2.2mm 3.1mm;
     border-right: 1px solid #ece0e0;
   }
   .meta-cell:last-child { border-right: 0; }
@@ -462,16 +513,16 @@ export function buildQuotationHtml(
   .meta-value {
     margin-top: 1px;
     color: #202833;
-    font-size: 10px;
+    font-size: 9.3px;
     font-weight: 800;
   }
   .info-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 3mm;
+    grid-template-columns: 1.02fr 1.04fr 1.12fr;
+    gap: 2.2mm;
   }
   .info-card {
-    padding: 4.2mm 3.4mm 3.2mm;
+    padding: 3.6mm 3mm 2.8mm;
     position: relative;
   }
   .floating-icon {
@@ -479,8 +530,8 @@ export function buildQuotationHtml(
     left: 50%;
     top: -7mm;
     transform: translateX(-50%);
-    width: 14mm;
-    height: 14mm;
+    width: 13mm;
+    height: 13mm;
     border-radius: 999px;
     background: linear-gradient(180deg, #b71c1c, #9b1111);
     color: #fff;
@@ -490,7 +541,7 @@ export function buildQuotationHtml(
     box-shadow: 0 8px 18px rgba(155,17,17,.22);
   }
   .card-title {
-    margin-top: 4mm;
+    margin-top: 3.2mm;
     text-align: center;
     color: #9b1111;
     font-size: 9.3px;
@@ -498,17 +549,17 @@ export function buildQuotationHtml(
     text-transform: uppercase;
   }
   .card-divider {
-    width: 22mm;
+    width: 20mm;
     height: 1.8px;
-    margin: 2mm auto 2.4mm;
+    margin: 1.5mm auto 2mm;
     background: linear-gradient(90deg, transparent, #b71c1c, transparent);
   }
   .detail-row {
     display: grid;
-    grid-template-columns: 8mm 34mm minmax(0,1fr);
+    grid-template-columns: 7mm 30mm minmax(0, 1fr);
     align-items: center;
-    gap: 2.4mm;
-    padding: 1.9mm 0;
+    gap: 2mm;
+    padding: 1.5mm 0;
     border-top: 1px solid #f0e5e5;
   }
   .detail-row:first-child { border-top: 0; }
@@ -532,13 +583,18 @@ export function buildQuotationHtml(
     font-weight: 600;
     font-size: 8.3px;
     line-height: 1.28;
-    overflow-wrap: anywhere;
+    word-break: normal;
+    overflow-wrap: normal;
+  }
+  .detail-value.wrap {
+    white-space: pre-line;
+    overflow-wrap: break-word;
   }
   .section-head {
     display: flex;
     align-items: center;
     gap: 2.6mm;
-    padding: 3mm 3.4mm;
+    padding: 2.6mm 3mm;
     border-radius: 12px 12px 0 0;
     background: linear-gradient(90deg, #9b1111, #b71c1c);
     color: #fff;
@@ -558,7 +614,7 @@ export function buildQuotationHtml(
     text-transform: uppercase;
     letter-spacing: .06em;
   }
-  .section-body { padding: 3.1mm; }
+  .section-body { padding: 2.6mm; }
   .boq-shell { overflow: hidden; }
   .boq {
     width: 100%;
@@ -576,7 +632,7 @@ export function buildQuotationHtml(
   }
   .boq td {
     border-bottom: 1px solid #efe8e8;
-    padding: 2.2mm 2.1mm;
+    padding: 1.8mm 2mm;
     vertical-align: top;
     font-size: 8.2px;
   }
@@ -588,13 +644,13 @@ export function buildQuotationHtml(
   .item-name {
     font-weight: 800;
     color: #202833;
-    line-height: 1.35;
+    line-height: 1.22;
   }
   .item-desc {
-    margin-top: .8mm;
+    margin-top: .5mm;
     color: #666;
     font-size: 7.4px;
-    line-height: 1.3;
+    line-height: 1.18;
   }
   .warranty-pill {
     display: inline-flex;
@@ -610,7 +666,7 @@ export function buildQuotationHtml(
   .bottom-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 3mm;
+    gap: 2.2mm;
   }
   .cost-row {
     display: grid;
@@ -649,7 +705,7 @@ export function buildQuotationHtml(
     border: 1px solid #efd4d4;
   }
   .cost-note {
-    margin-top: 1.6mm;
+    margin-top: 1.1mm;
     color: #666;
     font-size: 8px;
     line-height: 1.3;
@@ -684,7 +740,7 @@ export function buildQuotationHtml(
   .links-layout {
     display: grid;
     grid-template-columns: 1.5fr .72fr;
-    gap: 3mm;
+    gap: 2.2mm;
     align-items: stretch;
   }
   .links-list {
@@ -806,7 +862,7 @@ export function buildQuotationHtml(
   .three-col-grid {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
-    gap: 3mm;
+    gap: 2.2mm;
   }
   .glance-row {
     display: grid;
@@ -975,7 +1031,7 @@ export function buildQuotationHtml(
   .support-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 3mm;
+    gap: 2.2mm;
   }
   .notes-box {
     display: grid;
@@ -1049,8 +1105,8 @@ export function buildQuotationHtml(
   .terms-list { margin: 0; padding-left: 16px; }
   .terms-list li { margin: 0 0 .5mm; }
   .footer-brand {
-    margin-top: auto;
-    padding: 2.4mm 3mm;
+    margin-top: .8mm;
+    padding: 2mm 2.8mm;
     display: grid;
     grid-template-columns: 1fr auto;
     gap: 3mm;
@@ -1084,7 +1140,7 @@ export function buildQuotationHtml(
   }
   .footer-logo {
     color: #9b1111;
-    font-size: 10px;
+    font-size: 9.4px;
     font-weight: 900;
     letter-spacing: .08em;
     text-transform: uppercase;
@@ -1139,7 +1195,7 @@ export function buildQuotationHtml(
         <div class="badge-line"></div>
       </div>
 
-      <div class="logo-title">
+      <div class="letterhead-block">
         <div class="brand-mark">
           ${
             assets.letterheadUrl
@@ -1147,8 +1203,11 @@ export function buildQuotationHtml(
               : `<div class="brand-fallback">BT</div>`
           }
         </div>
-        <h1 class="hero-title">${renderTitleWithAccent(data.title)}</h1>
+        <div class="letterhead-name">${escapeHtml(data.company.name)}</div>
+        <div class="letterhead-subtitle">Dealers in Solar Products &amp; Electrical Solutions</div>
+        <div class="letterhead-contact">${escapeHtml(data.company.salesDesk)} &nbsp;&bull;&nbsp; ${escapeHtml(data.company.website)} &nbsp;&bull;&nbsp; ${escapeHtml(data.company.email)}</div>
       </div>
+      <h1 class="hero-title">${renderTitleWithAccent(data.title)}</h1>
       <div class="hero-rule"></div>
       <div class="hero-intro">${escapeHtml(data.intro)}</div>
 
@@ -1191,7 +1250,7 @@ export function buildQuotationHtml(
           ["wrench", "Lead Technician", data.preparedBy.leadTechnicianName],
           ["phone", "Technician Phone", data.preparedBy.leadTechnicianPhone],
           ["headset", "Sales Desk", data.preparedBy.salesDesk],
-        ])}
+        ], "wrap")}
       </div>
       <div class="section-card info-card">
         <div class="floating-icon">${iconSvg("building")}</div>
@@ -1201,7 +1260,7 @@ export function buildQuotationHtml(
           ["building", "Company", data.company.name],
           ["id", "Registration", data.company.registrationNo],
           ["file", "KRA PIN", data.company.kraPin],
-          ["location", "Office", data.company.office],
+          ["location", "Office", data.company.office.replace(/,\s*/g, ",\n")],
         ], "wrap")}
       </div>
     </div>
