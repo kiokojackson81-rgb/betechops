@@ -1400,25 +1400,37 @@ export async function listAssignedQuoteRequests(input: {
             )`
           : Prisma.empty
       }
-    ORDER BY
-      CASE
-        WHEN "status" = 'DRAFT' THEN 1
-        WHEN "status" = 'NEW' THEN 2
-        WHEN "status" = 'PENDING_APPROVAL' THEN 3
-        WHEN "status" = 'APPROVED' THEN 4
-        WHEN "status" = 'CONTACTED' THEN 5
-        WHEN "status" = 'SENT' THEN 6
-        WHEN "status" = 'VIEWED' THEN 7
-        WHEN "status" = 'FOLLOW_UP' THEN 8
-        WHEN "status" = 'QUOTED' THEN 9
-        WHEN "status" = 'ACCEPTED' THEN 10
-        WHEN "status" = 'CONVERTED' THEN 11
-        ELSE 12
-      END ASC,
-      "createdAt" DESC
+    ORDER BY "updatedAt" DESC, "createdAt" DESC
   `);
 
   return rows.map(serializeQuoteRequest);
+}
+
+export async function deleteQuoteRequest(
+  id: string,
+  actor: { userId: string; isElevatedActor?: boolean },
+) {
+  await ensureQuoteRequestsSchema();
+  const existingRows = await prisma.$queryRaw<QuoteRequestRow[]>(Prisma.sql`
+    SELECT ${QUOTE_REQUEST_SELECT_SQL}
+    FROM "QuoteRequest"
+    WHERE "id" = ${id}
+    LIMIT 1
+  `);
+  const existing = existingRows[0] ? serializeQuoteRequest(existingRows[0]) : null;
+  if (!existing) return null;
+
+  const assignedAttendantId = existing.assignedAttendant?.id ?? null;
+  if (!actor.isElevatedActor && assignedAttendantId !== actor.userId) {
+    throw new Error("You can only delete quotations assigned to you.");
+  }
+
+  await prisma.$executeRaw(Prisma.sql`
+    DELETE FROM "QuoteRequest"
+    WHERE "id" = ${id}
+  `);
+
+  return existing;
 }
 
 export async function getAssignedQuoteRequestById(id: string, userId: string) {
@@ -1764,6 +1776,7 @@ export async function createManualQuotation(
     status: input.status || (approvalPolicy.requiresApproval ? "PENDING_APPROVAL" : "QUOTED"),
     source: input.source || "MANUAL",
     requiresApproval: approvalPolicy.requiresApproval,
+    assignedAttendantId: input.assignedAttendantId || actor.id,
     projectType,
     quoteTitle: input.quoteTitle || input.preferredProducts || projectType.replace(/_/g, " "),
     quoteMessage: input.quoteMessage,

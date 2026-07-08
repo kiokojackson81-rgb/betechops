@@ -73,6 +73,7 @@ type Props = {
   templateApiPath?: string;
   enableCreate?: boolean;
   allowTemplateManager?: boolean;
+  allowDelete?: boolean;
 };
 
 const QUOTE_REQUEST_STATUSES: QuoteRequestStatus[] = [
@@ -1211,6 +1212,7 @@ export default function QuotationRequestsDeskClient({
   templateApiPath = "/api/attendant/quotation-center/templates",
   enableCreate = true,
   allowTemplateManager = false,
+  allowDelete = false,
 }: Props) {
   const [requests, setRequests] = useState<SerializedQuoteRequest[]>([]);
   const [statusFilter, setStatusFilter] = useState<QuoteRequestStatusFilter>(defaultStatusFilter);
@@ -1227,6 +1229,7 @@ export default function QuotationRequestsDeskClient({
   const [draftOpening, setDraftOpening] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [createCatalogQuery, setCreateCatalogQuery] = useState("");
@@ -1296,7 +1299,12 @@ export default function QuotationRequestsDeskClient({
           request.town || "",
           request.county || "",
         ].some((entry) => entry.toLowerCase().includes(value));
-      }),
+      }).sort(
+        (left, right) =>
+          new Date(right.updatedAt || right.createdAt).getTime() -
+            new Date(left.updatedAt || left.createdAt).getTime() ||
+          new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+      ),
     [end, query, requests, start],
   );
 
@@ -1553,6 +1561,34 @@ export default function QuotationRequestsDeskClient({
       setMessage(error instanceof Error ? error.message : "Failed to save quotation.");
     } finally {
       setCreateSaving(false);
+    }
+  }
+
+  async function handleDeleteQuotation(request: SerializedQuoteRequest) {
+    if (typeof window !== "undefined") {
+      const confirmed = window.confirm(
+        `Delete quotation ${request.quoteRef} for ${request.customerName}? This cannot be undone.`,
+      );
+      if (!confirmed) return;
+    }
+
+    setDeletingId(request.id);
+    setMessage(null);
+    try {
+      const response = await fetch(buildApiUrl(apiBasePath, apiQueryParams, request.id), {
+        method: "DELETE",
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Failed to delete quotation.");
+      }
+      setRequests((current) => current.filter((entry) => entry.id !== request.id));
+      setExpandedId((current) => (current === request.id ? null : current));
+      setMessage(`Quotation ${request.quoteRef} deleted successfully.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Failed to delete quotation.");
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -2698,14 +2734,27 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                         <div className="mt-2 text-xs text-slate-500">{formatDateTime(request.updatedAt || request.createdAt)}</div>
                       </div>
                       <div className="flex justify-start lg:justify-end">
-                        <button
-                          type="button"
-                          onClick={() => setExpandedId(expanded ? null : request.id)}
-                          className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/25 hover:bg-white/[0.06]"
-                        >
-                          {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                          {expanded ? "Close" : "View quotation"}
-                        </button>
+                        <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedId(expanded ? null : request.id)}
+                            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/25 hover:bg-white/[0.06]"
+                          >
+                            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                            {expanded ? "Close" : "View quotation"}
+                          </button>
+                          {allowDelete ? (
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteQuotation(request)}
+                              disabled={deletingId === request.id}
+                              className="inline-flex items-center gap-2 rounded-full border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-rose-100 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              {deletingId === request.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                              Delete
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -3342,6 +3391,17 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                               {downloadingId === request.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                               Download PDF
                             </button>
+                            {allowDelete ? (
+                              <button
+                                type="button"
+                                onClick={() => void handleDeleteQuotation(request)}
+                                disabled={deletingId === request.id}
+                                className="inline-flex items-center gap-2 rounded-full border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                {deletingId === request.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                                Delete quotation
+                              </button>
+                            ) : null}
                           </div>
                         </div>
 
