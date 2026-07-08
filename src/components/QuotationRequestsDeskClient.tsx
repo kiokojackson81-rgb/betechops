@@ -342,7 +342,7 @@ function createDefaultFormState(status: QuoteRequestStatus): QuoteDeskFormState 
     aiWarrantySummary: "",
     ...defaults,
     paymentMethod: "",
-    paymentTerms: "FULL_PAYMENT",
+    paymentTerms: "DEPOSIT_AND_BALANCE",
     deliveryMode: "NOT_INCLUDED",
     installationMode: "NOT_INCLUDED",
     deliveryFee: "",
@@ -384,7 +384,7 @@ function createDefaultQuotationDraft(): CreateQuotationDraft {
     aiWarrantySummary: "",
     ...defaults,
     paymentMethod: "",
-    paymentTerms: "FULL_PAYMENT",
+    paymentTerms: "DEPOSIT_AND_BALANCE",
     deliveryMode: "NOT_INCLUDED",
     installationMode: "NOT_INCLUDED",
     deliveryFee: "",
@@ -1905,7 +1905,7 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
       aiWarrantySummary: storedProposal.aiWarrantySummary || "",
       ...proposalDefaults,
       paymentMethod: storedProposal.paymentMethod || "",
-      paymentTerms: storedProposal.paymentTerms || "FULL_PAYMENT",
+      paymentTerms: storedProposal.paymentTerms || "DEPOSIT_AND_BALANCE",
       deliveryMode: storedProposal.deliveryMode || feeState.deliveryMode,
       installationMode: storedProposal.installationMode || feeState.installationMode,
       deliveryFee: feeState.deliveryFee,
@@ -2595,13 +2595,13 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
               </div>
               <div className="lg:col-span-2 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                 <label className="text-xs uppercase tracking-wide text-slate-400">
-                  Similar project link (optional)
+                  TikTok project link (optional)
                   <input
                     value={createDraft.projectReferenceLinks}
                     onChange={(event) =>
                       setCreateDraft((current) => ({ ...current, projectReferenceLinks: event.target.value }))
                     }
-                    placeholder="Paste TikTok, website, or project video link to feature on the PDF"
+                    placeholder="Paste TikTok project link to feature on the PDF"
                     className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 outline-none"
                   />
                 </label>

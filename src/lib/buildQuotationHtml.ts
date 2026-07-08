@@ -1370,24 +1370,6 @@ export function buildQuotationHtml(
       </div>
     </div>
 
-    <div class="page-spacer"></div>
-
-    <div class="footer-brand">
-      <div class="footer-brand-copy">
-        <div class="footer-brand-badge">${iconSvg("check")}</div>
-        <div>
-          <div class="footer-brand-title">Betech Solar Solutions - Powering Your World</div>
-          <div class="footer-brand-subtitle">Quality products &bull; Expert installation &bull; Reliable support</div>
-        </div>
-      </div>
-      <div class="footer-logo">Betech Solar Solutions</div>
-    </div>
-
-    <div class="footer">
-      <span>${escapeHtml(data.quoteRef)}</span>
-      <span>${escapeHtml(data.company.name)}</span>
-      <span>Page 1 of 2</span>
-    </div>
   </div>
 </section>
 
@@ -1592,24 +1574,6 @@ export function buildQuotationHtml(
       </div>
     </div>
 
-    <div class="page-spacer"></div>
-
-    <div class="footer-brand">
-      <div class="footer-brand-copy">
-        <div class="footer-brand-badge">${iconSvg("check")}</div>
-        <div>
-          <div class="footer-brand-title">Betech Solar Solutions - Your Trusted Solar Partner</div>
-          <div class="footer-brand-subtitle">Quality products &bull; Expert installation &bull; Reliable support</div>
-        </div>
-      </div>
-      <div class="footer-logo">Betech Solar Solutions</div>
-    </div>
-
-    <div class="footer">
-      <span>${escapeHtml(data.quoteRef)}</span>
-      <span>${escapeHtml(data.company.name)}</span>
-      <span>Page 2 of 2</span>
-    </div>
   </div>
 </section>
 </body>
