@@ -205,6 +205,7 @@ function renderBoqRows(items: ReturnType<typeof normalizeQuotePdfData>["items"])
   return items
     .map((item, index) => {
       const summary = splitItem(item.name, item.description);
+      const warrantyText = String(item.warrantyText || "").trim();
       return `
         <tr class="${index % 2 === 0 ? "boq-row-even" : "boq-row-odd"}">
           <td class="center">${item.index}</td>
@@ -215,7 +216,7 @@ function renderBoqRows(items: ReturnType<typeof normalizeQuotePdfData>["items"])
           <td class="center">${escapeHtml(item.quantity)}</td>
           <td class="right">${escapeHtml(formatMoney(item.unitPrice))}</td>
           <td class="right amount-cell">${escapeHtml(formatMoney(item.amount))}</td>
-          <td><span class="warranty-pill">${escapeHtml(item.warrantyText)}</span></td>
+          <td>${warrantyText ? `<span class="warranty-pill">${escapeHtml(warrantyText)}</span>` : ""}</td>
         </tr>
       `;
     })
@@ -300,6 +301,11 @@ function renderTermsCards(terms: readonly string[]) {
     ["wallet", "Payment Policy", [terms[1], "Full payment before installation.", "30% deposit with balance after installation.", "Full payment after installation where approved by management."].filter(Boolean).slice(1)],
     ["shield", "Warranty Coverage", terms[2] || "Warranty applies under normal use, correct installation, and manufacturer operating conditions."],
     ["user", "Customer Responsibilities", terms[3] || "Customer should confirm the final product scope, payment structure, and site readiness before dispatch or installation planning."],
+    [
+      "package",
+      "Returns & Refunds",
+      "Returns, exchanges, and product upgrades may be accommodated within a reasonable time after installation, subject to inspection and approval. Refunds are not available once installation has been completed.",
+    ],
   ] as const;
 
   return cards

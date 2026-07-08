@@ -181,6 +181,13 @@ function buildCustomerProfileHref(
   });
 }
 
+function extractFirstProjectUrl(value: string | null | undefined) {
+  const text = String(value || "").trim();
+  if (!text) return "https://www.tiktok.com/@betechsolarprojects";
+  const match = text.match(/https?:\/\/[^\s)]+/i);
+  return match?.[0] || "https://www.tiktok.com/@betechsolarprojects";
+}
+
 type QuoteItemDraft = {
   itemName: string;
   description: string;
@@ -322,7 +329,7 @@ function createProposalSectionDraft(projectType: QuoteProjectType) {
     termsAndConditions: defaults.termsAndConditions,
     preparedByDetails: defaults.preparedByDetails,
     companyLegalDetails: defaults.companyLegalDetails,
-    projectReferenceLinks: defaults.projectReferenceLinks || "https://www.tiktok.com/@betechsolarprojects",
+    projectReferenceLinks: "https://www.tiktok.com/@betechsolarprojects",
     proposalVisibility: defaults.visibility,
   };
 }
@@ -731,7 +738,9 @@ function applyProposalDefaults(
     termsAndConditions: overrides?.termsAndConditions?.trim() || defaults.termsAndConditions,
     preparedByDetails: overrides?.preparedByDetails?.trim() || defaults.preparedByDetails,
     companyLegalDetails: overrides?.companyLegalDetails?.trim() || defaults.companyLegalDetails,
-    projectReferenceLinks: overrides?.projectReferenceLinks?.trim() || defaults.projectReferenceLinks,
+    projectReferenceLinks: extractFirstProjectUrl(
+      overrides?.projectReferenceLinks?.trim() || defaults.projectReferenceLinks,
+    ),
     proposalVisibility: overrides?.visibility || defaults.visibility,
   };
 }
