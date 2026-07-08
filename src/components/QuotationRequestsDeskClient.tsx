@@ -2594,34 +2594,17 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                 </div>
               </div>
               <div className="lg:col-span-2 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  Quotation Settings
-                </div>
-                <div className="mt-2 text-sm text-slate-300">
-                  The final PDF uses the standard Betech warranty block automatically. Staff only need to confirm any similar-project link and customer note.
-                </div>
-                <div className="mt-4 grid gap-3">
-                  <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 text-xs text-slate-400">
-                    Standard warranty note:
-                    <div className="mt-2 normal-case tracking-normal text-slate-300">
-                      Warranty applies under normal use, correct installation, and manufacturer operating conditions.
-                    </div>
-                    <div className="mt-1 normal-case tracking-normal text-slate-300">
-                      Warranty does not cover misuse, accidental damage, unauthorized modification, or force majeure events.
-                    </div>
-                  </div>
-                  <label className="text-xs uppercase tracking-wide text-slate-400">
-                    Similar project link (optional)
-                    <input
-                      value={createDraft.projectReferenceLinks}
-                      onChange={(event) =>
-                        setCreateDraft((current) => ({ ...current, projectReferenceLinks: event.target.value }))
-                      }
-                      placeholder="Paste TikTok, website, or project video link to feature on the PDF"
-                      className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 outline-none"
-                    />
-                  </label>
-                </div>
+                <label className="text-xs uppercase tracking-wide text-slate-400">
+                  Similar project link (optional)
+                  <input
+                    value={createDraft.projectReferenceLinks}
+                    onChange={(event) =>
+                      setCreateDraft((current) => ({ ...current, projectReferenceLinks: event.target.value }))
+                    }
+                    placeholder="Paste TikTok, website, or project video link to feature on the PDF"
+                    className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 outline-none"
+                  />
+                </label>
               </div>
               <label className="text-xs uppercase tracking-wide text-slate-400 lg:col-span-2">
                 Notes to customer (optional)
