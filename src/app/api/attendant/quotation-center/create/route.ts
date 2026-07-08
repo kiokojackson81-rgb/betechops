@@ -69,6 +69,7 @@ function normalizeCreateBody(body: unknown) {
 
   normalized.depositAmount = normalizeNumber(raw.depositAmount);
   normalized.balanceAmount = normalizeNumber(raw.balanceAmount);
+  normalized.discountAmount = normalizeNumber(raw.discountAmount);
   normalized.deliveryMode = normalizeText(raw.deliveryMode);
   normalized.installationMode = normalizeText(raw.installationMode);
 

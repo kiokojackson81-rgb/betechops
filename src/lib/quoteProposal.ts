@@ -271,6 +271,10 @@ export function parseStoredQuoteProposal(
     typeof quotationData?.total === "number" && Number.isFinite(quotationData.total)
       ? roundCurrency(quotationData.total)
       : subtotal;
+  const discountAmount =
+    typeof quotationData?.discountAmount === "number" && Number.isFinite(quotationData.discountAmount)
+      ? roundCurrency(quotationData.discountAmount)
+      : 0;
   const paymentMethod = QUOTE_PAYMENT_METHODS.includes(
     String(quotationData?.paymentMethod || "") as QuotePaymentMethod,
   )
@@ -339,6 +343,7 @@ export function parseStoredQuoteProposal(
     items,
     subtotal,
     total,
+    discountAmount,
     paymentMethod,
     paymentTerms,
     depositAmount,

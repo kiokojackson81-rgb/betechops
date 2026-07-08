@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -14,6 +14,7 @@ import {
   RefreshCcw,
   Search,
   Trash2,
+  Upload,
 } from "lucide-react";
 import type {
   ManualQuotationCreateInput,
@@ -206,6 +207,7 @@ type QuoteDeskFormState = {
   quoteTitle: string;
   quoteMessage: string;
   quoteItems: QuoteItemDraft[];
+  discountAmount: string;
   warrantyMode: QuoteWarrantyMode;
   fullSystemWarranty: string;
   customWarranty: string;
@@ -269,6 +271,7 @@ type CreateQuotationDraft = {
   quoteMessage: string;
   templateId: string;
   quoteItems: QuoteItemDraft[];
+  discountAmount: string;
   warrantyMode: QuoteWarrantyMode;
   fullSystemWarranty: string;
   customWarranty: string;
@@ -341,6 +344,7 @@ function createDefaultFormState(status: QuoteRequestStatus): QuoteDeskFormState 
     quoteTitle: "",
     quoteMessage: "",
     quoteItems: [],
+    discountAmount: "",
     warrantyMode: "PER_ITEM",
     fullSystemWarranty: "",
     customWarranty: "",
@@ -383,6 +387,7 @@ function createDefaultQuotationDraft(): CreateQuotationDraft {
     quoteMessage: "",
     templateId: "",
     quoteItems: [],
+    discountAmount: "",
     warrantyMode: "PER_ITEM",
     fullSystemWarranty: "",
     customWarranty: "",
@@ -463,6 +468,11 @@ function applyTemplateToCreateDraft(
     quoteTitle: nextTemplate.templateName || generateQuoteTitleFromItems(templateItems, current.projectType),
     quoteMessage: nextTemplate.projectOverview || nextTemplate.scopeOfWork || current.quoteMessage,
     quoteItems: templateItems,
+    discountAmount:
+      nextTemplate.defaultDiscountAmount !== null &&
+      nextTemplate.defaultDiscountAmount !== undefined
+        ? String(nextTemplate.defaultDiscountAmount)
+        : current.discountAmount,
     preferredProducts,
     warrantyMode: current.warrantyMode === "PER_ITEM" ? current.warrantyMode : "PER_ITEM",
     fullSystemWarranty: nextTemplate.warranty || current.fullSystemWarranty,
@@ -498,6 +508,59 @@ function parseMoneyInput(value: string) {
   if (!normalized) return 0;
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function buildQuotedTotals(input: {
+  lineTotal: number;
+  deliveryMode: QuoteFeeMode;
+  installationMode: QuoteFeeMode;
+  deliveryFee: string;
+  installationFee: string;
+  discountAmount: string;
+}) {
+  const serviceTotal =
+    (input.installationMode === "CHARGED" ? parseMoneyInput(input.installationFee) : 0) +
+    (input.deliveryMode === "CHARGED" ? parseMoneyInput(input.deliveryFee) : 0);
+  const subtotal = input.lineTotal + serviceTotal;
+  const discountAmount = Math.max(0, parseMoneyInput(input.discountAmount));
+  const total = Math.max(0, subtotal - discountAmount);
+  return { subtotal, discountAmount, total };
+}
+
+function buildTemplateDownloadPayload(draft: CreateQuotationDraft) {
+  return {
+    templateName: draft.quoteTitle.trim() || generateQuoteTitleFromItems(draft.quoteItems, draft.projectType),
+    category: "",
+    systemSize: "",
+    brand: "",
+    projectOverview: draft.projectOverview.trim() || "",
+    whatItCanPower: draft.whatItCanPower.trim() || "",
+    scopeOfWork: draft.whatPriceIncludes.trim() || "",
+    deliveryTimeline: draft.deliveryTimeline.trim() || "",
+    installationTimeline: draft.installationTimeline.trim() || "",
+    warranty:
+      (draft.warrantyMode === "FULL_SYSTEM" ? draft.fullSystemWarranty : draft.customWarranty).trim() || "",
+    afterSalesSupport: draft.afterSalesSupport.trim() || "",
+    terms: draft.termsAndConditions.trim() || "",
+    internalNotes: draft.followUpNotes.trim() || "",
+    defaultPaymentMethod: draft.paymentMethod || undefined,
+    defaultPaymentTerms: draft.paymentTerms,
+    defaultDepositAmount:
+      draft.paymentTerms === "DEPOSIT_AND_BALANCE" && draft.depositAmount.trim()
+        ? parseMoneyInput(draft.depositAmount)
+        : undefined,
+    defaultBalanceAmount:
+      draft.paymentTerms === "DEPOSIT_AND_BALANCE" && draft.balanceAmount.trim()
+        ? parseMoneyInput(draft.balanceAmount)
+        : undefined,
+    defaultDiscountAmount: draft.discountAmount.trim() ? parseMoneyInput(draft.discountAmount) : 0,
+    items: buildSanitizedQuoteItems(draft.quoteItems, {
+      deliveryMode: draft.deliveryMode,
+      installationMode: draft.installationMode,
+      deliveryFee: draft.deliveryFee,
+      installationFee: draft.installationFee,
+    }),
+  };
 }
 
 function calculateDepositAndBalance(total: number) {
@@ -683,6 +746,7 @@ function buildQuoteRequestPayload(formState: QuoteDeskFormState): QuoteRequestRe
     quoteTitle: formState.quoteTitle.trim() || undefined,
     quoteMessage: formState.quoteMessage.trim() || undefined,
     quoteItems,
+    discountAmount: formState.discountAmount.trim() ? parseMoneyInput(formState.discountAmount) : undefined,
     warrantyMode: formState.warrantyMode,
     fullSystemWarranty: formState.fullSystemWarranty.trim() || undefined,
     customWarranty: formState.customWarranty.trim() || undefined,
@@ -1247,6 +1311,7 @@ export default function QuotationRequestsDeskClient({
   const [responseCatalogQuery, setResponseCatalogQuery] = useState("");
   const [responseCatalogLoading, setResponseCatalogLoading] = useState(false);
   const [responseCatalogResults, setResponseCatalogResults] = useState<CatalogQuoteProduct[]>([]);
+  const templateUploadInputRef = useRef<HTMLInputElement | null>(null);
   const impersonateId = apiQueryParams?.impersonateId ?? null;
 
   const expandedRequest = useMemo(
@@ -1271,12 +1336,24 @@ export default function QuotationRequestsDeskClient({
     });
   }, [formState.quoteItems]);
 
-  const quoteSubtotalPreview = useMemo(
+  const quoteTotalsPreview = useMemo(
     () =>
-      quoteItemsPreview.reduce((sum, item) => sum + item.lineTotal, 0) +
-      (formState.installationMode === "CHARGED" ? parseMoneyInput(formState.installationFee) : 0) +
-      (formState.deliveryMode === "CHARGED" ? parseMoneyInput(formState.deliveryFee) : 0),
-    [formState.deliveryFee, formState.deliveryMode, formState.installationFee, formState.installationMode, quoteItemsPreview],
+      buildQuotedTotals({
+        lineTotal: quoteItemsPreview.reduce((sum, item) => sum + item.lineTotal, 0),
+        deliveryMode: formState.deliveryMode,
+        installationMode: formState.installationMode,
+        deliveryFee: formState.deliveryFee,
+        installationFee: formState.installationFee,
+        discountAmount: formState.discountAmount,
+      }),
+    [
+      formState.deliveryFee,
+      formState.deliveryMode,
+      formState.discountAmount,
+      formState.installationFee,
+      formState.installationMode,
+      quoteItemsPreview,
+    ],
   );
 
   const filteredRequests = useMemo(
@@ -1321,8 +1398,8 @@ export default function QuotationRequestsDeskClient({
     if (formState.paymentTerms !== "DEPOSIT_AND_BALANCE") return null;
     const depositAmount = parseMoneyInput(formState.depositAmount);
     const explicitBalance = formState.balanceAmount.trim() ? parseMoneyInput(formState.balanceAmount) : null;
-    return explicitBalance ?? Math.max(0, quoteSubtotalPreview - depositAmount);
-  }, [formState.balanceAmount, formState.depositAmount, formState.paymentTerms, quoteSubtotalPreview]);
+    return explicitBalance ?? Math.max(0, quoteTotalsPreview.total - depositAmount);
+  }, [formState.balanceAmount, formState.depositAmount, formState.paymentTerms, quoteTotalsPreview.total]);
 
   const createQuoteItemsPreview = useMemo(() => {
     return createDraft.quoteItems.map((item) => {
@@ -1338,14 +1415,20 @@ export default function QuotationRequestsDeskClient({
     });
   }, [createDraft.quoteItems]);
 
-  const createQuoteSubtotalPreview = useMemo(
+  const createQuoteTotalsPreview = useMemo(
     () =>
-      createQuoteItemsPreview.reduce((sum, item) => sum + item.lineTotal, 0) +
-      (createDraft.installationMode === "CHARGED" ? parseMoneyInput(createDraft.installationFee) : 0) +
-      (createDraft.deliveryMode === "CHARGED" ? parseMoneyInput(createDraft.deliveryFee) : 0),
+      buildQuotedTotals({
+        lineTotal: createQuoteItemsPreview.reduce((sum, item) => sum + item.lineTotal, 0),
+        deliveryMode: createDraft.deliveryMode,
+        installationMode: createDraft.installationMode,
+        deliveryFee: createDraft.deliveryFee,
+        installationFee: createDraft.installationFee,
+        discountAmount: createDraft.discountAmount,
+      }),
     [
       createDraft.deliveryFee,
       createDraft.deliveryMode,
+      createDraft.discountAmount,
       createDraft.installationFee,
       createDraft.installationMode,
       createQuoteItemsPreview,
@@ -1358,12 +1441,12 @@ export default function QuotationRequestsDeskClient({
     const explicitBalance = createDraft.balanceAmount.trim()
       ? parseMoneyInput(createDraft.balanceAmount)
       : null;
-    return explicitBalance ?? Math.max(0, createQuoteSubtotalPreview - depositAmount);
+    return explicitBalance ?? Math.max(0, createQuoteTotalsPreview.total - depositAmount);
   }, [
     createDraft.balanceAmount,
     createDraft.depositAmount,
     createDraft.paymentTerms,
-    createQuoteSubtotalPreview,
+    createQuoteTotalsPreview.total,
   ]);
 
   useEffect(() => {
@@ -1372,7 +1455,7 @@ export default function QuotationRequestsDeskClient({
       setCreateDraft((current) => ({ ...current, depositAmount: "", balanceAmount: "" }));
       return;
     }
-    const next = calculateDepositAndBalance(createQuoteSubtotalPreview);
+    const next = calculateDepositAndBalance(createQuoteTotalsPreview.total);
     if (
       createDraft.depositAmount === next.depositAmount &&
       createDraft.balanceAmount === next.balanceAmount
@@ -1388,7 +1471,7 @@ export default function QuotationRequestsDeskClient({
     createDraft.balanceAmount,
     createDraft.depositAmount,
     createDraft.paymentTerms,
-    createQuoteSubtotalPreview,
+    createQuoteTotalsPreview.total,
   ]);
 
   useEffect(() => {
@@ -1397,7 +1480,7 @@ export default function QuotationRequestsDeskClient({
       setFormState((current) => ({ ...current, depositAmount: "", balanceAmount: "" }));
       return;
     }
-    const next = calculateDepositAndBalance(quoteSubtotalPreview);
+    const next = calculateDepositAndBalance(quoteTotalsPreview.total);
     if (
       formState.depositAmount === next.depositAmount &&
       formState.balanceAmount === next.balanceAmount
@@ -1413,7 +1496,7 @@ export default function QuotationRequestsDeskClient({
     formState.balanceAmount,
     formState.depositAmount,
     formState.paymentTerms,
-    quoteSubtotalPreview,
+    quoteTotalsPreview.total,
   ]);
 
   async function refreshRequests(nextStatus = statusFilter, nextQuery = query) {
@@ -1505,6 +1588,9 @@ export default function QuotationRequestsDeskClient({
           selectedTemplate?.scopeOfWork ||
           undefined,
         quoteItems,
+        discountAmount: createDraft.discountAmount.trim()
+          ? parseMoneyInput(createDraft.discountAmount)
+          : undefined,
         warrantyMode: createDraft.warrantyMode,
         fullSystemWarranty: createDraft.fullSystemWarranty.trim() || undefined,
         customWarranty: createDraft.customWarranty.trim() || undefined,
@@ -1646,6 +1732,9 @@ export default function QuotationRequestsDeskClient({
             createDraft.paymentTerms === "DEPOSIT_AND_BALANCE" && createDraft.balanceAmount.trim()
               ? parseMoneyInput(createDraft.balanceAmount)
               : undefined,
+          defaultDiscountAmount: createDraft.discountAmount.trim()
+            ? parseMoneyInput(createDraft.discountAmount)
+            : undefined,
           items: quoteItems,
         }),
       });
@@ -1662,6 +1751,53 @@ export default function QuotationRequestsDeskClient({
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Failed to save quotation template.");
     } finally {
+      setTemplateSaving(false);
+    }
+  }
+
+  function handleDownloadTemplateFormat() {
+    const payload = buildTemplateDownloadPayload(createDraft);
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = "betech-quotation-template.json";
+    link.click();
+    URL.revokeObjectURL(href);
+  }
+
+  async function handleTemplateFileSelected(file: File | null) {
+    if (!file) return;
+    setTemplateSaving(true);
+    setMessage(null);
+    try {
+      const text = await file.text();
+      const raw = JSON.parse(text) as Record<string, unknown>;
+      const body = {
+        ...raw,
+        templateName: String(raw.templateName || "").trim() || file.name.replace(/\.json$/i, ""),
+      };
+      const response = await fetch(buildApiUrl(templateApiPath, apiQueryParams), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Failed to upload quotation template.");
+      }
+      await refreshTemplates();
+      if (data.template?.id) {
+        setCreateMode("template");
+        setCreateDraft((current) => applyTemplateToCreateDraft(current, data.template));
+      }
+      setMessage(`Template ${data.template?.templateName || body.templateName} uploaded successfully.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Failed to upload quotation template.");
+    } finally {
+      if (templateUploadInputRef.current) {
+        templateUploadInputRef.current.value = "";
+      }
       setTemplateSaving(false);
     }
   }
@@ -1905,6 +2041,10 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
       quoteTitle: expandedRequest.quoteTitle || "",
       quoteMessage: expandedRequest.quoteMessage || "",
       quoteItems: feeState.quoteItems,
+      discountAmount:
+        typeof storedProposal.discountAmount === "number" && storedProposal.discountAmount > 0
+          ? String(storedProposal.discountAmount)
+          : "",
       warrantyMode: storedProposal.warrantyMode || "PER_ITEM",
       fullSystemWarranty: storedProposal.fullSystemWarranty || "",
       customWarranty: storedProposal.customWarranty || "",
@@ -2224,26 +2364,60 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                 />
               </label>
               {createMode === "template" ? (
-                <label className="text-xs uppercase tracking-wide text-slate-400 lg:col-span-2">
-                  Prepared quotation template
-                  <select
-                    value={createDraft.templateId}
-                    onChange={(event) => {
-                      const nextId = event.target.value;
-                      const nextTemplate = templates.find((template) => template.id === nextId) ?? null;
-                      setCreateDraft((current) => applyTemplateToCreateDraft(current, nextTemplate));
-                    }}
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
-                  >
-                    <option value="">{templatesLoading ? "Loading templates..." : "Select template"}</option>
-                    {templates.map((template) => (
-                      <option key={template.id} value={template.id}>
-                        {template.templateName}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <div className="lg:col-span-2 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
+                  <label className="text-xs uppercase tracking-wide text-slate-400">
+                    Prepared quotation template
+                    <select
+                      value={createDraft.templateId}
+                      onChange={(event) => {
+                        const nextId = event.target.value;
+                        const nextTemplate = templates.find((template) => template.id === nextId) ?? null;
+                        setCreateDraft((current) => applyTemplateToCreateDraft(current, nextTemplate));
+                      }}
+                      className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
+                    >
+                      <option value="">{templatesLoading ? "Loading templates..." : "Select template"}</option>
+                      {templates.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.templateName}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {allowTemplateManager ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleDownloadTemplateFormat}
+                        className="self-end rounded-full border border-white/10 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-200 transition hover:border-white/20"
+                      >
+                        <span className="inline-flex items-center gap-2">
+                          <Download className="h-3.5 w-3.5" />
+                          Download Format
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={templateSaving}
+                        onClick={() => templateUploadInputRef.current?.click()}
+                        className="self-end rounded-full border border-cyan-500/40 bg-cyan-500/10 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-cyan-200 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <span className="inline-flex items-center gap-2">
+                          <Upload className="h-3.5 w-3.5" />
+                          Upload Template
+                        </span>
+                      </button>
+                    </>
+                  ) : null}
+                </div>
               ) : null}
+              <input
+                ref={templateUploadInputRef}
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                onChange={(event) => void handleTemplateFileSelected(event.target.files?.[0] ?? null)}
+              />
               <div className="lg:col-span-2 rounded-2xl border border-white/10 bg-slate-900/70 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
@@ -2550,6 +2724,17 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                       ))}
                     </select>
                   </label>
+                  <label className="text-xs uppercase tracking-wide text-slate-400">
+                    Discount amount
+                    <input
+                      value={createDraft.discountAmount}
+                      onChange={(event) =>
+                        setCreateDraft((current) => ({ ...current, discountAmount: event.target.value }))
+                      }
+                      placeholder="0"
+                      className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
+                    />
+                  </label>
                   {createDraft.paymentTerms === "DEPOSIT_AND_BALANCE" ? (
                     <>
                       <label className="text-xs uppercase tracking-wide text-slate-400">
@@ -2581,12 +2766,18 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                   <div className="grid gap-2 text-sm text-slate-300 sm:grid-cols-2">
                     <div>
                       <span className="font-semibold text-white">Subtotal:</span>{" "}
-                      {formatQuoteCurrency(createQuoteSubtotalPreview)}
+                      {formatQuoteCurrency(createQuoteTotalsPreview.subtotal)}
                     </div>
                     <div>
                       <span className="font-semibold text-white">Total quoted amount:</span>{" "}
-                      {formatQuoteCurrency(createQuoteSubtotalPreview)}
+                      {formatQuoteCurrency(createQuoteTotalsPreview.total)}
                     </div>
+                    {createQuoteTotalsPreview.discountAmount > 0 ? (
+                      <div>
+                        <span className="font-semibold text-white">Discount:</span>{" "}
+                        {formatQuoteCurrency(createQuoteTotalsPreview.discountAmount)}
+                      </div>
+                    ) : null}
                     {createDraft.paymentTerms === "DEPOSIT_AND_BALANCE" ? (
                       <>
                         <div>
@@ -2640,14 +2831,31 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
 
             <div className="mt-4 flex flex-wrap gap-2">
               {allowTemplateManager ? (
-                <button
-                  type="button"
-                  disabled={templateSaving}
-                  onClick={() => void handleSaveTemplateFromDraft()}
-                  className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-200 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {templateSaving ? "Saving Template..." : "Save As Template"}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    disabled={templateSaving}
+                    onClick={() => void handleSaveTemplateFromDraft()}
+                    className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-200 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {templateSaving ? "Saving Template..." : "Save As Template"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDownloadTemplateFormat}
+                    className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-300 transition hover:border-white/20"
+                  >
+                    Download Template Format
+                  </button>
+                  <button
+                    type="button"
+                    disabled={templateSaving}
+                    onClick={() => templateUploadInputRef.current?.click()}
+                    className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-300 transition hover:border-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Upload Template File
+                  </button>
+                </>
               ) : null}
               <button
                 type="button"
@@ -3229,6 +3437,17 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                                     ))}
                                   </select>
                                 </label>
+                                <label className="text-xs uppercase tracking-wide text-slate-400">
+                                  Discount amount
+                                  <input
+                                    value={formState.discountAmount}
+                                    onChange={(event) =>
+                                      setFormState((current) => ({ ...current, discountAmount: event.target.value }))
+                                    }
+                                    placeholder="0"
+                                    className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                                  />
+                                </label>
                                 {formState.paymentTerms === "DEPOSIT_AND_BALANCE" ? (
                                   <>
                                     <label className="text-xs uppercase tracking-wide text-slate-400">
@@ -3261,12 +3480,18 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                                 <div className="grid gap-2 text-sm text-slate-300 sm:grid-cols-2">
                                   <div>
                                     <span className="font-semibold text-white">Subtotal:</span>{" "}
-                                    {formatQuoteCurrency(quoteSubtotalPreview)}
+                                    {formatQuoteCurrency(quoteTotalsPreview.subtotal)}
                                   </div>
                                   <div>
                                     <span className="font-semibold text-white">Total quoted amount:</span>{" "}
-                                    {formatQuoteCurrency(quoteSubtotalPreview)}
+                                    {formatQuoteCurrency(quoteTotalsPreview.total)}
                                   </div>
+                                  {quoteTotalsPreview.discountAmount > 0 ? (
+                                    <div>
+                                      <span className="font-semibold text-white">Discount:</span>{" "}
+                                      {formatQuoteCurrency(quoteTotalsPreview.discountAmount)}
+                                    </div>
+                                  ) : null}
                                   {formState.paymentTerms === "DEPOSIT_AND_BALANCE" ? (
                                     <>
                                       <div>

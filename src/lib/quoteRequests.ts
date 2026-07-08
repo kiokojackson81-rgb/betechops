@@ -13,6 +13,7 @@ import {
   sanitizeQuoteLineItems,
   calculateQuoteTotal,
   normalizeQuotePaymentBreakdown,
+  roundCurrency,
   type QuotePaymentMethod,
   type QuotePaymentTerms,
   type QuoteWarrantyMode,
@@ -406,6 +407,10 @@ export const quoteRequestResponseSchema = z.object({
   quoteTitle: z.string().trim().max(200).optional(),
   quoteMessage: z.string().trim().max(12000).optional(),
   quoteItems: z.array(quoteLineItemSchema).default([]),
+  discountAmount: z.preprocess(
+    (value) => (value === "" || value === null || value === undefined ? undefined : Number(value)),
+    z.number().nonnegative().max(1000000000).optional(),
+  ),
   warrantyMode: z.enum(QUOTE_WARRANTY_MODES).optional(),
   fullSystemWarranty: z.string().trim().max(4000).optional(),
   customWarranty: z.string().trim().max(4000).optional(),
@@ -462,6 +467,7 @@ export const quotationTemplateSchema = z.object({
   defaultPaymentTerms: quotePaymentTermsSchema.optional(),
   defaultDepositAmount: z.number().nonnegative().optional(),
   defaultBalanceAmount: z.number().nonnegative().optional(),
+  defaultDiscountAmount: z.number().nonnegative().optional(),
   defaultPdfLayout: z.string().trim().max(120).optional(),
   isActive: z.boolean().optional(),
   items: z.array(quoteLineItemSchema).default([]),
@@ -502,6 +508,10 @@ export const manualQuotationCreateSchema = z.object({
   quoteTitle: z.string().trim().max(200).optional(),
   quoteMessage: z.string().trim().max(12000).optional(),
   quoteItems: z.array(quoteLineItemSchema).default([]),
+  discountAmount: z.preprocess(
+    (value) => (value === "" || value === null || value === undefined ? undefined : Number(value)),
+    z.number().nonnegative().max(1000000000).optional(),
+  ),
   warrantyMode: z.enum(QUOTE_WARRANTY_MODES).optional(),
   fullSystemWarranty: z.string().trim().max(4000).optional(),
   customWarranty: z.string().trim().max(4000).optional(),
@@ -724,6 +734,7 @@ export type SerializedQuotationTemplate = {
   defaultPaymentTerms: QuotePaymentTerms | null;
   defaultDepositAmount: number | null;
   defaultBalanceAmount: number | null;
+  defaultDiscountAmount: number | null;
   defaultPdfLayout: string | null;
   isActive: boolean;
   items: Array<z.infer<typeof quoteLineItemSchema>>;
@@ -902,6 +913,11 @@ function serializeQuotationTemplate(row: QuotationTemplateRow): SerializedQuotat
     defaultPaymentTerms: row.defaultPaymentTerms as QuotePaymentTerms | null,
     defaultDepositAmount: row.defaultDepositAmount ?? null,
     defaultBalanceAmount: row.defaultBalanceAmount ?? null,
+    defaultDiscountAmount:
+      typeof templateData?.defaultDiscountAmount === "number" &&
+      Number.isFinite(templateData.defaultDiscountAmount)
+        ? Number(templateData.defaultDiscountAmount)
+        : null,
     defaultPdfLayout: row.defaultPdfLayout,
     isActive: Boolean(row.isActive),
     items,
@@ -1464,8 +1480,10 @@ export async function updateQuoteRequestResponse(
   await ensureQuoteRequestsSchema();
   const sanitizedItems = sanitizeQuoteLineItems(input.quoteItems);
   const subtotal = calculateQuoteTotal(sanitizedItems);
+  const discountAmount = roundCurrency(Math.max(0, Number(input.discountAmount || 0)));
+  const discountedTotal = roundCurrency(Math.max(0, subtotal - discountAmount));
   const paymentBreakdown = normalizeQuotePaymentBreakdown({
-    total: subtotal,
+    total: discountedTotal,
     paymentTerms: input.paymentTerms,
     depositAmount: input.depositAmount,
     balanceAmount: input.balanceAmount,
@@ -1504,6 +1522,7 @@ export async function updateQuoteRequestResponse(
     items: sanitizedItems,
     subtotal,
     total: paymentBreakdown.total,
+    discountAmount,
     warrantyMode: (input.warrantyMode || "PER_ITEM") as QuoteWarrantyMode,
     fullSystemWarranty: input.fullSystemWarranty?.trim() || null,
     customWarranty: input.customWarranty?.trim() || null,
@@ -1545,6 +1564,7 @@ export async function updateQuoteRequestResponse(
   const approvalPolicy = getQuotationApprovalPolicy({
     total: paymentBreakdown.total,
     paymentTerms: input.paymentTerms,
+    hasCustomDiscount: discountAmount > 0,
   });
   const nextStatus =
     input.status === "APPROVED" && approvalPolicy.requiresApproval
@@ -1738,8 +1758,10 @@ export async function createManualQuotation(
     throw new Error("Add at least one quotation item before saving the quotation.");
   }
   const subtotal = calculateQuoteTotal(quoteItems);
+  const discountAmount = roundCurrency(Math.max(0, Number(input.discountAmount || 0)));
+  const discountedTotal = roundCurrency(Math.max(0, subtotal - discountAmount));
   const paymentBreakdown = normalizeQuotePaymentBreakdown({
-    total: subtotal,
+    total: discountedTotal,
     paymentTerms: input.paymentTerms,
     depositAmount: input.depositAmount,
     balanceAmount: input.balanceAmount,
@@ -1769,6 +1791,7 @@ export async function createManualQuotation(
   const approvalPolicy = getQuotationApprovalPolicy({
     total: paymentBreakdown.total,
     paymentTerms: input.paymentTerms,
+    hasCustomDiscount: discountAmount > 0,
   });
 
   const created = await createQuoteRequest({
@@ -1784,6 +1807,7 @@ export async function createManualQuotation(
       items: quoteItems,
       subtotal,
       total: paymentBreakdown.total,
+      discountAmount,
       warrantyMode: (input.warrantyMode || "PER_ITEM") as QuoteWarrantyMode,
       fullSystemWarranty: input.fullSystemWarranty?.trim() || null,
       customWarranty: input.customWarranty?.trim() || null,
@@ -1838,6 +1862,7 @@ export async function createManualQuotation(
         source: created.source,
         status: created.status,
         total: paymentBreakdown.total,
+        discountAmount,
       },
     });
   }
@@ -1901,6 +1926,7 @@ export async function createQuotationTemplate(
       ${input.isActive !== false},
       ${{
         items: sanitizeQuoteLineItems(input.items),
+        defaultDiscountAmount: input.defaultDiscountAmount ?? null,
       } as Prisma.JsonObject},
       ${actor.id},
       ${actor.id},
