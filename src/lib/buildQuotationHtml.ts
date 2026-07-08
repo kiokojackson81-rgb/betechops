@@ -354,7 +354,6 @@ export function buildQuotationHtml(
     min-height: 285mm;
   }
   .top-strip {
-    border-top: 2px solid #9b1111;
     padding-top: 1.6mm;
   }
   .hero-card,

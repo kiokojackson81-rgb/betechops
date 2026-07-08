@@ -30,12 +30,9 @@ import type {
 import {
   formatQuoteCurrency,
   QUOTE_FEE_MODES,
-  getQuotePaymentMethodLabel,
   getQuotePaymentTermsLabel,
   parseStoredQuoteProposal,
-  PAYMENT_METHOD_DETAILS,
   QUOTE_WARRANTY_MODES,
-  QUOTE_PAYMENT_METHODS,
   QUOTE_PAYMENT_TERMS,
   type QuotePaymentMethod,
   type QuotePaymentTerms,
@@ -324,7 +321,7 @@ function createProposalSectionDraft(projectType: QuoteProjectType) {
     termsAndConditions: defaults.termsAndConditions,
     preparedByDetails: defaults.preparedByDetails,
     companyLegalDetails: defaults.companyLegalDetails,
-    projectReferenceLinks: defaults.projectReferenceLinks,
+    projectReferenceLinks: defaults.projectReferenceLinks || "https://www.tiktok.com/@betechsolarprojects",
     proposalVisibility: defaults.visibility,
   };
 }
@@ -335,7 +332,7 @@ function createDefaultFormState(status: QuoteRequestStatus): QuoteDeskFormState 
     status,
     quoteTitle: "",
     quoteMessage: "",
-    quoteItems: [createEmptyQuoteItem()],
+    quoteItems: [],
     warrantyMode: "PER_ITEM",
     fullSystemWarranty: "",
     customWarranty: "",
@@ -377,7 +374,7 @@ function createDefaultQuotationDraft(): CreateQuotationDraft {
     quoteTitle: "",
     quoteMessage: "",
     templateId: "",
-    quoteItems: [createEmptyQuoteItem()],
+    quoteItems: [],
     warrantyMode: "PER_ITEM",
     fullSystemWarranty: "",
     customWarranty: "",
@@ -493,6 +490,16 @@ function parseMoneyInput(value: string) {
   if (!normalized) return 0;
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function calculateDepositAndBalance(total: number) {
+  const safeTotal = Number.isFinite(total) ? Math.max(0, total) : 0;
+  const depositAmount = Math.round(safeTotal * 0.3);
+  const balanceAmount = Math.max(0, safeTotal - depositAmount);
+  return {
+    depositAmount: String(depositAmount),
+    balanceAmount: String(balanceAmount),
+  };
 }
 
 function suggestWarrantyForItem(itemName: string) {
@@ -619,7 +626,7 @@ function splitQuoteItemsAndFees(items: Array<{
     );
 
   return {
-    quoteItems: quoteItems.length ? quoteItems : [createEmptyQuoteItem()],
+    quoteItems,
     installationMode,
     deliveryMode,
     installationFee,
@@ -1342,6 +1349,56 @@ export default function QuotationRequestsDeskClient({
     createQuoteSubtotalPreview,
   ]);
 
+  useEffect(() => {
+    if (createDraft.paymentTerms !== "DEPOSIT_AND_BALANCE") {
+      if (!createDraft.depositAmount && !createDraft.balanceAmount) return;
+      setCreateDraft((current) => ({ ...current, depositAmount: "", balanceAmount: "" }));
+      return;
+    }
+    const next = calculateDepositAndBalance(createQuoteSubtotalPreview);
+    if (
+      createDraft.depositAmount === next.depositAmount &&
+      createDraft.balanceAmount === next.balanceAmount
+    ) {
+      return;
+    }
+    setCreateDraft((current) => ({
+      ...current,
+      depositAmount: next.depositAmount,
+      balanceAmount: next.balanceAmount,
+    }));
+  }, [
+    createDraft.balanceAmount,
+    createDraft.depositAmount,
+    createDraft.paymentTerms,
+    createQuoteSubtotalPreview,
+  ]);
+
+  useEffect(() => {
+    if (formState.paymentTerms !== "DEPOSIT_AND_BALANCE") {
+      if (!formState.depositAmount && !formState.balanceAmount) return;
+      setFormState((current) => ({ ...current, depositAmount: "", balanceAmount: "" }));
+      return;
+    }
+    const next = calculateDepositAndBalance(quoteSubtotalPreview);
+    if (
+      formState.depositAmount === next.depositAmount &&
+      formState.balanceAmount === next.balanceAmount
+    ) {
+      return;
+    }
+    setFormState((current) => ({
+      ...current,
+      depositAmount: next.depositAmount,
+      balanceAmount: next.balanceAmount,
+    }));
+  }, [
+    formState.balanceAmount,
+    formState.depositAmount,
+    formState.paymentTerms,
+    quoteSubtotalPreview,
+  ]);
+
   async function refreshRequests(nextStatus = statusFilter, nextQuery = query) {
     setLoading(true);
     setLoadError(null);
@@ -1487,7 +1544,10 @@ export default function QuotationRequestsDeskClient({
       setCreateDraft(createDefaultQuotationDraft());
       setCreateCatalogQuery("");
       setCreateCatalogResults([]);
-      void refreshRequests("ALL", "");
+      await refreshRequests("ALL", "");
+      if (data.request?.id) {
+        setExpandedId(data.request.id);
+      }
       setMessage("Quotation saved successfully. You can now email, SMS, WhatsApp, or download it.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Failed to save quotation.");
@@ -1597,11 +1657,12 @@ export default function QuotationRequestsDeskClient({
     }
   }
 
-  function addCreateCatalogItem(product: CatalogQuoteProduct) {
-    setCreateDraft((current) => {
-      const previousAutoTitle = generateQuoteTitleFromItems(current.quoteItems, current.projectType);
+function addCreateCatalogItem(product: CatalogQuoteProduct) {
+  setCreateDraft((current) => {
+      const currentItems = current.quoteItems.filter((item) => item.itemName.trim() || item.unitPrice.trim() || item.description.trim());
+      const previousAutoTitle = generateQuoteTitleFromItems(currentItems, current.projectType);
       const nextItems = [
-        ...current.quoteItems,
+        ...currentItems,
         hydrateQuoteItemDraft({
           itemName: product.productName,
           description: "",
@@ -1626,12 +1687,13 @@ export default function QuotationRequestsDeskClient({
     setCreateCatalogResults([]);
   }
 
-  function addResponseCatalogItem(product: CatalogQuoteProduct) {
-    setFormState((current) => {
+function addResponseCatalogItem(product: CatalogQuoteProduct) {
+  setFormState((current) => {
       const projectType = expandedRequest?.projectType || "SOLAR_HOME_SYSTEM";
-      const previousAutoTitle = generateQuoteTitleFromItems(current.quoteItems, projectType);
+      const currentItems = current.quoteItems.filter((item) => item.itemName.trim() || item.unitPrice.trim() || item.description.trim());
+      const previousAutoTitle = generateQuoteTitleFromItems(currentItems, projectType);
       const nextItems = [
-        ...current.quoteItems,
+        ...currentItems,
         hydrateQuoteItemDraft({
           itemName: product.productName,
           description: "",
@@ -2425,26 +2487,6 @@ export default function QuotationRequestsDeskClient({
 
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   <label className="text-xs uppercase tracking-wide text-slate-400">
-                    Payment method
-                    <select
-                      value={createDraft.paymentMethod}
-                      onChange={(event) =>
-                        setCreateDraft((current) => ({
-                          ...current,
-                          paymentMethod: event.target.value as QuotePaymentMethod | "",
-                        }))
-                      }
-                      className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
-                    >
-                      <option value="">Select payment method</option>
-                      {QUOTE_PAYMENT_METHODS.map((method) => (
-                        <option key={method} value={method}>
-                          {getQuotePaymentMethodLabel(method)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="text-xs uppercase tracking-wide text-slate-400">
                     Payment terms
                     <select
                       value={createDraft.paymentTerms}
@@ -3127,33 +3169,6 @@ export default function QuotationRequestsDeskClient({
                               </div>
 
                               <div className="mt-4 grid gap-3 md:grid-cols-2">
-                                <label className="text-xs uppercase tracking-wide text-slate-400">
-                                  Payment method
-                                  <select
-                                    value={formState.paymentMethod}
-                                    onChange={(event) =>
-                                      setFormState((current) => ({
-                                        ...current,
-                                        paymentMethod: event.target.value as QuotePaymentMethod | "",
-                                      }))
-                                    }
-                                    className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
-                                  >
-                                    <option value="">Select payment method</option>
-                                    {QUOTE_PAYMENT_METHODS.map((method) => (
-                                      <option key={method} value={method}>
-                                        {getQuotePaymentMethodLabel(method)}
-                                      </option>
-                                    ))}
-                                  </select>
-                                  {formState.paymentMethod ? (
-                                    <div className="mt-2 rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-[11px] normal-case tracking-normal text-slate-300">
-                                      {PAYMENT_METHOD_DETAILS[formState.paymentMethod].lines.map((line) => (
-                                        <div key={line}>{line}</div>
-                                      ))}
-                                    </div>
-                                  ) : null}
-                                </label>
                                 <label className="text-xs uppercase tracking-wide text-slate-400">
                                   Payment terms
                                   <select
