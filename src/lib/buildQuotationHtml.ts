@@ -29,7 +29,10 @@ type IconName =
   | "edit"
   | "message"
   | "alert"
-  | "check";
+  | "check"
+  | "settings"
+  | "book"
+  | "clipboard";
 
 function iconSvg(name: IconName, className = "icon-svg") {
   const attrs = `viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="${className}"`;
@@ -78,6 +81,12 @@ function iconSvg(name: IconName, className = "icon-svg") {
       '<path d="M21 12a8.5 8.5 0 0 1-8.5 8.5A8.6 8.6 0 0 1 8 19.2L3 20.5l1.3-5A8.6 8.6 0 0 1 3.5 12 8.5 8.5 0 1 1 21 12z"/>',
     alert: '<circle cx="12" cy="12" r="9"/><path d="M12 7v6"/><path d="M12 16h.01"/>',
     check: '<circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.3 2.3 4.7-5.1"/>',
+    settings:
+      '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1A2 2 0 1 1 3.4 17l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H2a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1A2 2 0 0 1 6.1 3.4l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V2a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5h.1a1.7 1.7 0 0 0 1.8-.3l.1-.1A2 2 0 1 1 20.6 6l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H22a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.5 1z"/>',
+    book:
+      '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21z"/><path d="M4 5.5V21"/><path d="M12 7h5"/><path d="M12 11h5"/><path d="M12 15h5"/><path d="M8 15a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/>',
+    clipboard:
+      '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4.5h6"/><path d="M9 9h6"/><path d="M9 13h6"/><path d="m9.5 17 1.5 1.5 3.5-3.5"/>',
   };
   return `<svg ${attrs}>${paths[name]}</svg>`;
 }
@@ -107,6 +116,32 @@ function renderIconList(items: readonly string[], icon: IconName) {
         <div class="mini-row">
           <div class="mini-icon">${iconSvg(icon)}</div>
           <div class="mini-text">${escapeHtml(item)}</div>
+        </div>
+      `,
+    )
+    .join("");
+}
+
+function renderSupportList(items: readonly string[]) {
+  const iconForSupportItem = (item: string, index: number): IconName => {
+    const normalized = item.toLowerCase();
+    if (normalized.includes("telephone") || normalized.includes("whatsapp")) return "headset";
+    if (normalized.includes("troubleshooting") || normalized.includes("remote")) return "settings";
+    if (normalized.includes("warranty")) return "shield";
+    if (normalized.includes("training") || normalized.includes("guidance")) return "book";
+    if (normalized.includes("spare parts")) return "package";
+    if (normalized.includes("maintenance")) return "wrench";
+    if (normalized.includes("site revisit")) return "clipboard";
+    return index === 0 ? "headset" : "check";
+  };
+
+  return items
+    .map(
+      (item, index) => `
+        <div class="support-row">
+          <div class="support-icon">${iconSvg(iconForSupportItem(item, index))}</div>
+          <div class="support-divider"></div>
+          <div class="support-text">${escapeHtml(item)}</div>
         </div>
       `,
     )
@@ -1011,6 +1046,43 @@ export function buildQuotationHtml(
     grid-template-columns: 1fr 1fr;
     gap: 2.2mm;
   }
+  .support-list {
+    display: grid;
+    gap: 0;
+  }
+  .support-row {
+    display: grid;
+    grid-template-columns: 16mm 1px 1fr;
+    gap: 3mm;
+    align-items: center;
+    padding: 2.4mm 0;
+    border-top: 1px solid #efe1e1;
+  }
+  .support-row:first-child { border-top: 0; }
+  .support-icon {
+    width: 13mm;
+    height: 13mm;
+    margin-left: 1mm;
+    border-radius: 10px;
+    background: linear-gradient(180deg, #fff8f8, #fff1f1);
+    color: #9b1111;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #f1dede;
+  }
+  .support-divider {
+    width: 1px;
+    background: linear-gradient(180deg, rgba(155,17,17,.18), rgba(183,28,28,.95), rgba(155,17,17,.18));
+    height: 100%;
+    min-height: 11mm;
+  }
+  .support-text {
+    color: #202833;
+    font-size: 8.9px;
+    line-height: 1.28;
+    font-weight: 700;
+  }
   .notes-box {
     display: grid;
     grid-template-columns: 10mm 1fr;
@@ -1479,7 +1551,9 @@ export function buildQuotationHtml(
             ["location", "Office", data.company.office],
           ])}
           <div style="margin-top:2.5mm;">
-            ${renderIconList(data.afterSalesSupport, "headset")}
+            <div class="support-list">
+              ${renderSupportList(data.afterSalesSupport)}
+            </div>
           </div>
         </div>
       </div>
