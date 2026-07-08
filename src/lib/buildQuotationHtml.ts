@@ -309,6 +309,18 @@ export function buildQuotationHtml(
     ? data.similarProjectLabel || "View a similar installation"
     : "View our recent projects";
   const featuredProjectQr = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(featuredProjectUrl)}`;
+  const feeStateNotes = [
+    data.deliveryMode === "INCLUDED"
+      ? "Delivery included."
+      : data.deliveryMode === "CHARGED"
+        ? "Delivery charged separately."
+        : "Delivery not included.",
+    data.installationMode === "INCLUDED"
+      ? "Installation included."
+      : data.installationMode === "CHARGED"
+        ? "Installation charged separately."
+        : "Installation not included.",
+  ].join(" ");
 
   return `<!doctype html>
 <html lang="en">
@@ -339,6 +351,7 @@ export function buildQuotationHtml(
     display: flex;
     flex-direction: column;
     gap: 2.2mm;
+    min-height: 285mm;
   }
   .top-strip {
     border-top: 2px solid #9b1111;
@@ -1078,6 +1091,10 @@ export function buildQuotationHtml(
     gap: 3mm;
     align-items: center;
   }
+  .page-spacer {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
   .footer-brand-copy {
     display: grid;
     grid-template-columns: 10mm 1fr;
@@ -1258,8 +1275,8 @@ export function buildQuotationHtml(
           <div class="cost-note">
             ${
               data.items.length === 1 && data.installationTotal <= 0 && data.transportTotal <= 0
-                ? "This quotation covers the selected item value only. Optional delivery, transport, or installation can be added separately if required."
-                : "Project value reflects the quoted equipment together with any listed delivery, installation, and related project costs."
+                ? `This quotation covers the selected item value only. ${feeStateNotes}`
+                : `Project value reflects the quoted equipment together with any listed delivery, installation, and related project costs. ${feeStateNotes}`
             }
           </div>
         </div>
@@ -1274,6 +1291,8 @@ export function buildQuotationHtml(
         </div>
       </div>
     </div>
+
+    <div class="page-spacer"></div>
 
     <div class="footer-brand">
       <div class="footer-brand-copy">
@@ -1491,6 +1510,8 @@ export function buildQuotationHtml(
         </div>
       </div>
     </div>
+
+    <div class="page-spacer"></div>
 
     <div class="footer-brand">
       <div class="footer-brand-copy">

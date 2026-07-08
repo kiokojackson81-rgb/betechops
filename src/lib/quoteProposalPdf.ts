@@ -77,7 +77,13 @@ function mapToCompactInput(input: QuotePdfInput): CompactQuotePdfInput {
       description: item.description || null,
       quantity: item.quantity,
       unitPrice: item.unitPrice,
-      warrantyText: null,
+      warrantyText:
+        item.warranty ||
+        (typeof item.warrantyPeriod === "number" && item.warrantyPeriod > 0
+          ? `${item.warrantyPeriod} ${item.warrantyUnit === "MONTHS" ? "Months" : "Years"}`
+          : null) ||
+        item.defaultWarranty ||
+        null,
     })),
     customerNotes: input.quoteMessage || null,
     similarProjectUrl: firstUrl(
