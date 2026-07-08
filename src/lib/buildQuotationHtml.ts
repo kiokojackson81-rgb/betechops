@@ -837,6 +837,13 @@ export function buildQuotationHtml(
     text-transform: uppercase;
     letter-spacing: .04em;
   }
+  .qr-caption {
+    color: #2b2b2b;
+    font-size: 8.4px;
+    line-height: 1.35;
+    text-align: center;
+    padding: 0 .8mm;
+  }
   .qr-box {
     padding: 2.2mm;
     border-radius: 12px;
@@ -1398,10 +1405,10 @@ export function buildQuotationHtml(
               <div class="link-circle">${iconSvg("play")}</div>
               <div class="link-divider"></div>
               <div>
-                <div class="link-title">${escapeHtml(featuredProjectLabel)}</div>
-                <div class="link-subtitle">Paste TikTok, YouTube, or website project link here.</div>
+                <div class="link-title">View Our Recent Solar Projects</div>
+                <div class="link-subtitle">See real installations completed by Betech Solar Solutions across Kenya.</div>
+                <div class="link-note">Scan the QR code or click the link below to view this project and more completed installations.</div>
                 <div class="link-url">${iconSvg("globe")}<span>${escapeHtml(featuredProjectUrl)}</span></div>
-                <div class="link-note">Scan the QR code to open the project link directly on your phone.</div>
               </div>
             </div>
             <div class="link-row">
@@ -1431,7 +1438,8 @@ export function buildQuotationHtml(
           </div>
 
           <div class="qr-card">
-            <div class="qr-head">${iconSvg("mobile")}<span>Scan To View Project</span></div>
+            <div class="qr-head">${iconSvg("mobile")}<span>See This System Installed</span></div>
+            <div class="qr-caption">Scan the QR code to view this project and more completed installations.</div>
             <div class="qr-box">
               <img src="${featuredProjectQr}" alt="Project QR code" />
             </div>
