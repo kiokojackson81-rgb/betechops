@@ -396,6 +396,122 @@ function renderTermsCards(terms: readonly string[]) {
     .join("");
 }
 
+type QuotationLayoutBlock = {
+  id: string;
+  priority: number;
+  estimatedHeight: number;
+  minimumAllowedHeight: number;
+  compactHeight: number;
+  canSplit: boolean;
+  html: string;
+};
+
+type PackedQuotationBlock = {
+  block: QuotationLayoutBlock;
+  compact: boolean;
+};
+
+const QUOTATION_PAGE_HEIGHT = 285;
+const QUOTATION_FOOTER_ALLOWANCE = 12;
+const QUOTATION_PAGE_USABLE_HEIGHT = QUOTATION_PAGE_HEIGHT - QUOTATION_FOOTER_ALLOWANCE;
+const QUOTATION_COMPACT_TOLERANCE = 10;
+
+function estimateTextLineCount(value: string | null | undefined, charsPerLine: number) {
+  const normalized = String(value || "").trim();
+  if (!normalized) return 0;
+  return Math.max(1, Math.ceil(normalized.length / Math.max(8, charsPerLine)));
+}
+
+function estimateBoqHeight(items: ReturnType<typeof normalizeQuotePdfData>["items"]) {
+  const headerHeight = 19;
+  const sectionHeadingHeight = 18;
+  const rowHeight = items.reduce((sum, item) => {
+    const titleLines = estimateTextLineCount(item.name, 36);
+    const subtitleLines = estimateTextLineCount(item.description, 52);
+    const warrantyLines = estimateTextLineCount(item.warrantyText, 16);
+    return sum + 11 + (titleLines - 1) * 3.2 + subtitleLines * 2.4 + Math.max(0, warrantyLines - 1) * 2.2;
+  }, 0);
+  return sectionHeadingHeight + headerHeight + rowHeight + 6;
+}
+
+function estimateHeroHeight(title: string) {
+  return 66 + Math.max(0, estimateTextLineCount(title, 28) - 2) * 8;
+}
+
+function estimateInfoGridHeight(data: ReturnType<typeof normalizeQuotePdfData>) {
+  const rowCounts = [
+    [data.customer.name, data.customer.phone, data.customer.email, data.customer.location],
+    [
+      data.preparedBy.team,
+      data.preparedBy.leadTechnicianName,
+      data.preparedBy.leadTechnicianPhone,
+      data.preparedBy.salesDesk,
+    ],
+    [data.company.name, data.company.registrationNo, data.company.kraPin, data.company.office],
+  ];
+
+  const cardHeights = rowCounts.map((rows) => {
+    const rowHeight = rows.reduce((sum, value) => sum + 9 + Math.max(0, estimateTextLineCount(value, 24) - 1) * 3.8, 0);
+    return 20 + rowHeight;
+  });
+
+  return Math.max(...cardHeights) + 8;
+}
+
+function packQuotationBlocks(
+  blocks: QuotationLayoutBlock[],
+  initialRemainingHeight: number,
+) {
+  const pages: PackedQuotationBlock[][] = [[]];
+  const remainingHeights = [Math.max(0, initialRemainingHeight)];
+
+  for (const block of [...blocks].sort((left, right) => left.priority - right.priority)) {
+    let pageIndex = pages.length - 1;
+    let remainingHeight = remainingHeights[pageIndex];
+
+    if (block.estimatedHeight <= remainingHeight) {
+      pages[pageIndex].push({ block, compact: false });
+      remainingHeights[pageIndex] -= block.estimatedHeight;
+      continue;
+    }
+
+    const compactOverrun = block.estimatedHeight - remainingHeight;
+    if (compactOverrun > 0 && compactOverrun <= QUOTATION_COMPACT_TOLERANCE && block.compactHeight <= remainingHeight) {
+      pages[pageIndex].push({ block, compact: true });
+      remainingHeights[pageIndex] -= block.compactHeight;
+      continue;
+    }
+
+    pages.push([]);
+    remainingHeights.push(QUOTATION_PAGE_USABLE_HEIGHT);
+    pageIndex = pages.length - 1;
+    remainingHeight = remainingHeights[pageIndex];
+
+    const useCompactOnNewPage = block.compactHeight < block.estimatedHeight && block.compactHeight <= remainingHeight;
+    pages[pageIndex].push({ block, compact: useCompactOnNewPage });
+    remainingHeights[pageIndex] -= useCompactOnNewPage ? block.compactHeight : block.estimatedHeight;
+  }
+
+  return pages;
+}
+
+function renderPackedQuotationBlocks(blocks: PackedQuotationBlock[]) {
+  if (!blocks.length) return "";
+  return `
+    <div class="page-block-stack">
+      ${blocks
+        .map(
+          ({ block, compact }) => `
+            <div class="packed-block ${compact ? "packed-block-compact" : ""}" data-block-id="${escapeHtml(block.id)}">
+              ${block.html}
+            </div>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
 export function buildQuotationHtml(
   input: QuotePdfInput,
   assets: {
@@ -425,13 +541,317 @@ export function buildQuotationHtml(
       ? "Delivery included."
       : data.deliveryMode === "CHARGED"
         ? "Delivery charged separately."
-        : "Delivery not included.",
+      : "Delivery not included.",
     data.installationMode === "INCLUDED"
       ? "Installation included."
       : data.installationMode === "CHARGED"
         ? "Installation charged separately."
         : "Installation not included.",
   ].join(" ");
+  const initialPageUsedHeight =
+    estimateHeroHeight(data.title) + estimateInfoGridHeight(data) + estimateBoqHeight(data.items) + 14;
+  const initialRemainingHeight = Math.max(0, QUOTATION_PAGE_USABLE_HEIGHT - initialPageUsedHeight);
+
+  const postBoqBlocks: QuotationLayoutBlock[] = [
+    {
+      id: "cost-warranty",
+      priority: 10,
+      estimatedHeight: 86,
+      compactHeight: 76,
+      minimumAllowedHeight: 72,
+      canSplit: false,
+      html: `
+        <div class="bottom-grid">
+          <div class="section-card">
+            <div class="section-head">
+              <div class="section-head-icon">${iconSvg("wallet")}</div>
+              <div class="section-head-title">Cost Breakdown</div>
+            </div>
+            <div class="section-body">
+              ${renderCostRows(costRows)}
+              <div class="cost-note">
+                ${
+                  data.items.length === 1 && data.installationTotal <= 0 && data.transportTotal <= 0
+                    ? `This quotation covers the selected item value only. ${feeStateNotes}`
+                    : `Project value reflects the quoted equipment together with any listed delivery, installation, and related project costs. ${feeStateNotes}`
+                }
+              </div>
+            </div>
+          </div>
+          <div class="section-card">
+            <div class="section-head">
+              <div class="section-head-icon">${iconSvg("shield")}</div>
+              <div class="section-head-title">Warranty Notes</div>
+            </div>
+            <div class="section-body">
+              ${renderWarrantyNotes(data.warrantyNotes)}
+            </div>
+          </div>
+        </div>
+      `,
+    },
+    {
+      id: "useful-links",
+      priority: 20,
+      estimatedHeight: 108 + Math.max(0, estimateTextLineCount(featuredProjectUrl, 56) - 1) * 3,
+      compactHeight: 96 + Math.max(0, estimateTextLineCount(featuredProjectUrl, 56) - 1) * 2.2,
+      minimumAllowedHeight: 90,
+      canSplit: false,
+      html: `
+        <div class="full-card">
+          <div class="section-head">
+            <div class="section-head-icon">${iconSvg("globe")}</div>
+            <div class="section-head-title">Useful Links</div>
+          </div>
+          <div class="section-body">
+            <div class="links-layout">
+              <div class="links-list">
+                <div class="link-row">
+                  <div class="link-circle">${iconSvg("play")}</div>
+                  <div class="link-divider"></div>
+                  <div>
+                    <div class="link-title">View Our Recent Solar Projects</div>
+                    <div class="link-subtitle">See real installations completed by Betech Solar Solutions across Kenya.</div>
+                    <div class="link-note">Scan the QR code or click the link below to view this project and more completed installations.</div>
+                    <div class="link-url">${iconSvg("globe")}<span>${escapeHtml(featuredProjectUrl)}</span></div>
+                  </div>
+                </div>
+                <div class="link-row">
+                  <div class="link-circle">${iconSvg("package")}</div>
+                  <div class="link-divider"></div>
+                  <div>
+                    <div class="link-title">View All Our Products</div>
+                    <div class="link-url">${iconSvg("globe")}<span>${escapeHtml(data.company.website)}</span></div>
+                  </div>
+                </div>
+                <div class="link-row">
+                  <div class="link-circle">${iconSvg("mail")}</div>
+                  <div class="link-divider"></div>
+                  <div>
+                    <div class="link-title">Email Us</div>
+                    <div class="link-subtitle">${escapeHtml(data.company.email)}</div>
+                  </div>
+                </div>
+                <div class="link-row">
+                  <div class="link-circle">${iconSvg("headset")}</div>
+                  <div class="link-divider"></div>
+                  <div>
+                    <div class="link-title">Technical Sales</div>
+                    <div class="link-subtitle">jackson@betech.co.ke</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="qr-card">
+                <div class="qr-head">${iconSvg("mobile")}<span>See This System Installed</span></div>
+                <div class="qr-caption">Scan the QR code to view this project and more completed installations.</div>
+                <div class="qr-box">
+                  <img src="${featuredProjectQr}" alt="Project QR code" />
+                </div>
+                <div class="qr-icons">
+                  <div class="qr-chip">
+                    <div class="qr-chip-icon">${iconSvg("play")}</div>
+                    <div>TikTok</div>
+                  </div>
+                  <div class="qr-chip">
+                    <div class="qr-chip-icon">${iconSvg("play")}</div>
+                    <div>YouTube</div>
+                  </div>
+                  <div class="qr-chip">
+                    <div class="qr-chip-icon">${iconSvg("globe")}</div>
+                    <div>Website</div>
+                  </div>
+                  <div class="qr-chip">
+                    <div class="qr-chip-icon">${iconSvg("mobile")}</div>
+                    <div>Mobile</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `,
+    },
+    {
+      id: "glance-payment-approval",
+      priority: 30,
+      estimatedHeight: 92,
+      compactHeight: 82,
+      minimumAllowedHeight: 76,
+      canSplit: false,
+      html: `
+        <div class="three-col-grid">
+          <div class="section-card">
+            <div class="section-head">
+              <div class="section-head-icon">${iconSvg("calendar")}</div>
+              <div class="section-head-title">At A Glance</div>
+            </div>
+            <div class="section-body">
+              <div class="glance-row">
+                <div class="glance-icon">${iconSvg("calendar")}</div>
+                <div class="glance-divider"></div>
+                <div class="glance-label">Quotation Date</div>
+                <div class="glance-value">${escapeHtml(data.quotationDateLabel)}</div>
+              </div>
+              <div class="glance-row">
+                <div class="glance-icon">${iconSvg("wallet")}</div>
+                <div class="glance-divider"></div>
+                <div class="glance-label">Payment Terms</div>
+                <div class="glance-value">${escapeHtml(data.paymentTermsLabel)}</div>
+              </div>
+              <div class="glance-row">
+                <div class="glance-icon">${iconSvg("truck")}</div>
+                <div class="glance-divider"></div>
+                <div class="glance-label">Delivery</div>
+                <div class="glance-value">${escapeHtml(data.deliveryText)}</div>
+              </div>
+              <div class="glance-row">
+                <div class="glance-icon">${iconSvg("wrench")}</div>
+                <div class="glance-divider"></div>
+                <div class="glance-label">Installation</div>
+                <div class="glance-value">${escapeHtml(data.installationText)}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-card">
+            <div class="section-head">
+              <div class="section-head-icon">${iconSvg("wallet")}</div>
+              <div class="section-head-title">Payment Terms</div>
+            </div>
+            <div class="section-body">
+              <div class="payment-option">
+                <div class="payment-option-icon">${iconSvg("wallet")}</div>
+                <div class="payment-option-text">Full payment before installation.</div>
+              </div>
+              <div class="payment-option">
+                <div class="payment-option-icon">30%</div>
+                <div class="payment-option-text">30% deposit with balance after installation.</div>
+              </div>
+              <div class="payment-option">
+                <div class="payment-option-icon">${iconSvg("shield")}</div>
+                <div class="payment-option-text">Full payment after installation where approved by management.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-card">
+            <div class="section-head">
+              <div class="section-head-icon">${iconSvg("check")}</div>
+              <div class="section-head-title">Approval &amp; Next Steps</div>
+            </div>
+            <div class="section-body">
+              ${renderApprovalTimeline()}
+            </div>
+          </div>
+        </div>
+      `,
+    },
+    {
+      id: "payment-methods",
+      priority: 40,
+      estimatedHeight: 52,
+      compactHeight: 46,
+      minimumAllowedHeight: 42,
+      canSplit: false,
+      html: `
+        <div class="section-card">
+          <div class="section-head">
+            <div class="section-head-icon">${iconSvg("briefcase")}</div>
+            <div class="section-head-title">Payment Methods</div>
+          </div>
+          <div class="section-body">
+            <div class="pay-grid">
+              ${renderPaymentMethods(data.paymentMethods)}
+            </div>
+          </div>
+        </div>
+      `,
+    },
+    {
+      id: "contact-information",
+      priority: 50,
+      estimatedHeight: 50,
+      compactHeight: 44,
+      minimumAllowedHeight: 40,
+      canSplit: false,
+      html: `
+        <div class="section-card">
+          <div class="section-head">
+            <div class="section-head-icon">${iconSvg("headset")}</div>
+            <div class="section-head-title">Contact Information</div>
+          </div>
+          <div class="section-body">
+            ${renderContactInformationGrid([
+              ["phone", "Sales Desk", data.company.salesDesk],
+              ["headset", "Technical Support", "0705663175"],
+              ["mail", "Email", data.company.email],
+              ["globe", "Website", data.company.website],
+              ["location", "Office", data.company.office],
+            ])}
+          </div>
+        </div>
+      `,
+    },
+    {
+      id: "support-notes",
+      priority: 60,
+      estimatedHeight: 96,
+      compactHeight: 86,
+      minimumAllowedHeight: 80,
+      canSplit: false,
+      html: `
+        <div class="support-grid">
+          <div class="section-card">
+            <div class="section-head">
+              <div class="section-head-icon">${iconSvg("headset")}</div>
+              <div class="section-head-title">After-Sales Support</div>
+            </div>
+            <div class="section-body">
+              ${renderSupportList(data.afterSalesSupport)}
+            </div>
+          </div>
+
+          <div class="section-card">
+            <div class="section-head">
+              <div class="section-head-icon">${iconSvg("file")}</div>
+              <div class="section-head-title">Customer Notes</div>
+            </div>
+            <div class="section-body">
+              <div class="notes-box">
+                <div class="notes-icon">${iconSvg("edit")}</div>
+                <div class="notes-text">${escapeHtml(data.customerNotes || "This quotation covers the supply, delivery, installation, testing and commissioning of a solar home system solution based on your stated requirements.")}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `,
+    },
+    {
+      id: "terms-and-conditions",
+      priority: 70,
+      estimatedHeight: 74,
+      compactHeight: 66,
+      minimumAllowedHeight: 60,
+      canSplit: false,
+      html: `
+        <div class="full-card">
+          <div class="section-head">
+            <div class="section-head-icon">${iconSvg("shield")}</div>
+            <div class="section-head-title">Terms &amp; Conditions</div>
+          </div>
+          <div class="section-body">
+            <div class="terms-stack">
+              ${renderTermsCards(data.termsAndConditions)}
+            </div>
+          </div>
+        </div>
+      `,
+    },
+  ];
+  const packedBlockPages = packQuotationBlocks(postBoqBlocks, initialRemainingHeight);
+  const firstPageBlocks = packedBlockPages[0] || [];
+  const laterPageBlocks = packedBlockPages.slice(1);
 
   return `<!doctype html>
 <html lang="en">
@@ -463,6 +883,50 @@ export function buildQuotationHtml(
     flex-direction: column;
     gap: 2.2mm;
     min-height: 285mm;
+  }
+  .page-block-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 2.2mm;
+  }
+  .packed-block {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .packed-block-compact .section-head {
+    padding-top: 1.7mm;
+    padding-bottom: 1.7mm;
+  }
+  .packed-block-compact .section-body {
+    padding-top: 1.9mm;
+    padding-bottom: 1.9mm;
+  }
+  .packed-block-compact .links-layout,
+  .packed-block-compact .three-col-grid,
+  .packed-block-compact .support-grid,
+  .packed-block-compact .pay-grid,
+  .packed-block-compact .terms-stack,
+  .packed-block-compact .support-columns,
+  .packed-block-compact .page-block-stack {
+    gap: 1.5mm;
+  }
+  .packed-block-compact .link-row,
+  .packed-block-compact .payment-option,
+  .packed-block-compact .glance-row,
+  .packed-block-compact .support-row,
+  .packed-block-compact .contact-item,
+  .packed-block-compact .terms-card,
+  .packed-block-compact .cost-row {
+    padding-top: 1.5mm;
+    padding-bottom: 1.5mm;
+  }
+  .packed-block-compact .qr-box img {
+    width: 38mm;
+    height: 38mm;
+  }
+  .packed-block-compact .qr-head {
+    padding-top: 1.7mm;
+    padding-bottom: 1.7mm;
   }
   .top-strip {
     padding-top: 1.6mm;
@@ -1489,245 +1953,20 @@ export function buildQuotationHtml(
       </div>
     </div>
 
-    <div class="bottom-grid">
-      <div class="section-card">
-        <div class="section-head">
-          <div class="section-head-icon">${iconSvg("wallet")}</div>
-          <div class="section-head-title">Cost Breakdown</div>
-        </div>
-        <div class="section-body">
-          ${renderCostRows(costRows)}
-          <div class="cost-note">
-            ${
-              data.items.length === 1 && data.installationTotal <= 0 && data.transportTotal <= 0
-                ? `This quotation covers the selected item value only. ${feeStateNotes}`
-                : `Project value reflects the quoted equipment together with any listed delivery, installation, and related project costs. ${feeStateNotes}`
-            }
-          </div>
-        </div>
-      </div>
-      <div class="section-card">
-        <div class="section-head">
-          <div class="section-head-icon">${iconSvg("shield")}</div>
-          <div class="section-head-title">Warranty Notes</div>
-        </div>
-        <div class="section-body">
-          ${renderWarrantyNotes(data.warrantyNotes)}
-        </div>
-      </div>
-    </div>
+    ${renderPackedQuotationBlocks(firstPageBlocks)}
 
   </div>
 </section>
-
-<section class="sheet page-break">
+${laterPageBlocks
+  .map(
+    (pageBlocks) => `
+<section class="sheet">
   <div class="page top-strip">
-    <div class="full-card">
-      <div class="section-head">
-        <div class="section-head-icon">${iconSvg("globe")}</div>
-        <div class="section-head-title">Useful Links</div>
-      </div>
-      <div class="section-body">
-        <div class="links-layout">
-          <div class="links-list">
-            <div class="link-row">
-              <div class="link-circle">${iconSvg("play")}</div>
-              <div class="link-divider"></div>
-              <div>
-                <div class="link-title">View Our Recent Solar Projects</div>
-                <div class="link-subtitle">See real installations completed by Betech Solar Solutions across Kenya.</div>
-                <div class="link-note">Scan the QR code or click the link below to view this project and more completed installations.</div>
-                <div class="link-url">${iconSvg("globe")}<span>${escapeHtml(featuredProjectUrl)}</span></div>
-              </div>
-            </div>
-            <div class="link-row">
-              <div class="link-circle">${iconSvg("package")}</div>
-              <div class="link-divider"></div>
-              <div>
-                <div class="link-title">View All Our Products</div>
-                <div class="link-url">${iconSvg("globe")}<span>${escapeHtml(data.company.website)}</span></div>
-              </div>
-            </div>
-            <div class="link-row">
-              <div class="link-circle">${iconSvg("mail")}</div>
-              <div class="link-divider"></div>
-              <div>
-                <div class="link-title">Email Us</div>
-                <div class="link-subtitle">${escapeHtml(data.company.email)}</div>
-              </div>
-            </div>
-            <div class="link-row">
-              <div class="link-circle">${iconSvg("headset")}</div>
-              <div class="link-divider"></div>
-              <div>
-                <div class="link-title">Technical Sales</div>
-                <div class="link-subtitle">jackson@betech.co.ke</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="qr-card">
-            <div class="qr-head">${iconSvg("mobile")}<span>See This System Installed</span></div>
-            <div class="qr-caption">Scan the QR code to view this project and more completed installations.</div>
-            <div class="qr-box">
-              <img src="${featuredProjectQr}" alt="Project QR code" />
-            </div>
-            <div class="qr-icons">
-              <div class="qr-chip">
-                <div class="qr-chip-icon">${iconSvg("play")}</div>
-                <div>TikTok</div>
-              </div>
-              <div class="qr-chip">
-                <div class="qr-chip-icon">${iconSvg("play")}</div>
-                <div>YouTube</div>
-              </div>
-              <div class="qr-chip">
-                <div class="qr-chip-icon">${iconSvg("globe")}</div>
-                <div>Website</div>
-              </div>
-              <div class="qr-chip">
-                <div class="qr-chip-icon">${iconSvg("mobile")}</div>
-                <div>Mobile</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="three-col-grid">
-      <div class="section-card">
-        <div class="section-head">
-          <div class="section-head-icon">${iconSvg("calendar")}</div>
-          <div class="section-head-title">At A Glance</div>
-        </div>
-        <div class="section-body">
-          <div class="glance-row">
-            <div class="glance-icon">${iconSvg("calendar")}</div>
-            <div class="glance-divider"></div>
-            <div class="glance-label">Quotation Date</div>
-            <div class="glance-value">${escapeHtml(data.quotationDateLabel)}</div>
-          </div>
-          <div class="glance-row">
-            <div class="glance-icon">${iconSvg("wallet")}</div>
-            <div class="glance-divider"></div>
-            <div class="glance-label">Payment Terms</div>
-            <div class="glance-value">${escapeHtml(data.paymentTermsLabel)}</div>
-          </div>
-          <div class="glance-row">
-            <div class="glance-icon">${iconSvg("truck")}</div>
-            <div class="glance-divider"></div>
-            <div class="glance-label">Delivery</div>
-            <div class="glance-value">${escapeHtml(data.deliveryText)}</div>
-          </div>
-          <div class="glance-row">
-            <div class="glance-icon">${iconSvg("wrench")}</div>
-            <div class="glance-divider"></div>
-            <div class="glance-label">Installation</div>
-            <div class="glance-value">${escapeHtml(data.installationText)}</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="section-card">
-        <div class="section-head">
-          <div class="section-head-icon">${iconSvg("wallet")}</div>
-          <div class="section-head-title">Payment Terms</div>
-        </div>
-        <div class="section-body">
-          <div class="payment-option">
-            <div class="payment-option-icon">${iconSvg("wallet")}</div>
-            <div class="payment-option-text">Full payment before installation.</div>
-          </div>
-          <div class="payment-option">
-            <div class="payment-option-icon">30%</div>
-            <div class="payment-option-text">30% deposit with balance after installation.</div>
-          </div>
-          <div class="payment-option">
-            <div class="payment-option-icon">${iconSvg("shield")}</div>
-            <div class="payment-option-text">Full payment after installation where approved by management.</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="section-card">
-        <div class="section-head">
-          <div class="section-head-icon">${iconSvg("check")}</div>
-          <div class="section-head-title">Approval &amp; Next Steps</div>
-        </div>
-        <div class="section-body">
-          ${renderApprovalTimeline()}
-        </div>
-      </div>
-    </div>
-
-    <div class="section-card">
-      <div class="section-head">
-        <div class="section-head-icon">${iconSvg("briefcase")}</div>
-        <div class="section-head-title">Payment Methods</div>
-      </div>
-      <div class="section-body">
-        <div class="pay-grid">
-          ${renderPaymentMethods(data.paymentMethods)}
-        </div>
-      </div>
-    </div>
-
-    <div class="section-card">
-      <div class="section-head">
-        <div class="section-head-icon">${iconSvg("headset")}</div>
-        <div class="section-head-title">Contact Information</div>
-      </div>
-      <div class="section-body">
-        ${renderContactInformationGrid([
-          ["phone", "Sales Desk", data.company.salesDesk],
-          ["headset", "Technical Support", "0705663175"],
-          ["mail", "Email", data.company.email],
-          ["globe", "Website", data.company.website],
-          ["location", "Office", data.company.office],
-        ])}
-      </div>
-    </div>
-
-    <div class="support-grid">
-      <div class="section-card">
-        <div class="section-head">
-          <div class="section-head-icon">${iconSvg("headset")}</div>
-          <div class="section-head-title">After-Sales Support</div>
-        </div>
-        <div class="section-body">
-          ${renderSupportList(data.afterSalesSupport)}
-        </div>
-      </div>
-
-      <div class="section-card">
-        <div class="section-head">
-          <div class="section-head-icon">${iconSvg("file")}</div>
-          <div class="section-head-title">Customer Notes</div>
-        </div>
-        <div class="section-body">
-          <div class="notes-box">
-            <div class="notes-icon">${iconSvg("edit")}</div>
-            <div class="notes-text">${escapeHtml(data.customerNotes || "This quotation covers the supply, delivery, installation, testing and commissioning of a solar home system solution based on your stated requirements.")}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="full-card">
-      <div class="section-head">
-        <div class="section-head-icon">${iconSvg("shield")}</div>
-        <div class="section-head-title">Terms &amp; Conditions</div>
-      </div>
-      <div class="section-body">
-        <div class="terms-stack">
-          ${renderTermsCards(data.termsAndConditions)}
-        </div>
-      </div>
-    </div>
-
+    ${renderPackedQuotationBlocks(pageBlocks)}
   </div>
-</section>
+</section>`,
+  )
+  .join("")}
 </body>
 </html>`;
 }
