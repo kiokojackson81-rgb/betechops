@@ -4,6 +4,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
+  QUOTE_FEE_MODES,
   quoteLineItemSchema,
   quotePaymentMethodSchema,
   quotePaymentTermsSchema,
@@ -426,6 +427,8 @@ export const quoteRequestResponseSchema = z.object({
   proposalVisibility: quoteProposalVisibilitySchema.optional(),
   paymentMethod: quotePaymentMethodSchema.optional(),
   paymentTerms: quotePaymentTermsSchema.optional(),
+  deliveryMode: z.enum(QUOTE_FEE_MODES).optional(),
+  installationMode: z.enum(QUOTE_FEE_MODES).optional(),
   depositAmount: z.preprocess(
     (value) => (value === "" || value === null || value === undefined ? undefined : Number(value)),
     z.number().nonnegative().max(1000000000).optional(),
@@ -520,6 +523,8 @@ export const manualQuotationCreateSchema = z.object({
   proposalVisibility: quoteProposalVisibilitySchema.optional(),
   paymentMethod: quotePaymentMethodSchema.optional(),
   paymentTerms: quotePaymentTermsSchema.optional(),
+  deliveryMode: z.enum(QUOTE_FEE_MODES).optional(),
+  installationMode: z.enum(QUOTE_FEE_MODES).optional(),
   depositAmount: z.preprocess(
     (value) => (value === "" || value === null || value === undefined ? undefined : Number(value)),
     z.number().nonnegative().max(1000000000).optional(),
@@ -1511,6 +1516,8 @@ export async function updateQuoteRequestResponse(
     ),
     paymentMethod: input.paymentMethod || null,
     paymentTerms: paymentBreakdown.paymentTerms,
+    deliveryMode: input.deliveryMode || "NOT_INCLUDED",
+    installationMode: input.installationMode || "NOT_INCLUDED",
     depositAmount: paymentBreakdown.depositAmount,
     balanceAmount: paymentBreakdown.balanceAmount,
   } satisfies Record<string, Prisma.JsonValue>;
@@ -1788,6 +1795,8 @@ export async function createManualQuotation(
       ),
       paymentMethod: input.paymentMethod || null,
       paymentTerms: paymentBreakdown.paymentTerms,
+      deliveryMode: input.deliveryMode || "NOT_INCLUDED",
+      installationMode: input.installationMode || "NOT_INCLUDED",
       depositAmount: paymentBreakdown.depositAmount,
       balanceAmount: paymentBreakdown.balanceAmount,
     },

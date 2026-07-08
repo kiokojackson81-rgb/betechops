@@ -69,6 +69,8 @@ function normalizeCreateBody(body: unknown) {
 
   normalized.depositAmount = normalizeNumber(raw.depositAmount);
   normalized.balanceAmount = normalizeNumber(raw.balanceAmount);
+  normalized.deliveryMode = normalizeText(raw.deliveryMode);
+  normalized.installationMode = normalizeText(raw.installationMode);
 
   if (Array.isArray(raw.quoteItems)) {
     normalized.quoteItems = raw.quoteItems
@@ -84,6 +86,8 @@ function normalizeCreateBody(body: unknown) {
           unitPrice: unitPrice && unitPrice >= 0 ? unitPrice : 0,
           defaultWarranty: normalizeText(rawItem.defaultWarranty, 4000),
           warranty: normalizeText(rawItem.warranty, 4000),
+          warrantyPeriod: normalizeNumber(rawItem.warrantyPeriod),
+          warrantyUnit: normalizeText(rawItem.warrantyUnit),
           warrantyNotes: normalizeText(rawItem.warrantyNotes, 4000),
           warrantySource: normalizeText(rawItem.warrantySource),
         };

@@ -29,6 +29,7 @@ import type {
 } from "@/lib/quoteRequests";
 import {
   formatQuoteCurrency,
+  QUOTE_FEE_MODES,
   getQuotePaymentMethodLabel,
   getQuotePaymentTermsLabel,
   parseStoredQuoteProposal,
@@ -38,8 +39,10 @@ import {
   QUOTE_PAYMENT_TERMS,
   type QuotePaymentMethod,
   type QuotePaymentTerms,
+  type QuoteFeeMode,
   type QuoteWarrantyMode,
   type QuoteWarrantySource,
+  type QuoteWarrantyUnit,
 } from "@/lib/quoteProposal";
 import {
   buildItemDrivenPowerSummary,
@@ -187,6 +190,8 @@ type QuoteItemDraft = {
   unitPrice: string;
   defaultWarranty: string;
   warranty: string;
+  warrantyPeriod: string;
+  warrantyUnit: QuoteWarrantyUnit;
   warrantyNotes: string;
   warrantySource: QuoteWarrantySource;
 };
@@ -217,6 +222,10 @@ type QuoteDeskFormState = {
   proposalVisibility: QuoteSectionVisibility;
   paymentMethod: QuotePaymentMethod | "";
   paymentTerms: QuotePaymentTerms;
+  deliveryMode: QuoteFeeMode;
+  installationMode: QuoteFeeMode;
+  deliveryFee: string;
+  installationFee: string;
   depositAmount: string;
   balanceAmount: string;
   followUpNotes: string;
@@ -276,6 +285,10 @@ type CreateQuotationDraft = {
   proposalVisibility: QuoteSectionVisibility;
   paymentMethod: QuotePaymentMethod | "";
   paymentTerms: QuotePaymentTerms;
+  deliveryMode: QuoteFeeMode;
+  installationMode: QuoteFeeMode;
+  deliveryFee: string;
+  installationFee: string;
   depositAmount: string;
   balanceAmount: string;
   followUpNotes: string;
@@ -289,18 +302,11 @@ function createEmptyQuoteItem(): QuoteItemDraft {
     unitPrice: "",
     defaultWarranty: "",
     warranty: "",
+    warrantyPeriod: "",
+    warrantyUnit: "YEARS",
     warrantyNotes: "",
     warrantySource: "CUSTOM",
   };
-}
-
-function createFeeQuoteItem(itemName: string): QuoteItemDraft {
-  return hydrateQuoteItemDraft({
-    itemName,
-    quantity: "1",
-    unitPrice: "0",
-    warrantySource: "CUSTOM",
-  });
 }
 
 function createProposalSectionDraft(projectType: QuoteProjectType) {
@@ -339,6 +345,10 @@ function createDefaultFormState(status: QuoteRequestStatus): QuoteDeskFormState 
     ...defaults,
     paymentMethod: "",
     paymentTerms: "FULL_PAYMENT",
+    deliveryMode: "NOT_INCLUDED",
+    installationMode: "NOT_INCLUDED",
+    deliveryFee: "",
+    installationFee: "",
     depositAmount: "",
     balanceAmount: "",
     followUpNotes: "",
@@ -377,6 +387,10 @@ function createDefaultQuotationDraft(): CreateQuotationDraft {
     ...defaults,
     paymentMethod: "",
     paymentTerms: "FULL_PAYMENT",
+    deliveryMode: "NOT_INCLUDED",
+    installationMode: "NOT_INCLUDED",
+    deliveryFee: "",
+    installationFee: "",
     depositAmount: "",
     balanceAmount: "",
     followUpNotes: "",
@@ -419,20 +433,23 @@ function applyTemplateToCreateDraft(
     return { ...current, templateId: "" };
   }
 
-  const templateItems = nextTemplate.items?.length
-    ? nextTemplate.items.map((item) =>
-        hydrateQuoteItemDraft({
+  const templateFeeState = nextTemplate.items?.length
+    ? splitQuoteItemsAndFees(
+        nextTemplate.items.map((item) => ({
           itemName: item.itemName,
           description: item.description || "",
-          quantity: String(item.quantity),
-          unitPrice: String(item.unitPrice),
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
           defaultWarranty: item.defaultWarranty || nextTemplate.warranty || "",
           warranty: item.warranty || item.defaultWarranty || nextTemplate.warranty || "",
+          warrantyPeriod: (item as { warrantyPeriod?: number | null }).warrantyPeriod,
+          warrantyUnit: (item as { warrantyUnit?: QuoteWarrantyUnit | null }).warrantyUnit,
           warrantyNotes: item.warrantyNotes || "",
           warrantySource: item.warrantySource || "TEMPLATE_DEFAULT",
-        }),
+        })),
       )
-    : current.quoteItems;
+    : null;
+  const templateItems = templateFeeState?.quoteItems || current.quoteItems;
   const preferredProducts = summarizeSelectedProducts(templateItems);
 
   return {
@@ -454,6 +471,10 @@ function applyTemplateToCreateDraft(
     followUpNotes: nextTemplate.internalNotes || current.followUpNotes,
     paymentMethod: nextTemplate.defaultPaymentMethod || current.paymentMethod,
     paymentTerms: nextTemplate.defaultPaymentTerms || current.paymentTerms,
+    deliveryMode: templateFeeState?.deliveryMode || current.deliveryMode,
+    installationMode: templateFeeState?.installationMode || current.installationMode,
+    deliveryFee: templateFeeState?.deliveryFee || current.deliveryFee,
+    installationFee: templateFeeState?.installationFee || current.installationFee,
     depositAmount:
       nextTemplate.defaultDepositAmount !== null &&
       nextTemplate.defaultDepositAmount !== undefined
@@ -498,19 +519,149 @@ function suggestWarrantyForItem(itemName: string) {
   return "Manufacturer warranty";
 }
 
-function buildQuoteRequestPayload(formState: QuoteDeskFormState): QuoteRequestResponseInput {
-  const quoteItems = formState.quoteItems
+function createServiceFeeItems(input: {
+  deliveryMode: QuoteFeeMode;
+  installationMode: QuoteFeeMode;
+  deliveryFee: string;
+  installationFee: string;
+}) {
+  const serviceItems: Array<{
+    itemName: string;
+    description?: string;
+    quantity: number;
+    unitPrice: number;
+    warrantySource: QuoteWarrantySource;
+  }> = [];
+
+  if (input.installationMode === "CHARGED") {
+    const amount = parseMoneyInput(input.installationFee);
+    if (amount <= 0) {
+      throw new Error("Enter the installation fee amount or switch installation to Included / Not included.");
+    }
+    serviceItems.push({
+      itemName: "Installation Fee",
+      description: "Quoted installation service",
+      quantity: 1,
+      unitPrice: amount,
+      warrantySource: "CUSTOM",
+    });
+  }
+
+  if (input.deliveryMode === "CHARGED") {
+    const amount = parseMoneyInput(input.deliveryFee);
+    if (amount <= 0) {
+      throw new Error("Enter the transport fee amount or switch transport to Included / Not included.");
+    }
+    serviceItems.push({
+      itemName: "Transport Fee",
+      description: "Quoted transport / delivery service",
+      quantity: 1,
+      unitPrice: amount,
+      warrantySource: "CUSTOM",
+    });
+  }
+
+  return serviceItems;
+}
+
+function isInstallationFeeItem(itemName: string) {
+  return /\binstallation fee\b/i.test(itemName.trim());
+}
+
+function isTransportFeeItem(itemName: string) {
+  return /\btransport fee\b/i.test(itemName.trim());
+}
+
+function splitQuoteItemsAndFees(items: Array<{
+  itemName: string;
+  description?: string | null;
+  quantity: number;
+  unitPrice: number;
+  defaultWarranty?: string | null;
+  warranty?: string | null;
+  warrantyPeriod?: number | null;
+  warrantyUnit?: QuoteWarrantyUnit | null;
+  warrantyNotes?: string | null;
+  warrantySource?: QuoteWarrantySource;
+}>) {
+  let installationMode: QuoteFeeMode = "NOT_INCLUDED";
+  let deliveryMode: QuoteFeeMode = "NOT_INCLUDED";
+  let installationFee = "";
+  let deliveryFee = "";
+
+  const quoteItems = items
+    .filter((item) => {
+      if (isInstallationFeeItem(item.itemName)) {
+        installationMode = "CHARGED";
+        installationFee = String(item.unitPrice || item.quantity * item.unitPrice || 0);
+        return false;
+      }
+      if (isTransportFeeItem(item.itemName)) {
+        deliveryMode = "CHARGED";
+        deliveryFee = String(item.unitPrice || item.quantity * item.unitPrice || 0);
+        return false;
+      }
+      return true;
+    })
+    .map((item) =>
+      hydrateQuoteItemDraft({
+        itemName: item.itemName,
+        description: item.description || "",
+        quantity: String(item.quantity),
+        unitPrice: String(item.unitPrice),
+        defaultWarranty: item.defaultWarranty || "",
+        warranty: item.warranty || "",
+        warrantyPeriod: item.warrantyPeriod ?? undefined,
+        warrantyUnit: item.warrantyUnit || undefined,
+        warrantyNotes: item.warrantyNotes || "",
+        warrantySource: item.warrantySource || "CUSTOM",
+      }),
+    );
+
+  return {
+    quoteItems: quoteItems.length ? quoteItems : [createEmptyQuoteItem()],
+    installationMode,
+    deliveryMode,
+    installationFee,
+    deliveryFee,
+  };
+}
+
+function buildSanitizedQuoteItems(
+  items: QuoteItemDraft[],
+  serviceInput?: {
+    deliveryMode: QuoteFeeMode;
+    installationMode: QuoteFeeMode;
+    deliveryFee: string;
+    installationFee: string;
+  },
+) {
+  const baseItems = items
     .map((item) => ({
       itemName: item.itemName.trim(),
       description: item.description.trim() || undefined,
       quantity: parseMoneyInput(item.quantity),
       unitPrice: parseMoneyInput(item.unitPrice),
       defaultWarranty: item.defaultWarranty.trim() || undefined,
-      warranty: item.warranty.trim() || undefined,
+      warranty: composeWarrantyLabel(item) || undefined,
+      warrantyPeriod: item.warrantyPeriod.trim() ? parseMoneyInput(item.warrantyPeriod) : undefined,
+      warrantyUnit: item.warrantyUnit,
       warrantyNotes: item.warrantyNotes.trim() || undefined,
       warrantySource: item.warrantySource,
     }))
     .filter((item) => item.itemName.length > 0);
+
+  const serviceItems = serviceInput ? createServiceFeeItems(serviceInput) : [];
+  return [...baseItems, ...serviceItems];
+}
+
+function buildQuoteRequestPayload(formState: QuoteDeskFormState): QuoteRequestResponseInput {
+  const quoteItems = buildSanitizedQuoteItems(formState.quoteItems, {
+    deliveryMode: formState.deliveryMode,
+    installationMode: formState.installationMode,
+    deliveryFee: formState.deliveryFee,
+    installationFee: formState.installationFee,
+  });
 
   return {
     status: formState.status,
@@ -538,6 +689,8 @@ function buildQuoteRequestPayload(formState: QuoteDeskFormState): QuoteRequestRe
     proposalVisibility: formState.proposalVisibility,
     paymentMethod: formState.paymentMethod || undefined,
     paymentTerms: formState.paymentTerms,
+    deliveryMode: formState.deliveryMode,
+    installationMode: formState.installationMode,
     depositAmount:
       formState.paymentTerms === "DEPOSIT_AND_BALANCE" && formState.depositAmount.trim()
         ? parseMoneyInput(formState.depositAmount)
@@ -605,6 +758,35 @@ function formatInstallationStatus(value: QuoteInstallationStatus | string | null
   return value.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function parseWarrantyPeriodText(value: string | null | undefined) {
+  const text = String(value || "").trim();
+  const match = text.match(/(\d+(?:\.\d+)?)\s*(year|years|month|months)/i);
+  if (!match) {
+    return { warrantyPeriod: "", warrantyUnit: "YEARS" as QuoteWarrantyUnit };
+  }
+  return {
+    warrantyPeriod: match[1],
+    warrantyUnit: /month/i.test(match[2]) ? ("MONTHS" as QuoteWarrantyUnit) : ("YEARS" as QuoteWarrantyUnit),
+  };
+}
+
+function composeWarrantyLabel(item: {
+  warrantyPeriod?: string | null;
+  warrantyUnit?: QuoteWarrantyUnit | null;
+  warranty?: string | null;
+  defaultWarranty?: string | null;
+}) {
+  const period = String(item.warrantyPeriod || "").trim();
+  if (period) {
+    const numeric = Number(period);
+    if (Number.isFinite(numeric) && numeric > 0) {
+      const normalized = Number.isInteger(numeric) ? String(numeric) : String(numeric);
+      return `${normalized} ${item.warrantyUnit === "MONTHS" ? "Months" : "Years"}`;
+    }
+  }
+  return String(item.warranty || item.defaultWarranty || "").trim();
+}
+
 function hydrateQuoteItemDraft(input: {
   itemName: string;
   description?: string | null;
@@ -612,9 +794,18 @@ function hydrateQuoteItemDraft(input: {
   unitPrice?: string;
   defaultWarranty?: string | null;
   warranty?: string | null;
+  warrantyPeriod?: string | number | null;
+  warrantyUnit?: QuoteWarrantyUnit | null;
   warrantyNotes?: string | null;
   warrantySource?: QuoteWarrantySource;
 }) {
+  const parsedWarranty =
+    input.warrantyPeriod !== undefined && input.warrantyPeriod !== null
+      ? {
+          warrantyPeriod: String(input.warrantyPeriod),
+          warrantyUnit: input.warrantyUnit ?? "YEARS",
+        }
+      : parseWarrantyPeriodText(input.warranty || input.defaultWarranty);
   return {
     itemName: input.itemName,
     description: input.description?.trim() || "",
@@ -622,6 +813,8 @@ function hydrateQuoteItemDraft(input: {
     unitPrice: input.unitPrice ?? "",
     defaultWarranty: input.defaultWarranty?.trim() || "",
     warranty: input.warranty?.trim() || "",
+    warrantyPeriod: parsedWarranty.warrantyPeriod,
+    warrantyUnit: parsedWarranty.warrantyUnit,
     warrantyNotes: input.warrantyNotes?.trim() || "",
     warrantySource: input.warrantySource ?? "CUSTOM",
   } satisfies QuoteItemDraft;
@@ -1060,8 +1253,11 @@ export default function QuotationRequestsDeskClient({
   }, [formState.quoteItems]);
 
   const quoteSubtotalPreview = useMemo(
-    () => quoteItemsPreview.reduce((sum, item) => sum + item.lineTotal, 0),
-    [quoteItemsPreview],
+    () =>
+      quoteItemsPreview.reduce((sum, item) => sum + item.lineTotal, 0) +
+      (formState.installationMode === "CHARGED" ? parseMoneyInput(formState.installationFee) : 0) +
+      (formState.deliveryMode === "CHARGED" ? parseMoneyInput(formState.deliveryFee) : 0),
+    [formState.deliveryFee, formState.deliveryMode, formState.installationFee, formState.installationMode, quoteItemsPreview],
   );
 
   const filteredRequests = useMemo(
@@ -1119,8 +1315,17 @@ export default function QuotationRequestsDeskClient({
   }, [createDraft.quoteItems]);
 
   const createQuoteSubtotalPreview = useMemo(
-    () => createQuoteItemsPreview.reduce((sum, item) => sum + item.lineTotal, 0),
-    [createQuoteItemsPreview],
+    () =>
+      createQuoteItemsPreview.reduce((sum, item) => sum + item.lineTotal, 0) +
+      (createDraft.installationMode === "CHARGED" ? parseMoneyInput(createDraft.installationFee) : 0) +
+      (createDraft.deliveryMode === "CHARGED" ? parseMoneyInput(createDraft.deliveryFee) : 0),
+    [
+      createDraft.deliveryFee,
+      createDraft.deliveryMode,
+      createDraft.installationFee,
+      createDraft.installationMode,
+      createQuoteItemsPreview,
+    ],
   );
 
   const createQuoteBalancePreview = useMemo(() => {
@@ -1187,18 +1392,12 @@ export default function QuotationRequestsDeskClient({
     setMessage(null);
     try {
       const selectedTemplate = templates.find((template) => template.id === createDraft.templateId) ?? null;
-      const quoteItems = createDraft.quoteItems
-        .map((item) => ({
-          itemName: item.itemName.trim(),
-          description: item.description.trim() || undefined,
-          quantity: parseMoneyInput(item.quantity),
-          unitPrice: parseMoneyInput(item.unitPrice),
-          defaultWarranty: item.defaultWarranty.trim() || undefined,
-          warranty: item.warranty.trim() || undefined,
-          warrantyNotes: item.warrantyNotes.trim() || undefined,
-          warrantySource: item.warrantySource,
-        }))
-        .filter((item) => item.itemName.length > 0);
+      const quoteItems = buildSanitizedQuoteItems(createDraft.quoteItems, {
+        deliveryMode: createDraft.deliveryMode,
+        installationMode: createDraft.installationMode,
+        deliveryFee: createDraft.deliveryFee,
+        installationFee: createDraft.installationFee,
+      });
       if (!quoteItems.length) {
         throw new Error("Add at least one quotation item before saving the quotation.");
       }
@@ -1253,6 +1452,8 @@ export default function QuotationRequestsDeskClient({
         proposalVisibility: createDraft.proposalVisibility,
         paymentMethod: createDraft.paymentMethod || undefined,
         paymentTerms: createDraft.paymentTerms,
+        deliveryMode: createDraft.deliveryMode,
+        installationMode: createDraft.installationMode,
         depositAmount:
           createDraft.paymentTerms === "DEPOSIT_AND_BALANCE" && createDraft.depositAmount.trim()
             ? parseMoneyInput(createDraft.depositAmount)
@@ -1280,15 +1481,13 @@ export default function QuotationRequestsDeskClient({
           const existing = current.filter((request) => request.id !== data.request.id);
           return [data.request, ...existing];
         });
+        setExpandedId(data.request.id);
       }
       setShowCreatePanel(false);
       setCreateDraft(createDefaultQuotationDraft());
       setCreateCatalogQuery("");
       setCreateCatalogResults([]);
-      await refreshRequests("ALL", "");
-      if (data.request?.id) {
-        setExpandedId(data.request.id);
-      }
+      void refreshRequests("ALL", "");
       setMessage("Quotation saved successfully. You can now email, SMS, WhatsApp, or download it.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Failed to save quotation.");
@@ -1301,18 +1500,12 @@ export default function QuotationRequestsDeskClient({
     setTemplateSaving(true);
     setMessage(null);
     try {
-      const quoteItems = createDraft.quoteItems
-        .map((item) => ({
-          itemName: item.itemName.trim(),
-          description: item.description.trim() || undefined,
-          quantity: parseMoneyInput(item.quantity),
-          unitPrice: parseMoneyInput(item.unitPrice),
-          defaultWarranty: item.defaultWarranty.trim() || undefined,
-          warranty: item.warranty.trim() || undefined,
-          warrantyNotes: item.warrantyNotes.trim() || undefined,
-          warrantySource: item.warrantySource,
-        }))
-        .filter((item) => item.itemName.length > 0);
+      const quoteItems = buildSanitizedQuoteItems(createDraft.quoteItems, {
+        deliveryMode: createDraft.deliveryMode,
+        installationMode: createDraft.installationMode,
+        deliveryFee: createDraft.deliveryFee,
+        installationFee: createDraft.installationFee,
+      });
       if (!quoteItems.length) {
         throw new Error("Add at least one quotation item before saving a template.");
       }
@@ -1580,6 +1773,7 @@ export default function QuotationRequestsDeskClient({
   useEffect(() => {
     if (!expandedRequest) return;
     const storedProposal = parseStoredQuoteProposal(expandedRequest.quotationData);
+    const feeState = splitQuoteItemsAndFees(storedProposal.items);
     const proposalDefaults = applyProposalDefaults(
       (expandedRequest.projectType as QuoteProjectType | null) || "SOLAR_HOME_SYSTEM",
       {
@@ -1603,20 +1797,7 @@ export default function QuotationRequestsDeskClient({
       status: expandedRequest.status,
       quoteTitle: expandedRequest.quoteTitle || "",
       quoteMessage: expandedRequest.quoteMessage || "",
-      quoteItems: storedProposal.items.length
-        ? storedProposal.items.map((item) =>
-            hydrateQuoteItemDraft({
-              itemName: item.itemName,
-              description: item.description || "",
-              quantity: String(item.quantity),
-              unitPrice: String(item.unitPrice),
-              defaultWarranty: item.defaultWarranty || "",
-              warranty: item.warranty || "",
-              warrantyNotes: item.warrantyNotes || "",
-              warrantySource: item.warrantySource || "CUSTOM",
-            }),
-          )
-        : [createEmptyQuoteItem()],
+      quoteItems: feeState.quoteItems,
       warrantyMode: storedProposal.warrantyMode || "PER_ITEM",
       fullSystemWarranty: storedProposal.fullSystemWarranty || "",
       customWarranty: storedProposal.customWarranty || "",
@@ -1627,6 +1808,10 @@ export default function QuotationRequestsDeskClient({
       ...proposalDefaults,
       paymentMethod: storedProposal.paymentMethod || "",
       paymentTerms: storedProposal.paymentTerms || "FULL_PAYMENT",
+      deliveryMode: storedProposal.deliveryMode || feeState.deliveryMode,
+      installationMode: storedProposal.installationMode || feeState.installationMode,
+      deliveryFee: feeState.deliveryFee,
+      installationFee: feeState.installationFee,
       depositAmount:
         typeof storedProposal.depositAmount === "number" ? String(storedProposal.depositAmount) : "",
       balanceAmount:
@@ -1976,34 +2161,62 @@ export default function QuotationRequestsDeskClient({
                     Add item
                   </button>
                 </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setCreateDraft((current) => ({
-                        ...current,
-                        quoteItems: [...current.quoteItems, createFeeQuoteItem("Installation Fee")],
-                      }))
-                    }
-                    className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
-                  >
-                    Add installation fee
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setCreateDraft((current) => ({
-                        ...current,
-                        quoteItems: [...current.quoteItems, createFeeQuoteItem("Transport Fee")],
-                      }))
-                    }
-                    className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
-                  >
-                    Add transport fee
-                  </button>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <label className="text-xs uppercase tracking-wide text-slate-400">
+                    Installation
+                    <select
+                      value={createDraft.installationMode}
+                      onChange={(event) =>
+                        setCreateDraft((current) => ({ ...current, installationMode: event.target.value as QuoteFeeMode }))
+                      }
+                      className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
+                    >
+                      {QUOTE_FEE_MODES.map((mode) => (
+                        <option key={mode} value={mode}>
+                          {mode === "CHARGED" ? "Enter fee" : formatStatus(mode)}
+                        </option>
+                      ))}
+                    </select>
+                    {createDraft.installationMode === "CHARGED" ? (
+                      <input
+                        value={createDraft.installationFee}
+                        onChange={(event) =>
+                          setCreateDraft((current) => ({ ...current, installationFee: event.target.value }))
+                        }
+                        placeholder="Installation fee amount"
+                        className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 outline-none"
+                      />
+                    ) : null}
+                  </label>
+                  <label className="text-xs uppercase tracking-wide text-slate-400">
+                    Transport / delivery
+                    <select
+                      value={createDraft.deliveryMode}
+                      onChange={(event) =>
+                        setCreateDraft((current) => ({ ...current, deliveryMode: event.target.value as QuoteFeeMode }))
+                      }
+                      className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
+                    >
+                      {QUOTE_FEE_MODES.map((mode) => (
+                        <option key={mode} value={mode}>
+                          {mode === "CHARGED" ? "Enter fee" : formatStatus(mode)}
+                        </option>
+                      ))}
+                    </select>
+                    {createDraft.deliveryMode === "CHARGED" ? (
+                      <input
+                        value={createDraft.deliveryFee}
+                        onChange={(event) =>
+                          setCreateDraft((current) => ({ ...current, deliveryFee: event.target.value }))
+                        }
+                        placeholder="Transport fee amount"
+                        className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 outline-none"
+                      />
+                    ) : null}
+                  </label>
                 </div>
                 <div className="mt-2 text-xs text-slate-500">
-                  Leave installation or transport at `0` when the cost is already included in the project value.
+                  Choose Included, Not included, or Enter fee for both installation and transport before saving.
                 </div>
 
                 <div className="mt-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
@@ -2168,8 +2381,43 @@ export default function QuotationRequestsDeskClient({
                           </button>
                         </div>
                       </div>
-                      <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 text-xs text-slate-400">
-                        Standard Betech warranty notes will be applied automatically in the final quotation PDF.
+                      <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_150px]">
+                        <label className="text-xs uppercase tracking-wide text-slate-400">
+                          Warranty period
+                          <input
+                            value={item.warrantyPeriod}
+                            onChange={(event) =>
+                              setCreateDraft((current) => ({
+                                ...current,
+                                quoteItems: current.quoteItems.map((entry, entryIndex) =>
+                                  entryIndex === index ? { ...entry, warrantyPeriod: event.target.value } : entry,
+                                ),
+                              }))
+                            }
+                            placeholder="10"
+                            className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 outline-none"
+                          />
+                        </label>
+                        <label className="text-xs uppercase tracking-wide text-slate-400">
+                          Unit
+                          <select
+                            value={item.warrantyUnit}
+                            onChange={(event) =>
+                              setCreateDraft((current) => ({
+                                ...current,
+                                quoteItems: current.quoteItems.map((entry, entryIndex) =>
+                                  entryIndex === index
+                                    ? { ...entry, warrantyUnit: event.target.value as QuoteWarrantyUnit }
+                                    : entry,
+                                ),
+                              }))
+                            }
+                            className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
+                          >
+                            <option value="YEARS">Years</option>
+                            <option value="MONTHS">Months</option>
+                          </select>
+                        </label>
                       </div>
                     </div>
                   ))}
@@ -2628,34 +2876,62 @@ export default function QuotationRequestsDeskClient({
                                   Add item
                                 </button>
                               </div>
-                              <div className="mt-3 flex flex-wrap gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setFormState((current) => ({
-                                      ...current,
-                                      quoteItems: [...current.quoteItems, createFeeQuoteItem("Installation Fee")],
-                                    }))
-                                  }
-                                  className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
-                                >
-                                  Add installation fee
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setFormState((current) => ({
-                                      ...current,
-                                      quoteItems: [...current.quoteItems, createFeeQuoteItem("Transport Fee")],
-                                    }))
-                                  }
-                                  className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
-                                >
-                                  Add transport fee
-                                </button>
+                              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                                <label className="text-xs uppercase tracking-wide text-slate-400">
+                                  Installation
+                                  <select
+                                    value={formState.installationMode}
+                                    onChange={(event) =>
+                                      setFormState((current) => ({ ...current, installationMode: event.target.value as QuoteFeeMode }))
+                                    }
+                                    className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                                  >
+                                    {QUOTE_FEE_MODES.map((mode) => (
+                                      <option key={mode} value={mode}>
+                                        {mode === "CHARGED" ? "Enter fee" : formatStatus(mode)}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  {formState.installationMode === "CHARGED" ? (
+                                    <input
+                                      value={formState.installationFee}
+                                      onChange={(event) =>
+                                        setFormState((current) => ({ ...current, installationFee: event.target.value }))
+                                      }
+                                      placeholder="Installation fee amount"
+                                      className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 focus:border-emerald-500 focus:outline-none"
+                                    />
+                                  ) : null}
+                                </label>
+                                <label className="text-xs uppercase tracking-wide text-slate-400">
+                                  Transport / delivery
+                                  <select
+                                    value={formState.deliveryMode}
+                                    onChange={(event) =>
+                                      setFormState((current) => ({ ...current, deliveryMode: event.target.value as QuoteFeeMode }))
+                                    }
+                                    className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                                  >
+                                    {QUOTE_FEE_MODES.map((mode) => (
+                                      <option key={mode} value={mode}>
+                                        {mode === "CHARGED" ? "Enter fee" : formatStatus(mode)}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  {formState.deliveryMode === "CHARGED" ? (
+                                    <input
+                                      value={formState.deliveryFee}
+                                      onChange={(event) =>
+                                        setFormState((current) => ({ ...current, deliveryFee: event.target.value }))
+                                      }
+                                      placeholder="Transport fee amount"
+                                      className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 focus:border-emerald-500 focus:outline-none"
+                                    />
+                                  ) : null}
+                                </label>
                               </div>
                               <div className="mt-2 text-xs text-slate-500">
-                                Leave installation or transport at `0` when the cost is already included in the quoted project value.
+                                Choose Included, Not included, or Enter fee for both installation and transport before saving.
                               </div>
 
                               <div className="mt-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
@@ -2808,8 +3084,43 @@ export default function QuotationRequestsDeskClient({
                                         </button>
                                       </div>
                                     </div>
-                                    <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 text-xs text-slate-400">
-                                      Standard Betech warranty notes will be applied automatically in the final quotation PDF.
+                                    <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_150px]">
+                                      <label className="text-xs uppercase tracking-wide text-slate-400">
+                                        Warranty period
+                                        <input
+                                          value={item.warrantyPeriod}
+                                          onChange={(event) =>
+                                            setFormState((current) => ({
+                                              ...current,
+                                              quoteItems: current.quoteItems.map((entry, entryIndex) =>
+                                                entryIndex === index ? { ...entry, warrantyPeriod: event.target.value } : entry,
+                                              ),
+                                            }))
+                                          }
+                                          placeholder="10"
+                                          className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 focus:border-emerald-500 focus:outline-none"
+                                        />
+                                      </label>
+                                      <label className="text-xs uppercase tracking-wide text-slate-400">
+                                        Unit
+                                        <select
+                                          value={item.warrantyUnit}
+                                          onChange={(event) =>
+                                            setFormState((current) => ({
+                                              ...current,
+                                              quoteItems: current.quoteItems.map((entry, entryIndex) =>
+                                                entryIndex === index
+                                                  ? { ...entry, warrantyUnit: event.target.value as QuoteWarrantyUnit }
+                                                  : entry,
+                                              ),
+                                            }))
+                                          }
+                                          className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                                        >
+                                          <option value="YEARS">Years</option>
+                                          <option value="MONTHS">Months</option>
+                                        </select>
+                                      </label>
                                     </div>
                                   </div>
                                 ))}

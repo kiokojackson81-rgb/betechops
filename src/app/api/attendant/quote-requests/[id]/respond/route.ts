@@ -252,6 +252,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     total: proposal.total,
     paymentMethod: proposal.paymentMethod,
     paymentTerms: proposal.paymentTerms,
+    deliveryMode: proposal.deliveryMode,
+    installationMode: proposal.installationMode,
     depositAmount: proposal.depositAmount,
     balanceAmount: proposal.balanceAmount,
     quoteMessage: updated.quoteMessage,

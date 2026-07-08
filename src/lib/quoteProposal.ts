@@ -34,6 +34,12 @@ export const QUOTE_WARRANTY_SOURCES = [
 
 export type QuoteWarrantySource = (typeof QUOTE_WARRANTY_SOURCES)[number];
 
+export const QUOTE_WARRANTY_UNITS = ["YEARS", "MONTHS"] as const;
+export type QuoteWarrantyUnit = (typeof QUOTE_WARRANTY_UNITS)[number];
+
+export const QUOTE_FEE_MODES = ["INCLUDED", "NOT_INCLUDED", "CHARGED"] as const;
+export type QuoteFeeMode = (typeof QUOTE_FEE_MODES)[number];
+
 export const QUOTE_PROPOSAL_SECTION_KEYS = [
   "projectOverview",
   "whatPriceIncludes",
@@ -84,6 +90,8 @@ export const quoteLineItemSchema = z.object({
   unitPrice: z.preprocess(parseMoneyInput, z.number().nonnegative().max(1000000000)),
   defaultWarranty: z.string().trim().max(4000).optional(),
   warranty: z.string().trim().max(4000).optional(),
+  warrantyPeriod: z.preprocess(parseMoneyInput, z.number().positive().max(1000).optional()),
+  warrantyUnit: z.enum(QUOTE_WARRANTY_UNITS).optional(),
   warrantyNotes: z.string().trim().max(4000).optional(),
   warrantySource: z.enum(QUOTE_WARRANTY_SOURCES).optional(),
 });
@@ -147,6 +155,13 @@ export function sanitizeQuoteLineItems(items: QuoteLineItemInput[]): StoredQuote
           : undefined,
       warranty:
         typeof item.warranty === "string" && item.warranty.trim() ? item.warranty.trim() : undefined,
+      warrantyPeriod:
+        typeof item.warrantyPeriod === "number" && Number.isFinite(item.warrantyPeriod) && item.warrantyPeriod > 0
+          ? roundCurrency(item.warrantyPeriod)
+          : undefined,
+      warrantyUnit: QUOTE_WARRANTY_UNITS.includes(String(item.warrantyUnit || "") as QuoteWarrantyUnit)
+        ? (String(item.warrantyUnit) as QuoteWarrantyUnit)
+        : undefined,
       warrantyNotes:
         typeof item.warrantyNotes === "string" && item.warrantyNotes.trim()
           ? item.warrantyNotes.trim()
@@ -230,6 +245,12 @@ export function parseStoredQuoteProposal(
             defaultWarranty:
               typeof record.defaultWarranty === "string" ? String(record.defaultWarranty) : undefined,
             warranty: typeof record.warranty === "string" ? String(record.warranty) : undefined,
+            warrantyPeriod:
+              typeof record.warrantyPeriod === "number" ? Number(record.warrantyPeriod) : undefined,
+            warrantyUnit:
+              typeof record.warrantyUnit === "string"
+                ? (String(record.warrantyUnit) as QuoteWarrantyUnit)
+                : undefined,
             warrantyNotes:
               typeof record.warrantyNotes === "string" ? String(record.warrantyNotes) : undefined,
             warrantySource:
@@ -309,6 +330,11 @@ export function parseStoredQuoteProposal(
     QUOTE_PROPOSAL_VISIBILITY_KEYS.map((key) => [key, rawVisibility?.[key] !== false]),
   ) as Record<QuoteProposalVisibilityKey, boolean>;
 
+  const feeModeValue = (key: "deliveryMode" | "installationMode") =>
+    QUOTE_FEE_MODES.includes(String(quotationData?.[key] || "") as QuoteFeeMode)
+      ? (String(quotationData?.[key]) as QuoteFeeMode)
+      : "NOT_INCLUDED";
+
   return {
     items,
     subtotal,
@@ -324,6 +350,8 @@ export function parseStoredQuoteProposal(
     aiWarrantySummary,
     proposalSections,
     proposalVisibility,
+    deliveryMode: feeModeValue("deliveryMode"),
+    installationMode: feeModeValue("installationMode"),
   };
 }
 

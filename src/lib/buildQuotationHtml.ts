@@ -292,15 +292,18 @@ export function buildQuotationHtml(
   },
 ) {
   const data = normalizeQuotePdfData(input);
+  const serviceCostRows: Array<readonly [string, number]> = [["Equipment", data.equipmentTotal]];
+  if (data.installationMode === "CHARGED" && data.installationTotal > 0) {
+    serviceCostRows.push(["Installation", data.installationTotal]);
+  }
+  if (data.deliveryMode === "CHARGED" && data.transportTotal > 0) {
+    serviceCostRows.push(["Transport", data.transportTotal]);
+  }
+  serviceCostRows.push(["Project Value", data.grandTotal]);
   const costRows =
-    data.items.length === 1 && data.installationTotal <= 0 && data.transportTotal <= 0
+    data.items.length === 1 && serviceCostRows.length === 2
       ? ([["Quoted Item Value", data.equipmentTotal], ["Project Value", data.grandTotal]] as const)
-      : ([
-          ["Equipment", data.equipmentTotal],
-          ["Installation", data.installationTotal],
-          ["Transport", data.transportTotal],
-          ["Project Value", data.grandTotal],
-        ] as const);
+      : serviceCostRows;
   const featuredProjectUrl = data.similarProjectUrl || data.company.projectsUrl;
   const featuredProjectLabel = data.similarProjectUrl
     ? data.similarProjectLabel || "View a similar installation"
@@ -326,16 +329,13 @@ export function buildQuotationHtml(
   }
   .sheet {
     width: 210mm;
-    min-height: 297mm;
     margin: 0 auto 10px;
     background: #fafafa;
     padding: 5mm;
     position: relative;
     overflow: hidden;
   }
-  .sheet.page-break { break-before: page; }
   .page {
-    min-height: 285mm;
     display: flex;
     flex-direction: column;
     gap: 2.2mm;
@@ -1140,11 +1140,8 @@ export function buildQuotationHtml(
   .footer-brand-badge .icon-svg { width: 4.1mm; height: 4.1mm; }
   @media print {
     body { background: #fff; }
-    .sheet {
-      margin: 0;
-      page-break-after: always;
-      box-shadow: none;
-    }
+    .sheet { margin: 0; box-shadow: none; }
+    .sheet:not(:last-child) { page-break-after: always; }
   }
 </style>
 </head>

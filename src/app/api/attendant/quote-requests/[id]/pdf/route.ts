@@ -43,6 +43,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     total: proposal.total,
     paymentMethod: proposal.paymentMethod,
     paymentTerms: proposal.paymentTerms,
+    deliveryMode: proposal.deliveryMode,
+    installationMode: proposal.installationMode,
     depositAmount: proposal.depositAmount,
     balanceAmount: proposal.balanceAmount,
     quoteMessage: quoteRequest.quoteMessage,

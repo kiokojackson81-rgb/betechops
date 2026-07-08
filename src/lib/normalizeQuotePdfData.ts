@@ -15,6 +15,7 @@ export type QuotePdfPaymentStructure =
   | "APPROVED_AFTER_INSTALLATION";
 
 export type QuotePdfWarrantyMode = "PER_ITEM" | "WHOLE_QUOTATION" | "FULL_SYSTEM" | "CUSTOM";
+export type QuotePdfFeeMode = "INCLUDED" | "NOT_INCLUDED" | "CHARGED";
 
 export type QuotePdfItemInput = {
   productId?: string | null;
@@ -39,6 +40,8 @@ export type QuotePdfInput = {
   warrantyMode?: QuotePdfWarrantyMode;
   wholeWarrantyText?: string | null;
   paymentStructure?: QuotePdfPaymentStructure;
+  deliveryMode?: QuotePdfFeeMode | null;
+  installationMode?: QuotePdfFeeMode | null;
   similarProjectUrl?: string | null;
   similarProjectLabel?: string | null;
   preparedBy?: {
@@ -88,6 +91,8 @@ export type NormalizedQuotePdfData = {
   projectValue: string;
   deliveryText: string;
   installationText: string;
+  deliveryMode: QuotePdfFeeMode;
+  installationMode: QuotePdfFeeMode;
   paymentStructure: QuotePdfPaymentStructure;
   paymentTermsLabel: string;
   warrantyMode: QuotePdfWarrantyMode;
@@ -169,6 +174,11 @@ function sanitizeUrl(value: string | null | undefined) {
   return null;
 }
 
+function normalizeFeeMode(value: QuotePdfFeeMode | string | null | undefined): QuotePdfFeeMode {
+  if (value === "INCLUDED" || value === "NOT_INCLUDED" || value === "CHARGED") return value;
+  return "NOT_INCLUDED";
+}
+
 function inferTitle(inputTitle: string | null | undefined, items: QuotePdfItemInput[]) {
   const cleaned = sanitizeText(inputTitle);
   if (cleaned) return cleaned;
@@ -231,6 +241,8 @@ export function normalizeQuotePdfData(input: QuotePdfInput): NormalizedQuotePdfD
     warrantyMode === "WHOLE_QUOTATION" || warrantyMode === "FULL_SYSTEM"
       ? rows.rows.map((item) => ({ ...item, warrantyText: wholeWarrantyText }))
       : rows.rows;
+  const deliveryMode = normalizeFeeMode(input.deliveryMode);
+  const installationMode = normalizeFeeMode(input.installationMode);
 
   return {
     quoteRef: sanitizeText(input.quoteRef) || generateQuoteRef(quotationDate),
@@ -264,8 +276,20 @@ export function normalizeQuotePdfData(input: QuotePdfInput): NormalizedQuotePdfD
     transportTotal: rows.transportTotal,
     installationTotal: rows.installationTotal,
     projectValue: "100%",
-    deliveryText: "1-2 days depending on your location and current workload, to be confirmed.",
-    installationText: "1-2 days depending on site conditions.",
+    deliveryText:
+      deliveryMode === "INCLUDED"
+        ? "Included in this quotation."
+        : deliveryMode === "CHARGED"
+          ? "Charged separately in the quotation."
+          : "Not included in this quotation.",
+    installationText:
+      installationMode === "INCLUDED"
+        ? "Included in this quotation."
+        : installationMode === "CHARGED"
+          ? "Charged separately in the quotation."
+          : "Not included in this quotation.",
+    deliveryMode,
+    installationMode,
     paymentStructure: normalizePaymentStructure(input.paymentStructure),
     paymentTermsLabel: paymentTermsLabel(normalizePaymentStructure(input.paymentStructure)),
     warrantyMode,

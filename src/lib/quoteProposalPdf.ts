@@ -6,6 +6,7 @@ import { buildQuotationHtml } from "@/lib/buildQuotationHtml";
 import { launchChromiumBrowser } from "@/lib/pdf/chromium";
 import { type QuotePdfInput as CompactQuotePdfInput } from "@/lib/normalizeQuotePdfData";
 import type {
+  QuoteFeeMode,
   QuotePaymentMethod,
   QuotePaymentTerms,
   QuoteWarrantyMode,
@@ -25,6 +26,8 @@ export type QuotePdfInput = {
   total?: number;
   paymentMethod?: QuotePaymentMethod | null;
   paymentTerms?: QuotePaymentTerms | null;
+  deliveryMode?: QuoteFeeMode | null;
+  installationMode?: QuoteFeeMode | null;
   depositAmount?: number | null;
   balanceAmount?: number | null;
   quoteMessage?: string | null;
@@ -96,6 +99,8 @@ function mapToCompactInput(input: QuotePdfInput): CompactQuotePdfInput {
         : input.paymentTerms === "DEPOSIT_AND_BALANCE"
           ? "DEPOSIT_AND_BALANCE"
           : "FULL_PAYMENT",
+    deliveryMode: input.deliveryMode || null,
+    installationMode: input.installationMode || null,
   };
 }
 
