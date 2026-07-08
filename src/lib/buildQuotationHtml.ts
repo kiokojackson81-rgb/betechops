@@ -135,17 +135,87 @@ function renderSupportList(items: readonly string[]) {
     return index === 0 ? "headset" : "check";
   };
 
-  return items
-    .map(
-      (item, index) => `
-        <div class="support-row">
-          <div class="support-icon">${iconSvg(iconForSupportItem(item, index))}</div>
-          <div class="support-divider"></div>
-          <div class="support-text">${escapeHtml(item)}</div>
-        </div>
-      `,
-    )
-    .join("");
+  const descriptionForSupportItem = (item: string) => {
+    const normalized = item.toLowerCase();
+    if (normalized.includes("telephone") || normalized.includes("whatsapp")) {
+      return "Get quick help and expert guidance whenever you need it.";
+    }
+    if (normalized.includes("troubleshooting") || normalized.includes("remote")) {
+      return "Our team helps diagnose and resolve issues remotely for your convenience.";
+    }
+    if (normalized.includes("warranty")) {
+      return "We provide warranty assistance and genuine support for eligible products.";
+    }
+    if (normalized.includes("training") || normalized.includes("guidance")) {
+      return "Learn how to use your system efficiently and get the best performance.";
+    }
+    if (normalized.includes("spare parts")) {
+      return "We provide original spare parts and replacement support.";
+    }
+    if (normalized.includes("maintenance")) {
+      return "Receive expert recommendations to keep your system running smoothly.";
+    }
+    if (normalized.includes("site revisit")) {
+      return "Our team can schedule a site visit when physical support is required.";
+    }
+    return "";
+  };
+
+  const renderSupportItem = (item: string, index: number) => `
+    <div class="support-row">
+      <div class="support-icon">${iconSvg(iconForSupportItem(item, index))}</div>
+      <div class="support-divider"></div>
+      <div class="support-copy">
+        <div class="support-title">${escapeHtml(item)}</div>
+        ${
+          descriptionForSupportItem(item)
+            ? `<div class="support-description">${escapeHtml(descriptionForSupportItem(item))}</div>`
+            : ""
+        }
+        ${
+          item.toLowerCase().includes("warranty")
+            ? '<div class="support-highlight">Technical support no. 0705663175</div>'
+            : ""
+        }
+      </div>
+    </div>
+  `;
+
+  const leftColumn = items.slice(0, 3);
+  const rightColumn = items.slice(3);
+
+  return `
+    <div class="support-columns">
+      <div class="support-list">
+        ${leftColumn.map((item, index) => renderSupportItem(item, index)).join("")}
+      </div>
+      <div class="support-list">
+        ${rightColumn.map((item, index) => renderSupportItem(item, leftColumn.length + index)).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function renderContactInformationGrid(rows: Array<[IconName, string, string]>) {
+  return `
+    <div class="contact-grid">
+      ${rows
+        .filter(([, , value]) => String(value || "").trim())
+        .map(
+          ([icon, label, value]) => `
+            <div class="contact-item">
+              <div class="contact-icon">${iconSvg(icon)}</div>
+              <div class="contact-divider"></div>
+              <div class="contact-copy">
+                <div class="contact-label">${escapeHtml(label)}</div>
+                <div class="contact-value">${escapeHtml(value)}</div>
+              </div>
+            </div>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
 }
 
 function renderPaymentMethods(
@@ -1056,8 +1126,62 @@ export function buildQuotationHtml(
   }
   .support-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1.45fr .95fr;
     gap: 2.2mm;
+    align-items: start;
+  }
+  .contact-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+  }
+  .contact-item {
+    display: grid;
+    grid-template-columns: 13mm 1px 1fr;
+    gap: 3mm;
+    align-items: center;
+    padding: 3mm 1.2mm;
+    border-top: 1px solid #efe1e1;
+  }
+  .contact-item:nth-child(-n+2) { border-top: 0; }
+  .contact-icon {
+    width: 11.5mm;
+    height: 11.5mm;
+    margin-left: 1mm;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #fff8f8, #fff1f1);
+    color: #9b1111;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #f1dede;
+  }
+  .contact-divider {
+    width: 1px;
+    background: linear-gradient(180deg, rgba(155,17,17,.18), rgba(183,28,28,.9), rgba(155,17,17,.18));
+    height: 100%;
+    min-height: 11mm;
+  }
+  .contact-copy {
+    display: grid;
+    gap: .6mm;
+  }
+  .contact-label {
+    color: #202833;
+    font-size: 8.8px;
+    font-weight: 800;
+  }
+  .contact-value {
+    color: #9b1111;
+    font-size: 8.6px;
+    line-height: 1.32;
+    font-weight: 800;
+    word-break: break-word;
+  }
+  .support-columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 3mm;
   }
   .support-list {
     display: grid;
@@ -1067,7 +1191,7 @@ export function buildQuotationHtml(
     display: grid;
     grid-template-columns: 16mm 1px 1fr;
     gap: 3mm;
-    align-items: center;
+    align-items: start;
     padding: 2.4mm 0;
     border-top: 1px solid #efe1e1;
   }
@@ -1090,11 +1214,27 @@ export function buildQuotationHtml(
     height: 100%;
     min-height: 11mm;
   }
-  .support-text {
+  .support-copy {
+    display: grid;
+    gap: .8mm;
+  }
+  .support-title {
     color: #202833;
-    font-size: 8.9px;
-    line-height: 1.28;
+    font-size: 8.8px;
+    line-height: 1.26;
     font-weight: 700;
+  }
+  .support-description {
+    color: #2b2b2b;
+    font-size: 7.9px;
+    line-height: 1.34;
+    font-weight: 500;
+  }
+  .support-highlight {
+    color: #9b1111;
+    font-size: 8.2px;
+    line-height: 1.28;
+    font-weight: 800;
   }
   .notes-box {
     display: grid;
@@ -1103,7 +1243,8 @@ export function buildQuotationHtml(
     border-radius: 12px;
     background: #f8f8f8;
     padding: 2.6mm;
-    min-height: 15mm;
+    min-height: 100%;
+    align-content: start;
   }
   .notes-icon {
     width: 9mm;
@@ -1532,25 +1673,30 @@ export function buildQuotationHtml(
       </div>
     </div>
 
+    <div class="section-card">
+      <div class="section-head">
+        <div class="section-head-icon">${iconSvg("headset")}</div>
+        <div class="section-head-title">Contact Information</div>
+      </div>
+      <div class="section-body">
+        ${renderContactInformationGrid([
+          ["phone", "Sales Desk", data.company.salesDesk],
+          ["headset", "Technical Support", "0705663175"],
+          ["mail", "Email", data.company.email],
+          ["globe", "Website", data.company.website],
+          ["location", "Office", data.company.office],
+        ])}
+      </div>
+    </div>
+
     <div class="support-grid">
       <div class="section-card">
         <div class="section-head">
           <div class="section-head-icon">${iconSvg("headset")}</div>
-          <div class="section-head-title">Contact &amp; After-Sales Support</div>
+          <div class="section-head-title">After-Sales Support</div>
         </div>
         <div class="section-body">
-          ${renderRows([
-            ["phone", "Sales Desk", data.company.salesDesk],
-            ["headset", "Technical Support", "0705663175"],
-            ["mail", "Email", data.company.email],
-            ["globe", "Website", data.company.website],
-            ["location", "Office", data.company.office],
-          ])}
-          <div style="margin-top:2.5mm;">
-            <div class="support-list">
-              ${renderSupportList(data.afterSalesSupport)}
-            </div>
-          </div>
+          ${renderSupportList(data.afterSalesSupport)}
         </div>
       </div>
 
@@ -1562,7 +1708,7 @@ export function buildQuotationHtml(
         <div class="section-body">
           <div class="notes-box">
             <div class="notes-icon">${iconSvg("edit")}</div>
-            <div class="notes-text">${escapeHtml(data.customerNotes || "No additional customer notes were entered for this quotation.")}</div>
+            <div class="notes-text">${escapeHtml(data.customerNotes || "This quotation covers the supply, delivery, installation, testing and commissioning of a solar home system solution based on your stated requirements.")}</div>
           </div>
         </div>
       </div>
