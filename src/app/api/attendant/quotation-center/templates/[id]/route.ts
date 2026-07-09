@@ -51,6 +51,7 @@ function normalizeTemplateBody(body: unknown) {
   }
 
   normalized.category = normalizeText(raw.category);
+  normalized.ownerAttendantId = normalizeText(raw.ownerAttendantId, 120);
   normalized.defaultPaymentMethod = normalizeText(raw.defaultPaymentMethod);
   normalized.defaultPaymentTerms = normalizeText(raw.defaultPaymentTerms);
   normalized.defaultDepositAmount = normalizeNumber(raw.defaultDepositAmount);
@@ -98,6 +99,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (!guard.ok) {
     return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
   }
+  if (!guard.isElevatedActor) {
+    return NextResponse.json({ ok: false, error: "Only admin can manage quotation templates." }, { status: 403 });
+  }
 
   const { id } = await context.params;
   const body = await request.json().catch(() => null);
@@ -124,6 +128,9 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   const guard = await guardRequest(request);
   if (!guard.ok) {
     return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+  }
+  if (!guard.isElevatedActor) {
+    return NextResponse.json({ ok: false, error: "Only admin can manage quotation templates." }, { status: 403 });
   }
 
   const { id } = await context.params;

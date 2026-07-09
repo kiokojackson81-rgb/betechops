@@ -107,6 +107,9 @@ const QUOTE_REQUEST_SCHEMA_SQL = [
     "id" TEXT NOT NULL,
     "templateName" TEXT NOT NULL,
     "category" TEXT,
+    "ownerAttendantId" TEXT,
+    "ownerAttendantEmail" TEXT,
+    "ownerAttendantName" TEXT,
     "systemSize" TEXT,
     "brand" TEXT,
     "projectOverview" TEXT,
@@ -132,6 +135,10 @@ const QUOTE_REQUEST_SCHEMA_SQL = [
     CONSTRAINT "QuotationTemplate_pkey" PRIMARY KEY ("id")
   )`,
   `CREATE INDEX IF NOT EXISTS "QuotationTemplate_isActive_updatedAt_idx" ON "QuotationTemplate"("isActive","updatedAt")`,
+  `CREATE INDEX IF NOT EXISTS "QuotationTemplate_ownerAttendantId_updatedAt_idx" ON "QuotationTemplate"("ownerAttendantId","updatedAt")`,
+  `ALTER TABLE "QuotationTemplate" ADD COLUMN IF NOT EXISTS "ownerAttendantId" TEXT`,
+  `ALTER TABLE "QuotationTemplate" ADD COLUMN IF NOT EXISTS "ownerAttendantEmail" TEXT`,
+  `ALTER TABLE "QuotationTemplate" ADD COLUMN IF NOT EXISTS "ownerAttendantName" TEXT`,
   `CREATE TABLE IF NOT EXISTS "QuotationEvent" (
     "id" TEXT NOT NULL,
     "quoteRequestId" TEXT NOT NULL,
@@ -452,6 +459,7 @@ export type QuoteRequestResponseInput = z.infer<typeof quoteRequestResponseSchem
 export const quotationTemplateSchema = z.object({
   templateName: z.string().trim().min(2).max(200),
   category: z.enum(QUOTE_TEMPLATE_CATEGORIES).optional().or(z.literal("")),
+  ownerAttendantId: z.string().trim().optional(),
   systemSize: z.string().trim().max(120).optional(),
   brand: z.string().trim().max(120).optional(),
   projectReferenceLinks: z.string().trim().max(4000).optional(),
@@ -720,6 +728,9 @@ export type SerializedQuotationTemplate = {
   id: string;
   templateName: string;
   category: QuoteTemplateCategory | null;
+  ownerAttendantId: string | null;
+  ownerAttendantEmail: string | null;
+  ownerAttendantName: string | null;
   systemSize: string | null;
   brand: string | null;
   projectReferenceLinks: string | null;
@@ -817,6 +828,9 @@ type QuotationTemplateRow = {
   id: string;
   templateName: string;
   category: string | null;
+  ownerAttendantId: string | null;
+  ownerAttendantEmail: string | null;
+  ownerAttendantName: string | null;
   systemSize: string | null;
   brand: string | null;
   projectOverview: string | null;
@@ -845,6 +859,9 @@ export const QUOTATION_TEMPLATE_SELECT_SQL = Prisma.sql`
   "id",
   "templateName",
   "category",
+  "ownerAttendantId",
+  "ownerAttendantEmail",
+  "ownerAttendantName",
   "systemSize",
   "brand",
   "projectOverview",
@@ -932,6 +949,9 @@ function serializeQuotationTemplate(row: QuotationTemplateRow): SerializedQuotat
     id: row.id,
     templateName: row.templateName,
     category: isQuoteTemplateCategory(row.category) ? row.category : null,
+    ownerAttendantId: row.ownerAttendantId,
+    ownerAttendantEmail: row.ownerAttendantEmail,
+    ownerAttendantName: row.ownerAttendantName,
     systemSize: row.systemSize,
     brand: row.brand,
     projectReferenceLinks:
@@ -1140,7 +1160,7 @@ export async function requireQuoteRequestsStaffActor(options?: { impersonateId?:
   };
 }
 
-async function getOrderedQuoteStaffUsers() {
+export async function getOrderedQuoteStaffUsers() {
   const staffUsers = await prisma.user.findMany({
     where: { email: { in: [...QUOTE_REQUEST_STAFF_EMAILS] } },
     select: { id: true, name: true, email: true },
@@ -1153,7 +1173,7 @@ async function getOrderedQuoteStaffUsers() {
   );
 }
 
-async function getQuoteStaffUserById(userId: string | null | undefined) {
+export async function getQuoteStaffUserById(userId: string | null | undefined) {
   if (!userId) return null;
   const staff = await getOrderedQuoteStaffUsers();
   return staff.find((user) => user.id === userId) ?? null;
@@ -1914,11 +1934,15 @@ export async function createQuotationTemplate(
 ) {
   await ensureQuoteRequestsSchema();
   const id = randomUUID();
+  const owner = await getQuoteStaffUserById(input.ownerAttendantId ?? null);
   await prisma.$executeRaw(Prisma.sql`
     INSERT INTO "QuotationTemplate" (
       "id",
       "templateName",
       "category",
+      "ownerAttendantId",
+      "ownerAttendantEmail",
+      "ownerAttendantName",
       "systemSize",
       "brand",
       "projectOverview",
@@ -1945,6 +1969,9 @@ export async function createQuotationTemplate(
       ${id},
       ${input.templateName.trim()},
       ${input.category || null},
+      ${owner?.id || null},
+      ${owner?.email || null},
+      ${owner?.name || null},
       ${input.systemSize?.trim() || null},
       ${input.brand?.trim() || null},
       ${input.projectOverview?.trim() || null},
@@ -1986,6 +2013,8 @@ export async function createQuotationTemplate(
 export async function listQuotationTemplates(options?: {
   activeOnly?: boolean;
   q?: string;
+  ownerAttendantId?: string | null;
+  viewerIsElevated?: boolean;
 }) {
   await ensureQuoteRequestsSchema();
   const query = String(options?.q || "").trim();
@@ -1994,6 +2023,11 @@ export async function listQuotationTemplates(options?: {
     FROM "QuotationTemplate"
     WHERE 1 = 1
       ${options?.activeOnly ? Prisma.sql`AND "isActive" = TRUE` : Prisma.empty}
+      ${
+        options?.viewerIsElevated
+          ? Prisma.empty
+          : Prisma.sql`AND ("ownerAttendantId" IS NULL OR "ownerAttendantId" = ${options?.ownerAttendantId || null})`
+      }
       ${
         query
           ? Prisma.sql`AND (
@@ -2025,6 +2059,7 @@ export async function duplicateQuotationTemplate(
     {
       templateName: `${existing.templateName} Copy`,
       category: isQuoteTemplateCategory(existing.category) ? existing.category : undefined,
+      ownerAttendantId: existing.ownerAttendantId || undefined,
       systemSize: existing.systemSize || undefined,
       brand: existing.brand || undefined,
       projectReferenceLinks:
@@ -2060,11 +2095,15 @@ export async function updateQuotationTemplate(
   actor: { id: string; name: string | null; email: string | null },
 ) {
   await ensureQuoteRequestsSchema();
+  const owner = await getQuoteStaffUserById(input.ownerAttendantId ?? null);
   await prisma.$executeRaw(Prisma.sql`
     UPDATE "QuotationTemplate"
     SET
       "templateName" = ${input.templateName.trim()},
       "category" = ${input.category || null},
+      "ownerAttendantId" = ${owner?.id || null},
+      "ownerAttendantEmail" = ${owner?.email || null},
+      "ownerAttendantName" = ${owner?.name || null},
       "systemSize" = ${input.systemSize?.trim() || null},
       "brand" = ${input.brand?.trim() || null},
       "projectOverview" = ${input.projectOverview?.trim() || null},

@@ -58,6 +58,12 @@ import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 
 type QuoteRequestStatusFilter = "ALL" | QuoteRequestStatus;
 
+type TemplateOwnerOption = {
+  id: string;
+  name: string | null;
+  email: string | null;
+};
+
 type Props = {
   apiBasePath: string;
   apiQueryParams?: Record<string, string | null | undefined>;
@@ -75,6 +81,7 @@ type Props = {
   enableCreate?: boolean;
   allowTemplateManager?: boolean;
   allowDelete?: boolean;
+  templateOwnerOptions?: TemplateOwnerOption[];
 };
 
 const QUOTE_REQUEST_STATUSES: QuoteRequestStatus[] = [
@@ -270,6 +277,7 @@ type CreateQuotationDraft = {
   quoteTitle: string;
   quoteMessage: string;
   templateId: string;
+  templateOwnerId: string;
   quoteItems: QuoteItemDraft[];
   discountAmount: string;
   warrantyMode: QuoteWarrantyMode;
@@ -386,6 +394,7 @@ function createDefaultQuotationDraft(): CreateQuotationDraft {
     quoteTitle: "",
     quoteMessage: "",
     templateId: "",
+    templateOwnerId: "",
     quoteItems: [],
     discountAmount: "",
     warrantyMode: "PER_ITEM",
@@ -440,7 +449,7 @@ function applyTemplateToCreateDraft(
   nextTemplate: SerializedQuotationTemplate | null,
 ) {
   if (!nextTemplate) {
-    return { ...current, templateId: "" };
+    return { ...current, templateId: "", templateOwnerId: "" };
   }
 
   const templateFeeState = nextTemplate.items?.length
@@ -465,6 +474,7 @@ function applyTemplateToCreateDraft(
   return {
     ...current,
     templateId: nextTemplate.id,
+    templateOwnerId: nextTemplate.ownerAttendantId || "",
     quoteTitle: nextTemplate.templateName || generateQuoteTitleFromItems(templateItems, current.projectType),
     quoteMessage: nextTemplate.projectOverview || nextTemplate.scopeOfWork || current.quoteMessage,
     quoteItems: templateItems,
@@ -537,6 +547,7 @@ function buildTemplatePayloadFromDraft(draft: CreateQuotationDraft) {
   return {
     templateName: draft.quoteTitle.trim() || generateQuoteTitleFromItems(draft.quoteItems, draft.projectType),
     category: "",
+    ownerAttendantId: draft.templateOwnerId || undefined,
     systemSize: "",
     brand: "",
     projectOverview: draft.projectOverview.trim() || "",
@@ -1016,6 +1027,7 @@ export default function QuotationRequestsDeskClient({
   enableCreate = true,
   allowTemplateManager = false,
   allowDelete = false,
+  templateOwnerOptions = [],
 }: Props) {
   const [requests, setRequests] = useState<SerializedQuoteRequest[]>([]);
   const [statusFilter, setStatusFilter] = useState<QuoteRequestStatusFilter>(defaultStatusFilter);
@@ -1463,7 +1475,12 @@ export default function QuotationRequestsDeskClient({
       if (data.template?.id) {
         setEditingTemplateId(data.template.id);
         setCreateMode("template");
-        setCreateDraft((current) => ({ ...current, templateId: data.template.id, quoteTitle: data.template.templateName }));
+        setCreateDraft((current) => ({
+          ...current,
+          templateId: data.template.id,
+          templateOwnerId: data.template.ownerAttendantId || "",
+          quoteTitle: data.template.templateName,
+        }));
       }
       setMessage(
         isEditing
@@ -1557,6 +1574,7 @@ export default function QuotationRequestsDeskClient({
       const body = {
         ...raw,
         templateName: String(raw.templateName || "").trim() || file.name.replace(/\.json$/i, ""),
+        ownerAttendantId: createDraft.templateOwnerId || raw.ownerAttendantId || undefined,
       };
       const response = await fetch(buildApiUrl(templateApiPath, apiQueryParams), {
         method: "POST",
@@ -2090,6 +2108,22 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
+                {templateOwnerOptions.length ? (
+                  <select
+                    value={createDraft.templateOwnerId}
+                    onChange={(event) =>
+                      setCreateDraft((current) => ({ ...current, templateOwnerId: event.target.value }))
+                    }
+                    className="rounded-full border border-white/10 bg-slate-950/70 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-200 outline-none"
+                  >
+                    <option value="">Shared admin template</option>
+                    {templateOwnerOptions.map((owner) => (
+                      <option key={owner.id} value={owner.id}>
+                        {owner.name || owner.email || owner.id}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
                 <button
                   type="button"
                   onClick={handleDownloadTemplateFormat}
@@ -2125,6 +2159,9 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                         <div className="mt-1 text-sm text-slate-400">
                           {template.items.length} item{template.items.length === 1 ? "" : "s"} · Updated{" "}
                           {formatDateTime(template.updatedAt)}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          Owner: {template.ownerAttendantName || template.ownerAttendantEmail || "Shared admin template"}
                         </div>
                         <div className="mt-2 text-xs uppercase tracking-[0.16em] text-slate-500">
                           {template.systemSize || template.brand || template.category || "Reusable quotation template"}
@@ -2295,6 +2332,25 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                     </select>
                   </label>
                 </div>
+              ) : null}
+              {allowTemplateManager && templateOwnerOptions.length ? (
+                <label className="text-xs uppercase tracking-wide text-slate-400 lg:col-span-2">
+                  Template owner
+                  <select
+                    value={createDraft.templateOwnerId}
+                    onChange={(event) =>
+                      setCreateDraft((current) => ({ ...current, templateOwnerId: event.target.value }))
+                    }
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
+                  >
+                    <option value="">Shared admin template</option>
+                    {templateOwnerOptions.map((owner) => (
+                      <option key={owner.id} value={owner.id}>
+                        {owner.name || owner.email || owner.id}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               ) : null}
               <input
                 ref={templateUploadInputRef}
