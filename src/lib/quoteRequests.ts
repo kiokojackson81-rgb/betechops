@@ -454,6 +454,7 @@ export const quotationTemplateSchema = z.object({
   category: z.enum(QUOTE_TEMPLATE_CATEGORIES).optional().or(z.literal("")),
   systemSize: z.string().trim().max(120).optional(),
   brand: z.string().trim().max(120).optional(),
+  projectReferenceLinks: z.string().trim().max(4000).optional(),
   projectOverview: z.string().trim().max(12000).optional(),
   whatItCanPower: z.string().trim().max(12000).optional(),
   scopeOfWork: z.string().trim().max(12000).optional(),
@@ -721,6 +722,7 @@ export type SerializedQuotationTemplate = {
   category: QuoteTemplateCategory | null;
   systemSize: string | null;
   brand: string | null;
+  projectReferenceLinks: string | null;
   projectOverview: string | null;
   whatItCanPower: string | null;
   scopeOfWork: string | null;
@@ -900,6 +902,10 @@ function serializeQuotationTemplate(row: QuotationTemplateRow): SerializedQuotat
     category: isQuoteTemplateCategory(row.category) ? row.category : null,
     systemSize: row.systemSize,
     brand: row.brand,
+    projectReferenceLinks:
+      typeof templateData?.projectReferenceLinks === "string"
+        ? templateData.projectReferenceLinks
+        : null,
     projectOverview: row.projectOverview,
     whatItCanPower: row.whatItCanPower,
     scopeOfWork: row.scopeOfWork,
@@ -1927,6 +1933,7 @@ export async function createQuotationTemplate(
       ${{
         items: sanitizeQuoteLineItems(input.items),
         defaultDiscountAmount: input.defaultDiscountAmount ?? null,
+        projectReferenceLinks: input.projectReferenceLinks?.trim() || null,
       } as Prisma.JsonObject},
       ${actor.id},
       ${actor.id},
@@ -1988,6 +1995,10 @@ export async function duplicateQuotationTemplate(
       category: isQuoteTemplateCategory(existing.category) ? existing.category : undefined,
       systemSize: existing.systemSize || undefined,
       brand: existing.brand || undefined,
+      projectReferenceLinks:
+        typeof asJsonObject(existing.templateData)?.projectReferenceLinks === "string"
+          ? (asJsonObject(existing.templateData)?.projectReferenceLinks as string)
+          : undefined,
       projectOverview: existing.projectOverview || undefined,
       whatItCanPower: existing.whatItCanPower || undefined,
       scopeOfWork: existing.scopeOfWork || undefined,
@@ -2042,6 +2053,7 @@ export async function updateQuotationTemplate(
       "templateData" = ${{
         items: sanitizeQuoteLineItems(input.items),
         defaultDiscountAmount: input.defaultDiscountAmount ?? null,
+        projectReferenceLinks: input.projectReferenceLinks?.trim() || null,
       } as Prisma.JsonObject},
       "updatedById" = ${actor.id},
       "updatedAt" = CURRENT_TIMESTAMP

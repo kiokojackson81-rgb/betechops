@@ -51,6 +51,13 @@ function firstUrl(...values: Array<string | null | undefined>) {
   return null;
 }
 
+function normalizeWarrantyText(value: string | null | undefined) {
+  const text = String(value || "").trim();
+  if (!text) return null;
+  if (/^0+(?:\.0+)?\s*(years?|months?)?$/i.test(text)) return null;
+  return text;
+}
+
 async function loadImageAsDataUrl(filePath: string) {
   try {
     const buffer = await fs.readFile(path.join(process.cwd(), filePath));
@@ -79,12 +86,10 @@ function mapToCompactInput(input: QuotePdfInput): CompactQuotePdfInput {
       quantity: item.quantity,
       unitPrice: item.unitPrice,
       warrantyText:
-        item.warranty ||
+        normalizeWarrantyText(item.warranty) ||
         (typeof item.warrantyPeriod === "number" && item.warrantyPeriod > 0
           ? `${item.warrantyPeriod} ${item.warrantyUnit === "MONTHS" ? "Months" : "Years"}`
-          : null) ||
-        item.defaultWarranty ||
-        null,
+          : null),
     })),
     subtotal: input.subtotal ?? null,
     grandTotal: input.total ?? null,

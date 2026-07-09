@@ -483,6 +483,8 @@ function applyTemplateToCreateDraft(
     installationTimeline: nextTemplate.installationTimeline || current.installationTimeline,
     afterSalesSupport: nextTemplate.afterSalesSupport || current.afterSalesSupport,
     termsAndConditions: nextTemplate.terms || current.termsAndConditions,
+    projectReferenceLinks:
+      nextTemplate.projectReferenceLinks || current.projectReferenceLinks,
     followUpNotes: nextTemplate.internalNotes || current.followUpNotes,
     paymentMethod: nextTemplate.defaultPaymentMethod || current.paymentMethod,
     paymentTerms: nextTemplate.defaultPaymentTerms || current.paymentTerms,
@@ -542,6 +544,7 @@ function buildTemplatePayloadFromDraft(draft: CreateQuotationDraft) {
     scopeOfWork: draft.whatPriceIncludes.trim() || "",
     deliveryTimeline: draft.deliveryTimeline.trim() || "",
     installationTimeline: draft.installationTimeline.trim() || "",
+    projectReferenceLinks: draft.projectReferenceLinks.trim() || "",
     warranty:
       (draft.warrantyMode === "FULL_SYSTEM" ? draft.fullSystemWarranty : draft.customWarranty).trim() || "",
     afterSalesSupport: draft.afterSalesSupport.trim() || "",
@@ -849,10 +852,22 @@ function parseWarrantyPeriodText(value: string | null | undefined) {
   if (!match) {
     return { warrantyPeriod: "", warrantyUnit: "YEARS" as QuoteWarrantyUnit };
   }
+  const numeric = Number(match[1]);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return { warrantyPeriod: "", warrantyUnit: "YEARS" as QuoteWarrantyUnit };
+  }
   return {
     warrantyPeriod: match[1],
     warrantyUnit: /month/i.test(match[2]) ? ("MONTHS" as QuoteWarrantyUnit) : ("YEARS" as QuoteWarrantyUnit),
   };
+}
+
+function normalizeWarrantyText(value: string | null | undefined) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const zeroPeriodMatch = text.match(/^0+(?:\.0+)?\s*(years?|months?)?$/i);
+  if (zeroPeriodMatch) return "";
+  return text;
 }
 
 function composeWarrantyLabel(item: {
@@ -869,7 +884,7 @@ function composeWarrantyLabel(item: {
       return `${normalized} ${item.warrantyUnit === "MONTHS" ? "Months" : "Years"}`;
     }
   }
-  return String(item.warranty || item.defaultWarranty || "").trim();
+  return normalizeWarrantyText(item.warranty);
 }
 
 function hydrateQuoteItemDraft(input: {
@@ -892,14 +907,14 @@ function hydrateQuoteItemDraft(input: {
           warrantyPeriod: String(input.warrantyPeriod),
           warrantyUnit: input.warrantyUnit ?? "YEARS",
         }
-      : parseWarrantyPeriodText(input.warranty || input.defaultWarranty);
+      : parseWarrantyPeriodText(normalizeWarrantyText(input.warranty));
   return {
     itemName: input.itemName,
     description: input.description?.trim() || "",
     quantity: input.quantity ?? "1",
     unitPrice: input.unitPrice ?? "",
     defaultWarranty: input.defaultWarranty?.trim() || "",
-    warranty: input.warranty?.trim() || "",
+    warranty: normalizeWarrantyText(input.warranty),
     warrantyPeriod: parsedWarranty.warrantyPeriod,
     warrantyUnit: parsedWarranty.warrantyUnit,
     warrantyNotes: input.warrantyNotes?.trim() || "",

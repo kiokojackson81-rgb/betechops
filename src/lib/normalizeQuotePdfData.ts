@@ -174,8 +174,11 @@ function sanitizeText(value: string | null | undefined) {
 function extractCompactWarrantyLabel(value: string | null | undefined) {
   const text = String(value || "").trim();
   if (!text) return "";
+  if (/^0+(?:\.0+)?\s*(years?|months?)?$/i.test(text)) return "";
   const match = text.match(/(\d+(?:\.\d+)?)\s*(years?|months?)/i);
   if (!match) return "";
+  const numeric = Number(match[1]);
+  if (!Number.isFinite(numeric) || numeric <= 0) return "";
   const amount = match[1];
   const unit = /month/i.test(match[2]) ? "Months" : "Years";
   return `${amount} ${unit}`;

@@ -399,6 +399,47 @@ function renderTermsCards(terms: readonly string[]) {
     .join("");
 }
 
+function normalizeProjectPortfolioLink(url?: string | null) {
+  const text = String(url || "").trim();
+  if (!text) return null;
+  try {
+    const parsed = new URL(text);
+    return `${parsed.origin}${parsed.pathname}`.replace(/\/$/, "").toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+function isDefaultProjectPortfolioLink(url?: string | null) {
+  const normalized = normalizeProjectPortfolioLink(url);
+  if (!normalized) return true;
+  const defaults = new Set([
+    "https://www.tiktok.com/@betechsolarprojects",
+    "https://www.betech.co.ke/projects",
+  ]);
+  return defaults.has(normalized);
+}
+
+function getProjectQrCopy(projectLink?: string | null) {
+  if (isDefaultProjectPortfolioLink(projectLink)) {
+    return {
+      leftTitle: "VIEW OUR RECENT SOLAR PROJECTS",
+      leftBody: "See real installations completed by Betech Solar Solutions across Kenya.",
+      leftNote: "Scan the QR code or click the link below to view our recent solar projects and completed installations.",
+      qrHeader: "SEE OUR RECENT PROJECTS",
+      qrBody: "Scan the QR code to view our recent solar projects and completed installations.",
+    };
+  }
+
+  return {
+    leftTitle: "VIEW A SIMILAR INSTALLATION",
+    leftBody: "See a similar solar installation completed by Betech Solar Solutions.",
+    leftNote: "Scan the QR code or click the link below to view this similar project directly.",
+    qrHeader: "SEE A SIMILAR PROJECT",
+    qrBody: "Scan the QR code to view a similar solar project completed by Betech Solar Solutions.",
+  };
+}
+
 type QuotationLayoutBlock = {
   id: string;
   html: string;
@@ -430,9 +471,7 @@ export function buildQuotationHtml(
   serviceCostRows.push(["Final quoted amount", data.grandTotal]);
   const costRows = serviceCostRows;
   const featuredProjectUrl = data.similarProjectUrl || data.company.projectsUrl;
-  const featuredProjectLabel = data.similarProjectUrl
-    ? data.similarProjectLabel || "View a similar installation"
-    : "View our recent projects";
+  const projectQrCopy = getProjectQrCopy(featuredProjectUrl);
   const featuredProjectQr = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(featuredProjectUrl)}`;
   const feeStateNotes = [
     data.deliveryMode === "INCLUDED"
@@ -496,9 +535,9 @@ export function buildQuotationHtml(
                   <div class="link-circle">${iconSvg("play")}</div>
                   <div class="link-divider"></div>
                   <div>
-                    <div class="link-title">View Our Recent Solar Projects</div>
-                    <div class="link-subtitle">See real installations completed by Betech Solar Solutions across Kenya.</div>
-                    <div class="link-note">Scan the QR code or click the link below to view this project and more completed installations.</div>
+                    <div class="link-title">${escapeHtml(projectQrCopy.leftTitle)}</div>
+                    <div class="link-subtitle">${escapeHtml(projectQrCopy.leftBody)}</div>
+                    <div class="link-note">${escapeHtml(projectQrCopy.leftNote)}</div>
                     <div class="link-url">${iconSvg("globe")}<span>${escapeHtml(featuredProjectUrl)}</span></div>
                   </div>
                 </div>
@@ -529,8 +568,8 @@ export function buildQuotationHtml(
               </div>
 
               <div class="qr-card">
-                <div class="qr-head">${iconSvg("mobile")}<span>See This System Installed</span></div>
-                <div class="qr-caption">Scan the QR code to view this project and more completed installations.</div>
+                <div class="qr-head">${iconSvg("mobile")}<span>${escapeHtml(projectQrCopy.qrHeader)}</span></div>
+                <div class="qr-caption">${escapeHtml(projectQrCopy.qrBody)}</div>
                 <div class="qr-box">
                   <img src="${featuredProjectQr}" alt="Project QR code" />
                 </div>
