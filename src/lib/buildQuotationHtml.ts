@@ -277,7 +277,7 @@ function renderBoqRows(items: ReturnType<typeof normalizeQuotePdfData>["items"])
       const summary = splitItem(item.name, item.description);
       const warrantyText = String(item.warrantyText || "").trim();
       return `
-        <tr class="${index % 2 === 0 ? "boq-row-even" : "boq-row-odd"}">
+        <tr class="boq-row ${index % 2 === 0 ? "boq-row-even" : "boq-row-odd"}">
           <td class="center">${item.index}</td>
           <td>
             <div class="item-name">${escapeHtml(summary.title)}</div>
@@ -750,6 +750,11 @@ export function buildQuotationHtml(
     page-break-inside: avoid;
     margin-bottom: 0;
   }
+  .quote-block.boq-block,
+  .quote-block[data-block-id="boq"] {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
   .compact-quotation .quote-block {
     margin-bottom: 0;
   }
@@ -799,7 +804,6 @@ export function buildQuotationHtml(
   .mini-card,
   .qr-card,
   .terms-card,
-  .boq-shell,
   .footer-brand {
     border-radius: 12px;
     background: #ffffff;
@@ -807,6 +811,14 @@ export function buildQuotationHtml(
     box-shadow: 0 2px 8px rgba(0,0,0,.05);
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+  .boq-shell {
+    border-radius: 12px;
+    background: #ffffff;
+    border: 1px solid #e7e7e7;
+    box-shadow: 0 2px 8px rgba(0,0,0,.05);
+    break-inside: auto;
+    page-break-inside: auto;
   }
   .hero-card {
     padding: 2mm 3.6mm 2.8mm;
@@ -1014,6 +1026,8 @@ export function buildQuotationHtml(
     border-radius: 12px 12px 0 0;
     background: linear-gradient(90deg, #9b1111, #b71c1c);
     color: #fff;
+    break-after: avoid;
+    page-break-after: avoid;
   }
   .section-head-icon {
     width: 9.5mm;
@@ -1031,11 +1045,17 @@ export function buildQuotationHtml(
     letter-spacing: .06em;
   }
   .section-body { padding: 2.6mm; }
-  .boq-shell { overflow: hidden; }
+  .boq-shell { overflow: visible; }
   .boq {
     width: 100%;
     border-collapse: separate;
     border-spacing: 0;
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+  .boq-row {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
   .boq th {
     background: #9b1111;
@@ -1078,6 +1098,7 @@ export function buildQuotationHtml(
     font-size: 7.1px;
     font-weight: 700;
     line-height: 1.25;
+    white-space: nowrap;
   }
   .bottom-grid {
     display: grid;
@@ -1791,6 +1812,7 @@ export function buildQuotationHtml(
       </div>
     </div>
 
+    <section class="quote-block boq-block" data-block-id="boq">
     <div class="boq-shell">
       <div class="section-head">
         <div class="section-head-icon">${iconSvg("briefcase")}</div>
@@ -1814,6 +1836,7 @@ export function buildQuotationHtml(
         </table>
       </div>
     </div>
+    </section>
 
     ${renderQuotationBlocks(postBoqBlocks)}
   </div>

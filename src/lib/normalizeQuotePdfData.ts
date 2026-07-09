@@ -167,6 +167,16 @@ function sanitizeText(value: string | null | undefined) {
   return text || null;
 }
 
+function extractCompactWarrantyLabel(value: string | null | undefined) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const match = text.match(/(\d+(?:\.\d+)?)\s*(years?|months?)/i);
+  if (!match) return "";
+  const amount = match[1];
+  const unit = /month/i.test(match[2]) ? "Months" : "Years";
+  return `${amount} ${unit}`;
+}
+
 function sanitizeUrl(value: string | null | undefined) {
   const text = String(value || "").trim();
   if (!text) return null;
@@ -239,8 +249,11 @@ export function normalizeQuotePdfData(input: QuotePdfInput): NormalizedQuotePdfD
   const wholeWarrantyText = sanitizeText(input.wholeWarrantyText) || "";
   const items =
     warrantyMode === "WHOLE_QUOTATION" || warrantyMode === "FULL_SYSTEM"
-      ? rows.rows.map((item) => ({ ...item, warrantyText: wholeWarrantyText }))
-      : rows.rows;
+      ? rows.rows.map((item) => ({ ...item, warrantyText: "Full system warranty" }))
+      : rows.rows.map((item) => ({
+          ...item,
+          warrantyText: extractCompactWarrantyLabel(item.warrantyText) || item.warrantyText,
+        }));
   const deliveryMode = normalizeFeeMode(input.deliveryMode);
   const installationMode = normalizeFeeMode(input.installationMode);
 
