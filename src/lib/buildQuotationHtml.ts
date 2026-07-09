@@ -295,6 +295,9 @@ function renderBoqRows(items: ReturnType<typeof normalizeQuotePdfData>["items"])
 
 function renderCostRows(rows: ReadonlyArray<readonly [string, number]>) {
   const iconByLabel = (label: string): IconName => {
+    if (/discount/i.test(label)) return "alert";
+    if (/final amount/i.test(label)) return "wallet";
+    if (/project cost/i.test(label)) return "package";
     if (/installation/i.test(label)) return "wrench";
     if (/transport/i.test(label)) return "truck";
     if (/project value/i.test(label)) return "wallet";
@@ -427,11 +430,12 @@ export function buildQuotationHtml(
   if (data.deliveryMode === "CHARGED" && data.transportTotal > 0) {
     serviceCostRows.push(["Transport", data.transportTotal]);
   }
-  serviceCostRows.push(["Project Value", data.grandTotal]);
-  const costRows =
-    data.items.length === 1 && serviceCostRows.length === 2
-      ? ([["Quoted Item Value", data.equipmentTotal], ["Project Value", data.grandTotal]] as const)
-      : serviceCostRows;
+  serviceCostRows.push(["Project Cost", data.subtotal]);
+  if (data.discountAmount > 0) {
+    serviceCostRows.push(["Discount", -data.discountAmount]);
+  }
+  serviceCostRows.push(["Final Amount", data.grandTotal]);
+  const costRows = serviceCostRows;
   const featuredProjectUrl = data.similarProjectUrl || data.company.projectsUrl;
   const featuredProjectLabel = data.similarProjectUrl
     ? data.similarProjectLabel || "View a similar installation"

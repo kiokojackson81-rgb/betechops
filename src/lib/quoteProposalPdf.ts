@@ -24,6 +24,7 @@ export type QuotePdfInput = {
   items: StoredQuoteLineItem[];
   subtotal?: number;
   total?: number;
+  discountAmount?: number | null;
   paymentMethod?: QuotePaymentMethod | null;
   paymentTerms?: QuotePaymentTerms | null;
   deliveryMode?: QuoteFeeMode | null;
@@ -85,6 +86,9 @@ function mapToCompactInput(input: QuotePdfInput): CompactQuotePdfInput {
         item.defaultWarranty ||
         null,
     })),
+    subtotal: input.subtotal ?? null,
+    grandTotal: input.total ?? null,
+    discountAmount: input.discountAmount ?? null,
     customerNotes: input.quoteMessage || null,
     similarProjectUrl: firstUrl(
       input.proposalSections?.projectReferenceLinks,

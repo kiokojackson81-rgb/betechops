@@ -36,6 +36,9 @@ export type QuotePdfInput = {
     location?: string | null;
   };
   items: QuotePdfItemInput[];
+  subtotal?: number | null;
+  grandTotal?: number | null;
+  discountAmount?: number | null;
   customerNotes?: string | null;
   warrantyMode?: QuotePdfWarrantyMode;
   wholeWarrantyText?: string | null;
@@ -85,6 +88,7 @@ export type NormalizedQuotePdfData = {
   items: NormalizedQuotePdfRow[];
   subtotal: number;
   grandTotal: number;
+  discountAmount: number;
   equipmentTotal: number;
   transportTotal: number;
   installationTotal: number;
@@ -189,6 +193,10 @@ function normalizeFeeMode(value: QuotePdfFeeMode | string | null | undefined): Q
   return "NOT_INCLUDED";
 }
 
+function normalizeCurrencyNumber(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : null;
+}
+
 function inferTitle(inputTitle: string | null | undefined, items: QuotePdfItemInput[]) {
   const cleaned = sanitizeText(inputTitle);
   if (cleaned) return cleaned;
@@ -283,8 +291,15 @@ export function normalizeQuotePdfData(input: QuotePdfInput): NormalizedQuotePdfD
         sanitizeText(input.preparedBy?.salesDesk) || BETECH_PREPARED_BY_DEFAULTS.salesDesk,
     },
     items,
-    subtotal: rows.subtotal,
-    grandTotal: rows.grandTotal,
+    subtotal:
+      normalizeCurrencyNumber(input.subtotal) ??
+      normalizeCurrencyNumber(input.grandTotal) ??
+      rows.subtotal,
+    grandTotal:
+      normalizeCurrencyNumber(input.grandTotal) ??
+      ((normalizeCurrencyNumber(input.subtotal) ?? rows.subtotal) -
+        (normalizeCurrencyNumber(input.discountAmount) ?? 0)),
+    discountAmount: normalizeCurrencyNumber(input.discountAmount) ?? 0,
     equipmentTotal: rows.equipmentTotal,
     transportTotal: rows.transportTotal,
     installationTotal: rows.installationTotal,
