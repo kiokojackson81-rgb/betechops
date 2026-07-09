@@ -450,8 +450,8 @@ function applyTemplateToCreateDraft(
           description: item.description || "",
           quantity: item.quantity,
           unitPrice: item.unitPrice,
-          defaultWarranty: item.defaultWarranty || nextTemplate.warranty || "",
-          warranty: item.warranty || item.defaultWarranty || nextTemplate.warranty || "",
+          defaultWarranty: item.defaultWarranty || "",
+          warranty: item.warranty || item.defaultWarranty || "",
           warrantyPeriod: (item as { warrantyPeriod?: number | null }).warrantyPeriod,
           warrantyUnit: (item as { warrantyUnit?: QuoteWarrantyUnit | null }).warrantyUnit,
           warrantyNotes: item.warrantyNotes || "",
@@ -881,7 +881,9 @@ function hydrateQuoteItemDraft(input: {
   warrantySource?: QuoteWarrantySource;
 }) {
   const parsedWarranty =
-    input.warrantyPeriod !== undefined && input.warrantyPeriod !== null
+    input.warrantyPeriod !== undefined &&
+    input.warrantyPeriod !== null &&
+    Number(input.warrantyPeriod) > 0
       ? {
           warrantyPeriod: String(input.warrantyPeriod),
           warrantyUnit: input.warrantyUnit ?? "YEARS",
