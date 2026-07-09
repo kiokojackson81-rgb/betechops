@@ -29,6 +29,13 @@ function formatMoney(value: number | null | undefined) {
   }).format(Number(value || 0));
 }
 
+function formatStatus(value: string | null | undefined) {
+  return String(value || "Quotation")
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 function metricCard(label: string, value: string) {
   return (
     <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
@@ -163,6 +170,52 @@ export default async function AdminCustomerProfilePage({
               {metricCard("Pending web orders", String(context.sales.pendingWebOrders))}
               {metricCard("Pending POD", String(context.sales.pendingPod))}
               {metricCard("Portal sign-in", context.account.lastLoginMethod || "Not recorded")}
+            </div>
+          </section>
+
+          <section className="rounded-[26px] border border-white/10 bg-slate-950/60 p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Recent quotations</div>
+              <div className="text-xs text-slate-500">{context.recentQuotations.length} visible</div>
+            </div>
+            <div className="mt-4 space-y-3">
+              {context.recentQuotations.length ? (
+                context.recentQuotations.map((quotation) => (
+                  <div key={quotation.id} className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
+                    <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="font-semibold text-white">{quotation.quoteRef}</div>
+                          <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-100">
+                            {formatStatus(quotation.status)}
+                          </span>
+                        </div>
+                        <div className="mt-2 text-sm text-slate-300">
+                          {quotation.quoteTitle || "Quotation proposal"}
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-4 text-xs text-slate-500">
+                          <span>{quotation.itemCount} items</span>
+                          <span>{formatMoney(quotation.totalAmount)}</span>
+                          <span>Updated {formatDateTime(quotation.updatedAt)}</span>
+                          {quotation.customerActionAt ? <span>Viewed {formatDateTime(quotation.customerActionAt)}</span> : null}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Link href={quotation.href} className="rounded-full border border-white/10 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-white/20 hover:text-white">
+                          Open quotation
+                        </Link>
+                        <a href={quotation.pdfHref} className="rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-100 transition hover:border-cyan-300/35">
+                          Download PDF
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-sm text-slate-500">
+                  No quotation records linked to this customer yet.
+                </div>
+              )}
             </div>
           </section>
 

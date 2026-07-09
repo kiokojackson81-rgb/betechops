@@ -820,6 +820,9 @@ export default function VoiceConsoleClient({
   }, [data.selectedContext, selectedCall]);
 
   const selectedChatraceActivity = selectedContextData?.chatrace || selectedCall?.customer?.chatrace || null;
+  const selectedRecentQuotations = Array.isArray((selectedContextData as any)?.recentQuotations)
+    ? ((selectedContextData as any).recentQuotations as Array<any>)
+    : [];
 
   const buildVoiceCustomerProfileHref = (input: {
     customerUserId?: string | null;
@@ -3230,6 +3233,62 @@ export default function VoiceConsoleClient({
                             </button>
                           </div>
                         </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-[20px] border border-slate-800 bg-slate-900/70 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-lg font-semibold text-white">Recent Quotations</div>
+                        <div className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                          {selectedRecentQuotations.length} linked
+                        </div>
+                      </div>
+                      <div className="mt-4 space-y-3">
+                        {selectedRecentQuotations.length ? (
+                          selectedRecentQuotations.map((quotation) => (
+                            <div key={quotation.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                <div className="min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <div className="font-semibold text-white">{quotation.quoteRef}</div>
+                                    <span className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(quotation.status)}`}>
+                                      {formatDispositionLabel(quotation.status)}
+                                    </span>
+                                  </div>
+                                  <div className="mt-2 text-sm text-slate-300">
+                                    {quotation.quoteTitle || "Quotation proposal"}
+                                  </div>
+                                  <div className="mt-2 flex flex-wrap gap-4 text-xs text-slate-500">
+                                    <span>{quotation.itemCount || 0} items</span>
+                                    <span>{formatMoney(quotation.totalAmount)}</span>
+                                    <span>Updated {formatDateTime(quotation.updatedAt)}</span>
+                                    {quotation.customerActionAt ? <span>Viewed {formatDateTime(quotation.customerActionAt)}</span> : null}
+                                  </div>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => openWorkspaceHref(quotation.href)}
+                                    className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
+                                  >
+                                    Open quotation
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => openWorkspaceHref(quotation.pdfHref)}
+                                    className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
+                                  >
+                                    Download PDF
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="rounded-2xl border border-dashed border-slate-800 px-3 py-6 text-sm text-slate-500">
+                            No quotation records linked to this customer yet.
+                          </div>
+                        )}
                       </div>
                     </div>
 

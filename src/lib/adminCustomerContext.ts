@@ -95,6 +95,18 @@ export type AdminCustomerContextResponse = {
       createdAt: string;
     } | null;
   };
+  recentQuotations: Array<{
+    id: string;
+    quoteRef: string;
+    quoteTitle: string | null;
+    status: string;
+    updatedAt: string;
+    customerActionAt: string | null;
+    itemCount: number;
+    totalAmount: number;
+    href: string;
+    pdfHref: string;
+  }>;
   chatrace: {
     found: boolean;
     lastInteractionAt: string | null;
@@ -189,6 +201,11 @@ function buildQuotationHref(quoteId: string | null | undefined) {
   params.set("tab", "quotations");
   if (quoteId) params.set("quoteId", quoteId);
   return `/marketing/receipts?${params.toString()}`;
+}
+
+function buildQuotationPdfHref(quoteId: string | null | undefined) {
+  if (!quoteId) return "/marketing/receipts?tab=quotations";
+  return `/api/attendant/quote-requests/${encodeURIComponent(quoteId)}/pdf`;
 }
 
 function mapVoiceTimelineTone(type: VoiceTimelineItem["type"]): AdminCustomerContextTimelineItem["tone"] {
@@ -587,6 +604,32 @@ export async function getAdminCustomerContext(
           }
         : null,
     },
+    recentQuotations: recentCustomerQuotations.slice(0, 5).map((quotation) => {
+      const quotationData =
+        quotation.quotationData && typeof quotation.quotationData === "object"
+          ? (quotation.quotationData as Record<string, unknown>)
+          : null;
+      const items = Array.isArray(quotationData?.items) ? quotationData.items : [];
+      const totalAmount = Number(
+        typeof quotationData?.total === "number"
+          ? quotationData.total
+          : typeof quotationData?.subtotal === "number"
+            ? quotationData.subtotal
+            : 0,
+      );
+      return {
+        id: quotation.id,
+        quoteRef: quotation.quoteRef,
+        quoteTitle: quotation.quoteTitle || null,
+        status: quotation.status,
+        updatedAt: toIso(quotation.updatedAt || quotation.createdAt) || new Date().toISOString(),
+        customerActionAt: toIso(quotation.customerActionAt),
+        itemCount: items.length,
+        totalAmount,
+        href: buildQuotationHref(quotation.id),
+        pdfHref: buildQuotationPdfHref(quotation.id),
+      };
+    }),
     chatrace: mapChatrace(
       voiceContext?.chatrace || {
         found: false,

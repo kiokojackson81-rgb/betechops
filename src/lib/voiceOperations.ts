@@ -495,8 +495,11 @@ export function resolveVoiceProviderOutcome(call: {
   };
 }
 
-function toIso(value: Date | null | undefined) {
-  return value ? value.toISOString() : null;
+function toIso(value: Date | string | null | undefined) {
+  if (!value) return null;
+  if (value instanceof Date) return value.toISOString();
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 function getCallStartedAt(call: { startedAt: Date | null; createdAt: Date }) {
@@ -540,6 +543,18 @@ function buildQuoteHref(quoteId: string | null | undefined, impersonateId?: stri
   if (quoteId) url.searchParams.set("quoteId", quoteId);
   if (impersonateId) url.searchParams.set("impersonateId", impersonateId);
   return `${url.pathname}?${url.searchParams.toString()}`;
+}
+
+function buildQuotePdfHref(quoteId: string | null | undefined, impersonateId?: string | null) {
+  const url = new URL("https://voice.local/api/attendant/quote-requests");
+  url.pathname = quoteId
+    ? `/api/attendant/quote-requests/${encodeURIComponent(quoteId)}/pdf`
+    : "/marketing/receipts";
+  if (!quoteId) {
+    url.searchParams.set("tab", "quotations");
+  }
+  if (impersonateId) url.searchParams.set("impersonateId", impersonateId);
+  return `${url.pathname}${url.searchParams.toString() ? `?${url.searchParams.toString()}` : ""}`;
 }
 
 function buildCreateReceiptHref(impersonateId?: string | null) {
@@ -977,6 +992,32 @@ function serializeCustomerContextSummary(context: Awaited<ReturnType<typeof getV
     },
     latestReceiptId: context.recentReceipts[0]?.id ?? null,
     latestQuotationId: context.recentQuotations[0]?.id ?? null,
+    recentQuotations: context.recentQuotations.slice(0, 4).map((quotation) => {
+      const quotationData =
+        quotation.quotationData && typeof quotation.quotationData === "object"
+          ? (quotation.quotationData as Record<string, unknown>)
+          : null;
+      const items = Array.isArray(quotationData?.items) ? quotationData.items : [];
+      const totalAmount = Number(
+        typeof quotationData?.total === "number"
+          ? quotationData.total
+          : typeof quotationData?.subtotal === "number"
+            ? quotationData.subtotal
+            : 0,
+      );
+      return {
+        id: quotation.id,
+        quoteRef: quotation.quoteRef,
+        quoteTitle: quotation.quoteTitle || null,
+        status: quotation.status,
+        updatedAt: toIso(quotation.updatedAt || quotation.createdAt),
+        customerActionAt: toIso(quotation.customerActionAt),
+        itemCount: items.length,
+        totalAmount,
+        href: buildQuoteHref(quotation.id),
+        pdfHref: buildQuotePdfHref(quotation.id),
+      };
+    }),
     recentTimeline: context.timeline.slice(0, 8).map((item) => ({
       ...item,
       at: item.at.toISOString(),

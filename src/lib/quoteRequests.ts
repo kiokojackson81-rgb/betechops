@@ -1754,6 +1754,37 @@ export async function listCustomerQuoteRequests(input: {
   return rows.map(serializeQuoteRequest);
 }
 
+export async function getCustomerQuoteRequestById(input: {
+  id: string;
+  userId: string;
+  phoneVariants: string[];
+  normalizedEmails: string[];
+}) {
+  await ensureQuoteRequestsSchema();
+  const conditions: Prisma.Sql[] = [Prisma.sql`"customerUserId" = ${input.userId}`];
+  const phoneVariants = [...new Set(input.phoneVariants.map(normalizePhone).filter(Boolean))];
+  const normalizedEmails = [...new Set(input.normalizedEmails.map(normalizeEmail).filter(Boolean))];
+
+  if (phoneVariants.length) {
+    conditions.push(Prisma.sql`"customerPhone" IN (${Prisma.join(phoneVariants)})`);
+  }
+  if (normalizedEmails.length) {
+    conditions.push(
+      Prisma.sql`LOWER(COALESCE("customerEmail", '')) IN (${Prisma.join(normalizedEmails)})`,
+    );
+  }
+
+  const rows = await prisma.$queryRaw<QuoteRequestRow[]>(Prisma.sql`
+    SELECT ${QUOTE_REQUEST_SELECT_SQL}
+    FROM "QuoteRequest"
+    WHERE "id" = ${input.id}
+      AND (${Prisma.join(conditions, " OR ")})
+    LIMIT 1
+  `);
+
+  return rows[0] ? serializeQuoteRequest(rows[0]) : null;
+}
+
 export async function listAllQuoteRequests(input?: {
   status?: QuoteRequestStatus | "ALL";
   assignedAttendantId?: string | null;

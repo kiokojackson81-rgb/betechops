@@ -1,0 +1,88 @@
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { buildCustomerAccountIdentity } from "@/lib/shopCustomerOrders";
+import { getCustomerQuoteRequestById } from "@/lib/quoteRequests";
+import { parseStoredQuoteProposal } from "@/lib/quoteProposal";
+import { buildQuoteProposalPdfBuffer } from "@/lib/quoteProposalPdf";
+
+export const dynamic = "force-dynamic";
+
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const session = await auth().catch(() => null);
+  const user = session?.user as { id?: string | null; phone?: string | null; email?: string | null } | undefined;
+
+  if (!user?.id) {
+    return NextResponse.json({ ok: false, error: "Please sign in to access your quotation." }, { status: 401 });
+  }
+
+  const identity = buildCustomerAccountIdentity(
+    {
+      id: user.id,
+      phone: user.phone || null,
+      email: user.email || null,
+    },
+    null,
+  );
+
+  const { id } = await context.params;
+  const quoteRequest = await getCustomerQuoteRequestById({
+    id,
+    userId: identity.userId,
+    phoneVariants: identity.phoneVariants,
+    normalizedEmails: identity.normalizedEmails,
+  });
+
+  if (!quoteRequest) {
+    return NextResponse.json({ ok: false, error: "Quotation not found." }, { status: 404 });
+  }
+
+  const proposal = parseStoredQuoteProposal(quoteRequest.quotationData);
+  const quotationPdf = await buildQuoteProposalPdfBuffer({
+    quoteRef: quoteRequest.quoteRef,
+    quoteTitle: quoteRequest.quoteTitle || "Betech Solar quotation",
+    customerName: quoteRequest.customerName,
+    customerPhone: quoteRequest.customerPhone,
+    customerEmail: quoteRequest.customerEmail,
+    customerLocation:
+      quoteRequest.customerLocation ||
+      [quoteRequest.town, quoteRequest.county].filter(Boolean).join(", ") ||
+      null,
+    issuedAtLabel: new Date().toLocaleString("en-KE"),
+    items: proposal.items,
+    subtotal: proposal.subtotal,
+    total: proposal.total,
+    discountAmount: proposal.discountAmount,
+    paymentMethod: proposal.paymentMethod,
+    paymentTerms: proposal.paymentTerms,
+    deliveryMode: proposal.deliveryMode,
+    installationMode: proposal.installationMode,
+    depositAmount: proposal.depositAmount,
+    balanceAmount: proposal.balanceAmount,
+    quoteMessage: quoteRequest.quoteMessage,
+    warrantyMode: proposal.warrantyMode,
+    fullSystemWarranty: proposal.fullSystemWarranty,
+    customWarranty: proposal.customWarranty,
+    warrantyGeneralNotes: proposal.warrantyGeneralNotes,
+    aiWarrantySummary: proposal.aiWarrantySummary,
+    proposalSections: proposal.proposalSections,
+    proposalVisibility: proposal.proposalVisibility,
+    preparedBy: {
+      team:
+        quoteRequest.assignedAttendant?.name ||
+        quoteRequest.assignedAttendant?.email ||
+        "Quotation attendant",
+      leadTechnicianName: "Jackson",
+      leadTechnicianPhone: "0705663175",
+      salesDesk: "0722 151 083",
+    },
+  });
+
+  return new NextResponse(quotationPdf, {
+    status: 200,
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename=\"${quoteRequest.quoteRef}.pdf\"`,
+      "Cache-Control": "no-store",
+    },
+  });
+}

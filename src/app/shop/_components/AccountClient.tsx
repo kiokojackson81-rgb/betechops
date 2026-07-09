@@ -552,6 +552,20 @@ export default function AccountClient({ initialProfile, recentOrders, recentQuot
                             ) : null}
                           </div>
                         ) : null}
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <a
+                            href={`/api/shop/quotes/${encodeURIComponent(quote.id)}/pdf`}
+                            className="inline-flex items-center rounded-full border border-[#7a0000]/15 bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.12em] text-[#7a0000] transition hover:border-[#7a0000]/30"
+                          >
+                            Download PDF
+                          </a>
+                          <Link
+                            href="/request-quote"
+                            className="inline-flex items-center rounded-full border border-[#0f172a]/10 bg-[#fff3d8] px-3 py-2 text-xs font-black uppercase tracking-[0.12em] text-slate-950 transition hover:border-[#7a0000]/20"
+                          >
+                            Request update
+                          </Link>
+                        </div>
                       </div>
                     );
                   })

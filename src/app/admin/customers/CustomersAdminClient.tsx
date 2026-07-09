@@ -66,6 +66,18 @@ type CustomerContext = {
     pendingPod: number;
     lastPurchaseAt: string | null;
   };
+  recentQuotations: Array<{
+    id: string;
+    quoteRef: string;
+    quoteTitle: string | null;
+    status: string;
+    updatedAt: string;
+    customerActionAt: string | null;
+    itemCount: number;
+    totalAmount: number;
+    href: string;
+    pdfHref: string;
+  }>;
   chatrace: {
     found: boolean;
     lastInteractionAt: string | null;
@@ -103,6 +115,12 @@ const dateTime = (value?: string | null) =>
         timeStyle: "short",
       }).format(new Date(value))
     : "—";
+
+const formatStatus = (value?: string | null) =>
+  String(value || "Quotation")
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 function buildPortalLoginHref(args: {
   customerUserId?: string | null;
@@ -487,6 +505,53 @@ export default function CustomersAdminClient({ customers }: { customers: Custome
                                 <div>Chatrace channel: {detail.chatrace.channel || "Not recorded"}</div>
                                 <div>Tags: {detail.chatrace.tags.join(", ") || "No tags"}</div>
                               </div>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {detail ? (
+                          <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Recent quotations</div>
+                              <div className="text-xs text-slate-500">{detail.recentQuotations.length} visible</div>
+                            </div>
+                            <div className="mt-4 space-y-3">
+                              {detail.recentQuotations.length ? (
+                                detail.recentQuotations.map((quotation) => (
+                                  <div key={quotation.id} className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
+                                    <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                                      <div className="min-w-0">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <div className="font-semibold text-white">{quotation.quoteRef}</div>
+                                          <ContextBadge label={formatStatus(quotation.status)} tone="emerald" />
+                                        </div>
+                                        <div className="mt-2 text-sm text-slate-300">
+                                          {quotation.quoteTitle || "Quotation proposal"}
+                                        </div>
+                                        <div className="mt-2 flex flex-wrap gap-4 text-xs text-slate-500">
+                                          <span>{quotation.itemCount} items</span>
+                                          <span>{money(quotation.totalAmount)}</span>
+                                          <span>Updated {dateTime(quotation.updatedAt)}</span>
+                                          {quotation.customerActionAt ? <span>Viewed {dateTime(quotation.customerActionAt)}</span> : null}
+                                        </div>
+                                      </div>
+                                      <div className="flex flex-wrap gap-2">
+                                        <QuickLink href={quotation.href} label="Open quotation" />
+                                        <a
+                                          href={quotation.pdfHref}
+                                          className="rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-100 transition hover:border-cyan-300/35"
+                                        >
+                                          Download PDF
+                                        </a>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-sm text-slate-500">
+                                  No quotation records linked to this customer yet.
+                                </div>
+                              )}
                             </div>
                           </div>
                         ) : null}
