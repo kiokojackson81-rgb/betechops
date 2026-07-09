@@ -1,0 +1,112 @@
+{
+  "templateName": "SRNE 5KW LITHIUM SOLAR POWER SYSTEM",
+  "category": "SOLAR_SYSTEM",
+  "systemSize": "5KW",
+  "brand": "SRNE",
+  "projectOverview": "Supply, delivery, installation, testing and commissioning of a complete SRNE 5KW lithium solar power system.",
+  "whatItCanPower": "Lighting, TVs, refrigerator, freezer, Wi-Fi, CCTV, laptops, microwave, washing machine, electric fence and moderate household loads.",
+  "scopeOfWork": "Supply of listed equipment and accessories, transportation, professional installation, testing, commissioning and user training.",
+  "deliveryTimeline": "Day 0 - Order confirmation and scheduling\nDay 1 - Equipment preparation and dispatch",
+  "installationTimeline": "Day 1-3 - Installation, testing, commissioning and customer handover",
+  "warranty": "SRNE 5KW Hybrid Inverter - 10 Years Manufacturer Warranty\nSRNE 5.12KWh Lithium Battery - 10 Years Manufacturer Warranty\nJinko 615W Bifacial Solar Panels - 25 Years Performance Warranty\nInstallation Workmanship - 12 Months",
+  "afterSalesSupport": "Telephone and WhatsApp technical support\nRemote troubleshooting assistance\nWarranty support\nUser training and operating guidance\nGenuine spare parts support\nProfessional maintenance advice\nSite revisit if needed for physical support",
+  "terms": "Quotation validity is subject to confirmation at the time of order placement.\nStandard payment options are full payment before installation, 30% deposit with balance after installation, or full payment after installation where approved by management.\nWarranty applies under normal use, correct installation, and manufacturer operating conditions.",
+  "internalNotes": "",
+  "defaultPaymentTerms": "DEPOSIT_AND_BALANCE",
+  "defaultDiscountAmount": 14800,
+  "items": [
+    {
+      "itemName": "SRNE 5KW 48V Hybrid Inverter",
+      "quantity": 1,
+      "unitPrice": 50000
+    },
+    {
+      "itemName": "SRNE 5.12KWh 48V LiFePO4 Lithium Battery (6000+ Cycles)",
+      "quantity": 1,
+      "unitPrice": 100000
+    },
+    {
+      "itemName": "Jinko 615W Bifacial Solar Panels",
+      "quantity": 4,
+      "unitPrice": 14000
+    },
+    {
+      "itemName": "Mini Mounting Rails",
+      "description": "14 pcs",
+      "quantity": 14,
+      "unitPrice": 500
+    },
+    {
+      "itemName": "Head Clamps",
+      "description": "10 pcs",
+      "quantity": 10,
+      "unitPrice": 250
+    },
+    {
+      "itemName": "Mid Clamps",
+      "description": "6 pcs",
+      "quantity": 6,
+      "unitPrice": 250
+    },
+    {
+      "itemName": "MC4 Connector Pairs",
+      "description": "4 pairs",
+      "quantity": 4,
+      "unitPrice": 250
+    },
+    {
+      "itemName": "4MM Solar Cable (50M Red + 50M Black)",
+      "description": "100M",
+      "quantity": 100,
+      "unitPrice": 130
+    },
+    {
+      "itemName": "12-Way Combiner Box",
+      "quantity": 1,
+      "unitPrice": 2500
+    },
+    {
+      "itemName": "DC Breaker 63A Double Pole",
+      "quantity": 1,
+      "unitPrice": 2500
+    },
+    {
+      "itemName": "AC Breaker 63A Double Pole",
+      "quantity": 1,
+      "unitPrice": 500
+    },
+    {
+      "itemName": "Surge Protection Device (SPD)",
+      "quantity": 1,
+      "unitPrice": 3000
+    },
+    {
+      "itemName": "Automatic Voltage Switch (AVS)",
+      "quantity": 1,
+      "unitPrice": 3000
+    },
+    {
+      "itemName": "Automatic Transfer Switch (ATS)",
+      "quantity": 1,
+      "unitPrice": 7500
+    },
+    {
+      "itemName": "Trunking, Flex Conduit, Conduit Pipes, Cable Clips, Tyraps, Self-Tapping Screws, Steel Nails & Miscellaneous Accessories",
+      "description": "Lot",
+      "quantity": 1,
+      "unitPrice": 5000
+    },
+    {
+      "itemName": "Transportation",
+      "description": "Lot",
+      "quantity": 1,
+      "unitPrice": 10000
+    },
+    {
+      "itemName": "Professional Installation, Testing, Commissioning & User Training",
+      "description": "Lot",
+      "quantity": 1,
+      "unitPrice": 25000
+    }
+  ]
+}
