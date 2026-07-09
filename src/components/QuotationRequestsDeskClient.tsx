@@ -669,8 +669,8 @@ function splitQuoteItemsAndFees(items: Array<{
   warrantyNotes?: string | null;
   warrantySource?: QuoteWarrantySource;
 }>) {
-  let installationMode: QuoteFeeMode = "NOT_INCLUDED";
-  let deliveryMode: QuoteFeeMode = "NOT_INCLUDED";
+  let installationMode: QuoteFeeMode = "INCLUDED";
+  let deliveryMode: QuoteFeeMode = "INCLUDED";
   let installationFee = "";
   let deliveryFee = "";
 

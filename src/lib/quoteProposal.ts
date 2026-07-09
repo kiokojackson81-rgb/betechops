@@ -141,37 +141,47 @@ export function roundCurrency(value: number) {
 
 export function sanitizeQuoteLineItems(items: QuoteLineItemInput[]): StoredQuoteLineItem[] {
   return items
-    .map((item) => ({
-      itemName: item.itemName.trim(),
-      description:
-        typeof item.description === "string" && item.description.trim()
-          ? item.description.trim()
-          : undefined,
-      quantity: roundCurrency(Number(item.quantity || 0)),
-      unitPrice: roundCurrency(Number(item.unitPrice || 0)),
-      defaultWarranty:
-        typeof item.defaultWarranty === "string" && item.defaultWarranty.trim()
-          ? item.defaultWarranty.trim()
-          : undefined,
-      warranty:
-        typeof item.warranty === "string" && item.warranty.trim() ? item.warranty.trim() : undefined,
-      warrantyPeriod:
+    .map((item) => {
+      const warranty =
+        typeof item.warranty === "string" && item.warranty.trim() ? item.warranty.trim() : undefined;
+      const warrantyPeriod =
         typeof item.warrantyPeriod === "number" && Number.isFinite(item.warrantyPeriod) && item.warrantyPeriod > 0
           ? roundCurrency(item.warrantyPeriod)
-          : undefined,
-      warrantyUnit: QUOTE_WARRANTY_UNITS.includes(String(item.warrantyUnit || "") as QuoteWarrantyUnit)
-        ? (String(item.warrantyUnit) as QuoteWarrantyUnit)
-        : undefined,
-      warrantyNotes:
-        typeof item.warrantyNotes === "string" && item.warrantyNotes.trim()
-          ? item.warrantyNotes.trim()
-          : undefined,
-      warrantySource: QUOTE_WARRANTY_SOURCES.includes(
-        String(item.warrantySource || "") as QuoteWarrantySource,
-      )
-        ? (String(item.warrantySource) as QuoteWarrantySource)
-        : undefined,
-    }))
+          : undefined;
+      const hasExplicitWarranty = Boolean(warranty) || typeof warrantyPeriod === "number";
+
+      return {
+        itemName: item.itemName.trim(),
+        description:
+          typeof item.description === "string" && item.description.trim()
+            ? item.description.trim()
+            : undefined,
+        quantity: roundCurrency(Number(item.quantity || 0)),
+        unitPrice: roundCurrency(Number(item.unitPrice || 0)),
+        defaultWarranty:
+          hasExplicitWarranty &&
+          typeof item.defaultWarranty === "string" &&
+          item.defaultWarranty.trim()
+            ? item.defaultWarranty.trim()
+            : undefined,
+        warranty,
+        warrantyPeriod,
+        warrantyUnit:
+          hasExplicitWarranty &&
+          QUOTE_WARRANTY_UNITS.includes(String(item.warrantyUnit || "") as QuoteWarrantyUnit)
+            ? (String(item.warrantyUnit) as QuoteWarrantyUnit)
+            : undefined,
+        warrantyNotes:
+          typeof item.warrantyNotes === "string" && item.warrantyNotes.trim()
+            ? item.warrantyNotes.trim()
+            : undefined,
+        warrantySource:
+          hasExplicitWarranty &&
+          QUOTE_WARRANTY_SOURCES.includes(String(item.warrantySource || "") as QuoteWarrantySource)
+            ? (String(item.warrantySource) as QuoteWarrantySource)
+            : undefined,
+      };
+    })
     .filter((item) => item.itemName && item.quantity > 0)
     .map((item) => ({
       ...item,

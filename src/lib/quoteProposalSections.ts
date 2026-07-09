@@ -314,15 +314,22 @@ export function buildWarrantyAiSummary(items: StoredQuoteLineItem[], mode: Quote
     return "Custom warranty mode selected. Staff should review the final custom wording before issuing the quotation.";
   }
 
-  const lines = items.map((item) => {
+  const lines = items
+    .map((item) => {
     const name = item.itemName.toLowerCase();
-    let suggestion = item.warranty || item.defaultWarranty || "Manufacturer warranty";
-    if (/\bpanel|solar panel|jinko\b/.test(name)) suggestion = "25 Years performance warranty";
-    else if (/\binverter|hybrid|srne\b/.test(name)) suggestion = "10 Years manufacturer warranty";
-    else if (/\bbattery|lithium|lifepo4\b/.test(name)) suggestion = "10 Years manufacturer warranty";
-    else if (/\binstallation|workmanship\b/.test(name)) suggestion = "12 months workmanship warranty";
-    return `${item.itemName}: ${suggestion}`;
-  });
+    let suggestion = item.warranty?.trim() || "";
+    if (!suggestion && typeof item.warrantyPeriod === "number" && Number.isFinite(item.warrantyPeriod) && item.warrantyPeriod > 0) {
+      suggestion = `${item.warrantyPeriod} ${item.warrantyUnit === "MONTHS" ? "Months" : "Years"}`;
+    }
+    if (!suggestion) {
+      if (/\bpanel|solar panel|jinko\b/.test(name)) suggestion = "25 Years performance warranty";
+      else if (/\binverter|hybrid|srne\b/.test(name)) suggestion = "10 Years manufacturer warranty";
+      else if (/\bbattery|lithium|lifepo4\b/.test(name)) suggestion = "10 Years manufacturer warranty";
+      else if (/\binstallation|workmanship\b/.test(name)) suggestion = "12 months workmanship warranty";
+    }
+      return suggestion ? `${item.itemName}: ${suggestion}` : null;
+    })
+    .filter((line): line is string => Boolean(line));
 
   return lines.join("\n");
 }

@@ -168,11 +168,19 @@ function buildWarrantyRows(input: QuotationAiInput) {
       ? input.fullSystemWarranty || "Covered under full system warranty"
       : input.warrantyMode === "CUSTOM"
         ? input.customWarranty || "Custom warranty"
-        : "Manufacturer warranty";
+        : "";
+
+  const resolveItemWarranty = (item: QuotationAiInput["items"][number]) => {
+    if (item.warranty?.trim()) return item.warranty.trim();
+    if (typeof item.warrantyPeriod === "number" && Number.isFinite(item.warrantyPeriod) && item.warrantyPeriod > 0) {
+      return `${item.warrantyPeriod} ${item.warrantyUnit === "MONTHS" ? "Months" : "Years"}`;
+    }
+    return fallbackWarranty;
+  };
 
   return input.items.map((item) => ({
     component: shortItemName(item.itemName),
-    warranty: item.warranty || item.defaultWarranty || fallbackWarranty,
+    warranty: resolveItemWarranty(item),
     notes:
       item.warrantyNotes ||
       (/panel/i.test(item.itemName)
