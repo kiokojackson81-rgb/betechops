@@ -423,18 +423,11 @@ export function buildQuotationHtml(
   },
 ) {
   const data = normalizeQuotePdfData(input);
-  const serviceCostRows: Array<readonly [string, number]> = [["Equipment", data.equipmentTotal]];
-  if (data.installationMode === "CHARGED" && data.installationTotal > 0) {
-    serviceCostRows.push(["Installation", data.installationTotal]);
-  }
-  if (data.deliveryMode === "CHARGED" && data.transportTotal > 0) {
-    serviceCostRows.push(["Transport", data.transportTotal]);
-  }
-  serviceCostRows.push(["Project Cost", data.subtotal]);
+  const serviceCostRows: Array<readonly [string, number]> = [["Subtotal", data.subtotal]];
   if (data.discountAmount > 0) {
     serviceCostRows.push(["Discount", -data.discountAmount]);
   }
-  serviceCostRows.push(["Final Amount", data.grandTotal]);
+  serviceCostRows.push(["Final quoted amount", data.grandTotal]);
   const costRows = serviceCostRows;
   const featuredProjectUrl = data.similarProjectUrl || data.company.projectsUrl;
   const featuredProjectLabel = data.similarProjectUrl
