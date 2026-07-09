@@ -4,6 +4,10 @@ import {
   manualQuotationCreateSchema,
   requireQuoteRequestsStaffActor,
 } from "@/lib/quoteRequests";
+import {
+  deliverQuotationNotifications,
+  prepareQuotationPdfAssets,
+} from "@/lib/quotationNotifications";
 
 export const dynamic = "force-dynamic";
 
@@ -144,7 +148,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Unable to save quotation." }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true, request: created });
+    let notifications: Array<{
+      channel: "email" | "sms" | "whatsapp";
+      ok: boolean;
+      error?: string;
+      meta?: Record<string, unknown>;
+    }> = [];
+    let pdfUrl: string | null = null;
+
+    try {
+      const assets = await prepareQuotationPdfAssets(created, {
+        name: guard.name,
+        email: guard.email,
+      });
+      pdfUrl = assets.pdfUrl;
+      notifications = await deliverQuotationNotifications(created, {
+        pdfBuffer: assets.pdfBuffer,
+        pdfUrl: assets.pdfUrl,
+        sendEmail: Boolean(created.customerEmail),
+        sendSms: Boolean(created.customerPhone),
+        triggerWhatsapp: true,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : "Failed to prepare quotation notifications.";
+      console.error("[quotation-center.create.notify_failed]", {
+        quoteRequestId: created.id,
+        quoteRef: created.quoteRef,
+        error: message,
+      });
+    }
+
+    return NextResponse.json({ ok: true, request: created, pdfUrl, notifications });
   } catch (error) {
     const message =
       error instanceof Error && error.message.trim()
