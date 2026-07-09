@@ -895,7 +895,39 @@ export const QUOTATION_EVENT_SELECT_SQL = Prisma.sql`
 
 function serializeQuotationTemplate(row: QuotationTemplateRow): SerializedQuotationTemplate {
   const templateData = asJsonObject(row.templateData);
-  const items = Array.isArray(templateData?.items) ? (templateData?.items as Array<z.infer<typeof quoteLineItemSchema>>) : [];
+  const items = Array.isArray(templateData?.items)
+    ? sanitizeQuoteLineItems(
+        (templateData.items as Array<unknown>).reduce<Array<z.infer<typeof quoteLineItemSchema>>>(
+          (accumulator, item) => {
+            if (!item || typeof item !== "object") return accumulator;
+            const record = item as Record<string, unknown>;
+            accumulator.push({
+              itemName: String(record.itemName ?? ""),
+              description: typeof record.description === "string" ? String(record.description) : undefined,
+              quantity: Number(record.quantity ?? 0),
+              unitPrice: Number(record.unitPrice ?? 0),
+              defaultWarranty:
+                typeof record.defaultWarranty === "string" ? String(record.defaultWarranty) : undefined,
+              warranty: typeof record.warranty === "string" ? String(record.warranty) : undefined,
+              warrantyPeriod:
+                typeof record.warrantyPeriod === "number" ? Number(record.warrantyPeriod) : undefined,
+              warrantyUnit:
+                typeof record.warrantyUnit === "string"
+                  ? (String(record.warrantyUnit) as z.infer<typeof quoteLineItemSchema>["warrantyUnit"])
+                  : undefined,
+              warrantyNotes:
+                typeof record.warrantyNotes === "string" ? String(record.warrantyNotes) : undefined,
+              warrantySource:
+                typeof record.warrantySource === "string"
+                  ? (String(record.warrantySource) as z.infer<typeof quoteLineItemSchema>["warrantySource"])
+                  : undefined,
+            });
+            return accumulator;
+          },
+          [],
+        ),
+      )
+    : [];
   return {
     id: row.id,
     templateName: row.templateName,

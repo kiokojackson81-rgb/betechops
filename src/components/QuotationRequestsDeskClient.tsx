@@ -899,6 +899,7 @@ function hydrateQuoteItemDraft(input: {
   warrantyNotes?: string | null;
   warrantySource?: QuoteWarrantySource;
 }) {
+  const normalizedWarranty = normalizeWarrantyText(input.warranty);
   const parsedWarranty =
     input.warrantyPeriod !== undefined &&
     input.warrantyPeriod !== null &&
@@ -907,14 +908,15 @@ function hydrateQuoteItemDraft(input: {
           warrantyPeriod: String(input.warrantyPeriod),
           warrantyUnit: input.warrantyUnit ?? "YEARS",
         }
-      : parseWarrantyPeriodText(normalizeWarrantyText(input.warranty));
+      : parseWarrantyPeriodText(normalizedWarranty);
+  const hasStructuredWarranty = Boolean(parsedWarranty.warrantyPeriod);
   return {
     itemName: input.itemName,
     description: input.description?.trim() || "",
     quantity: input.quantity ?? "1",
     unitPrice: input.unitPrice ?? "",
     defaultWarranty: input.defaultWarranty?.trim() || "",
-    warranty: normalizeWarrantyText(input.warranty),
+    warranty: hasStructuredWarranty ? "" : normalizedWarranty,
     warrantyPeriod: parsedWarranty.warrantyPeriod,
     warrantyUnit: parsedWarranty.warrantyUnit,
     warrantyNotes: input.warrantyNotes?.trim() || "",
@@ -2554,7 +2556,13 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                               setCreateDraft((current) => ({
                                 ...current,
                                 quoteItems: current.quoteItems.map((entry, entryIndex) =>
-                                  entryIndex === index ? { ...entry, warrantyPeriod: event.target.value } : entry,
+                                  entryIndex === index
+                                    ? {
+                                        ...entry,
+                                        warrantyPeriod: event.target.value,
+                                        warranty: event.target.value.trim() ? entry.warranty : "",
+                                      }
+                                    : entry,
                                 ),
                               }))
                             }
@@ -3259,7 +3267,13 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                                             setFormState((current) => ({
                                               ...current,
                                               quoteItems: current.quoteItems.map((entry, entryIndex) =>
-                                                entryIndex === index ? { ...entry, warrantyPeriod: event.target.value } : entry,
+                                                entryIndex === index
+                                                  ? {
+                                                      ...entry,
+                                                      warrantyPeriod: event.target.value,
+                                                      warranty: event.target.value.trim() ? entry.warranty : "",
+                                                    }
+                                                  : entry,
                                               ),
                                             }))
                                           }
