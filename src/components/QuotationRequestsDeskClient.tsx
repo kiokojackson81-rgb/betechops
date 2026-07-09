@@ -7,6 +7,8 @@ import {
   ChevronRight,
   Download,
   ExternalLink,
+  FilePenLine,
+  LayoutTemplate,
   Loader2,
   Mail,
   MessageCircle,
@@ -528,6 +530,10 @@ function buildQuotedTotals(input: {
 }
 
 function buildTemplateDownloadPayload(draft: CreateQuotationDraft) {
+  return buildTemplatePayloadFromDraft(draft);
+}
+
+function buildTemplatePayloadFromDraft(draft: CreateQuotationDraft) {
   return {
     templateName: draft.quoteTitle.trim() || generateQuoteTitleFromItems(draft.quoteItems, draft.projectType),
     category: "",
@@ -1295,12 +1301,15 @@ export default function QuotationRequestsDeskClient({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showCreatePanel, setShowCreatePanel] = useState(false);
+  const [showTemplatesPanel, setShowTemplatesPanel] = useState(false);
   const [createMode, setCreateMode] = useState<CreateQuotationMode>("manual");
   const [createDraft, setCreateDraft] = useState<CreateQuotationDraft>(createDefaultQuotationDraft());
   const [templates, setTemplates] = useState<SerializedQuotationTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [createSaving, setCreateSaving] = useState(false);
   const [templateSaving, setTemplateSaving] = useState(false);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [templateDeletingId, setTemplateDeletingId] = useState<string | null>(null);
   const [draftOpening, setDraftOpening] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -1646,6 +1655,7 @@ export default function QuotationRequestsDeskClient({
         setExpandedId(data.request.id);
       }
       setShowCreatePanel(false);
+      setEditingTemplateId(null);
       setCreateDraft(createDefaultQuotationDraft());
       setCreateCatalogQuery("");
       setCreateCatalogResults([]);
@@ -1707,53 +1717,100 @@ export default function QuotationRequestsDeskClient({
         createDraft.quoteTitle.trim() ||
         generateQuoteTitleFromItems(createDraft.quoteItems, createDraft.projectType);
 
-      const response = await fetch(buildApiUrl(templateApiPath, apiQueryParams), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          templateName,
-          projectOverview: createDraft.projectOverview.trim() || createDraft.quoteMessage.trim() || undefined,
-          whatItCanPower: createDraft.whatItCanPower.trim() || undefined,
-          scopeOfWork: createDraft.whatPriceIncludes.trim() || undefined,
-          deliveryTimeline: createDraft.deliveryTimeline.trim() || undefined,
-          installationTimeline: createDraft.installationTimeline.trim() || undefined,
-          warranty:
-            (createDraft.warrantyMode === "FULL_SYSTEM"
-              ? createDraft.fullSystemWarranty
-              : createDraft.customWarranty).trim() || undefined,
-          afterSalesSupport: createDraft.afterSalesSupport.trim() || undefined,
-          terms: createDraft.termsAndConditions.trim() || undefined,
-          internalNotes: createDraft.followUpNotes.trim() || undefined,
-          defaultPaymentMethod: createDraft.paymentMethod || undefined,
-          defaultPaymentTerms: createDraft.paymentTerms,
-          defaultDepositAmount:
-            createDraft.paymentTerms === "DEPOSIT_AND_BALANCE" && createDraft.depositAmount.trim()
-              ? parseMoneyInput(createDraft.depositAmount)
-              : undefined,
-          defaultBalanceAmount:
-            createDraft.paymentTerms === "DEPOSIT_AND_BALANCE" && createDraft.balanceAmount.trim()
-              ? parseMoneyInput(createDraft.balanceAmount)
-              : undefined,
-          defaultDiscountAmount: createDraft.discountAmount.trim()
-            ? parseMoneyInput(createDraft.discountAmount)
-            : undefined,
-          items: quoteItems,
-        }),
-      });
+      const payload = {
+        ...buildTemplatePayloadFromDraft(createDraft),
+        templateName,
+        items: quoteItems,
+      };
+      const isEditing = Boolean(editingTemplateId);
+      const response = await fetch(
+        isEditing
+          ? buildApiUrl(templateApiPath, apiQueryParams, editingTemplateId || "")
+          : buildApiUrl(templateApiPath, apiQueryParams),
+        {
+          method: isEditing ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
       const data = await response.json().catch(() => null);
       if (!response.ok || !data?.ok) {
         throw new Error(data?.error || "Failed to save quotation template.");
       }
       await refreshTemplates();
       if (data.template?.id) {
+        setEditingTemplateId(data.template.id);
         setCreateMode("template");
-        setCreateDraft((current) => ({ ...current, templateId: data.template.id }));
+        setCreateDraft((current) => ({ ...current, templateId: data.template.id, quoteTitle: data.template.templateName }));
       }
-      setMessage("Quotation template saved. You can now reuse it from prepared templates.");
+      setMessage(
+        isEditing
+          ? `Template ${data.template?.templateName || templateName} updated successfully.`
+          : "Quotation template saved. You can now reuse it from prepared templates.",
+      );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Failed to save quotation template.");
     } finally {
       setTemplateSaving(false);
+    }
+  }
+
+  function handleDownloadTemplate(template: SerializedQuotationTemplate) {
+    const blob = new Blob([JSON.stringify(template, null, 2)], { type: "application/json" });
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = `${template.templateName.replace(/[^a-z0-9]+/gi, "_") || "quotation_template"}.json`;
+    link.click();
+    URL.revokeObjectURL(href);
+  }
+
+  function handleEditTemplate(template: SerializedQuotationTemplate) {
+    setEditingTemplateId(template.id);
+    setShowTemplatesPanel(false);
+    setShowCreatePanel(true);
+    setCreateMode("template");
+    setCreateDraft(applyTemplateToCreateDraft(createDefaultQuotationDraft(), template));
+    setCreateCatalogQuery("");
+    setCreateCatalogResults([]);
+    setMessage(`Editing template ${template.templateName}. Update the fields you need, then save the template.`);
+  }
+
+  function handleUseTemplate(template: SerializedQuotationTemplate) {
+    setEditingTemplateId(null);
+    setShowTemplatesPanel(false);
+    setShowCreatePanel(true);
+    setCreateMode("template");
+    setCreateDraft(applyTemplateToCreateDraft(createDefaultQuotationDraft(), template));
+    setCreateCatalogQuery("");
+    setCreateCatalogResults([]);
+  }
+
+  async function handleDeleteTemplate(template: SerializedQuotationTemplate) {
+    if (typeof window !== "undefined") {
+      const confirmed = window.confirm(`Delete template ${template.templateName}? This cannot be undone.`);
+      if (!confirmed) return;
+    }
+    setTemplateDeletingId(template.id);
+    setMessage(null);
+    try {
+      const response = await fetch(buildApiUrl(templateApiPath, apiQueryParams, template.id), {
+        method: "DELETE",
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Failed to delete quotation template.");
+      }
+      setTemplates((current) => current.filter((entry) => entry.id !== template.id));
+      if (editingTemplateId === template.id) {
+        setEditingTemplateId(null);
+        setCreateDraft((current) => ({ ...current, templateId: "" }));
+      }
+      setMessage(`Template ${template.templateName} deleted successfully.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Failed to delete quotation template.");
+    } finally {
+      setTemplateDeletingId(null);
     }
   }
 
@@ -1921,11 +1978,11 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
   }, []);
 
   useEffect(() => {
-    if (!showCreatePanel) return;
+    if (!showCreatePanel && !showTemplatesPanel) return;
     if (templates.length) return;
     refreshTemplates().catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showCreatePanel]);
+  }, [showCreatePanel, showTemplatesPanel]);
 
   useEffect(() => {
     const normalizedQuery = createCatalogQuery.trim();
@@ -2249,16 +2306,40 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
       </div>
       ) : (
         <>
-          {enableCreate ? (
-            <div className="flex justify-end">
+          {enableCreate || allowTemplateManager ? (
+            <div className="flex flex-wrap justify-end gap-2">
+              {allowTemplateManager ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowTemplatesPanel((current) => !current);
+                    setShowCreatePanel(false);
+                    setEditingTemplateId(null);
+                  }}
+                  className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                    showTemplatesPanel
+                      ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-200"
+                      : "border-white/15 text-slate-100 hover:border-cyan-400 hover:text-white"
+                  }`}
+                >
+                  <LayoutTemplate className="h-3.5 w-3.5" />
+                  Saved Templates
+                </button>
+              ) : null}
+              {enableCreate ? (
               <button
                 type="button"
-                onClick={() => setShowCreatePanel((current) => !current)}
+                onClick={() => {
+                  setShowCreatePanel((current) => !current);
+                  setShowTemplatesPanel(false);
+                  setEditingTemplateId(null);
+                }}
                 className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 hover:text-white"
               >
                 <Plus className="h-3.5 w-3.5" />
                 Create Quotation
               </button>
+              ) : null}
             </div>
           ) : null}
           {loadError ? (
@@ -2274,6 +2355,104 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
         </>
       )}
 
+        {showTemplatesPanel ? (
+          <div className={`rounded-[28px] border border-cyan-500/20 bg-slate-950/60 ${compactMode ? "p-4" : "mt-5 p-5"}`}>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-300">
+                  Template Library
+                </div>
+                <div className="mt-2 text-lg font-semibold text-white">Saved templates</div>
+                <div className="mt-1 text-sm text-slate-300">
+                  Reuse your standard quotation setups here. You can edit, delete, download, or open any template into the quotation creator.
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleDownloadTemplateFormat}
+                  className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-300 transition hover:border-white/20"
+                >
+                  Download Template Format
+                </button>
+                <button
+                  type="button"
+                  disabled={templateSaving}
+                  onClick={() => templateUploadInputRef.current?.click()}
+                  className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-200 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Upload Template File
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {templatesLoading ? (
+                <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-6 text-sm text-slate-300">
+                  Loading saved templates...
+                </div>
+              ) : templates.length ? (
+                templates.map((template) => (
+                  <div
+                    key={template.id}
+                    className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
+                  >
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0">
+                        <div className="text-base font-semibold text-white">{template.templateName}</div>
+                        <div className="mt-1 text-sm text-slate-400">
+                          {template.items.length} item{template.items.length === 1 ? "" : "s"} · Updated{" "}
+                          {formatDateTime(template.updatedAt)}
+                        </div>
+                        <div className="mt-2 text-xs uppercase tracking-[0.16em] text-slate-500">
+                          {template.systemSize || template.brand || template.category || "Reusable quotation template"}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleUseTemplate(template)}
+                          className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400"
+                        >
+                          Use
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleEditTemplate(template)}
+                          className="inline-flex items-center gap-2 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-200 transition hover:border-cyan-400"
+                        >
+                          <FilePenLine className="h-3.5 w-3.5" />
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadTemplate(template)}
+                          className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-300 transition hover:border-white/20"
+                        >
+                          Download
+                        </button>
+                        <button
+                          type="button"
+                          disabled={templateDeletingId === template.id}
+                          onClick={() => void handleDeleteTemplate(template)}
+                          className="inline-flex items-center gap-2 rounded-full border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-rose-200 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          {templateDeletingId === template.id ? "Deleting..." : "Delete"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/30 px-4 py-8 text-sm text-slate-400">
+                  No saved templates yet. Create a quotation draft, then save it as a template for reuse.
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null}
+
         {showCreatePanel ? (
           <div className={`rounded-[28px] border border-emerald-500/20 bg-slate-950/60 ${compactMode ? "p-4" : "mt-5 p-5"}`}>
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -2282,10 +2461,12 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                   Quotation Center
                 </div>
                 <div className="mt-2 text-lg font-semibold text-white">
-                  Create quotation
+                  {editingTemplateId ? "Edit template" : "Create quotation"}
                 </div>
                 <div className="mt-1 text-sm text-slate-300">
-                  Start a quotation for walk-in, WhatsApp, phone, or template-based customers without waiting for the website form.
+                  {editingTemplateId
+                    ? "Update the saved template using only the fields staff actually maintain in day-to-day quotation work."
+                    : "Start a quotation for walk-in, WhatsApp, phone, or template-based customers without waiting for the website form."}
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -2296,7 +2477,12 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                   <button
                     key={mode}
                     type="button"
-                    onClick={() => setCreateMode(mode)}
+                    onClick={() => {
+                      setCreateMode(mode);
+                      if (mode === "manual") {
+                        setEditingTemplateId(null);
+                      }
+                    }}
                     className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
                       createMode === mode
                         ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
@@ -2386,31 +2572,6 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                       ))}
                     </select>
                   </label>
-                  {allowTemplateManager ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={handleDownloadTemplateFormat}
-                        className="self-end rounded-full border border-white/10 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-200 transition hover:border-white/20"
-                      >
-                        <span className="inline-flex items-center gap-2">
-                          <Download className="h-3.5 w-3.5" />
-                          Download Format
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        disabled={templateSaving}
-                        onClick={() => templateUploadInputRef.current?.click()}
-                        className="self-end rounded-full border border-cyan-500/40 bg-cyan-500/10 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-cyan-200 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <span className="inline-flex items-center gap-2">
-                          <Upload className="h-3.5 w-3.5" />
-                          Upload Template
-                        </span>
-                      </button>
-                    </>
-                  ) : null}
                 </div>
               ) : null}
               <input
@@ -2840,22 +3001,13 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                     onClick={() => void handleSaveTemplateFromDraft()}
                     className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-200 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {templateSaving ? "Saving Template..." : "Save As Template"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDownloadTemplateFormat}
-                    className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-300 transition hover:border-white/20"
-                  >
-                    Download Template Format
-                  </button>
-                  <button
-                    type="button"
-                    disabled={templateSaving}
-                    onClick={() => templateUploadInputRef.current?.click()}
-                    className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-300 transition hover:border-white/20 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Upload Template File
+                    {templateSaving
+                      ? editingTemplateId
+                        ? "Updating Template..."
+                        : "Saving Template..."
+                      : editingTemplateId
+                        ? "Update Template"
+                        : "Save As Template"}
                   </button>
                 </>
               ) : null}
@@ -2876,6 +3028,7 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                 type="button"
                 onClick={() => {
                   setShowCreatePanel(false);
+                  setEditingTemplateId(null);
                   setCreateDraft(createDefaultQuotationDraft());
                 }}
                 className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-300 transition hover:border-white/20"
@@ -3508,17 +3661,6 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                                   ) : null}
                                 </div>
                               </div>
-                            </div>
-                            <div className="md:col-span-2">
-                              <ProposalEditor
-                                state={formState}
-                                onChange={(updater) =>
-                                  setFormState((current) => {
-                                    const next = updater(current);
-                                    return { ...current, ...next };
-                                  })
-                                }
-                              />
                             </div>
                             <label className="text-xs uppercase tracking-wide text-slate-400 md:col-span-2">
                               Customer message

@@ -2010,3 +2010,59 @@ export async function duplicateQuotationTemplate(
     actor,
   );
 }
+
+export async function updateQuotationTemplate(
+  templateId: string,
+  input: QuotationTemplateInput,
+  actor: { id: string; name: string | null; email: string | null },
+) {
+  await ensureQuoteRequestsSchema();
+  await prisma.$executeRaw(Prisma.sql`
+    UPDATE "QuotationTemplate"
+    SET
+      "templateName" = ${input.templateName.trim()},
+      "category" = ${input.category || null},
+      "systemSize" = ${input.systemSize?.trim() || null},
+      "brand" = ${input.brand?.trim() || null},
+      "projectOverview" = ${input.projectOverview?.trim() || null},
+      "whatItCanPower" = ${input.whatItCanPower?.trim() || null},
+      "scopeOfWork" = ${input.scopeOfWork?.trim() || null},
+      "deliveryTimeline" = ${input.deliveryTimeline?.trim() || null},
+      "installationTimeline" = ${input.installationTimeline?.trim() || null},
+      "warranty" = ${input.warranty?.trim() || null},
+      "afterSalesSupport" = ${input.afterSalesSupport?.trim() || null},
+      "terms" = ${input.terms?.trim() || null},
+      "internalNotes" = ${input.internalNotes?.trim() || null},
+      "defaultPaymentMethod" = ${input.defaultPaymentMethod || null},
+      "defaultPaymentTerms" = ${input.defaultPaymentTerms || null},
+      "defaultDepositAmount" = ${input.defaultDepositAmount ?? null},
+      "defaultBalanceAmount" = ${input.defaultBalanceAmount ?? null},
+      "defaultPdfLayout" = ${input.defaultPdfLayout?.trim() || null},
+      "isActive" = ${input.isActive !== false},
+      "templateData" = ${{
+        items: sanitizeQuoteLineItems(input.items),
+        defaultDiscountAmount: input.defaultDiscountAmount ?? null,
+      } as Prisma.JsonObject},
+      "updatedById" = ${actor.id},
+      "updatedAt" = CURRENT_TIMESTAMP
+    WHERE "id" = ${templateId}
+  `);
+
+  const rows = await prisma.$queryRaw<QuotationTemplateRow[]>(Prisma.sql`
+    SELECT ${QUOTATION_TEMPLATE_SELECT_SQL}
+    FROM "QuotationTemplate"
+    WHERE "id" = ${templateId}
+    LIMIT 1
+  `);
+  return rows[0] ? serializeQuotationTemplate(rows[0]) : null;
+}
+
+export async function deleteQuotationTemplate(templateId: string) {
+  await ensureQuoteRequestsSchema();
+  const rows = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    DELETE FROM "QuotationTemplate"
+    WHERE "id" = ${templateId}
+    RETURNING "id"
+  `);
+  return Boolean(rows[0]?.id);
+}
