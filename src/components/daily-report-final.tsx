@@ -1718,7 +1718,7 @@ export default function DailyReportFinal() {
             <QuotationRequestsDeskClient
               apiBasePath="/api/attendant/quote-requests"
               apiQueryParams={impersonateId ? { impersonateId } : undefined}
-              defaultStatusFilter="NEW"
+              defaultStatusFilter="PENDING"
               filterStorageKey="attendant:quote-requests:status"
               deskTitle="Assigned quotation requests"
               deskDescription="Respond to quotation requests, build recommended solar bundles, and notify customers by email or SMS."

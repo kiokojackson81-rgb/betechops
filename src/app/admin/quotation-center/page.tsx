@@ -14,7 +14,7 @@ export default async function AdminQuotationCenterPage() {
           defaultStatusFilter="ALL"
           filterStorageKey="admin:quotation-center:status"
           deskTitle="Admin Quotation Center"
-          deskDescription="Create, review, edit, approve, delete, and convert quotations company-wide from one admin desk. Admin also controls all template upload, edit, delete, and ownership assignment."
+          deskDescription="Create, review, edit, delete, and convert quotations company-wide from one admin desk. Admin also controls all template upload, edit, delete, and ownership assignment."
           emptyMessage="No quotations found right now."
           compactMode
           allowTemplateManager

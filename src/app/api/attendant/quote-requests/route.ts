@@ -12,11 +12,11 @@ import {
 export const dynamic = "force-dynamic";
 
 function parseStatus(value: string | null): QuoteRequestStatus | "ALL" {
-  const normalized = String(value || "NEW").trim().toUpperCase();
+  const normalized = String(value || "PENDING").trim().toUpperCase();
   if (normalized === "ALL") return "ALL";
   return QUOTE_REQUEST_STATUSES.includes(normalized as QuoteRequestStatus)
     ? (normalized as QuoteRequestStatus)
-    : "NEW";
+    : "PENDING";
 }
 
 export async function GET(request: NextRequest) {

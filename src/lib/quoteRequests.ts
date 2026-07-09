@@ -56,7 +56,7 @@ const QUOTE_REQUEST_SCHEMA_SQL = [
     "preferredProducts" TEXT,
     "notes" TEXT,
     "answersJson" JSONB,
-    "status" TEXT NOT NULL DEFAULT 'NEW',
+    "status" TEXT NOT NULL DEFAULT 'PENDING',
     "assignedAttendantId" TEXT,
     "assignedAttendantEmail" TEXT,
     "assignedAttendantName" TEXT,
@@ -101,6 +101,10 @@ const QUOTE_REQUEST_SCHEMA_SQL = [
   `ALTER TABLE "QuoteRequest" ADD COLUMN IF NOT EXISTS "manualCustomerPhone" TEXT`,
   `ALTER TABLE "QuoteRequest" ADD COLUMN IF NOT EXISTS "manualCustomerEmail" TEXT`,
   `ALTER TABLE "QuoteRequest" ADD COLUMN IF NOT EXISTS "approvalReason" TEXT`,
+  `ALTER TABLE "QuoteRequest" ALTER COLUMN "status" SET DEFAULT 'PENDING'`,
+  `UPDATE "QuoteRequest" SET "status" = 'PENDING' WHERE "status" = 'NEW'`,
+  `UPDATE "QuoteRequest" SET "status" = 'PENDING' WHERE "status" = 'PENDING_APPROVAL'`,
+  `UPDATE "QuoteRequest" SET "status" = 'QUOTED' WHERE "status" = 'APPROVED'`,
   `CREATE INDEX IF NOT EXISTS "QuoteRequest_source_createdAt_idx" ON "QuoteRequest"("source","createdAt")`,
   `CREATE INDEX IF NOT EXISTS "QuoteRequest_templateId_createdAt_idx" ON "QuoteRequest"("templateId","createdAt")`,
   `CREATE TABLE IF NOT EXISTS "QuotationTemplate" (
@@ -234,10 +238,8 @@ const globalQuoteRequestState = globalThis as typeof globalThis & {
 
 export const QUOTE_REQUEST_STATUSES = [
   "DRAFT",
-  "NEW",
+  "PENDING",
   "CONTACTED",
-  "PENDING_APPROVAL",
-  "APPROVED",
   "SENT",
   "VIEWED",
   "QUOTED",
@@ -1240,6 +1242,12 @@ export async function ensureQuoteRequestAssignments() {
 }
 
 export function serializeQuoteRequest(row: QuoteRequestRow): SerializedQuoteRequest {
+  const normalizedStatus =
+    row.status === "NEW" || row.status === "PENDING_APPROVAL"
+      ? "PENDING"
+      : row.status === "APPROVED"
+        ? "QUOTED"
+        : row.status;
   return {
     id: row.id,
     quoteRef: row.quoteRef,
@@ -1266,7 +1274,7 @@ export function serializeQuoteRequest(row: QuoteRequestRow): SerializedQuoteRequ
     preferredProducts: row.preferredProducts,
     notes: row.notes,
     answers: asJsonObject(row.answersJson),
-    status: isQuoteStatus(row.status) ? row.status : "NEW",
+    status: isQuoteStatus(normalizedStatus) ? normalizedStatus : "PENDING",
     source: isQuoteSource(row.source) ? row.source : "WEBSITE_REQUEST",
     assignedAttendant: row.assignedAttendantId
       ? {
@@ -1392,7 +1400,7 @@ export async function createQuoteRequest(input: QuoteRequestCreateInput) {
       ${input.preferredProducts?.trim() || null},
       ${input.notes?.trim() || null},
       ${(input.answers || null) as Prisma.JsonObject | null},
-      ${input.status || "NEW"},
+      ${input.status || "PENDING"},
       ${input.source || "WEBSITE_REQUEST"},
       ${assignee?.id ?? null},
       ${assignee?.email ? normalizeEmail(assignee.email) : null},
@@ -1633,15 +1641,7 @@ export async function updateQuoteRequestResponse(
     lastRespondedByName: user.name ?? user.email ?? "Quotation attendant",
     lastRespondedAt: new Date().toISOString(),
   } satisfies Record<string, unknown>;
-  const approvalPolicy = getQuotationApprovalPolicy({
-    total: paymentBreakdown.total,
-    paymentTerms: input.paymentTerms,
-    hasCustomDiscount: discountAmount > 0,
-  });
-  const nextStatus =
-    input.status === "APPROVED" && approvalPolicy.requiresApproval
-      ? "PENDING_APPROVAL"
-      : input.status;
+  const nextStatus = input.status;
 
   await prisma.$executeRaw(Prisma.sql`
     UPDATE "QuoteRequest"
@@ -1651,17 +1651,13 @@ export async function updateQuoteRequestResponse(
       "quoteMessage" = ${input.quoteMessage?.trim() || null},
       "quotationData" = ${quotationData as Prisma.JsonObject},
       "responseMetadata" = ${responseMetadata as Prisma.JsonObject},
-      "requiresApproval" = ${approvalPolicy.requiresApproval},
-      "approvalReason" = ${approvalPolicy.reason},
-      "submittedForApprovalAt" = ${
-        nextStatus === "PENDING_APPROVAL" ? Prisma.sql`CURRENT_TIMESTAMP` : Prisma.sql`"submittedForApprovalAt"`
-      },
-      "submittedForApprovalById" = ${nextStatus === "PENDING_APPROVAL" ? user.id : null},
-      "approvedAt" = ${
-        nextStatus === "APPROVED" ? Prisma.sql`CURRENT_TIMESTAMP` : Prisma.sql`"approvedAt"`
-      },
-      "approvedById" = ${nextStatus === "APPROVED" ? user.id : null},
-      "approvedByName" = ${nextStatus === "APPROVED" ? (user.name ?? user.email ?? "Quotation attendant") : null},
+      "requiresApproval" = false,
+      "approvalReason" = null,
+      "submittedForApprovalAt" = null,
+      "submittedForApprovalById" = null,
+      "approvedAt" = null,
+      "approvedById" = null,
+      "approvedByName" = null,
       "respondedAt" = CURRENT_TIMESTAMP,
       "respondedById" = ${user.id},
       "updatedAt" = CURRENT_TIMESTAMP
@@ -1681,13 +1677,11 @@ export async function updateQuoteRequestResponse(
       quoteRequestId: updated.id,
       eventType: nextStatus,
       eventLabel:
-        nextStatus === "PENDING_APPROVAL"
-          ? "Submitted for approval"
-          : nextStatus === "APPROVED"
-            ? "Quotation approved"
-            : nextStatus === "SENT"
-              ? "Quotation sent"
-              : "Quotation updated",
+        nextStatus === "QUOTED"
+          ? "Quotation saved"
+          : nextStatus === "SENT"
+            ? "Quotation sent"
+            : "Quotation updated",
       eventDetail: input.quoteTitle?.trim() || input.followUpNotes?.trim() || null,
       actorUserId: user.id,
       actorName: user.name ?? user.email ?? "Quotation attendant",
@@ -1695,7 +1689,7 @@ export async function updateQuoteRequestResponse(
         total: paymentBreakdown.total,
         paymentTerms: paymentBreakdown.paymentTerms,
         status: nextStatus,
-        requiresApproval: approvalPolicy.requiresApproval,
+        requiresApproval: false,
       },
     });
   }
@@ -1891,17 +1885,11 @@ export async function createManualQuotation(
     scopeExclusions: input.scopeExclusions,
     aiWarrantySummary: input.aiWarrantySummary,
   });
-  const approvalPolicy = getQuotationApprovalPolicy({
-    total: paymentBreakdown.total,
-    paymentTerms: input.paymentTerms,
-    hasCustomDiscount: discountAmount > 0,
-  });
-
   const created = await createQuoteRequest({
     ...input,
-    status: input.status || (approvalPolicy.requiresApproval ? "PENDING_APPROVAL" : "QUOTED"),
+    status: input.status || "QUOTED",
     source: input.source || "MANUAL",
-    requiresApproval: approvalPolicy.requiresApproval,
+    requiresApproval: false,
     assignedAttendantId: input.assignedAttendantId || actor.id,
     projectType,
     quoteTitle: input.quoteTitle || input.preferredProducts || projectType.replace(/_/g, " "),
@@ -1949,7 +1937,7 @@ export async function createManualQuotation(
     },
     metadata: {
       sourceLabel: input.source || "MANUAL",
-      approvalReason: approvalPolicy.reason,
+      approvalReason: null,
     },
   });
 

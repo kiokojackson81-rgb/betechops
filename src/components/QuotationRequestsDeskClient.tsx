@@ -86,9 +86,7 @@ type Props = {
 
 const QUOTE_REQUEST_STATUSES: QuoteRequestStatus[] = [
   "DRAFT",
-  "NEW",
-  "PENDING_APPROVAL",
-  "APPROVED",
+  "PENDING",
   "CONTACTED",
   "SENT",
   "VIEWED",
@@ -413,6 +411,40 @@ function createDefaultQuotationDraft(): CreateQuotationDraft {
     depositAmount: "",
     balanceAmount: "",
     followUpNotes: "",
+  };
+}
+
+function buildCreateDraftFromRequest(request: SerializedQuoteRequest): CreateQuotationDraft {
+  const projectType = request.projectType || "SOLAR_HOME_SYSTEM";
+  const defaults = createDefaultQuotationDraft();
+  return {
+    ...defaults,
+    customerName: request.customerName || request.manualCustomerName || "",
+    customerPhone: request.customerPhone || request.manualCustomerPhone || "",
+    customerEmail: request.customerEmail || request.manualCustomerEmail || "",
+    customerLocation: request.customerLocation || "",
+    county: request.county || "",
+    town: request.town || "",
+    specificLocation: request.specificLocation || "",
+    projectType,
+    preferredContactMethod: request.preferredContactMethod || defaults.preferredContactMethod,
+    bestTimeToContact: request.bestTimeToContact || defaults.bestTimeToContact,
+    urgency: request.urgency || defaults.urgency,
+    installationStatus: request.installationStatus || defaults.installationStatus,
+    preferredProducts: request.preferredProducts || "",
+    notes: request.notes || "",
+    quoteTitle:
+      request.quoteTitle ||
+      request.preferredProducts ||
+      formatProjectType(projectType),
+    quoteMessage:
+      request.loadDescription ||
+      request.notes ||
+      "",
+    followUpNotes:
+      typeof request.responseMetadata?.followUpNotes === "string"
+        ? request.responseMetadata.followUpNotes
+        : "",
   };
 }
 
@@ -1013,7 +1045,7 @@ function renderAnswerBlock(title: string, answers?: Record<string, unknown> | nu
 export default function QuotationRequestsDeskClient({
   apiBasePath,
   apiQueryParams,
-  defaultStatusFilter = "NEW",
+  defaultStatusFilter = "PENDING",
   filterStorageKey,
   deskTitle = "Assigned quotation requests",
   deskDescription = "Review customer quote requests, recommend products, and notify customers by email or SMS.",
@@ -1064,7 +1096,7 @@ export default function QuotationRequestsDeskClient({
     [requests, expandedId],
   );
 
-  const initialResponseStatus = defaultStatusFilter === "ALL" ? "CONTACTED" : defaultStatusFilter;
+  const initialResponseStatus: QuoteRequestStatus = "QUOTED";
   const [formState, setFormState] = useState<QuoteDeskFormState>(createDefaultFormState(initialResponseStatus));
 
   const quoteItemsPreview = useMemo(() => {
@@ -1553,6 +1585,19 @@ export default function QuotationRequestsDeskClient({
     }
   }
 
+  function openCreatePanel(prefillRequest?: SerializedQuoteRequest | null) {
+    const nextOpen = !showCreatePanel || Boolean(prefillRequest);
+    setShowCreatePanel(nextOpen);
+    setShowTemplatesPanel(false);
+    setEditingTemplateId(null);
+    setCreateMode("manual");
+    if (nextOpen) {
+      setCreateDraft(prefillRequest ? buildCreateDraftFromRequest(prefillRequest) : createDefaultQuotationDraft());
+      setCreateCatalogQuery("");
+      setCreateCatalogResults([]);
+    }
+  }
+
   function handleDownloadTemplateFormat() {
     const payload = buildTemplateDownloadPayload(createDraft);
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
@@ -1816,6 +1861,12 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
     if (!expandedRequest) return;
     const storedProposal = parseStoredQuoteProposal(expandedRequest.quotationData);
     const feeState = splitQuoteItemsAndFees(storedProposal.items);
+    const initialQuoteStatus: QuoteRequestStatus =
+      expandedRequest.status === "PENDING" ||
+      expandedRequest.status === "CONTACTED" ||
+      expandedRequest.status === "DRAFT"
+        ? "QUOTED"
+        : expandedRequest.status;
     const proposalDefaults = applyProposalDefaults(
       (expandedRequest.projectType as QuoteProjectType | null) || "SOLAR_HOME_SYSTEM",
       {
@@ -1836,9 +1887,12 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
       },
     );
     setFormState({
-      status: expandedRequest.status,
-      quoteTitle: expandedRequest.quoteTitle || "",
-      quoteMessage: expandedRequest.quoteMessage || "",
+      status: initialQuoteStatus,
+      quoteTitle:
+        expandedRequest.quoteTitle ||
+        expandedRequest.preferredProducts ||
+        formatProjectType((expandedRequest.projectType as QuoteProjectType | null) || "SOLAR_HOME_SYSTEM"),
+      quoteMessage: expandedRequest.quoteMessage || expandedRequest.loadDescription || expandedRequest.notes || "",
       quoteItems: feeState.quoteItems,
       discountAmount:
         typeof storedProposal.discountAmount === "number" && storedProposal.discountAmount > 0
@@ -1988,7 +2042,7 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
             {enableCreate ? (
               <button
                 type="button"
-                onClick={() => setShowCreatePanel((current) => !current)}
+                onClick={() => openCreatePanel(expandedRequest)}
                 className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 hover:text-white"
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -2069,11 +2123,7 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
               {enableCreate ? (
               <button
                 type="button"
-                onClick={() => {
-                  setShowCreatePanel((current) => !current);
-                  setShowTemplatesPanel(false);
-                  setEditingTemplateId(null);
-                }}
+                onClick={() => openCreatePanel(expandedRequest)}
                 className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 hover:text-white"
               >
                 <Plus className="h-3.5 w-3.5" />

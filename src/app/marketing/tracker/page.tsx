@@ -306,12 +306,12 @@ async function listVisibleQuoteRequests(input: {
     }>>(Prisma.sql`
       SELECT *
       FROM "QuoteRequest"
-      WHERE LOWER(COALESCE("status", '')) IN ('new', 'contacted', 'pending', 'follow_up', 'quoted', 'amount_pending')
+      WHERE LOWER(COALESCE("status", '')) IN ('pending', 'new', 'contacted', 'follow_up', 'quoted', 'amount_pending')
       ORDER BY
         CASE
-          WHEN "status" = 'NEW' THEN 1
-          WHEN "status" = 'CONTACTED' THEN 2
-          WHEN "status" = 'PENDING' THEN 3
+          WHEN "status" = 'PENDING' THEN 1
+          WHEN "status" = 'NEW' THEN 2
+          WHEN "status" = 'CONTACTED' THEN 3
           WHEN "status" = 'FOLLOW_UP' THEN 4
           WHEN "status" = 'QUOTED' THEN 5
           WHEN "status" = 'AMOUNT_PENDING' THEN 6
