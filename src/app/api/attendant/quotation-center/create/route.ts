@@ -165,6 +165,7 @@ export async function POST(request: NextRequest) {
       notifications = await deliverQuotationNotifications(created, {
         pdfBuffer: assets.pdfBuffer,
         pdfUrl: assets.pdfUrl,
+        whatsappPdfUrl: assets.whatsappPdfUrl,
         sendEmail: Boolean(created.customerEmail),
         sendSms: Boolean(created.customerPhone),
         triggerWhatsapp: true,

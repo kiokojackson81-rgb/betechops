@@ -57,6 +57,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   const notifications = await deliverQuotationNotifications(updated, {
     pdfBuffer: assets.pdfBuffer,
     pdfUrl: assets.pdfUrl,
+    whatsappPdfUrl: assets.whatsappPdfUrl,
     sendEmail: Boolean(parsed.data.sendEmail),
     sendSms: Boolean(parsed.data.sendSms),
     triggerWhatsapp: true,

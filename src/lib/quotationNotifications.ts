@@ -3,6 +3,7 @@ import { uploadQuotationPdfToBlob } from "@/lib/blob/uploadQuotationPdf";
 import { sendGeneralCustomerNotificationEmail } from "@/lib/email";
 import { pushReceiptToChatrace } from "@/lib/integrations/chatrace";
 import { normalizeKenyanPhone, normalizePhone } from "@/lib/phone";
+import { getShopBaseUrl } from "@/lib/runtimeUrls";
 import {
   formatQuoteCurrency,
   getQuotePaymentMethodLabel,
@@ -21,6 +22,11 @@ export type QuotationNotificationResult = {
   meta?: Record<string, unknown>;
 };
 
+type QuotationPdfDeliveryResolution = {
+  url: string;
+  mode: "pdf" | "proxy";
+};
+
 function getNotificationPhoneVariants(phone: string | null | undefined) {
   const rawPhone = String(phone || "").trim();
   const normalizedPhone = normalizeKenyanPhone(rawPhone);
@@ -29,6 +35,51 @@ function getNotificationPhoneVariants(phone: string | null | undefined) {
     rawPhone,
     normalizedPhone,
     deliveryPhone: normalizedPhone || fallbackPhone || "",
+  };
+}
+
+async function isUrlReachable(url: string, tries = 3) {
+  const target = String(url || "").trim();
+  if (!target) return false;
+
+  for (let attempt = 0; attempt < tries; attempt += 1) {
+    try {
+      const headRes = await fetch(target, { method: "HEAD", redirect: "follow" });
+      if (headRes.ok) return true;
+    } catch {}
+
+    try {
+      const getRes = await fetch(target, {
+        method: "GET",
+        redirect: "follow",
+        headers: { Range: "bytes=0-0" },
+      });
+      if (getRes.ok || getRes.status === 206) return true;
+    } catch {}
+  }
+
+  return false;
+}
+
+async function resolveQuotationDeliveryPdfUrl(
+  quotationId: string,
+  candidateUrl?: string | null,
+): Promise<QuotationPdfDeliveryResolution> {
+  const cleanCandidate = String(candidateUrl || "").trim();
+  if (cleanCandidate) {
+    const candidateOk = await isUrlReachable(cleanCandidate, 3);
+    if (candidateOk) {
+      return { url: cleanCandidate, mode: "pdf" };
+    }
+    console.warn("[quotation.notifications.pdf.unreachable]", {
+      quotationId,
+      candidateUrl: cleanCandidate,
+    });
+  }
+
+  return {
+    url: `${getShopBaseUrl().replace(/\/$/, "")}/api/quotations/${encodeURIComponent(quotationId)}/pdf`,
+    mode: "proxy",
   };
 }
 
@@ -166,8 +217,24 @@ export async function prepareQuotationPdfAssets(
     quoteRef: request.quoteRef,
     buffer: pdfBuffer,
   });
+  const whatsappDelivery = await resolveQuotationDeliveryPdfUrl(request.id, upload.url);
 
-  return { proposal, pdfBuffer, pdfUrl: upload.url, blobKey: upload.key };
+  console.info("[quotation.notifications.assets]", {
+    quoteRequestId: request.id,
+    quoteRef: request.quoteRef,
+    blobUrl: upload.url,
+    whatsappPdfUrl: whatsappDelivery.url,
+    whatsappPdfMode: whatsappDelivery.mode,
+  });
+
+  return {
+    proposal,
+    pdfBuffer,
+    pdfUrl: upload.url,
+    blobKey: upload.key,
+    whatsappPdfUrl: whatsappDelivery.url,
+    whatsappPdfMode: whatsappDelivery.mode,
+  };
 }
 
 export async function deliverQuotationNotifications(
@@ -175,6 +242,7 @@ export async function deliverQuotationNotifications(
   opts: {
     pdfBuffer: Buffer;
     pdfUrl: string;
+    whatsappPdfUrl?: string;
     sendEmail?: boolean;
     sendSms?: boolean;
     triggerWhatsapp?: boolean;
@@ -194,9 +262,12 @@ export async function deliverQuotationNotifications(
     sendSms: Boolean(opts.sendSms),
     triggerWhatsapp: Boolean(opts.triggerWhatsapp),
     pdfUrlPresent: Boolean(opts.pdfUrl),
+    whatsappPdfUrlPresent: Boolean(opts.whatsappPdfUrl || opts.pdfUrl),
   });
 
-  if (opts.triggerWhatsapp && deliveryPhone && opts.pdfUrl) {
+  const whatsappPdfUrl = String(opts.whatsappPdfUrl || opts.pdfUrl || "").trim();
+
+  if (opts.triggerWhatsapp && deliveryPhone && whatsappPdfUrl) {
     try {
       const proposal = parseStoredQuoteProposal(request.quotationData);
       const chatrace = await pushReceiptToChatrace({
@@ -205,14 +276,20 @@ export async function deliverQuotationNotifications(
         receiptNumber: request.quoteRef,
         amount: String(proposal.total || 0),
         currency: "KES",
-        receiptLink: opts.pdfUrl,
-        receiptUrl: opts.pdfUrl,
+        receiptLink: whatsappPdfUrl,
+        receiptUrl: whatsappPdfUrl,
         tagName: "quotation_ready",
         skipDefaultTags: true,
+        items: proposal.items,
+        paymentMethod: proposal.paymentMethod || undefined,
+        attendant:
+          request.assignedAttendant?.name ||
+          request.assignedAttendant?.email ||
+          undefined,
         extraFields: {
           customer_name: request.customerName,
-          receipt_url: opts.pdfUrl,
-          quotation_url: opts.pdfUrl,
+          receipt_url: whatsappPdfUrl,
+          quotation_url: whatsappPdfUrl,
           quote_ref: request.quoteRef,
           quote_title: request.quoteTitle || "Betech Solar quotation",
         },
@@ -223,6 +300,7 @@ export async function deliverQuotationNotifications(
         quoteRef: request.quoteRef,
         ok: chatrace.ok,
         deliveryPhone,
+        whatsappPdfUrl,
         debugError: chatrace.debug?.error ?? null,
       });
       notifications.push({
@@ -232,7 +310,7 @@ export async function deliverQuotationNotifications(
         meta: {
           normalizedPhone,
           deliveryPhone,
-          pdfUrl: opts.pdfUrl,
+          pdfUrl: whatsappPdfUrl,
         },
       });
     } catch (error) {
@@ -247,7 +325,7 @@ export async function deliverQuotationNotifications(
       notifications.push({ channel: "whatsapp", ok: false, error: message });
     }
   } else if (opts.triggerWhatsapp) {
-    const reason = !opts.pdfUrl ? "missing_pdf_url" : "missing_phone";
+    const reason = !whatsappPdfUrl ? "missing_pdf_url" : "missing_phone";
     console.warn("[quotation.notifications.whatsapp.skipped]", {
       quoteRequestId: request.id,
       quoteRef: request.quoteRef,
