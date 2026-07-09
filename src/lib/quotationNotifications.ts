@@ -2,7 +2,7 @@ import { sendTransactionalSms } from "@/lib/africasTalking";
 import { uploadQuotationPdfToBlob } from "@/lib/blob/uploadQuotationPdf";
 import { sendGeneralCustomerNotificationEmail } from "@/lib/email";
 import { pushReceiptToChatrace } from "@/lib/integrations/chatrace";
-import { normalizeKenyanPhone } from "@/lib/phone";
+import { normalizeKenyanPhone, normalizePhone } from "@/lib/phone";
 import {
   formatQuoteCurrency,
   getQuotePaymentMethodLabel,
@@ -20,6 +20,17 @@ export type QuotationNotificationResult = {
   error?: string;
   meta?: Record<string, unknown>;
 };
+
+function getNotificationPhoneVariants(phone: string | null | undefined) {
+  const rawPhone = String(phone || "").trim();
+  const normalizedPhone = normalizeKenyanPhone(rawPhone);
+  const fallbackPhone = normalizedPhone ? "" : normalizePhone(rawPhone);
+  return {
+    rawPhone,
+    normalizedPhone,
+    deliveryPhone: normalizedPhone || fallbackPhone || "",
+  };
+}
 
 function buildPreparedBy(
   request: SerializedQuoteRequest,
@@ -170,13 +181,26 @@ export async function deliverQuotationNotifications(
   },
 ) {
   const notifications: QuotationNotificationResult[] = [];
-  const normalizedPhone = normalizeKenyanPhone(request.customerPhone || "");
+  const { rawPhone, normalizedPhone, deliveryPhone } = getNotificationPhoneVariants(request.customerPhone);
+  console.info("[quotation.notifications.start]", {
+    quoteRequestId: request.id,
+    quoteRef: request.quoteRef,
+    customerName: request.customerName,
+    rawPhone,
+    normalizedPhone,
+    deliveryPhone,
+    customerEmail: request.customerEmail || null,
+    sendEmail: Boolean(opts.sendEmail),
+    sendSms: Boolean(opts.sendSms),
+    triggerWhatsapp: Boolean(opts.triggerWhatsapp),
+    pdfUrlPresent: Boolean(opts.pdfUrl),
+  });
 
-  if (opts.triggerWhatsapp && normalizedPhone && opts.pdfUrl) {
+  if (opts.triggerWhatsapp && deliveryPhone && opts.pdfUrl) {
     try {
       const proposal = parseStoredQuoteProposal(request.quotationData);
       const chatrace = await pushReceiptToChatrace({
-        phoneE164: normalizedPhone,
+        phoneE164: deliveryPhone,
         customerName: request.customerName,
         receiptNumber: request.quoteRef,
         amount: String(proposal.total || 0),
@@ -188,15 +212,26 @@ export async function deliverQuotationNotifications(
         extraFields: {
           customer_name: request.customerName,
           receipt_url: opts.pdfUrl,
+          quotation_url: opts.pdfUrl,
+          quote_ref: request.quoteRef,
+          quote_title: request.quoteTitle || "Betech Solar quotation",
         },
       });
 
+      console.info("[quotation.notifications.whatsapp]", {
+        quoteRequestId: request.id,
+        quoteRef: request.quoteRef,
+        ok: chatrace.ok,
+        deliveryPhone,
+        debugError: chatrace.debug?.error ?? null,
+      });
       notifications.push({
         channel: "whatsapp",
         ok: chatrace.ok,
         error: chatrace.ok ? undefined : String(chatrace.debug?.error || "Chatrace sync failed."),
         meta: {
           normalizedPhone,
+          deliveryPhone,
           pdfUrl: opts.pdfUrl,
         },
       });
@@ -206,26 +241,65 @@ export async function deliverQuotationNotifications(
         quoteRequestId: request.id,
         quoteRef: request.quoteRef,
         normalizedPhone,
+        deliveryPhone,
         error: message,
       });
       notifications.push({ channel: "whatsapp", ok: false, error: message });
     }
+  } else if (opts.triggerWhatsapp) {
+    const reason = !opts.pdfUrl ? "missing_pdf_url" : "missing_phone";
+    console.warn("[quotation.notifications.whatsapp.skipped]", {
+      quoteRequestId: request.id,
+      quoteRef: request.quoteRef,
+      reason,
+      rawPhone,
+      normalizedPhone,
+      deliveryPhone,
+    });
+    notifications.push({
+      channel: "whatsapp",
+      ok: false,
+      error: `WhatsApp skipped: ${reason}.`,
+      meta: { rawPhone, normalizedPhone, deliveryPhone },
+    });
   }
 
-  if (opts.sendSms && normalizedPhone) {
+  if (opts.sendSms && deliveryPhone) {
     try {
-      await sendTransactionalSms(normalizedPhone, buildQuoteSms(request));
-      notifications.push({ channel: "sms", ok: true, meta: { normalizedPhone } });
+      await sendTransactionalSms(deliveryPhone, buildQuoteSms(request));
+      console.info("[quotation.notifications.sms]", {
+        quoteRequestId: request.id,
+        quoteRef: request.quoteRef,
+        ok: true,
+        deliveryPhone,
+      });
+      notifications.push({ channel: "sms", ok: true, meta: { normalizedPhone, deliveryPhone } });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to send SMS.";
       console.error("[quotation.sms.failed]", {
         quoteRequestId: request.id,
         quoteRef: request.quoteRef,
         normalizedPhone,
+        deliveryPhone,
         error: message,
       });
       notifications.push({ channel: "sms", ok: false, error: message });
     }
+  } else if (opts.sendSms) {
+    console.warn("[quotation.notifications.sms.skipped]", {
+      quoteRequestId: request.id,
+      quoteRef: request.quoteRef,
+      reason: "missing_phone",
+      rawPhone,
+      normalizedPhone,
+      deliveryPhone,
+    });
+    notifications.push({
+      channel: "sms",
+      ok: false,
+      error: "SMS skipped: missing phone.",
+      meta: { rawPhone, normalizedPhone, deliveryPhone },
+    });
   }
 
   if (opts.sendEmail && request.customerEmail) {
@@ -259,7 +333,23 @@ export async function deliverQuotationNotifications(
       });
       notifications.push({ channel: "email", ok: false, error: message });
     }
+  } else if (opts.sendEmail) {
+    console.warn("[quotation.notifications.email.skipped]", {
+      quoteRequestId: request.id,
+      quoteRef: request.quoteRef,
+      reason: "missing_email",
+    });
+    notifications.push({
+      channel: "email",
+      ok: false,
+      error: "Email skipped: missing email.",
+    });
   }
 
+  console.info("[quotation.notifications.complete]", {
+    quoteRequestId: request.id,
+    quoteRef: request.quoteRef,
+    notifications,
+  });
   return notifications;
 }

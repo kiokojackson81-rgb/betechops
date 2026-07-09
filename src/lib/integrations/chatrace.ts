@@ -338,6 +338,7 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
       'betech_dispatch_pay_on_delivery',
       'pod_receipt_admin_alert',
       'followup_responsible_alert',
+      'quotation_ready',
       // legacy/internal
       'receipt_admin_alert',
     ]);
