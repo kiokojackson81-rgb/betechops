@@ -174,7 +174,8 @@ function buildQuoteEmailText(request: SerializedQuoteRequest) {
 }
 
 function buildQuoteSms(request: SerializedQuoteRequest) {
-  return `Hello ${request.customerName}. We've prepared your quotation as requested. Log in using your phone number to view and download it here: https://www.betech.co.ke/account`;
+  const quoteUrl = `${getShopBaseUrl().replace(/\/$/, "")}/q/${encodeURIComponent(request.quoteRef)}`;
+  return `Hello ${request.customerName}. Your Betech Solar Solution quotation is ready. Download it here: ${quoteUrl}`;
 }
 
 export async function prepareQuotationPdfAssets(

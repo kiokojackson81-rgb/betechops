@@ -1530,6 +1530,20 @@ export async function getQuoteRequestById(id: string) {
   return rows[0] ? serializeQuoteRequest(rows[0]) : null;
 }
 
+export async function getQuoteRequestByRef(quoteRef: string) {
+  await ensureQuoteRequestsSchema();
+  const normalizedRef = String(quoteRef || "").trim();
+  if (!normalizedRef) return null;
+
+  const rows = await prisma.$queryRaw<QuoteRequestRow[]>(Prisma.sql`
+    SELECT ${QUOTE_REQUEST_SELECT_SQL}
+    FROM "QuoteRequest"
+    WHERE "quoteRef" = ${normalizedRef}
+    LIMIT 1
+  `);
+  return rows[0] ? serializeQuoteRequest(rows[0]) : null;
+}
+
 export async function updateQuoteRequestResponse(
   id: string,
   user: { id: string; name: string | null; email: string | null },
