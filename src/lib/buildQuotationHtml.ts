@@ -398,118 +398,19 @@ function renderTermsCards(terms: readonly string[]) {
 
 type QuotationLayoutBlock = {
   id: string;
-  priority: number;
-  estimatedHeight: number;
-  minimumAllowedHeight: number;
-  compactHeight: number;
-  canSplit: boolean;
   html: string;
 };
 
-type PackedQuotationBlock = {
-  block: QuotationLayoutBlock;
-  compact: boolean;
-};
-
-const QUOTATION_PAGE_HEIGHT = 285;
-const QUOTATION_FOOTER_ALLOWANCE = 12;
-const QUOTATION_PAGE_USABLE_HEIGHT = QUOTATION_PAGE_HEIGHT - QUOTATION_FOOTER_ALLOWANCE;
-const QUOTATION_COMPACT_TOLERANCE = 10;
-
-function estimateTextLineCount(value: string | null | undefined, charsPerLine: number) {
-  const normalized = String(value || "").trim();
-  if (!normalized) return 0;
-  return Math.max(1, Math.ceil(normalized.length / Math.max(8, charsPerLine)));
-}
-
-function estimateBoqHeight(items: ReturnType<typeof normalizeQuotePdfData>["items"]) {
-  const headerHeight = 19;
-  const sectionHeadingHeight = 18;
-  const rowHeight = items.reduce((sum, item) => {
-    const titleLines = estimateTextLineCount(item.name, 36);
-    const subtitleLines = estimateTextLineCount(item.description, 52);
-    const warrantyLines = estimateTextLineCount(item.warrantyText, 16);
-    return sum + 11 + (titleLines - 1) * 3.2 + subtitleLines * 2.4 + Math.max(0, warrantyLines - 1) * 2.2;
-  }, 0);
-  return sectionHeadingHeight + headerHeight + rowHeight + 6;
-}
-
-function estimateHeroHeight(title: string) {
-  return 66 + Math.max(0, estimateTextLineCount(title, 28) - 2) * 8;
-}
-
-function estimateInfoGridHeight(data: ReturnType<typeof normalizeQuotePdfData>) {
-  const rowCounts = [
-    [data.customer.name, data.customer.phone, data.customer.email, data.customer.location],
-    [
-      data.preparedBy.team,
-      data.preparedBy.leadTechnicianName,
-      data.preparedBy.leadTechnicianPhone,
-      data.preparedBy.salesDesk,
-    ],
-    [data.company.name, data.company.registrationNo, data.company.kraPin, data.company.office],
-  ];
-
-  const cardHeights = rowCounts.map((rows) => {
-    const rowHeight = rows.reduce((sum, value) => sum + 9 + Math.max(0, estimateTextLineCount(value, 24) - 1) * 3.8, 0);
-    return 20 + rowHeight;
-  });
-
-  return Math.max(...cardHeights) + 8;
-}
-
-function packQuotationBlocks(
-  blocks: QuotationLayoutBlock[],
-  initialRemainingHeight: number,
-) {
-  const pages: PackedQuotationBlock[][] = [[]];
-  const remainingHeights = [Math.max(0, initialRemainingHeight)];
-
-  for (const block of [...blocks].sort((left, right) => left.priority - right.priority)) {
-    let pageIndex = pages.length - 1;
-    let remainingHeight = remainingHeights[pageIndex];
-
-    if (block.estimatedHeight <= remainingHeight) {
-      pages[pageIndex].push({ block, compact: false });
-      remainingHeights[pageIndex] -= block.estimatedHeight;
-      continue;
-    }
-
-    const compactOverrun = block.estimatedHeight - remainingHeight;
-    if (compactOverrun > 0 && compactOverrun <= QUOTATION_COMPACT_TOLERANCE && block.compactHeight <= remainingHeight) {
-      pages[pageIndex].push({ block, compact: true });
-      remainingHeights[pageIndex] -= block.compactHeight;
-      continue;
-    }
-
-    pages.push([]);
-    remainingHeights.push(QUOTATION_PAGE_USABLE_HEIGHT);
-    pageIndex = pages.length - 1;
-    remainingHeight = remainingHeights[pageIndex];
-
-    const useCompactOnNewPage = block.compactHeight < block.estimatedHeight && block.compactHeight <= remainingHeight;
-    pages[pageIndex].push({ block, compact: useCompactOnNewPage });
-    remainingHeights[pageIndex] -= useCompactOnNewPage ? block.compactHeight : block.estimatedHeight;
-  }
-
-  return pages;
-}
-
-function renderPackedQuotationBlocks(blocks: PackedQuotationBlock[]) {
-  if (!blocks.length) return "";
-  return `
-    <div class="page-block-stack">
-      ${blocks
-        .map(
-          ({ block, compact }) => `
-            <div class="packed-block ${compact ? "packed-block-compact" : ""}" data-block-id="${escapeHtml(block.id)}">
-              ${block.html}
-            </div>
-          `,
-        )
-        .join("")}
-    </div>
-  `;
+function renderQuotationBlocks(blocks: QuotationLayoutBlock[]) {
+  return blocks
+    .map(
+      (block) => `
+        <section class="quote-block" data-block-id="${escapeHtml(block.id)}">
+          ${block.html}
+        </section>
+      `,
+    )
+    .join("");
 }
 
 export function buildQuotationHtml(
@@ -548,18 +449,11 @@ export function buildQuotationHtml(
         ? "Installation charged separately."
         : "Installation not included.",
   ].join(" ");
-  const initialPageUsedHeight =
-    estimateHeroHeight(data.title) + estimateInfoGridHeight(data) + estimateBoqHeight(data.items) + 14;
-  const initialRemainingHeight = Math.max(0, QUOTATION_PAGE_USABLE_HEIGHT - initialPageUsedHeight);
+  const compactQuotationClass = data.items.length <= 4 ? "compact-quotation" : "";
 
   const postBoqBlocks: QuotationLayoutBlock[] = [
     {
       id: "cost-warranty",
-      priority: 10,
-      estimatedHeight: 86,
-      compactHeight: 76,
-      minimumAllowedHeight: 72,
-      canSplit: false,
       html: `
         <div class="bottom-grid">
           <div class="section-card">
@@ -592,11 +486,6 @@ export function buildQuotationHtml(
     },
     {
       id: "useful-links",
-      priority: 20,
-      estimatedHeight: 108 + Math.max(0, estimateTextLineCount(featuredProjectUrl, 56) - 1) * 3,
-      compactHeight: 96 + Math.max(0, estimateTextLineCount(featuredProjectUrl, 56) - 1) * 2.2,
-      minimumAllowedHeight: 90,
-      canSplit: false,
       html: `
         <div class="full-card">
           <div class="section-head">
@@ -674,11 +563,6 @@ export function buildQuotationHtml(
     },
     {
       id: "glance-payment-approval",
-      priority: 30,
-      estimatedHeight: 92,
-      compactHeight: 82,
-      minimumAllowedHeight: 76,
-      canSplit: false,
       html: `
         <div class="three-col-grid">
           <div class="section-card">
@@ -749,11 +633,6 @@ export function buildQuotationHtml(
     },
     {
       id: "payment-methods",
-      priority: 40,
-      estimatedHeight: 52,
-      compactHeight: 46,
-      minimumAllowedHeight: 42,
-      canSplit: false,
       html: `
         <div class="section-card">
           <div class="section-head">
@@ -770,11 +649,6 @@ export function buildQuotationHtml(
     },
     {
       id: "contact-information",
-      priority: 50,
-      estimatedHeight: 50,
-      compactHeight: 44,
-      minimumAllowedHeight: 40,
-      canSplit: false,
       html: `
         <div class="section-card">
           <div class="section-head">
@@ -795,11 +669,6 @@ export function buildQuotationHtml(
     },
     {
       id: "support-notes",
-      priority: 60,
-      estimatedHeight: 96,
-      compactHeight: 86,
-      minimumAllowedHeight: 80,
-      canSplit: false,
       html: `
         <div class="support-grid">
           <div class="section-card">
@@ -829,11 +698,6 @@ export function buildQuotationHtml(
     },
     {
       id: "terms-and-conditions",
-      priority: 70,
-      estimatedHeight: 74,
-      compactHeight: 66,
-      minimumAllowedHeight: 60,
-      canSplit: false,
       html: `
         <div class="full-card">
           <div class="section-head">
@@ -849,9 +713,6 @@ export function buildQuotationHtml(
       `,
     },
   ];
-  const packedBlockPages = packQuotationBlocks(postBoqBlocks, initialRemainingHeight);
-  const firstPageBlocks = packedBlockPages[0] || [];
-  const laterPageBlocks = packedBlockPages.slice(1);
 
   return `<!doctype html>
 <html lang="en">
@@ -870,61 +731,63 @@ export function buildQuotationHtml(
     font-size: 9.6px;
     line-height: 1.38;
   }
-  .sheet {
+  .quotation-document {
     width: 210mm;
-    margin: 0 auto 10px;
+    margin: 0 auto;
     background: #fafafa;
     padding: 5mm;
-    position: relative;
-    overflow: hidden;
-  }
-  .page {
-    display: flex;
-    flex-direction: column;
-    gap: 2.2mm;
-    min-height: 285mm;
-  }
-  .page-block-stack {
     display: flex;
     flex-direction: column;
     gap: 2.2mm;
   }
-  .packed-block {
+  .document-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2.2mm;
+  }
+  .quote-block {
     break-inside: avoid;
     page-break-inside: avoid;
+    margin-bottom: 0;
   }
-  .packed-block-compact .section-head {
+  .compact-quotation .quote-block {
+    margin-bottom: 0;
+  }
+  .compact-quotation .section-head {
     padding-top: 1.7mm;
     padding-bottom: 1.7mm;
   }
-  .packed-block-compact .section-body {
+  .compact-quotation .section-body {
     padding-top: 1.9mm;
     padding-bottom: 1.9mm;
   }
-  .packed-block-compact .links-layout,
-  .packed-block-compact .three-col-grid,
-  .packed-block-compact .support-grid,
-  .packed-block-compact .pay-grid,
-  .packed-block-compact .terms-stack,
-  .packed-block-compact .support-columns,
-  .packed-block-compact .page-block-stack {
+  .compact-quotation .hero-card { padding: 22px 28px; }
+  .compact-quotation .info-card { padding: 18px 18px 14px; }
+  .compact-quotation .links-layout,
+  .compact-quotation .three-col-grid,
+  .compact-quotation .support-grid,
+  .compact-quotation .pay-grid,
+  .compact-quotation .terms-stack,
+  .compact-quotation .support-columns,
+  .compact-quotation .document-body {
     gap: 1.5mm;
   }
-  .packed-block-compact .link-row,
-  .packed-block-compact .payment-option,
-  .packed-block-compact .glance-row,
-  .packed-block-compact .support-row,
-  .packed-block-compact .contact-item,
-  .packed-block-compact .terms-card,
-  .packed-block-compact .cost-row {
+  .compact-quotation .boq td { padding: 10px 12px; }
+  .compact-quotation .link-row,
+  .compact-quotation .payment-option,
+  .compact-quotation .glance-row,
+  .compact-quotation .support-row,
+  .compact-quotation .contact-item,
+  .compact-quotation .terms-card,
+  .compact-quotation .cost-row {
     padding-top: 1.5mm;
     padding-bottom: 1.5mm;
   }
-  .packed-block-compact .qr-box img {
+  .compact-quotation .qr-box img {
     width: 38mm;
     height: 38mm;
   }
-  .packed-block-compact .qr-head {
+  .compact-quotation .qr-head {
     padding-top: 1.7mm;
     padding-bottom: 1.7mm;
   }
@@ -1846,14 +1709,13 @@ export function buildQuotationHtml(
   .footer-brand-badge .icon-svg { width: 4.1mm; height: 4.1mm; }
   @media print {
     body { background: #fff; }
-    .sheet { margin: 0; box-shadow: none; }
-    .sheet:not(:last-child) { page-break-after: always; }
+    .quotation-document { margin: 0; box-shadow: none; }
   }
 </style>
 </head>
 <body>
-<section class="sheet">
-  <div class="page top-strip">
+<main class="quotation-document ${compactQuotationClass}">
+  <div class="document-body top-strip">
     <div class="hero-card">
       <div class="letterhead-block">
         <div class="brand-mark">
@@ -1953,20 +1815,9 @@ export function buildQuotationHtml(
       </div>
     </div>
 
-    ${renderPackedQuotationBlocks(firstPageBlocks)}
-
+    ${renderQuotationBlocks(postBoqBlocks)}
   </div>
-</section>
-${laterPageBlocks
-  .map(
-    (pageBlocks) => `
-<section class="sheet">
-  <div class="page top-strip">
-    ${renderPackedQuotationBlocks(pageBlocks)}
-  </div>
-</section>`,
-  )
-  .join("")}
+</main>
 </body>
 </html>`;
 }
