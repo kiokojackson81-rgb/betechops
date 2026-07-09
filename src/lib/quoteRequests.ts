@@ -134,11 +134,11 @@ const QUOTE_REQUEST_SCHEMA_SQL = [
     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "QuotationTemplate_pkey" PRIMARY KEY ("id")
   )`,
-  `CREATE INDEX IF NOT EXISTS "QuotationTemplate_isActive_updatedAt_idx" ON "QuotationTemplate"("isActive","updatedAt")`,
-  `CREATE INDEX IF NOT EXISTS "QuotationTemplate_ownerAttendantId_updatedAt_idx" ON "QuotationTemplate"("ownerAttendantId","updatedAt")`,
   `ALTER TABLE "QuotationTemplate" ADD COLUMN IF NOT EXISTS "ownerAttendantId" TEXT`,
   `ALTER TABLE "QuotationTemplate" ADD COLUMN IF NOT EXISTS "ownerAttendantEmail" TEXT`,
   `ALTER TABLE "QuotationTemplate" ADD COLUMN IF NOT EXISTS "ownerAttendantName" TEXT`,
+  `CREATE INDEX IF NOT EXISTS "QuotationTemplate_isActive_updatedAt_idx" ON "QuotationTemplate"("isActive","updatedAt")`,
+  `CREATE INDEX IF NOT EXISTS "QuotationTemplate_ownerAttendantId_updatedAt_idx" ON "QuotationTemplate"("ownerAttendantId","updatedAt")`,
   `CREATE TABLE IF NOT EXISTS "QuotationEvent" (
     "id" TEXT NOT NULL,
     "quoteRequestId" TEXT NOT NULL,
