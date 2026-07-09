@@ -1829,9 +1829,9 @@ export function buildQuotationHtml(
         <div class="card-title">Prepared By</div>
         <div class="card-divider"></div>
         ${renderRows([
-          ["users", "Team", data.preparedBy.team],
+          ["users", "Sales Person", data.preparedBy.team],
           ["wrench", "Lead Technician", data.preparedBy.leadTechnicianName],
-          ["phone", "Technician Phone", data.preparedBy.leadTechnicianPhone],
+          ["phone", "Technical Support", data.preparedBy.leadTechnicianPhone],
           ["headset", "Sales Desk", data.preparedBy.salesDesk],
         ], "wrap")}
       </div>

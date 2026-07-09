@@ -32,6 +32,12 @@ export type QuotePdfInput = {
   depositAmount?: number | null;
   balanceAmount?: number | null;
   quoteMessage?: string | null;
+  preparedBy?: {
+    team?: string | null;
+    leadTechnicianName?: string | null;
+    leadTechnicianPhone?: string | null;
+    salesDesk?: string | null;
+  };
   warrantyMode?: QuoteWarrantyMode | null;
   fullSystemWarranty?: string | null;
   customWarranty?: string | null;
@@ -95,6 +101,14 @@ function mapToCompactInput(input: QuotePdfInput): CompactQuotePdfInput {
     grandTotal: input.total ?? null,
     discountAmount: input.discountAmount ?? null,
     customerNotes: input.quoteMessage || null,
+    preparedBy: input.preparedBy
+      ? {
+          team: input.preparedBy.team || undefined,
+          leadTechnicianName: input.preparedBy.leadTechnicianName || undefined,
+          leadTechnicianPhone: input.preparedBy.leadTechnicianPhone || undefined,
+          salesDesk: input.preparedBy.salesDesk || undefined,
+        }
+      : undefined,
     similarProjectUrl: firstUrl(
       input.proposalSections?.projectReferenceLinks,
       input.proposalSections?.similarProjects,

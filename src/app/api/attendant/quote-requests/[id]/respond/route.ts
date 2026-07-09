@@ -265,6 +265,17 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     aiWarrantySummary: proposal.aiWarrantySummary,
     proposalSections: proposal.proposalSections,
     proposalVisibility: proposal.proposalVisibility,
+    preparedBy: {
+      team:
+        updated.assignedAttendant?.name ||
+        updated.assignedAttendant?.email ||
+        guard.name ||
+        guard.email ||
+        "Quotation attendant",
+      leadTechnicianName: "Jackson",
+      leadTechnicianPhone: "0705663175",
+      salesDesk: "0722 151 083",
+    },
   });
 
   const notifications: Array<{ channel: "email" | "sms"; ok: boolean; error?: string }> = [];

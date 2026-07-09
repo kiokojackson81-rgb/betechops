@@ -56,6 +56,15 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     aiWarrantySummary: proposal.aiWarrantySummary,
     proposalSections: proposal.proposalSections,
     proposalVisibility: proposal.proposalVisibility,
+    preparedBy: {
+      team:
+        quoteRequest.assignedAttendant?.name ||
+        quoteRequest.assignedAttendant?.email ||
+        "Quotation attendant",
+      leadTechnicianName: "Jackson",
+      leadTechnicianPhone: "0705663175",
+      salesDesk: "0722 151 083",
+    },
   });
 
   return new NextResponse(quotationPdf, {
