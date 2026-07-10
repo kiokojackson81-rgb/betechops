@@ -1329,9 +1329,11 @@ export default function QuotationRequestsDeskClient({
         throw new Error(data?.error || "Failed to load quotation requests.");
       }
       setRequests(data.requests);
-      setExpandedId((current) => current && data.requests.some((request: SerializedQuoteRequest) => request.id === current)
-        ? current
-        : data.requests[0]?.id ?? null);
+      setExpandedId((current) =>
+        current && data.requests.some((request: SerializedQuoteRequest) => request.id === current)
+          ? current
+          : null,
+      );
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Failed to load quotation requests.");
     } finally {
@@ -1460,7 +1462,7 @@ export default function QuotationRequestsDeskClient({
           const existing = current.filter((request) => request.id !== data.request.id);
           return [data.request, ...existing];
         });
-        setExpandedId(data.request.id);
+        setExpandedId(null);
       }
       setShowCreatePanel(createOnlyMode);
       setShowCreateMoreOptions(false);
@@ -1473,7 +1475,7 @@ export default function QuotationRequestsDeskClient({
         await refreshRequests("ALL", "");
       }
       if (!createOnlyMode && data.request?.id) {
-        setExpandedId(data.request.id);
+        setExpandedId(null);
       }
       setMessage(createSuccessMessage);
     } catch (error) {
