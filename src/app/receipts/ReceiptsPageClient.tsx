@@ -356,11 +356,9 @@ export default function ReceiptsPageClient({
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts desk</p>
-              <h1 className="text-2xl font-semibold text-white">Betech Customers Operations</h1>
-              <p className="text-sm text-slate-400">
-                Build receipts or quotations from one mobile-friendly public desk, then let staff and customers view the saved document from their accounts.
-              </p>
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Operations Desk</p>
+              <h1 className="text-2xl font-semibold text-white">Receipts, PODs &amp; Quotations</h1>
+              <p className="text-sm text-slate-400">Create, save, print, and manage customer documents.</p>
             </div>
             <button
               onClick={openListView}

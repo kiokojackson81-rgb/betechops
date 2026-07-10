@@ -989,10 +989,10 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       <div className="receipt-screen space-y-6">
       {showHero && (
         <header className="space-y-1">
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts desk</p>
-          <h1 className="text-2xl font-semibold sm:text-3xl">Betech Customers Operations</h1>
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Operations Desk</p>
+          <h1 className="text-2xl font-semibold sm:text-3xl">Receipts, PODs &amp; Quotations</h1>
           <p className="text-sm text-slate-300">
-            Track every printable document, search by customer, and open the PDF drawer without leaving this page.
+            Track, search, and open saved customer documents without leaving this page.
           </p>
         </header>
       )}
