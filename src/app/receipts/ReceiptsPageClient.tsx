@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import ReceiptFormClient from "./ReceiptFormClient";
 import DailyReportReceiptsPanel from "@/components/daily-report-receipts";
+import QuotationRequestsDeskClient from "@/components/QuotationRequestsDeskClient";
 import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 
@@ -19,6 +20,13 @@ type ReceiptRow = {
   items?: any[];
   source?: "pos" | "marketing" | "support";
   detailUrl?: string | null;
+};
+
+type PublicStaffOption = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  attendantCategory?: string | null;
 };
 
 export default function ReceiptsPageClient({
@@ -55,6 +63,9 @@ export default function ReceiptsPageClient({
     count: 0,
     totalSales: 0,
   });
+  const [createDocumentType, setCreateDocumentType] = useState<"RECEIPT" | "QUOTATION">("RECEIPT");
+  const [quotationStaffOptions, setQuotationStaffOptions] = useState<PublicStaffOption[]>([]);
+  const [quotationStaffLoading, setQuotationStaffLoading] = useState(false);
 
   const listRef = useRef<HTMLDivElement | null>(null);
   const formRef = useRef<HTMLDivElement | null>(null);
@@ -125,6 +136,28 @@ export default function ReceiptsPageClient({
     const t = setTimeout(() => setDebouncedHistorySearch(historySearch), 250);
     return () => clearTimeout(t);
   }, [historySearch]);
+
+  useEffect(() => {
+    if (view !== "create" || createDocumentType !== "QUOTATION" || quotationStaffOptions.length) return;
+    let cancelled = false;
+    setQuotationStaffLoading(true);
+    fetch("/api/receipts/staff", { cache: "no-store" })
+      .then((response) => response.json().catch(() => []))
+      .then((data) => {
+        if (cancelled) return;
+        setQuotationStaffOptions(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setQuotationStaffOptions([]);
+      })
+      .finally(() => {
+        if (!cancelled) setQuotationStaffLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [createDocumentType, quotationStaffOptions.length, view]);
 
   // On mount, detect attendantId in the URL and open list view filtered to that attendant
   useEffect(() => {
@@ -326,7 +359,7 @@ export default function ReceiptsPageClient({
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts desk</p>
               <h1 className="text-2xl font-semibold text-white">Betech Customers Operations</h1>
               <p className="text-sm text-slate-400">
-                Track every printable document, search by customer, and open the PDF drawer without leaving this page.
+                Build receipts or quotations from one mobile-friendly public desk, then let staff and customers view the saved document from their accounts.
               </p>
             </div>
             <button
@@ -339,7 +372,54 @@ export default function ReceiptsPageClient({
 
           {/* Totals panel removed per request */}
           <div className="mt-4">
-            <ReceiptFormClient onCreated={handleCreated} showHero={false} />
+            <div className="mb-4 flex flex-wrap gap-2">
+              {([
+                ["RECEIPT", "Receipt / POD flow"],
+                ["QUOTATION", "Quotation flow"],
+              ] as const).map(([type, label]) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setCreateDocumentType(type)}
+                  className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                    createDocumentType === type
+                      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
+                      : "border-white/10 text-slate-300 hover:border-white/20 hover:text-white"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {createDocumentType === "QUOTATION" ? (
+              <div className="space-y-3">
+                {quotationStaffLoading && !quotationStaffOptions.length ? (
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-300">
+                    Loading quotation staff...
+                  </div>
+                ) : null}
+                <QuotationRequestsDeskClient
+                  apiBasePath="/api/public/quotation-center"
+                  deskTitle="Public quotation builder"
+                  deskDescription="Choose the staff owner, build the quotation here, and notify the customer immediately after save."
+                  compactMode
+                  enableCreate
+                  createOnlyMode
+                  initialCreateOpen
+                  allowTemplateSelection={false}
+                  allowTemplateManager={false}
+                  createApiPath="/api/public/quotation-center/create"
+                  createActionLabel="Save quotation and notify customer"
+                  createSuccessMessage="Quotation saved and customer notification has been triggered."
+                  assigneeOptions={quotationStaffOptions}
+                  assigneeLabel="Assign quotation to staff"
+                  requireAssigneeSelection
+                />
+              </div>
+            ) : (
+              <ReceiptFormClient onCreated={handleCreated} showHero={false} />
+            )}
           </div>
         </section>
       )}

@@ -82,6 +82,14 @@ type Props = {
   allowTemplateManager?: boolean;
   allowDelete?: boolean;
   templateOwnerOptions?: TemplateOwnerOption[];
+  createOnlyMode?: boolean;
+  initialCreateOpen?: boolean;
+  allowTemplateSelection?: boolean;
+  createActionLabel?: string;
+  createSuccessMessage?: string;
+  assigneeOptions?: TemplateOwnerOption[];
+  assigneeLabel?: string;
+  requireAssigneeSelection?: boolean;
 };
 
 const QUOTE_REQUEST_STATUSES: QuoteRequestStatus[] = [
@@ -305,6 +313,7 @@ type CreateQuotationDraft = {
   depositAmount: string;
   balanceAmount: string;
   followUpNotes: string;
+  assignedAttendantId: string;
 };
 
 function createEmptyQuoteItem(): QuoteItemDraft {
@@ -410,6 +419,7 @@ function createDefaultQuotationDraft(): CreateQuotationDraft {
     depositAmount: "",
     balanceAmount: "",
     followUpNotes: "",
+    assignedAttendantId: "",
   };
 }
 
@@ -444,6 +454,7 @@ function buildCreateDraftFromRequest(request: SerializedQuoteRequest): CreateQuo
       typeof request.responseMetadata?.followUpNotes === "string"
         ? request.responseMetadata.followUpNotes
         : "",
+    assignedAttendantId: request.assignedAttendant?.id || "",
   };
 }
 
@@ -1059,13 +1070,21 @@ export default function QuotationRequestsDeskClient({
   allowTemplateManager = false,
   allowDelete = false,
   templateOwnerOptions = [],
+  createOnlyMode = false,
+  initialCreateOpen = false,
+  allowTemplateSelection = true,
+  createActionLabel = "Save Quotation",
+  createSuccessMessage = "Quotation saved successfully. You can now email, SMS, WhatsApp, or download it.",
+  assigneeOptions = [],
+  assigneeLabel = "Quotation owner",
+  requireAssigneeSelection = false,
 }: Props) {
   const [requests, setRequests] = useState<SerializedQuoteRequest[]>([]);
   const [statusFilter, setStatusFilter] = useState<QuoteRequestStatusFilter>(defaultStatusFilter);
   const [query, setQuery] = useState(q);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [showCreatePanel, setShowCreatePanel] = useState(false);
+  const [showCreatePanel, setShowCreatePanel] = useState(initialCreateOpen || createOnlyMode);
   const [showTemplatesPanel, setShowTemplatesPanel] = useState(false);
   const [createMode, setCreateMode] = useState<CreateQuotationMode>("manual");
   const [createDraft, setCreateDraft] = useState<CreateQuotationDraft>(createDefaultQuotationDraft());
@@ -1276,6 +1295,11 @@ export default function QuotationRequestsDeskClient({
   ]);
 
   async function refreshRequests(nextStatus = statusFilter, nextQuery = query) {
+    if (createOnlyMode) {
+      setRequests([]);
+      setExpandedId(null);
+      return;
+    }
     setLoading(true);
     setLoadError(null);
     try {
@@ -1302,6 +1326,10 @@ export default function QuotationRequestsDeskClient({
   }
 
   async function refreshTemplates() {
+    if (!allowTemplateManager && !allowTemplateSelection) {
+      setTemplates([]);
+      return;
+    }
     setTemplatesLoading(true);
     try {
       const response = await fetch(
@@ -1351,6 +1379,7 @@ export default function QuotationRequestsDeskClient({
         notes: createDraft.notes || undefined,
         propertyType: "",
         source: createMode === "template" ? "TEMPLATE" : "MANUAL",
+        assignedAttendantId: createDraft.assignedAttendantId || undefined,
         templateId: selectedTemplate?.id,
         templateName: selectedTemplate?.templateName,
         quoteTitle:
@@ -1419,16 +1448,18 @@ export default function QuotationRequestsDeskClient({
         });
         setExpandedId(data.request.id);
       }
-      setShowCreatePanel(false);
+      setShowCreatePanel(createOnlyMode);
       setEditingTemplateId(null);
       setCreateDraft(createDefaultQuotationDraft());
       setCreateCatalogQuery("");
       setCreateCatalogResults([]);
-      await refreshRequests("ALL", "");
-      if (data.request?.id) {
+      if (!createOnlyMode) {
+        await refreshRequests("ALL", "");
+      }
+      if (!createOnlyMode && data.request?.id) {
         setExpandedId(data.request.id);
       }
-      setMessage("Quotation saved successfully. You can now email, SMS, WhatsApp, or download it.");
+      setMessage(createSuccessMessage);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Failed to save quotation.");
     } finally {
@@ -1757,16 +1788,23 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
   }, [filterStorageKey, statusFilter]);
 
   useEffect(() => {
+    if (createOnlyMode) return;
     refreshRequests().catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [createOnlyMode]);
 
   useEffect(() => {
     if (!showCreatePanel && !showTemplatesPanel) return;
+    if (!allowTemplateManager && !allowTemplateSelection) return;
     if (templates.length) return;
     refreshTemplates().catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showCreatePanel, showTemplatesPanel]);
+  }, [allowTemplateManager, allowTemplateSelection, showCreatePanel, showTemplatesPanel]);
+
+  useEffect(() => {
+    if (allowTemplateSelection) return;
+    setCreateMode("manual");
+  }, [allowTemplateSelection]);
 
   useEffect(() => {
     const normalizedQuery = createCatalogQuery.trim();
@@ -2027,7 +2065,7 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
 
   return (
     <div className="space-y-4">
-      {!compactMode ? (
+      {!compactMode && !createOnlyMode ? (
       <div className="rounded-2xl border border-white/10 bg-[var(--panel,#121723)] p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -2097,7 +2135,7 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
           </div>
         ) : null}
       </div>
-      ) : (
+      ) : !createOnlyMode ? (
         <>
           {enableCreate || allowTemplateManager ? (
             <div className="flex flex-wrap justify-end gap-2">
@@ -2142,7 +2180,11 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
             </div>
           ) : null}
         </>
-      )}
+      ) : message ? (
+        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+          {message}
+        </div>
+      ) : null}
 
         {showTemplatesPanel ? (
           <div className={`rounded-[28px] border border-cyan-500/20 bg-slate-950/60 ${compactMode ? "p-4" : "mt-5 p-5"}`}>
@@ -2280,7 +2322,7 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
               <div className="flex flex-wrap gap-2">
                 {([
                   ["manual", "Manual quotation"],
-                  ["template", "Use saved template"],
+                  ...(allowTemplateSelection ? ([["template", "Use saved template"]] as Array<[CreateQuotationMode, string]>) : []),
                 ] as Array<[CreateQuotationMode, string]>).map(([mode, label]) => (
                   <button
                     key={mode}
@@ -2350,6 +2392,25 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                   className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
                 />
               </label>
+              {assigneeOptions.length ? (
+                <label className="text-xs uppercase tracking-wide text-slate-400 lg:col-span-2">
+                  {assigneeLabel}
+                  <select
+                    value={createDraft.assignedAttendantId}
+                    onChange={(event) =>
+                      setCreateDraft((current) => ({ ...current, assignedAttendantId: event.target.value }))
+                    }
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
+                  >
+                    <option value="">Select staff</option>
+                    {assigneeOptions.map((owner) => (
+                      <option key={owner.id} value={owner.id}>
+                        {owner.name || owner.email || owner.id}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               <label className="text-xs uppercase tracking-wide text-slate-400 lg:col-span-2">
                 Quotation Name
                 <input
@@ -2850,17 +2911,18 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                   createSaving ||
                   !createDraft.customerName.trim() ||
                   !createDraft.customerPhone.trim() ||
+                  (requireAssigneeSelection && !createDraft.assignedAttendantId.trim()) ||
                   (createMode === "template" && !createDraft.templateId)
                 }
                 onClick={() => void handleCreateQuotation()}
                 className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {createSaving ? "Saving..." : "Save Quotation"}
+                {createSaving ? "Saving..." : createActionLabel}
               </button>
               <button
                 type="button"
                 onClick={() => {
-                  setShowCreatePanel(false);
+                  setShowCreatePanel(createOnlyMode);
                   setEditingTemplateId(null);
                   setCreateDraft(createDefaultQuotationDraft());
                 }}
@@ -2872,6 +2934,7 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
           </div>
         ) : null}
 
+        {!createOnlyMode ? (
         <div className={compactMode ? "space-y-3" : "mt-5 space-y-4"}>
           {filteredRequests.length ? (
             filteredRequests.map((request) => {
@@ -3640,6 +3703,7 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
             </div>
           )}
         </div>
+        ) : null}
     </div>
   );
 }
