@@ -654,8 +654,8 @@ export default function MarketingReceiptsPage() {
           ) : (
             <QuotationRequestsDeskClient
               apiBasePath="/api/attendant/quote-requests"
-              defaultStatusFilter="ALL"
-              filterStorageKey="marketing:quote-requests:list-status:v2"
+              defaultStatusFilter="PENDING"
+              filterStorageKey="marketing:quote-requests:list-status:v3"
               deskTitle="Quotation Center"
               deskDescription="Review saved quotations, create new quotations, download PDFs, and manage customer quotation history from one desk."
               emptyMessage="No quotations found right now."

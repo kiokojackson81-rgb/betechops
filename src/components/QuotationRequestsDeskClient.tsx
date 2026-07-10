@@ -88,7 +88,6 @@ const QUOTE_REQUEST_STATUSES: QuoteRequestStatus[] = [
   "DRAFT",
   "PENDING",
   "CONTACTED",
-  "SENT",
   "VIEWED",
   "QUOTED",
   "FOLLOW_UP",

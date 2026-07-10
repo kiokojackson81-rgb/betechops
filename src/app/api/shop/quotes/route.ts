@@ -149,6 +149,8 @@ export async function POST(request: NextRequest) {
     const quote = await createQuoteRequest({
       ...parsed.data,
       customerUserId: user.id,
+      status: "PENDING",
+      source: "WEBSITE_REQUEST",
     });
 
     if (!quote) {

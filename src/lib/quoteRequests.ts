@@ -105,6 +105,7 @@ const QUOTE_REQUEST_SCHEMA_SQL = [
   `UPDATE "QuoteRequest" SET "status" = 'PENDING' WHERE "status" = 'NEW'`,
   `UPDATE "QuoteRequest" SET "status" = 'PENDING' WHERE "status" = 'PENDING_APPROVAL'`,
   `UPDATE "QuoteRequest" SET "status" = 'QUOTED' WHERE "status" = 'APPROVED'`,
+  `UPDATE "QuoteRequest" SET "status" = 'QUOTED' WHERE "status" = 'SENT'`,
   `CREATE INDEX IF NOT EXISTS "QuoteRequest_source_createdAt_idx" ON "QuoteRequest"("source","createdAt")`,
   `CREATE INDEX IF NOT EXISTS "QuoteRequest_templateId_createdAt_idx" ON "QuoteRequest"("templateId","createdAt")`,
   `CREATE TABLE IF NOT EXISTS "QuotationTemplate" (
@@ -1245,6 +1246,8 @@ export function serializeQuoteRequest(row: QuoteRequestRow): SerializedQuoteRequ
   const normalizedStatus =
     row.status === "NEW" || row.status === "PENDING_APPROVAL"
       ? "PENDING"
+      : row.status === "SENT"
+        ? "QUOTED"
       : row.status === "APPROVED"
         ? "QUOTED"
         : row.status;
@@ -1641,7 +1644,7 @@ export async function updateQuoteRequestResponse(
     lastRespondedByName: user.name ?? user.email ?? "Quotation attendant",
     lastRespondedAt: new Date().toISOString(),
   } satisfies Record<string, unknown>;
-  const nextStatus = input.status;
+  const nextStatus = input.status === "SENT" ? "QUOTED" : input.status;
 
   await prisma.$executeRaw(Prisma.sql`
     UPDATE "QuoteRequest"
@@ -1679,9 +1682,7 @@ export async function updateQuoteRequestResponse(
       eventLabel:
         nextStatus === "QUOTED"
           ? "Quotation saved"
-          : nextStatus === "SENT"
-            ? "Quotation sent"
-            : "Quotation updated",
+          : "Quotation updated",
       eventDetail: input.quoteTitle?.trim() || input.followUpNotes?.trim() || null,
       actorUserId: user.id,
       actorName: user.name ?? user.email ?? "Quotation attendant",
@@ -1887,7 +1888,7 @@ export async function createManualQuotation(
   });
   const created = await createQuoteRequest({
     ...input,
-    status: input.status || "QUOTED",
+    status: input.status === "SENT" ? "QUOTED" : input.status || "QUOTED",
     source: input.source || "MANUAL",
     requiresApproval: false,
     assignedAttendantId: input.assignedAttendantId || actor.id,

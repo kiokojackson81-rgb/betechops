@@ -11,8 +11,8 @@ export default async function AdminQuotationCenterPage() {
       <div className="mx-auto max-w-7xl">
         <QuotationRequestsDeskClient
           apiBasePath="/api/attendant/quote-requests"
-          defaultStatusFilter="ALL"
-          filterStorageKey="admin:quotation-center:status"
+          defaultStatusFilter="PENDING"
+          filterStorageKey="admin:quotation-center:status:v2"
           deskTitle="Admin Quotation Center"
           deskDescription="Create, review, edit, delete, and convert quotations company-wide from one admin desk. Admin also controls all template upload, edit, delete, and ownership assignment."
           emptyMessage="No quotations found right now."
