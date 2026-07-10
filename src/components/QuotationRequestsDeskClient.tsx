@@ -1086,8 +1086,10 @@ export default function QuotationRequestsDeskClient({
   const [loading, setLoading] = useState(false);
   const [showCreatePanel, setShowCreatePanel] = useState(initialCreateOpen || createOnlyMode);
   const [showTemplatesPanel, setShowTemplatesPanel] = useState(false);
+  const [showCreateMoreOptions, setShowCreateMoreOptions] = useState(false);
   const [createMode, setCreateMode] = useState<CreateQuotationMode>("manual");
   const [createDraft, setCreateDraft] = useState<CreateQuotationDraft>(createDefaultQuotationDraft());
+  const [createItemAccordion, setCreateItemAccordion] = useState<boolean[]>([true]);
   const [templates, setTemplates] = useState<SerializedQuotationTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [createSaving, setCreateSaving] = useState(false);
@@ -1243,6 +1245,18 @@ export default function QuotationRequestsDeskClient({
     createDraft.paymentTerms,
     createQuoteTotalsPreview.total,
   ]);
+
+  useEffect(() => {
+    setCreateItemAccordion((current) => {
+      const nextLength = createDraft.quoteItems.length;
+      if (nextLength <= 0) return [];
+      if (current.length === nextLength) return current;
+      if (current.length < nextLength) {
+        return [...current, ...Array.from({ length: nextLength - current.length }, () => true)];
+      }
+      return current.slice(0, nextLength);
+    });
+  }, [createDraft.quoteItems.length]);
 
   useEffect(() => {
     if (createDraft.paymentTerms !== "DEPOSIT_AND_BALANCE") {
@@ -1449,8 +1463,10 @@ export default function QuotationRequestsDeskClient({
         setExpandedId(data.request.id);
       }
       setShowCreatePanel(createOnlyMode);
+      setShowCreateMoreOptions(false);
       setEditingTemplateId(null);
       setCreateDraft(createDefaultQuotationDraft());
+      setCreateItemAccordion([true]);
       setCreateCatalogQuery("");
       setCreateCatalogResults([]);
       if (!createOnlyMode) {
@@ -1567,22 +1583,28 @@ export default function QuotationRequestsDeskClient({
   }
 
   function handleEditTemplate(template: SerializedQuotationTemplate) {
+    const nextDraft = applyTemplateToCreateDraft(createDefaultQuotationDraft(), template);
     setEditingTemplateId(template.id);
     setShowTemplatesPanel(false);
     setShowCreatePanel(true);
+    setShowCreateMoreOptions(false);
     setCreateMode("template");
-    setCreateDraft(applyTemplateToCreateDraft(createDefaultQuotationDraft(), template));
+    setCreateDraft(nextDraft);
+    setCreateItemAccordion(nextDraft.quoteItems.length ? nextDraft.quoteItems.map(() => true) : [true]);
     setCreateCatalogQuery("");
     setCreateCatalogResults([]);
     setMessage(`Editing template ${template.templateName}. Update the fields you need, then save the template.`);
   }
 
   function handleUseTemplate(template: SerializedQuotationTemplate) {
+    const nextDraft = applyTemplateToCreateDraft(createDefaultQuotationDraft(), template);
     setEditingTemplateId(null);
     setShowTemplatesPanel(false);
     setShowCreatePanel(true);
+    setShowCreateMoreOptions(false);
     setCreateMode("template");
-    setCreateDraft(applyTemplateToCreateDraft(createDefaultQuotationDraft(), template));
+    setCreateDraft(nextDraft);
+    setCreateItemAccordion(nextDraft.quoteItems.length ? nextDraft.quoteItems.map(() => true) : [true]);
     setCreateCatalogQuery("");
     setCreateCatalogResults([]);
   }
@@ -1619,10 +1641,13 @@ export default function QuotationRequestsDeskClient({
     const nextOpen = !showCreatePanel || Boolean(prefillRequest);
     setShowCreatePanel(nextOpen);
     setShowTemplatesPanel(false);
+    setShowCreateMoreOptions(false);
     setEditingTemplateId(null);
     setCreateMode("manual");
     if (nextOpen) {
-      setCreateDraft(prefillRequest ? buildCreateDraftFromRequest(prefillRequest) : createDefaultQuotationDraft());
+      const nextDraft = prefillRequest ? buildCreateDraftFromRequest(prefillRequest) : createDefaultQuotationDraft();
+      setCreateDraft(nextDraft);
+      setCreateItemAccordion(nextDraft.quoteItems.length ? nextDraft.quoteItems.map(() => true) : [true]);
       setCreateCatalogQuery("");
       setCreateCatalogResults([]);
     }
@@ -1662,8 +1687,11 @@ export default function QuotationRequestsDeskClient({
       }
       await refreshTemplates();
       if (data.template?.id) {
+        const nextDraft = applyTemplateToCreateDraft(createDefaultQuotationDraft(), data.template);
         setCreateMode("template");
-        setCreateDraft((current) => applyTemplateToCreateDraft(current, data.template));
+        setShowCreateMoreOptions(false);
+        setCreateDraft(nextDraft);
+        setCreateItemAccordion(nextDraft.quoteItems.length ? nextDraft.quoteItems.map(() => true) : [true]);
       }
       setMessage(`Template ${data.template?.templateName || body.templateName} uploaded successfully.`);
     } catch (error) {
@@ -2630,197 +2658,164 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                 <div className="mt-4 space-y-3">
                   {createDraft.quoteItems.map((item, index) => (
                     <div key={`create-quote-item-${index}`} className="rounded-2xl border border-white/10 bg-slate-950/50 p-3 sm:p-4">
-                      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.6fr)_140px_160px_auto]">
-                        <label className="text-xs uppercase tracking-wide text-slate-400">
-                          Item name
-                          <textarea
-                            rows={2}
-                            value={item.itemName}
-                            onChange={(event) =>
-                              setCreateDraft((current) => ({
-                                ...current,
-                                quoteItems: current.quoteItems.map((entry, entryIndex) =>
-                                  entryIndex === index ? { ...entry, itemName: event.target.value } : entry,
-                                ),
-                              }))
-                            }
-                            className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
-                          />
-                          <textarea
-                            rows={2}
-                            value={item.description}
-                            onChange={(event) =>
-                              setCreateDraft((current) => ({
-                                ...current,
-                                quoteItems: current.quoteItems.map((entry, entryIndex) =>
-                                  entryIndex === index ? { ...entry, description: event.target.value } : entry,
-                                ),
-                              }))
-                            }
-                            placeholder="Optional short BOQ note"
-                            className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
-                          />
-                        </label>
-                        <label className="text-xs uppercase tracking-wide text-slate-400">
-                          Quantity
-                          <input
-                            value={item.quantity}
-                            onChange={(event) =>
-                              setCreateDraft((current) => ({
-                                ...current,
-                                quoteItems: current.quoteItems.map((entry, entryIndex) =>
-                                  entryIndex === index ? { ...entry, quantity: event.target.value } : entry,
-                                ),
-                              }))
-                            }
-                            className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
-                          />
-                        </label>
-                        <label className="text-xs uppercase tracking-wide text-slate-400">
-                          Unit price
-                          <input
-                            value={item.unitPrice}
-                            onChange={(event) =>
-                              setCreateDraft((current) => ({
-                                ...current,
-                                quoteItems: current.quoteItems.map((entry, entryIndex) =>
-                                  entryIndex === index ? { ...entry, unitPrice: event.target.value } : entry,
-                                ),
-                              }))
-                            }
-                            className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
-                          />
-                        </label>
-                        <div className="flex flex-col gap-3 rounded-xl border border-white/5 bg-white/[0.02] p-3 lg:border-0 lg:bg-transparent lg:p-0">
-                          <div className="text-left lg:text-right">
-                            <div className="text-xs uppercase tracking-wide text-slate-400">Line total</div>
-                            <div className="mt-1 text-sm font-semibold text-white">
-                              {formatQuoteCurrency(createQuoteItemsPreview[index]?.lineTotal || 0)}
-                            </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCreateItemAccordion((current) =>
+                            current.map((isOpen, entryIndex) => (entryIndex === index ? !isOpen : isOpen)),
+                          )
+                        }
+                        className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 text-left sm:hidden"
+                      >
+                        <div className="min-w-0">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                            Item {index + 1}
                           </div>
-                          <button
-                            type="button"
-                            disabled={createDraft.quoteItems.length <= 1}
-                            onClick={() =>
-                              setCreateDraft((current) => ({
-                                ...current,
-                                quoteItems:
-                                  current.quoteItems.length <= 1
-                                    ? current.quoteItems
-                                    : current.quoteItems.filter((_, entryIndex) => entryIndex !== index),
-                              }))
-                            }
-                            className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-rose-500/25 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-rose-200 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:opacity-40 lg:w-auto"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            Remove
-                          </button>
+                          <div className="truncate text-sm font-semibold text-white">
+                            {item.itemName.trim() || "New quotation item"}
+                          </div>
                         </div>
-                      </div>
-                      <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_150px]">
-                        <label className="text-xs uppercase tracking-wide text-slate-400">
-                          Warranty period
-                          <input
-                            value={item.warrantyPeriod}
-                            onChange={(event) =>
-                              setCreateDraft((current) => ({
-                                ...current,
-                                quoteItems: current.quoteItems.map((entry, entryIndex) =>
-                                  entryIndex === index
-                                    ? {
-                                        ...entry,
-                                        warrantyPeriod: event.target.value,
-                                        warranty: event.target.value.trim() ? entry.warranty : "",
-                                      }
-                                    : entry,
-                                ),
-                              }))
-                            }
-                            placeholder="10"
-                            className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 outline-none"
-                          />
-                        </label>
-                        <label className="text-xs uppercase tracking-wide text-slate-400">
-                          Unit
-                          <select
-                            value={item.warrantyUnit}
-                            onChange={(event) =>
-                              setCreateDraft((current) => ({
-                                ...current,
-                                quoteItems: current.quoteItems.map((entry, entryIndex) =>
-                                  entryIndex === index
-                                    ? { ...entry, warrantyUnit: event.target.value as QuoteWarrantyUnit }
-                                    : entry,
-                                ),
-                              }))
-                            }
-                            className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
-                          >
-                            <option value="YEARS">Years</option>
-                            <option value="MONTHS">Months</option>
-                          </select>
-                        </label>
+                        {createItemAccordion[index] ? (
+                          <ChevronDown className="h-4 w-4 text-slate-300" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-slate-300" />
+                        )}
+                      </button>
+                      <div className={`${createItemAccordion[index] ? "block" : "hidden"} mt-3 sm:mt-0 sm:block`}>
+                        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.6fr)_140px_160px_auto]">
+                          <label className="text-xs uppercase tracking-wide text-slate-400">
+                            Item name
+                            <textarea
+                              rows={2}
+                              value={item.itemName}
+                              onChange={(event) =>
+                                setCreateDraft((current) => ({
+                                  ...current,
+                                  quoteItems: current.quoteItems.map((entry, entryIndex) =>
+                                    entryIndex === index ? { ...entry, itemName: event.target.value } : entry,
+                                  ),
+                                }))
+                              }
+                              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
+                            />
+                            <textarea
+                              rows={2}
+                              value={item.description}
+                              onChange={(event) =>
+                                setCreateDraft((current) => ({
+                                  ...current,
+                                  quoteItems: current.quoteItems.map((entry, entryIndex) =>
+                                    entryIndex === index ? { ...entry, description: event.target.value } : entry,
+                                  ),
+                                }))
+                              }
+                              placeholder="Optional short BOQ note"
+                              className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
+                            />
+                          </label>
+                          <label className="text-xs uppercase tracking-wide text-slate-400">
+                            Quantity
+                            <input
+                              value={item.quantity}
+                              onChange={(event) =>
+                                setCreateDraft((current) => ({
+                                  ...current,
+                                  quoteItems: current.quoteItems.map((entry, entryIndex) =>
+                                    entryIndex === index ? { ...entry, quantity: event.target.value } : entry,
+                                  ),
+                                }))
+                              }
+                              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
+                            />
+                          </label>
+                          <label className="text-xs uppercase tracking-wide text-slate-400">
+                            Unit price
+                            <input
+                              value={item.unitPrice}
+                              onChange={(event) =>
+                                setCreateDraft((current) => ({
+                                  ...current,
+                                  quoteItems: current.quoteItems.map((entry, entryIndex) =>
+                                    entryIndex === index ? { ...entry, unitPrice: event.target.value } : entry,
+                                  ),
+                                }))
+                              }
+                              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
+                            />
+                          </label>
+                          <div className="flex flex-col gap-3 rounded-xl border border-white/5 bg-white/[0.02] p-3 lg:border-0 lg:bg-transparent lg:p-0">
+                            <div className="text-left lg:text-right">
+                              <div className="text-xs uppercase tracking-wide text-slate-400">Line total</div>
+                              <div className="mt-1 text-sm font-semibold text-white">
+                                {formatQuoteCurrency(createQuoteItemsPreview[index]?.lineTotal || 0)}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={createDraft.quoteItems.length <= 1}
+                              onClick={() =>
+                                setCreateDraft((current) => ({
+                                  ...current,
+                                  quoteItems:
+                                    current.quoteItems.length <= 1
+                                      ? current.quoteItems
+                                      : current.quoteItems.filter((_, entryIndex) => entryIndex !== index),
+                                }))
+                              }
+                              className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-rose-500/25 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-rose-200 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:opacity-40 lg:w-auto"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                        <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_150px]">
+                          <label className="text-xs uppercase tracking-wide text-slate-400">
+                            Warranty period
+                            <input
+                              value={item.warrantyPeriod}
+                              onChange={(event) =>
+                                setCreateDraft((current) => ({
+                                  ...current,
+                                  quoteItems: current.quoteItems.map((entry, entryIndex) =>
+                                    entryIndex === index
+                                      ? {
+                                          ...entry,
+                                          warrantyPeriod: event.target.value,
+                                          warranty: event.target.value.trim() ? entry.warranty : "",
+                                        }
+                                      : entry,
+                                  ),
+                                }))
+                              }
+                              placeholder="10"
+                              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 outline-none"
+                            />
+                          </label>
+                          <label className="text-xs uppercase tracking-wide text-slate-400">
+                            Unit
+                            <select
+                              value={item.warrantyUnit}
+                              onChange={(event) =>
+                                setCreateDraft((current) => ({
+                                  ...current,
+                                  quoteItems: current.quoteItems.map((entry, entryIndex) =>
+                                    entryIndex === index
+                                      ? { ...entry, warrantyUnit: event.target.value as QuoteWarrantyUnit }
+                                      : entry,
+                                  ),
+                                }))
+                              }
+                              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
+                            >
+                              <option value="YEARS">Years</option>
+                              <option value="MONTHS">Months</option>
+                            </select>
+                          </label>
+                        </div>
                       </div>
                     </div>
                   ))}
-                </div>
-
-                <div className="mt-4 grid gap-3 md:grid-cols-2">
-                  <label className="text-xs uppercase tracking-wide text-slate-400">
-                    Payment terms
-                    <select
-                      value={createDraft.paymentTerms}
-                      onChange={(event) =>
-                        setCreateDraft((current) => ({
-                          ...current,
-                          paymentTerms: event.target.value as QuotePaymentTerms,
-                        }))
-                      }
-                      className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
-                    >
-                      {QUOTE_PAYMENT_TERMS.map((term) => (
-                        <option key={term} value={term}>
-                          {getQuotePaymentTermsLabel(term)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="text-xs uppercase tracking-wide text-slate-400">
-                    Discount amount
-                    <input
-                      value={createDraft.discountAmount}
-                      onChange={(event) =>
-                        setCreateDraft((current) => ({ ...current, discountAmount: event.target.value }))
-                      }
-                      placeholder="0"
-                      className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
-                    />
-                  </label>
-                  {createDraft.paymentTerms === "DEPOSIT_AND_BALANCE" ? (
-                    <>
-                      <label className="text-xs uppercase tracking-wide text-slate-400">
-                        Deposit amount
-                        <input
-                          value={createDraft.depositAmount}
-                          onChange={(event) =>
-                            setCreateDraft((current) => ({ ...current, depositAmount: event.target.value }))
-                          }
-                          className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
-                        />
-                      </label>
-                      <label className="text-xs uppercase tracking-wide text-slate-400">
-                        Balance amount
-                        <input
-                          value={createDraft.balanceAmount}
-                          onChange={(event) =>
-                            setCreateDraft((current) => ({ ...current, balanceAmount: event.target.value }))
-                          }
-                          placeholder={createQuoteBalancePreview !== null ? String(createQuoteBalancePreview) : ""}
-                          className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
-                        />
-                      </label>
-                    </>
-                  ) : null}
                 </div>
 
                 <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/60 p-3 sm:p-4">
@@ -2853,44 +2848,127 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                     ) : null}
                   </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateMoreOptions((current) => !current)}
+                  className="mt-4 inline-flex w-full items-center justify-between rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-left"
+                >
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">
+                      More options
+                    </div>
+                    <div className="mt-1 text-sm text-slate-500">
+                      Payment terms, discount, project link, and customer notes.
+                    </div>
+                  </div>
+                  {showCreateMoreOptions ? (
+                    <ChevronDown className="h-4 w-4 text-slate-300" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 text-slate-300" />
+                  )}
+                </button>
+                {showCreateMoreOptions ? (
+                  <>
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      <label className="text-xs uppercase tracking-wide text-slate-400">
+                        Payment terms
+                        <select
+                          value={createDraft.paymentTerms}
+                          onChange={(event) =>
+                            setCreateDraft((current) => ({
+                              ...current,
+                              paymentTerms: event.target.value as QuotePaymentTerms,
+                            }))
+                          }
+                          className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
+                        >
+                          {QUOTE_PAYMENT_TERMS.map((term) => (
+                            <option key={term} value={term}>
+                              {getQuotePaymentTermsLabel(term)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="text-xs uppercase tracking-wide text-slate-400">
+                        Discount amount
+                        <input
+                          value={createDraft.discountAmount}
+                          onChange={(event) =>
+                            setCreateDraft((current) => ({ ...current, discountAmount: event.target.value }))
+                          }
+                          placeholder="0"
+                          className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
+                        />
+                      </label>
+                      {createDraft.paymentTerms === "DEPOSIT_AND_BALANCE" ? (
+                        <>
+                          <label className="text-xs uppercase tracking-wide text-slate-400">
+                            Deposit amount
+                            <input
+                              value={createDraft.depositAmount}
+                              onChange={(event) =>
+                                setCreateDraft((current) => ({ ...current, depositAmount: event.target.value }))
+                              }
+                              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
+                            />
+                          </label>
+                          <label className="text-xs uppercase tracking-wide text-slate-400">
+                            Balance amount
+                            <input
+                              value={createDraft.balanceAmount}
+                              onChange={(event) =>
+                                setCreateDraft((current) => ({ ...current, balanceAmount: event.target.value }))
+                              }
+                              placeholder={createQuoteBalancePreview !== null ? String(createQuoteBalancePreview) : ""}
+                              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
+                            />
+                          </label>
+                        </>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/40 p-3 sm:p-4">
+                      <label className="text-xs uppercase tracking-wide text-slate-400">
+                        TikTok project link (optional)
+                        <input
+                          value={createDraft.projectReferenceLinks}
+                          onChange={(event) =>
+                            setCreateDraft((current) => ({ ...current, projectReferenceLinks: event.target.value }))
+                          }
+                          placeholder="Paste TikTok project link to feature on the PDF"
+                          className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 outline-none"
+                        />
+                      </label>
+                    </div>
+                    <label className="mt-4 block text-xs uppercase tracking-wide text-slate-400">
+                      Notes to customer (optional)
+                      <textarea
+                        value={createDraft.quoteMessage}
+                        onChange={(event) =>
+                          setCreateDraft((current) => ({ ...current, quoteMessage: event.target.value }))
+                        }
+                        rows={4}
+                        placeholder="Optional customer note to print in the quotation"
+                        className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
+                      />
+                    </label>
+                    <label className="mt-4 block text-xs uppercase tracking-wide text-slate-400">
+                      Internal follow-up notes
+                      <textarea
+                        value={createDraft.followUpNotes}
+                        onChange={(event) =>
+                          setCreateDraft((current) => ({ ...current, followUpNotes: event.target.value }))
+                        }
+                        rows={3}
+                        className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
+                      />
+                    </label>
+                  </>
+                ) : null}
               </div>
-              <div className="lg:col-span-2 rounded-2xl border border-white/10 bg-slate-950/40 p-3 sm:p-4">
-                <label className="text-xs uppercase tracking-wide text-slate-400">
-                  TikTok project link (optional)
-                  <input
-                    value={createDraft.projectReferenceLinks}
-                    onChange={(event) =>
-                      setCreateDraft((current) => ({ ...current, projectReferenceLinks: event.target.value }))
-                    }
-                    placeholder="Paste TikTok project link to feature on the PDF"
-                    className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 outline-none"
-                  />
-                </label>
-              </div>
-              <label className="text-xs uppercase tracking-wide text-slate-400 lg:col-span-2">
-                Notes to customer (optional)
-                <textarea
-                  value={createDraft.quoteMessage}
-                  onChange={(event) =>
-                    setCreateDraft((current) => ({ ...current, quoteMessage: event.target.value }))
-                  }
-                  rows={4}
-                  placeholder="Optional customer note to print in the quotation"
-                  className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
-                />
-              </label>
-              <label className="text-xs uppercase tracking-wide text-slate-400 lg:col-span-2">
-                Internal follow-up notes
-                <textarea
-                  value={createDraft.followUpNotes}
-                  onChange={(event) => setCreateDraft((current) => ({ ...current, followUpNotes: event.target.value }))}
-                  rows={3}
-                  className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
-                />
-              </label>
             </div>
 
-            <div className="mt-4 grid gap-2 sm:flex sm:flex-wrap">
+            <div className="mt-4 hidden gap-2 sm:flex sm:flex-wrap">
               {allowTemplateManager ? (
                 <>
                   <button
@@ -2927,13 +3005,62 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                 type="button"
                 onClick={() => {
                   setShowCreatePanel(createOnlyMode);
+                  setShowCreateMoreOptions(false);
                   setEditingTemplateId(null);
                   setCreateDraft(createDefaultQuotationDraft());
+                  setCreateItemAccordion([true]);
                 }}
                 className="w-full rounded-full border border-white/10 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-300 transition hover:border-white/20 sm:w-auto sm:py-2"
               >
                 Cancel
               </button>
+            </div>
+            <div className="sticky bottom-3 z-20 mt-4 rounded-2xl border border-white/10 bg-slate-950/95 p-3 shadow-[0_18px_40px_rgba(0,0,0,0.45)] backdrop-blur sm:hidden">
+              <div className="grid gap-2">
+                {allowTemplateManager ? (
+                  <button
+                    type="button"
+                    disabled={templateSaving}
+                    onClick={() => void handleSaveTemplateFromDraft()}
+                    className="w-full rounded-full border border-cyan-500/40 bg-cyan-500/10 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-cyan-200 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {templateSaving
+                      ? editingTemplateId
+                        ? "Updating Template..."
+                        : "Saving Template..."
+                      : editingTemplateId
+                        ? "Update Template"
+                        : "Save As Template"}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  disabled={
+                    createSaving ||
+                    !createDraft.customerName.trim() ||
+                    !createDraft.customerPhone.trim() ||
+                    (requireAssigneeSelection && !createDraft.assignedAttendantId.trim()) ||
+                    (createMode === "template" && !createDraft.templateId)
+                  }
+                  onClick={() => void handleCreateQuotation()}
+                  className="w-full rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {createSaving ? "Saving..." : createActionLabel}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCreatePanel(createOnlyMode);
+                    setShowCreateMoreOptions(false);
+                    setEditingTemplateId(null);
+                    setCreateDraft(createDefaultQuotationDraft());
+                    setCreateItemAccordion([true]);
+                  }}
+                  className="w-full rounded-full border border-white/10 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-300 transition hover:border-white/20"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         ) : null}
