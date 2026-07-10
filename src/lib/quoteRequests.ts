@@ -1465,6 +1465,7 @@ export async function listAssignedQuoteRequests(input: {
   userId: string;
   status?: QuoteRequestStatus | "ALL";
   q?: string;
+  source?: QuoteRequestSource | "ALL";
 }) {
   await ensureQuoteRequestsSchema();
   const query = (input.q || "").trim();
@@ -1473,6 +1474,11 @@ export async function listAssignedQuoteRequests(input: {
     FROM "QuoteRequest"
     WHERE "assignedAttendantId" = ${input.userId}
       ${buildStatusWhere(input.status || "ALL")}
+      ${
+        input.source && input.source !== "ALL"
+          ? Prisma.sql`AND "source" = ${input.source}`
+          : Prisma.empty
+      }
       ${
         query
           ? Prisma.sql`AND (

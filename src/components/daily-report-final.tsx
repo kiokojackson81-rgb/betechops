@@ -530,18 +530,18 @@ export default function DailyReportFinal() {
         const payload = await response.json().catch(() => null);
         if (!response.ok || cancelled) return;
 
-        const isAdmin = Boolean(payload?.viewer?.isAdmin);
-        const queueCount = isAdmin
-          ? Number(payload?.summary?.missedCalls ?? 0) + Number(payload?.summary?.newVoiceLeads ?? 0)
-          : Number(payload?.summary?.myFollowUps ?? 0);
-        const missedCount = isAdmin
-          ? Number(payload?.summary?.missedCalls ?? 0)
-          : Number(payload?.summary?.myMissedCalls ?? 0);
+        const queueItems: Array<{ type?: string | null }> = Array.isArray(payload?.callQueue) ? payload.callQueue : [];
+        const queueCount = queueItems.length;
+        const missedCount = queueItems.filter(
+          (item) => String(item?.type || "").trim().toLowerCase() === "lead",
+        ).length;
 
         setVoiceDeskSummary({
           queueCount,
           missedCount,
-          followUpCount: Math.max(queueCount - missedCount, 0),
+          followUpCount: queueItems.filter(
+            (item) => String(item?.type || "").trim().toLowerCase() === "task",
+          ).length,
         });
       } catch {
         if (!cancelled) {
@@ -1167,7 +1167,7 @@ export default function DailyReportFinal() {
             credentials: "same-origin",
             signal: controller.signal,
           }),
-          fetch(`/api/attendant/quote-requests?${params.toString()}`, {
+          fetch(`/api/attendant/quote-requests?${params.toString()}&source=WEBSITE_REQUEST`, {
             cache: "no-store",
             credentials: "same-origin",
             signal: controller.signal,

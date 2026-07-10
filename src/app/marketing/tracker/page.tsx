@@ -22,6 +22,7 @@ import {
   ensureQuoteRequestAssignments,
   ensureQuoteRequestsSchema,
   listAssignedQuoteRequests,
+  QUOTE_REQUEST_SOURCES,
   type SerializedQuoteRequest,
 } from "@/lib/quoteRequests";
 import { getVoiceLiveSnapshot, resolveVoiceViewer } from "@/lib/voiceOperations";
@@ -303,10 +304,12 @@ async function listVisibleQuoteRequests(input: {
       preferredProducts: string | null;
       notes: string | null;
       answersJson: Prisma.JsonValue | null;
+      source: string | null;
     }>>(Prisma.sql`
       SELECT *
       FROM "QuoteRequest"
       WHERE LOWER(COALESCE("status", '')) IN ('pending', 'new', 'contacted', 'follow_up', 'quoted', 'amount_pending')
+        AND COALESCE("source", 'WEBSITE_REQUEST') = 'WEBSITE_REQUEST'
       ORDER BY
         CASE
           WHEN "status" = 'PENDING' THEN 1
@@ -329,6 +332,9 @@ async function listVisibleQuoteRequests(input: {
       town: row.town,
       projectType: row.projectType as SerializedQuoteRequest["projectType"],
       status: row.status,
+      source: QUOTE_REQUEST_SOURCES.includes(String(row.source || "").trim().toUpperCase() as (typeof QUOTE_REQUEST_SOURCES)[number])
+        ? (String(row.source).trim().toUpperCase() as SerializedQuoteRequest["source"])
+        : "WEBSITE_REQUEST",
       assignedAttendant: row.assignedAttendantId
         ? {
             id: row.assignedAttendantId,
@@ -342,7 +348,7 @@ async function listVisibleQuoteRequests(input: {
     })) as Array<
       Pick<
         SerializedQuoteRequest,
-        "id" | "customerName" | "customerPhone" | "customerEmail" | "customerUserId" | "customerLocation" | "county" | "town" | "projectType" | "status" | "assignedAttendant" | "quoteTitle" | "createdAt" | "updatedAt"
+        "id" | "customerName" | "customerPhone" | "customerEmail" | "customerUserId" | "customerLocation" | "county" | "town" | "projectType" | "status" | "source" | "assignedAttendant" | "quoteTitle" | "createdAt" | "updatedAt"
       >
     >;
   }
@@ -350,6 +356,7 @@ async function listVisibleQuoteRequests(input: {
   return listAssignedQuoteRequests({
     userId: input.userId,
     status: "ALL",
+    source: "WEBSITE_REQUEST",
   });
 }
 
@@ -673,13 +680,10 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
     })
     .slice(0, 14);
 
-  const voiceQueueCount = voiceSnapshot?.viewer.isAdmin
-    ? Number(voiceSnapshot?.summary.missedCalls ?? 0) + Number(voiceSnapshot?.summary.newVoiceLeads ?? 0)
-    : Number(voiceSnapshot?.summary.myFollowUps ?? 0);
-  const voiceMissedCount = voiceSnapshot?.viewer.isAdmin
-    ? Number(voiceSnapshot?.summary.missedCalls ?? 0)
-    : Number(voiceSnapshot?.summary.myMissedCalls ?? 0);
-  const voiceFollowUpCount = Math.max(voiceQueueCount - voiceMissedCount, 0);
+  const voiceQueueItems: Array<{ type?: string | null }> = Array.isArray(voiceSnapshot?.callQueue) ? voiceSnapshot.callQueue : [];
+  const voiceMissedCount = voiceQueueItems.filter((item) => String(item?.type || "").trim().toLowerCase() === "lead").length;
+  const voiceFollowUpCount = voiceQueueItems.filter((item) => String(item?.type || "").trim().toLowerCase() === "task").length;
+  const voiceQueueCount = voiceQueueItems.length;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">

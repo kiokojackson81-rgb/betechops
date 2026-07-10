@@ -718,6 +718,7 @@ async function listAdminQuoteRequests() {
   return prisma.$queryRaw<AdminQuoteRow[]>(Prisma.sql`
     SELECT "id", "quoteRef", "customerName", "customerPhone", "customerLocation", "status", "quoteTitle", "createdAt", "updatedAt"
     FROM "QuoteRequest"
+    WHERE COALESCE("source", 'WEBSITE_REQUEST') = 'WEBSITE_REQUEST'
     ORDER BY "updatedAt" DESC
     LIMIT 120
   `);

@@ -321,7 +321,7 @@ export default function MarketingReceiptsPage() {
           "/api/attendant/website-orders?status=ALL",
         ),
         fetchJson<{ requests?: Array<{ id: string; status?: string | null; createdAt?: string | null; updatedAt?: string | null }> }>(
-          "/api/attendant/quote-requests?status=ALL",
+          "/api/attendant/quote-requests?status=ALL&source=WEBSITE_REQUEST",
         ),
       ]);
 
@@ -397,22 +397,23 @@ export default function MarketingReceiptsPage() {
           newVoiceLeads?: number;
         };
         viewer?: { isAdmin?: boolean };
+        callQueue?: Array<{ type?: string | null }>;
       }>("/api/voice/live");
 
       if (cancelled) return;
 
-      const isAdmin = Boolean(voicePayload?.viewer?.isAdmin);
-      const queueCount = isAdmin
-        ? Number(voicePayload?.summary?.missedCalls ?? 0) + Number(voicePayload?.summary?.newVoiceLeads ?? 0)
-        : Number(voicePayload?.summary?.myFollowUps ?? 0);
-      const missedCount = isAdmin
-        ? Number(voicePayload?.summary?.missedCalls ?? 0)
-        : Number(voicePayload?.summary?.myMissedCalls ?? 0);
+      const queueItems = Array.isArray(voicePayload?.callQueue) ? voicePayload.callQueue : [];
+      const queueCount = queueItems.length;
+      const missedCount = queueItems.filter(
+        (item) => String(item?.type || "").trim().toLowerCase() === "lead",
+      ).length;
 
       setVoiceDeskSummary({
         queueCount,
         missedCount,
-        followUpCount: Math.max(queueCount - missedCount, 0),
+        followUpCount: queueItems.filter(
+          (item) => String(item?.type || "").trim().toLowerCase() === "task",
+        ).length,
       });
     };
 
