@@ -1109,6 +1109,8 @@ export default function QuotationRequestsDeskClient({
   const [responseCatalogLoading, setResponseCatalogLoading] = useState(false);
   const [responseCatalogResults, setResponseCatalogResults] = useState<CatalogQuoteProduct[]>([]);
   const templateUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const createItemRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const responseItemRefs = useRef<Array<HTMLDivElement | null>>([]);
   const impersonateId = apiQueryParams?.impersonateId ?? null;
 
   const expandedRequest = useMemo(
@@ -1742,8 +1744,48 @@ export default function QuotationRequestsDeskClient({
     }
   }
 
-function addCreateCatalogItem(product: CatalogQuoteProduct) {
-  setCreateDraft((current) => {
+  function scrollToQuoteItem(
+    refs: { current: Array<HTMLDivElement | null> },
+    index: number,
+  ) {
+    window.setTimeout(() => {
+      refs.current[index]?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 40);
+  }
+
+  function appendCreateQuoteItem(nextItem?: QuoteItemDraft) {
+    let nextIndex = 0;
+    setCreateDraft((current) => {
+      const quoteItems = [...current.quoteItems, nextItem ?? createEmptyQuoteItem()];
+      nextIndex = quoteItems.length - 1;
+      return {
+        ...current,
+        quoteItems,
+      };
+    });
+    setCreateItemAccordion((current) => [...current, true]);
+    scrollToQuoteItem(createItemRefs, nextIndex);
+  }
+
+  function appendResponseQuoteItem(nextItem?: QuoteItemDraft) {
+    let nextIndex = 0;
+    setFormState((current) => {
+      const quoteItems = [...current.quoteItems, nextItem ?? createEmptyQuoteItem()];
+      nextIndex = quoteItems.length - 1;
+      return {
+        ...current,
+        quoteItems,
+      };
+    });
+    scrollToQuoteItem(responseItemRefs, nextIndex);
+  }
+
+  function addCreateCatalogItem(product: CatalogQuoteProduct) {
+    let nextIndex = 0;
+    setCreateDraft((current) => {
       const currentItems = current.quoteItems.filter((item) => item.itemName.trim() || item.unitPrice.trim() || item.description.trim());
       const previousAutoTitle = generateQuoteTitleFromItems(currentItems, current.projectType);
       const nextItems = [
@@ -1758,6 +1800,7 @@ function addCreateCatalogItem(product: CatalogQuoteProduct) {
           warrantySource: "CUSTOM",
         }),
       ];
+      nextIndex = nextItems.length - 1;
       return {
         ...current,
         preferredProducts: summarizeSelectedProducts(nextItems),
@@ -1768,12 +1811,22 @@ function addCreateCatalogItem(product: CatalogQuoteProduct) {
         quoteItems: nextItems,
       };
     });
+    setCreateItemAccordion((current) => {
+      const next = Array.from(
+        { length: Math.max(current.length, nextIndex + 1) },
+        (_, entryIndex) => current[entryIndex] ?? true,
+      );
+      next[nextIndex] = true;
+      return next;
+    });
     setCreateCatalogQuery("");
     setCreateCatalogResults([]);
+    scrollToQuoteItem(createItemRefs, nextIndex);
   }
 
-function addResponseCatalogItem(product: CatalogQuoteProduct) {
-  setFormState((current) => {
+  function addResponseCatalogItem(product: CatalogQuoteProduct) {
+    let nextIndex = 0;
+    setFormState((current) => {
       const projectType = expandedRequest?.projectType || "SOLAR_HOME_SYSTEM";
       const currentItems = current.quoteItems.filter((item) => item.itemName.trim() || item.unitPrice.trim() || item.description.trim());
       const previousAutoTitle = generateQuoteTitleFromItems(currentItems, projectType);
@@ -1789,6 +1842,7 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
           warrantySource: "CUSTOM",
         }),
       ];
+      nextIndex = nextItems.length - 1;
       return {
         ...current,
         quoteTitle:
@@ -1800,6 +1854,7 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
     });
     setResponseCatalogQuery("");
     setResponseCatalogResults([]);
+    scrollToQuoteItem(responseItemRefs, nextIndex);
   }
 
   useEffect(() => {
@@ -2513,19 +2568,6 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                       Build the quotation before saving it so the quotation is complete immediately.
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setCreateDraft((current) => ({
-                        ...current,
-                        quoteItems: [...current.quoteItems, createEmptyQuoteItem()],
-                      }))
-                    }
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 hover:bg-emerald-500/20 sm:w-auto"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Add item
-                  </button>
                 </div>
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
                   <label className="text-xs uppercase tracking-wide text-slate-400">
@@ -2659,7 +2701,13 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
 
                 <div className="mt-4 space-y-3">
                   {createDraft.quoteItems.map((item, index) => (
-                    <div key={`create-quote-item-${index}`} className="rounded-2xl border border-white/10 bg-slate-950/50 p-3 sm:p-4">
+                    <div
+                      key={`create-quote-item-${index}`}
+                      ref={(node) => {
+                        createItemRefs.current[index] = node;
+                      }}
+                      className="rounded-2xl border border-white/10 bg-slate-950/50 p-3 sm:p-4"
+                    >
                       <button
                         type="button"
                         onClick={() =>
@@ -2818,6 +2866,14 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                       </div>
                     </div>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => appendCreateQuoteItem()}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 hover:bg-emerald-500/20"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add item
+                  </button>
                 </div>
 
                 <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/60 p-3 sm:p-4">
@@ -3337,19 +3393,6 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                                     Add each quoted item, quantity, and unit price. The system will calculate totals automatically.
                                   </div>
                                 </div>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setFormState((current) => ({
-                                      ...current,
-                                      quoteItems: [...current.quoteItems, createEmptyQuoteItem()],
-                                    }))
-                                  }
-                                  className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 hover:bg-emerald-500/20"
-                                >
-                                  <Plus className="h-3.5 w-3.5" />
-                                  Add item
-                                </button>
                               </div>
                               <div className="mt-3 grid gap-3 md:grid-cols-2">
                                 <label className="text-xs uppercase tracking-wide text-slate-400">
@@ -3483,7 +3526,13 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
 
                               <div className="mt-4 space-y-3">
                                 {formState.quoteItems.map((item, index) => (
-                                  <div key={`quote-item-${index}`} className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
+                                  <div
+                                    key={`quote-item-${index}`}
+                                    ref={(node) => {
+                                      responseItemRefs.current[index] = node;
+                                    }}
+                                    className="rounded-2xl border border-white/10 bg-slate-900/70 p-4"
+                                  >
                                     <div className="grid gap-3 lg:grid-cols-[minmax(0,1.6fr)_140px_160px_auto]">
                                       <label className="text-xs uppercase tracking-wide text-slate-400">
                                         Item name
@@ -3605,6 +3654,14 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                                     </div>
                                   </div>
                                 ))}
+                                <button
+                                  type="button"
+                                  onClick={() => appendResponseQuoteItem()}
+                                  className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 hover:bg-emerald-500/20"
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                  Add item
+                                </button>
                               </div>
 
                               <div className="mt-4 grid gap-3 md:grid-cols-2">
