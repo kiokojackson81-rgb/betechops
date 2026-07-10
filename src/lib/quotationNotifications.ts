@@ -250,11 +250,14 @@ export async function deliverQuotationNotifications(
   },
 ) {
   const notifications: QuotationNotificationResult[] = [];
-  const { rawPhone, normalizedPhone, deliveryPhone } = getNotificationPhoneVariants(request.customerPhone);
+  const notificationPhone = request.customerPhone || request.manualCustomerPhone || "";
+  const { rawPhone, normalizedPhone, deliveryPhone } = getNotificationPhoneVariants(notificationPhone);
   console.info("[quotation.notifications.start]", {
     quoteRequestId: request.id,
     quoteRef: request.quoteRef,
     customerName: request.customerName,
+    customerPhone: request.customerPhone || null,
+    manualCustomerPhone: request.manualCustomerPhone || null,
     rawPhone,
     normalizedPhone,
     deliveryPhone,

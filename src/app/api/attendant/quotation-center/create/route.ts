@@ -4,6 +4,7 @@ import {
   manualQuotationCreateSchema,
   requireQuoteRequestsStaffActor,
 } from "@/lib/quoteRequests";
+import { normalizePhone } from "@/lib/phone";
 import {
   deliverQuotationNotifications,
   prepareQuotationPdfAssets,
@@ -148,6 +149,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Unable to save quotation." }, { status: 500 });
     }
 
+    const fallbackPhone = normalizePhone(parsed.data.phone || "");
+    const notificationRequest = {
+      ...created,
+      customerPhone: created.customerPhone || created.manualCustomerPhone || fallbackPhone || "",
+      manualCustomerPhone: created.manualCustomerPhone || fallbackPhone || null,
+    };
+
     let notifications: Array<{
       channel: "email" | "sms" | "whatsapp";
       ok: boolean;
@@ -157,17 +165,17 @@ export async function POST(request: NextRequest) {
     let pdfUrl: string | null = null;
 
     try {
-      const assets = await prepareQuotationPdfAssets(created, {
+      const assets = await prepareQuotationPdfAssets(notificationRequest, {
         name: guard.name,
         email: guard.email,
       });
       pdfUrl = assets.pdfUrl;
-      notifications = await deliverQuotationNotifications(created, {
+      notifications = await deliverQuotationNotifications(notificationRequest, {
         pdfBuffer: assets.pdfBuffer,
         pdfUrl: assets.pdfUrl,
         whatsappPdfUrl: assets.whatsappPdfUrl,
-        sendEmail: Boolean(created.customerEmail),
-        sendSms: Boolean(created.customerPhone),
+        sendEmail: Boolean(notificationRequest.customerEmail),
+        sendSms: Boolean(notificationRequest.customerPhone || notificationRequest.manualCustomerPhone),
         triggerWhatsapp: true,
       });
     } catch (error) {
