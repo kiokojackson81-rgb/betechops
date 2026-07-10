@@ -24,6 +24,7 @@ import type {
   QuoteContactTime,
   QuoteInstallationStatus,
   QuoteRequestResponseInput,
+  QuoteRequestSource,
   QuoteProjectType,
   QuoteRequestStatus,
   QuoteUrgency,
@@ -90,6 +91,8 @@ type Props = {
   assigneeOptions?: TemplateOwnerOption[];
   assigneeLabel?: string;
   requireAssigneeSelection?: boolean;
+  showMonitoringSummary?: boolean;
+  enableAdminFilters?: boolean;
 };
 
 const QUOTE_REQUEST_STATUSES: QuoteRequestStatus[] = [
@@ -107,6 +110,16 @@ const QUOTE_REQUEST_STATUSES: QuoteRequestStatus[] = [
 ];
 
 const STATUS_OPTIONS: QuoteRequestStatusFilter[] = ["ALL", ...QUOTE_REQUEST_STATUSES];
+const SOURCE_OPTIONS: Array<QuoteRequestSource | "ALL"> = [
+  "ALL",
+  "WEBSITE_REQUEST",
+  "MANUAL",
+  "RECEIPTS",
+  "ADMIN",
+  "WHATSAPP",
+  "PHONE",
+  "TEMPLATE",
+];
 
 const PROJECT_TYPE_OPTIONS: QuoteProjectType[] = [
   "SOLAR_HOME_SYSTEM",
@@ -154,6 +167,10 @@ function formatDateTime(value: string | null) {
 }
 
 function formatStatus(value: string) {
+  return value.replace(/_/g, " ");
+}
+
+function formatSource(value: string) {
   return value.replace(/_/g, " ");
 }
 
@@ -1078,9 +1095,13 @@ export default function QuotationRequestsDeskClient({
   assigneeOptions = [],
   assigneeLabel = "Quotation owner",
   requireAssigneeSelection = false,
+  showMonitoringSummary = false,
+  enableAdminFilters = false,
 }: Props) {
   const [requests, setRequests] = useState<SerializedQuoteRequest[]>([]);
   const [statusFilter, setStatusFilter] = useState<QuoteRequestStatusFilter>(defaultStatusFilter);
+  const [sourceFilter, setSourceFilter] = useState<QuoteRequestSource | "ALL">("ALL");
+  const [staffFilter, setStaffFilter] = useState<string>("ALL");
   const [query, setQuery] = useState(q);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1248,6 +1269,21 @@ export default function QuotationRequestsDeskClient({
     createQuoteTotalsPreview.total,
   ]);
 
+  const requestSummary = useMemo(() => {
+    const pendingStatuses = new Set<QuoteRequestStatus>(["PENDING", "FOLLOW_UP", "CONTACTED", "VIEWED"]);
+    const websitePending = requests.filter(
+      (request) => request.source === "WEBSITE_REQUEST" && pendingStatuses.has(request.status),
+    ).length;
+    return {
+      total: requests.length,
+      pending: requests.filter((request) => pendingStatuses.has(request.status)).length,
+      quoted: requests.filter((request) => request.status === "QUOTED").length,
+      converted: requests.filter((request) => request.status === "CONVERTED").length,
+      websiteRequests: requests.filter((request) => request.source === "WEBSITE_REQUEST").length,
+      websitePending,
+    };
+  }, [requests]);
+
   useEffect(() => {
     setCreateItemAccordion((current) => {
       const nextLength = createDraft.quoteItems.length;
@@ -1310,7 +1346,12 @@ export default function QuotationRequestsDeskClient({
     quoteTotalsPreview.total,
   ]);
 
-  async function refreshRequests(nextStatus = statusFilter, nextQuery = query) {
+  async function refreshRequests(
+    nextStatus = statusFilter,
+    nextQuery = query,
+    nextSource: QuoteRequestSource | "ALL" = sourceFilter,
+    nextStaffId = staffFilter,
+  ) {
     if (createOnlyMode) {
       setRequests([]);
       setExpandedId(null);
@@ -1322,6 +1363,8 @@ export default function QuotationRequestsDeskClient({
       const response = await fetch(
         buildApiUrl(apiBasePath, apiQueryParams, "", {
           status: nextStatus,
+          ...(nextSource !== "ALL" ? { source: nextSource } : {}),
+          ...(nextStaffId !== "ALL" ? { staffId: nextStaffId } : {}),
           ...(nextQuery.trim() ? { q: nextQuery.trim() } : {}),
         }),
         { cache: "no-store" },
@@ -2208,6 +2251,70 @@ export default function QuotationRequestsDeskClient({
             </button>
           ))}
         </div>
+
+        {showMonitoringSummary ? (
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+            {[
+              { label: "All activities", value: requestSummary.total, tone: "text-white" },
+              { label: "Needs action", value: requestSummary.pending, tone: "text-amber-200" },
+              { label: "Quoted", value: requestSummary.quoted, tone: "text-emerald-200" },
+              { label: "Converted", value: requestSummary.converted, tone: "text-cyan-200" },
+              { label: "Website requests", value: requestSummary.websiteRequests, tone: "text-fuchsia-200" },
+              { label: "Website pending", value: requestSummary.websitePending, tone: "text-rose-200" },
+            ].map((item) => (
+              <div key={item.label} className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  {item.label}
+                </div>
+                <div className={`mt-2 text-2xl font-semibold ${item.tone}`}>{item.value}</div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {enableAdminFilters ? (
+          <div className="mt-4 grid gap-3 lg:grid-cols-[220px_260px]">
+            <label className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+              Source
+              <select
+                value={sourceFilter}
+                onChange={(event) => {
+                  const nextSource = event.target.value as QuoteRequestSource | "ALL";
+                  setSourceFilter(nextSource);
+                  refreshRequests(statusFilter, query, nextSource, staffFilter).catch(() => undefined);
+                }}
+                className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none"
+              >
+                {SOURCE_OPTIONS.map((source) => (
+                  <option key={source} value={source}>
+                    {source === "ALL" ? "All sources" : formatSource(source)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {assigneeOptions.length ? (
+              <label className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                Staff owner
+                <select
+                  value={staffFilter}
+                  onChange={(event) => {
+                    const nextStaff = event.target.value;
+                    setStaffFilter(nextStaff);
+                    refreshRequests(statusFilter, query, sourceFilter, nextStaff).catch(() => undefined);
+                  }}
+                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none"
+                >
+                  <option value="ALL">All staff owners</option>
+                  {assigneeOptions.map((owner) => (
+                    <option key={owner.id} value={owner.id}>
+                      {owner.name || owner.email || owner.id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+          </div>
+        ) : null}
 
         {loadError ? (
           <div className="mt-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
@@ -3159,6 +3266,16 @@ export default function QuotationRequestsDeskClient({
                         </Link>
                         <div className="mt-1 text-xs text-slate-400">{request.customerPhone}</div>
                         <div className="mt-1 text-xs text-slate-500">{request.quoteRef}</div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <span className="rounded-full border border-fuchsia-400/25 bg-fuchsia-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-fuchsia-100">
+                            {formatSource(request.source)}
+                          </span>
+                          {request.templateName ? (
+                            <span className="rounded-full border border-cyan-400/25 bg-cyan-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-100">
+                              Template
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                       <div className="text-sm text-slate-300">
                         <div>{request.customerLocation || [request.town, request.county].filter(Boolean).join(" - ") || "Location pending"}</div>
@@ -3225,6 +3342,21 @@ export default function QuotationRequestsDeskClient({
                             <div>{request.customerPhone}</div>
                             <div>{request.customerEmail || "No email saved yet"}</div>
                             <div>{request.customerLocation || [request.town, request.county].filter(Boolean).join(" - ") || "Location pending"}</div>
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <span className="rounded-full border border-fuchsia-400/25 bg-fuchsia-400/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-fuchsia-100">
+                              {formatSource(request.source)}
+                            </span>
+                            {request.assignedAttendant?.name || request.assignedAttendant?.email ? (
+                              <span className="rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-100">
+                                {request.assignedAttendant?.name || request.assignedAttendant?.email}
+                              </span>
+                            ) : null}
+                            {request.templateName ? (
+                              <span className="rounded-full border border-white/15 bg-white/[0.03] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-200">
+                                {request.templateName}
+                              </span>
+                            ) : null}
                           </div>
                         </div>
                       </button>
@@ -3884,6 +4016,19 @@ export default function QuotationRequestsDeskClient({
                           </div>
                           <div className="mt-3">
                             {request.assignedAttendant?.name || request.assignedAttendant?.email || "Unassigned"}
+                          </div>
+                          <div className="mt-3 grid gap-2 text-xs text-slate-400">
+                            <div>Source: {formatSource(request.source)}</div>
+                            <div>Created: {formatDateTime(request.createdAt)}</div>
+                            <div>Updated: {formatDateTime(request.updatedAt)}</div>
+                            {request.viewedAt ? <div>Viewed by customer: {formatDateTime(request.viewedAt)}</div> : null}
+                            {request.customerActionAt ? (
+                              <div>Customer action: {formatDateTime(request.customerActionAt)}</div>
+                            ) : null}
+                            {request.respondedAt ? (
+                              <div>Last quoted / updated: {formatDateTime(request.respondedAt)}</div>
+                            ) : null}
+                            {request.templateName ? <div>Template used: {request.templateName}</div> : null}
                           </div>
                           <div className="mt-3 rounded-2xl border border-white/10 bg-slate-950/50 p-3 text-xs text-slate-300">
                             <div className="font-semibold uppercase tracking-[0.16em] text-slate-400">

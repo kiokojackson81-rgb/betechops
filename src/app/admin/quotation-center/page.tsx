@@ -4,22 +4,25 @@ import { getOrderedQuoteStaffUsers } from "@/lib/quoteRequests";
 export const dynamic = "force-dynamic";
 
 export default async function AdminQuotationCenterPage() {
-  const templateOwnerOptions = await getOrderedQuoteStaffUsers();
+  const staffOptions = await getOrderedQuoteStaffUsers();
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-4 text-slate-100 lg:px-6">
-      <div className="mx-auto max-w-7xl">
+      <div className="mx-auto max-w-[1600px]">
         <QuotationRequestsDeskClient
-          apiBasePath="/api/attendant/quote-requests"
-          defaultStatusFilter="PENDING"
+          apiBasePath="/api/admin/quotation-center"
+          defaultStatusFilter="ALL"
           filterStorageKey="admin:quotation-center:status:v2"
-          deskTitle="Admin Quotation Center"
-          deskDescription="Create, review, edit, delete, and convert quotations company-wide from one admin desk. Admin also controls all template upload, edit, delete, and ownership assignment."
-          emptyMessage="No quotations found right now."
-          compactMode
+          deskTitle="Admin Quotation Monitoring Center"
+          deskDescription="Review every quotation activity company-wide, including website requests, manual quotations, quoted work, conversions, ownership, templates, and customer follow-up from one admin desk."
+          emptyMessage="No quotations found across the current filters."
           allowTemplateManager
           allowDelete
-          templateOwnerOptions={templateOwnerOptions}
+          templateOwnerOptions={staffOptions}
+          assigneeOptions={staffOptions}
+          assigneeLabel="Assign quotation to staff"
+          showMonitoringSummary
+          enableAdminFilters
         />
       </div>
     </main>
