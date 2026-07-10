@@ -2748,20 +2748,6 @@ export default function QuotationRequestsDeskClient({
                               }
                               className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
                             />
-                            <textarea
-                              rows={2}
-                              value={item.description}
-                              onChange={(event) =>
-                                setCreateDraft((current) => ({
-                                  ...current,
-                                  quoteItems: current.quoteItems.map((entry, entryIndex) =>
-                                    entryIndex === index ? { ...entry, description: event.target.value } : entry,
-                                  ),
-                                }))
-                              }
-                              placeholder="Optional short BOQ note"
-                              className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
-                            />
                           </label>
                           <label className="text-xs uppercase tracking-wide text-slate-400">
                             Quantity
@@ -2819,9 +2805,26 @@ export default function QuotationRequestsDeskClient({
                             </button>
                           </div>
                         </div>
-                        <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_150px]">
-                          <label className="text-xs uppercase tracking-wide text-slate-400">
-                            Warranty period
+                        <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1.8fr)_minmax(190px,0.7fr)_140px]">
+                          <label className="block">
+                            <span className="sr-only">BOQ notes</span>
+                            <textarea
+                              rows={1}
+                              value={item.description}
+                              onChange={(event) =>
+                                setCreateDraft((current) => ({
+                                  ...current,
+                                  quoteItems: current.quoteItems.map((entry, entryIndex) =>
+                                    entryIndex === index ? { ...entry, description: event.target.value } : entry,
+                                  ),
+                                }))
+                              }
+                              placeholder="Optional short BOQ notes"
+                              className="h-12 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none resize-none"
+                            />
+                          </label>
+                          <label className="block">
+                            <span className="sr-only">Warranty period</span>
                             <input
                               value={item.warrantyPeriod}
                               onChange={(event) =>
@@ -2838,12 +2841,12 @@ export default function QuotationRequestsDeskClient({
                                   ),
                                 }))
                               }
-                              placeholder="10"
-                              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 outline-none"
+                              placeholder="Warranty period"
+                              className="h-12 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
                             />
                           </label>
-                          <label className="text-xs uppercase tracking-wide text-slate-400">
-                            Unit
+                          <label className="block">
+                            <span className="sr-only">Warranty unit</span>
                             <select
                               value={item.warrantyUnit}
                               onChange={(event) =>
@@ -2856,7 +2859,7 @@ export default function QuotationRequestsDeskClient({
                                   ),
                                 }))
                               }
-                              className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
+                              className="h-12 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
                             >
                               <option value="YEARS">Years</option>
                               <option value="MONTHS">Months</option>
@@ -3608,9 +3611,26 @@ export default function QuotationRequestsDeskClient({
                                         </button>
                                       </div>
                                     </div>
-                                    <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_150px]">
-                                      <label className="text-xs uppercase tracking-wide text-slate-400">
-                                        Warranty period
+                                    <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1.8fr)_minmax(190px,0.7fr)_140px]">
+                                      <label className="block">
+                                        <span className="sr-only">BOQ notes</span>
+                                        <textarea
+                                          rows={1}
+                                          value={item.description}
+                                          onChange={(event) =>
+                                            setFormState((current) => ({
+                                              ...current,
+                                              quoteItems: current.quoteItems.map((entry, entryIndex) =>
+                                                entryIndex === index ? { ...entry, description: event.target.value } : entry,
+                                              ),
+                                            }))
+                                          }
+                                          placeholder="Optional short BOQ notes"
+                                          className="h-12 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none resize-none"
+                                        />
+                                      </label>
+                                      <label className="block">
+                                        <span className="sr-only">Warranty period</span>
                                         <input
                                           value={item.warrantyPeriod}
                                           onChange={(event) =>
@@ -3627,12 +3647,12 @@ export default function QuotationRequestsDeskClient({
                                               ),
                                             }))
                                           }
-                                          placeholder="10"
-                                          className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 focus:border-emerald-500 focus:outline-none"
+                                          placeholder="Warranty period"
+                                          className="h-12 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
                                         />
                                       </label>
-                                      <label className="text-xs uppercase tracking-wide text-slate-400">
-                                        Unit
+                                      <label className="block">
+                                        <span className="sr-only">Warranty unit</span>
                                         <select
                                           value={item.warrantyUnit}
                                           onChange={(event) =>
@@ -3645,7 +3665,7 @@ export default function QuotationRequestsDeskClient({
                                               ),
                                             }))
                                           }
-                                          className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                                          className="h-12 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
                                         >
                                           <option value="YEARS">Years</option>
                                           <option value="MONTHS">Months</option>
