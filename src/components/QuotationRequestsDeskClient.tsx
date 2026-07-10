@@ -2304,7 +2304,11 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
         ) : null}
 
         {showCreatePanel ? (
-          <div className={`rounded-[28px] border border-emerald-500/20 bg-slate-950/60 ${compactMode ? "p-4" : "mt-5 p-5"}`}>
+          <div
+            className={`rounded-[28px] border border-emerald-500/20 bg-slate-950/60 ${
+              compactMode ? "p-3 sm:p-4" : "mt-5 p-4 sm:p-5"
+            }`}
+          >
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300">
@@ -2319,7 +2323,7 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                     : "Start a quotation for walk-in, WhatsApp, phone, or template-based customers without waiting for the website form."}
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="grid gap-2 sm:flex sm:flex-wrap">
                 {([
                   ["manual", "Manual quotation"],
                   ...(allowTemplateSelection ? ([["template", "Use saved template"]] as Array<[CreateQuotationMode, string]>) : []),
@@ -2333,7 +2337,7 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                         setEditingTemplateId(null);
                       }
                     }}
-                    className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                    className={`w-full rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition sm:w-auto ${
                       createMode === mode
                         ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
                         : "border-white/10 text-slate-200 hover:border-white/25"
@@ -2469,7 +2473,7 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                 className="hidden"
                 onChange={(event) => void handleTemplateFileSelected(event.target.files?.[0] ?? null)}
               />
-              <div className="lg:col-span-2 rounded-2xl border border-white/10 bg-slate-900/70 p-4">
+              <div className="lg:col-span-2 rounded-2xl border border-white/10 bg-slate-900/70 p-3 sm:p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
@@ -2487,7 +2491,7 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                         quoteItems: [...current.quoteItems, createEmptyQuoteItem()],
                       }))
                     }
-                    className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 hover:bg-emerald-500/20"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 hover:bg-emerald-500/20 sm:w-auto"
                   >
                     <Plus className="h-3.5 w-3.5" />
                     Add item
@@ -2551,7 +2555,7 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                   Choose Included, Not included, or Enter fee for both installation and transport before saving.
                 </div>
 
-                <div className="mt-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
+                <div className="mt-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-3 sm:p-4">
                   <div className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">
                     Add from live catalog
                   </div>
@@ -2592,12 +2596,12 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                               <div className="mt-1 line-clamp-2 text-xs text-slate-500">{product.shortDescription}</div>
                             ) : null}
                           </div>
-                          <div className="flex flex-wrap gap-2">
+                          <div className="grid gap-2 sm:flex sm:flex-wrap">
                             <a
                               href={product.productUrl}
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-200 transition hover:border-white/20"
+                              className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-white/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-200 transition hover:border-white/20 sm:w-auto"
                             >
                               <ExternalLink className="h-3.5 w-3.5" />
                               View
@@ -2605,7 +2609,7 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                             <button
                               type="button"
                               onClick={() => addCreateCatalogItem(product)}
-                              className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400"
+                              className="w-full rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400 sm:w-auto"
                             >
                               Add item
                             </button>
@@ -2625,7 +2629,7 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
 
                 <div className="mt-4 space-y-3">
                   {createDraft.quoteItems.map((item, index) => (
-                    <div key={`create-quote-item-${index}`} className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+                    <div key={`create-quote-item-${index}`} className="rounded-2xl border border-white/10 bg-slate-950/50 p-3 sm:p-4">
                       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.6fr)_140px_160px_auto]">
                         <label className="text-xs uppercase tracking-wide text-slate-400">
                           Item name
@@ -2687,8 +2691,8 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                             className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none"
                           />
                         </label>
-                        <div className="flex items-end justify-between gap-3 lg:flex-col lg:items-end">
-                          <div className="text-right">
+                        <div className="flex flex-col gap-3 rounded-xl border border-white/5 bg-white/[0.02] p-3 lg:border-0 lg:bg-transparent lg:p-0">
+                          <div className="text-left lg:text-right">
                             <div className="text-xs uppercase tracking-wide text-slate-400">Line total</div>
                             <div className="mt-1 text-sm font-semibold text-white">
                               {formatQuoteCurrency(createQuoteItemsPreview[index]?.lineTotal || 0)}
@@ -2706,7 +2710,7 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                                     : current.quoteItems.filter((_, entryIndex) => entryIndex !== index),
                               }))
                             }
-                            className="inline-flex items-center gap-2 rounded-full border border-rose-500/25 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-rose-200 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:opacity-40"
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-rose-500/25 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-rose-200 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:opacity-40 lg:w-auto"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                             Remove
@@ -2819,7 +2823,7 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                   ) : null}
                 </div>
 
-                <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/60 p-3 sm:p-4">
                   <div className="grid gap-2 text-sm text-slate-300 sm:grid-cols-2">
                     <div>
                       <span className="font-semibold text-white">Subtotal:</span>{" "}
@@ -2850,7 +2854,7 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                   </div>
                 </div>
               </div>
-              <div className="lg:col-span-2 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+              <div className="lg:col-span-2 rounded-2xl border border-white/10 bg-slate-950/40 p-3 sm:p-4">
                 <label className="text-xs uppercase tracking-wide text-slate-400">
                   TikTok project link (optional)
                   <input
@@ -2886,14 +2890,14 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
               </label>
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-4 grid gap-2 sm:flex sm:flex-wrap">
               {allowTemplateManager ? (
                 <>
                   <button
                     type="button"
                     disabled={templateSaving}
                     onClick={() => void handleSaveTemplateFromDraft()}
-                    className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-200 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="w-full rounded-full border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-200 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                   >
                     {templateSaving
                       ? editingTemplateId
@@ -2915,7 +2919,7 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                   (createMode === "template" && !createDraft.templateId)
                 }
                 onClick={() => void handleCreateQuotation()}
-                className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+                className="w-full rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:py-2"
               >
                 {createSaving ? "Saving..." : createActionLabel}
               </button>
@@ -2926,7 +2930,7 @@ function addResponseCatalogItem(product: CatalogQuoteProduct) {
                   setEditingTemplateId(null);
                   setCreateDraft(createDefaultQuotationDraft());
                 }}
-                className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-300 transition hover:border-white/20"
+                className="w-full rounded-full border border-white/10 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-300 transition hover:border-white/20 sm:w-auto sm:py-2"
               >
                 Cancel
               </button>

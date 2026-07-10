@@ -352,9 +352,9 @@ export default function ReceiptsPageClient({
       {view === "create" && (
         <section
           ref={formRef}
-          className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40"
+          className="rounded-3xl border border-white/10 bg-slate-900/80 p-4 shadow-xl shadow-black/40 sm:p-6"
         >
-          <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Receipts desk</p>
               <h1 className="text-2xl font-semibold text-white">Betech Customers Operations</h1>
@@ -364,7 +364,7 @@ export default function ReceiptsPageClient({
             </div>
             <button
               onClick={openListView}
-              className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95"
+              className="w-full rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black hover:brightness-95 sm:w-auto"
             >
               View receipts
             </button>
@@ -372,7 +372,7 @@ export default function ReceiptsPageClient({
 
           {/* Totals panel removed per request */}
           <div className="mt-4">
-            <div className="mb-4 flex flex-wrap gap-2">
+            <div className="mb-4 grid gap-2 sm:flex sm:flex-wrap">
               {([
                 ["RECEIPT", "Receipt / POD flow"],
                 ["QUOTATION", "Quotation flow"],
@@ -381,7 +381,7 @@ export default function ReceiptsPageClient({
                   key={type}
                   type="button"
                   onClick={() => setCreateDocumentType(type)}
-                  className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                  className={`w-full rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition sm:w-auto ${
                     createDocumentType === type
                       ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
                       : "border-white/10 text-slate-300 hover:border-white/20 hover:text-white"
