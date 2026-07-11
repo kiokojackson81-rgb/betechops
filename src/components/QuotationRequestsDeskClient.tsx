@@ -2491,96 +2491,214 @@ export default function QuotationRequestsDeskClient({
         </div>
 
         {showMonitoringSummary ? (
-          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-            {[
-              { label: "All activities", value: requestSummary.total, tone: "text-white" },
-              { label: "Needs action", value: requestSummary.pending, tone: "text-amber-200" },
-              { label: "Quoted", value: requestSummary.quoted, tone: "text-emerald-200" },
-              { label: "Converted", value: requestSummary.converted, tone: "text-cyan-200" },
-              { label: "Website requests", value: requestSummary.websiteRequests, tone: "text-fuchsia-200" },
-              { label: "Website pending", value: requestSummary.websitePending, tone: "text-rose-200" },
-            ].map((item) => (
-              <div key={item.label} className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  {item.label}
-                </div>
-                <div className={`mt-2 text-2xl font-semibold ${item.tone}`}>{item.value}</div>
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        {showMonitoringSummary ? (
           <div className="mt-4 space-y-3">
-            <div className="flex flex-wrap gap-2">
-              {([
-                { view: "ALL", count: requestSummary.total },
-                { view: "WEBSITE", count: requestSummary.websiteRequests },
-                { view: "WEBSITE_PENDING", count: requestSummary.websitePending },
-                { view: "MANUAL", count: requestSummary.manualRequests },
-                { view: "PENDING", count: requestSummary.pending },
-                { view: "QUOTED", count: requestSummary.quoted },
-                { view: "CONVERTED", count: requestSummary.converted },
-              ] as Array<{ view: AdminQuotationView; count: number }>).map((item) => (
-                <button
-                  key={item.view}
-                  type="button"
-                  onClick={() => applyAdminView(item.view)}
-                  className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
-                    adminView === item.view
-                      ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-200"
-                      : "border-white/10 bg-slate-950/60 text-slate-200 hover:border-cyan-400 hover:text-white"
-                  }`}
-                >
-                  {getAdminViewLabel(item.view)} ({item.count})
-                </button>
-              ))}
-            </div>
-            <div className="grid gap-3 xl:grid-cols-4">
-              {[
-                { label: "Website quote rate", value: conversionAnalytics.websiteQuoteRate },
-                { label: "Desk quote rate", value: conversionAnalytics.manualQuoteRate },
-                { label: "Quote to conversion", value: conversionAnalytics.conversionRate },
-                { label: "Delivery split", value: conversionAnalytics.workloadSplit },
-              ].map((item) => (
-                <div key={item.label} className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    {item.label}
+            <div className="grid gap-3 xl:grid-cols-[1.15fr_1fr_1.15fr]">
+              <div className="rounded-2xl border border-fuchsia-500/20 bg-[linear-gradient(180deg,rgba(76,29,149,0.18),rgba(15,23,42,0.9))] px-4 py-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-fuchsia-200/80">
+                      Website request desk
+                    </div>
+                    <div className="mt-1 text-lg font-semibold text-white">Front-end quotation demand</div>
+                    <div className="mt-1 text-sm text-slate-300">
+                      Track fresh website enquiries separately from manual desk work.
+                    </div>
                   </div>
-                  <div className="mt-2 text-lg font-semibold text-white">{item.value}</div>
+                  <div className="rounded-2xl border border-fuchsia-400/30 bg-fuchsia-500/10 px-4 py-3 text-right">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-fuchsia-200/80">Requests</div>
+                    <div className="mt-1 text-3xl font-semibold text-white">{requestSummary.websiteRequests}</div>
+                  </div>
                 </div>
-              ))}
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-3">
+                    <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Pending website</div>
+                    <div className="mt-1 text-2xl font-semibold text-amber-200">{requestSummary.websitePending}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-3">
+                    <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Quoted from web</div>
+                    <div className="mt-1 text-2xl font-semibold text-emerald-200">
+                      {requests.filter((request) => isWebsiteRequest(request) && request.status === "QUOTED").length}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-3">
+                    <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Website converted</div>
+                    <div className="mt-1 text-2xl font-semibold text-cyan-200">
+                      {requests.filter((request) => isWebsiteRequest(request) && request.status === "CONVERTED").length}
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => applyAdminView("WEBSITE")}
+                    className="rounded-full border border-fuchsia-500/30 bg-fuchsia-500/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-fuchsia-100"
+                  >
+                    Open website queue
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyAdminView("WEBSITE_PENDING")}
+                    className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-amber-100"
+                  >
+                    Pending website only
+                  </button>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-cyan-500/20 bg-[linear-gradient(180deg,rgba(8,47,73,0.32),rgba(15,23,42,0.9))] px-4 py-4">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-200/80">
+                  Conversion pulse
+                </div>
+                <div className="mt-1 text-lg font-semibold text-white">Quotation delivery health</div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {[
+                    { label: "All activities", value: String(requestSummary.total), tone: "text-white" },
+                    { label: "Needs action", value: String(requestSummary.pending), tone: "text-amber-200" },
+                    { label: "Quoted", value: String(requestSummary.quoted), tone: "text-emerald-200" },
+                    { label: "Converted", value: String(requestSummary.converted), tone: "text-cyan-200" },
+                    { label: "Website quote rate", value: conversionAnalytics.websiteQuoteRate, tone: "text-fuchsia-200" },
+                    { label: "Quote to conversion", value: conversionAnalytics.conversionRate, tone: "text-sky-200" },
+                  ].map((item) => (
+                    <div key={item.label} className="rounded-2xl border border-white/10 bg-slate-950/45 px-3 py-3">
+                      <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">{item.label}</div>
+                      <div className={`mt-1 text-xl font-semibold ${item.tone}`}>{item.value}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/45 px-3 py-3 text-sm text-slate-300">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Delivery split</div>
+                  <div className="mt-2 font-medium text-white">{conversionAnalytics.workloadSplit}</div>
+                  <div className="mt-1 text-xs text-slate-400">
+                    Manual desk quote rate: {conversionAnalytics.manualQuoteRate}
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-emerald-500/20 bg-[linear-gradient(180deg,rgba(6,78,59,0.22),rgba(15,23,42,0.9))] px-4 py-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-200/80">
+                      Bulk control
+                    </div>
+                    <div className="mt-1 text-lg font-semibold text-white">Mass routing and status tools</div>
+                    <div className="mt-1 text-sm text-slate-300">
+                      Apply fast presets, then run the update once on the selected records.
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-right">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-emerald-200/80">Selected</div>
+                    <div className="mt-1 text-3xl font-semibold text-white">{selectedRequestIds.length}</div>
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {[
+                    { label: "Preset pending", status: "PENDING" as QuoteRequestStatus },
+                    { label: "Preset follow-up", status: "FOLLOW_UP" as QuoteRequestStatus },
+                    { label: "Preset quoted", status: "QUOTED" as QuoteRequestStatus },
+                  ].map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => applyBulkPreset({ status: preset.status })}
+                      className="rounded-full border border-white/10 bg-slate-900/60 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-200 transition hover:border-cyan-400 hover:text-white"
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                  {assigneeOptions.slice(0, 4).map((owner) => (
+                    <button
+                      key={owner.id}
+                      type="button"
+                      onClick={() => applyBulkPreset({ assigneeId: owner.id })}
+                      className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
+                    >
+                      Assign {owner.name || owner.email || owner.id}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                  <select
+                    value={bulkStatus}
+                    onChange={(event) => setBulkStatus(event.target.value as QuoteRequestStatus | "")}
+                    className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none"
+                  >
+                    <option value="">Leave status unchanged</option>
+                    {QUOTE_REQUEST_STATUSES.map((status) => (
+                      <option key={status} value={status}>
+                        {formatStatus(status)}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={bulkAssigneeId}
+                    onChange={(event) => setBulkAssigneeId(event.target.value)}
+                    className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none"
+                  >
+                    <option value="">Keep current owner</option>
+                    {assigneeOptions.map((owner) => (
+                      <option key={owner.id} value={owner.id}>
+                        {owner.name || owner.email || owner.id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={!selectedRequestIds.length || bulkSaving}
+                    onClick={() => void handleBulkApply()}
+                    className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-cyan-200 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {bulkSaving ? "Applying..." : "Apply bulk update"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!selectedRequestIds.length}
+                    onClick={() => setSelectedRequestIds([])}
+                    className="rounded-full border border-white/10 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-300 transition hover:border-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Clear selection
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        ) : null}
-
-        {showMonitoringSummary ? (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {[
-              { label: `Website requests (${requestSummary.websiteRequests})`, source: "WEBSITE_REQUEST" as const, status: "ALL" as QuoteRequestStatusFilter },
-              { label: `Pending website (${requestSummary.websitePending})`, source: "WEBSITE_REQUEST" as const, status: "PENDING" as QuoteRequestStatusFilter },
-              { label: "All quotation activity", source: "ALL" as const, status: "ALL" as QuoteRequestStatusFilter },
-            ].map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                onClick={() => {
-                  setSourceFilter(item.source);
-                  setStatusFilter(item.status);
-                  setAdminView(
-                    item.source === "WEBSITE_REQUEST" && item.status === "PENDING"
-                      ? "WEBSITE_PENDING"
-                      : item.source === "WEBSITE_REQUEST"
-                        ? "WEBSITE"
-                        : "ALL",
-                  );
-                  refreshRequests(item.status, query, item.source, staffFilter).catch(() => undefined);
-                }}
-                className="rounded-full border border-white/10 bg-slate-950/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-200 transition hover:border-cyan-400 hover:text-white"
-              >
-                {item.label}
-              </button>
-            ))}
+            <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-4">
+              <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    Activity lens
+                  </div>
+                  <div className="mt-1 text-sm text-slate-300">
+                    Focus the dashboard on a specific quotation workload stream.
+                  </div>
+                </div>
+                <div className="text-xs text-slate-500">
+                  Current view: <span className="font-semibold text-slate-200">{getAdminViewLabel(adminView)}</span>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {([
+                  { view: "ALL", count: requestSummary.total },
+                  { view: "WEBSITE", count: requestSummary.websiteRequests },
+                  { view: "WEBSITE_PENDING", count: requestSummary.websitePending },
+                  { view: "MANUAL", count: requestSummary.manualRequests },
+                  { view: "PENDING", count: requestSummary.pending },
+                  { view: "QUOTED", count: requestSummary.quoted },
+                  { view: "CONVERTED", count: requestSummary.converted },
+                ] as Array<{ view: AdminQuotationView; count: number }>).map((item) => (
+                  <button
+                    key={item.view}
+                    type="button"
+                    onClick={() => applyAdminView(item.view)}
+                    className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                      adminView === item.view
+                        ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-200"
+                        : "border-white/10 bg-slate-950/60 text-slate-200 hover:border-cyan-400 hover:text-white"
+                    }`}
+                  >
+                    {getAdminViewLabel(item.view)} ({item.count})
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         ) : null}
 
@@ -2630,111 +2748,11 @@ export default function QuotationRequestsDeskClient({
             ) : null}
               <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  Website request desk
+                  Queue controls
                 </div>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      applyAdminView("WEBSITE");
-                    }}
-                    className="rounded-full border border-fuchsia-500/30 bg-fuchsia-500/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-fuchsia-100"
-                  >
-                    Website only
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      applyAdminView("WEBSITE_PENDING");
-                    }}
-                    className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-amber-100"
-                  >
-                    Pending website
-                  </button>
+                <div className="mt-2 text-sm text-slate-300">
+                  Use source and owner filters to narrow the active admin workload view.
                 </div>
-              </div>
-            </div>
-            <div className="rounded-2xl border border-cyan-500/20 bg-slate-950/50 px-4 py-4">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-300">
-                    Bulk admin actions
-                  </div>
-                  <div className="mt-1 text-sm text-slate-300">
-                    Apply reassignment or status updates to selected quotations.
-                  </div>
-                </div>
-                <div className="text-xs text-slate-400">
-                  {selectedRequestIds.length} selected
-                </div>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {[
-                  { label: "Preset pending", status: "PENDING" as QuoteRequestStatus },
-                  { label: "Preset follow-up", status: "FOLLOW_UP" as QuoteRequestStatus },
-                  { label: "Preset quoted", status: "QUOTED" as QuoteRequestStatus },
-                ].map((preset) => (
-                  <button
-                    key={preset.label}
-                    type="button"
-                    onClick={() => applyBulkPreset({ status: preset.status })}
-                    className="rounded-full border border-white/10 bg-slate-900/60 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-200 transition hover:border-cyan-400 hover:text-white"
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-                {assigneeOptions.slice(0, 4).map((owner) => (
-                  <button
-                    key={owner.id}
-                    type="button"
-                    onClick={() => applyBulkPreset({ assigneeId: owner.id })}
-                    className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
-                  >
-                    Assign {owner.name || owner.email || owner.id}
-                  </button>
-                ))}
-              </div>
-              <div className="mt-3 grid gap-3 lg:grid-cols-[220px_260px_auto_auto]">
-                <select
-                  value={bulkStatus}
-                  onChange={(event) => setBulkStatus(event.target.value as QuoteRequestStatus | "")}
-                  className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none"
-                >
-                  <option value="">Leave status unchanged</option>
-                  {QUOTE_REQUEST_STATUSES.map((status) => (
-                    <option key={status} value={status}>
-                      {formatStatus(status)}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={bulkAssigneeId}
-                  onChange={(event) => setBulkAssigneeId(event.target.value)}
-                  className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none"
-                >
-                  <option value="">Keep current owner</option>
-                  {assigneeOptions.map((owner) => (
-                    <option key={owner.id} value={owner.id}>
-                      {owner.name || owner.email || owner.id}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  disabled={!selectedRequestIds.length || bulkSaving}
-                  onClick={() => void handleBulkApply()}
-                  className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-cyan-200 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {bulkSaving ? "Applying..." : "Apply Bulk Update"}
-                </button>
-                <button
-                  type="button"
-                  disabled={!selectedRequestIds.length}
-                  onClick={() => setSelectedRequestIds([])}
-                  className="rounded-full border border-white/10 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-300 transition hover:border-white/20 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Clear Selection
-                </button>
               </div>
             </div>
           </div>
