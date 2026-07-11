@@ -59,6 +59,14 @@ import {
 import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 
 type QuoteRequestStatusFilter = "ALL" | QuoteRequestStatus;
+type AdminQuotationView =
+  | "ALL"
+  | "WEBSITE"
+  | "WEBSITE_PENDING"
+  | "MANUAL"
+  | "PENDING"
+  | "QUOTED"
+  | "CONVERTED";
 
 type TemplateOwnerOption = {
   id: string;
@@ -230,6 +238,66 @@ function isConversionEvent(event: SerializedQuotationEvent) {
     "CONVERTED",
     "PDF_DOWNLOADED",
   ].includes(event.eventType);
+}
+
+function isWebsiteRequest(request: Pick<SerializedQuoteRequest, "source">) {
+  return request.source === "WEBSITE_REQUEST";
+}
+
+function isPendingQuotationStatus(status: QuoteRequestStatus) {
+  return ["PENDING", "FOLLOW_UP", "CONTACTED", "VIEWED"].includes(status);
+}
+
+function getAdminViewLabel(view: AdminQuotationView) {
+  switch (view) {
+    case "WEBSITE":
+      return "Website Requests";
+    case "WEBSITE_PENDING":
+      return "Pending Website";
+    case "MANUAL":
+      return "Manual / Desk";
+    case "PENDING":
+      return "Needs Action";
+    case "QUOTED":
+      return "Quoted";
+    case "CONVERTED":
+      return "Converted";
+    default:
+      return "All Activity";
+  }
+}
+
+function matchesAdminView(request: SerializedQuoteRequest, view: AdminQuotationView) {
+  switch (view) {
+    case "WEBSITE":
+      return isWebsiteRequest(request);
+    case "WEBSITE_PENDING":
+      return isWebsiteRequest(request) && isPendingQuotationStatus(request.status);
+    case "MANUAL":
+      return !isWebsiteRequest(request);
+    case "PENDING":
+      return isPendingQuotationStatus(request.status);
+    case "QUOTED":
+      return request.status === "QUOTED";
+    case "CONVERTED":
+      return request.status === "CONVERTED";
+    default:
+      return true;
+  }
+}
+
+function groupTimelineEvents(events: SerializedQuotationEvent[]) {
+  return {
+    workflow: events.filter(
+      (event) =>
+        !isConversionEvent(event) &&
+        !["CUSTOMER_VIEWED", "WHATSAPP_LINK_OPENED", "CUSTOMER_DOWNLOADED"].includes(event.eventType),
+    ),
+    conversion: events.filter(isConversionEvent),
+    customer: events.filter((event) =>
+      ["CUSTOMER_VIEWED", "WHATSAPP_LINK_OPENED", "CUSTOMER_DOWNLOADED"].includes(event.eventType),
+    ),
+  };
 }
 
 type QuoteItemDraft = {
@@ -1116,6 +1184,7 @@ export default function QuotationRequestsDeskClient({
   const [statusFilter, setStatusFilter] = useState<QuoteRequestStatusFilter>(defaultStatusFilter);
   const [sourceFilter, setSourceFilter] = useState<QuoteRequestSource | "ALL">("ALL");
   const [staffFilter, setStaffFilter] = useState<string>("ALL");
+  const [adminView, setAdminView] = useState<AdminQuotationView>("ALL");
   const [query, setQuery] = useState(q);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1199,6 +1268,9 @@ export default function QuotationRequestsDeskClient({
   const filteredRequests = useMemo(
     () =>
       requests.filter((request) => {
+        if (enableAdminFilters && !matchesAdminView(request, adminView)) {
+          return false;
+        }
         const outsideSelectedWindow =
           !isWithinRange(request.updatedAt || request.createdAt, start, end) &&
           !isWithinRange(request.createdAt, start, end);
@@ -1231,7 +1303,7 @@ export default function QuotationRequestsDeskClient({
             new Date(left.updatedAt || left.createdAt).getTime() ||
           new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
       ),
-    [end, query, requests, start],
+    [adminView, enableAdminFilters, end, query, requests, start],
   );
 
   const quoteBalancePreview = useMemo(() => {
@@ -1294,6 +1366,10 @@ export default function QuotationRequestsDeskClient({
     const websitePending = requests.filter(
       (request) => request.source === "WEBSITE_REQUEST" && pendingStatuses.has(request.status),
     ).length;
+    const manualRequests = requests.filter((request) => !isWebsiteRequest(request)).length;
+    const manualPending = requests.filter(
+      (request) => !isWebsiteRequest(request) && pendingStatuses.has(request.status),
+    ).length;
     return {
       total: requests.length,
       pending: requests.filter((request) => pendingStatuses.has(request.status)).length,
@@ -1301,6 +1377,31 @@ export default function QuotationRequestsDeskClient({
       converted: requests.filter((request) => request.status === "CONVERTED").length,
       websiteRequests: requests.filter((request) => request.source === "WEBSITE_REQUEST").length,
       websitePending,
+      manualRequests,
+      manualPending,
+    };
+  }, [requests]);
+
+  const conversionAnalytics = useMemo(() => {
+    const websiteRequests = requests.filter((request) => isWebsiteRequest(request));
+    const manualRequests = requests.filter((request) => !isWebsiteRequest(request));
+    const pendingRequests = requests.filter((request) => isPendingQuotationStatus(request.status));
+    const quotedRequests = requests.filter((request) => request.status === "QUOTED");
+    const convertedRequests = requests.filter((request) => request.status === "CONVERTED");
+    const safePercent = (numerator: number, denominator: number) =>
+      denominator > 0 ? `${Math.round((numerator / denominator) * 100)}%` : "0%";
+
+    return {
+      websiteQuoteRate: safePercent(
+        websiteRequests.filter((request) => ["QUOTED", "CONVERTED"].includes(request.status)).length,
+        websiteRequests.length,
+      ),
+      manualQuoteRate: safePercent(
+        manualRequests.filter((request) => ["QUOTED", "CONVERTED"].includes(request.status)).length,
+        manualRequests.length,
+      ),
+      conversionRate: safePercent(convertedRequests.length, quotedRequests.length + convertedRequests.length),
+      workloadSplit: `${pendingRequests.length} action / ${quotedRequests.length + convertedRequests.length} delivered`,
     };
   }, [requests]);
 
@@ -1487,6 +1588,54 @@ export default function QuotationRequestsDeskClient({
     } finally {
       setBulkSaving(false);
     }
+  }
+
+  function applyAdminView(view: AdminQuotationView) {
+    setAdminView(view);
+    if (view === "WEBSITE") {
+      setSourceFilter("WEBSITE_REQUEST");
+      setStatusFilter("ALL");
+      refreshRequests("ALL", query, "WEBSITE_REQUEST", staffFilter).catch(() => undefined);
+      return;
+    }
+    if (view === "WEBSITE_PENDING") {
+      setSourceFilter("WEBSITE_REQUEST");
+      setStatusFilter("PENDING");
+      refreshRequests("PENDING", query, "WEBSITE_REQUEST", staffFilter).catch(() => undefined);
+      return;
+    }
+    if (view === "PENDING") {
+      setSourceFilter("ALL");
+      setStatusFilter("PENDING");
+      refreshRequests("PENDING", query, "ALL", staffFilter).catch(() => undefined);
+      return;
+    }
+    if (view === "QUOTED") {
+      setSourceFilter("ALL");
+      setStatusFilter("QUOTED");
+      refreshRequests("QUOTED", query, "ALL", staffFilter).catch(() => undefined);
+      return;
+    }
+    if (view === "CONVERTED") {
+      setSourceFilter("ALL");
+      setStatusFilter("CONVERTED");
+      refreshRequests("CONVERTED", query, "ALL", staffFilter).catch(() => undefined);
+      return;
+    }
+    if (view === "MANUAL") {
+      setSourceFilter("ALL");
+      setStatusFilter("ALL");
+      refreshRequests("ALL", query, "ALL", staffFilter).catch(() => undefined);
+      return;
+    }
+    setSourceFilter("ALL");
+    setStatusFilter("ALL");
+    refreshRequests("ALL", query, "ALL", staffFilter).catch(() => undefined);
+  }
+
+  function applyBulkPreset(input: { status?: QuoteRequestStatus; assigneeId?: string }) {
+    if (input.status) setBulkStatus(input.status);
+    if (typeof input.assigneeId === "string") setBulkAssigneeId(input.assigneeId);
   }
 
   async function handleCreateQuotation() {
@@ -2319,6 +2468,15 @@ export default function QuotationRequestsDeskClient({
               type="button"
               onClick={() => {
                 setStatusFilter(status);
+                setAdminView(
+                  status === "PENDING"
+                    ? "PENDING"
+                    : status === "QUOTED"
+                      ? "QUOTED"
+                      : status === "CONVERTED"
+                        ? "CONVERTED"
+                        : "ALL",
+                );
                 refreshRequests(status, query).catch(() => undefined);
               }}
               className={`rounded-full border px-4 py-1 transition ${
@@ -2353,6 +2511,50 @@ export default function QuotationRequestsDeskClient({
         ) : null}
 
         {showMonitoringSummary ? (
+          <div className="mt-4 space-y-3">
+            <div className="flex flex-wrap gap-2">
+              {([
+                { view: "ALL", count: requestSummary.total },
+                { view: "WEBSITE", count: requestSummary.websiteRequests },
+                { view: "WEBSITE_PENDING", count: requestSummary.websitePending },
+                { view: "MANUAL", count: requestSummary.manualRequests },
+                { view: "PENDING", count: requestSummary.pending },
+                { view: "QUOTED", count: requestSummary.quoted },
+                { view: "CONVERTED", count: requestSummary.converted },
+              ] as Array<{ view: AdminQuotationView; count: number }>).map((item) => (
+                <button
+                  key={item.view}
+                  type="button"
+                  onClick={() => applyAdminView(item.view)}
+                  className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                    adminView === item.view
+                      ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-200"
+                      : "border-white/10 bg-slate-950/60 text-slate-200 hover:border-cyan-400 hover:text-white"
+                  }`}
+                >
+                  {getAdminViewLabel(item.view)} ({item.count})
+                </button>
+              ))}
+            </div>
+            <div className="grid gap-3 xl:grid-cols-4">
+              {[
+                { label: "Website quote rate", value: conversionAnalytics.websiteQuoteRate },
+                { label: "Desk quote rate", value: conversionAnalytics.manualQuoteRate },
+                { label: "Quote to conversion", value: conversionAnalytics.conversionRate },
+                { label: "Delivery split", value: conversionAnalytics.workloadSplit },
+              ].map((item) => (
+                <div key={item.label} className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    {item.label}
+                  </div>
+                  <div className="mt-2 text-lg font-semibold text-white">{item.value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {showMonitoringSummary ? (
           <div className="mt-3 flex flex-wrap gap-2">
             {[
               { label: `Website requests (${requestSummary.websiteRequests})`, source: "WEBSITE_REQUEST" as const, status: "ALL" as QuoteRequestStatusFilter },
@@ -2365,6 +2567,13 @@ export default function QuotationRequestsDeskClient({
                 onClick={() => {
                   setSourceFilter(item.source);
                   setStatusFilter(item.status);
+                  setAdminView(
+                    item.source === "WEBSITE_REQUEST" && item.status === "PENDING"
+                      ? "WEBSITE_PENDING"
+                      : item.source === "WEBSITE_REQUEST"
+                        ? "WEBSITE"
+                        : "ALL",
+                  );
                   refreshRequests(item.status, query, item.source, staffFilter).catch(() => undefined);
                 }}
                 className="rounded-full border border-white/10 bg-slate-950/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-200 transition hover:border-cyan-400 hover:text-white"
@@ -2385,6 +2594,7 @@ export default function QuotationRequestsDeskClient({
                 onChange={(event) => {
                   const nextSource = event.target.value as QuoteRequestSource | "ALL";
                   setSourceFilter(nextSource);
+                  setAdminView(nextSource === "WEBSITE_REQUEST" ? "WEBSITE" : "ALL");
                   refreshRequests(statusFilter, query, nextSource, staffFilter).catch(() => undefined);
                 }}
                 className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none"
@@ -2404,6 +2614,7 @@ export default function QuotationRequestsDeskClient({
                   onChange={(event) => {
                     const nextStaff = event.target.value;
                     setStaffFilter(nextStaff);
+                    setAdminView("ALL");
                     refreshRequests(statusFilter, query, sourceFilter, nextStaff).catch(() => undefined);
                   }}
                   className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none"
@@ -2425,8 +2636,7 @@ export default function QuotationRequestsDeskClient({
                   <button
                     type="button"
                     onClick={() => {
-                      setSourceFilter("WEBSITE_REQUEST");
-                      refreshRequests(statusFilter, query, "WEBSITE_REQUEST", staffFilter).catch(() => undefined);
+                      applyAdminView("WEBSITE");
                     }}
                     className="rounded-full border border-fuchsia-500/30 bg-fuchsia-500/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-fuchsia-100"
                   >
@@ -2435,9 +2645,7 @@ export default function QuotationRequestsDeskClient({
                   <button
                     type="button"
                     onClick={() => {
-                      setSourceFilter("WEBSITE_REQUEST");
-                      setStatusFilter("PENDING");
-                      refreshRequests("PENDING", query, "WEBSITE_REQUEST", staffFilter).catch(() => undefined);
+                      applyAdminView("WEBSITE_PENDING");
                     }}
                     className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-amber-100"
                   >
@@ -2459,6 +2667,32 @@ export default function QuotationRequestsDeskClient({
                 <div className="text-xs text-slate-400">
                   {selectedRequestIds.length} selected
                 </div>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {[
+                  { label: "Preset pending", status: "PENDING" as QuoteRequestStatus },
+                  { label: "Preset follow-up", status: "FOLLOW_UP" as QuoteRequestStatus },
+                  { label: "Preset quoted", status: "QUOTED" as QuoteRequestStatus },
+                ].map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => applyBulkPreset({ status: preset.status })}
+                    className="rounded-full border border-white/10 bg-slate-900/60 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-200 transition hover:border-cyan-400 hover:text-white"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+                {assigneeOptions.slice(0, 4).map((owner) => (
+                  <button
+                    key={owner.id}
+                    type="button"
+                    onClick={() => applyBulkPreset({ assigneeId: owner.id })}
+                    className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
+                  >
+                    Assign {owner.name || owner.email || owner.id}
+                  </button>
+                ))}
               </div>
               <div className="mt-3 grid gap-3 lg:grid-cols-[220px_260px_auto_auto]">
                 <select
@@ -3432,6 +3666,7 @@ export default function QuotationRequestsDeskClient({
               const canOpenReceiptDraft = storedProposal.items.length > 0;
               const requestEvents = eventsByRequestId[request.id] ?? [];
               const conversionEvents = requestEvents.filter(isConversionEvent);
+              const groupedRequestEvents = groupTimelineEvents(requestEvents);
               const isSelected = selectedRequestIds.includes(request.id);
               return (
                 <div
@@ -4309,25 +4544,40 @@ export default function QuotationRequestsDeskClient({
                               {eventsLoadingId === request.id && !requestEvents.length ? (
                                 <div className="text-slate-500">Loading timeline...</div>
                               ) : requestEvents.length ? (
-                                requestEvents.slice(0, 8).map((event) => (
-                                  <div key={event.id} className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2">
-                                    <div className="flex items-start justify-between gap-3">
-                                      <div>
-                                        <div className="font-semibold text-slate-100">{event.eventLabel}</div>
-                                        <div className="mt-1 text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                                          {formatEventTypeLabel(event.eventType)}
-                                        </div>
+                                ([
+                                  { key: "workflow", label: "Workflow activity" },
+                                  { key: "conversion", label: "Conversion activity" },
+                                  { key: "customer", label: "Customer activity" },
+                                ] as const).map((group) =>
+                                  groupedRequestEvents[group.key].length ? (
+                                    <div key={group.key} className="rounded-xl border border-white/10 bg-slate-900/50 px-3 py-3">
+                                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                                        {group.label}
                                       </div>
-                                      <div className="text-right text-[11px] text-slate-400">
-                                        <div>{formatDateTime(event.createdAt)}</div>
-                                        <div>{event.actorName || "System"}</div>
+                                      <div className="mt-2 space-y-2">
+                                        {groupedRequestEvents[group.key].slice(0, 4).map((event) => (
+                                          <div key={event.id} className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2">
+                                            <div className="flex items-start justify-between gap-3">
+                                              <div>
+                                                <div className="font-semibold text-slate-100">{event.eventLabel}</div>
+                                                <div className="mt-1 text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                                                  {formatEventTypeLabel(event.eventType)}
+                                                </div>
+                                              </div>
+                                              <div className="text-right text-[11px] text-slate-400">
+                                                <div>{formatDateTime(event.createdAt)}</div>
+                                                <div>{event.actorName || "System"}</div>
+                                              </div>
+                                            </div>
+                                            {event.eventDetail ? (
+                                              <div className="mt-2 text-[11px] text-slate-300">{event.eventDetail}</div>
+                                            ) : null}
+                                          </div>
+                                        ))}
                                       </div>
                                     </div>
-                                    {event.eventDetail ? (
-                                      <div className="mt-2 text-[11px] text-slate-300">{event.eventDetail}</div>
-                                    ) : null}
-                                  </div>
-                                ))
+                                  ) : null,
+                                )
                               ) : (
                                 <div className="text-slate-500">No quotation timeline recorded yet.</div>
                               )}
