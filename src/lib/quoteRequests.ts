@@ -459,6 +459,14 @@ export const quoteRequestResponseSchema = z.object({
 
 export type QuoteRequestResponseInput = z.infer<typeof quoteRequestResponseSchema>;
 
+export const bulkQuoteRequestUpdateSchema = z.object({
+  ids: z.array(z.string().trim().min(1)).min(1).max(200),
+  status: z.enum(QUOTE_REQUEST_STATUSES).optional(),
+  assignedAttendantId: z.string().trim().nullable().optional(),
+});
+
+export type BulkQuoteRequestUpdateInput = z.infer<typeof bulkQuoteRequestUpdateSchema>;
+
 export const quotationTemplateSchema = z.object({
   templateName: z.string().trim().min(2).max(200),
   category: z.enum(QUOTE_TEMPLATE_CATEGORIES).optional().or(z.literal("")),
@@ -1850,6 +1858,90 @@ export async function listQuotationEvents(quoteRequestId: string) {
     ORDER BY "createdAt" DESC
   `);
   return rows.map(serializeQuotationEvent);
+}
+
+export async function bulkUpdateQuoteRequests(
+  input: BulkQuoteRequestUpdateInput,
+  actor: { userId: string; actorUserId?: string | null; name: string | null; email: string | null },
+) {
+  await ensureQuoteRequestsSchema();
+  const ids = [...new Set(input.ids.map((value) => value.trim()).filter(Boolean))];
+  if (!ids.length) return { updatedCount: 0, requests: [] as SerializedQuoteRequest[] };
+
+  const assignee =
+    input.assignedAttendantId === undefined
+      ? undefined
+      : input.assignedAttendantId
+        ? await getQuoteStaffUserById(input.assignedAttendantId)
+        : null;
+
+  if (input.assignedAttendantId && !assignee) {
+    throw new Error("Selected quotation owner was not found.");
+  }
+
+  const assignmentsChanged = input.assignedAttendantId !== undefined;
+  const statusChanged = Boolean(input.status);
+
+  if (!assignmentsChanged && !statusChanged) {
+    const requests = await prisma.$queryRaw<QuoteRequestRow[]>(Prisma.sql`
+      SELECT ${QUOTE_REQUEST_SELECT_SQL}
+      FROM "QuoteRequest"
+      WHERE "id" IN (${Prisma.join(ids)})
+      ORDER BY "updatedAt" DESC, "createdAt" DESC
+    `);
+    return { updatedCount: requests.length, requests: requests.map(serializeQuoteRequest) };
+  }
+
+  await prisma.$executeRaw(Prisma.sql`
+    UPDATE "QuoteRequest"
+    SET
+      "status" = ${input.status ?? Prisma.raw(`"status"`)},
+      "assignedAttendantId" = ${
+        assignmentsChanged ? (assignee?.id ?? null) : Prisma.raw(`"assignedAttendantId"`)
+      },
+      "assignedAttendantEmail" = ${
+        assignmentsChanged ? (assignee?.email ?? null) : Prisma.raw(`"assignedAttendantEmail"`)
+      },
+      "assignedAttendantName" = ${
+        assignmentsChanged ? (assignee?.name ?? null) : Prisma.raw(`"assignedAttendantName"`)
+      },
+      "updatedAt" = CURRENT_TIMESTAMP
+    WHERE "id" IN (${Prisma.join(ids)})
+  `);
+
+  const requests = await prisma.$queryRaw<QuoteRequestRow[]>(Prisma.sql`
+    SELECT ${QUOTE_REQUEST_SELECT_SQL}
+    FROM "QuoteRequest"
+    WHERE "id" IN (${Prisma.join(ids)})
+    ORDER BY "updatedAt" DESC, "createdAt" DESC
+  `);
+
+  const serialized = requests.map(serializeQuoteRequest);
+  await Promise.all(
+    serialized.map((request) =>
+      appendQuotationEvent({
+        quoteRequestId: request.id,
+        eventType: statusChanged && assignmentsChanged ? "BULK_STATUS_AND_ASSIGNMENT_UPDATED" : statusChanged ? "BULK_STATUS_UPDATED" : "BULK_ASSIGNMENT_UPDATED",
+        eventLabel: statusChanged && assignmentsChanged ? "Bulk status and owner updated" : statusChanged ? "Bulk status updated" : "Bulk owner updated",
+        eventDetail: [
+          statusChanged ? `Status: ${input.status}` : null,
+          assignmentsChanged
+            ? `Owner: ${assignee?.name || assignee?.email || "Unassigned"}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        actorUserId: actor.actorUserId ?? actor.userId,
+        actorName: actor.name ?? actor.email ?? "Quotation admin",
+        metadata: {
+          status: input.status ?? null,
+          assignedAttendantId: assignee?.id ?? null,
+        },
+      }),
+    ),
+  );
+
+  return { updatedCount: serialized.length, requests: serialized };
 }
 
 export async function createManualQuotation(

@@ -11,6 +11,8 @@ export default async function AdminQuotationCenterPage() {
       <div className="mx-auto max-w-[1600px]">
         <QuotationRequestsDeskClient
           apiBasePath="/api/admin/quotation-center"
+          createApiPath="/api/admin/quotation-center/create"
+          templateApiPath="/api/admin/quotation-center/templates"
           defaultStatusFilter="ALL"
           filterStorageKey="admin:quotation-center:status:v2"
           deskTitle="Admin Quotation Monitoring Center"

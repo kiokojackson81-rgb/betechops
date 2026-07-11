@@ -29,6 +29,7 @@ import type {
   QuoteRequestStatus,
   QuoteUrgency,
   SerializedQuoteRequest,
+  SerializedQuotationEvent,
   SerializedQuotationTemplate,
 } from "@/lib/quoteRequests";
 import {
@@ -216,6 +217,19 @@ function extractFirstProjectUrl(value: string | null | undefined) {
   if (!text) return "https://www.tiktok.com/@betechsolarprojects";
   const match = text.match(/https?:\/\/[^\s)]+/i);
   return match?.[0] || "https://www.tiktok.com/@betechsolarprojects";
+}
+
+function formatEventTypeLabel(value: string) {
+  return value.replace(/_/g, " ");
+}
+
+function isConversionEvent(event: SerializedQuotationEvent) {
+  return [
+    "QUOTATION_DRAFT_OPENED",
+    "RECEIPT_DRAFT_OPENED",
+    "CONVERTED",
+    "PDF_DOWNLOADED",
+  ].includes(event.eventType);
 }
 
 type QuoteItemDraft = {
@@ -1129,6 +1143,12 @@ export default function QuotationRequestsDeskClient({
   const [responseCatalogQuery, setResponseCatalogQuery] = useState("");
   const [responseCatalogLoading, setResponseCatalogLoading] = useState(false);
   const [responseCatalogResults, setResponseCatalogResults] = useState<CatalogQuoteProduct[]>([]);
+  const [eventsByRequestId, setEventsByRequestId] = useState<Record<string, SerializedQuotationEvent[]>>({});
+  const [eventsLoadingId, setEventsLoadingId] = useState<string | null>(null);
+  const [selectedRequestIds, setSelectedRequestIds] = useState<string[]>([]);
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [bulkStatus, setBulkStatus] = useState<QuoteRequestStatus | "">("");
+  const [bulkAssigneeId, setBulkAssigneeId] = useState<string>("");
   const templateUploadInputRef = useRef<HTMLInputElement | null>(null);
   const createItemRefs = useRef<Array<HTMLDivElement | null>>([]);
   const responseItemRefs = useRef<Array<HTMLDivElement | null>>([]);
@@ -1285,6 +1305,10 @@ export default function QuotationRequestsDeskClient({
   }, [requests]);
 
   useEffect(() => {
+    setSelectedRequestIds((current) => current.filter((id) => requests.some((request) => request.id === id)));
+  }, [requests]);
+
+  useEffect(() => {
     setCreateItemAccordion((current) => {
       const nextLength = createDraft.quoteItems.length;
       if (nextLength <= 0) return [];
@@ -1406,6 +1430,62 @@ export default function QuotationRequestsDeskClient({
       setMessage(error instanceof Error ? error.message : "Failed to load quotation templates.");
     } finally {
       setTemplatesLoading(false);
+    }
+  }
+
+  async function loadRequestEvents(requestId: string) {
+    if (!enableAdminFilters || eventsByRequestId[requestId]) return;
+    setEventsLoadingId(requestId);
+    try {
+      const response = await fetch(buildApiUrl(apiBasePath, apiQueryParams, `${requestId}/events`), {
+        cache: "no-store",
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Failed to load quotation activity.");
+      }
+      setEventsByRequestId((current) => ({ ...current, [requestId]: Array.isArray(data.events) ? data.events : [] }));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Failed to load quotation activity.");
+    } finally {
+      setEventsLoadingId(null);
+    }
+  }
+
+  async function handleBulkApply() {
+    if (!selectedRequestIds.length) {
+      setMessage("Select at least one quotation first.");
+      return;
+    }
+    if (!bulkStatus && !bulkAssigneeId) {
+      setMessage("Choose a bulk status or staff owner first.");
+      return;
+    }
+    setBulkSaving(true);
+    setMessage(null);
+    try {
+      const response = await fetch(buildApiUrl(apiBasePath, apiQueryParams, "bulk"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ids: selectedRequestIds,
+          status: bulkStatus || undefined,
+          assignedAttendantId: bulkAssigneeId || undefined,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Failed to apply bulk quotation action.");
+      }
+      setSelectedRequestIds([]);
+      setBulkStatus("");
+      setBulkAssigneeId("");
+      await refreshRequests();
+      setMessage(`Updated ${data.updatedCount || selectedRequestIds.length} quotation record(s).`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Failed to apply bulk quotation action.");
+    } finally {
+      setBulkSaving(false);
     }
   }
 
@@ -2272,8 +2352,32 @@ export default function QuotationRequestsDeskClient({
           </div>
         ) : null}
 
+        {showMonitoringSummary ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {[
+              { label: `Website requests (${requestSummary.websiteRequests})`, source: "WEBSITE_REQUEST" as const, status: "ALL" as QuoteRequestStatusFilter },
+              { label: `Pending website (${requestSummary.websitePending})`, source: "WEBSITE_REQUEST" as const, status: "PENDING" as QuoteRequestStatusFilter },
+              { label: "All quotation activity", source: "ALL" as const, status: "ALL" as QuoteRequestStatusFilter },
+            ].map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => {
+                  setSourceFilter(item.source);
+                  setStatusFilter(item.status);
+                  refreshRequests(item.status, query, item.source, staffFilter).catch(() => undefined);
+                }}
+                className="rounded-full border border-white/10 bg-slate-950/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-200 transition hover:border-cyan-400 hover:text-white"
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         {enableAdminFilters ? (
-          <div className="mt-4 grid gap-3 lg:grid-cols-[220px_260px]">
+          <div className="mt-4 space-y-3">
+            <div className="grid gap-3 lg:grid-cols-[220px_260px_minmax(0,1fr)]">
             <label className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
               Source
               <select
@@ -2313,6 +2417,92 @@ export default function QuotationRequestsDeskClient({
                 </select>
               </label>
             ) : null}
+              <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  Website request desk
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSourceFilter("WEBSITE_REQUEST");
+                      refreshRequests(statusFilter, query, "WEBSITE_REQUEST", staffFilter).catch(() => undefined);
+                    }}
+                    className="rounded-full border border-fuchsia-500/30 bg-fuchsia-500/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-fuchsia-100"
+                  >
+                    Website only
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSourceFilter("WEBSITE_REQUEST");
+                      setStatusFilter("PENDING");
+                      refreshRequests("PENDING", query, "WEBSITE_REQUEST", staffFilter).catch(() => undefined);
+                    }}
+                    className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-amber-100"
+                  >
+                    Pending website
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-cyan-500/20 bg-slate-950/50 px-4 py-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-300">
+                    Bulk admin actions
+                  </div>
+                  <div className="mt-1 text-sm text-slate-300">
+                    Apply reassignment or status updates to selected quotations.
+                  </div>
+                </div>
+                <div className="text-xs text-slate-400">
+                  {selectedRequestIds.length} selected
+                </div>
+              </div>
+              <div className="mt-3 grid gap-3 lg:grid-cols-[220px_260px_auto_auto]">
+                <select
+                  value={bulkStatus}
+                  onChange={(event) => setBulkStatus(event.target.value as QuoteRequestStatus | "")}
+                  className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none"
+                >
+                  <option value="">Leave status unchanged</option>
+                  {QUOTE_REQUEST_STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {formatStatus(status)}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={bulkAssigneeId}
+                  onChange={(event) => setBulkAssigneeId(event.target.value)}
+                  className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none"
+                >
+                  <option value="">Keep current owner</option>
+                  {assigneeOptions.map((owner) => (
+                    <option key={owner.id} value={owner.id}>
+                      {owner.name || owner.email || owner.id}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={!selectedRequestIds.length || bulkSaving}
+                  onClick={() => void handleBulkApply()}
+                  className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-cyan-200 transition hover:border-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {bulkSaving ? "Applying..." : "Apply Bulk Update"}
+                </button>
+                <button
+                  type="button"
+                  disabled={!selectedRequestIds.length}
+                  onClick={() => setSelectedRequestIds([])}
+                  className="rounded-full border border-white/10 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-300 transition hover:border-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Clear Selection
+                </button>
+              </div>
+            </div>
           </div>
         ) : null}
 
@@ -3240,6 +3430,9 @@ export default function QuotationRequestsDeskClient({
               const expanded = request.id === expandedId;
               const storedProposal = parseStoredQuoteProposal(request.quotationData);
               const canOpenReceiptDraft = storedProposal.items.length > 0;
+              const requestEvents = eventsByRequestId[request.id] ?? [];
+              const conversionEvents = requestEvents.filter(isConversionEvent);
+              const isSelected = selectedRequestIds.includes(request.id);
               return (
                 <div
                   key={request.id}
@@ -3248,6 +3441,23 @@ export default function QuotationRequestsDeskClient({
                   {compactMode ? (
                     <div className="grid gap-3 lg:grid-cols-[140px_1.3fr_1fr_160px_140px_150px] lg:items-center">
                       <div>
+                        {enableAdminFilters ? (
+                          <label className="mb-2 flex items-center gap-2 text-xs text-slate-400">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(event) =>
+                                setSelectedRequestIds((current) =>
+                                  event.target.checked
+                                    ? [...new Set([...current, request.id])]
+                                    : current.filter((id) => id !== request.id),
+                                )
+                              }
+                              className="h-4 w-4 rounded border-white/20 bg-slate-950/70"
+                            />
+                            Select
+                          </label>
+                        ) : null}
                         <span className="rounded-full border border-violet-400/25 bg-violet-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-violet-100">
                           QUOTATION
                         </span>
@@ -3297,7 +3507,13 @@ export default function QuotationRequestsDeskClient({
                         <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
                           <button
                             type="button"
-                            onClick={() => setExpandedId(expanded ? null : request.id)}
+                            onClick={() => {
+                              const nextExpanded = expanded ? null : request.id;
+                              setExpandedId(nextExpanded);
+                              if (nextExpanded) {
+                                void loadRequestEvents(request.id);
+                              }
+                            }}
                             className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/25 hover:bg-white/[0.06]"
                           >
                             {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -3321,9 +3537,34 @@ export default function QuotationRequestsDeskClient({
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <button
                         type="button"
-                        onClick={() => setExpandedId(expanded ? null : request.id)}
+                        onClick={() => {
+                          const nextExpanded = expanded ? null : request.id;
+                          setExpandedId(nextExpanded);
+                          if (nextExpanded) {
+                            void loadRequestEvents(request.id);
+                          }
+                        }}
                         className="flex min-w-0 flex-1 items-start gap-3 text-left"
                       >
+                        {enableAdminFilters ? (
+                          <span
+                            onClick={(event) => event.stopPropagation()}
+                            className="mt-1"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(event) =>
+                                setSelectedRequestIds((current) =>
+                                  event.target.checked
+                                    ? [...new Set([...current, request.id])]
+                                    : current.filter((id) => id !== request.id),
+                                )
+                              }
+                              className="h-4 w-4 rounded border-white/20 bg-slate-950/70"
+                            />
+                          </span>
+                        ) : null}
                         <span className="mt-1 rounded-full border border-white/10 bg-white/5 p-2 text-slate-300">
                           {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                         </span>
@@ -4032,12 +4273,64 @@ export default function QuotationRequestsDeskClient({
                           </div>
                           <div className="mt-3 rounded-2xl border border-white/10 bg-slate-950/50 p-3 text-xs text-slate-300">
                             <div className="font-semibold uppercase tracking-[0.16em] text-slate-400">
-                              Conversion
+                              Conversion history
                             </div>
                             <div className="mt-2">
                               {canOpenReceiptDraft
                                 ? "Open a quotation print view or convert this saved quotation into the receipts desk."
                                 : "Quotation items are still empty. Build the quote first, then open the receipts desk."}
+                            </div>
+                            <div className="mt-3 space-y-2">
+                              {eventsLoadingId === request.id && !requestEvents.length ? (
+                                <div className="text-slate-500">Loading conversion activity...</div>
+                              ) : conversionEvents.length ? (
+                                conversionEvents.slice(0, 6).map((event) => (
+                                  <div key={event.id} className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2">
+                                    <div className="font-semibold text-slate-100">{event.eventLabel}</div>
+                                    <div className="mt-1 text-[11px] text-slate-400">
+                                      {formatDateTime(event.createdAt)}
+                                      {event.actorName ? ` · ${event.actorName}` : ""}
+                                    </div>
+                                    {event.eventDetail ? (
+                                      <div className="mt-1 text-[11px] text-slate-300">{event.eventDetail}</div>
+                                    ) : null}
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="text-slate-500">No conversion activity recorded yet.</div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="mt-3 rounded-2xl border border-white/10 bg-slate-950/50 p-3 text-xs text-slate-300">
+                            <div className="font-semibold uppercase tracking-[0.16em] text-slate-400">
+                              Latest activity timeline
+                            </div>
+                            <div className="mt-3 space-y-2">
+                              {eventsLoadingId === request.id && !requestEvents.length ? (
+                                <div className="text-slate-500">Loading timeline...</div>
+                              ) : requestEvents.length ? (
+                                requestEvents.slice(0, 8).map((event) => (
+                                  <div key={event.id} className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <div className="font-semibold text-slate-100">{event.eventLabel}</div>
+                                        <div className="mt-1 text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                                          {formatEventTypeLabel(event.eventType)}
+                                        </div>
+                                      </div>
+                                      <div className="text-right text-[11px] text-slate-400">
+                                        <div>{formatDateTime(event.createdAt)}</div>
+                                        <div>{event.actorName || "System"}</div>
+                                      </div>
+                                    </div>
+                                    {event.eventDetail ? (
+                                      <div className="mt-2 text-[11px] text-slate-300">{event.eventDetail}</div>
+                                    ) : null}
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="text-slate-500">No quotation timeline recorded yet.</div>
+                              )}
                             </div>
                           </div>
                           {request.respondedAt ? (
