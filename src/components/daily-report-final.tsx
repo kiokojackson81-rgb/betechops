@@ -23,7 +23,7 @@ import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 import {
   isCarriedForwardPendingItem,
   isOpenAgentOrderStatus,
-  isOpenQuotationStatus,
+  isPendingQuotationStatus,
   summarizeVoiceQueueItems,
   isPendingPodStatus,
   isPendingPosReceiptStatus,
@@ -1208,7 +1208,7 @@ export default function DailyReportFinal() {
         );
         setPendingQuoteRequests(
           quoteRequests.filter((request) =>
-            isOpenQuotationStatus(request.status) &&
+            isPendingQuotationStatus(request.status) &&
             shouldShowPendingWorkItem({
               status: request.status,
               createdAt: request.createdAt,

@@ -9,7 +9,7 @@ import WebsiteOrdersDeskClient from "@/components/WebsiteOrdersDeskClient";
 import QuotationRequestsDeskClient from "@/components/QuotationRequestsDeskClient";
 import {
   isCarriedForwardPendingItem,
-  isOpenQuotationStatus,
+  isPendingQuotationStatus,
   isWebsiteQuotationRequestSource,
   isPendingPodStatus,
   isPendingWebOrderStatus,
@@ -349,7 +349,7 @@ export default function MarketingReceiptsPage() {
       const openQuoteRequests = Array.isArray(quotePayload?.requests)
         ? quotePayload.requests.filter(
             (request) =>
-              isWebsiteQuotationRequestSource(request.source) && isOpenQuotationStatus(request.status),
+              isWebsiteQuotationRequestSource(request.source) && isPendingQuotationStatus(request.status),
           )
         : [];
 

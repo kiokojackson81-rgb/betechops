@@ -34,10 +34,11 @@ import AdminPrivacyToggle from "@/app/admin/_components/AdminPrivacyToggle";
 import { getAdminAgentSales } from "@/lib/agents/sales";
 import {
   ensureQuoteRequestsSchema,
+  normalizeQuoteRequestStatus,
 } from "@/lib/quoteRequests";
 import {
   isCarriedForwardPendingItem,
-  isOpenQuotationStatus,
+  isPendingQuotationStatus,
   isOpenWorkItemStatus,
   isPendingPodStatus,
   isPendingWebOrderStatus,
@@ -716,13 +717,17 @@ async function safeLoad<T>(loader: () => Promise<T>, fallback: T): Promise<T> {
 
 async function listAdminQuoteRequests() {
   await ensureQuoteRequestsSchema();
-  return prisma.$queryRaw<AdminQuoteRow[]>(Prisma.sql`
+  const rows = await prisma.$queryRaw<AdminQuoteRow[]>(Prisma.sql`
     SELECT "id", "quoteRef", "customerName", "customerPhone", "customerLocation", "status", "quoteTitle", "createdAt", "updatedAt"
     FROM "QuoteRequest"
     WHERE COALESCE("source", 'WEBSITE_REQUEST') = 'WEBSITE_REQUEST'
     ORDER BY "updatedAt" DESC
     LIMIT 120
   `);
+  return rows.map((row) => ({
+    ...row,
+    status: normalizeQuoteRequestStatus(row.status),
+  }));
 }
 
 async function listAdminPodFollowUp() {
@@ -1309,7 +1314,7 @@ async function getDashboardData(range: DashboardRange) {
   const pendingPosOrderValue = pendingPosOrders.reduce((sum, order) => sum + toNumber(order.totalAmount), 0);
 
   const openQuoteRows = quoteRows.filter((row) =>
-    isOpenQuotationStatus(row.status) &&
+    isPendingQuotationStatus(row.status) &&
     shouldShowPendingWorkItem({
       status: row.status,
       createdAt: row.createdAt,
@@ -1327,7 +1332,7 @@ async function getDashboardData(range: DashboardRange) {
       periodStart: periodBounds.start,
     }) && !wasCreatedOrUpdatedInPeriod(row.createdAt, row.updatedAt, periodBounds),
   );
-  const newQuoteRows = periodQuoteRows.filter((row) => String(row.status).toLowerCase() === "new");
+  const newQuoteRows = periodQuoteRows.filter((row) => row.status === "PENDING");
   const websitePeriodQuoteRows = websiteOpenQuoteRows.filter((row) =>
     wasCreatedOrUpdatedInPeriod(row.createdAt, row.updatedAt, periodBounds),
   );
@@ -1338,7 +1343,7 @@ async function getDashboardData(range: DashboardRange) {
       periodStart: periodBounds.start,
     }) && !wasCreatedOrUpdatedInPeriod(row.createdAt, row.updatedAt, periodBounds),
   );
-  const websiteNewQuoteRows = websitePeriodQuoteRows.filter((row) => String(row.status).toLowerCase() === "new");
+  const websiteNewQuoteRows = websitePeriodQuoteRows.filter((row) => row.status === "PENDING");
 
   const pendingPodRows = podFollowUpRows.filter((row) =>
     isPendingPodStatus(row.status) &&
@@ -1448,7 +1453,7 @@ async function getDashboardData(range: DashboardRange) {
     if (!updatedAt) continue;
     const key = dayKey(updatedAt);
     const point = trendMap.get(key);
-    if (point && isOpenQuotationStatus(quote.status)) {
+    if (point && isPendingQuotationStatus(quote.status)) {
       point.quotations += 1;
     }
   }

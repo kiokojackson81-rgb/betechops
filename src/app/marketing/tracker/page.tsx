@@ -11,7 +11,7 @@ import { WEBSITE_ORDER_ACTIVE_STATUSES } from "@/lib/websiteOrders";
 import { getAdminAgentSales } from "@/lib/agents/sales";
 import {
   isCarriedForwardPendingItem,
-  isOpenQuotationStatus,
+  isPendingQuotationStatus,
   isOpenWorkItemStatus,
   isWebsiteQuotationRequestSource,
   isPendingPodStatus,
@@ -23,7 +23,9 @@ import {
 import {
   ensureQuoteRequestAssignments,
   ensureQuoteRequestsSchema,
+  getQuoteRequestStatusAliases,
   listAssignedQuoteRequests,
+  normalizeQuoteRequestStatus,
   QUOTE_REQUEST_SOURCES,
   type SerializedQuoteRequest,
 } from "@/lib/quoteRequests";
@@ -271,6 +273,14 @@ async function listVisibleQuoteRequests(input: {
   await ensureQuoteRequestAssignments();
 
   if (input.role === "ADMIN") {
+    const uniqueActionableStatuses = Array.from(
+      new Set([
+        ...getQuoteRequestStatusAliases("PENDING"),
+        ...getQuoteRequestStatusAliases("FOLLOW_UP"),
+        ...getQuoteRequestStatusAliases("REVISED"),
+        ...getQuoteRequestStatusAliases("APPROVED"),
+      ]),
+    );
     const rows = await prisma.$queryRaw<Array<{
       id: string;
       customerName: string;
@@ -310,17 +320,15 @@ async function listVisibleQuoteRequests(input: {
     }>>(Prisma.sql`
       SELECT *
       FROM "QuoteRequest"
-      WHERE LOWER(COALESCE("status", '')) IN ('pending', 'new', 'contacted', 'follow_up', 'quoted', 'amount_pending')
+      WHERE UPPER(COALESCE("status", '')) IN (${Prisma.join(uniqueActionableStatuses)})
         AND COALESCE("source", 'WEBSITE_REQUEST') = 'WEBSITE_REQUEST'
       ORDER BY
         CASE
           WHEN "status" = 'PENDING' THEN 1
-          WHEN "status" = 'NEW' THEN 2
-          WHEN "status" = 'CONTACTED' THEN 3
-          WHEN "status" = 'FOLLOW_UP' THEN 4
-          WHEN "status" = 'QUOTED' THEN 5
-          WHEN "status" = 'AMOUNT_PENDING' THEN 6
-          ELSE 7
+          WHEN "status" = 'FOLLOW_UP' THEN 2
+          WHEN "status" = 'REVISED' THEN 3
+          WHEN "status" = 'APPROVED' THEN 4
+          ELSE 5
         END ASC,
         "createdAt" DESC
     `);
@@ -333,7 +341,7 @@ async function listVisibleQuoteRequests(input: {
       county: row.county,
       town: row.town,
       projectType: row.projectType as SerializedQuoteRequest["projectType"],
-      status: row.status,
+      status: normalizeQuoteRequestStatus(row.status),
       source: QUOTE_REQUEST_SOURCES.includes(String(row.source || "").trim().toUpperCase() as (typeof QUOTE_REQUEST_SOURCES)[number])
         ? (String(row.source).trim().toUpperCase() as SerializedQuoteRequest["source"])
         : "WEBSITE_REQUEST",
@@ -539,7 +547,7 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
 
   const quoteRequests = rawQuoteRequests.filter((request) =>
     isWebsiteQuotationRequestSource(request.source) &&
-    isOpenQuotationStatus(request.status) &&
+    isPendingQuotationStatus(request.status) &&
     shouldShowPendingWorkItem({
       status: request.status,
       createdAt: request.createdAt,

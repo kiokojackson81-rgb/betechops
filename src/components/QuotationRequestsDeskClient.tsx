@@ -33,6 +33,9 @@ import type {
   SerializedQuotationTemplate,
 } from "@/lib/quoteRequests";
 import {
+  QUOTE_REQUEST_ACTIONABLE_STATUSES,
+} from "@/lib/quoteRequests";
+import {
   formatQuoteCurrency,
   QUOTE_FEE_MODES,
   getQuotePaymentTermsLabel,
@@ -105,17 +108,13 @@ type Props = {
 };
 
 const QUOTE_REQUEST_STATUSES: QuoteRequestStatus[] = [
-  "DRAFT",
   "PENDING",
-  "CONTACTED",
-  "VIEWED",
   "QUOTED",
   "FOLLOW_UP",
-  "ACCEPTED",
-  "REJECTED",
+  "REVISED",
+  "APPROVED",
   "CONVERTED",
   "CLOSED",
-  "EXPIRED",
 ];
 
 const STATUS_OPTIONS: QuoteRequestStatusFilter[] = ["ALL", ...QUOTE_REQUEST_STATUSES];
@@ -245,7 +244,7 @@ function isWebsiteRequest(request: Pick<SerializedQuoteRequest, "source">) {
 }
 
 function isPendingQuotationStatus(status: QuoteRequestStatus) {
-  return ["PENDING", "FOLLOW_UP", "CONTACTED", "VIEWED"].includes(status);
+  return (QUOTE_REQUEST_ACTIONABLE_STATUSES as readonly string[]).includes(status);
 }
 
 function getAdminViewLabel(view: AdminQuotationView) {
@@ -1362,7 +1361,7 @@ export default function QuotationRequestsDeskClient({
   ]);
 
   const requestSummary = useMemo(() => {
-    const pendingStatuses = new Set<QuoteRequestStatus>(["PENDING", "FOLLOW_UP", "CONTACTED", "VIEWED"]);
+    const pendingStatuses = new Set<QuoteRequestStatus>(QUOTE_REQUEST_ACTIONABLE_STATUSES);
     const websitePending = requests.filter(
       (request) => request.source === "WEBSITE_REQUEST" && pendingStatuses.has(request.status),
     ).length;
@@ -1393,15 +1392,20 @@ export default function QuotationRequestsDeskClient({
 
     return {
       websiteQuoteRate: safePercent(
-        websiteRequests.filter((request) => ["QUOTED", "CONVERTED"].includes(request.status)).length,
+        websiteRequests.filter((request) => ["QUOTED", "APPROVED", "CONVERTED"].includes(request.status)).length,
         websiteRequests.length,
       ),
       manualQuoteRate: safePercent(
-        manualRequests.filter((request) => ["QUOTED", "CONVERTED"].includes(request.status)).length,
+        manualRequests.filter((request) => ["QUOTED", "APPROVED", "CONVERTED"].includes(request.status)).length,
         manualRequests.length,
       ),
-      conversionRate: safePercent(convertedRequests.length, quotedRequests.length + convertedRequests.length),
-      workloadSplit: `${pendingRequests.length} action / ${quotedRequests.length + convertedRequests.length} delivered`,
+      conversionRate: safePercent(
+        convertedRequests.length,
+        requests.filter((request) => ["APPROVED", "CONVERTED"].includes(request.status)).length,
+      ),
+      workloadSplit: `${pendingRequests.length} action / ${
+        requests.filter((request) => ["QUOTED", "APPROVED", "CONVERTED"].includes(request.status)).length
+      } delivered`,
     };
   }, [requests]);
 
@@ -1600,14 +1604,14 @@ export default function QuotationRequestsDeskClient({
     }
     if (view === "WEBSITE_PENDING") {
       setSourceFilter("WEBSITE_REQUEST");
-      setStatusFilter("PENDING");
-      refreshRequests("PENDING", query, "WEBSITE_REQUEST", staffFilter).catch(() => undefined);
+      setStatusFilter("ALL");
+      refreshRequests("ALL", query, "WEBSITE_REQUEST", staffFilter).catch(() => undefined);
       return;
     }
     if (view === "PENDING") {
       setSourceFilter("ALL");
-      setStatusFilter("PENDING");
-      refreshRequests("PENDING", query, "ALL", staffFilter).catch(() => undefined);
+      setStatusFilter("ALL");
+      refreshRequests("ALL", query, "ALL", staffFilter).catch(() => undefined);
       return;
     }
     if (view === "QUOTED") {
@@ -2256,9 +2260,7 @@ export default function QuotationRequestsDeskClient({
     const storedProposal = parseStoredQuoteProposal(expandedRequest.quotationData);
     const feeState = splitQuoteItemsAndFees(storedProposal.items);
     const initialQuoteStatus: QuoteRequestStatus =
-      expandedRequest.status === "PENDING" ||
-      expandedRequest.status === "CONTACTED" ||
-      expandedRequest.status === "DRAFT"
+      expandedRequest.status === "PENDING"
         ? "QUOTED"
         : expandedRequest.status;
     const proposalDefaults = applyProposalDefaults(

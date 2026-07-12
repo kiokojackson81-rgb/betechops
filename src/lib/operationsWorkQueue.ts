@@ -1,3 +1,8 @@
+import {
+  normalizeQuoteRequestStatus,
+  QUOTE_REQUEST_ACTIONABLE_STATUSES,
+} from "@/lib/quoteRequests";
+
 type PeriodBounds = {
   start: Date;
   end: Date;
@@ -21,22 +26,17 @@ function isWithinPeriod(value: DateLike, period: PeriodBounds) {
   return date >= period.start && date <= period.end;
 }
 
+export function isPendingQuotationStatus(status: string | null | undefined) {
+  const canonical = normalizeQuoteRequestStatus(status);
+  return (QUOTE_REQUEST_ACTIONABLE_STATUSES as readonly string[]).includes(canonical);
+}
+
 export function isOpenQuotationStatus(status: string | null | undefined) {
-  const normalized = normalizeStatus(status);
-  return new Set([
-    "draft",
-    "new",
-    "contacted",
-    "pending",
-    "pending_approval",
-    "approved",
-    "sent",
-    "viewed",
-    "follow_up",
-    "quoted",
-    "amount_pending",
-    "accepted",
-  ]).has(normalized);
+  const canonical = normalizeQuoteRequestStatus(status);
+  return (
+    isPendingQuotationStatus(canonical) ||
+    canonical === "QUOTED"
+  );
 }
 
 export function isWebsiteQuotationRequestSource(source: string | null | undefined) {

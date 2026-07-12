@@ -102,10 +102,11 @@ const QUOTE_REQUEST_SCHEMA_SQL = [
   `ALTER TABLE "QuoteRequest" ADD COLUMN IF NOT EXISTS "manualCustomerEmail" TEXT`,
   `ALTER TABLE "QuoteRequest" ADD COLUMN IF NOT EXISTS "approvalReason" TEXT`,
   `ALTER TABLE "QuoteRequest" ALTER COLUMN "status" SET DEFAULT 'PENDING'`,
-  `UPDATE "QuoteRequest" SET "status" = 'PENDING' WHERE "status" = 'NEW'`,
-  `UPDATE "QuoteRequest" SET "status" = 'PENDING' WHERE "status" = 'PENDING_APPROVAL'`,
-  `UPDATE "QuoteRequest" SET "status" = 'QUOTED' WHERE "status" = 'APPROVED'`,
+  `UPDATE "QuoteRequest" SET "status" = 'PENDING' WHERE "status" IN ('NEW', 'PENDING_APPROVAL', 'DRAFT', 'CONTACTED', 'VIEWED')`,
   `UPDATE "QuoteRequest" SET "status" = 'QUOTED' WHERE "status" = 'SENT'`,
+  `UPDATE "QuoteRequest" SET "status" = 'APPROVED' WHERE "status" = 'ACCEPTED'`,
+  `UPDATE "QuoteRequest" SET "status" = 'FOLLOW_UP' WHERE "status" = 'AMOUNT_PENDING'`,
+  `UPDATE "QuoteRequest" SET "status" = 'CLOSED' WHERE "status" IN ('REJECTED', 'EXPIRED')`,
   `CREATE INDEX IF NOT EXISTS "QuoteRequest_source_createdAt_idx" ON "QuoteRequest"("source","createdAt")`,
   `CREATE INDEX IF NOT EXISTS "QuoteRequest_templateId_createdAt_idx" ON "QuoteRequest"("templateId","createdAt")`,
   `CREATE TABLE IF NOT EXISTS "QuotationTemplate" (
@@ -238,21 +239,47 @@ const globalQuoteRequestState = globalThis as typeof globalThis & {
 };
 
 export const QUOTE_REQUEST_STATUSES = [
-  "DRAFT",
   "PENDING",
-  "CONTACTED",
-  "SENT",
-  "VIEWED",
   "QUOTED",
   "FOLLOW_UP",
-  "ACCEPTED",
-  "REJECTED",
+  "REVISED",
+  "APPROVED",
   "CONVERTED",
   "CLOSED",
-  "EXPIRED",
 ] as const;
 
 export type QuoteRequestStatus = (typeof QUOTE_REQUEST_STATUSES)[number];
+
+const QUOTE_REQUEST_STATUS_ALIASES = {
+  PENDING: ["PENDING", "NEW", "PENDING_APPROVAL", "DRAFT", "CONTACTED", "VIEWED"],
+  QUOTED: ["QUOTED", "SENT"],
+  FOLLOW_UP: ["FOLLOW_UP", "AMOUNT_PENDING"],
+  REVISED: ["REVISED"],
+  APPROVED: ["APPROVED", "ACCEPTED"],
+  CONVERTED: ["CONVERTED"],
+  CLOSED: ["CLOSED", "REJECTED", "EXPIRED"],
+} as const satisfies Record<QuoteRequestStatus, readonly string[]>;
+
+export const QUOTE_REQUEST_ACTIONABLE_STATUSES = [
+  "PENDING",
+  "FOLLOW_UP",
+  "REVISED",
+  "APPROVED",
+] as const satisfies readonly QuoteRequestStatus[];
+
+export function normalizeQuoteRequestStatus(status: string | null | undefined): QuoteRequestStatus {
+  const normalized = String(status ?? "").trim().toUpperCase();
+  for (const [canonicalStatus, aliases] of Object.entries(QUOTE_REQUEST_STATUS_ALIASES) as Array<
+    [QuoteRequestStatus, readonly string[]]
+  >) {
+    if (aliases.includes(normalized)) return canonicalStatus;
+  }
+  return "PENDING";
+}
+
+export function getQuoteRequestStatusAliases(status: QuoteRequestStatus) {
+  return [...QUOTE_REQUEST_STATUS_ALIASES[status]];
+}
 
 export const QUOTE_REQUEST_SOURCES = [
   "WEBSITE_REQUEST",
@@ -1251,14 +1278,7 @@ export async function ensureQuoteRequestAssignments() {
 }
 
 export function serializeQuoteRequest(row: QuoteRequestRow): SerializedQuoteRequest {
-  const normalizedStatus =
-    row.status === "NEW" || row.status === "PENDING_APPROVAL"
-      ? "PENDING"
-      : row.status === "SENT"
-        ? "QUOTED"
-      : row.status === "APPROVED"
-        ? "QUOTED"
-        : row.status;
+  const normalizedStatus = normalizeQuoteRequestStatus(row.status);
   return {
     id: row.id,
     quoteRef: row.quoteRef,
@@ -1285,7 +1305,7 @@ export function serializeQuoteRequest(row: QuoteRequestRow): SerializedQuoteRequ
     preferredProducts: row.preferredProducts,
     notes: row.notes,
     answers: asJsonObject(row.answersJson),
-    status: isQuoteStatus(normalizedStatus) ? normalizedStatus : "PENDING",
+    status: normalizedStatus,
     source: isQuoteSource(row.source) ? row.source : "WEBSITE_REQUEST",
     assignedAttendant: row.assignedAttendantId
       ? {
@@ -1466,7 +1486,7 @@ export async function createQuoteRequest(input: QuoteRequestCreateInput) {
 
 function buildStatusWhere(status: QuoteRequestStatus | "ALL") {
   if (status === "ALL") return Prisma.empty;
-  return Prisma.sql`AND "status" = ${status}`;
+  return Prisma.sql`AND UPPER(COALESCE("status", '')) IN (${Prisma.join(getQuoteRequestStatusAliases(status))})`;
 }
 
 export async function listAssignedQuoteRequests(input: {
@@ -1658,7 +1678,7 @@ export async function updateQuoteRequestResponse(
     lastRespondedByName: user.name ?? user.email ?? "Quotation attendant",
     lastRespondedAt: new Date().toISOString(),
   } satisfies Record<string, unknown>;
-  const nextStatus = input.status === "SENT" ? "QUOTED" : input.status;
+  const nextStatus = input.status;
 
   await prisma.$executeRaw(Prisma.sql`
     UPDATE "QuoteRequest"
@@ -1986,7 +2006,7 @@ export async function createManualQuotation(
   });
   const created = await createQuoteRequest({
     ...input,
-    status: input.status === "SENT" ? "QUOTED" : input.status || "QUOTED",
+    status: input.status || "QUOTED",
     source: input.source || "MANUAL",
     requiresApproval: false,
     assignedAttendantId: input.assignedAttendantId || actor.id,
