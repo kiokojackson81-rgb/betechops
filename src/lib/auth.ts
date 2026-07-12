@@ -4,7 +4,6 @@ import { getServerSession } from "next-auth/next";
 import { getToken } from "next-auth/jwt";
 import type { Session } from "next-auth";
 import type { Role } from "@prisma/client";
-import { headers } from "next/headers";
 import { isCategoryAllowed, normalizeCategory } from "@/lib/attendants/categoryCompat";
 import { authOptions } from "@/lib/nextAuth";
 import { getKenyanPhoneVariants, normalizeKenyanPhone } from "@/lib/phone";
@@ -67,6 +66,7 @@ export async function auth(): Promise<Session | null> {
   }
 
   try {
+    const { headers } = await import("next/headers");
     const headerStore = await headers();
     const token = await getToken({
       req: {
