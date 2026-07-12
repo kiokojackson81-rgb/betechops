@@ -27,6 +27,7 @@ import VoiceFeedbackPanel from "@/components/voice/VoiceFeedbackPanel";
 import VoiceSettingsClient from "@/components/voice/VoiceSettingsClient";
 import { useSoftphone } from "@/components/voice/SoftphoneProvider";
 import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
+import { summarizeVoiceQueueItems } from "@/lib/operationsWorkQueue";
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import type { VoiceLiveSnapshot } from "@/lib/voiceOperations";
@@ -1210,11 +1211,10 @@ export default function VoiceConsoleClient({
     ["answered", "connected", "transferred"].includes(String(call.status || "").trim().toLowerCase()),
   ).length;
 
-  const filteredMissedCount =
-    filteredRecentCalls.filter((call) =>
-      ["missed", "busy", "failed", "cancelled", "disconnected"].includes(String(call.status || "").trim().toLowerCase()),
-    ).length +
-    missedFollowUpsCount;
+  const filteredMissedCount = useMemo(
+    () => summarizeVoiceQueueItems(filteredFollowUps as Array<{ type?: string | null }>).missedCount,
+    [filteredFollowUps],
+  );
 
   const filteredAverageTalkTime =
     filteredRecentCalls.reduce((sum, call) => sum + Number(call.durationInSeconds || 0), 0) /

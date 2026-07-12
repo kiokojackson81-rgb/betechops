@@ -39,6 +39,42 @@ export function isOpenQuotationStatus(status: string | null | undefined) {
   ]).has(normalized);
 }
 
+export function isWebsiteQuotationRequestSource(source: string | null | undefined) {
+  return String(source ?? "").trim().toUpperCase() === "WEBSITE_REQUEST";
+}
+
+export function isOpenWebsiteQuotationRequest(input: {
+  status?: string | null;
+  source?: string | null;
+}) {
+  return isWebsiteQuotationRequestSource(input.source) && isOpenQuotationStatus(input.status);
+}
+
+export function summarizeVoiceQueueItems<T extends { type?: string | null }>(
+  items: T[] | null | undefined,
+) {
+  const queueItems = Array.isArray(items) ? items : [];
+  let missedCount = 0;
+  let followUpCount = 0;
+
+  for (const item of queueItems) {
+    const normalizedType = String(item?.type ?? "").trim().toLowerCase();
+    if (normalizedType === "lead") {
+      missedCount += 1;
+      continue;
+    }
+    if (normalizedType === "task") {
+      followUpCount += 1;
+    }
+  }
+
+  return {
+    queueCount: missedCount + followUpCount,
+    missedCount,
+    followUpCount,
+  };
+}
+
 export function isPendingWebOrderStatus(status: string | null | undefined) {
   const normalized = normalizeStatus(status);
   return new Set([

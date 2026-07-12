@@ -10,8 +10,10 @@ import QuotationRequestsDeskClient from "@/components/QuotationRequestsDeskClien
 import {
   isCarriedForwardPendingItem,
   isOpenQuotationStatus,
+  isWebsiteQuotationRequestSource,
   isPendingPodStatus,
   isPendingWebOrderStatus,
+  summarizeVoiceQueueItems,
   wasCreatedOrUpdatedInPeriod,
 } from "@/lib/operationsWorkQueue";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
@@ -320,7 +322,7 @@ export default function MarketingReceiptsPage() {
         fetchJson<{ orders?: Array<{ id: string; status?: string | null; createdAt?: string | null; updatedAt?: string | null }> }>(
           "/api/attendant/website-orders?status=ALL",
         ),
-        fetchJson<{ requests?: Array<{ id: string; status?: string | null; createdAt?: string | null; updatedAt?: string | null }> }>(
+        fetchJson<{ requests?: Array<{ id: string; status?: string | null; source?: string | null; createdAt?: string | null; updatedAt?: string | null }> }>(
           "/api/attendant/quote-requests?status=ALL&source=WEBSITE_REQUEST",
         ),
       ]);
@@ -345,7 +347,10 @@ export default function MarketingReceiptsPage() {
         ? webPayload.orders.filter((order) => isPendingWebOrderStatus(order.status))
         : [];
       const openQuoteRequests = Array.isArray(quotePayload?.requests)
-        ? quotePayload.requests.filter((request) => isOpenQuotationStatus(request.status))
+        ? quotePayload.requests.filter(
+            (request) =>
+              isWebsiteQuotationRequestSource(request.source) && isOpenQuotationStatus(request.status),
+          )
         : [];
 
       setDashboardCounts({
@@ -403,17 +408,12 @@ export default function MarketingReceiptsPage() {
       if (cancelled) return;
 
       const queueItems = Array.isArray(voicePayload?.callQueue) ? voicePayload.callQueue : [];
-      const queueCount = queueItems.length;
-      const missedCount = queueItems.filter(
-        (item) => String(item?.type || "").trim().toLowerCase() === "lead",
-      ).length;
+      const voiceQueueSummary = summarizeVoiceQueueItems(queueItems);
 
       setVoiceDeskSummary({
-        queueCount,
-        missedCount,
-        followUpCount: queueItems.filter(
-          (item) => String(item?.type || "").trim().toLowerCase() === "task",
-        ).length,
+        queueCount: voiceQueueSummary.queueCount,
+        missedCount: voiceQueueSummary.missedCount,
+        followUpCount: voiceQueueSummary.followUpCount,
       });
     };
 

@@ -24,6 +24,7 @@ import {
   isCarriedForwardPendingItem,
   isOpenAgentOrderStatus,
   isOpenQuotationStatus,
+  summarizeVoiceQueueItems,
   isPendingPodStatus,
   isPendingPosReceiptStatus,
   isPendingWebOrderStatus,
@@ -531,17 +532,12 @@ export default function DailyReportFinal() {
         if (!response.ok || cancelled) return;
 
         const queueItems: Array<{ type?: string | null }> = Array.isArray(payload?.callQueue) ? payload.callQueue : [];
-        const queueCount = queueItems.length;
-        const missedCount = queueItems.filter(
-          (item) => String(item?.type || "").trim().toLowerCase() === "lead",
-        ).length;
+        const voiceQueueSummary = summarizeVoiceQueueItems(queueItems);
 
         setVoiceDeskSummary({
-          queueCount,
-          missedCount,
-          followUpCount: queueItems.filter(
-            (item) => String(item?.type || "").trim().toLowerCase() === "task",
-          ).length,
+          queueCount: voiceQueueSummary.queueCount,
+          missedCount: voiceQueueSummary.missedCount,
+          followUpCount: voiceQueueSummary.followUpCount,
         });
       } catch {
         if (!cancelled) {

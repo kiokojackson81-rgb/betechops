@@ -13,9 +13,11 @@ import {
   isCarriedForwardPendingItem,
   isOpenQuotationStatus,
   isOpenWorkItemStatus,
+  isWebsiteQuotationRequestSource,
   isPendingPodStatus,
   isPendingWebOrderStatus,
   shouldShowPendingWorkItem,
+  summarizeVoiceQueueItems,
   wasCreatedOrUpdatedInPeriod,
 } from "@/lib/operationsWorkQueue";
 import {
@@ -536,6 +538,7 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
   );
 
   const quoteRequests = rawQuoteRequests.filter((request) =>
+    isWebsiteQuotationRequestSource(request.source) &&
     isOpenQuotationStatus(request.status) &&
     shouldShowPendingWorkItem({
       status: request.status,
@@ -681,9 +684,10 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
     .slice(0, 14);
 
   const voiceQueueItems: Array<{ type?: string | null }> = Array.isArray(voiceSnapshot?.callQueue) ? voiceSnapshot.callQueue : [];
-  const voiceMissedCount = voiceQueueItems.filter((item) => String(item?.type || "").trim().toLowerCase() === "lead").length;
-  const voiceFollowUpCount = voiceQueueItems.filter((item) => String(item?.type || "").trim().toLowerCase() === "task").length;
-  const voiceQueueCount = voiceQueueItems.length;
+  const voiceQueueSummary = summarizeVoiceQueueItems(voiceQueueItems);
+  const voiceMissedCount = voiceQueueSummary.missedCount;
+  const voiceFollowUpCount = voiceQueueSummary.followUpCount;
+  const voiceQueueCount = voiceQueueSummary.queueCount;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">

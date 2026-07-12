@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 import { getKenyanPhoneVariants, normalizeKenyanPhone } from "@/lib/phone";
+import { summarizeVoiceQueueItems } from "@/lib/operationsWorkQueue";
 import { prisma } from "@/lib/prisma";
 import { getVoiceTestNumberLabel, isVoiceAdminTestPhone } from "@/lib/voiceTestNumbers";
 import { getVoiceCustomerContext } from "@/lib/voiceCustomerContext";
@@ -1677,13 +1678,11 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
     .filter((agent) => (viewer.isAdmin ? agent.isRoutingAgent : true))
     .sort((left, right) => left.routingPriority - right.routingPriority || left.displayName.localeCompare(right.displayName));
 
+  const voiceQueueSummary = summarizeVoiceQueueItems([...followUps, ...missedLeads]);
   const activeCallsCount = activeCalls.filter((call) => isLiveActiveStatus(call.status)).length;
   const waitingCallsCount = waitingCalls.filter((call) => isWaitingStatus(call.status)).length;
   const answeredCallsCount = recentCalls.filter((call) => isAnsweredStatus(call.status)).length;
-  const missedCallsCount =
-    recentCalls.filter((call) => isMissedStatus(call.status)).length +
-    followUps.filter((task) => normalizeStatus(task.status) === "pending").length +
-    missedLeads.filter((lead) => ["pending_follow_up", "open"].includes(normalizeStatus(lead.status))).length;
+  const missedCallsCount = voiceQueueSummary.missedCount;
   const longestWaitingSeconds = waitingCalls.reduce((max, call) => Math.max(max, call.waitingSeconds || 0), 0);
   const callbackOverdueCount = followUps.filter((task) => Number(task.callbackOverdueSeconds || 0) > 0).length;
   const transferRate =
@@ -1811,11 +1810,11 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
           callCostToday: Number(callCostAggregate._sum.amount ?? 0),
           newVoiceLeads: newVoiceLeadsCount,
           wallboard: {
-            liveQueue: waitingCallsCount + followUps.length + missedLeads.length,
+            liveQueue: waitingCallsCount + voiceQueueSummary.queueCount,
             longestWaitingSeconds,
             availableAgents: availableAgentsCount,
             answeredToday: answeredCallsCount,
-            missedToday: missedCallsCount,
+            missedToday: voiceQueueSummary.missedCount,
           },
           supervisor: {
             answerRate,
@@ -1828,8 +1827,8 @@ export async function getVoiceLiveSnapshot(input: VoiceLiveSnapshotInput) {
       : {
           myCallsToday: callsTodayCount,
           myActiveCalls: activeCallsCount,
-          myMissedCalls: missedCallsCount,
-          myFollowUps: followUps.length + missedLeads.length,
+          myMissedCalls: voiceQueueSummary.missedCount,
+          myFollowUps: voiceQueueSummary.queueCount,
           myAnsweredCalls: answeredCallsCount,
         },
     activeCalls,

@@ -42,6 +42,7 @@ import {
   isPendingPodStatus,
   isPendingWebOrderStatus,
   shouldShowPendingWorkItem,
+  summarizeVoiceQueueItems,
   wasCreatedOrUpdatedInPeriod,
 } from "@/lib/operationsWorkQueue";
 import { prisma } from "@/lib/prisma";
@@ -1317,6 +1318,7 @@ async function getDashboardData(range: DashboardRange) {
       periodEnd: periodBounds.end,
     }),
   );
+  const websiteOpenQuoteRows = openQuoteRows;
   const periodQuoteRows = openQuoteRows.filter((row) => wasCreatedOrUpdatedInPeriod(row.createdAt, row.updatedAt, periodBounds));
   const carriedQuoteRows = openQuoteRows.filter((row) =>
     isCarriedForwardPendingItem({
@@ -1326,6 +1328,17 @@ async function getDashboardData(range: DashboardRange) {
     }) && !wasCreatedOrUpdatedInPeriod(row.createdAt, row.updatedAt, periodBounds),
   );
   const newQuoteRows = periodQuoteRows.filter((row) => String(row.status).toLowerCase() === "new");
+  const websitePeriodQuoteRows = websiteOpenQuoteRows.filter((row) =>
+    wasCreatedOrUpdatedInPeriod(row.createdAt, row.updatedAt, periodBounds),
+  );
+  const websiteCarriedQuoteRows = websiteOpenQuoteRows.filter((row) =>
+    isCarriedForwardPendingItem({
+      status: row.status,
+      createdAt: row.createdAt,
+      periodStart: periodBounds.start,
+    }) && !wasCreatedOrUpdatedInPeriod(row.createdAt, row.updatedAt, periodBounds),
+  );
+  const websiteNewQuoteRows = websitePeriodQuoteRows.filter((row) => String(row.status).toLowerCase() === "new");
 
   const pendingPodRows = podFollowUpRows.filter((row) =>
     isPendingPodStatus(row.status) &&
@@ -1435,8 +1448,16 @@ async function getDashboardData(range: DashboardRange) {
     if (!updatedAt) continue;
     const key = dayKey(updatedAt);
     const point = trendMap.get(key);
-    if (point && isOpenQuotationStatus(quote.status)) point.quotations += 1;
+    if (point && isOpenQuotationStatus(quote.status)) {
+      point.quotations += 1;
+    }
   }
+
+  const voiceQueueSummary = summarizeVoiceQueueItems(
+    voiceFollowUpsOpen.map((item) => ({
+      type: item.voiceLeadId ? "lead" : "task",
+    })),
+  );
 
   const unpricedSales = await getUnpricedDailySalesForRange({
     startDate: range.start,
@@ -1805,7 +1826,7 @@ async function getDashboardData(range: DashboardRange) {
       posOrders: pendingPosOrders.length,
       webOrders: pendingWebsiteOrders.length,
       agentOrders: visibleOpenAgentOrders.length,
-      quotations: openQuoteRows.length,
+      quotations: websiteOpenQuoteRows.length,
       podPending: pendingPodRows.length,
       jumiaPending: pendingJumiaOrders,
       lowStockItems: lowStockCount,
@@ -1859,9 +1880,9 @@ async function getDashboardData(range: DashboardRange) {
         pending: visibleOpenAgentOrders.length,
       },
       quotations: {
-        count: openQuoteRows.length,
+        count: websiteOpenQuoteRows.length,
         sales: 0,
-        pending: newQuoteRows.length,
+        pending: websiteNewQuoteRows.length,
       },
       pod: {
         count: pendingPodRows.length,
@@ -1889,7 +1910,7 @@ async function getDashboardData(range: DashboardRange) {
       orderValue: webOrderValue,
       pendingOrderValue: pendingWebOrderValue,
       recentOrders: webRecentRows,
-      quoteRequests: openQuoteRows.slice(0, 4).map((quote) => ({
+      quoteRequests: websiteOpenQuoteRows.slice(0, 4).map((quote) => ({
         ...quote,
         carriedForward: isCarriedForwardPendingItem({
           status: quote.status,
@@ -1914,7 +1935,7 @@ async function getDashboardData(range: DashboardRange) {
     lowStockItems,
     queues: {
       websiteOrders: pendingWebsiteOrders,
-      quotations: openQuoteRows.map((quote) => ({
+      quotations: websiteOpenQuoteRows.map((quote) => ({
         ...quote,
         carriedForward: isCarriedForwardPendingItem({
           status: quote.status,
@@ -1928,7 +1949,7 @@ async function getDashboardData(range: DashboardRange) {
       pos: { current: periodPendingPosOrders.length, carried: carriedPendingPosOrders.length },
       web: { current: periodWebsiteOrders.length, carried: carriedWebsiteOrders.length },
       agent: { current: periodOpenAgentOrders.length, carried: carriedOpenAgentOrders.length },
-      quotations: { current: periodQuoteRows.length, carried: carriedQuoteRows.length },
+      quotations: { current: websitePeriodQuoteRows.length, carried: websiteCarriedQuoteRows.length },
       pod: { current: periodPendingPodRows.length, carried: carriedPendingPodRows.length },
     },
     pricingQueue,
@@ -1949,9 +1970,9 @@ async function getDashboardData(range: DashboardRange) {
     voice: {
       totalCalls: voiceStatuses.length,
       answeredCalls: answeredVoiceCalls.length,
-      missedCalls: missedVoiceCalls.length,
+      missedCalls: voiceQueueSummary.missedCount,
       attemptedCalls: attemptedVoiceCalls.length,
-      openFollowUps: voiceFollowUpsOpen.length,
+      openFollowUps: voiceQueueSummary.queueCount,
       callbackRequests: voiceCallbackRequestsPeriod.length,
       requestedCallbacks: requestedCallbackCount,
       openedCallbackLinks: recentlyOpenedCallbackCount,
