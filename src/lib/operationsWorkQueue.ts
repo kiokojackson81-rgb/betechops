@@ -1,7 +1,7 @@
 import {
   normalizeQuoteRequestStatus,
   QUOTE_REQUEST_ACTIONABLE_STATUSES,
-} from "@/lib/quoteRequests";
+} from "@/lib/quoteRequestStatus";
 
 type PeriodBounds = {
   start: Date;

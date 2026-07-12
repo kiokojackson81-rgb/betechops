@@ -34,7 +34,7 @@ import type {
 } from "@/lib/quoteRequests";
 import {
   QUOTE_REQUEST_ACTIONABLE_STATUSES,
-} from "@/lib/quoteRequests";
+} from "@/lib/quoteRequestStatus";
 import {
   formatQuoteCurrency,
   QUOTE_FEE_MODES,

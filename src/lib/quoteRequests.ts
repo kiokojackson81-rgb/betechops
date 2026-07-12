@@ -4,6 +4,13 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
+  getQuoteRequestStatusAliases,
+  normalizeQuoteRequestStatus,
+  QUOTE_REQUEST_ACTIONABLE_STATUSES,
+  QUOTE_REQUEST_STATUSES,
+  type QuoteRequestStatus,
+} from "@/lib/quoteRequestStatus";
+import {
   QUOTE_FEE_MODES,
   quoteLineItemSchema,
   quotePaymentMethodSchema,
@@ -19,6 +26,13 @@ import {
   type QuoteWarrantyMode,
 } from "@/lib/quoteProposal";
 import { applyQuotationAiEnrichment } from "@/lib/quotationAiSections";
+export {
+  getQuoteRequestStatusAliases,
+  normalizeQuoteRequestStatus,
+  QUOTE_REQUEST_ACTIONABLE_STATUSES,
+  QUOTE_REQUEST_STATUSES,
+} from "@/lib/quoteRequestStatus";
+export type { QuoteRequestStatus } from "@/lib/quoteRequestStatus";
 
 const quoteProposalVisibilitySchema = z.object({
   projectOverview: z.boolean().optional(),
@@ -237,49 +251,6 @@ const QUOTE_REQUEST_STAFF_EMAILS = ["jeniffer@betech.co.ke", "brendah@betech.co.
 const globalQuoteRequestState = globalThis as typeof globalThis & {
   __quoteRequestSchemaReady?: Promise<void>;
 };
-
-export const QUOTE_REQUEST_STATUSES = [
-  "PENDING",
-  "QUOTED",
-  "FOLLOW_UP",
-  "REVISED",
-  "APPROVED",
-  "CONVERTED",
-  "CLOSED",
-] as const;
-
-export type QuoteRequestStatus = (typeof QUOTE_REQUEST_STATUSES)[number];
-
-const QUOTE_REQUEST_STATUS_ALIASES = {
-  PENDING: ["PENDING", "NEW", "PENDING_APPROVAL", "DRAFT", "CONTACTED", "VIEWED"],
-  QUOTED: ["QUOTED", "SENT"],
-  FOLLOW_UP: ["FOLLOW_UP", "AMOUNT_PENDING"],
-  REVISED: ["REVISED"],
-  APPROVED: ["APPROVED", "ACCEPTED"],
-  CONVERTED: ["CONVERTED"],
-  CLOSED: ["CLOSED", "REJECTED", "EXPIRED"],
-} as const satisfies Record<QuoteRequestStatus, readonly string[]>;
-
-export const QUOTE_REQUEST_ACTIONABLE_STATUSES = [
-  "PENDING",
-  "FOLLOW_UP",
-  "REVISED",
-  "APPROVED",
-] as const satisfies readonly QuoteRequestStatus[];
-
-export function normalizeQuoteRequestStatus(status: string | null | undefined): QuoteRequestStatus {
-  const normalized = String(status ?? "").trim().toUpperCase();
-  for (const [canonicalStatus, aliases] of Object.entries(QUOTE_REQUEST_STATUS_ALIASES) as Array<
-    [QuoteRequestStatus, readonly string[]]
-  >) {
-    if (aliases.includes(normalized)) return canonicalStatus;
-  }
-  return "PENDING";
-}
-
-export function getQuoteRequestStatusAliases(status: QuoteRequestStatus) {
-  return [...QUOTE_REQUEST_STATUS_ALIASES[status]];
-}
 
 export const QUOTE_REQUEST_SOURCES = [
   "WEBSITE_REQUEST",
