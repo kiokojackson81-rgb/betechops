@@ -5,12 +5,14 @@ import type { SerializedWebsiteOrder } from "@/lib/websiteOrders";
 
 type Props = {
   initialOrders: SerializedWebsiteOrder[];
+  initialExpandedId?: string | null;
 };
 
-export default function WebsiteOrdersAdminClient({ initialOrders }: Props) {
+export default function WebsiteOrdersAdminClient({ initialOrders, initialExpandedId }: Props) {
   return (
     <WebsiteOrdersDeskClient
       initialOrders={initialOrders}
+      initialExpandedId={initialExpandedId}
       apiBasePath="/api/admin/website-orders"
       defaultStatusFilter="PENDING"
       orderListLabel="Website orders"

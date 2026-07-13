@@ -3,8 +3,13 @@ import { getOrderedQuoteStaffUsers } from "@/lib/quoteRequests";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminQuotationCenterPage() {
+export default async function AdminQuotationCenterPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ quoteId?: string }>;
+}) {
   const staffOptions = await getOrderedQuoteStaffUsers();
+  const params = (await searchParams) || {};
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-4 text-slate-100 lg:px-6">
@@ -14,6 +19,7 @@ export default async function AdminQuotationCenterPage() {
           createApiPath="/api/admin/quotation-center/create"
           templateApiPath="/api/admin/quotation-center/templates"
           defaultStatusFilter="ALL"
+          initialExpandedId={params.quoteId?.trim() || null}
           filterStorageKey="admin:quotation-center:status:v2"
           deskTitle="Admin Quotation Monitoring Center"
           deskDescription="Review every quotation activity company-wide, including website requests, manual quotations, quoted work, conversions, ownership, templates, and customer follow-up from one admin desk."

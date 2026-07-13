@@ -722,7 +722,6 @@ async function listAdminQuoteRequests() {
     FROM "QuoteRequest"
     WHERE COALESCE("source", 'WEBSITE_REQUEST') = 'WEBSITE_REQUEST'
     ORDER BY "updatedAt" DESC
-    LIMIT 120
   `);
   return rows.map((row) => ({
     ...row,
@@ -734,7 +733,6 @@ async function listAdminPodFollowUp() {
   const receipts = await prisma.receipt.findMany({
     where: { data: { path: ["podDelivery"], not: Prisma.JsonNull } },
     orderBy: { generatedAt: "desc" },
-    take: 80,
     select: {
       id: true,
       generatedAt: true,
@@ -963,7 +961,6 @@ async function getDashboardData(range: DashboardRange) {
     }),
     prisma.websiteOrder.findMany({
       orderBy: [{ updatedAt: "desc" }],
-      take: 120,
       select: {
         id: true,
         orderRef: true,
@@ -1004,7 +1001,6 @@ async function getDashboardData(range: DashboardRange) {
     prisma.order.findMany({
       where: { status: { in: ["PENDING", "PROCESSING"] } },
       orderBy: [{ updatedAt: "desc" }],
-      take: 80,
       select: {
         id: true,
         orderNumber: true,
@@ -1410,7 +1406,7 @@ async function getDashboardData(range: DashboardRange) {
       status: sale.statusMeta.label,
       createdAt: sale.createdAt,
       updatedAt: sale.updatedAt,
-      href: `/marketing/agent-orders?saleId=${encodeURIComponent(sale.id)}`,
+      href: `/admin/agents/sales/${encodeURIComponent(sale.id)}`,
       carriedForward: isCarriedForwardPendingItem({
         status: sale.status,
         createdAt: sale.createdAt,
@@ -1428,7 +1424,7 @@ async function getDashboardData(range: DashboardRange) {
       status: String(order.status).replace(/_/g, " ").toLowerCase(),
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
-      href: `/marketing/receipts?tab=web-orders&orderId=${encodeURIComponent(order.id)}`,
+      href: `/admin/receipts?tab=website-orders&orderId=${encodeURIComponent(order.id)}`,
       ref: order.orderRef,
       carriedForward: isCarriedForwardPendingItem({
         status: order.status,
@@ -1799,8 +1795,8 @@ async function getDashboardData(range: DashboardRange) {
       urgencyTone: ageToneClass(item.lastAt),
       urgencyLabel: ageToneLabel(item.lastAt),
       voiceHref: `/admin/communications/voice?tab=recent&selectedPhone=${encodeURIComponent(item.phone)}`,
-      webHref: `/marketing/receipts?tab=web-orders&q=${encodeURIComponent(item.phone)}`,
-      quoteHref: `/marketing/receipts?tab=quotations&q=${encodeURIComponent(item.phone)}`,
+      webHref: `/admin/receipts?tab=website-orders&q=${encodeURIComponent(item.phone)}`,
+      quoteHref: `/admin/quotation-center?q=${encodeURIComponent(item.phone)}`,
       posHref: `/admin/customers?q=${encodeURIComponent(item.phone)}`,
     }));
 
@@ -2257,9 +2253,9 @@ export default async function AdminOverviewPage({
           <StatCard title="Selected range profit" value={formatKES(dashboard.livePulse.currentPeriodProfit)} sub="Recorded margin across major channels" icon={ChartColumnBig} accent="from-sky-500/20 via-cyan-500/10 to-transparent" href={withDashboardRange("/admin/marketing-report")} />
           <StatCard title="POS receipts" value={`${dashboard.livePulse.posReceipts}`} sub="POS, marketing, and support receipts" icon={Receipt} accent="from-indigo-500/20 via-cyan-500/10 to-transparent" href={withDashboardRange("/admin/receipts")} />
           <StatCard title="POS orders" value={`${dashboard.livePulse.posOrders}`} sub={`Current ${dashboard.pendingBreakdown.pos.current} · Carried ${dashboard.pendingBreakdown.pos.carried}`} icon={Package} accent="from-violet-500/20 via-slate-500/10 to-transparent" href={withDashboardRange("/marketing/receipts?tab=pos")} />
-          <StatCard title="Web orders" value={`${dashboard.livePulse.webOrders}`} sub={`Current period ${dashboard.pendingBreakdown.web.current} · Carried forward ${dashboard.pendingBreakdown.web.carried}`} icon={ShoppingBag} accent="from-emerald-500/20 via-teal-500/10 to-transparent" href={withDashboardRange("/marketing/receipts?tab=web-orders")} />
-          <StatCard title="Agent orders" value={`${dashboard.livePulse.agentOrders}`} sub={`Current period ${dashboard.pendingBreakdown.agent.current} · Carried forward ${dashboard.pendingBreakdown.agent.carried}`} icon={Users} accent="from-violet-500/20 via-fuchsia-500/10 to-transparent" href={withDashboardRange("/marketing/agent-orders")} />
-          <StatCard title="Quotations" value={`${dashboard.livePulse.quotations}`} sub={`Current period ${dashboard.pendingBreakdown.quotations.current} · Carried forward ${dashboard.pendingBreakdown.quotations.carried}`} icon={ClipboardCheck} accent="from-cyan-500/20 via-sky-500/10 to-transparent" href={withDashboardRange("/marketing/receipts?tab=quotations")} />
+          <StatCard title="Web orders" value={`${dashboard.livePulse.webOrders}`} sub={`Current period ${dashboard.pendingBreakdown.web.current} · Carried forward ${dashboard.pendingBreakdown.web.carried}`} icon={ShoppingBag} accent="from-emerald-500/20 via-teal-500/10 to-transparent" href={withDashboardRange("/admin/receipts?tab=website-orders")} />
+          <StatCard title="Agent orders" value={`${dashboard.livePulse.agentOrders}`} sub={`Current period ${dashboard.pendingBreakdown.agent.current} · Carried forward ${dashboard.pendingBreakdown.agent.carried}`} icon={Users} accent="from-violet-500/20 via-fuchsia-500/10 to-transparent" href={withDashboardRange("/admin/agents/pending-sales")} />
+          <StatCard title="Quotations" value={`${dashboard.livePulse.quotations}`} sub={`Current period ${dashboard.pendingBreakdown.quotations.current} · Carried forward ${dashboard.pendingBreakdown.quotations.carried}`} icon={ClipboardCheck} accent="from-cyan-500/20 via-sky-500/10 to-transparent" href={withDashboardRange("/admin/quotation-center")} />
           <StatCard title="POD pending" value={`${dashboard.livePulse.podPending}`} sub={`Current period ${dashboard.pendingBreakdown.pod.current} · Carried forward ${dashboard.pendingBreakdown.pod.carried}`} icon={Truck} accent="from-amber-500/20 via-orange-500/10 to-transparent" href={withDashboardRange("/marketing/receipts?tab=pos&podStatus=pending")} />
           <StatCard title="Jumia pending" value={`${dashboard.livePulse.jumiaPending}`} sub="Marketplace pending order backlog" icon={Store} accent="from-amber-500/20 via-yellow-500/10 to-transparent" href={withDashboardRange("/admin/orders")} />
           <StatCard title="Low stock items" value={`${dashboard.livePulse.lowStockItems}`} sub="Items at or below minimum stock" icon={Boxes} accent="from-rose-500/20 via-orange-500/10 to-transparent" href={withDashboardRange("/admin/pos-management")} />
@@ -2434,7 +2430,7 @@ export default async function AdminOverviewPage({
               status: String(order.status).replace(/_/g, " ").toLowerCase(),
               createdAt: order.createdAt,
               updatedAt: order.updatedAt,
-              href: `/marketing/receipts?tab=web-orders&orderId=${encodeURIComponent(order.id)}`,
+              href: `/admin/receipts?tab=website-orders&orderId=${encodeURIComponent(order.id)}`,
               carriedForward: isCarriedForwardPendingItem({
                 status: order.status,
                 createdAt: order.createdAt,
@@ -2461,7 +2457,7 @@ export default async function AdminOverviewPage({
               status: String(quote.status).replace(/_/g, " ").toLowerCase(),
               createdAt: quote.createdAt,
               updatedAt: quote.updatedAt,
-              href: `/marketing/receipts?tab=quotations&quoteId=${encodeURIComponent(quote.id)}`,
+              href: `/admin/quotation-center?quoteId=${encodeURIComponent(quote.id)}`,
               carriedForward: Boolean((quote as { carriedForward?: boolean }).carriedForward),
             })),
             ...dashboard.queues.pod.map((row) => ({
@@ -2548,9 +2544,9 @@ export default async function AdminOverviewPage({
         />
         <div className="grid gap-4 xl:grid-cols-3">
           <ControlCenterCard title="POS / Direct Sales" count={dashboard.salesActivity.pos.count} amount={dashboard.salesActivity.pos.sales} pending={dashboard.salesActivity.pos.pending} href={withDashboardRange("/admin/receipts")} note={`Receipts plus ${dashboard.livePulse.posOrders} open POS orders / POD actions.`} />
-          <ControlCenterCard title="Web Orders" count={dashboard.salesActivity.web.count} amount={dashboard.salesActivity.web.sales} pending={dashboard.salesActivity.web.pending} href={withDashboardRange("/marketing/receipts?tab=web-orders")} note={`Current period ${dashboard.pendingBreakdown.web.current} · Carried forward ${dashboard.pendingBreakdown.web.carried}`} />
-          <ControlCenterCard title="Agent Orders" count={dashboard.salesActivity.agent.count} amount={dashboard.salesActivity.agent.sales} pending={dashboard.salesActivity.agent.pending} href={withDashboardRange("/marketing/agent-orders")} note={`Current period ${dashboard.pendingBreakdown.agent.current} · Carried forward ${dashboard.pendingBreakdown.agent.carried}`} />
-          <ControlCenterCard title="Quotations" count={dashboard.salesActivity.quotations.count} amount={dashboard.salesActivity.quotations.sales} pending={dashboard.salesActivity.quotations.pending} href={withDashboardRange("/marketing/receipts?tab=quotations")} note={`Current period ${dashboard.pendingBreakdown.quotations.current} · Carried forward ${dashboard.pendingBreakdown.quotations.carried}`} />
+          <ControlCenterCard title="Web Orders" count={dashboard.salesActivity.web.count} amount={dashboard.salesActivity.web.sales} pending={dashboard.salesActivity.web.pending} href={withDashboardRange("/admin/receipts?tab=website-orders")} note={`Current period ${dashboard.pendingBreakdown.web.current} · Carried forward ${dashboard.pendingBreakdown.web.carried}`} />
+          <ControlCenterCard title="Agent Orders" count={dashboard.salesActivity.agent.count} amount={dashboard.salesActivity.agent.sales} pending={dashboard.salesActivity.agent.pending} href={withDashboardRange("/admin/agents/pending-sales")} note={`Current period ${dashboard.pendingBreakdown.agent.current} · Carried forward ${dashboard.pendingBreakdown.agent.carried}`} />
+          <ControlCenterCard title="Quotations" count={dashboard.salesActivity.quotations.count} amount={dashboard.salesActivity.quotations.sales} pending={dashboard.salesActivity.quotations.pending} href={withDashboardRange("/admin/quotation-center")} note={`Current period ${dashboard.pendingBreakdown.quotations.current} · Carried forward ${dashboard.pendingBreakdown.quotations.carried}`} />
           <ControlCenterCard title="POD Follow-up" count={dashboard.salesActivity.pod.count} amount={dashboard.salesActivity.pod.sales} pending={dashboard.salesActivity.pod.pending} href={withDashboardRange("/marketing/receipts?tab=pos&podStatus=pending")} note={`Current period ${dashboard.pendingBreakdown.pod.current} · Carried forward ${dashboard.pendingBreakdown.pod.carried}`} />
           <ControlCenterCard title="Marketplace Orders" count={dashboard.salesActivity.marketplace.count} amount={dashboard.salesActivity.marketplace.sales} pending={dashboard.salesActivity.marketplace.pending} href={withDashboardRange("/admin/online/summary")} note="Jumia and Kilimall order movement." />
         </div>
@@ -2712,7 +2708,7 @@ export default async function AdminOverviewPage({
                 <div className="text-lg font-semibold text-white">Recent web customers and orders</div>
                 <div className="mt-1 text-sm text-slate-400">Most recent website orders plus website quote activity for the active statistics period.</div>
               </div>
-              <Link href="/marketing/receipts?tab=web-orders" className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-emerald-400/30 hover:text-emerald-200">Open web orders</Link>
+              <Link href="/admin/receipts?tab=website-orders" className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:border-emerald-400/30 hover:text-emerald-200">Open web orders</Link>
             </div>
             <div className="mt-4 grid gap-3">
               {dashboard.web.recentOrders.map((row) => (
@@ -2737,7 +2733,7 @@ export default async function AdminOverviewPage({
                   amount={null}
                   status={String(quote.status).replace(/_/g, " ").toLowerCase()}
                   age={ageLabel(quote.updatedAt)}
-                  href={`/marketing/receipts?tab=quotations&quoteId=${encodeURIComponent(quote.id)}`}
+                  href={`/admin/quotation-center?quoteId=${encodeURIComponent(quote.id)}`}
                   carriedForward={Boolean((quote as { carriedForward?: boolean }).carriedForward)}
                 />
               ))}

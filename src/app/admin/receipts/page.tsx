@@ -20,7 +20,7 @@ export const viewport = {
 export default async function AdminReceiptsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ tab?: string }>;
+  searchParams?: Promise<{ tab?: string; orderId?: string }>;
 }) {
   try {
     const params = (await searchParams) || {};
@@ -65,7 +65,7 @@ export default async function AdminReceiptsPage({
             </Link>
           </div>
           {activeTab === "website-orders" ? (
-            <WebsiteOrdersAdminClient initialOrders={serializedOrders} />
+            <WebsiteOrdersAdminClient initialOrders={serializedOrders} initialExpandedId={params.orderId?.trim() || null} />
           ) : (
             <ReceiptsAdminClient initial={receipts as never[]} allowEdit scope="global" onlyPos includeLedger={false} />
           )}

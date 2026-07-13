@@ -81,6 +81,7 @@ type Props = {
   apiBasePath: string;
   apiQueryParams?: Record<string, string | null | undefined>;
   defaultStatusFilter?: QuoteRequestStatusFilter;
+  initialExpandedId?: string | null;
   filterStorageKey?: string;
   deskTitle?: string;
   deskDescription?: string;
@@ -1154,6 +1155,7 @@ export default function QuotationRequestsDeskClient({
   apiBasePath,
   apiQueryParams,
   defaultStatusFilter = "PENDING",
+  initialExpandedId = null,
   filterStorageKey,
   deskTitle = "Assigned quotation requests",
   deskDescription = "Review customer quote requests, recommend products, and notify customers by email or SMS.",
@@ -1185,7 +1187,7 @@ export default function QuotationRequestsDeskClient({
   const [staffFilter, setStaffFilter] = useState<string>("ALL");
   const [adminView, setAdminView] = useState<AdminQuotationView>("ALL");
   const [query, setQuery] = useState(q);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(initialExpandedId);
   const [loading, setLoading] = useState(false);
   const [showCreatePanel, setShowCreatePanel] = useState(initialCreateOpen || createOnlyMode);
   const [showTemplatesPanel, setShowTemplatesPanel] = useState(false);
@@ -2147,6 +2149,12 @@ export default function QuotationRequestsDeskClient({
       window.localStorage.setItem(filterStorageKey, statusFilter);
     }
   }, [filterStorageKey, statusFilter]);
+
+  useEffect(() => {
+    if (initialExpandedId) {
+      setExpandedId(initialExpandedId);
+    }
+  }, [initialExpandedId]);
 
   useEffect(() => {
     if (createOnlyMode) return;
