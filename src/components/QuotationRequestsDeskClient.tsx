@@ -2022,43 +2022,25 @@ export default function QuotationRequestsDeskClient({
     }
   }
 
-  function scrollToQuoteItem(
-    refs: { current: Array<HTMLDivElement | null> },
-    index: number,
-  ) {
-    window.setTimeout(() => {
-      refs.current[index]?.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-    }, 40);
-  }
-
   function appendCreateQuoteItem(nextItem?: QuoteItemDraft) {
-    let nextIndex = 0;
     setCreateDraft((current) => {
       const quoteItems = [...current.quoteItems, nextItem ?? createEmptyQuoteItem()];
-      nextIndex = quoteItems.length - 1;
       return {
         ...current,
         quoteItems,
       };
     });
     setCreateItemAccordion((current) => [...current, true]);
-    scrollToQuoteItem(createItemRefs, nextIndex);
   }
 
   function appendResponseQuoteItem(nextItem?: QuoteItemDraft) {
-    let nextIndex = 0;
     setFormState((current) => {
       const quoteItems = [...current.quoteItems, nextItem ?? createEmptyQuoteItem()];
-      nextIndex = quoteItems.length - 1;
       return {
         ...current,
         quoteItems,
       };
     });
-    scrollToQuoteItem(responseItemRefs, nextIndex);
   }
 
   function addCreateCatalogItem(product: CatalogQuoteProduct) {
@@ -2099,11 +2081,9 @@ export default function QuotationRequestsDeskClient({
     });
     setCreateCatalogQuery("");
     setCreateCatalogResults([]);
-    scrollToQuoteItem(createItemRefs, nextIndex);
   }
 
   function addResponseCatalogItem(product: CatalogQuoteProduct) {
-    let nextIndex = 0;
     setFormState((current) => {
       const projectType = expandedRequest?.projectType || "SOLAR_HOME_SYSTEM";
       const currentItems = current.quoteItems.filter((item) => item.itemName.trim() || item.unitPrice.trim() || item.description.trim());
@@ -2120,7 +2100,6 @@ export default function QuotationRequestsDeskClient({
           warrantySource: "CUSTOM",
         }),
       ];
-      nextIndex = nextItems.length - 1;
       return {
         ...current,
         quoteTitle:
@@ -2132,7 +2111,6 @@ export default function QuotationRequestsDeskClient({
     });
     setResponseCatalogQuery("");
     setResponseCatalogResults([]);
-    scrollToQuoteItem(responseItemRefs, nextIndex);
   }
 
   useEffect(() => {
