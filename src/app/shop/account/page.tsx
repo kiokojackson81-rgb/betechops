@@ -16,6 +16,7 @@ import {
   backfillQuoteRequestsForCustomerAccount,
   listCustomerQuoteRequests,
 } from "@/lib/quoteRequests";
+import { listCustomerSiteVisits } from "@/lib/siteVisits";
 import { buildCustomerAccountIdentity, listCustomerAccountOrders } from "@/lib/shopCustomerOrders";
 
 export const metadata: Metadata = buildShopMetadata({
@@ -76,6 +77,12 @@ export default async function ShopAccountPage() {
     normalizedEmails: identity.normalizedEmails,
     take: 6,
   });
+  const recentSiteVisits = await listCustomerSiteVisits({
+    userId: identity.userId,
+    phoneVariants: identity.phoneVariants,
+    normalizedEmails: identity.normalizedEmails,
+    take: 6,
+  });
 
   const account = dbUser || {
     id: user.id,
@@ -119,6 +126,7 @@ export default async function ShopAccountPage() {
               itemPreview: order.itemPreview,
             }))}
             recentQuotes={recentQuotes}
+            recentSiteVisits={recentSiteVisits}
           />
           <div className="mt-4">
             <ShopSupportStrip />

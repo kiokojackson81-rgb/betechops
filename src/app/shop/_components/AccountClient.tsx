@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   CheckCircle2,
+  CalendarCheck2,
   CreditCard,
   MapPin,
   Phone,
@@ -13,6 +14,7 @@ import {
 import CustomerAccountSidebar from "@/app/shop/_components/CustomerAccountSidebar";
 import { getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
 import type { SerializedQuoteRequest } from "@/lib/quoteRequests";
+import type { SerializedSiteVisit } from "@/lib/siteVisits";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import {
   getShopCustomerProfile,
@@ -60,6 +62,7 @@ type AccountClientProps = {
     }>;
   }>;
   recentQuotes: SerializedQuoteRequest[];
+  recentSiteVisits: SerializedSiteVisit[];
 };
 
 function buildFormProfile(
@@ -101,7 +104,16 @@ function formatProjectLabel(value?: string | null) {
   return value.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-export default function AccountClient({ initialProfile, recentOrders, recentQuotes }: AccountClientProps) {
+function formatSiteVisitStatus(status: string) {
+  return status.replace(/_/g, " ").toLowerCase().replace(/^\w/, (letter) => letter.toUpperCase());
+}
+
+function formatSiteVisitOutcome(value?: string | null) {
+  if (!value) return "Visit in progress";
+  return value.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+export default function AccountClient({ initialProfile, recentOrders, recentQuotes, recentSiteVisits }: AccountClientProps) {
   const [localOrders, setLocalOrders] = useState<MockOrderRecord[]>([]);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -571,6 +583,49 @@ export default function AccountClient({ initialProfile, recentOrders, recentQuot
                   })
                 ) : (
                   <div className="text-sm text-slate-500">No recent quote requests saved yet.</div>
+                )}
+              </div>
+            </section>
+
+            <section id="site-visits" className={`${shopStyles.lightCard} scroll-mt-28 p-5`}>
+              <div className="flex items-center gap-2">
+                <div className={shopStyles.sectionEyebrow}>Site visits</div>
+                <CalendarCheck2 className="h-4 w-4 text-[#7a0000]" />
+              </div>
+              <div className="mt-4 space-y-3">
+                {recentSiteVisits.length ? (
+                  recentSiteVisits.slice(0, 3).map((visit) => (
+                    <div key={visit.id} className="rounded-[18px] border border-[#7a0000]/10 bg-[#fcfaf7] p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-black text-slate-950">{visit.visitRef}</div>
+                          <div className="mt-1 text-xs text-slate-500">
+                            {formatProjectLabel(visit.projectType)} • {formatDate(visit.scheduledAt || visit.createdAt)}
+                          </div>
+                        </div>
+                        <div className="rounded-full bg-[#fff3d8] px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-[#7a0000]">
+                          {formatSiteVisitStatus(visit.status)}
+                        </div>
+                      </div>
+                      <div className="mt-2 text-sm text-slate-600">
+                        {[visit.location, visit.town, visit.county].filter(Boolean).join(", ") || "Location pending"}
+                      </div>
+                      <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
+                        <div><span className="font-bold text-slate-950">Assigned:</span> {visit.assignedTechnicianName || visit.assignedStaffName || "Betech team pending"}</div>
+                        <div><span className="font-bold text-slate-950">Visit status:</span> {formatSiteVisitStatus(visit.status)}</div>
+                        <div className="sm:col-span-2">
+                          <span className="font-bold text-slate-950">Outcome:</span> {formatSiteVisitOutcome(visit.outcome)}
+                        </div>
+                        {visit.quoteRef ? (
+                          <div className="sm:col-span-2">
+                            <span className="font-bold text-slate-950">Linked quotation:</span> {visit.quoteRef}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-sm text-slate-500">No site visits have been scheduled on your account yet.</div>
                 )}
               </div>
             </section>

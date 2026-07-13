@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { BellRing, MapPin, Package, ShieldCheck, UserRound } from "lucide-react";
+import { BellRing, CalendarCheck2, MapPin, Package, ShieldCheck, UserRound } from "lucide-react";
 import ShopAccountLogoutButton from "@/app/shop/_components/ShopAccountLogoutButton";
 
-type SidebarSection = "overview" | "address" | "orders" | "quotes";
+type SidebarSection = "overview" | "address" | "orders" | "quotes" | "siteVisits";
 
 export default function CustomerAccountSidebar({
   profileCompletion,
@@ -18,6 +18,7 @@ export default function CustomerAccountSidebar({
     { key: "address" as const, icon: MapPin, label: "Address details", href: "/account#address-details" },
     { key: "orders" as const, icon: Package, label: "Recent orders", href: "/account/orders" },
     { key: "quotes" as const, icon: BellRing, label: "Quote follow-up", href: "/account#quote-follow-up" },
+    { key: "siteVisits" as const, icon: CalendarCheck2, label: "Site visits", href: "/account#site-visits" },
   ];
 
   return (

@@ -3866,6 +3866,13 @@ export default function QuotationRequestsDeskClient({
                               Open customer profile
                               <ExternalLink className="h-4 w-4" />
                             </Link>
+                            <Link
+                              href={`/admin/quotation-center/site-visits?quoteRef=${encodeURIComponent(request.quoteRef || "")}`}
+                              className="inline-flex items-center gap-2 rounded-lg border border-sky-400/20 bg-sky-400/10 px-3 py-2 text-sm font-medium text-sky-100 transition hover:border-sky-300/30 hover:bg-sky-400/15"
+                            >
+                              Schedule site visit
+                              <ExternalLink className="h-4 w-4" />
+                            </Link>
                             <button
                               type="button"
                               disabled={!canOpenReceiptDraft || draftOpening === `${request.id}:quotation`}
