@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { SITE_VISIT_STATUSES } from "@/lib/siteVisits";
+import { SITE_VISIT_STATUSES } from "@/lib/siteVisitShared";
 import type {
   SerializedSiteVisitAttachment,
   SerializedSiteVisitEvent,
@@ -10,7 +10,7 @@ import type {
   SiteVisitOutcome,
   SiteVisitPaymentStatus,
   SiteVisitStatus,
-} from "@/lib/siteVisits";
+} from "@/lib/siteVisitShared";
 import type { QuoteProjectType } from "@/lib/quoteRequests";
 
 type StaffOption = {

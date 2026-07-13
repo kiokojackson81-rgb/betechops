@@ -14,7 +14,7 @@ import {
 import CustomerAccountSidebar from "@/app/shop/_components/CustomerAccountSidebar";
 import { getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
 import type { SerializedQuoteRequest } from "@/lib/quoteRequests";
-import type { SerializedSiteVisit } from "@/lib/siteVisits";
+import type { SerializedSiteVisit } from "@/lib/siteVisitShared";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import {
   getShopCustomerProfile,
