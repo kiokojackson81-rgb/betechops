@@ -854,8 +854,11 @@ export async function updateSiteVisit(
   const preferredDate = input.preferredDate !== undefined
     ? (input.preferredDate?.trim() ? new Date(`${input.preferredDate.trim()}T00:00:00.000`) : null)
     : (existing.preferredDate ? new Date(existing.preferredDate) : null);
-  const completedAt = nextStatus === "VISITED" && !existing.completedAt ? new Date() : existing.completedAt ? new Date(existing.completedAt) : null;
-  const closedAt = nextStatus === "CLOSED" && !existing.closedAt ? new Date() : existing.closedAt ? new Date(existing.closedAt) : null;
+  const completedAt =
+    nextStatus === "VISITED" || nextStatus === "CLOSED"
+      ? (existing.completedAt ? new Date(existing.completedAt) : new Date())
+      : null;
+  const closedAt = nextStatus === "CLOSED" ? (existing.closedAt ? new Date(existing.closedAt) : new Date()) : null;
 
   const updatedRows = await prisma.$queryRaw<SiteVisitRow[]>(Prisma.sql`
     UPDATE "SiteVisit"
@@ -910,8 +913,22 @@ export async function updateSiteVisit(
     RETURNING ${SITE_VISIT_SELECT_SQL}
   `);
 
-  const updated = updatedRows[0] ? serializeSiteVisit(updatedRows[0]) : null;
+  let updated = updatedRows[0] ? serializeSiteVisit(updatedRows[0]) : null;
   if (!updated) return null;
+
+  if (input.status && updated.status !== input.status) {
+    const forcedRows = await prisma.$queryRaw<SiteVisitRow[]>(Prisma.sql`
+      UPDATE "SiteVisit"
+      SET
+        "status" = ${input.status},
+        "completedAt" = ${completedAt},
+        "closedAt" = ${closedAt},
+        "updatedAt" = CURRENT_TIMESTAMP
+      WHERE "id" = ${id}
+      RETURNING ${SITE_VISIT_SELECT_SQL}
+    `);
+    updated = forcedRows[0] ? serializeSiteVisit(forcedRows[0]) : updated;
+  }
 
   await recordSiteVisitEvent({
     siteVisitId: updated.id,
