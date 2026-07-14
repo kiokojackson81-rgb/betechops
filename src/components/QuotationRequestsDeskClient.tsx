@@ -1192,6 +1192,7 @@ export default function QuotationRequestsDeskClient({
   const [showCreatePanel, setShowCreatePanel] = useState(initialCreateOpen || createOnlyMode);
   const [showTemplatesPanel, setShowTemplatesPanel] = useState(false);
   const [showCreateMoreOptions, setShowCreateMoreOptions] = useState(false);
+  const [showResponseMoreOptions, setShowResponseMoreOptions] = useState(false);
   const [createMode, setCreateMode] = useState<CreateQuotationMode>("manual");
   const [createDraft, setCreateDraft] = useState<CreateQuotationDraft>(createDefaultQuotationDraft());
   const [createItemAccordion, setCreateItemAccordion] = useState<boolean[]>([true]);
@@ -2307,6 +2308,7 @@ export default function QuotationRequestsDeskClient({
     });
     setResponseCatalogQuery("");
     setResponseCatalogResults([]);
+    setShowResponseMoreOptions(false);
   }, [expandedRequest]);
 
   async function handleRespond(channelOverrides?: { sendEmail?: boolean; sendSms?: boolean }) {
@@ -4305,65 +4307,6 @@ export default function QuotationRequestsDeskClient({
                                 </button>
                               </div>
 
-                              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                                <label className="text-xs uppercase tracking-wide text-slate-400">
-                                  Payment terms
-                                  <select
-                                    value={formState.paymentTerms}
-                                    onChange={(event) =>
-                                      setFormState((current) => ({
-                                        ...current,
-                                        paymentTerms: event.target.value as QuotePaymentTerms,
-                                      }))
-                                    }
-                                    className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
-                                  >
-                                    {QUOTE_PAYMENT_TERMS.map((term) => (
-                                      <option key={term} value={term}>
-                                        {getQuotePaymentTermsLabel(term)}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
-                                <label className="text-xs uppercase tracking-wide text-slate-400">
-                                  Discount amount
-                                  <input
-                                    value={formState.discountAmount}
-                                    onChange={(event) =>
-                                      setFormState((current) => ({ ...current, discountAmount: event.target.value }))
-                                    }
-                                    placeholder="0"
-                                    className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
-                                  />
-                                </label>
-                                {formState.paymentTerms === "DEPOSIT_AND_BALANCE" ? (
-                                  <>
-                                    <label className="text-xs uppercase tracking-wide text-slate-400">
-                                      Deposit amount
-                                      <input
-                                        value={formState.depositAmount}
-                                        onChange={(event) =>
-                                          setFormState((current) => ({ ...current, depositAmount: event.target.value }))
-                                        }
-                                        placeholder="100000"
-                                        className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
-                                      />
-                                    </label>
-                                    <label className="text-xs uppercase tracking-wide text-slate-400">
-                                      Balance amount
-                                      <input
-                                        value={formState.balanceAmount}
-                                        onChange={(event) =>
-                                          setFormState((current) => ({ ...current, balanceAmount: event.target.value }))
-                                        }
-                                        placeholder={quoteBalancePreview !== null ? String(quoteBalancePreview) : ""}
-                                        className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
-                                      />
-                                    </label>
-                                  </>
-                                ) : null}
-                              </div>
-
                               <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/60 p-4">
                                 <div className="grid gap-2 text-sm text-slate-300 sm:grid-cols-2">
                                   <div>
@@ -4394,31 +4337,129 @@ export default function QuotationRequestsDeskClient({
                                   ) : null}
                                 </div>
                               </div>
+
+                              <button
+                                type="button"
+                                onClick={() => setShowResponseMoreOptions((current) => !current)}
+                                className="mt-4 inline-flex w-full items-center justify-between rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-left"
+                              >
+                                <div>
+                                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">
+                                    More options
+                                  </div>
+                                  <div className="mt-1 text-sm text-slate-500">
+                                    Payment terms, discount, project link, and customer notes.
+                                  </div>
+                                </div>
+                                {showResponseMoreOptions ? (
+                                  <ChevronDown className="h-4 w-4 text-slate-300" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4 text-slate-300" />
+                                )}
+                              </button>
+
+                              {showResponseMoreOptions ? (
+                                <>
+                                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                                    <label className="text-xs uppercase tracking-wide text-slate-400">
+                                      Payment terms
+                                      <select
+                                        value={formState.paymentTerms}
+                                        onChange={(event) =>
+                                          setFormState((current) => ({
+                                            ...current,
+                                            paymentTerms: event.target.value as QuotePaymentTerms,
+                                          }))
+                                        }
+                                        className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                                      >
+                                        {QUOTE_PAYMENT_TERMS.map((term) => (
+                                          <option key={term} value={term}>
+                                            {getQuotePaymentTermsLabel(term)}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                    <label className="text-xs uppercase tracking-wide text-slate-400">
+                                      Discount amount
+                                      <input
+                                        value={formState.discountAmount}
+                                        onChange={(event) =>
+                                          setFormState((current) => ({ ...current, discountAmount: event.target.value }))
+                                        }
+                                        placeholder="0"
+                                        className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                                      />
+                                    </label>
+                                    {formState.paymentTerms === "DEPOSIT_AND_BALANCE" ? (
+                                      <>
+                                        <label className="text-xs uppercase tracking-wide text-slate-400">
+                                          Deposit amount
+                                          <input
+                                            value={formState.depositAmount}
+                                            onChange={(event) =>
+                                              setFormState((current) => ({ ...current, depositAmount: event.target.value }))
+                                            }
+                                            placeholder="100000"
+                                            className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                                          />
+                                        </label>
+                                        <label className="text-xs uppercase tracking-wide text-slate-400">
+                                          Balance amount
+                                          <input
+                                            value={formState.balanceAmount}
+                                            onChange={(event) =>
+                                              setFormState((current) => ({ ...current, balanceAmount: event.target.value }))
+                                            }
+                                            placeholder={quoteBalancePreview !== null ? String(quoteBalancePreview) : ""}
+                                            className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                                          />
+                                        </label>
+                                      </>
+                                    ) : null}
+                                  </div>
+
+                                  <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/40 p-3 sm:p-4">
+                                    <label className="text-xs uppercase tracking-wide text-slate-400">
+                                      TikTok project link (optional)
+                                      <input
+                                        value={formState.projectReferenceLinks}
+                                        onChange={(event) =>
+                                          setFormState((current) => ({ ...current, projectReferenceLinks: event.target.value }))
+                                        }
+                                        placeholder="Paste TikTok project link to feature on the PDF"
+                                        className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 focus:border-emerald-500 focus:outline-none"
+                                      />
+                                    </label>
+                                  </div>
+
+                                  <label className="mt-4 block text-xs uppercase tracking-wide text-slate-400 md:col-span-2">
+                                    Notes to customer (optional)
+                                    <textarea
+                                      rows={4}
+                                      value={formState.quoteMessage}
+                                      onChange={(event) =>
+                                        setFormState((current) => ({ ...current, quoteMessage: event.target.value }))
+                                      }
+                                      placeholder="Optional customer note to print in the quotation"
+                                      className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                                    />
+                                  </label>
+
+                                  <label className="mt-4 block text-xs uppercase tracking-wide text-slate-400 md:col-span-2">
+                                    Internal follow-up notes
+                                    <textarea
+                                      rows={3}
+                                      value={formState.followUpNotes}
+                                      onChange={(event) =>
+                                        setFormState((current) => ({ ...current, followUpNotes: event.target.value }))
+                                      }
+                                      className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                                    />
+                                  </label>
+                                </>
+                              ) : null}
                             </div>
-                            <label className="text-xs uppercase tracking-wide text-slate-400 md:col-span-2">
-                              Customer message
-                              <textarea
-                                rows={5}
-                                value={formState.quoteMessage}
-                                onChange={(event) =>
-                                  setFormState((current) => ({ ...current, quoteMessage: event.target.value }))
-                                }
-                                placeholder="Explain the recommended setup, delivery plan, and next step for the customer."
-                                className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
-                              />
-                            </label>
-                            <label className="text-xs uppercase tracking-wide text-slate-400 md:col-span-2">
-                              Follow-up notes
-                              <textarea
-                                rows={3}
-                                value={formState.followUpNotes}
-                                onChange={(event) =>
-                                  setFormState((current) => ({ ...current, followUpNotes: event.target.value }))
-                                }
-                                placeholder="Internal follow-up notes for the next call or message."
-                                className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
-                              />
-                            </label>
                           </div>
                         </div>
                       </div>
