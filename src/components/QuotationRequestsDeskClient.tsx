@@ -656,6 +656,72 @@ function applyTemplateToCreateDraft(
   };
 }
 
+function applyTemplateToResponseForm(
+  current: QuoteDeskFormState,
+  nextTemplate: SerializedQuotationTemplate | null,
+) {
+  if (!nextTemplate) {
+    return current;
+  }
+
+  const templateFeeState = nextTemplate.items?.length
+    ? splitQuoteItemsAndFees(
+        nextTemplate.items.map((item) => ({
+          itemName: item.itemName,
+          description: item.description || "",
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          defaultWarranty: item.defaultWarranty || "",
+          warranty: item.warranty || "",
+          warrantyPeriod: (item as { warrantyPeriod?: number | null }).warrantyPeriod,
+          warrantyUnit: (item as { warrantyUnit?: QuoteWarrantyUnit | null }).warrantyUnit,
+          warrantyNotes: item.warrantyNotes || "",
+          warrantySource: item.warrantySource || "TEMPLATE_DEFAULT",
+        })),
+      )
+    : null;
+
+  return {
+    ...current,
+    quoteTitle:
+      nextTemplate.templateName ||
+      generateQuoteTitleFromItems(templateFeeState?.quoteItems || current.quoteItems, "SOLAR_HOME_SYSTEM"),
+    quoteMessage: nextTemplate.projectOverview || nextTemplate.scopeOfWork || current.quoteMessage,
+    quoteItems: templateFeeState?.quoteItems || current.quoteItems,
+    discountAmount:
+      nextTemplate.defaultDiscountAmount !== null &&
+      nextTemplate.defaultDiscountAmount !== undefined
+        ? String(nextTemplate.defaultDiscountAmount)
+        : current.discountAmount,
+    fullSystemWarranty: nextTemplate.warranty || current.fullSystemWarranty,
+    projectOverview: nextTemplate.projectOverview || current.projectOverview,
+    whatItCanPower: nextTemplate.whatItCanPower || current.whatItCanPower,
+    whatPriceIncludes: nextTemplate.scopeOfWork || current.whatPriceIncludes,
+    deliveryTimeline: nextTemplate.deliveryTimeline || current.deliveryTimeline,
+    installationTimeline: nextTemplate.installationTimeline || current.installationTimeline,
+    afterSalesSupport: nextTemplate.afterSalesSupport || current.afterSalesSupport,
+    termsAndConditions: nextTemplate.terms || current.termsAndConditions,
+    projectReferenceLinks: nextTemplate.projectReferenceLinks || current.projectReferenceLinks,
+    followUpNotes: nextTemplate.internalNotes || current.followUpNotes,
+    paymentMethod: nextTemplate.defaultPaymentMethod || current.paymentMethod,
+    paymentTerms: nextTemplate.defaultPaymentTerms || current.paymentTerms,
+    deliveryMode: templateFeeState?.deliveryMode || current.deliveryMode,
+    installationMode: templateFeeState?.installationMode || current.installationMode,
+    deliveryFee: templateFeeState?.deliveryFee || current.deliveryFee,
+    installationFee: templateFeeState?.installationFee || current.installationFee,
+    depositAmount:
+      nextTemplate.defaultDepositAmount !== null &&
+      nextTemplate.defaultDepositAmount !== undefined
+        ? String(nextTemplate.defaultDepositAmount)
+        : current.depositAmount,
+    balanceAmount:
+      nextTemplate.defaultBalanceAmount !== null &&
+      nextTemplate.defaultBalanceAmount !== undefined
+        ? String(nextTemplate.defaultBalanceAmount)
+        : current.balanceAmount,
+  };
+}
+
 function parseMoneyInput(value: string) {
   const normalized = value.replace(/,/g, "").trim();
   if (!normalized) return 0;
@@ -1214,6 +1280,7 @@ export default function QuotationRequestsDeskClient({
   const [responseCatalogQuery, setResponseCatalogQuery] = useState("");
   const [responseCatalogLoading, setResponseCatalogLoading] = useState(false);
   const [responseCatalogResults, setResponseCatalogResults] = useState<CatalogQuoteProduct[]>([]);
+  const [responseTemplateId, setResponseTemplateId] = useState("");
   const [eventsByRequestId, setEventsByRequestId] = useState<Record<string, SerializedQuotationEvent[]>>({});
   const [eventsLoadingId, setEventsLoadingId] = useState<string | null>(null);
   const [selectedRequestIds, setSelectedRequestIds] = useState<string[]>([]);
@@ -2308,6 +2375,7 @@ export default function QuotationRequestsDeskClient({
     });
     setResponseCatalogQuery("");
     setResponseCatalogResults([]);
+    setResponseTemplateId(expandedRequest.templateId || "");
     setShowResponseMoreOptions(false);
   }, [expandedRequest]);
 
@@ -4009,6 +4077,28 @@ export default function QuotationRequestsDeskClient({
                                 className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
                               />
                             </label>
+                            {allowTemplateSelection ? (
+                              <label className="text-xs uppercase tracking-wide text-slate-400 md:col-span-2">
+                                Saved template
+                                <select
+                                  value={responseTemplateId}
+                                  onChange={(event) => {
+                                    const nextId = event.target.value;
+                                    const nextTemplate = templates.find((template) => template.id === nextId) ?? null;
+                                    setResponseTemplateId(nextId);
+                                    setFormState((current) => applyTemplateToResponseForm(current, nextTemplate));
+                                  }}
+                                  className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                                >
+                                  <option value="">{templatesLoading ? "Loading templates..." : "Select template"}</option>
+                                  {templates.map((template) => (
+                                    <option key={template.id} value={template.id}>
+                                      {template.templateName}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            ) : null}
                             <div className="md:col-span-2 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
