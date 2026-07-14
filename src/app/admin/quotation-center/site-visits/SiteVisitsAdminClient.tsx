@@ -191,6 +191,28 @@ export default function SiteVisitsAdminClient({ staffOptions, initialQuoteRef }:
   const [uploading, setUploading] = useState(false);
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
 
+  function visitMatchesActiveFilters(visit: SerializedSiteVisit) {
+    if (statusFilter !== "ALL" && visit.status !== statusFilter) return false;
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return true;
+    return [visit.visitRef, visit.quoteRef || "", visit.customerName, visit.customerPhone, visit.county || "", visit.town || ""]
+      .some((value) => value.toLowerCase().includes(normalizedQuery));
+  }
+
+  function syncVisitInQueue(nextVisit: SerializedSiteVisit) {
+    setVisits((current) => {
+      const withoutCurrent = current.filter((visit) => visit.id !== nextVisit.id);
+      if (!visitMatchesActiveFilters(nextVisit)) {
+        return withoutCurrent;
+      }
+      return [nextVisit, ...withoutCurrent].sort((left, right) => {
+        const leftTime = new Date(left.scheduledAt || left.createdAt).getTime();
+        const rightTime = new Date(right.scheduledAt || right.createdAt).getTime();
+        return rightTime - leftTime;
+      });
+    });
+  }
+
   async function loadVisits() {
     setLoading(true);
     setError(null);
@@ -315,9 +337,11 @@ export default function SiteVisitsAdminClient({ staffOptions, initialQuoteRef }:
       });
       const data = await response.json().catch(() => null);
       if (!response.ok || !data?.ok) throw new Error(data?.error || "Failed to update site visit.");
+      syncVisitInQueue(data.visit);
+      setEditForm(buildEditForm(data.visit));
       setMessage(`Site visit ${data.visit.visitRef} updated.`);
-      await loadVisits();
       setSelectedId(data.visit.id);
+      await loadVisits();
       await loadVisitDetail(data.visit.id);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Failed to update site visit.");
@@ -341,6 +365,10 @@ export default function SiteVisitsAdminClient({ staffOptions, initialQuoteRef }:
       const data = await response.json().catch(() => null);
       if (!response.ok || !data?.ok) throw new Error(data?.error || "Failed to upload attachment.");
       setAttachmentFile(null);
+      if (data.visit) {
+        syncVisitInQueue(data.visit);
+        setEditForm(buildEditForm(data.visit));
+      }
       setMessage(
         data.visit?.status === "VISITED"
           ? `Attachment uploaded and ${selectedVisit.visitRef} marked as visited.`
