@@ -341,8 +341,16 @@ export default function SiteVisitsAdminClient({ staffOptions, initialQuoteRef }:
       const data = await response.json().catch(() => null);
       if (!response.ok || !data?.ok) throw new Error(data?.error || "Failed to upload attachment.");
       setAttachmentFile(null);
-      setMessage(`Attachment uploaded to ${selectedVisit.visitRef}.`);
-      await loadVisitDetail(selectedVisit.id);
+      setMessage(
+        data.visit?.status === "VISITED"
+          ? `Attachment uploaded and ${selectedVisit.visitRef} marked as visited.`
+          : `Attachment uploaded to ${selectedVisit.visitRef}.`,
+      );
+      await loadVisits();
+      if (data.visit?.id) {
+        setSelectedId(data.visit.id);
+      }
+      await loadVisitDetail(data.visit?.id || selectedVisit.id);
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "Failed to upload attachment.");
     } finally {

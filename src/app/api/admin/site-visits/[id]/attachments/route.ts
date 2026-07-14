@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import { auth } from "@/lib/auth";
-import { createSiteVisitAttachment, getSiteVisitById } from "@/lib/siteVisits";
+import { createSiteVisitAttachment, getSiteVisitById, updateSiteVisit } from "@/lib/siteVisits";
 
 export const runtime = "nodejs";
 
@@ -60,5 +60,20 @@ export async function POST(
     return NextResponse.json({ ok: false, error: "Failed to save attachment." }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, attachment });
+  const actor = {
+    id: user?.id || "",
+    name: user?.name || null,
+    email: user?.email || null,
+  };
+
+  const updatedVisit =
+    visit.status === "PENDING" || visit.status === "SCHEDULED"
+      ? await updateSiteVisit(id, {
+        customerName: visit.customerName,
+        customerPhone: visit.customerPhone,
+        status: "VISITED",
+      }, actor)
+      : visit;
+
+  return NextResponse.json({ ok: true, attachment, visit: updatedVisit || visit });
 }
