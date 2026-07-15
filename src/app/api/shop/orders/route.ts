@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { applyReferralAttributionToUser, ensureAttributionSchema, REFERRAL_COOKIE_NAME } from "@/lib/attribution";
+import { CUSTOMER_REFERRAL_COOKIE_NAME } from "@/lib/referralCookies";
 import { prisma } from "@/lib/prisma";
 import { findOrCreateCustomerIdentityUser } from "@/lib/customerIdentity";
+import { ensureReviewInvitationsForWebsiteOrder, syncReferralLinkForWebsiteOrder } from "@/lib/reviewsReferrals";
 import {
   buildWebsiteOrderRef,
   deriveWebsiteOrderType,
@@ -81,6 +83,7 @@ export async function POST(request: NextRequest) {
     locationNotes: data.notes?.trim() || null,
   });
   const referralCode = request.cookies.get(REFERRAL_COOKIE_NAME)?.value || "";
+  const customerReferralCode = request.cookies.get(CUSTOMER_REFERRAL_COOKIE_NAME)?.value || "";
   const resolvedReferral = await applyReferralAttributionToUser(customerIdentity.user.id, referralCode);
 
   const created = await prisma.websiteOrder.create({
@@ -110,6 +113,7 @@ export async function POST(request: NextRequest) {
         referredByAgentName: resolvedReferral?.agentName ?? null,
         referredByAgentEmail: resolvedReferral?.agentEmail ?? null,
         attributionCodeUsed: resolvedReferral?.referralCode ?? null,
+        customerReferralCode: customerReferralCode || null,
       },
       items: {
         create: items.map((item) => ({
@@ -130,6 +134,19 @@ export async function POST(request: NextRequest) {
   if (!createdRow) {
     return NextResponse.json({ ok: false, error: "Website order was created but could not be loaded." }, { status: 500 });
   }
+
+  await syncReferralLinkForWebsiteOrder(created.id).catch((error) => {
+    console.error("[referrals] failed to sync customer referral for website order", {
+      orderId: created.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
+  await ensureReviewInvitationsForWebsiteOrder(created.id).catch((error) => {
+    console.error("[reviews] failed to provision review invitations for website order", {
+      orderId: created.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
 
   return NextResponse.json({
     ok: true,

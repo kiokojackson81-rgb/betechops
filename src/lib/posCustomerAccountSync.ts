@@ -7,6 +7,7 @@ import {
 } from "@/lib/customerIdentity";
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
+import { ensureReviewInvitationsForWebsiteOrder, syncReferralLinkForWebsiteOrder } from "@/lib/reviewsReferrals";
 import { ensureWebsiteOrdersSchema } from "@/lib/websiteOrders";
 
 function readJsonObject(value: unknown) {
@@ -237,6 +238,21 @@ export async function syncPosReceiptToCustomerAccount(receiptId: string) {
     }
 
     return saved;
+  });
+
+  await syncReferralLinkForWebsiteOrder(websiteOrder.id).catch((error) => {
+    console.error("[referrals] failed to sync customer referral after POS receipt sync", {
+      websiteOrderId: websiteOrder.id,
+      receiptId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
+  await ensureReviewInvitationsForWebsiteOrder(websiteOrder.id).catch((error) => {
+    console.error("[reviews] failed to provision review invitations after POS receipt sync", {
+      websiteOrderId: websiteOrder.id,
+      receiptId,
+      error: error instanceof Error ? error.message : String(error),
+    });
   });
 
   return {

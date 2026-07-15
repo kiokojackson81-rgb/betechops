@@ -6,11 +6,13 @@ import ShopAnalyticsTracker from "@/app/shop/_components/ShopAnalyticsTracker";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
 import ShopMobileStickyBar from "@/app/shop/_components/ShopMobileStickyBar";
 import ProductCard from "@/app/shop/_components/ProductCard";
+import ReferralClickTracker from "@/app/shop/_components/ReferralClickTracker";
 import ShopBreadcrumbs from "@/app/shop/_components/ShopBreadcrumbs";
 import ShopFooter from "@/app/shop/_components/ShopFooter";
 import ShopHeader from "@/app/shop/_components/ShopHeader";
 import ShopProductDetailActions from "@/app/shop/_components/ShopProductDetailActions";
 import ShopProductGallery from "@/app/shop/_components/ShopProductGallery";
+import ProductReviewsSection from "@/app/shop/_components/ProductReviewsSection";
 import { formatCurrency, shopStyles } from "@/app/shop/_components/shopStyles";
 import MarkdownRendererClient from "@/components/MarkdownRendererClient";
 import { getShopProductBySlug, getShopProductBySlugOrOpsProductId, getShopProducts } from "@/app/shop/shopApi";
@@ -18,6 +20,7 @@ import { buildProductJsonLd, buildShopMetadata } from "@/app/shop/shopMetadata";
 import { shopNavLinks, type ShopProduct } from "@/app/shop/shopData";
 import { getProductAvailabilityBadge, getProductAvailabilityMessage, getProductCheckoutAvailabilityMessage } from "@/app/shop/shopAvailability";
 import { getShopCategoryHref, SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
+import { getPublishedProductReviews } from "@/lib/reviewsReferrals";
 
 function normalizeProductText(value: string) {
   return value
@@ -167,14 +170,21 @@ export default async function ShopProductDetailPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams?: Promise<{ opsProductId?: string }> | { opsProductId?: string };
+  searchParams?: Promise<{ opsProductId?: string; ref?: string }> | { opsProductId?: string; ref?: string };
 }) {
   const { slug } = await params;
   const resolvedSearchParams = await Promise.resolve(searchParams ?? {});
   const product = await getShopProductBySlugOrOpsProductId(slug, resolvedSearchParams.opsProductId);
   if (!product) notFound();
 
-  const products = await getShopProducts();
+  const [products, publishedReviews] = await Promise.all([
+    getShopProducts(),
+    getPublishedProductReviews(product.opsProductId || product.id).catch(() => ({
+      total: 0,
+      averageRating: 0,
+      reviews: [],
+    })),
+  ]);
   const relatedProducts = products.filter((item) => item.category === product.category && item.id !== product.id).slice(0, 4);
   const stockLabelMap = {
     in_stock: "In stock",
@@ -191,6 +201,7 @@ export default async function ShopProductDetailPage({
   const breadcrumbTitle = buildBreadcrumbTitle(product);
   const detailBullets = buildDetailBullets({ ...product, fullDescription: undefined });
   const tiktokEmbedUrl = getTikTokEmbedUrl(product.tiktokVideoUrl);
+  const referralCode = String(resolvedSearchParams.ref || "").trim().toUpperCase();
   const supportItems = [
     {
       icon: <Truck className="h-4 w-4" />,
@@ -246,6 +257,7 @@ export default async function ShopProductDetailPage({
   return (
     <div className={shopStyles.page}>
       <ShopAnalyticsTracker kind="product_view" payload={{ slug: product.slug, name: product.name, category: product.category, brand: product.brand }} />
+      {referralCode ? <ReferralClickTracker referralCode={referralCode} productSlug={product.slug} /> : null}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }} />
       <ShopHeader navLinks={shopNavLinks} />
       <section className="py-4 sm:py-7">
@@ -358,6 +370,12 @@ export default async function ShopProductDetailPage({
                 </details>
               ))}
             </div>
+
+            <ProductReviewsSection
+              averageRating={publishedReviews.averageRating}
+              total={publishedReviews.total}
+              reviews={publishedReviews.reviews}
+            />
 
           </div>
 

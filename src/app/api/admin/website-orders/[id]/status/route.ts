@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma, WebsiteOrderStatus } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { ensureReviewInvitationsForWebsiteOrder, syncReferralLinkForWebsiteOrder } from "@/lib/reviewsReferrals";
 import {
   buildWebsiteOrderReceiptPayload,
   canAdvanceWebsiteOrderStatus,
@@ -124,6 +125,21 @@ export async function PATCH(request: NextRequest, context: { params: Promise<any
     where: { id },
     data: updates,
     include: websiteOrderAdminInclude,
+  });
+
+  await syncReferralLinkForWebsiteOrder(order.id).catch((error) => {
+    console.error("[referrals] failed to sync customer referral after admin website order status change", {
+      orderId: order.id,
+      status: order.status,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
+  await ensureReviewInvitationsForWebsiteOrder(order.id).catch((error) => {
+    console.error("[reviews] failed to provision review invitations after admin website order status change", {
+      orderId: order.id,
+      status: order.status,
+      error: error instanceof Error ? error.message : String(error),
+    });
   });
 
   return NextResponse.json({ ok: true, order: await serializeWebsiteOrder(order) });

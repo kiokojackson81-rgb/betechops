@@ -20,6 +20,10 @@
     {
       "path": "/api/cron/online/email-ingest",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/reviews-referrals/invitations",
+      "schedule": "0 * * * *"
     }
   ],
   "functions": {

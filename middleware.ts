@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getReferralCookieMaxAge, normalizeReferralCode, REFERRAL_COOKIE_NAME } from "@/lib/attribution";
+import { CUSTOMER_REFERRAL_COOKIE_NAME, CUSTOMER_REFERRAL_COOKIE_TTL_SECONDS } from "@/lib/referralCookies";
 import {
   isAllowedSearchCrawlerUserAgent,
   isBlockedCrawlerUserAgent,
@@ -192,10 +193,11 @@ export function middleware(req: NextRequest) {
     }
 
     if (referralCode) {
+      const isCustomerReferral = /^BRF-[A-Z0-9]+$/i.test(referralCode);
       response.cookies.set({
-        name: REFERRAL_COOKIE_NAME,
+        name: isCustomerReferral ? CUSTOMER_REFERRAL_COOKIE_NAME : REFERRAL_COOKIE_NAME,
         value: referralCode,
-        maxAge: getReferralCookieMaxAge(),
+        maxAge: isCustomerReferral ? CUSTOMER_REFERRAL_COOKIE_TTL_SECONDS : getReferralCookieMaxAge(),
         path: "/",
         sameSite: "lax",
         secure: req.nextUrl.protocol === "https:",
