@@ -1089,6 +1089,105 @@ export async function createAdminTestReviewLink(input?: {
   };
 }
 
+export async function deleteAdminTestReviewLink(invitationId: string) {
+  await ensureReviewReferralSchema();
+
+  const invitationRows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `
+      SELECT ri.*, p."sku" AS "productSku"
+      FROM "ReviewInvitation" ri
+      LEFT JOIN "Product" p ON p."id" = ri."productId"
+      WHERE ri."id" = $1
+      LIMIT 1
+    `,
+    invitationId,
+  );
+  const invitation = invitationRows[0];
+  if (!invitation) {
+    throw new Error("Test review invitation not found.");
+  }
+
+  const productSku = cleanOptional(invitation.productSku);
+  const orderRef = cleanOptional(invitation.orderOrReceiptRef) || "";
+  const isTestInvitation = productSku === "TEST-REVIEW-JACKSON-0705663175" || orderRef.startsWith("TEST-");
+  if (!isTestInvitation) {
+    throw new Error("Only admin test review invitations can be deleted from this tool.");
+  }
+
+  const reviewRows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `SELECT "id" FROM "ProductReviewSubmission" WHERE "invitationId" = $1 LIMIT 1`,
+    invitationId,
+  );
+  const reviewId = cleanOptional(reviewRows[0]?.id);
+
+  let accountId: string | null = null;
+  if (reviewId) {
+    const accountRows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+      `SELECT DISTINCT "accountId" FROM "ReferralLink" WHERE "reviewId" = $1 AND "accountId" IS NOT NULL`,
+      reviewId,
+    );
+    accountId = cleanOptional(accountRows[0]?.accountId);
+
+    await prisma.$executeRawUnsafe(
+      `
+        DELETE FROM "ReferralEvent"
+        WHERE "referralLinkId" IN (
+          SELECT "id" FROM "ReferralLink" WHERE "reviewId" = $1
+        )
+      `,
+      reviewId,
+    );
+    await prisma.$executeRawUnsafe(
+      `
+        DELETE FROM "ReferralWithdrawalAllocation"
+        WHERE "referralLinkId" IN (
+          SELECT "id" FROM "ReferralLink" WHERE "reviewId" = $1
+        )
+      `,
+      reviewId,
+    );
+    await prisma.$executeRawUnsafe(`DELETE FROM "ReferralLink" WHERE "reviewId" = $1`, reviewId);
+    await prisma.$executeRawUnsafe(`DELETE FROM "ReviewSupportRequest" WHERE "reviewId" = $1`, reviewId);
+    await prisma.$executeRawUnsafe(`DELETE FROM "ProductReviewSubmission" WHERE "id" = $1`, reviewId);
+  }
+
+  await prisma.$executeRawUnsafe(`DELETE FROM "ReviewInvitation" WHERE "id" = $1`, invitationId);
+
+  if (accountId) {
+    const accountUsageRows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+      `
+        SELECT
+          EXISTS(SELECT 1 FROM "ReferralLink" WHERE "accountId" = $1) AS "hasLinks",
+          EXISTS(SELECT 1 FROM "ReferralWithdrawalRequest" WHERE "accountId" = $1) AS "hasWithdrawals"
+      `,
+      accountId,
+    );
+    const hasLinks = Boolean(accountUsageRows[0]?.hasLinks);
+    const hasWithdrawals = Boolean(accountUsageRows[0]?.hasWithdrawals);
+    if (!hasLinks && !hasWithdrawals) {
+      await prisma.$executeRawUnsafe(`DELETE FROM "ReferralAccount" WHERE "id" = $1`, accountId);
+    }
+  }
+
+  if (productSku === "TEST-REVIEW-JACKSON-0705663175") {
+    const remainingProductRows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+      `
+        SELECT
+          EXISTS(SELECT 1 FROM "ReviewInvitation" WHERE "productId" = $1) AS "hasInvitations",
+          EXISTS(SELECT 1 FROM "ProductReviewSubmission" WHERE "productId" = $1) AS "hasReviews"
+      `,
+      asString(invitation.productId),
+    );
+    const hasInvitations = Boolean(remainingProductRows[0]?.hasInvitations);
+    const hasReviews = Boolean(remainingProductRows[0]?.hasReviews);
+    if (!hasInvitations && !hasReviews) {
+      await prisma.product.delete({ where: { id: asString(invitation.productId) } }).catch(() => null);
+    }
+  }
+
+  return { deletedInvitationId: invitationId };
+}
+
 export async function getReviewInvitationDetailsByToken(token: string) {
   const row = await getInvitationRowByToken(token);
   if (!row) return null;

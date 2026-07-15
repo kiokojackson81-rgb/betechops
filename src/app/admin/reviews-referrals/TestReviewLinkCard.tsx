@@ -57,6 +57,7 @@ export default function TestReviewLinkCard() {
   const [result, setResult] = useState<TestReviewLinkPayload | null>(null);
   const [copied, setCopied] = useState(false);
   const [mode, setMode] = useState<"create" | "send">("create");
+  const [deleting, setDeleting] = useState(false);
 
   async function createLink(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -91,6 +92,27 @@ export default function TestReviewLinkCard() {
     await navigator.clipboard.writeText(result.reviewUrl);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
+  }
+
+  async function deleteTestReview() {
+    if (!result?.invitation.invitationId) return;
+    setDeleting(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/admin/reviews-referrals/test-link/${result.invitation.invitationId}`, {
+        method: "DELETE",
+      });
+      const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || "Unable to delete test review.");
+      }
+      setResult(null);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to delete test review.");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   const previewImage = result?.invitation.product.imageUrl || result?.product.imageUrl;
@@ -226,6 +248,14 @@ export default function TestReviewLinkCard() {
               >
                 Open review page
               </a>
+              <button
+                type="button"
+                onClick={deleteTestReview}
+                disabled={deleting}
+                className="rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm font-semibold text-rose-100 transition hover:border-rose-300/30 disabled:opacity-60"
+              >
+                {deleting ? "Deleting..." : "Delete test review"}
+              </button>
             </div>
 
             {result.dispatch?.errors?.length ? (
