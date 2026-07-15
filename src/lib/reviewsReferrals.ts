@@ -1525,6 +1525,87 @@ export async function processDueReviewInvitations(input?: { limit?: number; dryR
   return summary;
 }
 
+export async function backfillReviewInvitationsForRecentSales(input?: {
+  lookbackDays?: number;
+  limit?: number;
+  dryRun?: boolean;
+  processDue?: boolean;
+}) {
+  await ensureReviewReferralSchema();
+
+  const now = new Date();
+  const lookbackDays = Math.min(Math.max(Number(input?.lookbackDays || 7), 1), 90);
+  const limit = Math.min(Math.max(Number(input?.limit || 200), 1), 500);
+  const windowStart = new Date(now.getTime() - lookbackDays * 24 * 60 * 60 * 1000);
+
+  const orders = await prisma.websiteOrder.findMany({
+    where: {
+      createdAt: {
+        gte: windowStart,
+        lte: now,
+      },
+      status: {
+        not: "CANCELLED",
+      },
+    },
+    select: {
+      id: true,
+      orderRef: true,
+      createdAt: true,
+      status: true,
+    },
+    orderBy: {
+      createdAt: "asc",
+    },
+    take: limit,
+  });
+
+  const summary = {
+    lookbackDays,
+    windowStart: windowStart.toISOString(),
+    windowEnd: now.toISOString(),
+    scannedOrders: orders.length,
+    createdInvitations: 0,
+    skippedInvitations: 0,
+    touchedOrders: 0,
+    dueProcessing: null as null | Awaited<ReturnType<typeof processDueReviewInvitations>>,
+    orders: [] as Array<{
+      websiteOrderId: string;
+      orderRef: string | null;
+      createdAt: string;
+      status: string;
+      created: number;
+      skipped: number;
+    }>,
+  };
+
+  if (!input?.dryRun) {
+    for (const order of orders) {
+      const result = await ensureReviewInvitationsForWebsiteOrder(order.id);
+      summary.touchedOrders += 1;
+      summary.createdInvitations += Number(result.created || 0);
+      summary.skippedInvitations += Number(result.skipped || 0);
+      summary.orders.push({
+        websiteOrderId: order.id,
+        orderRef: cleanOptional(order.orderRef),
+        createdAt: order.createdAt.toISOString(),
+        status: String(order.status || ""),
+        created: Number(result.created || 0),
+        skipped: Number(result.skipped || 0),
+      });
+    }
+  }
+
+  if (input?.processDue) {
+    summary.dueProcessing = await processDueReviewInvitations({
+      limit: Math.min(Math.max(limit, 1), 250),
+      dryRun: Boolean(input?.dryRun),
+    });
+  }
+
+  return summary;
+}
+
 export async function submitReviewByToken(token: string, input: z.infer<typeof submitReviewSchema>) {
   await ensureReviewReferralSchema();
   const invitation = await getInvitationRowByToken(token);
