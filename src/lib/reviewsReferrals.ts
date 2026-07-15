@@ -441,6 +441,24 @@ type ReviewInvitationAdminRow = {
   orderOrReceiptRef: string | null;
 };
 
+type SubmittedReviewAdminRow = {
+  id: string;
+  invitationId: string;
+  customerName: string;
+  customerPhone: string;
+  customerTown: string | null;
+  productName: string;
+  reviewTitle: string | null;
+  reviewBody: string;
+  overallRating: number;
+  wouldRecommend: string | null;
+  published: boolean;
+  moderationStatus: string;
+  hasProblem: boolean;
+  orderOrReceiptRef: string | null;
+  createdAt: string | null;
+};
+
 type PurchaseContext = {
   productId: string;
   productName: string;
@@ -2424,6 +2442,41 @@ export async function getReviewInvitationOperations(args?: {
   );
 
   return rows.map(presentReviewInvitationAdminRow);
+}
+
+export async function getSubmittedReviewOperations(limit = 120) {
+  await ensureReviewReferralSchema();
+  const boundedLimit = Math.min(Math.max(Number(limit || 120), 1), 250);
+  const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `
+      SELECT
+        prs.*,
+        ri."orderOrReceiptRef"
+      FROM "ProductReviewSubmission" prs
+      INNER JOIN "ReviewInvitation" ri ON ri."id" = prs."invitationId"
+      ORDER BY prs."createdAt" DESC
+      LIMIT $1
+    `,
+    boundedLimit,
+  );
+
+  return rows.map((row) => ({
+    id: asString(row.id),
+    invitationId: asString(row.invitationId),
+    customerName: asString(row.customerName),
+    customerPhone: maskPhone(asString(row.customerPhone)),
+    customerTown: cleanOptional(row.customerTown),
+    productName: asString(row.productName),
+    reviewTitle: cleanOptional(row.reviewTitle),
+    reviewBody: asString(row.reviewBody),
+    overallRating: Number(row.overallRating || 0),
+    wouldRecommend: cleanOptional(row.wouldRecommend),
+    published: Boolean(row.published),
+    moderationStatus: asString(row.moderationStatus || "pending"),
+    hasProblem: Boolean(row.hasProblem),
+    orderOrReceiptRef: cleanOptional(row.orderOrReceiptRef),
+    createdAt: toDate(row.createdAt)?.toISOString() || null,
+  })) satisfies SubmittedReviewAdminRow[];
 }
 
 export async function retryReviewInvitationSend(invitationId: string) {

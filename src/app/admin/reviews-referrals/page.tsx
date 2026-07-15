@@ -6,13 +6,16 @@ import TestReviewLinkCard from "./TestReviewLinkCard";
 
 export const dynamic = "force-dynamic";
 
-function StatCard({ label, value, tone }: { label: string; value: string; tone?: string }) {
-  return (
-    <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
+function StatCard({ label, value, tone, href }: { label: string; value: string; tone?: string; href?: string }) {
+  const content = (
+    <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4 transition hover:border-white/20 hover:bg-white/[0.06]">
       <div className="text-xs uppercase tracking-[0.22em] text-slate-500">{label}</div>
       <div className={`mt-3 text-2xl font-semibold ${tone || "text-white"}`}>{value}</div>
     </div>
   );
+
+  if (href) return <Link href={href}>{content}</Link>;
+  return content;
 }
 
 export default async function AdminReviewsReferralsPage() {
@@ -42,8 +45,8 @@ export default async function AdminReviewsReferralsPage() {
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-          <StatCard label="Pending invitations" value={String(summary.reviews.pendingInvitations)} />
-          <StatCard label="Submitted reviews" value={String(summary.reviews.submittedReviews)} tone="text-amber-200" />
+          <StatCard label="Pending invitations" value={String(summary.reviews.pendingInvitations)} href="/admin/reviews-referrals/invitations?status=due" />
+          <StatCard label="Submitted reviews" value={String(summary.reviews.submittedReviews)} tone="text-amber-200" href="/admin/reviews-referrals/submitted-reviews" />
           <StatCard label="Published reviews" value={String(summary.reviews.publishedReviews)} tone="text-emerald-200" />
           <StatCard label="Open support alerts" value={String(summary.support.openSupportRequests)} tone="text-rose-200" />
           <StatCard label="Referral links" value={String(summary.referrals.totalReferrals)} tone="text-sky-200" />

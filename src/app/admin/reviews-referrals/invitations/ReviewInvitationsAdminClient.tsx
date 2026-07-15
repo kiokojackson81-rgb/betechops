@@ -39,9 +39,15 @@ function deriveQueue(row: InvitationRow) {
   return "due";
 }
 
-export default function ReviewInvitationsAdminClient({ initialRows }: { initialRows: InvitationRow[] }) {
+export default function ReviewInvitationsAdminClient({
+  initialRows,
+  initialFilter = "all",
+}: {
+  initialRows: InvitationRow[];
+  initialFilter?: "all" | "due" | "sent" | "failed";
+}) {
   const [rows, setRows] = useState(initialRows);
-  const [filter, setFilter] = useState<"all" | "due" | "sent" | "failed">("all");
+  const [filter, setFilter] = useState<"all" | "due" | "sent" | "failed">(initialFilter);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const filteredRows = useMemo(
@@ -147,7 +153,7 @@ export default function ReviewInvitationsAdminClient({ initialRows }: { initialR
                 disabled={busyId !== null || queue === "sent"}
                 className="rounded-2xl bg-cyan-300 px-4 py-3 text-sm font-semibold text-slate-950 disabled:opacity-60"
               >
-                {busyId === row.id ? "Retrying..." : queue === "sent" ? "Already sent" : "Retry send"}
+                {busyId === row.id ? "Sending..." : queue === "sent" ? "Already sent" : queue === "failed" ? "Retry send" : "Send invitation"}
               </button>
             </div>
           </article>

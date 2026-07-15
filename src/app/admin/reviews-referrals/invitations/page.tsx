@@ -6,12 +6,21 @@ import ReviewInvitationsAdminClient from "./ReviewInvitationsAdminClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminReviewInvitationsPage() {
+export default async function AdminReviewInvitationsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ status?: string }> | { status?: string };
+}) {
   const session = await auth();
   const role = (session?.user as { role?: string } | undefined)?.role ?? "";
   if (!session) redirect("/admin/login");
   if (role !== "ADMIN" && role !== "SUPERVISOR") redirect("/not-authorized");
 
+  const resolvedSearchParams = await Promise.resolve(searchParams ?? {});
+  const requestedStatus = String(resolvedSearchParams.status || "").trim();
+  const statusFilter = ["all", "due", "sent", "failed"].includes(requestedStatus)
+    ? (requestedStatus as "all" | "due" | "sent" | "failed")
+    : "all";
   const rows = await getReviewInvitationOperations({ status: "all", limit: 120 });
 
   return (
@@ -22,7 +31,7 @@ export default async function AdminReviewInvitationsPage() {
             <div className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-300">Review Invitations</div>
             <h1 className="text-4xl font-semibold tracking-tight text-white">Post-purchase review send operations</h1>
             <p className="max-w-3xl text-sm text-slate-400">
-              Inspect due, sent, and failed review invitations and retry customer outreach when a send attempt fails.
+              Inspect due, sent, and failed review invitations and send customer invitations directly from this queue.
             </p>
           </div>
           <Link
@@ -34,7 +43,7 @@ export default async function AdminReviewInvitationsPage() {
         </div>
       </section>
 
-      <ReviewInvitationsAdminClient initialRows={rows} />
+      <ReviewInvitationsAdminClient initialRows={rows} initialFilter={statusFilter} />
     </div>
   );
 }
