@@ -556,9 +556,9 @@ export function buildReviewInvitationOutboundMessage(input: {
 }) {
   const firstName = firstNameOf(input.customerName);
   return [
-    `Hello ${firstName}, thank you for buying ${input.productName} from Betech Solar.`,
-    `Please share your review here: ${input.reviewUrl}`,
-    "Your feedback helps us improve service and unlock customer referral rewards.",
+    `Hello ${firstName}, thank you for SHOPPING AT BETECH SOLAR RECENETLY .`,
+    `Please share your review ABOUT THE PRODUCT here: ${input.reviewUrl}`,
+    "Your feedback helps us improve OUR serviceS and YOU CAN EARN referral rewards.",
   ].join(" ");
 }
 
@@ -985,6 +985,7 @@ export async function createAdminTestReviewLink(input?: {
   customerName?: string;
   customerPhone?: string;
   customerTown?: string | null;
+  sendNow?: boolean;
 }) {
   await ensureReviewReferralSchema();
 
@@ -1059,8 +1060,23 @@ export async function createAdminTestReviewLink(input?: {
     deliveryMode: "pickup",
   });
 
+  let dispatch: Record<string, unknown> | null = null;
+  if (input?.sendNow) {
+    const createdRow = await getInvitationRowByToken(result.invitation.token);
+    if (!createdRow) {
+      throw new Error("Unable to load the created test invitation for sending.");
+    }
+    dispatch = await processReviewInvitationSend(createdRow);
+  }
+
   return {
     ...result,
+    outboundMessage: buildReviewInvitationOutboundMessage({
+      customerName,
+      productName: product.name,
+      reviewUrl: result.reviewUrl,
+    }),
+    dispatch,
     product: {
       id: product.id,
       name: product.name,

@@ -9,6 +9,7 @@ const createAdminTestReviewLinkSchema = z.object({
   customerName: z.string().trim().min(2).optional(),
   customerPhone: z.string().trim().min(7).optional(),
   customerTown: z.string().trim().min(2).optional(),
+  sendNow: z.boolean().optional(),
 });
 
 export async function POST(request: Request) {

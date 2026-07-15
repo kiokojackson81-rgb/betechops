@@ -4,6 +4,13 @@ import { useState } from "react";
 
 type TestReviewLinkPayload = {
   reviewUrl: string;
+  outboundMessage?: string;
+  dispatch?: {
+    status?: string;
+    phone?: string;
+    channels?: string[];
+    errors?: string[];
+  } | null;
   invitation: {
     invitationId: string;
     expiresAt: string;
@@ -49,6 +56,7 @@ export default function TestReviewLinkCard() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<TestReviewLinkPayload | null>(null);
   const [copied, setCopied] = useState(false);
+  const [mode, setMode] = useState<"create" | "send">("create");
 
   async function createLink(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -59,7 +67,7 @@ export default function TestReviewLinkCard() {
       const response = await fetch("/api/admin/reviews-referrals/test-link", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customerName, customerPhone, customerTown }),
+        body: JSON.stringify({ customerName, customerPhone, customerTown, sendNow: mode === "send" }),
       });
       const payload = (await response.json().catch(() => ({}))) as {
         ok?: boolean;
@@ -92,9 +100,9 @@ export default function TestReviewLinkCard() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-3">
           <div className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-300">Test Review Link</div>
-          <h2 className="text-3xl font-semibold tracking-tight text-white">Create a safe admin review test</h2>
+          <h2 className="text-3xl font-semibold tracking-tight text-white">Create or send a real admin review test</h2>
           <p className="max-w-3xl text-sm text-slate-400">
-            This creates a manual invitation in the dev review system without sending SMS or WhatsApp to the customer.
+            Create a safe preview-only invitation or send the real review SMS and WhatsApp flow for the dedicated test product.
           </p>
         </div>
       </div>
@@ -127,13 +135,22 @@ export default function TestReviewLinkCard() {
           </label>
         </div>
 
-        <div className="flex items-end justify-start xl:justify-end">
+        <div className="flex flex-wrap items-end justify-start gap-3 xl:justify-end">
           <button
             type="submit"
             disabled={loading}
+            onClick={() => setMode("create")}
             className="inline-flex rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-semibold text-slate-950 disabled:opacity-60"
           >
-            {loading ? "Creating..." : "Create test review link"}
+            {loading && mode === "create" ? "Creating..." : "Create test review link"}
+          </button>
+          <button
+            type="submit"
+            disabled={loading}
+            onClick={() => setMode("send")}
+            className="inline-flex rounded-2xl border border-amber-400/20 bg-amber-400/10 px-5 py-3 text-sm font-semibold text-amber-100 disabled:opacity-60"
+          >
+            {loading && mode === "send" ? "Sending..." : "Create and send real test"}
           </button>
         </div>
       </form>
@@ -189,6 +206,8 @@ export default function TestReviewLinkCard() {
               <div>Expires: {formatDate(result.invitation.expiresAt)}</div>
               <div>Delivery mode: {result.invitation.order.deliveryMode || "pickup"}</div>
               <div>Image source: {previewImage ? "Product image will render on the review page." : "Fallback Betech Solar badge only."}</div>
+              <div>Dispatch status: {result.dispatch?.status || "Not sent yet"}</div>
+              <div>Channels: {result.dispatch?.channels?.join(", ") || "No outbound channel used yet"}</div>
             </div>
 
             <div className="mt-5 flex flex-wrap gap-3">
@@ -207,6 +226,19 @@ export default function TestReviewLinkCard() {
               >
                 Open review page
               </a>
+            </div>
+
+            {result.dispatch?.errors?.length ? (
+              <div className="mt-4 rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">
+                {result.dispatch.errors.join(" | ")}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="rounded-[26px] border border-white/10 bg-slate-950/70 p-5 xl:col-span-2">
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300">SMS preview</div>
+            <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-sm leading-7 text-slate-100">
+              {result.outboundMessage || "No message generated."}
             </div>
           </div>
         </div>
