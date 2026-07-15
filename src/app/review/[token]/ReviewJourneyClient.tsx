@@ -5,6 +5,7 @@ import { useState } from "react";
 type InvitationPayload = {
   invitationId: string;
   token: string;
+  isTestMode: boolean;
   reviewStatus: string;
   expiresAt: string;
   purchaseDate: string;
@@ -192,6 +193,16 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.26),transparent_28%),linear-gradient(180deg,#fff8ef_0%,#fffdfb_45%,#f8fafc_100%)] px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl space-y-6">
+        {invitation.isTestMode ? (
+          <section className="rounded-[28px] border border-amber-300/45 bg-[linear-gradient(180deg,#fff7db_0%,#fff2c0_100%)] px-5 py-4 text-[#5a2400] shadow-[0_14px_30px_rgba(245,158,11,0.12)]">
+            <div className="text-xs font-black uppercase tracking-[0.22em] text-[#9a3412]">Admin Test Mode</div>
+            <div className="mt-2 text-lg font-bold">This is a real test review page.</div>
+            <p className="mt-2 text-sm leading-7 text-[#7c2d12]">
+              Any review submitted here is saved to the real review workflow for monitoring, but it belongs to the dedicated admin test product only.
+            </p>
+          </section>
+        ) : null}
+
         <section className="overflow-hidden rounded-[34px] border border-[#7a0000]/10 bg-white shadow-[0_28px_80px_rgba(122,0,0,0.10)]">
           <div className="grid gap-0 lg:grid-cols-[1.05fr_0.95fr]">
             <div className="bg-[linear-gradient(145deg,#210505_0%,#4d0909_48%,#7a0000_100%)] px-6 py-8 text-white sm:px-8">
@@ -424,6 +435,9 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                   {submitting ? "Submitting review..." : "Submit my review"}
                 </button>
                 <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Verified purchase only. One review per invitation.</div>
+                {invitation.isTestMode ? (
+                  <div className="text-xs uppercase tracking-[0.18em] text-amber-700">Admin test submission enabled.</div>
+                ) : null}
               </div>
             </form>
           </section>
@@ -435,6 +449,11 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
               <p className="mt-4 text-sm leading-7 text-slate-600">
                 Your feedback has been submitted successfully. It will appear on the product page after moderation. If you reported a problem, our support team has already been alerted.
               </p>
+              {invitation.isTestMode ? (
+                <div className="mt-4 rounded-2xl border border-amber-300/40 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  Test submission recorded successfully. Admin can now refresh the test monitor page and verify the submitted review.
+                </div>
+              ) : null}
 
               <div className="mt-6 rounded-[28px] border border-[#eddacf] bg-[#fffaf5] p-5">
                 <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Submitted review</div>

@@ -13,8 +13,12 @@ type TestReviewLinkPayload = {
   } | null;
   invitation: {
     invitationId: string;
+    token: string;
+    isTestMode: boolean;
+    reviewStatus: string;
     expiresAt: string;
     purchaseDate: string;
+    usedAt?: string | null;
     customer: {
       firstName: string;
       town: string | null;
@@ -30,6 +34,14 @@ type TestReviewLinkPayload = {
       orderOrReceiptRef: string | null;
       deliveryMode: string | null;
     };
+    review?: {
+      reviewTitle: string | null;
+      reviewBody: string;
+      overallRating: number;
+      wouldRecommend: string | null;
+      moderationStatus: string;
+      createdAt: string | null;
+    } | null;
   };
   product: {
     imageUrl: string | null;
@@ -58,6 +70,7 @@ export default function TestReviewLinkCard() {
   const [copied, setCopied] = useState(false);
   const [mode, setMode] = useState<"create" | "send">("create");
   const [deleting, setDeleting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   async function createLink(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -112,6 +125,31 @@ export default function TestReviewLinkCard() {
       setError(requestError instanceof Error ? requestError.message : "Unable to delete test review.");
     } finally {
       setDeleting(false);
+    }
+  }
+
+  async function refreshTestStatus() {
+    if (!result?.invitation.token) return;
+    setRefreshing(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/reviews/invitations/${result.invitation.token}`, {
+        cache: "no-store",
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        invitation?: TestReviewLinkPayload["invitation"];
+        error?: string;
+      };
+      if (!response.ok || !payload.ok || !payload.invitation) {
+        throw new Error(payload.error || "Unable to refresh test review status.");
+      }
+      setResult((current) => (current ? { ...current, invitation: payload.invitation! } : current));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to refresh test review status.");
+    } finally {
+      setRefreshing(false);
     }
   }
 
@@ -228,6 +266,8 @@ export default function TestReviewLinkCard() {
               <div>Expires: {formatDate(result.invitation.expiresAt)}</div>
               <div>Delivery mode: {result.invitation.order.deliveryMode || "pickup"}</div>
               <div>Image source: {previewImage ? "Product image will render on the review page." : "Fallback Betech Solar badge only."}</div>
+              <div>Test page mode: {result.invitation.isTestMode ? "Real admin test page" : "Standard review page"}</div>
+              <div>Review status: {result.invitation.reviewStatus}</div>
               <div>Dispatch status: {result.dispatch?.status || "Not sent yet"}</div>
               <div>Channels: {result.dispatch?.channels?.join(", ") || "No outbound channel used yet"}</div>
             </div>
@@ -239,6 +279,14 @@ export default function TestReviewLinkCard() {
                 className="rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm font-semibold text-white transition hover:border-white/20"
               >
                 {copied ? "Copied" : "Copy link"}
+              </button>
+              <button
+                type="button"
+                onClick={refreshTestStatus}
+                disabled={refreshing}
+                className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300/30 disabled:opacity-60"
+              >
+                {refreshing ? "Refreshing..." : "Refresh review status"}
               </button>
               <a
                 href={result.reviewUrl}
@@ -271,6 +319,20 @@ export default function TestReviewLinkCard() {
               {result.outboundMessage || "No message generated."}
             </div>
           </div>
+
+          {result.invitation.review ? (
+            <div className="rounded-[26px] border border-emerald-400/20 bg-emerald-400/10 p-5 xl:col-span-2">
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200">Submitted Test Review</div>
+              <div className="mt-3 text-xl font-bold text-white">{result.invitation.review.reviewTitle || "Customer review submitted"}</div>
+              <div className="mt-3 text-sm leading-7 text-emerald-50/90">{result.invitation.review.reviewBody}</div>
+              <div className="mt-4 flex flex-wrap gap-4 text-sm text-emerald-100">
+                <span>Overall: {result.invitation.review.overallRating}/5</span>
+                <span>Recommend: {result.invitation.review.wouldRecommend || "Not specified"}</span>
+                <span>Moderation: {result.invitation.review.moderationStatus}</span>
+                <span>Submitted: {result.invitation.review.createdAt ? formatDate(result.invitation.review.createdAt) : "Just now"}</span>
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </section>

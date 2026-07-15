@@ -387,6 +387,7 @@ export const createReferralWithdrawalSchema = z.object({
 export type ReviewInvitationDetails = {
   invitationId: string;
   token: string;
+  isTestMode: boolean;
   reviewStatus: string;
   expiresAt: string;
   purchaseDate: string;
@@ -841,9 +842,12 @@ async function presentInvitationRow(row: Record<string, unknown>, token: string)
   const product = await getProductSummary(productId);
   const review = await getReviewRowByInvitationId(asString(row.id));
   const slug = slugifyProductName(product.name);
+  const orderRef = cleanOptional(row.orderOrReceiptRef) || "";
+  const isTestMode = orderRef.startsWith("TEST-");
   return {
     invitationId: asString(row.id),
     token,
+    isTestMode,
     reviewStatus: asString(row.reviewStatus || "PENDING"),
     expiresAt: toDate(row.expiresAt)?.toISOString() || "",
     purchaseDate: toDate(row.purchaseDate)?.toISOString() || "",
