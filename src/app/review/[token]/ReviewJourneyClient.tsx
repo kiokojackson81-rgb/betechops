@@ -503,8 +503,8 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                 <div className="mt-2 text-2xl font-black tracking-tight text-[#210505]">{invitation.product.name}</div>
                 <div className="mt-4 grid gap-2 text-sm text-slate-700">
                   <div>Selling price: {formatMoney(invitation.product.currentPrice)}</div>
-                  <div>You will earn a 6% commission of {formatMoney(projectedCommission)} if any of your referral purchases from us.</div>
-                  <div>We track their purchases using the phone number that you enter below.</div>
+                  <div>You will earn a commission of {formatMoney(projectedCommission)}, which is 6% of the selling price, when your referral purchases from us.</div>
+                  <div>We track their purchases using the phone number you enter below and deposit your commission to your account once your referral has purchased.</div>
                 </div>
               </div>
 
