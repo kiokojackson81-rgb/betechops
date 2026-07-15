@@ -203,73 +203,75 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
           </section>
         ) : null}
 
-        <section className="overflow-hidden rounded-[34px] border border-[#7a0000]/10 bg-white shadow-[0_28px_80px_rgba(122,0,0,0.10)]">
-          <div className="grid gap-0 lg:grid-cols-[1.05fr_0.95fr]">
-            <div className="bg-[linear-gradient(145deg,#210505_0%,#4d0909_48%,#7a0000_100%)] px-6 py-8 text-white sm:px-8">
-              <div className="text-xs font-black uppercase tracking-[0.28em] text-amber-300">Verified Purchase Review</div>
-              <h1 className="mt-4 text-3xl font-black tracking-tight sm:text-5xl">
-                Hello {invitation.customer.firstName}, how is your product performing?
-              </h1>
-              <p className="mt-4 max-w-xl text-sm leading-7 text-amber-50/90 sm:text-base">
-                Thank you for purchasing from Betech Solar Solutions. Share your experience below, then refer a friend or family member and earn after a successful sale.
-              </p>
+        {!alreadySubmitted ? (
+          <section className="overflow-hidden rounded-[34px] border border-[#7a0000]/10 bg-white shadow-[0_28px_80px_rgba(122,0,0,0.10)]">
+            <div className="grid gap-0 lg:grid-cols-[1.05fr_0.95fr]">
+              <div className="bg-[linear-gradient(145deg,#210505_0%,#4d0909_48%,#7a0000_100%)] px-6 py-8 text-white sm:px-8">
+                <div className="text-xs font-black uppercase tracking-[0.28em] text-amber-300">Verified Purchase Review</div>
+                <h1 className="mt-4 text-3xl font-black tracking-tight sm:text-5xl">
+                  Hello {invitation.customer.firstName}, how is your product performing?
+                </h1>
+                <p className="mt-4 max-w-xl text-sm leading-7 text-amber-50/90 sm:text-base">
+                  Thank you for purchasing from Betech Solar Solutions. Share your experience below, then refer a friend or family member and earn after a successful sale.
+                </p>
 
-              <div className="mt-8 grid gap-4 sm:grid-cols-2">
-                <div className="rounded-[24px] border border-white/10 bg-white/10 p-4 backdrop-blur">
-                  <div className="text-xs uppercase tracking-[0.18em] text-amber-200">Purchase date</div>
-                  <div className="mt-2 text-lg font-semibold">{formatDate(invitation.purchaseDate)}</div>
-                </div>
-                <div className="rounded-[24px] border border-white/10 bg-white/10 p-4 backdrop-blur">
-                  <div className="text-xs uppercase tracking-[0.18em] text-amber-200">Reference</div>
-                  <div className="mt-2 text-lg font-semibold">{invitation.order.orderOrReceiptRef || "Verified order"}</div>
-                </div>
-                <div className="rounded-[24px] border border-white/10 bg-white/10 p-4 backdrop-blur">
-                  <div className="text-xs uppercase tracking-[0.18em] text-amber-200">Review link status</div>
-                  <div className="mt-2 text-lg font-semibold">{alreadySubmitted ? "Submitted" : "Pending"}</div>
-                </div>
-                <div className="rounded-[24px] border border-white/10 bg-white/10 p-4 backdrop-blur">
-                  <div className="text-xs uppercase tracking-[0.18em] text-amber-200">Expires</div>
-                  <div className="mt-2 text-lg font-semibold">{formatDate(invitation.expiresAt)}</div>
+                <div className="mt-8 grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-[24px] border border-white/10 bg-white/10 p-4 backdrop-blur">
+                    <div className="text-xs uppercase tracking-[0.18em] text-amber-200">Purchase date</div>
+                    <div className="mt-2 text-lg font-semibold">{formatDate(invitation.purchaseDate)}</div>
+                  </div>
+                  <div className="rounded-[24px] border border-white/10 bg-white/10 p-4 backdrop-blur">
+                    <div className="text-xs uppercase tracking-[0.18em] text-amber-200">Reference</div>
+                    <div className="mt-2 text-lg font-semibold">{invitation.order.orderOrReceiptRef || "Verified order"}</div>
+                  </div>
+                  <div className="rounded-[24px] border border-white/10 bg-white/10 p-4 backdrop-blur">
+                    <div className="text-xs uppercase tracking-[0.18em] text-amber-200">Review link status</div>
+                    <div className="mt-2 text-lg font-semibold">Pending</div>
+                  </div>
+                  <div className="rounded-[24px] border border-white/10 bg-white/10 p-4 backdrop-blur">
+                    <div className="text-xs uppercase tracking-[0.18em] text-amber-200">Expires</div>
+                    <div className="mt-2 text-lg font-semibold">{formatDate(invitation.expiresAt)}</div>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="bg-[#fff8f2] p-5 sm:p-8">
-              <div className="rounded-[28px] border border-[#ecd7cb] bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.07)]">
-                <div className="flex flex-col gap-5 sm:flex-row">
-                  <div className="h-32 w-full overflow-hidden rounded-[24px] bg-[#fff4e3] sm:h-40 sm:w-40 sm:shrink-0">
-                    {invitation.product.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={invitation.product.imageUrl} alt={invitation.product.name} className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full items-center justify-center px-4 text-center text-sm font-semibold text-[#7a0000]">
-                        Betech Solar
+              <div className="bg-[#fff8f2] p-5 sm:p-8">
+                <div className="rounded-[28px] border border-[#ecd7cb] bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.07)]">
+                  <div className="flex flex-col gap-5 sm:flex-row">
+                    <div className="h-32 w-full overflow-hidden rounded-[24px] bg-[#fff4e3] sm:h-40 sm:w-40 sm:shrink-0">
+                      {invitation.product.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={invitation.product.imageUrl} alt={invitation.product.name} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full items-center justify-center px-4 text-center text-sm font-semibold text-[#7a0000]">
+                          Betech Solar
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="inline-flex rounded-full border border-[#0f9d58]/15 bg-[#eefcf4] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#0f9d58]">
+                        Verified Purchase
                       </div>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="inline-flex rounded-full border border-[#0f9d58]/15 bg-[#eefcf4] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#0f9d58]">
-                      Verified Purchase
+                      <h2 className="mt-3 text-2xl font-black tracking-tight text-[#210505]">{invitation.product.name}</h2>
+                      <div className="mt-4 grid gap-2 text-sm text-slate-600">
+                        <div>Purchased: {formatDate(invitation.purchaseDate)}</div>
+                        <div>Receipt / order: {invitation.order.orderOrReceiptRef || "Verified order"}</div>
+                        <div>Current price: {formatMoney(invitation.product.currentPrice)}</div>
+                        <div>Warranty: {invitation.product.warranty || "Manufacturer warranty available"}</div>
+                      </div>
+                      <a
+                        href={`/shop/product/${invitation.product.slug}`}
+                        className="mt-5 inline-flex rounded-2xl border border-[#7a0000]/15 px-4 py-2 text-sm font-semibold text-[#7a0000] transition hover:bg-[#fff7ee]"
+                      >
+                        View product details
+                      </a>
                     </div>
-                    <h2 className="mt-3 text-2xl font-black tracking-tight text-[#210505]">{invitation.product.name}</h2>
-                    <div className="mt-4 grid gap-2 text-sm text-slate-600">
-                      <div>Purchased: {formatDate(invitation.purchaseDate)}</div>
-                      <div>Receipt / order: {invitation.order.orderOrReceiptRef || "Verified order"}</div>
-                      <div>Current price: {formatMoney(invitation.product.currentPrice)}</div>
-                      <div>Warranty: {invitation.product.warranty || "Manufacturer warranty available"}</div>
-                    </div>
-                    <a
-                      href={`/shop/product/${invitation.product.slug}`}
-                      className="mt-5 inline-flex rounded-2xl border border-[#7a0000]/15 px-4 py-2 text-sm font-semibold text-[#7a0000] transition hover:bg-[#fff7ee]"
-                    >
-                      View product details
-                    </a>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
+        ) : null}
 
         {!alreadySubmitted ? (
           <section className="rounded-[34px] border border-[#ecd7cb] bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)] sm:p-8">
