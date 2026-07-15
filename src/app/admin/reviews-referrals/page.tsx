@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { getReviewsReferralsAdminSummary } from "@/lib/reviewsReferrals";
+import TestReviewLinkCard from "./TestReviewLinkCard";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,8 @@ export default async function AdminReviewsReferralsPage() {
 
   return (
     <div className="space-y-8">
+      <TestReviewLinkCard />
+
       <section className="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.95),rgba(2,6,23,.98))] p-8">
         <div className="space-y-3">
           <div className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-300">Reviews & Referrals</div>

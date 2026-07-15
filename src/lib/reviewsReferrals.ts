@@ -981,6 +981,98 @@ export async function createReviewInvitation(input: z.infer<typeof createReviewI
   };
 }
 
+export async function createAdminTestReviewLink(input?: {
+  customerName?: string;
+  customerPhone?: string;
+  customerTown?: string | null;
+}) {
+  await ensureReviewReferralSchema();
+
+  const customerName = String(input?.customerName || "Jackson").trim() || "Jackson";
+  const customerPhone = String(input?.customerPhone || "0705663175").trim() || "0705663175";
+  const customerTown = cleanOptional(input?.customerTown) || "Nairobi";
+  const sku = "TEST-REVIEW-JACKSON-0705663175";
+  const imageUrl = "https://www.betech.co.ke/agents/product-solar-kit-clean.png";
+
+  const product = await prisma.product.upsert({
+    where: { sku },
+    update: {
+      name: "Betech Review Test Solar Kit",
+      category: "Testing",
+      sellingPrice: 24999,
+      showInShop: true,
+      ecommerceVisible: true,
+      shopWarranty: "12 months",
+      shopImageUrl: imageUrl,
+      mainImageUrl: imageUrl,
+      shortDescription: "Temporary product used for review flow testing.",
+      description: "Temporary product used for review flow testing.",
+      stockQuantity: 5,
+      isActive: true,
+      status: "ACTIVE",
+      availabilityType: "SHOP",
+    },
+    create: {
+      sku,
+      name: "Betech Review Test Solar Kit",
+      category: "Testing",
+      sellingPrice: 24999,
+      showInShop: true,
+      ecommerceVisible: true,
+      shopWarranty: "12 months",
+      shopImageUrl: imageUrl,
+      mainImageUrl: imageUrl,
+      shortDescription: "Temporary product used for review flow testing.",
+      description: "Temporary product used for review flow testing.",
+      stockQuantity: 5,
+      isActive: true,
+      status: "ACTIVE",
+      availabilityType: "SHOP",
+    },
+    select: {
+      id: true,
+      name: true,
+      category: true,
+      sellingPrice: true,
+      shopWarranty: true,
+      defaultWarranty: true,
+      shopImageUrl: true,
+      mainImageUrl: true,
+    },
+  });
+
+  const now = new Date();
+  const purchaseDate = new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000);
+  const scheduledSendAt = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const result = await createReviewInvitation({
+    productId: product.id,
+    websiteOrderId: null,
+    orderId: null,
+    receiptId: null,
+    customerUserId: null,
+    customerName,
+    customerPhone,
+    customerTown,
+    orderOrReceiptRef: `TEST-${customerName.toUpperCase().replace(/[^A-Z0-9]+/g, "-")}-${now.toISOString().slice(0, 10).replace(/-/g, "")}`,
+    purchaseDate,
+    scheduledSendAt,
+    deliveryMode: "pickup",
+  });
+
+  return {
+    ...result,
+    product: {
+      id: product.id,
+      name: product.name,
+      category: product.category,
+      currentPrice: Number(product.sellingPrice || 0),
+      warranty: product.shopWarranty || product.defaultWarranty || null,
+      imageUrl: product.shopImageUrl || product.mainImageUrl || null,
+      slug: slugifyProductName(product.name),
+    },
+  };
+}
+
 export async function getReviewInvitationDetailsByToken(token: string) {
   const row = await getInvitationRowByToken(token);
   if (!row) return null;
