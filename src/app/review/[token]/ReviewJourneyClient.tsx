@@ -74,6 +74,23 @@ function formatMoney(value: number) {
   }).format(value || 0);
 }
 
+function buildReferralShareMessage(input: {
+  referredName?: string;
+  productName: string;
+  productPrice: number;
+  referralUrl: string;
+}) {
+  return [
+    `Hello${input.referredName ? ` ${input.referredName}` : ""}, I recently purchased this product from Betech Solar Solutions and thought it might help you too.`,
+    "",
+    `${input.productName}`,
+    `Price: ${formatMoney(input.productPrice)}`,
+    "",
+    "View product details here:",
+    input.referralUrl,
+  ].join("\n");
+}
+
 function Stars({
   name,
   value,
@@ -130,6 +147,15 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
   });
 
   const alreadySubmitted = Boolean(invitation.review);
+  const projectedCommission = Number((invitation.product.currentPrice * 0.06).toFixed(2));
+  const referralMessagePreview = referralSuccess
+    ? buildReferralShareMessage({
+        referredName: referralForm.referredName,
+        productName: invitation.product.name,
+        productPrice: invitation.product.currentPrice,
+        referralUrl: referralSuccess.referralUrl,
+      })
+    : null;
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -477,7 +503,8 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                 <div className="mt-2 text-2xl font-black tracking-tight text-[#210505]">{invitation.product.name}</div>
                 <div className="mt-4 grid gap-2 text-sm text-slate-700">
                   <div>Selling price: {formatMoney(invitation.product.currentPrice)}</div>
-                  <div>Your commission after a completed sale: approximately based on current policy</div>
+                  <div>You will earn a 6% commission of {formatMoney(projectedCommission)} if any of your referral purchases from us.</div>
+                  <div>We track their purchases using the phone number that you enter below.</div>
                 </div>
               </div>
 
@@ -530,10 +557,14 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                     <div>Potential commission: {formatMoney(referralSuccess.potentialCommission)}</div>
                     <div className="break-all">Referral link: {referralSuccess.referralUrl}</div>
                   </div>
+                  <div className="rounded-2xl border border-[#ddc6ba] bg-[#fffaf5] p-4">
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Prefilled share message</div>
+                    <pre className="mt-3 whitespace-pre-wrap break-words text-sm leading-7 text-slate-700">{referralMessagePreview}</pre>
+                  </div>
                   <div className="flex flex-wrap gap-3">
                     <a
                       href={`https://wa.me/?text=${encodeURIComponent(
-                        `Hello${referralForm.referredName ? ` ${referralForm.referredName}` : ""}, I recently purchased this product from Betech Solar Solutions and thought it might help you too.\n\n${invitation.product.name}\nPrice: ${formatMoney(invitation.product.currentPrice)}\n\nView product details here:\n${referralSuccess.referralUrl}`,
+                        referralMessagePreview || "",
                       )}`}
                       target="_blank"
                       rel="noreferrer"

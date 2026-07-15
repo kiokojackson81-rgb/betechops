@@ -1005,6 +1005,8 @@ export async function createAdminTestReviewLink(input?: {
       name: "Betech Review Test Solar Kit",
       category: "Testing",
       sellingPrice: 24999,
+      commissionEnabled: true,
+      commissionAmount: 0,
       showInShop: true,
       ecommerceVisible: true,
       shopWarranty: "12 months",
@@ -1022,6 +1024,8 @@ export async function createAdminTestReviewLink(input?: {
       name: "Betech Review Test Solar Kit",
       category: "Testing",
       sellingPrice: 24999,
+      commissionEnabled: true,
+      commissionAmount: 0,
       showInShop: true,
       ecommerceVisible: true,
       shopWarranty: "12 months",
@@ -1045,6 +1049,35 @@ export async function createAdminTestReviewLink(input?: {
       mainImageUrl: true,
     },
   });
+
+  const referralPolicyId = `test-policy-${product.id}`;
+  await prisma.$executeRawUnsafe(
+    `
+      INSERT INTO "ProductReferralPolicy" (
+        "id", "productId", "enabled", "commissionType", "commissionRate", "fixedAmount",
+        "maximumAmount", "minimumQualifyingSale", "holdingDays", "requiresFullPayment",
+        "createdAt", "updatedAt"
+      )
+      VALUES (
+        $1, $2, TRUE, 'PERCENTAGE', 6, NULL,
+        NULL, NULL, 7, TRUE,
+        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      )
+      ON CONFLICT ("productId")
+      DO UPDATE SET
+        "enabled" = TRUE,
+        "commissionType" = 'PERCENTAGE',
+        "commissionRate" = 6,
+        "fixedAmount" = NULL,
+        "maximumAmount" = NULL,
+        "minimumQualifyingSale" = NULL,
+        "holdingDays" = 7,
+        "requiresFullPayment" = TRUE,
+        "updatedAt" = CURRENT_TIMESTAMP
+    `,
+    referralPolicyId,
+    product.id,
+  );
 
   const now = new Date();
   const purchaseDate = new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000);
