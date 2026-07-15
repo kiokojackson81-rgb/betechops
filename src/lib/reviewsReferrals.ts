@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { sendTransactionalSms } from "@/lib/africasTalking";
+import { sendOtpSms, sendTransactionalSms } from "@/lib/africasTalking";
 import { sendGeneralCustomerNotificationEmail } from "@/lib/email";
 import { hasWhatsAppConfig, sendWhatsAppTextMessage } from "@/lib/notifications/whatsapp";
 import { normalizeKenyanPhone } from "@/lib/phone";
@@ -2148,6 +2148,7 @@ export async function sendReferralAccountOtp(token: string) {
   }
 
   const otp = await createOtpCodeForChannel("phone", normalizedPhone);
+  await sendOtpSms(otp.normalizedIdentifier, otp.code);
   return {
     phone: maskPhone(otp.normalizedIdentifier),
   };
