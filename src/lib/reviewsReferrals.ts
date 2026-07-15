@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { sendTransactionalSms } from "@/lib/africasTalking";
+import { sendGeneralCustomerNotificationEmail } from "@/lib/email";
 import { hasWhatsAppConfig, sendWhatsAppTextMessage } from "@/lib/notifications/whatsapp";
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { createOtpCodeForChannel, createDirectVerifiedAuthToken, readVerifiedAuthToken, verifyOtpCodeForChannel } from "@/lib/phoneOtpAuth";
@@ -19,6 +20,7 @@ const REVIEW_REFERRAL_SCHEMA_SQL = [
     "customerUserId" TEXT,
     "customerName" TEXT NOT NULL,
     "customerPhone" TEXT NOT NULL,
+    "customerEmail" TEXT,
     "customerTown" TEXT,
     "productId" TEXT NOT NULL,
     "productName" TEXT NOT NULL,
@@ -43,6 +45,7 @@ const REVIEW_REFERRAL_SCHEMA_SQL = [
   `CREATE INDEX IF NOT EXISTS "ReviewInvitation_customerPhone_createdAt_idx" ON "ReviewInvitation"("customerPhone","createdAt")`,
   `CREATE INDEX IF NOT EXISTS "ReviewInvitation_expiresAt_reviewStatus_idx" ON "ReviewInvitation"("expiresAt","reviewStatus")`,
   `ALTER TABLE "ReviewInvitation" ADD COLUMN IF NOT EXISTS "publicToken" TEXT`,
+  `ALTER TABLE "ReviewInvitation" ADD COLUMN IF NOT EXISTS "customerEmail" TEXT`,
   `ALTER TABLE "ReviewInvitation" ADD COLUMN IF NOT EXISTS "sendAttempts" INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE "ReviewInvitation" ADD COLUMN IF NOT EXISTS "lastSendAttemptAt" TIMESTAMP(3)`,
   `ALTER TABLE "ReviewInvitation" ADD COLUMN IF NOT EXISTS "lastSendStatus" TEXT`,
@@ -338,6 +341,7 @@ export const createReviewInvitationSchema = z.object({
   customerUserId: nullableString,
   customerName: z.string().trim().min(2),
   customerPhone: z.string().trim().min(7),
+  customerEmail: nullableString,
   customerTown: nullableString,
   orderOrReceiptRef: nullableString,
   purchaseDate: z.coerce.date().optional(),
@@ -443,6 +447,7 @@ type PurchaseContext = {
   customerUserId: string | null;
   customerName: string;
   customerPhone: string;
+  customerEmail: string | null;
   customerTown: string | null;
   purchaseDate: Date;
   orderOrReceiptRef: string | null;
@@ -556,11 +561,24 @@ export function buildReviewInvitationOutboundMessage(input: {
   reviewUrl: string;
 }) {
   const firstName = firstNameOf(input.customerName);
+  return `Hello ${firstName}, thank you for shopping with us recently. We'd appreciate it if you could share your review of the product here: ${input.reviewUrl}. Your feedback helps us improve our service, and you can also earn referral rewards. Thank you!`;
+}
+
+export function buildReviewInvitationWhatsAppMessage(input: {
+  customerName: string;
+  productName: string;
+  reviewUrl: string;
+}) {
+  const firstName = firstNameOf(input.customerName);
   return [
-    `Hello ${firstName}, thank you for SHOPPING AT BETECH SOLAR RECENETLY .`,
-    `Please share your review ABOUT THE PRODUCT here: ${input.reviewUrl}`,
-    "Your feedback helps us improve OUR serviceS and YOU CAN EARN referral rewards.",
-  ].join(" ");
+    `Hello ${firstName},`,
+    "",
+    "Thank you for shopping with us recently at Betech Solar.",
+    `We'd appreciate it if you could share your review of the product here: ${input.reviewUrl}`,
+    "",
+    "Your feedback helps us improve our service, and you can also earn referral rewards.",
+    "Thank you!",
+  ].join("\n");
 }
 
 export function getReviewInvitationExpiry(baseDate = new Date()) {
@@ -661,6 +679,7 @@ async function resolvePurchaseContext(input: z.infer<typeof createReviewInvitati
       customerUserId: websiteOrder.customerUserId,
       customerName: cleanOptional(websiteOrder.customerName) || input.customerName,
       customerPhone: normalizeKenyanPhone(websiteOrder.customerPhone) || normalizedPhone,
+      customerEmail: cleanOptional(websiteOrder.customerEmail),
       customerTown: websiteOrder.customerUser?.town || input.customerTown || null,
       purchaseDate: websiteOrder.createdAt,
       orderOrReceiptRef: websiteOrder.orderRef,
@@ -694,6 +713,7 @@ async function resolvePurchaseContext(input: z.infer<typeof createReviewInvitati
       customerUserId: null,
       customerName: input.customerName,
       customerPhone: normalizeKenyanPhone(receipt.order.customerPhone || "") || normalizedPhone,
+      customerEmail: cleanOptional(receipt.order.customerEmail),
       customerTown: input.customerTown || null,
       purchaseDate: receipt.generatedAt,
       orderOrReceiptRef: receipt.receiptNumber || receipt.order.orderNumber,
@@ -723,6 +743,7 @@ async function resolvePurchaseContext(input: z.infer<typeof createReviewInvitati
       customerUserId: null,
       customerName: input.customerName,
       customerPhone: normalizeKenyanPhone(order.customerPhone || "") || normalizedPhone,
+      customerEmail: cleanOptional(order.customerEmail),
       customerTown: input.customerTown || null,
       purchaseDate: order.createdAt,
       orderOrReceiptRef: order.orderNumber,
@@ -739,6 +760,7 @@ async function resolvePurchaseContext(input: z.infer<typeof createReviewInvitati
     customerUserId: input.customerUserId || null,
     customerName: input.customerName,
     customerPhone: normalizedPhone,
+    customerEmail: cleanOptional(input.customerEmail),
     customerTown: input.customerTown || null,
     purchaseDate: input.purchaseDate || new Date(),
     orderOrReceiptRef: input.orderOrReceiptRef || null,
@@ -947,14 +969,14 @@ export async function createReviewInvitation(input: z.infer<typeof createReviewI
   await prisma.$executeRawUnsafe(
     `
       INSERT INTO "ReviewInvitation" (
-        "id", "tokenHash", "publicToken", "customerUserId", "customerName", "customerPhone", "customerTown",
+        "id", "tokenHash", "publicToken", "customerUserId", "customerName", "customerPhone", "customerEmail", "customerTown",
         "productId", "productName", "websiteOrderId", "orderId", "receiptId", "orderOrReceiptRef",
         "purchaseDate", "deliveryMode", "scheduledSendAt", "expiresAt", "createdAt", "updatedAt"
       )
       VALUES (
-        $1, $2, $3, $4, $5, $6, $7,
-        $8, $9, $10, $11, $12, $13,
-        $14, $15, $16, $17, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        $1, $2, $3, $4, $5, $6, $7, $8,
+        $9, $10, $11, $12, $13, $14,
+        $15, $16, $17, $18, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
       )
     `,
     invitationId,
@@ -963,6 +985,7 @@ export async function createReviewInvitation(input: z.infer<typeof createReviewI
     context.customerUserId,
     context.customerName,
     context.customerPhone,
+    context.customerEmail,
     context.customerTown,
     context.productId,
     context.productName,
@@ -1109,6 +1132,11 @@ export async function createAdminTestReviewLink(input?: {
   return {
     ...result,
     outboundMessage: buildReviewInvitationOutboundMessage({
+      customerName,
+      productName: product.name,
+      reviewUrl: result.reviewUrl,
+    }),
+    outboundWhatsAppMessage: buildReviewInvitationWhatsAppMessage({
       customerName,
       productName: product.name,
       reviewUrl: result.reviewUrl,
@@ -1325,13 +1353,19 @@ async function processReviewInvitationSend(
 
   const publicToken = await ensureInvitationPublicToken(row);
   const reviewUrl = `https://www.betech.co.ke/review/${publicToken}`;
-  const message = buildReviewInvitationOutboundMessage({
+  const smsMessage = buildReviewInvitationOutboundMessage({
+    customerName: asString(row.customerName),
+    productName: asString(row.productName),
+    reviewUrl,
+  });
+  const whatsappMessage = buildReviewInvitationWhatsAppMessage({
     customerName: asString(row.customerName),
     productName: asString(row.productName),
     reviewUrl,
   });
   const phone = normalizeKenyanPhone(asString(row.customerPhone));
-  if (!phone) {
+  const email = cleanOptional(row.customerEmail);
+  if (!phone && !email) {
     if (!options?.dryRun) {
       await prisma.$executeRawUnsafe(
         `
@@ -1347,20 +1381,20 @@ async function processReviewInvitationSend(
         invitationId,
       );
     }
-    return { invitationId, status: "failed", reason: "invalid_phone" } as Record<string, unknown>;
+    return { invitationId, status: "failed", reason: "missing_phone_and_email" } as Record<string, unknown>;
   }
 
   if (options?.dryRun) {
-    return { invitationId, status: "dry_run", phone, reviewUrl } as Record<string, unknown>;
+    return { invitationId, status: "dry_run", phone, email, reviewUrl } as Record<string, unknown>;
   }
 
   let sent = false;
   const channels: string[] = [];
   const errors: string[] = [];
 
-  if (hasWhatsAppConfig()) {
+  if (phone && hasWhatsAppConfig()) {
     try {
-      await sendWhatsAppTextMessage({ to: phone, body: message, previewUrl: true });
+      await sendWhatsAppTextMessage({ to: phone, body: whatsappMessage, previewUrl: true });
       sent = true;
       channels.push("whatsapp");
     } catch (error) {
@@ -1368,12 +1402,34 @@ async function processReviewInvitationSend(
     }
   }
 
-  try {
-    await sendTransactionalSms(phone, message);
-    sent = true;
-    channels.push("sms");
-  } catch (error) {
-    errors.push(error instanceof Error ? error.message : "SMS send failed.");
+  if (phone) {
+    try {
+      await sendTransactionalSms(phone, smsMessage);
+      sent = true;
+      channels.push("sms");
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : "SMS send failed.");
+    }
+  }
+
+  if (email) {
+    try {
+      await sendGeneralCustomerNotificationEmail({
+        to: email,
+        subject: "Please review your recent Betech Solar purchase",
+        title: "Share your product review",
+        intro: `Hello ${firstNameOf(asString(row.customerName))},`,
+        bodyHtml: `<p>Thank you for shopping with us recently.</p><p>We'd appreciate it if you could share your review of the product by clicking the button below.</p><p>Your feedback helps us improve our service, and you can also earn referral rewards.</p>`,
+        bodyText: `Hello ${firstNameOf(asString(row.customerName))},\n\nThank you for shopping with us recently.\nWe'd appreciate it if you could share your review of the product here: ${reviewUrl}\n\nYour feedback helps us improve our service, and you can also earn referral rewards.\nThank you!`,
+        ctaLabel: "Share your review",
+        ctaUrl: reviewUrl,
+        outro: "Thank you for choosing Betech Solar Solutions.",
+      });
+      sent = true;
+      channels.push("email");
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : "Email send failed.");
+    }
   }
 
   if (!sent) {

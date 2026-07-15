@@ -5,6 +5,7 @@ import { useState } from "react";
 type TestReviewLinkPayload = {
   reviewUrl: string;
   outboundMessage?: string;
+  outboundWhatsAppMessage?: string;
   dispatch?: {
     status?: string;
     phone?: string;
@@ -317,6 +318,13 @@ export default function TestReviewLinkCard() {
             <div className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300">SMS preview</div>
             <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-sm leading-7 text-slate-100">
               {result.outboundMessage || "No message generated."}
+            </div>
+          </div>
+
+          <div className="rounded-[26px] border border-white/10 bg-slate-950/70 p-5 xl:col-span-2">
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300">WhatsApp template</div>
+            <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-sm leading-7 text-slate-100 whitespace-pre-wrap">
+              {result.outboundWhatsAppMessage || "No WhatsApp template generated."}
             </div>
           </div>
 
