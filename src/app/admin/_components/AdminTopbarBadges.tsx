@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 export default function AdminTopbarBadges() {
-  const [pp, setPP] = useState<number | null>(null);
+  const [reviews, setReviews] = useState<number | null>(null);
   const [rp, setRP] = useState<number | null>(null);
 
   useEffect(() => {
@@ -11,11 +11,16 @@ export default function AdminTopbarBadges() {
     (async () => {
       try {
         const [a, b] = await Promise.all([
-          fetch("/api/orders/pending-pricing", { cache: "no-store" }).then(r => r.ok ? r.json() : { count: 0 }),
+          fetch("/api/admin/reviews-referrals/summary", { cache: "no-store" }).then(r => r.ok ? r.json() : { summary: { reviews: { submittedReviews: 0 } } }),
           fetch("/api/returns/waiting-pickup", { cache: "no-store" }).then(r => r.ok ? r.json() : { count: 0 }),
         ]);
-        if (!ignore) { setPP(a.count ?? 0); setRP(b.count ?? 0); }
-      } catch { if (!ignore) { setPP(0); setRP(0); } }
+        if (!ignore) {
+          setReviews(a.summary?.reviews?.submittedReviews ?? 0);
+          setRP(b.count ?? 0);
+        }
+      } catch {
+        if (!ignore) { setReviews(0); setRP(0); }
+      }
     })();
     return () => { ignore = true; };
   }, []);
@@ -33,7 +38,7 @@ export default function AdminTopbarBadges() {
 
   return (
     <div className="flex items-center gap-2">
-      <Badge href="/admin/pending-pricing" label="Pending Pricing" count={pp} />
+      <Badge href="/admin/reviews-referrals" label="Customer Reviews" count={reviews} />
       <Badge href="/admin/returns" label="Returns" count={rp} />
     </div>
   );

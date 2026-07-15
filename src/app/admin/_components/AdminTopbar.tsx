@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 export default function AdminTopbar() {
-  const [pendingPricing, setPendingPricing] = useState<number | null>(null);
+  const [reviewsCount, setReviewsCount] = useState<number | null>(null);
   const [waitingPickup, setWaitingPickup] = useState<number | null>(null);
 
   useEffect(() => {
@@ -12,17 +12,17 @@ export default function AdminTopbar() {
     (async () => {
       try {
         const [pp, rp] = await Promise.all([
-          fetch("/api/orders/pending-pricing", { cache: "no-store" })
+          fetch("/api/admin/reviews-referrals/summary", { cache: "no-store" })
             .then(r => r.json()).catch(() => ({ count: 0 })),
           fetch("/api/returns/waiting-pickup", { cache: "no-store" })
             .then(r => r.json()).catch(() => ({ count: 0 })),
         ]);
         if (!ignore) {
-          setPendingPricing(typeof pp.count === "number" ? pp.count : 0);
+          setReviewsCount(typeof pp?.summary?.reviews?.submittedReviews === "number" ? pp.summary.reviews.submittedReviews : 0);
           setWaitingPickup(typeof rp.count === "number" ? rp.count : 0);
         }
       } catch {
-        if (!ignore) { setPendingPricing(0); setWaitingPickup(0); }
+        if (!ignore) { setReviewsCount(0); setWaitingPickup(0); }
       }
     })();
     return () => { ignore = true; };
@@ -34,11 +34,11 @@ export default function AdminTopbar() {
       <Link href="/admin/shops" className="px-3 py-1 rounded bg-white/5">Shops</Link>
       <Link href="/admin/users" className="px-3 py-1 rounded bg-white/5">Users</Link>
 
-      <Link href="/admin/pending-pricing" className="px-3 py-1 rounded bg-white/5 relative">
-        Pending Pricing
-        {pendingPricing !== null && (
+      <Link href="/admin/reviews-referrals" className="px-3 py-1 rounded bg-white/5 relative">
+        Customer Reviews
+        {reviewsCount !== null && (
           <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-yellow-500/20 px-2 text-yellow-300 text-xs">
-            {pendingPricing}
+            {reviewsCount}
           </span>
         )}
       </Link>
