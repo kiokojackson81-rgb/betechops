@@ -47,8 +47,8 @@ export default async function AdminReviewsReferralsPage() {
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
           <StatCard label="Pending invitations" value={String(summary.reviews.pendingInvitations)} href="/admin/reviews-referrals/invitations?status=due" />
           <StatCard label="Submitted reviews" value={String(summary.reviews.submittedReviews)} tone="text-amber-200" href="/admin/reviews-referrals/submitted-reviews" />
-          <StatCard label="Published reviews" value={String(summary.reviews.publishedReviews)} tone="text-emerald-200" />
-          <StatCard label="Open support alerts" value={String(summary.support.openSupportRequests)} tone="text-rose-200" />
+          <StatCard label="Published reviews" value={String(summary.reviews.publishedReviews)} tone="text-emerald-200" href="/admin/reviews-referrals/published-reviews" />
+          <StatCard label="Open support alerts" value={String(summary.support.openSupportRequests)} tone="text-rose-200" href="/admin/reviews-referrals/support-alerts" />
           <StatCard label="Referral links" value={String(summary.referrals.totalReferrals)} tone="text-sky-200" />
           <StatCard label="Potential commissions" value={money.format(summary.referrals.potentialCommission)} tone="text-cyan-200" />
           <StatCard label="Pending withdrawals" value={String(summary.withdrawals.pendingWithdrawals)} tone="text-amber-200" />
