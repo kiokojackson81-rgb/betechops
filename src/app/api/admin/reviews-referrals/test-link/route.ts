@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 const createAdminTestReviewLinkSchema = z.object({
   customerName: z.string().trim().min(2).optional(),
   customerPhone: z.string().trim().min(7).optional(),
+  customerEmail: z.string().trim().email().optional(),
   customerTown: z.string().trim().min(2).optional(),
   sendNow: z.boolean().optional(),
 });

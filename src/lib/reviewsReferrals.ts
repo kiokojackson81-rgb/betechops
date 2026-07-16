@@ -1077,6 +1077,7 @@ export async function createReviewInvitation(input: z.infer<typeof createReviewI
 export async function createAdminTestReviewLink(input?: {
   customerName?: string;
   customerPhone?: string;
+  customerEmail?: string;
   customerTown?: string | null;
   sendNow?: boolean;
 }) {
@@ -1084,6 +1085,7 @@ export async function createAdminTestReviewLink(input?: {
 
   const customerName = String(input?.customerName || "Jackson").trim() || "Jackson";
   const customerPhone = String(input?.customerPhone || "0705663175").trim() || "0705663175";
+  const customerEmail = cleanOptional(input?.customerEmail);
   const customerTown = cleanOptional(input?.customerTown) || "Nairobi";
   const sku = "TEST-REVIEW-JACKSON-0705663175";
   const imageUrl = "https://www.betech.co.ke/agents/product-solar-kit-clean.png";
@@ -1179,6 +1181,7 @@ export async function createAdminTestReviewLink(input?: {
     customerUserId: null,
     customerName,
     customerPhone,
+    customerEmail,
     customerTown,
     orderOrReceiptRef: `TEST-${customerName.toUpperCase().replace(/[^A-Z0-9]+/g, "-")}-${now.toISOString().slice(0, 10).replace(/-/g, "")}`,
     purchaseDate,

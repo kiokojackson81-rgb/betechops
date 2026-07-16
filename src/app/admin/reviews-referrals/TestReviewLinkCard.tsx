@@ -64,6 +64,7 @@ function formatMoney(value: number) {
 export default function TestReviewLinkCard() {
   const [customerName, setCustomerName] = useState("Jackson");
   const [customerPhone, setCustomerPhone] = useState("0705663175");
+  const [customerEmail, setCustomerEmail] = useState("kiokojackson81@gmail.com");
   const [customerTown, setCustomerTown] = useState("Nairobi");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +83,7 @@ export default function TestReviewLinkCard() {
       const response = await fetch("/api/admin/reviews-referrals/test-link", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customerName, customerPhone, customerTown, sendNow: mode === "send" }),
+        body: JSON.stringify({ customerName, customerPhone, customerEmail, customerTown, sendNow: mode === "send" }),
       });
       const payload = (await response.json().catch(() => ({}))) as {
         ok?: boolean;
@@ -163,13 +164,13 @@ export default function TestReviewLinkCard() {
           <div className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-300">Test Review Link</div>
           <h2 className="text-3xl font-semibold tracking-tight text-white">Create or send a real admin review test</h2>
           <p className="max-w-3xl text-sm text-slate-400">
-            Create a safe preview-only invitation or send the real review SMS and WhatsApp flow for the dedicated test product.
+            Create a safe preview-only invitation or send the real review SMS, WhatsApp, and email flow to the admin test contacts for the dedicated test product.
           </p>
         </div>
       </div>
 
       <form onSubmit={createLink} className="mt-6 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
           <label className="space-y-2">
             <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Customer name</span>
             <input
@@ -183,6 +184,15 @@ export default function TestReviewLinkCard() {
             <input
               value={customerPhone}
               onChange={(event) => setCustomerPhone(event.target.value)}
+              className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/50"
+            />
+          </label>
+          <label className="space-y-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Admin email</span>
+            <input
+              type="email"
+              value={customerEmail}
+              onChange={(event) => setCustomerEmail(event.target.value)}
               className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300/50"
             />
           </label>
