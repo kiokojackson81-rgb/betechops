@@ -334,6 +334,7 @@ const globalReviewReferralState = globalThis as typeof globalThis & {
 
 export const MIN_REFERRAL_WITHDRAWAL_AMOUNT = 1000;
 const REVIEW_INVITATION_CHATRACE_TAG = (process.env.CHATRACE_POST_PURCHASE_REVIEW_TAG || "post_purchase_review").trim();
+export type ReviewInvitationTestChannel = "sms" | "whatsapp" | "email";
 
 const nullableString = z.string().trim().optional().nullable();
 
@@ -430,6 +431,7 @@ type ReviewInvitationAdminRow = {
   id: string;
   customerName: string;
   customerPhone: string;
+  customerEmail: string | null;
   productName: string;
   reviewStatus: string;
   scheduledSendAt: string | null;
@@ -624,6 +626,24 @@ export function buildReviewInvitationWhatsAppMessage(input: {
     "Your feedback helps us improve our service, and you can also earn referral rewards.",
     "Thank you!",
   ].join("\n");
+}
+
+function buildReviewInvitationEmailPayload(input: {
+  customerName: string;
+  reviewUrl: string;
+}) {
+  const firstName = firstNameOf(input.customerName);
+  return {
+    subject: "Please review your recent Betech Solar purchase",
+    title: "Share your product review",
+    intro: `Hello ${firstName},`,
+    bodyHtml:
+      "<p>Thank you for shopping with us recently.</p><p>We'd appreciate it if you could share your review of the product by clicking the button below.</p><p>Your feedback helps us improve our service, and you can also earn referral rewards.</p>",
+    bodyText: `Hello ${firstName},\n\nThank you for shopping with us recently.\nWe'd appreciate it if you could share your review of the product here: ${input.reviewUrl}\n\nYour feedback helps us improve our service, and you can also earn referral rewards.\nThank you!`,
+    ctaLabel: "Share your review",
+    ctaUrl: input.reviewUrl,
+    outro: "Thank you for choosing Betech Solar Solutions.",
+  };
 }
 
 export function getReviewInvitationExpiry(baseDate = new Date()) {
@@ -986,6 +1006,7 @@ function presentReviewInvitationAdminRow(row: Record<string, unknown>): ReviewIn
     id: asString(row.id),
     customerName: asString(row.customerName),
     customerPhone: maskPhone(asString(row.customerPhone)),
+    customerEmail: cleanOptional(row.customerEmail),
     productName: asString(row.productName),
     reviewStatus: asString(row.reviewStatus || "PENDING"),
     scheduledSendAt: toDate(row.scheduledSendAt)?.toISOString() || null,
@@ -1485,14 +1506,10 @@ async function processReviewInvitationSend(
     try {
       await sendGeneralCustomerNotificationEmail({
         to: email,
-        subject: "Please review your recent Betech Solar purchase",
-        title: "Share your product review",
-        intro: `Hello ${firstNameOf(asString(row.customerName))},`,
-        bodyHtml: `<p>Thank you for shopping with us recently.</p><p>We'd appreciate it if you could share your review of the product by clicking the button below.</p><p>Your feedback helps us improve our service, and you can also earn referral rewards.</p>`,
-        bodyText: `Hello ${firstNameOf(asString(row.customerName))},\n\nThank you for shopping with us recently.\nWe'd appreciate it if you could share your review of the product here: ${reviewUrl}\n\nYour feedback helps us improve our service, and you can also earn referral rewards.\nThank you!`,
-        ctaLabel: "Share your review",
-        ctaUrl: reviewUrl,
-        outro: "Thank you for choosing Betech Solar Solutions.",
+        ...buildReviewInvitationEmailPayload({
+          customerName: asString(row.customerName),
+          reviewUrl,
+        }),
       });
       sent = true;
       channels.push("email");
@@ -3008,6 +3025,114 @@ export async function retryReviewInvitationSend(invitationId: string) {
   return {
     result: matched,
     invitation: refreshedRows[0] ? presentReviewInvitationAdminRow(refreshedRows[0]) : null,
+  };
+}
+
+export async function sendAdminReviewInvitationChannelTest(
+  invitationId: string,
+  channel: ReviewInvitationTestChannel,
+) {
+  await ensureReviewReferralSchema();
+  const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `SELECT * FROM "ReviewInvitation" WHERE "id" = $1 LIMIT 1`,
+    invitationId,
+  );
+  const row = rows[0];
+  if (!row) {
+    throw new Error("Review invitation not found.");
+  }
+
+  const publicToken = await ensureInvitationPublicToken(row);
+  const reviewUrl = `https://www.betech.co.ke/review/${publicToken}`;
+  const smsMessage = buildReviewInvitationOutboundMessage({
+    customerName: asString(row.customerName),
+    productName: asString(row.productName),
+    reviewUrl,
+  });
+  const whatsappMessage = buildReviewInvitationWhatsAppMessage({
+    customerName: asString(row.customerName),
+    productName: asString(row.productName),
+    reviewUrl,
+  });
+  const emailPayload = buildReviewInvitationEmailPayload({
+    customerName: asString(row.customerName),
+    reviewUrl,
+  });
+  const phone = normalizeKenyanPhone(asString(row.customerPhone));
+  const email = cleanOptional(row.customerEmail);
+
+  if (channel === "sms") {
+    if (!phone) {
+      throw new Error("This invitation does not have a valid phone number for SMS.");
+    }
+    await sendTransactionalSms(phone, smsMessage);
+    return {
+      channel,
+      recipient: phone,
+      reviewUrl,
+      preview: {
+        title: "SMS test sent",
+        message: smsMessage,
+      },
+    };
+  }
+
+  if (channel === "whatsapp") {
+    if (!phone) {
+      throw new Error("This invitation does not have a valid phone number for WhatsApp.");
+    }
+    const chatrace = await pushReceiptToChatrace({
+      phoneE164: phone,
+      customerName: asString(row.customerName),
+      receiptNumber: cleanOptional(row.orderOrReceiptRef) || invitationId,
+      amount: "0",
+      currency: "KES",
+      receiptLink: reviewUrl,
+      receiptUrl: reviewUrl,
+      tagName: REVIEW_INVITATION_CHATRACE_TAG,
+      skipDefaultTags: true,
+      extraFields: {
+        customer_name: asString(row.customerName),
+        review_url: reviewUrl,
+        review_link: reviewUrl,
+        review_invitation_url: reviewUrl,
+        review_invitation_id: invitationId,
+        review_reference: cleanOptional(row.orderOrReceiptRef) || invitationId,
+        review_product_name: asString(row.productName),
+        product_name: asString(row.productName),
+        whatsapp_message_preview: whatsappMessage,
+      },
+    });
+    if (!chatrace.ok) {
+      throw new Error(String(chatrace.debug?.error || "Unable to trigger WhatsApp review flow."));
+    }
+    return {
+      channel,
+      recipient: phone,
+      reviewUrl,
+      preview: {
+        title: "WhatsApp test triggered",
+        message: whatsappMessage,
+      },
+    };
+  }
+
+  if (!email) {
+    throw new Error("This invitation does not have an email address.");
+  }
+  await sendGeneralCustomerNotificationEmail({
+    to: email,
+    ...emailPayload,
+  });
+  return {
+    channel,
+    recipient: email,
+    reviewUrl,
+    preview: {
+      title: "Email test sent",
+      subject: emailPayload.subject,
+      message: emailPayload.bodyText,
+    },
   };
 }
 
