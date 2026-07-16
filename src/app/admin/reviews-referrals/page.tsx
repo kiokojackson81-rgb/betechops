@@ -82,6 +82,12 @@ export default async function AdminReviewsReferralsPage() {
           >
             Open invitation queue
           </Link>
+          <Link
+            href="/admin/reviews-referrals/ownership-locks"
+            className="inline-flex rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm font-semibold text-rose-100 transition hover:border-rose-300/30"
+          >
+            Manage referral overrides
+          </Link>
         </div>
       </section>
     </div>

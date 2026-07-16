@@ -425,3 +425,81 @@ export async function claimReferralOwnershipLock(
 
   return { id: lockId, normalizedPhone, lockExpiresAt };
 }
+
+export async function listReferralOwnershipLocks(status: "active" | "released" | "expired" | "all" = "active", limit = 150) {
+  await ensureReferralFraudSchema();
+  const boundedLimit = Math.min(Math.max(Number(limit || 150), 1), 300);
+  const whereClause =
+    status === "all"
+      ? ""
+      : `WHERE "status" = $1`;
+  const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `
+      SELECT *
+      FROM "ReferralOwnershipLock"
+      ${whereClause}
+      ORDER BY "createdAt" DESC
+      LIMIT $${status === "all" ? 1 : 2}
+    `,
+    ...(status === "all" ? [boundedLimit] : [status, boundedLimit]),
+  );
+  return rows.map(mapOwnershipLockRow);
+}
+
+export async function releaseReferralOwnershipLock(input: {
+  lockId: string;
+  note: string;
+  adminUserId?: string | null;
+}) {
+  await ensureReferralFraudSchema();
+  const lockRows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `SELECT * FROM "ReferralOwnershipLock" WHERE "id" = $1 LIMIT 1`,
+    input.lockId,
+  );
+  const row = lockRows[0];
+  if (!row) {
+    throw new Error("Referral ownership lock not found.");
+  }
+  const lock = mapOwnershipLockRow(row);
+  if (lock.status !== "active") {
+    throw new Error("Only active referral locks can be released.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(
+      `
+        UPDATE "ReferralOwnershipLock"
+        SET
+          "status" = 'released',
+          "releasedAt" = CURRENT_TIMESTAMP,
+          "overrideNote" = $2,
+          "updatedAt" = CURRENT_TIMESTAMP
+        WHERE "id" = $1
+      `,
+      input.lockId,
+      input.note.trim(),
+    );
+    await recordReferralFraudEvent(tx, {
+      normalizedPhone: lock.normalizedPhone,
+      eventType: "ownership_lock_released",
+      source: "admin_override",
+      actorUserId: input.adminUserId,
+      ownershipLockId: input.lockId,
+      agentLeadId: lock.agentLeadId,
+      reviewId: lock.reviewId,
+      referralLinkId: lock.referralLinkId,
+      metadata: {
+        note: input.note.trim(),
+        previousOwnerType: lock.ownerType,
+        ownerUserId: lock.ownerUserId,
+        ownerReferralAccountId: lock.ownerReferralAccountId,
+      } as Prisma.InputJsonValue,
+    });
+  });
+
+  const refreshedRows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `SELECT * FROM "ReferralOwnershipLock" WHERE "id" = $1 LIMIT 1`,
+    input.lockId,
+  );
+  return refreshedRows[0] ? mapOwnershipLockRow(refreshedRows[0]) : null;
+}
