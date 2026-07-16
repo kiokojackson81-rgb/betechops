@@ -28,6 +28,14 @@ type InvitationPayload = {
     orderOrReceiptRef: string | null;
     deliveryMode: string | null;
   };
+  purchasedItems: Array<{
+    productId: string | null;
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    lineTotal: number;
+    isPrimary: boolean;
+  }>;
   review: {
     id: string;
     reviewTitle: string | null;
@@ -148,6 +156,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
 
   const alreadySubmitted = Boolean(invitation.review);
   const projectedCommission = Number((invitation.product.currentPrice * 0.06).toFixed(2));
+  const otherPurchasedItems = invitation.purchasedItems.filter((item) => !item.isPrimary);
   const referralMessagePreview = referralSuccess
     ? buildReferralShareMessage({
         referredName: referralForm.referredName,
@@ -285,6 +294,21 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                         <div>Current price: {formatMoney(invitation.product.currentPrice)}</div>
                         <div>Warranty: {invitation.product.warranty || "Manufacturer warranty available"}</div>
                       </div>
+                      {otherPurchasedItems.length ? (
+                        <div className="mt-5 rounded-[22px] border border-[#ecd7cb] bg-[#fff8f2] p-4">
+                          <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a0000]">
+                            Other items from this purchase
+                          </div>
+                          <div className="mt-3 grid gap-2 text-sm text-slate-600">
+                            {otherPurchasedItems.map((item, index) => (
+                              <div key={`${item.productId || item.name}-${index}`} className="flex flex-wrap justify-between gap-3">
+                                <span>{item.name} x{item.quantity}</span>
+                                <span>{formatMoney(item.lineTotal || item.unitPrice * item.quantity)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
                       <a
                         href={`/shop/product/${invitation.product.slug}`}
                         className="mt-5 inline-flex rounded-2xl border border-[#7a0000]/15 px-4 py-2 text-sm font-semibold text-[#7a0000] transition hover:bg-[#fff7ee]"

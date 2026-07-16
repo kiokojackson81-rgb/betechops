@@ -425,6 +425,14 @@ export type ReviewInvitationDetails = {
     orderOrReceiptRef: string | null;
     deliveryMode: string | null;
   };
+  purchasedItems: Array<{
+    productId: string | null;
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    lineTotal: number;
+    isPrimary: boolean;
+  }>;
   review: ReturnType<typeof presentReviewRow> | null;
 };
 
@@ -510,6 +518,11 @@ function asString(value: unknown) {
 function cleanOptional(value: unknown) {
   const cleaned = asString(value).trim();
   return cleaned || null;
+}
+
+function toPositiveNumber(value: unknown) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
 }
 
 function toNumber(value: unknown) {
@@ -908,6 +921,49 @@ async function getReviewRowByInvitationId(invitationId: string) {
   return rows[0] ? presentReviewRow(rows[0]) : null;
 }
 
+function summarizeWebsiteOrderItem(item: Record<string, unknown>, primaryProductId: string | null) {
+  const quantity = Math.max(1, Number(item.quantity || 1));
+  const unitPrice =
+    toPositiveNumber(item.unitPrice) ||
+    toPositiveNumber(item.sellingPrice) ||
+    toPositiveNumber(item.price);
+  const lineTotal =
+    toPositiveNumber(item.total) ||
+    toPositiveNumber(item.totalPrice) ||
+    toPositiveNumber(item.lineTotal) ||
+    unitPrice * quantity;
+  const productId = cleanOptional(item.productId);
+  const name =
+    cleanOptional(item.productName) ||
+    cleanOptional(item.name) ||
+    "Purchased item";
+
+  return {
+    productId,
+    name,
+    quantity,
+    unitPrice,
+    lineTotal,
+    isPrimary: Boolean(primaryProductId) && productId === primaryProductId,
+  };
+}
+
+function pickPrimaryWebsiteOrderItem(items: Array<Record<string, unknown>>) {
+  const eligible = items.filter((item) => cleanOptional(item.productId));
+  if (!eligible.length) return null;
+  return eligible
+    .map((item) => ({
+      raw: item,
+      score:
+        toPositiveNumber(item.total) ||
+        toPositiveNumber(item.totalPrice) ||
+        toPositiveNumber(item.lineTotal) ||
+        toPositiveNumber(item.unitPrice) * Math.max(1, Number(item.quantity || 1)) ||
+        toPositiveNumber(item.sellingPrice) * Math.max(1, Number(item.quantity || 1)),
+    }))
+    .sort((a, b) => b.score - a.score)[0]?.raw || null;
+}
+
 async function getInvitationRowByToken(token: string) {
   await ensureReviewReferralSchema();
   const tokenHash = hashPublicToken(token);
@@ -929,6 +985,24 @@ async function presentInvitationRow(row: Record<string, unknown>, token: string)
   const productId = asString(row.productId);
   const product = await getProductSummary(productId);
   const review = await getReviewRowByInvitationId(asString(row.id));
+  const websiteOrderId = cleanOptional(row.websiteOrderId);
+  const purchasedItems = websiteOrderId
+    ? ((await prisma.websiteOrder.findUnique({
+        where: { id: websiteOrderId },
+        include: {
+          items: true,
+        },
+      }))?.items || []).map((item) => summarizeWebsiteOrderItem(item as unknown as Record<string, unknown>, productId))
+    : [
+        {
+          productId,
+          name: product.name,
+          quantity: 1,
+          unitPrice: Number(product.sellingPrice || 0),
+          lineTotal: Number(product.sellingPrice || 0),
+          isPrimary: true,
+        },
+      ];
   const slug = slugifyProductName(product.name);
   const orderRef = cleanOptional(row.orderOrReceiptRef) || "";
   const isTestMode = orderRef.startsWith("TEST-");
@@ -957,12 +1031,13 @@ async function presentInvitationRow(row: Record<string, unknown>, token: string)
       category: product.category || null,
     },
     order: {
-      websiteOrderId: cleanOptional(row.websiteOrderId),
+      websiteOrderId,
       orderId: cleanOptional(row.orderId),
       receiptId: cleanOptional(row.receiptId),
       orderOrReceiptRef: cleanOptional(row.orderOrReceiptRef),
       deliveryMode: cleanOptional(row.deliveryMode),
     },
+    purchasedItems,
     review,
   };
 }
@@ -1347,49 +1422,47 @@ export async function ensureReviewInvitationsForWebsiteOrder(orderId: string) {
   }
   const purchaseBaseDate = getInvitationBaseDateFromWebsiteOrder(order);
 
-  let created = 0;
-  let skipped = 0;
-  for (const item of order.items) {
-    const productId = cleanOptional(item.productId);
-    if (!productId) {
-      skipped += 1;
-      continue;
-    }
-
-    const existingRows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
-      `
-        SELECT "id"
-        FROM "ReviewInvitation"
-        WHERE "websiteOrderId" = $1 AND "productId" = $2
-        LIMIT 1
-      `,
-      order.id,
-      productId,
-    );
-    if (existingRows[0]?.id) {
-      skipped += 1;
-      continue;
-    }
-
-    await createReviewInvitation({
-      productId,
-      websiteOrderId: order.id,
-      orderId: null,
-      receiptId: order.receiptId,
-      customerUserId: order.customerUserId,
-      customerName: order.customerName,
-      customerPhone: order.customerPhone,
-      customerTown: order.customerUser?.town || null,
-      orderOrReceiptRef: order.orderRef,
-      purchaseDate: purchaseBaseDate,
-      deliveryMode: order.deliveryMethod,
-      scheduledSendAt: getReviewSendDate(purchaseBaseDate),
-      expiresAt: getReviewInvitationExpiry(purchaseBaseDate),
-    });
-    created += 1;
+  const eligibleItems = order.items.filter((item) => cleanOptional(item.productId));
+  if (!eligibleItems.length) {
+    return { created: 0, skipped: order.items.length };
   }
 
-  return { created, skipped };
+  const existingRows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `
+      SELECT "id"
+      FROM "ReviewInvitation"
+      WHERE "websiteOrderId" = $1
+      LIMIT 1
+    `,
+    order.id,
+  );
+  if (existingRows[0]?.id) {
+    return { created: 0, skipped: eligibleItems.length };
+  }
+
+  const primaryItem = pickPrimaryWebsiteOrderItem(eligibleItems as unknown as Array<Record<string, unknown>>);
+  const productId = cleanOptional(primaryItem?.productId);
+  if (!productId) {
+    return { created: 0, skipped: eligibleItems.length };
+  }
+
+  await createReviewInvitation({
+    productId,
+    websiteOrderId: order.id,
+    orderId: null,
+    receiptId: order.receiptId,
+    customerUserId: order.customerUserId,
+    customerName: order.customerName,
+    customerPhone: order.customerPhone,
+    customerTown: order.customerUser?.town || null,
+    orderOrReceiptRef: order.orderRef,
+    purchaseDate: purchaseBaseDate,
+    deliveryMode: order.deliveryMethod,
+    scheduledSendAt: getReviewSendDate(purchaseBaseDate),
+    expiresAt: getReviewInvitationExpiry(purchaseBaseDate),
+  });
+
+  return { created: 1, skipped: Math.max(0, eligibleItems.length - 1) };
 }
 
 async function processReviewInvitationSend(
