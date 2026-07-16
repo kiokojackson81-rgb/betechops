@@ -1,10 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
+import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 
 type InvitationRow = {
   id: string;
+  customerUserId: string | null;
   customerName: string;
+  customerPhoneRaw: string;
   customerPhone: string;
   customerEmail: string | null;
   productName: string;
@@ -49,6 +53,13 @@ function deriveQueue(row: InvitationRow) {
   if (row.sentAt) return "sent";
   if ((row.lastSendStatus || "").toUpperCase() === "FAILED") return "failed";
   return "due";
+}
+
+function buildVoiceHistoryHref(phone: string) {
+  const params = new URLSearchParams();
+  params.set("tab", "recent");
+  params.set("selectedPhone", phone);
+  return `/admin/communications/voice?${params.toString()}`;
 }
 
 export default function ReviewInvitationsAdminClient({
@@ -136,6 +147,13 @@ export default function ReviewInvitationsAdminClient({
 
       {filteredRows.map((row) => {
         const queue = deriveQueue(row);
+        const customerProfileHref = buildAdminCustomerProfileHref({
+          customerUserId: row.customerUserId,
+          phone: row.customerPhoneRaw,
+          email: row.customerEmail,
+          displayName: row.customerName,
+        });
+        const voiceHistoryHref = buildVoiceHistoryHref(row.customerPhoneRaw);
         return (
           <article key={row.id} className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.96))] p-5">
             <div className="flex flex-wrap items-start justify-between gap-4">
@@ -144,6 +162,9 @@ export default function ReviewInvitationsAdminClient({
                   <h2 className="text-2xl font-semibold text-white">{row.customerName}</h2>
                   <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${badgeClass(queue)}`}>
                     {queue}
+                  </span>
+                  <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${String(row.reviewStatus || "").toUpperCase() === "SUBMITTED" ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100" : "border-white/10 bg-white/[0.04] text-slate-200"}`}>
+                    {String(row.reviewStatus || "").toUpperCase() === "SUBMITTED" ? "review submitted" : "awaiting review"}
                   </span>
                 </div>
                 <div className="mt-3 grid gap-2 text-sm text-slate-400 sm:grid-cols-2 xl:grid-cols-4">
@@ -213,6 +234,18 @@ export default function ReviewInvitationsAdminClient({
               >
                 {testBusyKey === `${row.id}:email` ? "Testing Email..." : "Test Email"}
               </button>
+              <Link
+                href={customerProfileHref}
+                className="rounded-2xl border border-sky-400/20 bg-sky-400/10 px-4 py-3 text-sm font-semibold text-sky-100 transition hover:border-sky-300/30"
+              >
+                Open Customer 360
+              </Link>
+              <Link
+                href={voiceHistoryHref}
+                className="rounded-2xl border border-violet-400/20 bg-violet-400/10 px-4 py-3 text-sm font-semibold text-violet-100 transition hover:border-violet-300/30"
+              >
+                Open voice history
+              </Link>
             </div>
 
             {channelTests[row.id] ? (

@@ -439,7 +439,9 @@ export type ReviewInvitationDetails = {
 
 type ReviewInvitationAdminRow = {
   id: string;
+  customerUserId: string | null;
   customerName: string;
+  customerPhoneRaw: string;
   customerPhone: string;
   customerEmail: string | null;
   productName: string;
@@ -1081,7 +1083,9 @@ function getInvitationBaseDateFromWebsiteOrder(order: {
 function presentReviewInvitationAdminRow(row: Record<string, unknown>): ReviewInvitationAdminRow {
   return {
     id: asString(row.id),
+    customerUserId: cleanOptional(row.customerUserId),
     customerName: asString(row.customerName),
+    customerPhoneRaw: asString(row.customerPhone),
     customerPhone: maskPhone(asString(row.customerPhone)),
     customerEmail: cleanOptional(row.customerEmail),
     productName: asString(row.productName),
