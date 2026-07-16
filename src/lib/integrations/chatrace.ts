@@ -336,6 +336,7 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     const FORCE_RETRIGGER_TAGS = new Set([
       'pod_dispatch_speedaf',
       'betech_dispatch_pay_on_delivery',
+      'post_purchase_review',
       'pod_receipt_admin_alert',
       'followup_responsible_alert',
       'quotation_ready',

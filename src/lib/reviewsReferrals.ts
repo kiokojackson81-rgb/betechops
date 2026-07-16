@@ -6,7 +6,7 @@ import { generateReferralCode } from "@/lib/agents/generateReferralCode";
 import { findOrCreateCustomerIdentityUser, findSafeUserById } from "@/lib/customerIdentity";
 import { updateSafeCustomerProfile, updateSafeUserById } from "@/lib/customerProfile";
 import { sendGeneralCustomerNotificationEmail } from "@/lib/email";
-import { hasWhatsAppConfig, sendWhatsAppTextMessage } from "@/lib/notifications/whatsapp";
+import { pushReceiptToChatrace } from "@/lib/integrations/chatrace";
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { createOtpCodeForChannel, createDirectVerifiedAuthToken, readVerifiedAuthToken, verifyOtpCodeForChannel } from "@/lib/phoneOtpAuth";
 import { prisma } from "@/lib/prisma";
@@ -333,6 +333,7 @@ const globalReviewReferralState = globalThis as typeof globalThis & {
 };
 
 export const MIN_REFERRAL_WITHDRAWAL_AMOUNT = 1000;
+const REVIEW_INVITATION_CHATRACE_TAG = (process.env.CHATRACE_POST_PURCHASE_REVIEW_TAG || "post_purchase_review").trim();
 
 const nullableString = z.string().trim().optional().nullable();
 
@@ -617,7 +618,7 @@ export function buildReviewInvitationWhatsAppMessage(input: {
   return [
     `Hello ${firstName},`,
     "",
-    "Thank you for shopping with us recently at Betech Solar.",
+    "Thank you for shopping with us recently at Betech Solar Solutions.",
     `We'd appreciate it if you could share your review of the product here: ${input.reviewUrl}`,
     "",
     "Your feedback helps us improve our service, and you can also earn referral rewards.",
@@ -1436,9 +1437,33 @@ async function processReviewInvitationSend(
   const channels: string[] = [];
   const errors: string[] = [];
 
-  if (phone && hasWhatsAppConfig()) {
+  if (phone) {
     try {
-      await sendWhatsAppTextMessage({ to: phone, body: whatsappMessage, previewUrl: true });
+      const chatrace = await pushReceiptToChatrace({
+        phoneE164: phone,
+        customerName: asString(row.customerName),
+        receiptNumber: cleanOptional(row.orderOrReceiptRef) || invitationId,
+        amount: "0",
+        currency: "KES",
+        receiptLink: reviewUrl,
+        receiptUrl: reviewUrl,
+        tagName: REVIEW_INVITATION_CHATRACE_TAG,
+        skipDefaultTags: true,
+        extraFields: {
+          customer_name: asString(row.customerName),
+          review_url: reviewUrl,
+          review_link: reviewUrl,
+          review_invitation_url: reviewUrl,
+          review_invitation_id: invitationId,
+          review_reference: cleanOptional(row.orderOrReceiptRef) || invitationId,
+          review_product_name: asString(row.productName),
+          product_name: asString(row.productName),
+          whatsapp_message_preview: whatsappMessage,
+        },
+      });
+      if (!chatrace.ok) {
+        throw new Error(String(chatrace.debug?.error || "Chatrace WhatsApp trigger failed."));
+      }
       sent = true;
       channels.push("whatsapp");
     } catch (error) {
