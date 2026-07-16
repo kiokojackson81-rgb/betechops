@@ -27,7 +27,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Update product.lastBuyingPrice
     const updated = await prisma.product.update({
       where: { id: productId },
-      data: { lastBuyingPrice: lastBuyingPrice },
+      data: {
+        lastBuyingPrice: lastBuyingPrice,
+        variableCost: false,
+      },
     });
 
     // TODO: Add audit logging when AuditLog table is migrated

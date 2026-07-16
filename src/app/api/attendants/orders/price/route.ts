@@ -17,7 +17,10 @@ export async function POST(req: Request) {
     // this will throw and we fallback to accepting without persisting.
     const updated = await prisma.product.update({
       where: { id: productId },
-      data: { lastBuyingPrice: v },
+      data: {
+        lastBuyingPrice: v,
+        variableCost: false,
+      },
       select: { id: true, lastBuyingPrice: true },
     });
     return NextResponse.json({ ok: true, product: updated });

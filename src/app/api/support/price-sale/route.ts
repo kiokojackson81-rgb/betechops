@@ -179,7 +179,10 @@ export async function POST(req: Request) {
     if (saveToCatalog && catalogProductId) {
       await tx.product.updateMany({
         where: { id: catalogProductId },
-        data: { lastBuyingPrice: roundedPrice },
+        data: {
+          lastBuyingPrice: roundedPrice,
+          variableCost: false,
+        },
       });
     }
 
