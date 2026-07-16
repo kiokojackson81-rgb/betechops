@@ -50,6 +50,12 @@ export default async function AgentReferralsPage({ useRootPaths = false }: Agent
 
   const dashboard = await getAgentDashboardData(agentSession.userId);
   if (!dashboard) redirect(agentPath("/register", useRootPaths));
+  const combinedPotentialCommission =
+    Number(dashboard.salesSummary.potentialCommission || 0) + Number(dashboard.reviewReferralSummary.totals.potentialCommission || 0);
+  const combinedEarnedCommission =
+    Number(dashboard.salesSummary.earnedCommission || 0) + Number(dashboard.reviewReferralSummary.totals.availableBalance || 0);
+  const combinedPaidCommission =
+    Number(dashboard.salesSummary.paidCommission || 0) + Number(dashboard.reviewReferralSummary.totals.paidWithdrawalAmount || 0);
 
   return (
     <AgentPortalShell
@@ -64,9 +70,9 @@ export default async function AgentReferralsPage({ useRootPaths = false }: Agent
         payoutPhone: dashboard.profile.phone,
       }}
       stats={{
-        potentialCommission: dashboard.salesSummary.potentialCommission,
-        earnedCommission: dashboard.salesSummary.earnedCommission,
-        paidCommission: dashboard.salesSummary.paidCommission,
+        potentialCommission: combinedPotentialCommission,
+        earnedCommission: combinedEarnedCommission,
+        paidCommission: combinedPaidCommission,
       }}
     >
       <div className="space-y-5 sm:space-y-6">
@@ -112,6 +118,69 @@ export default async function AgentReferralsPage({ useRootPaths = false }: Agent
             <div className="mt-3 text-3xl font-black tracking-tight text-[#210505]">
               {money(dashboard.websiteReferralSummary.totalRevenue)}
             </div>
+          </div>
+          <div className="rounded-[26px] border border-[#e4d4cb] bg-white p-5 shadow-[0_12px_40px_rgba(64,32,18,0.06)]">
+            <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">Review referral links</div>
+            <div className="mt-3 text-3xl font-black tracking-tight text-[#210505]">
+              {dashboard.reviewReferralSummary.totals.totalReferrals}
+            </div>
+          </div>
+          <div className="rounded-[26px] border border-[#e4d4cb] bg-white p-5 shadow-[0_12px_40px_rgba(64,32,18,0.06)]">
+            <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">Review referral balance</div>
+            <div className="mt-3 text-3xl font-black tracking-tight text-[#210505]">
+              {money(dashboard.reviewReferralSummary.totals.availableBalance)}
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-[28px] border border-[#e4d4cb] bg-white p-4 shadow-[0_12px_40px_rgba(64,32,18,0.08)] sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">Customer review referrals</p>
+              <h2 className="mt-2 text-xl font-black tracking-tight text-[#210505] sm:text-2xl">Referrals created after product reviews</h2>
+              <p className="mt-2 text-sm text-slate-600">
+                These are customers who reviewed a product and then referred another buyer using the review referral flow. They are now linked to this same dashboard account.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-6 space-y-4">
+            {dashboard.reviewReferralSummary.referrals.length ? (
+              dashboard.reviewReferralSummary.referrals.map((referral) => (
+                <article key={referral.id} className="rounded-[26px] border border-[#ece1d9] bg-[#fffaf5] p-4 sm:p-5">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <h3 className="text-lg font-semibold text-[#210505] sm:text-xl">{referral.productName}</h3>
+                        <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${statusBadge(referral.status)}`}>
+                          {String(referral.status).replace(/_/g, " ")}
+                        </span>
+                        <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${statusBadge(referral.commissionStatus)}`}>
+                          {String(referral.commissionStatus).replace(/_/g, " ")}
+                        </span>
+                      </div>
+                      <div className="grid gap-2 text-sm text-slate-600 sm:grid-cols-2 xl:grid-cols-4">
+                        <div>Referral code: {referral.referralCode}</div>
+                        <div>Customer: {referral.referredName || "Unnamed referral"}</div>
+                        <div>Phone: {referral.referredPhone}</div>
+                        <div>Date referred: {referral.createdAt ? new Intl.DateTimeFormat("en-KE", { dateStyle: "medium" }).format(new Date(referral.createdAt)) : "Not available"}</div>
+                      </div>
+                    </div>
+                    <div className="w-full rounded-[24px] border border-[#f1b81d]/25 bg-[#fff3cf] p-4 xl:min-w-[260px] xl:max-w-[320px]">
+                      <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">Potential commission</div>
+                      <div className="mt-3 text-2xl font-black tracking-tight text-[#210505] sm:text-3xl">{money(referral.potentialCommission)}</div>
+                      <div className="mt-2 text-sm text-[#6e5500]">
+                        Review referral commissions move to withdrawable balance once the tracked customer completes purchase.
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <div className="rounded-[24px] border border-dashed border-[#d9c6ba] bg-[#fffaf5] p-10 text-center text-slate-500">
+                No review referral links have been created yet.
+              </div>
+            )}
           </div>
         </section>
 

@@ -2,6 +2,9 @@ import { createHash, randomBytes } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { sendOtpSms, sendTransactionalSms } from "@/lib/africasTalking";
+import { generateReferralCode } from "@/lib/agents/generateReferralCode";
+import { findOrCreateCustomerIdentityUser, findSafeUserById } from "@/lib/customerIdentity";
+import { updateSafeCustomerProfile, updateSafeUserById } from "@/lib/customerProfile";
 import { sendGeneralCustomerNotificationEmail } from "@/lib/email";
 import { hasWhatsAppConfig, sendWhatsAppTextMessage } from "@/lib/notifications/whatsapp";
 import { normalizeKenyanPhone } from "@/lib/phone";
@@ -563,6 +566,29 @@ function buildReviewToken() {
 
 function buildActivationToken() {
   return `act_${randomBytes(18).toString("base64url")}`;
+}
+
+async function generateUniqueAgentReferralCode() {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const code = generateReferralCode();
+    const existing = await prisma.agentProfile.findUnique({
+      where: { referralCode: code },
+      select: { id: true },
+    });
+    if (!existing) return code;
+  }
+  throw new Error("Unable to generate a unique agent referral code.");
+}
+
+function splitCustomerName(name: string) {
+  const parts = String(name || "")
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return {
+    firstName: parts[0] || "Customer",
+    lastName: parts.slice(1).join(" ") || parts[0] || "Customer",
+  };
 }
 
 function buildReferralCode() {
@@ -2154,6 +2180,113 @@ export async function sendReferralAccountOtp(token: string) {
   };
 }
 
+async function ensureAgentIdentityForReferralAccount(account: Record<string, unknown>) {
+  const customerName = asString(account.customerName);
+  const normalizedPhone = normalizeKenyanPhone(asString(account.customerPhone));
+  if (!normalizedPhone) {
+    throw new Error("Referral account phone number is invalid.");
+  }
+
+  const existingUserId = cleanOptional(account.customerUserId);
+  const resolution = await findOrCreateCustomerIdentityUser({
+    customerName,
+    customerPhone: normalizedPhone,
+    customerEmail: null,
+    currentUserId: existingUserId,
+  });
+
+  const userId = resolution.user.id;
+  await updateSafeCustomerProfile(userId, {
+    name: customerName,
+    phone: normalizedPhone,
+    whatsappNumber: normalizedPhone,
+  }).catch(() => null);
+  await updateSafeUserById(userId, {
+    phone: normalizedPhone,
+    phoneVerifiedAt: new Date(),
+    lastLoginMethod: "africastalking_otp",
+    isActive: true,
+  }).catch(() => null);
+
+  const user = await findSafeUserById(userId);
+  const { firstName, lastName } = splitCustomerName(customerName);
+  const existingAgentProfile = await prisma.agentProfile.findFirst({
+    where: {
+      OR: [
+        { userId },
+        { phone: normalizedPhone },
+        ...(user?.email ? [{ email: { equals: user.email, mode: "insensitive" as const } }] : []),
+      ],
+    },
+    select: {
+      id: true,
+      status: true,
+      userId: true,
+      referralCode: true,
+    },
+  });
+
+  if (existingAgentProfile) {
+    const nextStatus = ["rejected", "suspended"].includes(String(existingAgentProfile.status || "").toLowerCase())
+      ? existingAgentProfile.status
+      : "approved";
+
+    await prisma.agentProfile.update({
+      where: { id: existingAgentProfile.id },
+      data: {
+        userId,
+        firstName,
+        lastName,
+        email: user?.email || null,
+        phone: normalizedPhone,
+        country: "Kenya",
+        status: nextStatus || "approved",
+      },
+    });
+  } else {
+    const referralCode = await generateUniqueAgentReferralCode();
+    await prisma.$transaction(async (tx) => {
+      await tx.agentProfile.create({
+        data: {
+          userId,
+          referralCode,
+          firstName,
+          lastName,
+          email: user?.email || null,
+          phone: normalizedPhone,
+          country: "Kenya",
+          status: "approved",
+        },
+      });
+      await tx.agentActivityLog.create({
+        data: {
+          agentId: userId,
+          action: "review_referral_linked",
+          description: "Auto-linked from post-purchase review referral activation",
+        },
+      }).catch(() => null);
+    });
+  }
+
+  await prisma.$executeRawUnsafe(
+    `
+      UPDATE "ReferralAccount"
+      SET
+        "customerUserId" = $2,
+        "status" = CASE WHEN LOWER(COALESCE("status", '')) = 'pending_activation' THEN 'active' ELSE "status" END,
+        "updatedAt" = CURRENT_TIMESTAMP
+      WHERE "id" = $1
+    `,
+    asString(account.id),
+    userId,
+  );
+
+  return {
+    userId,
+    phone: normalizedPhone,
+  };
+}
+
 export async function verifyReferralAccountOtp(token: string, code: string) {
   const account = await getReferralAccountRowByToken(token);
   if (!account) throw new Error("Referral account not found.");
@@ -2170,6 +2303,11 @@ export async function verifyReferralAccountOtp(token: string, code: string) {
 
   const verified = await verifyOtpCodeForChannel("phone", normalizedPhone, code, `/activate?token=${encodeURIComponent(token)}`);
 
+  const linkedIdentity = await ensureAgentIdentityForReferralAccount({
+    ...account,
+    customerUserId: verified.user.id,
+  });
+
   await prisma.$executeRawUnsafe(
     `
       UPDATE "ReferralAccount"
@@ -2181,14 +2319,14 @@ export async function verifyReferralAccountOtp(token: string, code: string) {
       WHERE "id" = $1
     `,
     asString(account.id),
-    verified.user.id,
+    linkedIdentity.userId,
   );
 
-  const sessionToken = createDirectVerifiedAuthToken({
-    userId: verified.user.id,
+  const verificationToken = createDirectVerifiedAuthToken({
+    userId: linkedIdentity.userId,
     channel: "phone",
-    identifier: normalizedPhone,
-    redirectTo: `/activate?token=${encodeURIComponent(token)}`,
+    identifier: linkedIdentity.phone,
+    redirectTo: "/dashboard",
     requiresProfileCompletion: false,
   });
 
@@ -2196,10 +2334,194 @@ export async function verifyReferralAccountOtp(token: string, code: string) {
   if (!dashboard) throw new Error("Unable to load referral dashboard.");
 
   return {
-    sessionToken,
+    sessionToken: verificationToken,
+    verificationToken,
     dashboard,
-    phone: normalizedPhone,
+    phone: linkedIdentity.phone,
+    redirectTo: "/dashboard",
   };
+}
+
+async function findReferralAccountByUserId(userId: string) {
+  const user = await findSafeUserById(userId);
+  const normalizedPhone = normalizeKenyanPhone(user?.phone || "");
+
+  const accounts = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `
+      SELECT *
+      FROM "ReferralAccount"
+      WHERE "customerUserId" = $1
+        OR ($2 IS NOT NULL AND "customerPhone" = $2)
+      ORDER BY CASE WHEN "customerUserId" = $1 THEN 0 ELSE 1 END, "updatedAt" DESC
+      LIMIT 1
+    `,
+    userId,
+    normalizedPhone || null,
+  );
+
+  const account = accounts[0] ?? null;
+  if (!account) return null;
+
+  if (cleanOptional(account.customerUserId) !== userId) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "ReferralAccount" SET "customerUserId" = $2, "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = $1`,
+      asString(account.id),
+      userId,
+    );
+    account.customerUserId = userId;
+  }
+
+  return account;
+}
+
+export async function getReferralAgentDashboardByUserId(userId: string) {
+  await ensureReviewReferralSchema();
+  await refreshReferralCommissionAvailability();
+
+  const account = await findReferralAccountByUserId(userId);
+  if (!account) {
+    return {
+      accountId: null,
+      totals: {
+        totalReferrals: 0,
+        potentialCommission: 0,
+        availableBalance: 0,
+        pendingWithdrawalAmount: 0,
+        paidWithdrawalAmount: 0,
+      },
+      referrals: [] as Array<{
+        id: string;
+        referralCode: string;
+        productName: string;
+        referredName: string | null;
+        referredPhone: string;
+        status: string;
+        commissionStatus: string;
+        potentialCommission: number;
+        createdAt: string | null;
+      }>,
+      withdrawals: [] as Array<ReturnType<typeof presentWithdrawalRow>>,
+    };
+  }
+
+  const links = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `SELECT * FROM "ReferralLink" WHERE "accountId" = $1 ORDER BY "createdAt" DESC`,
+    asString(account.id),
+  );
+  const [withdrawals, availableLinks] = await Promise.all([
+    getReferralWithdrawalsForAccount(asString(account.id)),
+    getAvailableReferralLinksForAccount(asString(account.id)),
+  ]);
+
+  return {
+    accountId: asString(account.id),
+    totals: {
+      totalReferrals: links.length,
+      potentialCommission: roundMoney(links.reduce((sum, row) => sum + toNumber(row.potentialCommission), 0)),
+      availableBalance: roundMoney(availableLinks.reduce((sum, row) => sum + toNumber(row.potentialCommission), 0)),
+      pendingWithdrawalAmount: roundMoney(
+        withdrawals
+          .filter((row) => ["pending", "approved", "held"].includes(String(row.status || "").toLowerCase()))
+          .reduce((sum, row) => sum + toNumber(row.amount), 0),
+      ),
+      paidWithdrawalAmount: roundMoney(
+        withdrawals
+          .filter((row) => String(row.status || "").toLowerCase() === "paid")
+          .reduce((sum, row) => sum + toNumber(row.amount), 0),
+      ),
+    },
+    referrals: links.map((row) => ({
+      id: asString(row.id),
+      referralCode: asString(row.referralCode),
+      productName: asString(row.productName),
+      referredName: cleanOptional(row.referredName),
+      referredPhone: maskPhone(asString(row.referredPhone)),
+      status: asString(row.status),
+      commissionStatus: asString(row.commissionStatus),
+      potentialCommission: toNumber(row.potentialCommission),
+      createdAt: toDate(row.createdAt)?.toISOString() || null,
+    })),
+    withdrawals: withdrawals.map(presentWithdrawalRow),
+  };
+}
+
+export async function createReferralWithdrawalRequestForUser(userId: string, amountInput: number) {
+  await ensureReviewReferralSchema();
+  await refreshReferralCommissionAvailability();
+
+  const account = await findReferralAccountByUserId(userId);
+  if (!account) {
+    throw new Error("No linked review referral account was found for this agent.");
+  }
+
+  const amount = roundMoney(Number(amountInput || 0));
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("Enter a valid withdrawal amount.");
+  }
+  if (amount < MIN_REFERRAL_WITHDRAWAL_AMOUNT) {
+    throw new Error(`Minimum withdrawal amount is KES ${MIN_REFERRAL_WITHDRAWAL_AMOUNT}.`);
+  }
+
+  const availableLinks = await getAvailableReferralLinksForAccount(asString(account.id));
+  const availableBalance = roundMoney(availableLinks.reduce((sum, row) => sum + toNumber(row.potentialCommission), 0));
+  if (amount > availableBalance) {
+    throw new Error(`Requested amount exceeds available balance of KES ${availableBalance}.`);
+  }
+
+  const phone = normalizeKenyanPhone(asString(account.customerPhone));
+  if (!phone) {
+    throw new Error("Referral account phone number is invalid.");
+  }
+
+  const created = await prisma.$transaction(async (tx) => {
+    const withdrawalId = `rwr_${randomBytes(10).toString("hex")}`;
+    await tx.$executeRawUnsafe(
+      `
+        INSERT INTO "ReferralWithdrawalRequest" (
+          "id", "accountId", "amount", "method", "phone", "status", "createdAt", "updatedAt"
+        ) VALUES ($1, $2, $3, 'M_PESA', $4, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `,
+      withdrawalId,
+      asString(account.id),
+      amount,
+      phone,
+    );
+
+    let remaining = amount;
+    for (const link of availableLinks) {
+      if (remaining <= 0) break;
+      const allocationAmount = roundMoney(Math.min(remaining, toNumber(link.potentialCommission)));
+      if (allocationAmount <= 0) continue;
+      await tx.$executeRawUnsafe(
+        `
+          INSERT INTO "ReferralWithdrawalAllocation" (
+            "id", "withdrawalRequestId", "referralLinkId", "amount", "createdAt"
+          ) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+        `,
+        `rwa_${randomBytes(10).toString("hex")}`,
+        withdrawalId,
+        asString(link.id),
+        allocationAmount,
+      );
+      remaining = roundMoney(remaining - allocationAmount);
+    }
+
+    if (remaining > 0.009) {
+      throw new Error("Unable to reserve enough commission lines for this withdrawal.");
+    }
+
+    const rows = await tx.$queryRawUnsafe<Array<Record<string, unknown>>>(
+      `SELECT * FROM "ReferralWithdrawalRequest" WHERE "id" = $1 LIMIT 1`,
+      withdrawalId,
+    );
+    return rows[0] ?? null;
+  });
+
+  if (!created) {
+    throw new Error("Unable to create withdrawal request.");
+  }
+
+  return presentWithdrawalRow(created);
 }
 
 export async function createReferralWithdrawalRequest(

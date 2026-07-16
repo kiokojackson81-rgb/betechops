@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { generateReferralCode } from "@/lib/agents/generateReferralCode";
 import { getAgentsBaseUrl } from "@/lib/runtimeUrls";
+import { getReferralAgentDashboardByUserId } from "@/lib/reviewsReferrals";
 import { getAgentSalesDashboardSummary } from "@/lib/agents/sales";
 import { listAgentReferralLeadsByAgent } from "@/lib/agents/referralLeads";
 import { normalizeKenyanPhone } from "@/lib/phone";
@@ -89,7 +90,7 @@ export async function getAgentDashboardData(userId: string) {
 
   if (!profile) return null;
 
-  const [{ sales, summary: salesSummary }, commissions, payouts, activities, referredWebsiteOrders, referralLeads] = await Promise.all([
+  const [{ sales, summary: salesSummary }, commissions, payouts, activities, referredWebsiteOrders, referralLeads, reviewReferralSummary] = await Promise.all([
     withAgentDashboardFallback(
       "sales-summary",
       getAgentSalesDashboardSummary(userId),
@@ -163,6 +164,24 @@ export async function getAgentDashboardData(userId: string) {
         return [];
       }
       throw error;
+    }),
+    getReferralAgentDashboardByUserId(userId).catch((error) => {
+      console.error("[agents.dashboard] review referral summary load failed", {
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return {
+        accountId: null,
+        totals: {
+          totalReferrals: 0,
+          potentialCommission: 0,
+          availableBalance: 0,
+          pendingWithdrawalAmount: 0,
+          paidWithdrawalAmount: 0,
+        },
+        referrals: [],
+        withdrawals: [],
+      };
     }),
   ]);
 
@@ -258,6 +277,7 @@ export async function getAgentDashboardData(userId: string) {
     salesSummary,
     sales,
     websiteReferralSummary,
+    reviewReferralSummary,
     referralLeadSummary,
     referralLeads: referralLeadsWithStatus,
     referredWebsiteOrders: mappedReferredWebsiteOrders,

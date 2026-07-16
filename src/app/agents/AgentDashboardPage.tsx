@@ -66,12 +66,20 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
   const popularitySignals = await getPopularitySignalsByProduct(shopProducts);
   const opportunityProducts = sortAgentProductsBySignals(shopProducts, popularitySignals, "featured").slice(0, 10);
   const status = String(dashboard.profile.status || "").toLowerCase();
-  const totalCommissionEarnedSoFar =
-    Number(dashboard.salesSummary.earnedCommission || 0) + Number(dashboard.salesSummary.paidCommission || 0);
+  const combinedPotentialCommission =
+    Number(dashboard.salesSummary.potentialCommission || 0) + Number(dashboard.reviewReferralSummary.totals.potentialCommission || 0);
+  const combinedEarnedCommission =
+    Number(dashboard.salesSummary.earnedCommission || 0) + Number(dashboard.reviewReferralSummary.totals.availableBalance || 0);
+  const combinedPaidCommission =
+    Number(dashboard.salesSummary.paidCommission || 0) + Number(dashboard.reviewReferralSummary.totals.paidWithdrawalAmount || 0);
+  const totalCommissionEarnedSoFar = combinedEarnedCommission + combinedPaidCommission;
   const dashboardSummary = {
     ...dashboard.salesSummary,
     websiteReferralOrders: dashboard.websiteReferralSummary.totalOrders,
     websiteReferralRevenue: dashboard.websiteReferralSummary.totalRevenue,
+    potentialCommission: combinedPotentialCommission,
+    earnedCommission: combinedEarnedCommission,
+    paidCommission: combinedPaidCommission,
     totalCommissionEarnedSoFar,
   };
 
@@ -119,9 +127,9 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
         payoutPhone: dashboard.profile.phone,
       }}
       stats={{
-        potentialCommission: dashboard.salesSummary.potentialCommission,
-        earnedCommission: dashboard.salesSummary.earnedCommission,
-        paidCommission: dashboard.salesSummary.paidCommission,
+        potentialCommission: combinedPotentialCommission,
+        earnedCommission: combinedEarnedCommission,
+        paidCommission: combinedPaidCommission,
       }}
     >
       <style
@@ -142,7 +150,7 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
             </div>
             <h2 className="mt-4 text-3xl font-black tracking-tight">Grow Your Solar Business With Betech</h2>
             <p className="mt-3 max-w-2xl text-sm text-white/78">
-              Refer customers, submit orders, and earn up to 6% commission on successful solar sales across Kenya.
+              Refer customers, submit orders, and earn up to 6% commission on successful solar sales across Kenya, including post-purchase customer review referrals.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Link
@@ -218,8 +226,8 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
                 <CircleDollarSign className="h-5 w-5" />
                 <div className="text-sm font-semibold uppercase tracking-[0.18em]">Ready To Withdraw</div>
               </div>
-              <div className="mt-3 text-3xl font-black tracking-tight text-[#210505]">{money(dashboard.salesSummary.earnedCommission)}</div>
-              <p className="mt-2 text-sm text-slate-600">Completed and fully paid customer orders appear here.</p>
+              <div className="mt-3 text-3xl font-black tracking-tight text-[#210505]">{money(combinedEarnedCommission)}</div>
+              <p className="mt-2 text-sm text-slate-600">Completed sales and released customer review referral commissions appear here.</p>
             </div>
             <div className="rounded-[28px] border border-[#e4d4cb] bg-white p-5 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
               <div className="flex items-center gap-3 text-[#7a0000]">

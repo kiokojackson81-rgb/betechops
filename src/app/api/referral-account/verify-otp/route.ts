@@ -15,7 +15,12 @@ export async function POST(request: Request) {
 
   try {
     const result = await verifyReferralAccountOtp(token, code);
-    const response = NextResponse.json({ ok: true, dashboard: result.dashboard });
+    const response = NextResponse.json({
+      ok: true,
+      dashboard: result.dashboard,
+      verificationToken: result.verificationToken,
+      redirectTo: result.redirectTo,
+    });
     response.cookies.set(REFERRAL_ACTIVATION_SESSION_COOKIE, result.sessionToken, {
       httpOnly: true,
       sameSite: "lax",

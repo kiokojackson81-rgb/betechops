@@ -1,5 +1,6 @@
 "use client";
 
+import { signIn } from "next-auth/react";
 import { useState } from "react";
 
 type WithdrawalRow = {
@@ -116,12 +117,29 @@ export default function ReferralActivationClient({ token, initialDashboard, prev
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, code: otpCode }),
       });
-      const payload = (await response.json()) as { ok: boolean; dashboard?: ReferralDashboardPayload; error?: string };
+      const payload = (await response.json()) as {
+        ok: boolean;
+        dashboard?: ReferralDashboardPayload;
+        verificationToken?: string;
+        redirectTo?: string;
+        error?: string;
+      };
       if (!response.ok || !payload.ok || !payload.dashboard) {
         throw new Error(payload.error || "Unable to verify OTP.");
       }
       setDashboard(payload.dashboard);
       setMessage("Phone number verified successfully.");
+      if (payload.verificationToken) {
+        const signInResult = await signIn("phone-otp", {
+          redirect: false,
+          verificationToken: payload.verificationToken,
+          callbackUrl: payload.redirectTo || "/dashboard",
+        });
+        if (signInResult?.ok) {
+          window.location.href = payload.redirectTo || signInResult.url || "/dashboard";
+          return;
+        }
+      }
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Unable to verify OTP.");
     } finally {
