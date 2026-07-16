@@ -2902,6 +2902,7 @@ export async function getReviewsReferralsAdminSummary() {
       `
         SELECT
           COUNT(*) FILTER (WHERE "reviewStatus" = 'PENDING')::int AS "pendingInvitations",
+          COUNT(*) FILTER (WHERE "sentAt" IS NOT NULL)::int AS "sentInvitations",
           COUNT(*) FILTER (WHERE "reviewStatus" = 'SUBMITTED')::int AS "submittedReviews",
           COUNT(*) FILTER (WHERE "reviewStatus" = 'PUBLISHED')::int AS "publishedReviews"
         FROM "ReviewInvitation"
@@ -2936,6 +2937,7 @@ export async function getReviewsReferralsAdminSummary() {
   return {
     reviews: {
       pendingInvitations: Number(reviewRows[0]?.pendingInvitations || 0),
+      sentInvitations: Number(reviewRows[0]?.sentInvitations || 0),
       submittedReviews: Number(reviewRows[0]?.submittedReviews || 0),
       publishedReviews: Number(reviewRows[0]?.publishedReviews || 0),
     },
