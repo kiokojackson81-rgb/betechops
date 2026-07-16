@@ -143,7 +143,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     whatsappPdfUrl: assets.whatsappPdfUrl,
     sendEmail: Boolean(parsed.data.sendEmail),
     sendSms: Boolean(parsed.data.sendSms),
-    triggerWhatsapp: true,
+    // Automatic WhatsApp delivery happens on initial quotation creation.
+    // Follow-up edits or email/SMS sends should not retrigger the same
+    // quotation_ready flow unless we add an explicit resend action.
+    triggerWhatsapp: false,
   });
 
   return NextResponse.json({

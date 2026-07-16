@@ -124,13 +124,13 @@ function Stars({
   onChange: (next: number) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
       {[1, 2, 3, 4, 5].map((score) => (
         <button
           key={`${name}-${score}`}
           type="button"
           onClick={() => onChange(score)}
-          className={`flex h-12 w-12 items-center justify-center rounded-full text-[2.2rem] leading-none transition sm:h-14 sm:w-14 sm:text-[2.5rem] ${score <= value ? "text-amber-400" : "text-slate-300 hover:text-amber-300"}`}
+          className={`flex h-14 w-14 items-center justify-center rounded-full text-[2.8rem] leading-none transition sm:h-16 sm:w-16 sm:text-[3.2rem] ${score <= value ? "text-amber-400" : "text-slate-300 hover:text-amber-300"}`}
           aria-label={`${score} star${score === 1 ? "" : "s"}`}
           aria-pressed={score <= value}
         >
