@@ -7,6 +7,7 @@ import { findOrCreateCustomerIdentityUser, findSafeUserById } from "@/lib/custom
 import { updateSafeCustomerProfile, updateSafeUserById } from "@/lib/customerProfile";
 import { sendGeneralCustomerNotificationEmail } from "@/lib/email";
 import { pushReceiptToChatrace } from "@/lib/integrations/chatrace";
+import { hasWhatsAppConfig, sendWhatsAppTextMessage } from "@/lib/notifications/whatsapp";
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { createOtpCodeForChannel, createDirectVerifiedAuthToken, readVerifiedAuthToken, verifyOtpCodeForChannel } from "@/lib/phoneOtpAuth";
 import { prisma } from "@/lib/prisma";
@@ -3084,30 +3085,34 @@ export async function sendAdminReviewInvitationChannelTest(
     if (!phone) {
       throw new Error("This invitation does not have a valid phone number for WhatsApp.");
     }
-    const chatrace = await pushReceiptToChatrace({
-      phoneE164: phone,
-      customerName: asString(row.customerName),
-      receiptNumber: cleanOptional(row.orderOrReceiptRef) || invitationId,
-      amount: "0",
-      currency: "KES",
-      receiptLink: reviewUrl,
-      receiptUrl: reviewUrl,
-      tagName: REVIEW_INVITATION_CHATRACE_TAG,
-      skipDefaultTags: true,
-      extraFields: {
-        customer_name: asString(row.customerName),
-        review_url: reviewUrl,
-        review_link: reviewUrl,
-        review_invitation_url: reviewUrl,
-        review_invitation_id: invitationId,
-        review_reference: cleanOptional(row.orderOrReceiptRef) || invitationId,
-        review_product_name: asString(row.productName),
-        product_name: asString(row.productName),
-        whatsapp_message_preview: whatsappMessage,
-      },
-    });
-    if (!chatrace.ok) {
-      throw new Error(String(chatrace.debug?.error || "Unable to trigger WhatsApp review flow."));
+    if (hasWhatsAppConfig()) {
+      await sendWhatsAppTextMessage({ to: phone, body: whatsappMessage, previewUrl: true });
+    } else {
+      const chatrace = await pushReceiptToChatrace({
+        phoneE164: phone,
+        customerName: asString(row.customerName),
+        receiptNumber: cleanOptional(row.orderOrReceiptRef) || invitationId,
+        amount: "0",
+        currency: "KES",
+        receiptLink: reviewUrl,
+        receiptUrl: reviewUrl,
+        tagName: REVIEW_INVITATION_CHATRACE_TAG,
+        skipDefaultTags: true,
+        extraFields: {
+          customer_name: asString(row.customerName),
+          review_url: reviewUrl,
+          review_link: reviewUrl,
+          review_invitation_url: reviewUrl,
+          review_invitation_id: invitationId,
+          review_reference: cleanOptional(row.orderOrReceiptRef) || invitationId,
+          review_product_name: asString(row.productName),
+          product_name: asString(row.productName),
+          whatsapp_message_preview: whatsappMessage,
+        },
+      });
+      if (!chatrace.ok) {
+        throw new Error(String(chatrace.debug?.error || "Unable to trigger WhatsApp review flow."));
+      }
     }
     return {
       channel,
