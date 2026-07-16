@@ -6,6 +6,7 @@ import { generateReferralCode } from "@/lib/agents/generateReferralCode";
 import { findOrCreateCustomerIdentityUser, findSafeUserById } from "@/lib/customerIdentity";
 import { updateSafeCustomerProfile, updateSafeUserById } from "@/lib/customerProfile";
 import { sendGeneralCustomerNotificationEmail } from "@/lib/email";
+import { assertNoSelfReferralForReview, claimReferralOwnershipLock, ensureReferralFraudSchema } from "@/lib/referralFraud";
 import { pushReceiptToChatrace } from "@/lib/integrations/chatrace";
 import { hasWhatsAppConfig, sendWhatsAppTextMessage } from "@/lib/notifications/whatsapp";
 import { normalizeKenyanPhone } from "@/lib/phone";
@@ -1936,6 +1937,7 @@ async function getOrCreateReferralAccount(input: {
 
 export async function createReferralFromReview(input: z.infer<typeof createReferralSchema>) {
   await ensureReviewReferralSchema();
+  await ensureReferralFraudSchema();
   const invitation = await getInvitationRowByToken(input.token);
   if (!invitation) throw new Error("Review invitation not found.");
 
@@ -1948,11 +1950,6 @@ export async function createReferralFromReview(input: z.infer<typeof createRefer
 
   const referredPhone = normalizeKenyanPhone(input.referredPhone);
   if (!referredPhone) throw new Error("A valid Kenyan phone number is required for the referral.");
-
-  const referrerPhone = normalizeKenyanPhone(asString(invitation.customerPhone));
-  if (referrerPhone && referrerPhone === referredPhone) {
-    throw new Error("Self-referrals are not allowed.");
-  }
 
   const product = await getProductSummary(asString(invitation.productId));
   const policy = await getReferralPolicyForProduct(product.id);
@@ -1977,17 +1974,41 @@ export async function createReferralFromReview(input: z.infer<typeof createRefer
   };
 
   await prisma.$transaction(async (tx) => {
+    await assertNoSelfReferralForReview(tx, {
+      customerUserId: cleanOptional(invitation.customerUserId),
+      referrerPhone: asString(invitation.customerPhone),
+      referredPhone,
+      referralAccountId: account.accountId,
+    });
+    const ownershipLock = await claimReferralOwnershipLock(tx, {
+      normalizedPhone: referredPhone,
+      source: "post_review_referral",
+      ownerType: "review_referral",
+      ownerUserId: cleanOptional(invitation.customerUserId),
+      ownerReferralAccountId: account.accountId,
+      customerUserId: cleanOptional(invitation.customerUserId),
+      customerName: cleanOptional(input.referredName),
+      productName: product.name,
+      reviewId: asString(review.id),
+      referralLinkId: linkId,
+      metadata: {
+        invitationId: asString(invitation.id),
+        referralCode,
+        channel: input.channel,
+      },
+    });
+
     await tx.$executeRawUnsafe(
       `
         INSERT INTO "ReferralLink" (
           "id", "accountId", "reviewId", "productId", "productName", "referredName", "referredPhone",
-          "referralCode", "referralUrl", "channel", "status", "potentialCommission", "commissionStatus",
+          "referralCode", "referralUrl", "channel", "ownershipLockId", "status", "potentialCommission", "commissionStatus",
           "policySnapshot", "metadata", "createdAt", "updatedAt"
         )
         VALUES (
           $1, $2, $3, $4, $5, $6, $7,
-          $8, $9, $10, 'LINK_CREATED', $11, 'COMMISSION_PENDING',
-          $12::jsonb, $13::jsonb, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+          $8, $9, $10, $11, 'LINK_CREATED', $12, 'COMMISSION_PENDING',
+          $13::jsonb, $14::jsonb, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
         )
       `,
       linkId,
@@ -2000,6 +2021,7 @@ export async function createReferralFromReview(input: z.infer<typeof createRefer
       referralCode,
       referralUrl,
       input.channel,
+      ownershipLock.id,
       potentialCommission,
       JSON.stringify(policySnapshot),
       JSON.stringify({

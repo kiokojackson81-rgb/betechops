@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { normalizeKenyanPhone } from "@/lib/phone";
+import { assertNoSelfReferralForAgent, claimReferralOwnershipLock, ensureReferralFraudSchema } from "@/lib/referralFraud";
 
 const AGENT_REFERRAL_LEADS_SCHEMA_SQL = [
   `CREATE TABLE IF NOT EXISTS "AgentReferralLead" (
@@ -131,6 +132,7 @@ export async function ensureAgentReferralLeadsSchema() {
 
 export async function createAgentReferralLead(input: CreateAgentReferralLeadInput) {
   await ensureAgentReferralLeadsSchema();
+  await ensureReferralFraudSchema();
 
   const normalizedPhone = normalizeKenyanPhone(input.customerPhone);
   if (!normalizedPhone) {
@@ -142,6 +144,7 @@ export async function createAgentReferralLead(input: CreateAgentReferralLeadInpu
   const normalizedOpsProductId = String(input.opsProductId || "").trim() || null;
   const normalizedProductSlug = String(input.productSlug || "").trim() || null;
   const normalizedReferralCode = String(input.referralCode || "").trim() || null;
+  const leadId = randomUUID();
 
   const duplicateRows = (await prisma.$queryRawUnsafe(
     `
@@ -188,41 +191,62 @@ export async function createAgentReferralLead(input: CreateAgentReferralLeadInpu
     return mapAgentReferralLeadRow(updatedRows[0]);
   }
 
-  const createdRows = (await prisma.$queryRawUnsafe(
-    `
-      INSERT INTO "AgentReferralLead" (
-        "id",
-        "agentId",
-        "productId",
-        "opsProductId",
-        "productName",
-        "productSlug",
-        "customerName",
-        "customerPhone",
-        "referralCode",
-        "referralUrl",
-        "channel",
-        "status",
-        "createdAt",
-        "updatedAt"
-      )
-      VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'PENDING', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-      )
-      RETURNING *
-    `,
-    randomUUID(),
-    input.agentId,
-    normalizedProductId,
-    normalizedOpsProductId,
-    input.productName,
-    normalizedProductSlug,
-    normalizedCustomerName,
-    normalizedPhone,
-    normalizedReferralCode,
-    input.referralUrl,
-    input.channel,
-  )) as Record<string, unknown>[];
+  const createdRows = await prisma.$transaction(async (tx) => {
+    await assertNoSelfReferralForAgent(tx, input.agentId, normalizedPhone);
+    const ownershipLock = await claimReferralOwnershipLock(tx, {
+      normalizedPhone,
+      source: "agent_referral",
+      ownerType: "agent",
+      ownerUserId: input.agentId,
+      customerName: normalizedCustomerName,
+      productName: input.productName,
+      agentLeadId: leadId,
+      metadata: {
+        productId: normalizedProductId,
+        productSlug: normalizedProductSlug,
+        referralCode: normalizedReferralCode,
+        channel: input.channel,
+      },
+    });
+
+    return (await tx.$queryRawUnsafe(
+      `
+        INSERT INTO "AgentReferralLead" (
+          "id",
+          "agentId",
+          "productId",
+          "opsProductId",
+          "productName",
+          "productSlug",
+          "customerName",
+          "customerPhone",
+          "referralCode",
+          "referralUrl",
+          "channel",
+          "ownershipLockId",
+          "status",
+          "createdAt",
+          "updatedAt"
+        )
+        VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'PENDING', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        )
+        RETURNING *
+      `,
+      leadId,
+      input.agentId,
+      normalizedProductId,
+      normalizedOpsProductId,
+      input.productName,
+      normalizedProductSlug,
+      normalizedCustomerName,
+      normalizedPhone,
+      normalizedReferralCode,
+      input.referralUrl,
+      input.channel,
+      ownershipLock.id,
+    )) as Record<string, unknown>[];
+  });
 
   return mapAgentReferralLeadRow(createdRows[0]);
 }
