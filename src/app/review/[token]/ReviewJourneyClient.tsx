@@ -99,6 +99,21 @@ function buildReferralShareMessage(input: {
   ].join("\n");
 }
 
+function getFulfillmentCopy(deliveryMode: string | null | undefined) {
+  const mode = String(deliveryMode || "").toLowerCase();
+  const installationKeywords = ["install", "installation", "installed", "system"];
+  const isInstallation = installationKeywords.some((keyword) => mode.includes(keyword));
+  return isInstallation
+    ? {
+        title: "Installation service",
+        prompt: "How would you rate the installation service?",
+      }
+    : {
+        title: "Delivery experience",
+        prompt: "How would you rate the delivery of your order?",
+      };
+}
+
 function Stars({
   name,
   value,
@@ -157,6 +172,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
   const alreadySubmitted = Boolean(invitation.review);
   const projectedCommission = Number((invitation.product.currentPrice * 0.06).toFixed(2));
   const otherPurchasedItems = invitation.purchasedItems.filter((item) => !item.isPrimary);
+  const fulfillmentCopy = getFulfillmentCopy(invitation.order.deliveryMode);
   const referralMessagePreview = referralSuccess
     ? buildReferralShareMessage({
         referredName: referralForm.referredName,
@@ -333,18 +349,18 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
               </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="mt-8 grid gap-6">
-              <div className="grid gap-5 lg:grid-cols-2">
-                <label className="rounded-[26px] border border-[#eddacf] bg-[#fffaf5] p-5">
-                  <div className="text-sm font-bold text-[#210505]">Overall rating</div>
-                  <div className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-500">How would you rate this product?</div>
+            <form onSubmit={handleSubmit} className="mt-8 grid gap-5 sm:gap-6">
+              <div className="grid gap-4 sm:gap-5 lg:grid-cols-2">
+                <label className="rounded-[24px] border border-[#eddacf] bg-[#fffaf5] p-4 sm:rounded-[26px] sm:p-5">
+                  <div className="text-base font-bold text-[#210505]">Overall experience</div>
+                  <div className="mt-2 text-sm leading-6 text-slate-600">How would you rate your overall experience with this product?</div>
                   <div className="mt-4">
                     <Stars name="overall" value={form.overallRating} onChange={(value) => setForm((current) => ({ ...current, overallRating: value }))} />
                   </div>
                 </label>
-                <label className="rounded-[26px] border border-[#eddacf] bg-[#fffaf5] p-5">
-                  <div className="text-sm font-bold text-[#210505]">Product performance</div>
-                  <div className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-500">How well is the product performing?</div>
+                <label className="rounded-[24px] border border-[#eddacf] bg-[#fffaf5] p-4 sm:rounded-[26px] sm:p-5">
+                  <div className="text-base font-bold text-[#210505]">Product performance</div>
+                  <div className="mt-2 text-sm leading-6 text-slate-600">How well is the product performing?</div>
                   <div className="mt-4">
                     <Stars
                       name="performance"
@@ -353,20 +369,9 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                     />
                   </div>
                 </label>
-                <label className="rounded-[26px] border border-[#eddacf] bg-[#fffaf5] p-5">
-                  <div className="text-sm font-bold text-[#210505]">Customer service</div>
-                  <div className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-500">How would you rate our customer service?</div>
-                  <div className="mt-4">
-                    <Stars
-                      name="service"
-                      value={form.customerServiceRating}
-                      onChange={(value) => setForm((current) => ({ ...current, customerServiceRating: value }))}
-                    />
-                  </div>
-                </label>
-                <label className="rounded-[26px] border border-[#eddacf] bg-[#fffaf5] p-5">
-                  <div className="text-sm font-bold text-[#210505]">Delivery or installation</div>
-                  <div className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-500">Rate the relevant part of fulfilment</div>
+                <label className="rounded-[24px] border border-[#eddacf] bg-[#fffaf5] p-4 sm:rounded-[26px] sm:p-5">
+                  <div className="text-base font-bold text-[#210505]">{fulfillmentCopy.title}</div>
+                  <div className="mt-2 text-sm leading-6 text-slate-600">{fulfillmentCopy.prompt}</div>
                   <div className="mt-4">
                     <Stars
                       name="fulfillment"
@@ -375,9 +380,20 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                     />
                   </div>
                 </label>
+                <label className="rounded-[24px] border border-[#eddacf] bg-[#fffaf5] p-4 sm:rounded-[26px] sm:p-5">
+                  <div className="text-base font-bold text-[#210505]">Customer service</div>
+                  <div className="mt-2 text-sm leading-6 text-slate-600">How would you rate the support you received from our team?</div>
+                  <div className="mt-4">
+                    <Stars
+                      name="service"
+                      value={form.customerServiceRating}
+                      onChange={(value) => setForm((current) => ({ ...current, customerServiceRating: value }))}
+                    />
+                  </div>
+                </label>
               </div>
 
-              <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+              <div className="grid gap-4 sm:gap-5 lg:grid-cols-[0.9fr_1.1fr]">
                 <label className="grid gap-2">
                   <span className="text-sm font-semibold text-[#210505]">Review title</span>
                   <input
@@ -412,7 +428,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                 />
               </label>
 
-              <div className="rounded-[28px] border border-[#ecd7cb] bg-[#fffaf5] p-5">
+              <div className="rounded-[24px] border border-[#ecd7cb] bg-[#fffaf5] p-4 sm:rounded-[28px] sm:p-5">
                 <div className="text-sm font-bold text-[#210505]">Are you experiencing any problem with the product?</div>
                 <div className="mt-4 flex flex-wrap gap-4 text-sm">
                   <label className="inline-flex items-center gap-2">
