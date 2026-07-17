@@ -27,6 +27,7 @@ type CashAdvance = {
   repaymentPeriod?: number | null;
   remainingBalance: number;
   createdAt: string;
+  hrComment?: string | null;
   user: { id: string; name?: string | null; email: string; attendantCategory?: string | null };
   installments?: Array<{ id: string; dueDate: string; amount: number; isPaid: boolean }>;
 };
@@ -95,8 +96,17 @@ export default function AdminWellnessClient() {
   const [data, setData] = useState<SummaryResponse | null>(null);
   const [leaveComments, setLeaveComments] = useState<Record<string, string>>({});
   const [advanceForms, setAdvanceForms] = useState<Record<string, { approvedAmount: string; repaymentPeriod: string; hrComment: string }>>({});
+  const [recentAdvanceDrafts, setRecentAdvanceDrafts] = useState<
+    Record<string, { userId: string; requestedAmount: string; approvedAmount: string; repaymentPeriod: string; reason: string; hrComment: string }>
+  >({});
   const [adjustmentForms, setAdjustmentForms] = useState<Record<string, { amount: string; adminComment: string }>>({});
   const [balanceDrafts, setBalanceDrafts] = useState<Record<string, { annualEntitlement: string; sickEntitlement: string; emergencyEntitlement: string }>>({});
+  const [adminAdvanceForm, setAdminAdvanceForm] = useState({
+    userId: "",
+    requestedAmount: "",
+    repaymentPeriod: "1",
+    reason: "",
+  });
 
   const fetchSummary = async () => {
     setLoading(true);
@@ -127,6 +137,22 @@ export default function AdminWellnessClient() {
       };
     }
     setAdvanceForms(nextAdvanceForms);
+
+    const nextRecentAdvanceDrafts: Record<
+      string,
+      { userId: string; requestedAmount: string; approvedAmount: string; repaymentPeriod: string; reason: string; hrComment: string }
+    > = {};
+    for (const row of data.recentCashAdvances) {
+      nextRecentAdvanceDrafts[row.id] = {
+        userId: row.user.id,
+        requestedAmount: String(row.requestedAmount ?? ""),
+        approvedAmount: String(row.approvedAmount ?? row.requestedAmount ?? ""),
+        repaymentPeriod: String(Math.max(1, Number(row.repaymentPeriod ?? 1))),
+        reason: row.reason ?? "",
+        hrComment: row.hrComment ?? "",
+      };
+    }
+    setRecentAdvanceDrafts(nextRecentAdvanceDrafts);
 
     const nextAdjustmentForms: Record<string, { amount: string; adminComment: string }> = {};
     for (const row of data.pendingAdjustmentRequests) {
@@ -258,6 +284,158 @@ export default function AdminWellnessClient() {
     }
   };
 
+  const staffOptions = useMemo(
+    () =>
+      (data?.leaveBalances ?? []).map((balance) => ({
+        id: balance.user.id,
+        label: balance.user.name || balance.user.email,
+        sub: balance.user.email,
+      })),
+    [data],
+  );
+
+  const createAdminAdvance = async () => {
+    try {
+      if (!adminAdvanceForm.userId) throw new Error("Select staff");
+      const requestedAmount = Math.trunc(Number(adminAdvanceForm.requestedAmount ?? 0));
+      const repaymentPeriod = Math.trunc(Number(adminAdvanceForm.repaymentPeriod ?? 0));
+      const reason = adminAdvanceForm.reason.trim();
+      if (requestedAmount <= 0) throw new Error("Requested amount must be greater than zero");
+      if (repaymentPeriod <= 0) throw new Error("Repayment period must be at least 1 month");
+      if (!reason) throw new Error("Reason is required");
+      const res = await fetch(`/api/cash-advance?impersonateId=${encodeURIComponent(adminAdvanceForm.userId)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requestedAmount,
+          repaymentPeriod,
+          reason,
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(String(body?.error ?? "Failed to create cash advance"));
+      toast("Cash advance created", "success");
+      setAdminAdvanceForm({ userId: "", requestedAmount: "", repaymentPeriod: "1", reason: "" });
+      await fetchSummary();
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Failed to create cash advance", "error");
+    }
+  };
+
+  const updateRecentAdvance = async (id: string) => {
+    try {
+      const draft = recentAdvanceDrafts[id];
+      if (!draft) return;
+      const res = await fetch(`/api/cash-advance/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: draft.userId,
+          requestedAmount: Number(draft.requestedAmount),
+          approvedAmount: Number(draft.approvedAmount),
+          repaymentPeriod: Number(draft.repaymentPeriod),
+          reason: draft.reason,
+          hrComment: draft.hrComment,
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(String(body?.error ?? "Failed to update cash advance"));
+      toast("Cash advance updated", "success");
+      await fetchSummary();
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Failed to update cash advance", "error");
+    }
+  };
+
+  const deleteRecentAdvance = async (id: string) => {
+    try {
+      if (typeof window !== "undefined" && !window.confirm("Delete this cash advance application?")) return;
+      const res = await fetch(`/api/cash-advance/${id}`, { method: "DELETE" });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(String(body?.error ?? "Failed to delete cash advance"));
+      toast("Cash advance deleted", "success");
+      await fetchSummary();
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Failed to delete cash advance", "error");
+    }
+  };
+
+  const editLeaveRequest = async (row: LeaveRequest) => {
+    if (typeof window === "undefined") return;
+    const startDate = window.prompt("Start date (YYYY-MM-DD)", row.startDate.slice(0, 10));
+    if (startDate == null) return;
+    const endDate = window.prompt("End date (YYYY-MM-DD)", row.endDate.slice(0, 10));
+    if (endDate == null) return;
+    const type = window.prompt("Leave type", row.type);
+    if (type == null) return;
+    const reason = window.prompt("Reason", row.reason);
+    if (reason == null) return;
+    try {
+      const res = await fetch(`/api/leave/${row.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ startDate, endDate, type, reason }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(String(body?.error ?? "Failed to update leave request"));
+      toast("Leave request updated", "success");
+      await fetchSummary();
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Failed to update leave request", "error");
+    }
+  };
+
+  const deleteLeaveRequest = async (id: string) => {
+    try {
+      if (typeof window !== "undefined" && !window.confirm("Delete this leave request?")) return;
+      const res = await fetch(`/api/leave/${id}`, { method: "DELETE" });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(String(body?.error ?? "Failed to delete leave request"));
+      toast("Leave request deleted", "success");
+      await fetchSummary();
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Failed to delete leave request", "error");
+    }
+  };
+
+  const editAdjustmentRequest = async (row: PayrollAdjustmentRequest) => {
+    if (typeof window === "undefined") return;
+    const amount = window.prompt("Amount", String(row.amount));
+    if (amount == null) return;
+    const label = window.prompt("Label", row.label);
+    if (label == null) return;
+    const details = window.prompt("Details", row.details);
+    if (details == null) return;
+    const incidentDate = window.prompt("Incident date (YYYY-MM-DD, optional)", row.incidentDate ? row.incidentDate.slice(0, 10) : "");
+    if (incidentDate == null) return;
+    try {
+      const res = await fetch(`/api/payroll-adjustment-requests/${row.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: Number(amount), label, details, incidentDate }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(String(body?.error ?? "Failed to update adjustment request"));
+      toast("Payroll adjustment updated", "success");
+      await fetchSummary();
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Failed to update adjustment request", "error");
+    }
+  };
+
+  const deleteAdjustmentRequest = async (id: string) => {
+    try {
+      if (typeof window !== "undefined" && !window.confirm("Delete this payroll adjustment request?")) return;
+      const res = await fetch(`/api/payroll-adjustment-requests/${id}`, { method: "DELETE" });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(String(body?.error ?? "Failed to delete adjustment request"));
+      toast("Payroll adjustment deleted", "success");
+      await fetchSummary();
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Failed to delete adjustment request", "error");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(34,197,94,.18),transparent_28%),linear-gradient(135deg,#111827,#0f172a_60%,#0b1220)] p-6">
@@ -278,6 +456,43 @@ export default function AdminWellnessClient() {
               {processing ? "Processing..." : "Run due deductions"}
             </Button>
           </div>
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-white/10 bg-white/5 p-5">
+        <h2 className="text-lg font-semibold">Create Cash Advance</h2>
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <label className="space-y-2 text-sm">
+            <span className="text-slate-300">Staff</span>
+            <select
+              className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 outline-none"
+              value={adminAdvanceForm.userId}
+              onChange={(e) => setAdminAdvanceForm((state) => ({ ...state, userId: e.target.value }))}
+            >
+              <option value="">Select staff</option>
+              {staffOptions.map((option) => (
+                <option key={option.id} value={option.id}>{option.label} - {option.sub}</option>
+              ))}
+            </select>
+          </label>
+          <Field
+            label="Requested amount"
+            value={adminAdvanceForm.requestedAmount}
+            onChange={(value) => setAdminAdvanceForm((state) => ({ ...state, requestedAmount: value }))}
+          />
+          <Field
+            label="Repayment months"
+            value={adminAdvanceForm.repaymentPeriod}
+            onChange={(value) => setAdminAdvanceForm((state) => ({ ...state, repaymentPeriod: value }))}
+          />
+          <Field
+            label="Reason"
+            value={adminAdvanceForm.reason}
+            onChange={(value) => setAdminAdvanceForm((state) => ({ ...state, reason: value }))}
+          />
+        </div>
+        <div className="mt-3">
+          <Button onClick={() => void createAdminAdvance()}>Create advance</Button>
         </div>
       </section>
 
@@ -305,6 +520,10 @@ export default function AdminWellnessClient() {
                   <StatusBadge status={row.status} />
                 </div>
                 <div className="mt-2 text-sm text-slate-300">{row.reason}</div>
+                <div className="mt-3 flex gap-3">
+                  <Button variant="secondary" onClick={() => void editLeaveRequest(row)}>Edit</Button>
+                  <Button variant="secondary" onClick={() => void deleteLeaveRequest(row.id)}>Delete</Button>
+                </div>
               </div>
             ))}
             {!data?.recentLeaveRequests?.length && !loading ? <EmptyCard label="No leave requests yet." /> : null}
@@ -324,6 +543,79 @@ export default function AdminWellnessClient() {
                   <StatusBadge status={row.status} />
                 </div>
                 <div className="mt-2 text-sm text-slate-300">{row.reason}</div>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <label className="space-y-2 text-sm">
+                    <span className="text-slate-300">Staff</span>
+                    <select
+                      className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 outline-none"
+                      value={recentAdvanceDrafts[row.id]?.userId ?? row.user.id}
+                      onChange={(e) =>
+                        setRecentAdvanceDrafts((state) => ({
+                          ...state,
+                          [row.id]: { ...state[row.id], userId: e.target.value },
+                        }))
+                      }
+                    >
+                      {staffOptions.map((option) => (
+                        <option key={option.id} value={option.id}>{option.label} - {option.sub}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <Field
+                    label="Repayment months"
+                    value={recentAdvanceDrafts[row.id]?.repaymentPeriod ?? String(Math.max(1, Number(row.repaymentPeriod ?? 1)))}
+                    onChange={(value) =>
+                      setRecentAdvanceDrafts((state) => ({
+                        ...state,
+                        [row.id]: { ...state[row.id], repaymentPeriod: value },
+                      }))
+                    }
+                  />
+                  <Field
+                    label="Requested amount"
+                    value={recentAdvanceDrafts[row.id]?.requestedAmount ?? String(row.requestedAmount)}
+                    onChange={(value) =>
+                      setRecentAdvanceDrafts((state) => ({
+                        ...state,
+                        [row.id]: { ...state[row.id], requestedAmount: value },
+                      }))
+                    }
+                  />
+                  <Field
+                    label="Approved amount"
+                    value={recentAdvanceDrafts[row.id]?.approvedAmount ?? String(row.approvedAmount ?? row.requestedAmount)}
+                    onChange={(value) =>
+                      setRecentAdvanceDrafts((state) => ({
+                        ...state,
+                        [row.id]: { ...state[row.id], approvedAmount: value },
+                      }))
+                    }
+                  />
+                  <Field
+                    label="Reason"
+                    value={recentAdvanceDrafts[row.id]?.reason ?? row.reason}
+                    onChange={(value) =>
+                      setRecentAdvanceDrafts((state) => ({
+                        ...state,
+                        [row.id]: { ...state[row.id], reason: value },
+                      }))
+                    }
+                  />
+                  <Field
+                    label="HR comment"
+                    value={recentAdvanceDrafts[row.id]?.hrComment ?? ""}
+                    onChange={(value) =>
+                      setRecentAdvanceDrafts((state) => ({
+                        ...state,
+                        [row.id]: { ...state[row.id], hrComment: value },
+                      }))
+                    }
+                  />
+                </div>
+                <div className="mt-3 flex gap-3">
+                  <Button variant="secondary" onClick={() => void updateRecentAdvance(row.id)}>Save changes</Button>
+                  <Button variant="secondary" onClick={() => void deleteRecentAdvance(row.id)}>Delete</Button>
+                </div>
               </div>
             ))}
             {!data?.recentCashAdvances?.length && !loading ? <EmptyCard label="No cash advance requests yet." /> : null}
@@ -343,6 +635,10 @@ export default function AdminWellnessClient() {
                   <StatusBadge status={row.status} />
                 </div>
                 <div className="mt-2 text-sm text-slate-300">{row.details}</div>
+                <div className="mt-3 flex gap-3">
+                  <Button variant="secondary" onClick={() => void editAdjustmentRequest(row)}>Edit</Button>
+                  <Button variant="secondary" onClick={() => void deleteAdjustmentRequest(row.id)}>Delete</Button>
+                </div>
               </div>
             ))}
             {!data?.recentAdjustmentRequests?.length && !loading ? <EmptyCard label="No payroll adjustment requests yet." /> : null}
