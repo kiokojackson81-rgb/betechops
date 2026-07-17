@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Card from "@/app/_components/Card";
 import DailyReportReceiptsPanel from "@/components/daily-report-receipts";
 import WebsiteOrdersDeskClient from "@/components/WebsiteOrdersDeskClient";
@@ -162,6 +162,7 @@ async function fetchJson<T>(url: string): Promise<T | null> {
 export default function MarketingReceiptsPage() {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const today = useMemo(() => new Date(), []);
   const defaultDate = useMemo(() => toDateInput(today), [today]);
   const tradingPeriod = useMemo(() => getTradingPeriodFor(today), [today]);
@@ -200,33 +201,24 @@ export default function MarketingReceiptsPage() {
     missedCount: 0,
     followUpCount: 0,
   });
-  const [currentSearch, setCurrentSearch] = useState("");
+  const [currentSearch, setCurrentSearch] = useState(searchParams.toString() ? `?${searchParams.toString()}` : "");
   const [podFilter, setPodFilter] = useState<PodFilterValue>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("receipts");
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    const nextSearch = searchParams.toString();
+    setCurrentSearch(nextSearch ? `?${nextSearch}` : "");
 
-    const syncFromLocation = () => {
-      const nextSearch = window.location.search;
-      setCurrentSearch(nextSearch);
-
-      const params = new URLSearchParams(nextSearch);
-      const nextTab = params.get("tab");
-      const resolvedViewMode =
-        nextTab === "web-orders"
-          ? "web-orders"
-          : nextTab === "quotations"
-            ? "quote-requests"
-            : "receipts";
-      setViewMode((current) => (current === resolvedViewMode ? current : resolvedViewMode));
-      setPodFilter(params.get("pod") === "pending" ? "pod_pending" : "all");
-    };
-
-    syncFromLocation();
-    window.addEventListener("popstate", syncFromLocation);
-    return () => window.removeEventListener("popstate", syncFromLocation);
-  }, []);
+    const nextTab = searchParams.get("tab");
+    const resolvedViewMode =
+      nextTab === "web-orders"
+        ? "web-orders"
+        : nextTab === "quotations"
+          ? "quote-requests"
+          : "receipts";
+    setViewMode((current) => (current === resolvedViewMode ? current : resolvedViewMode));
+    setPodFilter(searchParams.get("pod") === "pending" ? "pod_pending" : "all");
+  }, [searchParams]);
 
   function setReceiptViewMode(nextMode: ViewMode) {
     setViewMode(nextMode);
@@ -641,12 +633,12 @@ export default function MarketingReceiptsPage() {
           ) : viewMode === "web-orders" ? (
             <WebsiteOrdersDeskClient
               apiBasePath="/api/attendant/website-orders"
-              defaultStatusFilter="PENDING"
+              defaultStatusFilter="ALL"
               orderListLabel="Website orders"
               orderListTitle="Assigned web orders"
               orderListDescription="Process your assigned website orders here using the same lifecycle used in admin."
               emptyMessage="No assigned website orders found right now."
-              filterStorageKey="marketing:web-orders:status"
+              filterStorageKey="marketing:web-orders:status:v2"
               q={filters.query}
               start={filters.start}
               end={filters.end}

@@ -1459,6 +1459,35 @@ export default function VoiceConsoleClient({
     softphone.startOutgoingCall(normalizedPhone);
   };
 
+  const applyContactedUpdateLocally = (input: { id?: string | null; voiceLeadId?: string | null; queueType: "task" | "lead" }) => {
+    setData((current) => {
+      const nextData = { ...(current as any) };
+
+      if (Array.isArray(nextData.callQueue)) {
+        nextData.callQueue = nextData.callQueue.map((item: any) => {
+          if (input.queueType === "task" && input.id && item.type === "task" && item.id === input.id) {
+            return { ...item, status: "contacted" };
+          }
+          if (input.queueType === "lead" && input.voiceLeadId && item.type === "lead" && item.voiceLeadId === input.voiceLeadId) {
+            return { ...item, status: "contacted" };
+          }
+          return item;
+        });
+      }
+
+      if (nextData.selectedCallDetail && Array.isArray(nextData.selectedCallDetail.followUps) && input.queueType === "task" && input.id) {
+        nextData.selectedCallDetail = {
+          ...nextData.selectedCallDetail,
+          followUps: nextData.selectedCallDetail.followUps.map((task: any) =>
+            task.id === input.id ? { ...task, status: "contacted" } : task,
+          ),
+        };
+      }
+
+      return nextData;
+    });
+  };
+
   const handleMarkContacted = async (input: { id?: string | null; voiceLeadId?: string | null; queueType: "task" | "lead" }) => {
     setError(null);
     try {
@@ -1476,7 +1505,10 @@ export default function VoiceConsoleClient({
       if (!response.ok) {
         throw new Error(String(payload.error || "mark_contacted_failed"));
       }
-      await refreshSnapshot(selectedCallId, selectedPhone);
+      applyContactedUpdateLocally(input);
+      refreshSnapshot(selectedCallId, selectedPhone).catch((refreshError) => {
+        console.error("[voice.console.mark_contacted_refresh_failed]", refreshError);
+      });
     } catch (markError) {
       console.error("[voice.console.mark_contacted_failed]", markError);
       setError("Could not mark the customer as contacted.");
