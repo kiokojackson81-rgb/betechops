@@ -581,7 +581,7 @@ function presentWithdrawalRow(row: Record<string, unknown>) {
 }
 
 function buildReviewToken() {
-  return `rvw_${randomBytes(18).toString("base64url")}`;
+  return `rvw_${randomBytes(12).toString("base64url")}`;
 }
 
 function buildActivationToken() {
@@ -754,10 +754,14 @@ async function resolvePurchaseContext(input: z.infer<typeof createReviewInvitati
     });
 
     if (!websiteOrder) throw new Error("Website order not found.");
+    const matchedItem = websiteOrder.items[0];
+    if (!matchedItem) {
+      throw new Error("The selected review product does not belong to this website order.");
+    }
 
     return {
       productId: product.id,
-      productName: product.name,
+      productName: cleanOptional(matchedItem.productName) || product.name,
       customerUserId: websiteOrder.customerUserId,
       customerName: cleanOptional(websiteOrder.customerName) || input.customerName,
       customerPhone: normalizeKenyanPhone(websiteOrder.customerPhone) || normalizedPhone,
@@ -781,6 +785,13 @@ async function resolvePurchaseContext(input: z.infer<typeof createReviewInvitati
             items: {
               where: { productId: input.productId },
               take: 1,
+              include: {
+                product: {
+                  select: {
+                    name: true,
+                  },
+                },
+              },
             },
           },
         },
@@ -788,12 +799,16 @@ async function resolvePurchaseContext(input: z.infer<typeof createReviewInvitati
     });
 
     if (!receipt?.order) throw new Error("Receipt not found.");
+    const matchedItem = receipt.order.items[0];
+    if (!matchedItem) {
+      throw new Error("The selected review product does not belong to this receipt.");
+    }
 
     return {
       productId: product.id,
-      productName: product.name,
+      productName: cleanOptional(matchedItem.product?.name) || product.name,
       customerUserId: null,
-      customerName: input.customerName,
+      customerName: cleanOptional(receipt.order.customerName) || input.customerName,
       customerPhone: normalizeKenyanPhone(receipt.order.customerPhone || "") || normalizedPhone,
       customerEmail: cleanOptional(receipt.order.customerEmail),
       customerTown: input.customerTown || null,
@@ -813,17 +828,28 @@ async function resolvePurchaseContext(input: z.infer<typeof createReviewInvitati
         items: {
           where: { productId: input.productId },
           take: 1,
+          include: {
+            product: {
+              select: {
+                name: true,
+              },
+            },
+          },
         },
       },
     });
 
     if (!order) throw new Error("Order not found.");
+    const matchedItem = order.items[0];
+    if (!matchedItem) {
+      throw new Error("The selected review product does not belong to this order.");
+    }
 
     return {
       productId: product.id,
-      productName: product.name,
+      productName: cleanOptional(matchedItem.product?.name) || product.name,
       customerUserId: null,
-      customerName: input.customerName,
+      customerName: cleanOptional(order.customerName) || input.customerName,
       customerPhone: normalizeKenyanPhone(order.customerPhone || "") || normalizedPhone,
       customerEmail: cleanOptional(order.customerEmail),
       customerTown: input.customerTown || null,
