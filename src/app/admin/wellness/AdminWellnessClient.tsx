@@ -491,9 +491,14 @@ export default function AdminWellnessClient() {
             onChange={(value) => setAdminAdvanceForm((state) => ({ ...state, reason: value }))}
           />
         </div>
-        <div className="mt-3">
-          <Button onClick={() => void createAdminAdvance()}>Create advance</Button>
-        </div>
+          <div className="mt-4">
+            <Button
+              onClick={() => void createAdminAdvance()}
+              className="min-w-[180px] rounded-2xl bg-emerald-500 px-6 py-3 text-base font-semibold text-slate-950 shadow-[0_12px_30px_rgba(16,185,129,0.25)] hover:brightness-95"
+            >
+              Create advance
+            </Button>
+          </div>
       </section>
 
       <section className="rounded-3xl border border-white/10 bg-white/5 p-5">
