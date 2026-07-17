@@ -1252,131 +1252,6 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           />
         </div>
       )}
-      {customerType === "project" && (
-        <div className="mt-3 space-y-4 rounded-3xl border border-cyan-500/30 bg-cyan-500/5 p-4 sm:p-5">
-          <div>
-            <p className="text-xs uppercase tracking-[0.25em] text-cyan-200">Project details</p>
-            <p className="mt-1 text-sm text-slate-300">
-              Capture the project stage and payment position now. After saving, the POS receipts page can keep moving the project forward.
-            </p>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className={labelClass}>
-              Project stage
-              <select
-                value={projectDraft.stage}
-                onChange={(e) =>
-                  setProjectDraft((current) => ({
-                    ...current,
-                    stage: e.target.value as ReceiptProjectStage,
-                  }))
-                }
-                className={fieldClass}
-              >
-                {PROJECT_STAGE_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {formatProjectStageLabel(option)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={labelClass}>
-              Payment position
-              <select
-                value={projectDraft.paymentTerm}
-                onChange={(e) =>
-                  setProjectDraft((current) => ({
-                    ...current,
-                    paymentTerm: e.target.value as ReceiptProjectPaymentTerm,
-                  }))
-                }
-                className={fieldClass}
-              >
-                {PROJECT_PAYMENT_TERM_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {formatProjectPaymentTermLabel(option)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={labelClass}>
-              Scheduled date
-              <input
-                type="date"
-                value={projectDraft.scheduledDate}
-                onChange={(e) =>
-                  setProjectDraft((current) => ({
-                    ...current,
-                    scheduledDate: e.target.value,
-                  }))
-                }
-                className={fieldClass}
-              />
-            </label>
-            {projectDraft.paymentTerm === "DEPOSIT_AND_BALANCE" ? (
-              <label className={labelClass}>
-                Deposit percent
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={projectDraft.depositPercent}
-                  onChange={(e) =>
-                    setProjectDraft((current) => ({
-                      ...current,
-                      depositPercent: e.target.value,
-                    }))
-                  }
-                  className={fieldClass}
-                />
-              </label>
-            ) : (
-              <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-300">
-                This payment position follows the full receipt total automatically.
-              </div>
-            )}
-            <label className={`${labelClass} md:col-span-2`}>
-              Project notes
-              <textarea
-                rows={3}
-                value={projectDraft.internalNotes}
-                onChange={(e) =>
-                  setProjectDraft((current) => ({
-                    ...current,
-                    internalNotes: e.target.value,
-                  }))
-                }
-                placeholder="Installation timing, site preparation, customer follow-up, or internal handover notes"
-                className="mt-1 min-h-[96px] w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-400/60 focus:outline-none"
-              />
-            </label>
-          </div>
-          <div className="grid gap-3 rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-4 text-sm text-slate-200 sm:grid-cols-3">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">Project value</p>
-              <p className="mt-1 font-semibold text-white">KES {total.toLocaleString()}</p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">Expected deposit</p>
-              <p className="mt-1 font-semibold text-cyan-200">
-                KES{" "}
-                {(
-                  projectDraft.paymentTerm === "DEPOSIT_AND_BALANCE"
-                    ? total * (Number(projectDraft.depositPercent || 30) / 100)
-                    : 0
-                ).toLocaleString()}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">Balance after this receipt</p>
-              <p className="mt-1 font-semibold text-amber-200">
-                KES {Math.max(0, total - (docType === "LAYAWAY" ? deposit : total)).toLocaleString()}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
       <section className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
         <div className="flex flex-wrap items-center gap-4">
           <label className="inline-flex items-center gap-2 text-sm text-slate-200">
@@ -1553,6 +1428,130 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
             {showAddressInput ? "Hide address" : "+ Add address"}
           </button>
         </div>
+        {customerType === "project" && (
+          <div className="mt-5 space-y-4 rounded-3xl border border-cyan-500/30 bg-cyan-500/5 p-4 sm:p-5">
+            <div>
+              <p className="text-xs uppercase tracking-[0.25em] text-cyan-200">Project details</p>
+              <p className="mt-1 text-sm text-slate-300">
+                Capture the project stage and payment position now. After saving, the POS receipts page can keep moving the project forward.
+              </p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className={labelClass}>
+                Project stage
+                <select
+                  value={projectDraft.stage}
+                  onChange={(e) =>
+                    setProjectDraft((current) => ({
+                      ...current,
+                      stage: e.target.value as ReceiptProjectStage,
+                    }))
+                  }
+                  className={fieldClass}
+                >
+                  {PROJECT_STAGE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {formatProjectStageLabel(option)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={labelClass}>
+                Payment position
+                <select
+                  value={projectDraft.paymentTerm}
+                  onChange={(e) =>
+                    setProjectDraft((current) => ({
+                      ...current,
+                      paymentTerm: e.target.value as ReceiptProjectPaymentTerm,
+                    }))
+                  }
+                  className={fieldClass}
+                >
+                  {PROJECT_PAYMENT_TERM_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {formatProjectPaymentTermLabel(option)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={labelClass}>
+                Scheduled date
+                <input
+                  type="date"
+                  value={projectDraft.scheduledDate}
+                  onChange={(e) =>
+                    setProjectDraft((current) => ({
+                      ...current,
+                      scheduledDate: e.target.value,
+                    }))
+                  }
+                  className={fieldClass}
+                />
+              </label>
+              {projectDraft.paymentTerm === "DEPOSIT_AND_BALANCE" ? (
+                <label className={labelClass}>
+                  Deposit percent
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={projectDraft.depositPercent}
+                    onChange={(e) =>
+                      setProjectDraft((current) => ({
+                        ...current,
+                        depositPercent: e.target.value,
+                      }))
+                    }
+                    className={fieldClass}
+                  />
+                </label>
+              ) : (
+                <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-300">
+                  This payment position follows the full receipt total automatically.
+                </div>
+              )}
+              <label className={`${labelClass} md:col-span-2`}>
+                Project notes
+                <textarea
+                  rows={3}
+                  value={projectDraft.internalNotes}
+                  onChange={(e) =>
+                    setProjectDraft((current) => ({
+                      ...current,
+                      internalNotes: e.target.value,
+                    }))
+                  }
+                  placeholder="Installation timing, site preparation, customer follow-up, or internal handover notes"
+                  className="mt-1 min-h-[96px] w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-400/60 focus:outline-none"
+                />
+              </label>
+            </div>
+            <div className="grid gap-3 rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-4 text-sm text-slate-200 sm:grid-cols-3">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-400">Project value</p>
+                <p className="mt-1 font-semibold text-white">KES {total.toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-400">Expected deposit</p>
+                <p className="mt-1 font-semibold text-cyan-200">
+                  KES{" "}
+                  {(
+                    projectDraft.paymentTerm === "DEPOSIT_AND_BALANCE"
+                      ? total * (Number(projectDraft.depositPercent || 30) / 100)
+                      : 0
+                  ).toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-400">Balance after this receipt</p>
+                <p className="mt-1 font-semibold text-amber-200">
+                  KES {Math.max(0, total - (docType === "LAYAWAY" ? deposit : total)).toLocaleString()}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
 
       {catalogOpen ? (
