@@ -14,6 +14,7 @@ type LeaveRequest = {
   endDate: string;
   reason: string;
   managerComment?: string | null;
+  createdAt: string;
   user: { id: string; name?: string | null; email: string; attendantCategory?: string | null };
 };
 
@@ -25,6 +26,7 @@ type CashAdvance = {
   reason: string;
   repaymentPeriod?: number | null;
   remainingBalance: number;
+  createdAt: string;
   user: { id: string; name?: string | null; email: string; attendantCategory?: string | null };
   installments?: Array<{ id: string; dueDate: string; amount: number; isPaid: boolean }>;
 };
@@ -62,6 +64,9 @@ type SummaryResponse = {
   pendingLeaveRequests: LeaveRequest[];
   pendingCashAdvances: CashAdvance[];
   pendingAdjustmentRequests: PayrollAdjustmentRequest[];
+  recentLeaveRequests: LeaveRequest[];
+  recentCashAdvances: CashAdvance[];
+  recentAdjustmentRequests: PayrollAdjustmentRequest[];
   outstandingAdvances: CashAdvance[];
   leaveBalances: LeaveBalance[];
   totals: {
@@ -273,6 +278,75 @@ export default function AdminWellnessClient() {
               {processing ? "Processing..." : "Run due deductions"}
             </Button>
           </div>
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-white/10 bg-white/5 p-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">Recent Wellness Applications</h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Admin can review both pending and already-decided front-side applications here.
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-6 xl:grid-cols-3">
+          <section className="space-y-3">
+            <div className="text-sm font-semibold text-slate-200">Leave requests</div>
+            {(data?.recentLeaveRequests ?? []).slice(0, 12).map((row) => (
+              <div key={row.id} className="rounded-2xl border border-white/5 bg-slate-950/40 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="font-medium text-slate-100">{row.user.name || row.user.email}</div>
+                    <div className="text-xs text-slate-400">
+                      {row.type} · {row.daysRequested} day(s) · {dateFmt.format(new Date(row.createdAt))}
+                    </div>
+                  </div>
+                  <StatusBadge status={row.status} />
+                </div>
+                <div className="mt-2 text-sm text-slate-300">{row.reason}</div>
+              </div>
+            ))}
+            {!data?.recentLeaveRequests?.length && !loading ? <EmptyCard label="No leave requests yet." /> : null}
+          </section>
+
+          <section className="space-y-3">
+            <div className="text-sm font-semibold text-slate-200">Cash advances</div>
+            {(data?.recentCashAdvances ?? []).slice(0, 12).map((row) => (
+              <div key={row.id} className="rounded-2xl border border-white/5 bg-slate-950/40 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="font-medium text-slate-100">{row.user.name || row.user.email}</div>
+                    <div className="text-xs text-slate-400">
+                      {currency.format(row.requestedAmount)} · {dateFmt.format(new Date(row.createdAt))}
+                    </div>
+                  </div>
+                  <StatusBadge status={row.status} />
+                </div>
+                <div className="mt-2 text-sm text-slate-300">{row.reason}</div>
+              </div>
+            ))}
+            {!data?.recentCashAdvances?.length && !loading ? <EmptyCard label="No cash advance requests yet." /> : null}
+          </section>
+
+          <section className="space-y-3">
+            <div className="text-sm font-semibold text-slate-200">Payroll adjustments</div>
+            {(data?.recentAdjustmentRequests ?? []).slice(0, 12).map((row) => (
+              <div key={row.id} className="rounded-2xl border border-white/5 bg-slate-950/40 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="font-medium text-slate-100">{row.attendant.name || row.attendant.email}</div>
+                    <div className="text-xs text-slate-400">
+                      {row.label} · {currency.format(row.amount)} · {dateFmt.format(new Date(row.createdAt))}
+                    </div>
+                  </div>
+                  <StatusBadge status={row.status} />
+                </div>
+                <div className="mt-2 text-sm text-slate-300">{row.details}</div>
+              </div>
+            ))}
+            {!data?.recentAdjustmentRequests?.length && !loading ? <EmptyCard label="No payroll adjustment requests yet." /> : null}
+          </section>
         </div>
       </section>
 
@@ -549,6 +623,21 @@ function Field({
 
 function EmptyCard({ label }: { label: string }) {
   return <div className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-sm text-slate-400">{label}</div>;
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const normalized = String(status || "").toUpperCase();
+  const tone =
+    normalized === "APPROVED"
+      ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"
+      : normalized === "REJECTED"
+        ? "border-rose-400/30 bg-rose-500/10 text-rose-200"
+        : "border-amber-300/30 bg-amber-500/10 text-amber-100";
+  return (
+    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${tone}`}>
+      {normalized || "PENDING"}
+    </span>
+  );
 }
 
 function formatAdjustmentType(value: string) {

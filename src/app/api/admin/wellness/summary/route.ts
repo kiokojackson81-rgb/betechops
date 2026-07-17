@@ -15,7 +15,16 @@ export async function GET() {
   const auth = await requireRole(["ADMIN", "SUPERVISOR"]);
   if (!auth.ok) return auth.res;
 
-  const [pendingLeaveRequests, pendingCashAdvances, pendingAdjustmentRequests, approvedAdvances, staff] = await Promise.all([
+  const [
+    pendingLeaveRequests,
+    pendingCashAdvances,
+    pendingAdjustmentRequests,
+    recentLeaveRequests,
+    recentCashAdvances,
+    recentAdjustmentRequests,
+    approvedAdvances,
+    staff,
+  ] = await Promise.all([
     prisma.leaveRequest.findMany({
       where: { status: "PENDING" },
       include: {
@@ -40,6 +49,32 @@ export async function GET() {
       },
       orderBy: [{ createdAt: "asc" }],
       take: 50,
+    }),
+    prisma.leaveRequest.findMany({
+      include: {
+        user: { select: { id: true, name: true, email: true, attendantCategory: true } },
+      },
+      orderBy: [{ createdAt: "desc" }],
+      take: 80,
+    }),
+    prisma.cashAdvance.findMany({
+      include: {
+        user: { select: { id: true, name: true, email: true, attendantCategory: true } },
+        installments: {
+          orderBy: [{ dueDate: "asc" }],
+          take: 3,
+        },
+      },
+      orderBy: [{ createdAt: "desc" }],
+      take: 80,
+    }),
+    (prisma as any).payrollAdjustmentRequest.findMany({
+      include: {
+        attendant: { select: { id: true, name: true, email: true, attendantCategory: true } },
+        requestedBy: { select: { id: true, name: true, email: true, attendantCategory: true } },
+      },
+      orderBy: [{ createdAt: "desc" }],
+      take: 80,
     }),
     prisma.cashAdvance.findMany({
       where: { status: "APPROVED" },
@@ -99,6 +134,13 @@ export async function GET() {
     pendingLeaveRequests,
     pendingCashAdvances,
     pendingAdjustmentRequests,
+    recentLeaveRequests,
+    recentCashAdvances: recentCashAdvances.map((item) => ({
+      ...item,
+      repaymentPeriod: normalizeCashAdvanceRepaymentPeriodValue(item.repaymentPeriod),
+      remainingBalance: computeEffectiveCashAdvanceRemainingBalance(item),
+    })),
+    recentAdjustmentRequests,
     outstandingAdvances,
     leaveBalances,
     totals: {
