@@ -284,7 +284,7 @@ export default async function TechnicalDashboardPage({
       value: activeInstallations.length,
       hint: "Project receipts still being executed",
       icon: Wrench,
-      href: "/admin/returns",
+      href: "/technical/projects",
     },
     {
       label: "Service calls pending",
@@ -298,14 +298,14 @@ export default async function TechnicalDashboardPage({
       value: reportsRequired,
       hint: dailyReportCount > 0 ? "Daily report already filed today" : "Daily report still pending",
       icon: FileText,
-      href: "/attendant/daily-report",
+      href: "/technical/daily-report",
     },
     {
       label: "Projects completed this period",
       value: completedProjectsPeriod.length,
       hint: "Completed and posted project receipts",
       icon: BriefcaseBusiness,
-      href: "/admin/returns",
+      href: "/technical/projects",
     },
   ];
 
@@ -328,7 +328,7 @@ export default async function TechnicalDashboardPage({
       subtitle: receipt.receiptNumber || "Project receipt",
       status: receipt.projectFlow?.stage.replace(/_/g, " ") || "Project",
       time: formatShortDate(receipt.projectFlow?.scheduledDate || receipt.createdAt),
-      href: "/admin/returns",
+      href: "/technical/projects",
       actionLabel: "Open project",
       icon: BriefcaseBusiness,
     })),
@@ -342,9 +342,9 @@ export default async function TechnicalDashboardPage({
     { href: "/technical/quotations", label: "Create quotation" },
     { href: "/receipts", label: "Create receipt" },
     { href: "/technical/site-visits", label: "Schedule site visit" },
-    { href: "/admin/returns", label: "Open projects" },
-    { href: "/attendant/daily-report", label: "Submit daily report" },
-    { href: "/attendant/wellness", label: "Wellness / safety" },
+    { href: "/technical/projects", label: "Open projects" },
+    { href: "/technical/daily-report", label: "Submit daily report" },
+    { href: "/technical/wellness", label: "Wellness / safety" },
   ];
 
   return (

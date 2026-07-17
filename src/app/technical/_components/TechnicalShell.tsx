@@ -29,7 +29,7 @@ const sections = [
     items: [
       { href: "/technical/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/technical/site-visits", label: "Site Visits", icon: CalendarDays },
-      { href: "/admin/returns", label: "Projects", icon: BriefcaseBusiness },
+      { href: "/technical/projects", label: "Projects", icon: BriefcaseBusiness },
       { href: "/receipts", label: "Receipts", icon: Receipt },
       { href: "/technical/quotations", label: "Quotations", icon: FileText },
     ],
@@ -37,10 +37,10 @@ const sections = [
   {
     label: "Employee",
     items: [
-      { href: "/attendant/daily-report", label: "Daily Reports", icon: ClipboardList },
-      { href: "/attendant/wellness", label: "Wellness", icon: HeartPulse },
-      { href: "/admin/wellness", label: "Compliance", icon: ShieldCheck },
-      { href: "/admin/customers", label: "Customers", icon: Users },
+      { href: "/technical/daily-report", label: "Daily Reports", icon: ClipboardList },
+      { href: "/technical/wellness", label: "Wellness", icon: HeartPulse },
+      { href: "/technical/wellness", label: "Compliance", icon: ShieldCheck },
+      { href: "/receipts", label: "Customers", icon: Users },
     ],
   },
 ] as const;
