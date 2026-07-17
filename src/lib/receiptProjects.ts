@@ -22,6 +22,13 @@ export const RECEIPT_PROJECT_PAYMENT_STATUSES = [
 
 export type ReceiptProjectPaymentStatus = (typeof RECEIPT_PROJECT_PAYMENT_STATUSES)[number];
 
+export const RECEIPT_PROJECT_HANDLER_TYPES = [
+  "STAFF",
+  "EXTERNAL",
+] as const;
+
+export type ReceiptProjectHandlerType = (typeof RECEIPT_PROJECT_HANDLER_TYPES)[number];
+
 export type ReceiptProjectFlow = {
   isProject: true;
   stage: ReceiptProjectStage;
@@ -35,6 +42,11 @@ export type ReceiptProjectFlow = {
   scheduledDate: string | null;
   postedReceiptNumber: string | null;
   internalNotes: string | null;
+  handlerType: ReceiptProjectHandlerType | null;
+  handlerStaffId: string | null;
+  handlerStaffName: string | null;
+  externalAgentName: string | null;
+  externalAgentPhone: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
 };
@@ -67,6 +79,14 @@ export function normalizeReceiptProjectPaymentStatus(value: unknown): ReceiptPro
   return "UNPAID";
 }
 
+export function normalizeReceiptProjectHandlerType(value: unknown): ReceiptProjectHandlerType | null {
+  const candidate = String(value || "").trim().toUpperCase();
+  if (RECEIPT_PROJECT_HANDLER_TYPES.includes(candidate as ReceiptProjectHandlerType)) {
+    return candidate as ReceiptProjectHandlerType;
+  }
+  return null;
+}
+
 function normalizeOptionalDate(value: unknown) {
   const candidate = String(value || "").trim();
   if (!candidate) return null;
@@ -84,6 +104,11 @@ export function buildReceiptProjectFlow(input: {
   scheduledDate?: unknown;
   postedReceiptNumber?: unknown;
   internalNotes?: unknown;
+  handlerType?: unknown;
+  handlerStaffId?: unknown;
+  handlerStaffName?: unknown;
+  externalAgentName?: unknown;
+  externalAgentPhone?: unknown;
 }) {
   const existing = input.existing ?? null;
   const projectValue = roundCurrency(Math.max(0, Number(input.projectValue || 0)));
@@ -103,6 +128,25 @@ export function buildReceiptProjectFlow(input: {
       ? roundCurrency(projectValue * (depositPercent / 100))
       : 0;
   const balanceAmount = roundCurrency(Math.max(0, projectValue - amountPaidTotal));
+  const handlerType = normalizeReceiptProjectHandlerType(
+    input.handlerType ?? existing?.handlerType,
+  );
+  const handlerStaffId =
+    handlerType === "STAFF"
+      ? String(input.handlerStaffId ?? existing?.handlerStaffId ?? "").trim() || null
+      : null;
+  const handlerStaffName =
+    handlerType === "STAFF"
+      ? String(input.handlerStaffName ?? existing?.handlerStaffName ?? "").trim() || null
+      : null;
+  const externalAgentName =
+    handlerType === "EXTERNAL"
+      ? String(input.externalAgentName ?? existing?.externalAgentName ?? "").trim() || null
+      : null;
+  const externalAgentPhone =
+    handlerType === "EXTERNAL"
+      ? String(input.externalAgentPhone ?? existing?.externalAgentPhone ?? "").trim() || null
+      : null;
 
   let paymentStatus: ReceiptProjectPaymentStatus = "UNPAID";
   if (amountPaidTotal >= projectValue && projectValue > 0) {
@@ -127,6 +171,11 @@ export function buildReceiptProjectFlow(input: {
     ).trim() || null,
     internalNotes:
       String(input.internalNotes ?? existing?.internalNotes ?? "").trim() || null,
+    handlerType,
+    handlerStaffId,
+    handlerStaffName,
+    externalAgentName,
+    externalAgentPhone,
     createdAt:
       String(existing?.createdAt ?? "").trim() || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -150,6 +199,11 @@ export function readReceiptProjectFlow(value: unknown): ReceiptProjectFlow | nul
     scheduledDate: normalizeOptionalDate(source.scheduledDate),
     postedReceiptNumber: String(source.postedReceiptNumber || "").trim() || null,
     internalNotes: String(source.internalNotes || "").trim() || null,
+    handlerType: normalizeReceiptProjectHandlerType(source.handlerType),
+    handlerStaffId: String(source.handlerStaffId || "").trim() || null,
+    handlerStaffName: String(source.handlerStaffName || "").trim() || null,
+    externalAgentName: String(source.externalAgentName || "").trim() || null,
+    externalAgentPhone: String(source.externalAgentPhone || "").trim() || null,
     createdAt: String(source.createdAt || "").trim() || null,
     updatedAt: String(source.updatedAt || "").trim() || null,
   };

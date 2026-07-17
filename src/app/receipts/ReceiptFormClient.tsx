@@ -7,7 +7,6 @@ import {
   buildReceiptProjectFlow,
   readReceiptProjectFlow,
   type ReceiptProjectPaymentTerm,
-  type ReceiptProjectStage,
 } from "@/lib/receiptProjects";
 import { showToast } from "@/lib/ui/toast";
 import { generateReceiptSerial } from "@/lib/receipts/serial";
@@ -81,18 +80,11 @@ type ReceiptFormProps = {
 };
 
 type ProjectDraft = {
-  stage: ReceiptProjectStage;
   paymentTerm: ReceiptProjectPaymentTerm;
   depositPercent: string;
   scheduledDate: string;
   internalNotes: string;
 };
-
-const PROJECT_STAGE_OPTIONS: ReceiptProjectStage[] = [
-  "RECEIPT_CREATED",
-  "PROJECT_IN_PROGRESS",
-  "COMPLETED_POSTED",
-];
 
 const PROJECT_PAYMENT_TERM_OPTIONS: ReceiptProjectPaymentTerm[] = [
   "FULL_BEFORE_INSTALLATION",
@@ -101,23 +93,11 @@ const PROJECT_PAYMENT_TERM_OPTIONS: ReceiptProjectPaymentTerm[] = [
 ];
 
 const createDefaultProjectDraft = (): ProjectDraft => ({
-  stage: "RECEIPT_CREATED",
   paymentTerm: "DEPOSIT_AND_BALANCE",
   depositPercent: "30",
   scheduledDate: "",
   internalNotes: "",
 });
-
-const formatProjectStageLabel = (value: ReceiptProjectStage) => {
-  switch (value) {
-    case "RECEIPT_CREATED":
-      return "Receipt created";
-    case "PROJECT_IN_PROGRESS":
-      return "Project in progress";
-    case "COMPLETED_POSTED":
-      return "Completed and posted to POS";
-  }
-};
 
 const formatProjectPaymentTermLabel = (value: ReceiptProjectPaymentTerm) => {
   switch (value) {
@@ -324,7 +304,6 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       const parsedProjectFlow = readReceiptProjectFlow(parsed.projectFlow);
       if (parsedProjectFlow) {
         setProjectDraft({
-          stage: parsedProjectFlow.stage,
           paymentTerm: parsedProjectFlow.paymentTerm,
           depositPercent: String(parsedProjectFlow.depositPercent || 30),
           scheduledDate: parsedProjectFlow.scheduledDate ? parsedProjectFlow.scheduledDate.slice(0, 10) : "",
@@ -680,7 +659,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     projectFlow:
       customerType === "project"
         ? buildReceiptProjectFlow({
-            stage: projectDraft.stage,
+            stage: "RECEIPT_CREATED",
             paymentTerm: projectDraft.paymentTerm,
             projectValue: total,
             amountPaidTotal: docType === "LAYAWAY" ? deposit : total,
@@ -966,7 +945,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     const projectFlow =
       customerType === "project"
         ? buildReceiptProjectFlow({
-            stage: projectDraft.stage,
+            stage: "RECEIPT_CREATED",
             paymentTerm: projectDraft.paymentTerm,
             projectValue: total,
             amountPaidTotal: docType === "LAYAWAY" ? deposit : total,
@@ -1433,29 +1412,10 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
             <div>
               <p className="text-xs uppercase tracking-[0.25em] text-cyan-200">Project details</p>
               <p className="mt-1 text-sm text-slate-300">
-                Capture the project stage and payment position now. After saving, the POS receipts page can keep moving the project forward.
+                Capture the project payment position and schedule now. Admin can move the project forward from the operations workspace after the receipt is saved.
               </p>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
-              <label className={labelClass}>
-                Project stage
-                <select
-                  value={projectDraft.stage}
-                  onChange={(e) =>
-                    setProjectDraft((current) => ({
-                      ...current,
-                      stage: e.target.value as ReceiptProjectStage,
-                    }))
-                  }
-                  className={fieldClass}
-                >
-                  {PROJECT_STAGE_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {formatProjectStageLabel(option)}
-                    </option>
-                  ))}
-                </select>
-              </label>
               <label className={labelClass}>
                 Payment position
                 <select
@@ -1486,7 +1446,8 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                       scheduledDate: e.target.value,
                     }))
                   }
-                  className={fieldClass}
+                  onClick={(e) => e.currentTarget.showPicker?.()}
+                  className={`${fieldClass} cursor-pointer`}
                 />
               </label>
               {projectDraft.paymentTerm === "DEPOSIT_AND_BALANCE" ? (
@@ -1544,9 +1505,17 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                 </p>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-400">Balance after this receipt</p>
+                <p className="text-xs uppercase tracking-wide text-slate-400">Balance after installation</p>
                 <p className="mt-1 font-semibold text-amber-200">
-                  KES {Math.max(0, total - (docType === "LAYAWAY" ? deposit : total)).toLocaleString()}
+                  KES{" "}
+                  {Math.max(
+                    0,
+                    projectDraft.paymentTerm === "DEPOSIT_AND_BALANCE"
+                      ? total * (1 - Number(projectDraft.depositPercent || 30) / 100)
+                      : projectDraft.paymentTerm === "FULL_AFTER_INSTALLATION"
+                        ? total
+                        : 0,
+                  ).toLocaleString()}
                 </p>
               </div>
             </div>

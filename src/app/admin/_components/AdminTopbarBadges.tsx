@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 export default function AdminTopbarBadges() {
   const [reviews, setReviews] = useState<number | null>(null);
-  const [rp, setRP] = useState<number | null>(null);
+  const [projects, setProjects] = useState<number | null>(null);
 
   useEffect(() => {
     let ignore = false;
@@ -12,14 +12,14 @@ export default function AdminTopbarBadges() {
       try {
         const [a, b] = await Promise.all([
           fetch("/api/admin/reviews-referrals/summary", { cache: "no-store" }).then(r => r.ok ? r.json() : { summary: { reviews: { submittedReviews: 0 } } }),
-          fetch("/api/returns/waiting-pickup", { cache: "no-store" }).then(r => r.ok ? r.json() : { count: 0 }),
+          fetch("/api/receipts?customerType=project&scope=global&page=1&size=1", { cache: "no-store" }).then(r => r.ok ? r.json() : { paging: { totalCount: 0 } }),
         ]);
         if (!ignore) {
           setReviews(a.summary?.reviews?.submittedReviews ?? 0);
-          setRP(b.count ?? 0);
+          setProjects(b.paging?.totalCount ?? 0);
         }
       } catch {
-        if (!ignore) { setReviews(0); setRP(0); }
+        if (!ignore) { setReviews(0); setProjects(0); }
       }
     })();
     return () => { ignore = true; };
@@ -39,7 +39,7 @@ export default function AdminTopbarBadges() {
   return (
     <div className="flex items-center gap-2">
       <Badge href="/admin/reviews-referrals" label="Customer Reviews" count={reviews} />
-      <Badge href="/admin/returns" label="Returns" count={rp} />
+      <Badge href="/admin/returns" label="Projects" count={projects} />
     </div>
   );
 }

@@ -45,7 +45,7 @@ export const NAV: AdminNavItem[] = [
       { href: "/admin/settings/shop-images", label: "Shop Images" },
       { href: "/admin/marketing-report?impersonateId=cmimxqf9t0003v5mcjdq8x61p", label: "SalesOps" },
       { href: "/admin/reviews-referrals", label: "Customer Reviews" },
-      { href: "/admin/returns", label: "Returns" },
+      { href: "/admin/returns", label: "Projects" },
       { href: "/admin/receipts?tab=website-orders", label: "Website Orders" },
       { href: "/admin/quotation-center", label: "Quotation Center" },
       { href: "/admin/quotation-center/site-visits", label: "Site Visits" },

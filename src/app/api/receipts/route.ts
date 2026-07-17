@@ -651,6 +651,12 @@ export async function GET(req: NextRequest) {
       projectStage: projectFlowData?.stage ?? null,
       projectPaymentTerm: projectFlowData?.paymentTerm ?? null,
       projectPaymentStatus: projectFlowData?.paymentStatus ?? null,
+      projectScheduledDate: projectFlowData?.scheduledDate ?? null,
+      projectHandlerType: projectFlowData?.handlerType ?? null,
+      projectHandlerStaffId: projectFlowData?.handlerStaffId ?? null,
+      projectHandlerStaffName: projectFlowData?.handlerStaffName ?? null,
+      projectExternalAgentName: projectFlowData?.externalAgentName ?? null,
+      projectExternalAgentPhone: projectFlowData?.externalAgentPhone ?? null,
     };
   };
 

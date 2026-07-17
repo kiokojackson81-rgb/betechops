@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/api";
 import {
   buildReceiptProjectFlow,
   readReceiptProjectFlow,
+  RECEIPT_PROJECT_HANDLER_TYPES,
   RECEIPT_PROJECT_PAYMENT_TERMS,
   RECEIPT_PROJECT_STAGES,
 } from "@/lib/receiptProjects";
@@ -17,6 +18,11 @@ const updateSchema = z.object({
   depositPercent: z.number().min(0).max(100).optional(),
   scheduledDate: z.string().trim().nullable().optional(),
   internalNotes: z.string().trim().nullable().optional(),
+  handlerType: z.enum(RECEIPT_PROJECT_HANDLER_TYPES).nullable().optional(),
+  handlerStaffId: z.string().trim().nullable().optional(),
+  handlerStaffName: z.string().trim().nullable().optional(),
+  externalAgentName: z.string().trim().nullable().optional(),
+  externalAgentPhone: z.string().trim().nullable().optional(),
 });
 
 type ParamsContext = { params: { id: string } } | { params: Promise<{ id: string }> };
@@ -74,6 +80,22 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
     postedReceiptNumber: existing.order?.orderNumber ?? existingProjectFlow?.postedReceiptNumber ?? null,
     internalNotes:
       parsed.data.internalNotes !== undefined ? parsed.data.internalNotes : existingProjectFlow?.internalNotes,
+    handlerType:
+      parsed.data.handlerType !== undefined ? parsed.data.handlerType : existingProjectFlow?.handlerType,
+    handlerStaffId:
+      parsed.data.handlerStaffId !== undefined ? parsed.data.handlerStaffId : existingProjectFlow?.handlerStaffId,
+    handlerStaffName:
+      parsed.data.handlerStaffName !== undefined
+        ? parsed.data.handlerStaffName
+        : existingProjectFlow?.handlerStaffName,
+    externalAgentName:
+      parsed.data.externalAgentName !== undefined
+        ? parsed.data.externalAgentName
+        : existingProjectFlow?.externalAgentName,
+    externalAgentPhone:
+      parsed.data.externalAgentPhone !== undefined
+        ? parsed.data.externalAgentPhone
+        : existingProjectFlow?.externalAgentPhone,
   });
 
   const updated = await prisma.receipt.update({
