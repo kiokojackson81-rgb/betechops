@@ -48,6 +48,12 @@ import {
   type QuoteWarrantySource,
   type QuoteWarrantyUnit,
 } from "@/lib/quoteProposal";
+import type {
+  QuoteProjectPaymentTerm,
+  QuoteProjectStage,
+  SerializedQuoteProjectEvent,
+  SerializedQuoteProjectOrder,
+} from "@/lib/quoteProjects";
 import {
   buildItemDrivenPowerSummary,
   getProjectTypeDefaultSections,
@@ -75,6 +81,30 @@ type TemplateOwnerOption = {
   id: string;
   name: string | null;
   email: string | null;
+};
+
+const PROJECT_STAGE_OPTIONS: QuoteProjectStage[] = [
+  "RECEIPT_CREATED",
+  "PROJECT_IN_PROGRESS",
+  "COMPLETED_POSTED",
+];
+
+const PROJECT_PAYMENT_TERM_OPTIONS: QuoteProjectPaymentTerm[] = [
+  "FULL_BEFORE_INSTALLATION",
+  "DEPOSIT_AND_BALANCE",
+  "FULL_AFTER_INSTALLATION",
+];
+
+type ProjectDraft = {
+  stage: QuoteProjectStage;
+  paymentTerm: QuoteProjectPaymentTerm;
+  totalAmount: string;
+  depositPercent: string;
+  depositPaidAmount: string;
+  amountPaidTotal: string;
+  scheduledDate: string;
+  postedReceiptNumber: string;
+  internalNotes: string;
 };
 
 type Props = {
@@ -181,6 +211,42 @@ function formatStatus(value: string) {
 
 function formatSource(value: string) {
   return value.replace(/_/g, " ");
+}
+
+function formatProjectStage(value: QuoteProjectStage) {
+  switch (value) {
+    case "RECEIPT_CREATED":
+      return "Receipt created";
+    case "PROJECT_IN_PROGRESS":
+      return "Project in progress";
+    case "COMPLETED_POSTED":
+      return "Completed and posted to POS";
+  }
+}
+
+function formatProjectPaymentTerm(value: QuoteProjectPaymentTerm) {
+  switch (value) {
+    case "FULL_BEFORE_INSTALLATION":
+      return "Pay fully before installation";
+    case "DEPOSIT_AND_BALANCE":
+      return "Pay deposit and balance";
+    case "FULL_AFTER_INSTALLATION":
+      return "Pay fully after installation";
+  }
+}
+
+function createProjectDraft(order: SerializedQuoteProjectOrder | null, totalAmount = 0): ProjectDraft {
+  return {
+    stage: order?.stage ?? "RECEIPT_CREATED",
+    paymentTerm: order?.paymentTerm ?? "DEPOSIT_AND_BALANCE",
+    totalAmount: String(order?.totalAmount ?? totalAmount ?? 0),
+    depositPercent: String(order?.depositPercent ?? 30),
+    depositPaidAmount: String(order?.depositPaidAmount ?? 0),
+    amountPaidTotal: String(order?.amountPaidTotal ?? 0),
+    scheduledDate: order?.scheduledDate ? order.scheduledDate.slice(0, 10) : "",
+    postedReceiptNumber: order?.postedReceiptNumber ?? "",
+    internalNotes: order?.internalNotes ?? "",
+  };
 }
 
 function isWithinRange(value: string | null | undefined, start?: string, end?: string) {
@@ -1283,6 +1349,11 @@ export default function QuotationRequestsDeskClient({
   const [responseTemplateId, setResponseTemplateId] = useState("");
   const [eventsByRequestId, setEventsByRequestId] = useState<Record<string, SerializedQuotationEvent[]>>({});
   const [eventsLoadingId, setEventsLoadingId] = useState<string | null>(null);
+  const [projectByRequestId, setProjectByRequestId] = useState<Record<string, SerializedQuoteProjectOrder | null>>({});
+  const [projectEventsByRequestId, setProjectEventsByRequestId] = useState<Record<string, SerializedQuoteProjectEvent[]>>({});
+  const [projectDrafts, setProjectDrafts] = useState<Record<string, ProjectDraft>>({});
+  const [projectLoadingId, setProjectLoadingId] = useState<string | null>(null);
+  const [projectSavingId, setProjectSavingId] = useState<string | null>(null);
   const [selectedRequestIds, setSelectedRequestIds] = useState<string[]>([]);
   const [bulkSaving, setBulkSaving] = useState(false);
   const [bulkStatus, setBulkStatus] = useState<QuoteRequestStatus | "">("");
@@ -1624,6 +1695,129 @@ export default function QuotationRequestsDeskClient({
       setMessage(error instanceof Error ? error.message : "Failed to load quotation activity.");
     } finally {
       setEventsLoadingId(null);
+    }
+  }
+
+  async function loadProjectWorkflow(request: SerializedQuoteRequest) {
+    if (!enableAdminFilters) return;
+    setProjectLoadingId(request.id);
+    try {
+      const response = await fetch(buildApiUrl(apiBasePath, apiQueryParams, `${request.id}/project`), {
+        cache: "no-store",
+      });
+      const data = await response.json().catch(() => null);
+      if (response.status === 404) {
+        setProjectByRequestId((current) => ({ ...current, [request.id]: null }));
+        setProjectEventsByRequestId((current) => ({ ...current, [request.id]: [] }));
+        setProjectDrafts((current) => ({
+          ...current,
+          [request.id]: createProjectDraft(
+            null,
+            parseStoredQuoteProposal(request.quotationData).total,
+          ),
+        }));
+        return;
+      }
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Failed to load project workflow.");
+      }
+      const nextOrder = (data.projectOrder ?? null) as SerializedQuoteProjectOrder | null;
+      const nextEvents = Array.isArray(data.projectEvents) ? (data.projectEvents as SerializedQuoteProjectEvent[]) : [];
+      setProjectByRequestId((current) => ({ ...current, [request.id]: nextOrder }));
+      setProjectEventsByRequestId((current) => ({ ...current, [request.id]: nextEvents }));
+      setProjectDrafts((current) => ({
+        ...current,
+        [request.id]: createProjectDraft(nextOrder, parseStoredQuoteProposal(request.quotationData).total),
+      }));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Failed to load project workflow.");
+    } finally {
+      setProjectLoadingId(null);
+    }
+  }
+
+  async function createProjectWorkflow(request: SerializedQuoteRequest) {
+    setProjectSavingId(request.id);
+    setMessage(null);
+    try {
+      const draft = projectDrafts[request.id] ?? createProjectDraft(null, parseStoredQuoteProposal(request.quotationData).total);
+      const response = await fetch(buildApiUrl(apiBasePath, apiQueryParams, `${request.id}/project`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paymentTerm: draft.paymentTerm,
+          depositPercent: Number(draft.depositPercent || 30),
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Failed to create project workflow.");
+      }
+      if (data.projectOrder) {
+        setProjectByRequestId((current) => ({ ...current, [request.id]: data.projectOrder as SerializedQuoteProjectOrder }));
+      }
+      if (Array.isArray(data.projectEvents)) {
+        setProjectEventsByRequestId((current) => ({ ...current, [request.id]: data.projectEvents as SerializedQuoteProjectEvent[] }));
+      }
+      setProjectDrafts((current) => ({
+        ...current,
+        [request.id]: createProjectDraft(
+          (data.projectOrder ?? null) as SerializedQuoteProjectOrder | null,
+          parseStoredQuoteProposal(request.quotationData).total,
+        ),
+      }));
+      setMessage("Project workflow created.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Failed to create project workflow.");
+    } finally {
+      setProjectSavingId(null);
+    }
+  }
+
+  async function saveProjectWorkflow(request: SerializedQuoteRequest) {
+    const draft = projectDrafts[request.id];
+    if (!draft) return;
+    setProjectSavingId(request.id);
+    setMessage(null);
+    try {
+      const response = await fetch(buildApiUrl(apiBasePath, apiQueryParams, `${request.id}/project`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stage: draft.stage,
+          paymentTerm: draft.paymentTerm,
+          totalAmount: Number(draft.totalAmount || 0),
+          depositPercent: Number(draft.depositPercent || 0),
+          depositPaidAmount: Number(draft.depositPaidAmount || 0),
+          amountPaidTotal: Number(draft.amountPaidTotal || 0),
+          scheduledDate: draft.scheduledDate || null,
+          postedReceiptNumber: draft.postedReceiptNumber || null,
+          internalNotes: draft.internalNotes || null,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Failed to update project workflow.");
+      }
+      const nextOrder = (data.projectOrder ?? null) as SerializedQuoteProjectOrder | null;
+      const nextRequest = (data.quoteRequest ?? null) as SerializedQuoteRequest | null;
+      if (nextRequest) {
+        setRequests((current) => current.map((row) => (row.id === nextRequest.id ? nextRequest : row)));
+      }
+      setProjectByRequestId((current) => ({ ...current, [request.id]: nextOrder }));
+      setProjectEventsByRequestId((current) => ({
+        ...current,
+        [request.id]: Array.isArray(data.projectEvents) ? (data.projectEvents as SerializedQuoteProjectEvent[]) : [],
+      }));
+      setProjectDrafts((current) => ({
+        ...current,
+        [request.id]: createProjectDraft(nextOrder, parseStoredQuoteProposal((nextRequest ?? request).quotationData).total),
+      }));
+      setMessage("Project workflow updated.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Failed to update project workflow.");
+    } finally {
+      setProjectSavingId(null);
     }
   }
 
@@ -3823,6 +4017,7 @@ export default function QuotationRequestsDeskClient({
                               setExpandedId(nextExpanded);
                               if (nextExpanded) {
                                 void loadRequestEvents(request.id);
+                                void loadProjectWorkflow(request);
                               }
                             }}
                             className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/25 hover:bg-white/[0.06]"
@@ -3853,6 +4048,7 @@ export default function QuotationRequestsDeskClient({
                           setExpandedId(nextExpanded);
                           if (nextExpanded) {
                             void loadRequestEvents(request.id);
+                            void loadProjectWorkflow(request);
                           }
                         }}
                         className="flex min-w-0 flex-1 items-start gap-3 text-left"
@@ -4628,6 +4824,254 @@ export default function QuotationRequestsDeskClient({
                               </button>
                             ) : null}
                           </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4 text-sm text-slate-200">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-200/80">
+                                Project workflow
+                              </div>
+                              <div className="mt-1 text-sm text-slate-300">
+                                Track receipt creation, project progress, payment position, and final POS posting.
+                              </div>
+                            </div>
+                            {projectByRequestId[request.id] ? (
+                              <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-100">
+                                {formatProjectStage(projectByRequestId[request.id]?.stage ?? "RECEIPT_CREATED")}
+                              </span>
+                            ) : null}
+                          </div>
+
+                          {!projectByRequestId[request.id] ? (
+                            <div className="mt-4">
+                              <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/40 px-4 py-4 text-sm text-slate-400">
+                                No project workflow created yet for this quotation.
+                              </div>
+                              <div className="mt-3 flex flex-wrap gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => void createProjectWorkflow(request)}
+                                  disabled={projectSavingId === request.id}
+                                  className="inline-flex items-center gap-2 rounded-full bg-cyan-400 px-5 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:opacity-60"
+                                >
+                                  {projectSavingId === request.id ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                                  Create project workflow
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="mt-4 space-y-4">
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                <label className="text-xs uppercase tracking-wide text-slate-400">
+                                  Stage
+                                  <select
+                                    value={projectDrafts[request.id]?.stage ?? "RECEIPT_CREATED"}
+                                    onChange={(event) =>
+                                      setProjectDrafts((current) => ({
+                                        ...current,
+                                        [request.id]: {
+                                          ...(current[request.id] ?? createProjectDraft(projectByRequestId[request.id], parseStoredQuoteProposal(request.quotationData).total)),
+                                          stage: event.target.value as QuoteProjectStage,
+                                        },
+                                      }))
+                                    }
+                                    className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none"
+                                  >
+                                    {PROJECT_STAGE_OPTIONS.map((option) => (
+                                      <option key={option} value={option}>
+                                        {formatProjectStage(option)}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label className="text-xs uppercase tracking-wide text-slate-400">
+                                  Payment position
+                                  <select
+                                    value={projectDrafts[request.id]?.paymentTerm ?? "DEPOSIT_AND_BALANCE"}
+                                    onChange={(event) =>
+                                      setProjectDrafts((current) => ({
+                                        ...current,
+                                        [request.id]: {
+                                          ...(current[request.id] ?? createProjectDraft(projectByRequestId[request.id], parseStoredQuoteProposal(request.quotationData).total)),
+                                          paymentTerm: event.target.value as QuoteProjectPaymentTerm,
+                                        },
+                                      }))
+                                    }
+                                    className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none"
+                                  >
+                                    {PROJECT_PAYMENT_TERM_OPTIONS.map((option) => (
+                                      <option key={option} value={option}>
+                                        {formatProjectPaymentTerm(option)}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label className="text-xs uppercase tracking-wide text-slate-400">
+                                  Total amount
+                                  <input
+                                    value={projectDrafts[request.id]?.totalAmount ?? ""}
+                                    onChange={(event) =>
+                                      setProjectDrafts((current) => ({
+                                        ...current,
+                                        [request.id]: {
+                                          ...(current[request.id] ?? createProjectDraft(projectByRequestId[request.id], parseStoredQuoteProposal(request.quotationData).total)),
+                                          totalAmount: event.target.value,
+                                        },
+                                      }))
+                                    }
+                                    className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none"
+                                  />
+                                </label>
+                                <label className="text-xs uppercase tracking-wide text-slate-400">
+                                  Scheduled date
+                                  <input
+                                    type="date"
+                                    value={projectDrafts[request.id]?.scheduledDate ?? ""}
+                                    onChange={(event) =>
+                                      setProjectDrafts((current) => ({
+                                        ...current,
+                                        [request.id]: {
+                                          ...(current[request.id] ?? createProjectDraft(projectByRequestId[request.id], parseStoredQuoteProposal(request.quotationData).total)),
+                                          scheduledDate: event.target.value,
+                                        },
+                                      }))
+                                    }
+                                    className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none"
+                                  />
+                                </label>
+                                {(projectDrafts[request.id]?.paymentTerm ?? "DEPOSIT_AND_BALANCE") === "DEPOSIT_AND_BALANCE" ? (
+                                  <label className="text-xs uppercase tracking-wide text-slate-400">
+                                    Deposit percent
+                                    <input
+                                      value={projectDrafts[request.id]?.depositPercent ?? "30"}
+                                      onChange={(event) =>
+                                        setProjectDrafts((current) => ({
+                                          ...current,
+                                          [request.id]: {
+                                            ...(current[request.id] ?? createProjectDraft(projectByRequestId[request.id], parseStoredQuoteProposal(request.quotationData).total)),
+                                            depositPercent: event.target.value,
+                                          },
+                                        }))
+                                      }
+                                      className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none"
+                                    />
+                                  </label>
+                                ) : null}
+                                <label className="text-xs uppercase tracking-wide text-slate-400">
+                                  Deposit paid
+                                  <input
+                                    value={projectDrafts[request.id]?.depositPaidAmount ?? "0"}
+                                    onChange={(event) =>
+                                      setProjectDrafts((current) => ({
+                                        ...current,
+                                        [request.id]: {
+                                          ...(current[request.id] ?? createProjectDraft(projectByRequestId[request.id], parseStoredQuoteProposal(request.quotationData).total)),
+                                          depositPaidAmount: event.target.value,
+                                        },
+                                      }))
+                                    }
+                                    className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none"
+                                  />
+                                </label>
+                                <label className="text-xs uppercase tracking-wide text-slate-400">
+                                  Total paid
+                                  <input
+                                    value={projectDrafts[request.id]?.amountPaidTotal ?? "0"}
+                                    onChange={(event) =>
+                                      setProjectDrafts((current) => ({
+                                        ...current,
+                                        [request.id]: {
+                                          ...(current[request.id] ?? createProjectDraft(projectByRequestId[request.id], parseStoredQuoteProposal(request.quotationData).total)),
+                                          amountPaidTotal: event.target.value,
+                                        },
+                                      }))
+                                    }
+                                    className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none"
+                                  />
+                                </label>
+                                <label className="text-xs uppercase tracking-wide text-slate-400 sm:col-span-2">
+                                  Posted POS receipt number
+                                  <input
+                                    value={projectDrafts[request.id]?.postedReceiptNumber ?? ""}
+                                    onChange={(event) =>
+                                      setProjectDrafts((current) => ({
+                                        ...current,
+                                        [request.id]: {
+                                          ...(current[request.id] ?? createProjectDraft(projectByRequestId[request.id], parseStoredQuoteProposal(request.quotationData).total)),
+                                          postedReceiptNumber: event.target.value,
+                                        },
+                                      }))
+                                    }
+                                    className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none"
+                                  />
+                                </label>
+                                <label className="text-xs uppercase tracking-wide text-slate-400 sm:col-span-2">
+                                  Internal project notes
+                                  <textarea
+                                    rows={3}
+                                    value={projectDrafts[request.id]?.internalNotes ?? ""}
+                                    onChange={(event) =>
+                                      setProjectDrafts((current) => ({
+                                        ...current,
+                                        [request.id]: {
+                                          ...(current[request.id] ?? createProjectDraft(projectByRequestId[request.id], parseStoredQuoteProposal(request.quotationData).total)),
+                                          internalNotes: event.target.value,
+                                        },
+                                      }))
+                                    }
+                                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none"
+                                  />
+                                </label>
+                              </div>
+
+                              <div className="grid gap-2 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-xs text-slate-300">
+                                <div>Payment status: {projectByRequestId[request.id]?.paymentStatus?.replace(/_/g, " ")}</div>
+                                <div>Required deposit: {formatQuoteCurrency(projectByRequestId[request.id]?.depositRequiredAmount ?? 0)}</div>
+                                <div>Balance due: {formatQuoteCurrency(projectByRequestId[request.id]?.balanceAmount ?? 0)}</div>
+                                {projectByRequestId[request.id]?.postedToPosAt ? (
+                                  <div>Posted to POS: {formatDateTime(projectByRequestId[request.id]?.postedToPosAt ?? null)}</div>
+                                ) : null}
+                              </div>
+
+                              <div className="flex flex-wrap gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => void saveProjectWorkflow(request)}
+                                  disabled={projectSavingId === request.id}
+                                  className="inline-flex items-center gap-2 rounded-full bg-cyan-400 px-5 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:opacity-60"
+                                >
+                                  {projectSavingId === request.id ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                                  Save project workflow
+                                </button>
+                              </div>
+
+                              <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-3 text-xs text-slate-300">
+                                <div className="font-semibold uppercase tracking-[0.16em] text-slate-400">
+                                  Project timeline
+                                </div>
+                                <div className="mt-2 space-y-2">
+                                  {projectLoadingId === request.id && !(projectEventsByRequestId[request.id] ?? []).length ? (
+                                    <div className="text-slate-500">Loading project activity...</div>
+                                  ) : (projectEventsByRequestId[request.id] ?? []).length ? (
+                                    (projectEventsByRequestId[request.id] ?? []).slice(0, 4).map((event) => (
+                                      <div key={event.id} className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2">
+                                        <div className="font-semibold text-slate-100">{event.eventLabel}</div>
+                                        <div className="mt-1 text-[11px] text-slate-400">
+                                          {formatDateTime(event.createdAt)}
+                                        </div>
+                                        {event.eventDetail ? (
+                                          <div className="mt-1 text-[11px] text-slate-300">{event.eventDetail}</div>
+                                        ) : null}
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <div className="text-slate-500">No project activity recorded yet.</div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
 
                         <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-4 text-sm text-slate-300">

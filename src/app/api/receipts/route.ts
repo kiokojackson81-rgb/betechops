@@ -24,6 +24,8 @@ import { adjustProfitForPodDeliveryFee, getPodDeliveryFee, loadPodDeliveryFeeMap
 import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
 import { waitForReceiptById } from "@/lib/receiptReadAfterWrite";
 import { getProductTableCapabilities, type ProductTableCapabilities } from "@/lib/productTableCapabilities";
+import { recordQuotationEvent } from "@/lib/quoteRequests";
+import { upsertQuoteProjectOrder, type QuoteProjectPaymentTerm } from "@/lib/quoteProjects";
 
 const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" | null => {
   if (typeof value !== "string") return null;
@@ -31,6 +33,13 @@ const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" | null => {
   if (candidate === "CASH") return "CASH";
   if (candidate === "MPESA") return "MPESA";
   return null;
+};
+
+const mapReceiptQuotePaymentTerm = (value: unknown): QuoteProjectPaymentTerm => {
+  const candidate = String(value || "").trim().toUpperCase();
+  if (candidate === "APPROVED_AFTER_INSTALLATION") return "FULL_AFTER_INSTALLATION";
+  if (candidate === "DEPOSIT_AND_BALANCE") return "DEPOSIT_AND_BALANCE";
+  return "FULL_BEFORE_INSTALLATION";
 };
 
 export const dynamic = "force-dynamic";
@@ -1859,6 +1868,77 @@ export async function POST(req: NextRequest) {
 
       return { orderRef: orderUpsert.orderNumber, receiptId: receipt.id };
     });
+
+    const quoteMetadata =
+      payload?.metadata && typeof payload.metadata === "object" && !Array.isArray(payload.metadata)
+        ? (payload.metadata as Record<string, unknown>)
+        : null;
+    const linkedQuoteRequestId =
+      quoteMetadata?.source === "QUOTATION_CENTER" && typeof quoteMetadata.quoteRequestId === "string"
+        ? quoteMetadata.quoteRequestId.trim()
+        : "";
+
+    if (linkedQuoteRequestId) {
+      try {
+        const quotedTotalAmount =
+          typeof quoteMetadata?.quoteTotalAmount === "number"
+            ? quoteMetadata.quoteTotalAmount
+            : Number(quoteMetadata?.quoteTotalAmount || total || 0);
+        const projectTotalAmount = Number.isFinite(quotedTotalAmount) && quotedTotalAmount > 0 ? quotedTotalAmount : total;
+        const depositPercentBase =
+          typeof quoteMetadata?.quoteDepositAmount === "number" && projectTotalAmount > 0
+            ? (quoteMetadata.quoteDepositAmount / projectTotalAmount) * 100
+            : 30;
+
+        const projectOrder = await upsertQuoteProjectOrder({
+          quoteRequestId: linkedQuoteRequestId,
+          stage: "RECEIPT_CREATED",
+          paymentTerm: mapReceiptQuotePaymentTerm(quoteMetadata?.quotePaymentTerms),
+          totalAmount: projectTotalAmount,
+          depositPercent: depositPercentBase,
+          depositPaidAmount: docType === "LAYAWAY" ? deposit : total,
+          amountPaidTotal: docType === "LAYAWAY" ? deposit : total,
+          postedReceiptNumber: result.orderRef,
+          actorUserId: attendantId ?? issuedById ?? null,
+          createEvent: {
+            eventType: "POS_RECEIPT_LINKED",
+            eventLabel: "POS receipt linked",
+            eventDetail: `Receipt ${result.orderRef} was saved from quotation workflow.`,
+            metadata: {
+              receiptId: result.receiptId,
+              receiptNumber: result.orderRef,
+              totalPaid: docType === "LAYAWAY" ? deposit : total,
+              docType,
+            },
+          },
+        });
+
+        if (projectOrder) {
+          await recordQuotationEvent({
+            quoteRequestId: linkedQuoteRequestId,
+            eventType: "POS_RECEIPT_LINKED",
+            eventLabel: "POS receipt linked",
+            eventDetail: `Receipt ${result.orderRef} now anchors the project workflow.`,
+            actorUserId: attendantId ?? issuedById ?? null,
+            actorName: null,
+            metadata: {
+              projectOrderId: projectOrder.id,
+              receiptId: result.receiptId,
+              receiptNumber: result.orderRef,
+              paymentStatus: projectOrder.paymentStatus,
+              projectStage: projectOrder.stage,
+            },
+          }).catch(() => undefined);
+        }
+      } catch (quoteProjectLinkErr) {
+        console.error("[receipts] failed to sync quotation project workflow", {
+          quoteRequestId: linkedQuoteRequestId,
+          receiptId: result.receiptId,
+          orderRef: result.orderRef,
+          error: quoteProjectLinkErr instanceof Error ? quoteProjectLinkErr.message : String(quoteProjectLinkErr),
+        });
+      }
+    }
 
     waitForReceiptById<{
       id: string;

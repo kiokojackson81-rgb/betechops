@@ -113,11 +113,12 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [mpesaPaid, setMpesaPaid] = useState<number | "">(0);
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [catalogQuery, setCatalogQuery] = useState("");
-  const [catalogLoading, setCatalogLoading] = useState(false);
-  const [catalogResults, setCatalogResults] = useState<CatalogProduct[]>([]);
-  const [duplicateCatalogPool, setDuplicateCatalogPool] = useState<CatalogProduct[]>([]);
-  const [websiteOrderId, setWebsiteOrderId] = useState<string | null>(null);
-  const [websiteOrderRef, setWebsiteOrderRef] = useState<string | null>(null);
+    const [catalogLoading, setCatalogLoading] = useState(false);
+    const [catalogResults, setCatalogResults] = useState<CatalogProduct[]>([]);
+    const [duplicateCatalogPool, setDuplicateCatalogPool] = useState<CatalogProduct[]>([]);
+    const [websiteOrderId, setWebsiteOrderId] = useState<string | null>(null);
+    const [websiteOrderRef, setWebsiteOrderRef] = useState<string | null>(null);
+    const [prefillMetadata, setPrefillMetadata] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -222,9 +223,12 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       ) {
         setDocType(parsed.docType.trim().toUpperCase());
       }
-      if (parsed.websiteOrderId) setWebsiteOrderId(String(parsed.websiteOrderId));
-      if (parsed.websiteOrderRef) setWebsiteOrderRef(String(parsed.websiteOrderRef));
-      if (parsed.customerName) setCustomerName(String(parsed.customerName));
+        if (parsed.websiteOrderId) setWebsiteOrderId(String(parsed.websiteOrderId));
+        if (parsed.websiteOrderRef) setWebsiteOrderRef(String(parsed.websiteOrderRef));
+        if (parsed.metadata && typeof parsed.metadata === "object" && !Array.isArray(parsed.metadata)) {
+          setPrefillMetadata(parsed.metadata as Record<string, unknown>);
+        }
+        if (parsed.customerName) setCustomerName(String(parsed.customerName));
       if (parsed.customerPhone) setCustomerPhone(String(parsed.customerPhone));
       if (parsed.customerEmail) setCustomerEmail(String(parsed.customerEmail));
       if (parsed.deliveryAddress) {
@@ -921,19 +925,25 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         websiteOrderId: websiteOrderId || undefined,
         globalWarranty: globalWarranty || undefined,
         deposit: docType === "LAYAWAY" ? deposit : undefined,
-        paymentBreakdown: {
-          cash: normalizedPaymentBreakdown.cash,
-          mpesa: normalizedPaymentBreakdown.mpesa,
-        },
-        metadata: websiteOrderId
-          ? {
-              source: "WEBSITE",
-              websiteOrderId,
-              websiteOrderRef,
-            }
-          : undefined,
-        items: normalizedItems,
-      };
+          paymentBreakdown: {
+            cash: normalizedPaymentBreakdown.cash,
+            mpesa: normalizedPaymentBreakdown.mpesa,
+          },
+          metadata:
+            websiteOrderId || prefillMetadata
+              ? {
+                  ...(prefillMetadata ?? {}),
+                  ...(websiteOrderId
+                    ? {
+                        source: "WEBSITE",
+                        websiteOrderId,
+                        websiteOrderRef,
+                      }
+                    : {}),
+                }
+              : undefined,
+          items: normalizedItems,
+        };
 
       const res = await fetch("/api/receipts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), credentials: "same-origin" });
       const data = await res.json().catch(() => ({}));

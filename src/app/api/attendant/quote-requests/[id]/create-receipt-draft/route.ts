@@ -63,6 +63,10 @@ function buildQuoteReceiptPrefill(
       quoteRef: request.quoteRef,
       quoteStatus: request.status,
       quoteSource: request.source,
+      quotePaymentTerms: proposal.paymentTerms ?? null,
+      quotePaymentMethod: proposal.paymentMethod ?? null,
+      quoteTotalAmount: proposal.total ?? 0,
+      quoteDepositAmount: proposal.depositAmount ?? null,
     },
     items: proposal.items.map((item) => ({
       title: item.itemName,
