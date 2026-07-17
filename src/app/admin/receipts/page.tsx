@@ -50,20 +50,22 @@ export default async function AdminReceiptsPage({
     return (
       <main className="min-h-screen w-full bg-slate-950 text-slate-100">
         <div className="w-full px-4 py-6 lg:px-8 xl:px-12">
-          <div className="mb-4 flex flex-wrap gap-2">
-            <Link
-              href="/admin/quotation-center"
-              className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
-            >
-              Admin Quotation Center
-            </Link>
-            <Link
-              href="/marketing/receipts?tab=quotations"
-              className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
-            >
-              Staff Quotations
-            </Link>
-          </div>
+          {activeTab !== "website-orders" ? (
+            <div className="mb-4 flex flex-wrap gap-2">
+              <Link
+                href="/admin/quotation-center"
+                className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
+              >
+                Admin Quotation Center
+              </Link>
+              <Link
+                href="/marketing/receipts?tab=quotations"
+                className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/20"
+              >
+                Staff Quotations
+              </Link>
+            </div>
+          ) : null}
           {activeTab === "website-orders" ? (
             <WebsiteOrdersAdminClient initialOrders={serializedOrders} initialExpandedId={params.orderId?.trim() || null} />
           ) : (
