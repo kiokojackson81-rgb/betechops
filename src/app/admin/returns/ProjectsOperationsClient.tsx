@@ -331,7 +331,7 @@ export default function ProjectsOperationsClient() {
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="text-lg font-semibold text-white">
-                        {row.customerName || "Project customer"}
+                        {row.customerName || row.orderRef || "Project"}
                       </h2>
                       <span className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-100">
                         Project
@@ -341,15 +341,15 @@ export default function ProjectsOperationsClient() {
                       </span>
                     </div>
                     <div className="mt-2 text-sm text-slate-300">
-                      {row.orderRef || "No reference"} · {row.customerPhone || "No phone"} · {formatCurrency(row.total)}
+                      {[row.orderRef, row.customerPhone, formatCurrency(row.total)].filter(Boolean).join(" · ")}
                     </div>
                     <div className="mt-1 text-xs text-slate-400">
                       Created {new Date(row.createdAt).toLocaleString("en-KE")} · Payment {formatPaymentTermLabel(row.projectPaymentTerm)}
                     </div>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
-                    <div>Assigned by receipt: {row.attendantName || "Not set"}</div>
-                    <div className="mt-1">
+                    {row.attendantName ? <div>Assigned by receipt: {row.attendantName}</div> : null}
+                    <div className={row.attendantName ? "mt-1" : ""}>
                       Payment status: {(row.projectPaymentStatus || "UNPAID").replace(/_/g, " ")}
                     </div>
                   </div>
@@ -419,70 +419,6 @@ export default function ProjectsOperationsClient() {
                     </>
                   ) : null}
                   <label className="text-sm text-slate-200">
-                    Deposit paid
-                    <input
-                      type="number"
-                      min={0}
-                      value={editor.depositPaidAmount}
-                      onChange={(e) => setEditorValue(row.id, { depositPaidAmount: e.target.value })}
-                      className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60"
-                    />
-                  </label>
-                  <label className="text-sm text-slate-200">
-                    Deposit method
-                    <select
-                      value={editor.depositPaymentMethod}
-                      onChange={(e) => setEditorValue(row.id, { depositPaymentMethod: e.target.value as ProjectEditor["depositPaymentMethod"] })}
-                      className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60"
-                    >
-                      {["UNSPECIFIED", "MPESA", "CASH", "BANK", "MIXED"].map((option) => (
-                        <option key={option} value={option}>
-                          {option === "UNSPECIFIED" ? "Unspecified" : option}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="text-sm text-slate-200">
-                    Deposit reference
-                    <input
-                      value={editor.depositReference}
-                      onChange={(e) => setEditorValue(row.id, { depositReference: e.target.value })}
-                      className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60"
-                    />
-                  </label>
-                  <label className="text-sm text-slate-200">
-                    Balance paid
-                    <input
-                      type="number"
-                      min={0}
-                      value={editor.balancePaidAmount}
-                      onChange={(e) => setEditorValue(row.id, { balancePaidAmount: e.target.value })}
-                      className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60"
-                    />
-                  </label>
-                  <label className="text-sm text-slate-200">
-                    Balance method
-                    <select
-                      value={editor.balancePaymentMethod}
-                      onChange={(e) => setEditorValue(row.id, { balancePaymentMethod: e.target.value as ProjectEditor["balancePaymentMethod"] })}
-                      className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60"
-                    >
-                      {["UNSPECIFIED", "MPESA", "CASH", "BANK", "MIXED"].map((option) => (
-                        <option key={option} value={option}>
-                          {option === "UNSPECIFIED" ? "Unspecified" : option}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="text-sm text-slate-200">
-                    Balance reference
-                    <input
-                      value={editor.balanceReference}
-                      onChange={(e) => setEditorValue(row.id, { balanceReference: e.target.value })}
-                      className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60"
-                    />
-                  </label>
-                  <label className="text-sm text-slate-200">
                     Handler type
                     <select
                       value={editor.handlerType}
@@ -537,20 +473,7 @@ export default function ProjectsOperationsClient() {
                         />
                       </label>
                     </>
-                  ) : (
-                    <div className="xl:col-span-2 rounded-2xl border border-dashed border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-400">
-                      Select staff or external agent to assign the installation.
-                    </div>
-                  )}
-                  <label className="text-sm text-slate-200 xl:col-span-5">
-                    Payment notes
-                    <textarea
-                      rows={2}
-                      value={editor.paymentNotes}
-                      onChange={(e) => setEditorValue(row.id, { paymentNotes: e.target.value })}
-                      className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60"
-                    />
-                  </label>
+                  ) : null}
                 </div>
 
                 <div className="mt-5 flex flex-wrap gap-3">
