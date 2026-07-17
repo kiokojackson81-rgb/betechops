@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   await ensureWebsiteOrdersSchema();
 
   const searchParams = request.nextUrl.searchParams;
-  const statusParam = (searchParams.get("status") || "PENDING").toUpperCase();
+  const statusParam = (searchParams.get("status") || "ALL").toUpperCase();
   const q = (searchParams.get("q") || "").trim();
   const statuses =
     statusParam === "ALL"

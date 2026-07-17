@@ -14,11 +14,11 @@ export default function WebsiteOrdersAdminClient({ initialOrders, initialExpande
       initialOrders={initialOrders}
       initialExpandedId={initialExpandedId}
       apiBasePath="/api/admin/website-orders"
-      defaultStatusFilter="PENDING"
+      defaultStatusFilter="ALL"
       orderListLabel="Website orders"
-      orderListTitle="Pending website orders"
-      orderListDescription="Review customer website orders, confirm them safely, and continue through the receipt flow."
-      filterStorageKey="admin:website-orders:status"
+      orderListTitle="Website orders"
+      orderListDescription="Review customer website orders across all statuses, confirm them safely, and continue through the receipt flow."
+      filterStorageKey="admin:website-orders:status:v2"
     />
   );
 }
