@@ -8,6 +8,7 @@ import {
   normalizeCashAdvanceRepaymentPeriodValue,
   normalizePaidLeaveEntitlements,
 } from "@/lib/wellness";
+import { buildStaffAttendantWhere } from "@/lib/staffUsers";
 
 export const dynamic = "force-dynamic";
 
@@ -90,7 +91,7 @@ export async function GET() {
       take: 50,
     }),
     prisma.user.findMany({
-      where: { role: { in: ["ATTENDANT", "SUPERVISOR"] } },
+      where: buildStaffAttendantWhere(),
       select: {
         id: true,
         name: true,
@@ -98,7 +99,7 @@ export async function GET() {
         attendantCategory: true,
         leaveBalance: true,
       },
-      orderBy: [{ name: "asc" }],
+      orderBy: [{ attendantCategory: "asc" }, { name: "asc" }],
       take: 100,
     }),
   ]);
