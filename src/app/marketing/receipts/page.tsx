@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Card from "@/app/_components/Card";
 import DailyReportReceiptsPanel from "@/components/daily-report-receipts";
@@ -159,7 +159,7 @@ async function fetchJson<T>(url: string): Promise<T | null> {
   }
 }
 
-export default function MarketingReceiptsPage() {
+function MarketingReceiptsPageInner() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -662,5 +662,13 @@ export default function MarketingReceiptsPage() {
         </Card>
       </main>
     </div>
+  );
+}
+
+export default function MarketingReceiptsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-950 text-slate-100" />}>
+      <MarketingReceiptsPageInner />
+    </Suspense>
   );
 }
