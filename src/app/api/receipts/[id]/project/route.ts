@@ -7,6 +7,7 @@ import {
   readReceiptProjectFlow,
   RECEIPT_PROJECT_HANDLER_TYPES,
   RECEIPT_PROJECT_DEPOSIT_TYPES,
+  RECEIPT_PROJECT_PAYMENT_METHODS,
   RECEIPT_PROJECT_PAYMENT_TERMS,
   RECEIPT_PROJECT_STAGES,
 } from "@/lib/receiptProjects";
@@ -19,8 +20,15 @@ const updateSchema = z.object({
   depositType: z.enum(RECEIPT_PROJECT_DEPOSIT_TYPES).optional(),
   depositValue: z.number().min(0).optional(),
   depositPercent: z.number().min(0).max(100).optional(),
+  depositPaidAmount: z.number().min(0).optional(),
+  depositPaymentMethod: z.enum(RECEIPT_PROJECT_PAYMENT_METHODS).optional(),
+  depositReference: z.string().trim().nullable().optional(),
+  balancePaidAmount: z.number().min(0).optional(),
+  balancePaymentMethod: z.enum(RECEIPT_PROJECT_PAYMENT_METHODS).optional(),
+  balanceReference: z.string().trim().nullable().optional(),
   scheduledDate: z.string().trim().nullable().optional(),
   internalNotes: z.string().trim().nullable().optional(),
+  paymentNotes: z.string().trim().nullable().optional(),
   handlerType: z.enum(RECEIPT_PROJECT_HANDLER_TYPES).nullable().optional(),
   handlerStaffId: z.string().trim().nullable().optional(),
   handlerStaffName: z.string().trim().nullable().optional(),
@@ -80,11 +88,19 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
     depositType: parsed.data.depositType ?? existingProjectFlow?.depositType,
     depositValue: parsed.data.depositValue ?? existingProjectFlow?.depositValue,
     depositPercent: parsed.data.depositPercent ?? existingProjectFlow?.depositPercent,
+    depositPaidAmount: parsed.data.depositPaidAmount ?? existingProjectFlow?.depositPaidAmount,
+    depositPaymentMethod: parsed.data.depositPaymentMethod ?? existingProjectFlow?.depositPaymentMethod,
+    depositReference: parsed.data.depositReference ?? existingProjectFlow?.depositReference,
+    balancePaidAmount: parsed.data.balancePaidAmount ?? existingProjectFlow?.balancePaidAmount,
+    balancePaymentMethod: parsed.data.balancePaymentMethod ?? existingProjectFlow?.balancePaymentMethod,
+    balanceReference: parsed.data.balanceReference ?? existingProjectFlow?.balanceReference,
     scheduledDate:
       parsed.data.scheduledDate !== undefined ? parsed.data.scheduledDate : existingProjectFlow?.scheduledDate,
     postedReceiptNumber: existing.order?.orderNumber ?? existingProjectFlow?.postedReceiptNumber ?? null,
     internalNotes:
       parsed.data.internalNotes !== undefined ? parsed.data.internalNotes : existingProjectFlow?.internalNotes,
+    paymentNotes:
+      parsed.data.paymentNotes !== undefined ? parsed.data.paymentNotes : existingProjectFlow?.paymentNotes,
     handlerType:
       parsed.data.handlerType !== undefined ? parsed.data.handlerType : existingProjectFlow?.handlerType,
     handlerStaffId:
@@ -111,6 +127,23 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
         customerType: "project",
         projectFlow: nextProjectFlow,
       },
+      order: existing.order
+        ? {
+            update: {
+              paidAmount: nextProjectFlow.totalPaidAmount,
+              paymentStatus:
+                nextProjectFlow.paymentStatus === "FULLY_PAID"
+                  ? "PAID"
+                  : nextProjectFlow.paymentStatus === "PARTIALLY_PAID"
+                    ? "PARTIAL"
+                    : "UNPAID",
+              status:
+                nextProjectFlow.stage === "COMPLETED_POSTED"
+                  ? "COMPLETED"
+                  : "PENDING",
+            },
+          }
+        : undefined,
     },
     include: {
       order: {

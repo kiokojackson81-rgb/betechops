@@ -23,6 +23,17 @@ type ProjectRow = {
   projectDepositType?: "PERCENT" | "AMOUNT" | null;
   projectDepositValue?: number | null;
   projectDepositRequiredAmount?: number | null;
+  projectDepositPaidAmount?: number | null;
+  projectDepositPendingAmount?: number | null;
+  projectDepositPaymentMethod?: "MPESA" | "CASH" | "BANK" | "MIXED" | "UNSPECIFIED" | null;
+  projectDepositReference?: string | null;
+  projectBalanceExpectedAmount?: number | null;
+  projectBalancePaidAmount?: number | null;
+  projectBalancePendingAmount?: number | null;
+  projectBalancePaymentMethod?: "MPESA" | "CASH" | "BANK" | "MIXED" | "UNSPECIFIED" | null;
+  projectBalanceReference?: string | null;
+  projectTotalPaidAmount?: number | null;
+  projectRemainingAmount?: number | null;
   projectScheduledDate?: string | null;
   projectHandlerType?: "STAFF" | "EXTERNAL" | null;
   projectHandlerStaffId?: string | null;
@@ -35,7 +46,14 @@ type ProjectEditor = {
   paymentTerm: "FULL_BEFORE_INSTALLATION" | "DEPOSIT_AND_BALANCE" | "FULL_AFTER_INSTALLATION";
   depositType: "PERCENT" | "AMOUNT";
   depositValue: string;
+  depositPaidAmount: string;
+  depositPaymentMethod: "MPESA" | "CASH" | "BANK" | "MIXED" | "UNSPECIFIED";
+  depositReference: string;
+  balancePaidAmount: string;
+  balancePaymentMethod: "MPESA" | "CASH" | "BANK" | "MIXED" | "UNSPECIFIED";
+  balanceReference: string;
   scheduledDate: string;
+  paymentNotes: string;
   handlerType: "STAFF" | "EXTERNAL" | "";
   handlerStaffId: string;
   externalAgentName: string;
@@ -87,7 +105,14 @@ const makeEditor = (row: ProjectRow): ProjectEditor => ({
       ? row.projectDepositRequiredAmount ?? row.projectDepositValue ?? 0
       : row.projectDepositValue ?? 30,
   ),
+  depositPaidAmount: String(row.projectDepositPaidAmount ?? 0),
+  depositPaymentMethod: row.projectDepositPaymentMethod ?? "UNSPECIFIED",
+  depositReference: row.projectDepositReference ?? "",
+  balancePaidAmount: String(row.projectBalancePaidAmount ?? 0),
+  balancePaymentMethod: row.projectBalancePaymentMethod ?? "UNSPECIFIED",
+  balanceReference: row.projectBalanceReference ?? "",
   scheduledDate: row.projectScheduledDate ? row.projectScheduledDate.slice(0, 10) : "",
+  paymentNotes: "",
   handlerType: row.projectHandlerType ?? "",
   handlerStaffId: row.projectHandlerStaffId ?? "",
   externalAgentName: row.projectExternalAgentName ?? "",
@@ -192,7 +217,14 @@ export default function ProjectsOperationsClient() {
           paymentTerm: editor.paymentTerm,
           depositType: editor.depositType,
           depositValue: Number(editor.depositValue || 0),
+          depositPaidAmount: Number(editor.depositPaidAmount || 0),
+          depositPaymentMethod: editor.depositPaymentMethod,
+          depositReference: editor.depositReference || null,
+          balancePaidAmount: Number(editor.balancePaidAmount || 0),
+          balancePaymentMethod: editor.balancePaymentMethod,
+          balanceReference: editor.balanceReference || null,
           scheduledDate: editor.scheduledDate || null,
+          paymentNotes: editor.paymentNotes || null,
           handlerType: editor.handlerType || null,
           handlerStaffId: editor.handlerType === "STAFF" ? editor.handlerStaffId || null : null,
           handlerStaffName:
@@ -387,6 +419,70 @@ export default function ProjectsOperationsClient() {
                     </>
                   ) : null}
                   <label className="text-sm text-slate-200">
+                    Deposit paid
+                    <input
+                      type="number"
+                      min={0}
+                      value={editor.depositPaidAmount}
+                      onChange={(e) => setEditorValue(row.id, { depositPaidAmount: e.target.value })}
+                      className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60"
+                    />
+                  </label>
+                  <label className="text-sm text-slate-200">
+                    Deposit method
+                    <select
+                      value={editor.depositPaymentMethod}
+                      onChange={(e) => setEditorValue(row.id, { depositPaymentMethod: e.target.value as ProjectEditor["depositPaymentMethod"] })}
+                      className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60"
+                    >
+                      {["UNSPECIFIED", "MPESA", "CASH", "BANK", "MIXED"].map((option) => (
+                        <option key={option} value={option}>
+                          {option === "UNSPECIFIED" ? "Unspecified" : option}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-sm text-slate-200">
+                    Deposit reference
+                    <input
+                      value={editor.depositReference}
+                      onChange={(e) => setEditorValue(row.id, { depositReference: e.target.value })}
+                      className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60"
+                    />
+                  </label>
+                  <label className="text-sm text-slate-200">
+                    Balance paid
+                    <input
+                      type="number"
+                      min={0}
+                      value={editor.balancePaidAmount}
+                      onChange={(e) => setEditorValue(row.id, { balancePaidAmount: e.target.value })}
+                      className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60"
+                    />
+                  </label>
+                  <label className="text-sm text-slate-200">
+                    Balance method
+                    <select
+                      value={editor.balancePaymentMethod}
+                      onChange={(e) => setEditorValue(row.id, { balancePaymentMethod: e.target.value as ProjectEditor["balancePaymentMethod"] })}
+                      className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60"
+                    >
+                      {["UNSPECIFIED", "MPESA", "CASH", "BANK", "MIXED"].map((option) => (
+                        <option key={option} value={option}>
+                          {option === "UNSPECIFIED" ? "Unspecified" : option}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-sm text-slate-200">
+                    Balance reference
+                    <input
+                      value={editor.balanceReference}
+                      onChange={(e) => setEditorValue(row.id, { balanceReference: e.target.value })}
+                      className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60"
+                    />
+                  </label>
+                  <label className="text-sm text-slate-200">
                     Handler type
                     <select
                       value={editor.handlerType}
@@ -446,6 +542,15 @@ export default function ProjectsOperationsClient() {
                       Select staff or external agent to assign the installation.
                     </div>
                   )}
+                  <label className="text-sm text-slate-200 xl:col-span-5">
+                    Payment notes
+                    <textarea
+                      rows={2}
+                      value={editor.paymentNotes}
+                      onChange={(e) => setEditorValue(row.id, { paymentNotes: e.target.value })}
+                      className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60"
+                    />
+                  </label>
                 </div>
 
                 <div className="mt-5 flex flex-wrap gap-3">

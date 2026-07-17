@@ -29,6 +29,16 @@ export const RECEIPT_PROJECT_DEPOSIT_TYPES = [
 
 export type ReceiptProjectDepositType = (typeof RECEIPT_PROJECT_DEPOSIT_TYPES)[number];
 
+export const RECEIPT_PROJECT_PAYMENT_METHODS = [
+  "MPESA",
+  "CASH",
+  "BANK",
+  "MIXED",
+  "UNSPECIFIED",
+] as const;
+
+export type ReceiptProjectPaymentMethod = (typeof RECEIPT_PROJECT_PAYMENT_METHODS)[number];
+
 export const RECEIPT_PROJECT_HANDLER_TYPES = [
   "STAFF",
   "EXTERNAL",
@@ -46,11 +56,23 @@ export type ReceiptProjectFlow = {
   depositValue: number;
   depositPercent: number;
   depositRequiredAmount: number;
+  depositPaidAmount: number;
+  depositPendingAmount: number;
+  depositPaymentMethod: ReceiptProjectPaymentMethod;
+  depositReference: string | null;
+  balanceExpectedAmount: number;
+  balancePaidAmount: number;
+  balancePendingAmount: number;
+  balancePaymentMethod: ReceiptProjectPaymentMethod;
+  balanceReference: string | null;
+  totalPaidAmount: number;
+  remainingAmount: number;
   amountPaidTotal: number;
   balanceAmount: number;
   scheduledDate: string | null;
   postedReceiptNumber: string | null;
   internalNotes: string | null;
+  paymentNotes: string | null;
   handlerType: ReceiptProjectHandlerType | null;
   handlerStaffId: string | null;
   handlerStaffName: string | null;
@@ -104,6 +126,14 @@ export function normalizeReceiptProjectHandlerType(value: unknown): ReceiptProje
   return null;
 }
 
+export function normalizeReceiptProjectPaymentMethod(value: unknown): ReceiptProjectPaymentMethod {
+  const candidate = String(value || "").trim().toUpperCase();
+  if (RECEIPT_PROJECT_PAYMENT_METHODS.includes(candidate as ReceiptProjectPaymentMethod)) {
+    return candidate as ReceiptProjectPaymentMethod;
+  }
+  return "UNSPECIFIED";
+}
+
 function normalizeOptionalDate(value: unknown) {
   const candidate = String(value || "").trim();
   if (!candidate) return null;
@@ -118,12 +148,19 @@ export function buildReceiptProjectFlow(input: {
   depositType?: unknown;
   depositValue?: unknown;
   projectValue: number;
-  amountPaidTotal: number;
   depositPercent?: unknown;
   depositAmount?: unknown;
+  depositPaidAmount?: unknown;
+  depositPaymentMethod?: unknown;
+  depositReference?: unknown;
+  balancePaidAmount?: unknown;
+  balancePaymentMethod?: unknown;
+  balanceReference?: unknown;
+  amountPaidTotal?: number;
   scheduledDate?: unknown;
   postedReceiptNumber?: unknown;
   internalNotes?: unknown;
+  paymentNotes?: unknown;
   handlerType?: unknown;
   handlerStaffId?: unknown;
   handlerStaffName?: unknown;
@@ -132,9 +169,6 @@ export function buildReceiptProjectFlow(input: {
 }) {
   const existing = input.existing ?? null;
   const projectValue = roundCurrency(Math.max(0, Number(input.projectValue || 0)));
-  const amountPaidTotal = roundCurrency(
-    Math.max(0, Math.min(projectValue, Number(input.amountPaidTotal || 0))),
-  );
   const paymentTerm = normalizeReceiptProjectPaymentTerm(
     input.paymentTerm ?? existing?.paymentTerm,
   );
@@ -153,20 +187,58 @@ export function buildReceiptProjectFlow(input: {
       ? depositType === "AMOUNT"
         ? roundCurrency(Math.max(0, Math.min(projectValue, Number.isFinite(normalizedDepositValue) ? normalizedDepositValue : 0)))
         : Math.max(0, Math.min(100, Number.isFinite(normalizedDepositValue) ? normalizedDepositValue : 30))
-      : 0;
+      : paymentTerm === "FULL_BEFORE_INSTALLATION"
+        ? projectValue
+        : 0;
   const depositRequiredAmount =
-    paymentTerm === "DEPOSIT_AND_BALANCE"
-      ? depositType === "AMOUNT"
-        ? roundCurrency(depositValue)
-        : roundCurrency(projectValue * (depositValue / 100))
-      : 0;
+    paymentTerm === "FULL_BEFORE_INSTALLATION"
+      ? projectValue
+      : paymentTerm === "DEPOSIT_AND_BALANCE"
+        ? depositType === "AMOUNT"
+          ? roundCurrency(depositValue)
+          : roundCurrency(projectValue * (depositValue / 100))
+        : 0;
   const depositPercent =
     paymentTerm === "DEPOSIT_AND_BALANCE"
       ? projectValue > 0
         ? roundCurrency((depositRequiredAmount / projectValue) * 100)
         : 0
       : 0;
-  const balanceAmount = roundCurrency(Math.max(0, projectValue - amountPaidTotal));
+  const balanceExpectedAmount =
+    paymentTerm === "FULL_BEFORE_INSTALLATION"
+      ? 0
+      : paymentTerm === "FULL_AFTER_INSTALLATION"
+        ? projectValue
+        : roundCurrency(Math.max(0, projectValue - depositRequiredAmount));
+  const depositPaidAmount = roundCurrency(
+    Math.max(0, Math.min(projectValue, Number(input.depositPaidAmount ?? existing?.depositPaidAmount ?? 0))),
+  );
+  const balancePaidAmount = roundCurrency(
+    Math.max(0, Math.min(projectValue, Number(input.balancePaidAmount ?? existing?.balancePaidAmount ?? 0))),
+  );
+  const totalPaidAmount = roundCurrency(
+    Math.max(
+      0,
+      Math.min(
+        projectValue,
+        Number(
+          input.amountPaidTotal ??
+            (depositPaidAmount + balancePaidAmount),
+        ) || 0,
+      ),
+    ),
+  );
+  const depositPendingAmount = roundCurrency(Math.max(0, depositRequiredAmount - depositPaidAmount));
+  const balancePendingAmount = roundCurrency(Math.max(0, balanceExpectedAmount - balancePaidAmount));
+  const remainingAmount = roundCurrency(Math.max(0, projectValue - totalPaidAmount));
+  const amountPaidTotal = totalPaidAmount;
+  const balanceAmount = remainingAmount;
+  const depositPaymentMethod = normalizeReceiptProjectPaymentMethod(
+    input.depositPaymentMethod ?? existing?.depositPaymentMethod,
+  );
+  const balancePaymentMethod = normalizeReceiptProjectPaymentMethod(
+    input.balancePaymentMethod ?? existing?.balancePaymentMethod,
+  );
   const handlerType = normalizeReceiptProjectHandlerType(
     input.handlerType ?? existing?.handlerType,
   );
@@ -204,6 +276,17 @@ export function buildReceiptProjectFlow(input: {
     depositValue,
     depositPercent,
     depositRequiredAmount,
+    depositPaidAmount,
+    depositPendingAmount,
+    depositPaymentMethod,
+    depositReference: String(input.depositReference ?? existing?.depositReference ?? "").trim() || null,
+    balanceExpectedAmount,
+    balancePaidAmount,
+    balancePendingAmount,
+    balancePaymentMethod,
+    balanceReference: String(input.balanceReference ?? existing?.balanceReference ?? "").trim() || null,
+    totalPaidAmount,
+    remainingAmount,
     amountPaidTotal,
     balanceAmount,
     scheduledDate: normalizeOptionalDate(input.scheduledDate ?? existing?.scheduledDate),
@@ -212,6 +295,8 @@ export function buildReceiptProjectFlow(input: {
     ).trim() || null,
     internalNotes:
       String(input.internalNotes ?? existing?.internalNotes ?? "").trim() || null,
+    paymentNotes:
+      String(input.paymentNotes ?? existing?.paymentNotes ?? "").trim() || null,
     handlerType,
     handlerStaffId,
     handlerStaffName,
@@ -237,11 +322,23 @@ export function readReceiptProjectFlow(value: unknown): ReceiptProjectFlow | nul
     depositValue: roundCurrency(Math.max(0, Number(source.depositValue || 0))),
     depositPercent: Math.max(0, Number(source.depositPercent || 0)),
     depositRequiredAmount: roundCurrency(Math.max(0, Number(source.depositRequiredAmount || 0))),
+    depositPaidAmount: roundCurrency(Math.max(0, Number(source.depositPaidAmount || 0))),
+    depositPendingAmount: roundCurrency(Math.max(0, Number(source.depositPendingAmount || 0))),
+    depositPaymentMethod: normalizeReceiptProjectPaymentMethod(source.depositPaymentMethod),
+    depositReference: String(source.depositReference || "").trim() || null,
+    balanceExpectedAmount: roundCurrency(Math.max(0, Number(source.balanceExpectedAmount || 0))),
+    balancePaidAmount: roundCurrency(Math.max(0, Number(source.balancePaidAmount || 0))),
+    balancePendingAmount: roundCurrency(Math.max(0, Number(source.balancePendingAmount || 0))),
+    balancePaymentMethod: normalizeReceiptProjectPaymentMethod(source.balancePaymentMethod),
+    balanceReference: String(source.balanceReference || "").trim() || null,
+    totalPaidAmount: roundCurrency(Math.max(0, Number(source.totalPaidAmount || source.amountPaidTotal || 0))),
+    remainingAmount: roundCurrency(Math.max(0, Number(source.remainingAmount || source.balanceAmount || 0))),
     amountPaidTotal: roundCurrency(Math.max(0, Number(source.amountPaidTotal || 0))),
     balanceAmount: roundCurrency(Math.max(0, Number(source.balanceAmount || 0))),
     scheduledDate: normalizeOptionalDate(source.scheduledDate),
     postedReceiptNumber: String(source.postedReceiptNumber || "").trim() || null,
     internalNotes: String(source.internalNotes || "").trim() || null,
+    paymentNotes: String(source.paymentNotes || "").trim() || null,
     handlerType: normalizeReceiptProjectHandlerType(source.handlerType),
     handlerStaffId: String(source.handlerStaffId || "").trim() || null,
     handlerStaffName: String(source.handlerStaffName || "").trim() || null,

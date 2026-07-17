@@ -7,6 +7,7 @@ import {
   buildReceiptProjectFlow,
   readReceiptProjectFlow,
   type ReceiptProjectDepositType,
+  type ReceiptProjectPaymentMethod,
   type ReceiptProjectPaymentTerm,
 } from "@/lib/receiptProjects";
 import { showToast } from "@/lib/ui/toast";
@@ -84,8 +85,15 @@ type ProjectDraft = {
   paymentTerm: ReceiptProjectPaymentTerm;
   depositType: ReceiptProjectDepositType;
   depositValue: string;
+  depositPaidAmount: string;
+  depositPaymentMethod: ReceiptProjectPaymentMethod;
+  depositReference: string;
+  balancePaidAmount: string;
+  balancePaymentMethod: ReceiptProjectPaymentMethod;
+  balanceReference: string;
   scheduledDate: string;
   internalNotes: string;
+  paymentNotes: string;
 };
 
 const PROJECT_PAYMENT_TERM_OPTIONS: ReceiptProjectPaymentTerm[] = [
@@ -98,8 +106,15 @@ const createDefaultProjectDraft = (): ProjectDraft => ({
   paymentTerm: "DEPOSIT_AND_BALANCE",
   depositType: "PERCENT",
   depositValue: "30",
+  depositPaidAmount: "",
+  depositPaymentMethod: "UNSPECIFIED",
+  depositReference: "",
+  balancePaidAmount: "",
+  balancePaymentMethod: "UNSPECIFIED",
+  balanceReference: "",
   scheduledDate: "",
   internalNotes: "",
+  paymentNotes: "",
 });
 
 const formatProjectPaymentTermLabel = (value: ReceiptProjectPaymentTerm) => {
@@ -107,11 +122,19 @@ const formatProjectPaymentTermLabel = (value: ReceiptProjectPaymentTerm) => {
     case "FULL_BEFORE_INSTALLATION":
       return "Pay fully before installation";
     case "DEPOSIT_AND_BALANCE":
-      return "30% deposit and balance";
+      return "Deposit and balance";
     case "FULL_AFTER_INSTALLATION":
       return "Pay fully after installation";
   }
 };
+
+const PROJECT_PAYMENT_METHOD_OPTIONS: ReceiptProjectPaymentMethod[] = [
+  "UNSPECIFIED",
+  "MPESA",
+  "CASH",
+  "BANK",
+  "MIXED",
+];
 
 export default function ReceiptFormClient({ onCreated, showHero = true }: ReceiptFormProps) {  
   const [staffMembers, setStaffMembers] = useState<Array<{ id: string; name: string; email?: string | null }>>([]);
@@ -314,8 +337,15 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
               ? parsedProjectFlow.depositRequiredAmount || 0
               : parsedProjectFlow.depositValue || parsedProjectFlow.depositPercent || 30,
           ),
+          depositPaidAmount: String(parsedProjectFlow.depositPaidAmount || 0),
+          depositPaymentMethod: parsedProjectFlow.depositPaymentMethod || "UNSPECIFIED",
+          depositReference: parsedProjectFlow.depositReference || "",
+          balancePaidAmount: String(parsedProjectFlow.balancePaidAmount || 0),
+          balancePaymentMethod: parsedProjectFlow.balancePaymentMethod || "UNSPECIFIED",
+          balanceReference: parsedProjectFlow.balanceReference || "",
           scheduledDate: parsedProjectFlow.scheduledDate ? parsedProjectFlow.scheduledDate.slice(0, 10) : "",
           internalNotes: parsedProjectFlow.internalNotes || "",
+          paymentNotes: parsedProjectFlow.paymentNotes || "",
         });
       }
     } catch (error) {
@@ -620,6 +650,30 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     };
   }, [showSplitPaymentInputs, primaryPaymentMethod, total, numericCashPaid, numericMpesaPaid]);
 
+  const previewProjectFlow = useMemo(
+    () =>
+      customerType === "project"
+        ? buildReceiptProjectFlow({
+            stage: "RECEIPT_CREATED",
+            paymentTerm: projectDraft.paymentTerm,
+            depositType: projectDraft.depositType,
+            depositValue: Number(projectDraft.depositValue || 0),
+            depositPaidAmount: Number(projectDraft.depositPaidAmount || 0),
+            depositPaymentMethod: projectDraft.depositPaymentMethod,
+            depositReference: projectDraft.depositReference || null,
+            balancePaidAmount: Number(projectDraft.balancePaidAmount || 0),
+            balancePaymentMethod: projectDraft.balancePaymentMethod,
+            balanceReference: projectDraft.balanceReference || null,
+            projectValue: total,
+            scheduledDate: projectDraft.scheduledDate || null,
+            postedReceiptNumber: serial,
+            internalNotes: projectDraft.internalNotes || null,
+            paymentNotes: projectDraft.paymentNotes || null,
+          })
+        : null,
+    [customerType, projectDraft, total, serial],
+  );
+
   useEffect(() => {
     const cash = toNumber(cashPaid);
     const mpesa = toNumber(mpesaPaid);
@@ -671,11 +725,17 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
             paymentTerm: projectDraft.paymentTerm,
             depositType: projectDraft.depositType,
             depositValue: Number(projectDraft.depositValue || 0),
+            depositPaidAmount: Number(projectDraft.depositPaidAmount || 0),
+            depositPaymentMethod: projectDraft.depositPaymentMethod,
+            depositReference: projectDraft.depositReference || null,
+            balancePaidAmount: Number(projectDraft.balancePaidAmount || 0),
+            balancePaymentMethod: projectDraft.balancePaymentMethod,
+            balanceReference: projectDraft.balanceReference || null,
             projectValue: total,
-            amountPaidTotal: docType === "LAYAWAY" ? deposit : total,
             scheduledDate: projectDraft.scheduledDate || null,
             postedReceiptNumber: serial,
             internalNotes: projectDraft.internalNotes || null,
+            paymentNotes: projectDraft.paymentNotes || null,
           })
         : undefined,
     paymentBreakdown: {
@@ -958,11 +1018,17 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
             paymentTerm: projectDraft.paymentTerm,
             depositType: projectDraft.depositType,
             depositValue: Number(projectDraft.depositValue || 0),
+            depositPaidAmount: Number(projectDraft.depositPaidAmount || 0),
+            depositPaymentMethod: projectDraft.depositPaymentMethod,
+            depositReference: projectDraft.depositReference || null,
+            balancePaidAmount: Number(projectDraft.balancePaidAmount || 0),
+            balancePaymentMethod: projectDraft.balancePaymentMethod,
+            balanceReference: projectDraft.balanceReference || null,
             projectValue: total,
-            amountPaidTotal: docType === "LAYAWAY" ? deposit : total,
             scheduledDate: projectDraft.scheduledDate || null,
             postedReceiptNumber: serial,
             internalNotes: projectDraft.internalNotes || null,
+            paymentNotes: projectDraft.paymentNotes || null,
           })
         : null;
     const normalizedItems = items.map((it) => ({
@@ -1508,6 +1574,102 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                   This payment position follows the full receipt total automatically.
                 </div>
               )}
+              <label className={labelClass}>
+                Deposit paid now
+                <input
+                  type="number"
+                  min={0}
+                  value={projectDraft.depositPaidAmount}
+                  onChange={(e) =>
+                    setProjectDraft((current) => ({
+                      ...current,
+                      depositPaidAmount: e.target.value,
+                    }))
+                  }
+                  className={fieldClass}
+                />
+              </label>
+              <label className={labelClass}>
+                Deposit payment method
+                <select
+                  value={projectDraft.depositPaymentMethod}
+                  onChange={(e) =>
+                    setProjectDraft((current) => ({
+                      ...current,
+                      depositPaymentMethod: e.target.value as ReceiptProjectPaymentMethod,
+                    }))
+                  }
+                  className={fieldClass}
+                >
+                  {PROJECT_PAYMENT_METHOD_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option === "UNSPECIFIED" ? "Unspecified" : option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={labelClass}>
+                Deposit reference
+                <input
+                  value={projectDraft.depositReference}
+                  onChange={(e) =>
+                    setProjectDraft((current) => ({
+                      ...current,
+                      depositReference: e.target.value,
+                    }))
+                  }
+                  placeholder="M-Pesa code, bank ref, or cash note"
+                  className={fieldClass}
+                />
+              </label>
+              <label className={labelClass}>
+                Balance paid now
+                <input
+                  type="number"
+                  min={0}
+                  value={projectDraft.balancePaidAmount}
+                  onChange={(e) =>
+                    setProjectDraft((current) => ({
+                      ...current,
+                      balancePaidAmount: e.target.value,
+                    }))
+                  }
+                  className={fieldClass}
+                />
+              </label>
+              <label className={labelClass}>
+                Balance payment method
+                <select
+                  value={projectDraft.balancePaymentMethod}
+                  onChange={(e) =>
+                    setProjectDraft((current) => ({
+                      ...current,
+                      balancePaymentMethod: e.target.value as ReceiptProjectPaymentMethod,
+                    }))
+                  }
+                  className={fieldClass}
+                >
+                  {PROJECT_PAYMENT_METHOD_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option === "UNSPECIFIED" ? "Unspecified" : option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={labelClass}>
+                Balance reference
+                <input
+                  value={projectDraft.balanceReference}
+                  onChange={(e) =>
+                    setProjectDraft((current) => ({
+                      ...current,
+                      balanceReference: e.target.value,
+                    }))
+                  }
+                  placeholder="Final payment reference"
+                  className={fieldClass}
+                />
+              </label>
               <label className={`${labelClass} md:col-span-2`}>
                 Project notes
                 <textarea
@@ -1523,6 +1685,21 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                   className="mt-1 min-h-[96px] w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-400/60 focus:outline-none"
                 />
               </label>
+              <label className={`${labelClass} md:col-span-2`}>
+                Payment notes
+                <textarea
+                  rows={2}
+                  value={projectDraft.paymentNotes}
+                  onChange={(e) =>
+                    setProjectDraft((current) => ({
+                      ...current,
+                      paymentNotes: e.target.value,
+                    }))
+                  }
+                  placeholder="Deposit received, pending balance timeline, bank details, or customer payment agreement"
+                  className="mt-1 min-h-[72px] w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-400/60 focus:outline-none"
+                />
+              </label>
             </div>
             <div className="grid gap-3 rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-4 text-sm text-slate-200 sm:grid-cols-3">
               <div>
@@ -1532,31 +1709,31 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
               <div>
                 <p className="text-xs uppercase tracking-wide text-slate-400">Expected deposit</p>
                 <p className="mt-1 font-semibold text-cyan-200">
-                  KES{" "}
-                  {(
-                    projectDraft.paymentTerm === "DEPOSIT_AND_BALANCE"
-                      ? projectDraft.depositType === "AMOUNT"
-                        ? Math.max(0, Math.min(total, Number(projectDraft.depositValue || 0)))
-                        : total * (Number(projectDraft.depositValue || 30) / 100)
-                      : 0
-                  ).toLocaleString()}
+                  KES {Number(previewProjectFlow?.depositRequiredAmount || 0).toLocaleString()}
                 </p>
               </div>
               <div>
                 <p className="text-xs uppercase tracking-wide text-slate-400">Balance after installation</p>
                 <p className="mt-1 font-semibold text-amber-200">
-                  KES{" "}
-                  {Math.max(
-                    0,
-                    projectDraft.paymentTerm === "DEPOSIT_AND_BALANCE"
-                      ? total -
-                        (projectDraft.depositType === "AMOUNT"
-                          ? Math.max(0, Math.min(total, Number(projectDraft.depositValue || 0)))
-                          : total * (Number(projectDraft.depositValue || 30) / 100))
-                      : projectDraft.paymentTerm === "FULL_AFTER_INSTALLATION"
-                        ? total
-                        : 0,
-                  ).toLocaleString()}
+                  KES {Number(previewProjectFlow?.balanceExpectedAmount || 0).toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-400">Deposit pending</p>
+                <p className="mt-1 font-semibold text-rose-200">
+                  KES {Number(previewProjectFlow?.depositPendingAmount || 0).toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-400">Total paid so far</p>
+                <p className="mt-1 font-semibold text-emerald-200">
+                  KES {Number(previewProjectFlow?.totalPaidAmount || 0).toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-400">Remaining unpaid amount</p>
+                <p className="mt-1 font-semibold text-orange-200">
+                  KES {Number(previewProjectFlow?.remainingAmount || 0).toLocaleString()}
                 </p>
               </div>
             </div>

@@ -654,6 +654,18 @@ export async function GET(req: NextRequest) {
       projectDepositType: projectFlowData?.depositType ?? null,
       projectDepositValue: projectFlowData?.depositValue ?? null,
       projectDepositRequiredAmount: projectFlowData?.depositRequiredAmount ?? null,
+      projectDepositPaidAmount: projectFlowData?.depositPaidAmount ?? null,
+      projectDepositPendingAmount: projectFlowData?.depositPendingAmount ?? null,
+      projectDepositPaymentMethod: projectFlowData?.depositPaymentMethod ?? null,
+      projectDepositReference: projectFlowData?.depositReference ?? null,
+      projectBalanceExpectedAmount: projectFlowData?.balanceExpectedAmount ?? null,
+      projectBalancePaidAmount: projectFlowData?.balancePaidAmount ?? null,
+      projectBalancePendingAmount: projectFlowData?.balancePendingAmount ?? null,
+      projectBalancePaymentMethod: projectFlowData?.balancePaymentMethod ?? null,
+      projectBalanceReference: projectFlowData?.balanceReference ?? null,
+      projectTotalPaidAmount: projectFlowData?.totalPaidAmount ?? null,
+      projectRemainingAmount: projectFlowData?.remainingAmount ?? null,
+      projectPaymentNotes: projectFlowData?.paymentNotes ?? null,
       projectScheduledDate: projectFlowData?.scheduledDate ?? null,
       projectHandlerType: projectFlowData?.handlerType ?? null,
       projectHandlerStaffId: projectFlowData?.handlerStaffId ?? null,
@@ -1069,11 +1081,18 @@ export async function POST(req: NextRequest) {
               depositType: payload?.projectFlow?.depositType,
               depositValue: payload?.projectFlow?.depositValue,
               projectValue: total,
-              amountPaidTotal: docType === "LAYAWAY" ? deposit : total,
+              amountPaidTotal: payload?.projectFlow?.totalPaidAmount,
               depositPercent: payload?.projectFlow?.depositPercent,
+              depositPaidAmount: payload?.projectFlow?.depositPaidAmount,
+              depositPaymentMethod: payload?.projectFlow?.depositPaymentMethod,
+              depositReference: payload?.projectFlow?.depositReference,
+              balancePaidAmount: payload?.projectFlow?.balancePaidAmount,
+              balancePaymentMethod: payload?.projectFlow?.balancePaymentMethod,
+              balanceReference: payload?.projectFlow?.balanceReference,
               scheduledDate: payload?.projectFlow?.scheduledDate,
               postedReceiptNumber: serial,
               internalNotes: payload?.projectFlow?.internalNotes,
+              paymentNotes: payload?.projectFlow?.paymentNotes,
             })
           : null;
       const metadataFromPayload =
@@ -1099,9 +1118,30 @@ export async function POST(req: NextRequest) {
         : receiptMetadata;
       const dayOfWeek = entryDate.toLocaleDateString("en-KE", { weekday: "long" });
 
-      const orderStatus = docType === "LAYAWAY" ? "PENDING" : isPodDelivery ? "PENDING" : "COMPLETED";
-      const orderPaymentStatus = docType === "LAYAWAY" ? "PARTIAL" : isPodDelivery ? "UNPAID" : "PAID";
-      const paidAmountValue = docType === "LAYAWAY" ? deposit : isPodDelivery ? 0 : Number(total) || 0;
+      const projectPaidAmount = Number(normalizedProjectFlow?.totalPaidAmount ?? 0);
+      const orderStatus =
+        isProjectReceipt
+          ? normalizedProjectFlow?.stage === "COMPLETED_POSTED"
+            ? "COMPLETED"
+            : "PENDING"
+          : docType === "LAYAWAY"
+            ? "PENDING"
+            : isPodDelivery
+              ? "PENDING"
+              : "COMPLETED";
+      const orderPaymentStatus =
+        isProjectReceipt
+          ? normalizedProjectFlow?.paymentStatus === "FULLY_PAID"
+            ? "PAID"
+            : normalizedProjectFlow?.paymentStatus === "PARTIALLY_PAID"
+              ? "PARTIAL"
+              : "UNPAID"
+          : docType === "LAYAWAY"
+            ? "PARTIAL"
+            : isPodDelivery
+              ? "UNPAID"
+              : "PAID";
+      const paidAmountValue = isProjectReceipt ? projectPaidAmount : docType === "LAYAWAY" ? deposit : isPodDelivery ? 0 : Number(total) || 0;
       // choose shop: provided or first active
       let shopId = payload?.shopId;
       if (!shopId) {

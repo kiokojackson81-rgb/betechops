@@ -453,8 +453,15 @@ export default function ReceiptsAdminClient({
     paymentTerm: ReceiptProjectPaymentTerm;
     depositType: ReceiptProjectDepositType;
     depositValue: string;
+    depositPaidAmount: string;
+    depositPaymentMethod: "MPESA" | "CASH" | "BANK" | "MIXED" | "UNSPECIFIED";
+    depositReference: string;
+    balancePaidAmount: string;
+    balancePaymentMethod: "MPESA" | "CASH" | "BANK" | "MIXED" | "UNSPECIFIED";
+    balanceReference: string;
     scheduledDate: string;
     internalNotes: string;
+    paymentNotes: string;
   } | null>(null);
   const [podPanelStatus, setPodPanelStatus] = useState<PodPanelStatus>("delivered");
   const firstLoadRef = useRef(true);
@@ -844,8 +851,15 @@ export default function ReceiptsAdminClient({
                   ? nextProjectFlow.depositRequiredAmount || 0
                   : nextProjectFlow.depositValue || nextProjectFlow.depositPercent || 30,
               ),
+              depositPaidAmount: String(nextProjectFlow.depositPaidAmount || 0),
+              depositPaymentMethod: nextProjectFlow.depositPaymentMethod || "UNSPECIFIED",
+              depositReference: nextProjectFlow.depositReference || "",
+              balancePaidAmount: String(nextProjectFlow.balancePaidAmount || 0),
+              balancePaymentMethod: nextProjectFlow.balancePaymentMethod || "UNSPECIFIED",
+              balanceReference: nextProjectFlow.balanceReference || "",
               scheduledDate: nextProjectFlow.scheduledDate ? nextProjectFlow.scheduledDate.slice(0, 10) : "",
               internalNotes: nextProjectFlow.internalNotes || "",
+              paymentNotes: nextProjectFlow.paymentNotes || "",
             }
           : null,
       );
@@ -970,8 +984,15 @@ export default function ReceiptsAdminClient({
       depositType?: ReceiptProjectDepositType;
       depositValue?: number;
       depositPercent?: number;
+      depositPaidAmount?: number;
+      depositPaymentMethod?: "MPESA" | "CASH" | "BANK" | "MIXED" | "UNSPECIFIED";
+      depositReference?: string | null;
+      balancePaidAmount?: number;
+      balancePaymentMethod?: "MPESA" | "CASH" | "BANK" | "MIXED" | "UNSPECIFIED";
+      balanceReference?: string | null;
       scheduledDate?: string | null;
       internalNotes?: string | null;
+      paymentNotes?: string | null;
     }) => {
       setProjectActionId(receiptId);
       try {
@@ -2451,6 +2472,94 @@ export default function ReceiptsAdminClient({
                             </label>
                           </>
                         ) : null}
+                        <label className="text-xs uppercase tracking-wide text-cyan-200/80">
+                          Deposit paid
+                          <input
+                            type="number"
+                            min={0}
+                            value={projectEditor.depositPaidAmount}
+                            onChange={(e) =>
+                              setProjectEditor((current) =>
+                                current ? { ...current, depositPaidAmount: e.target.value } : current,
+                              )
+                            }
+                            className="mt-1 w-full rounded-xl border border-cyan-400/20 bg-slate-950/70 px-3 py-2 text-sm text-white"
+                          />
+                        </label>
+                        <label className="text-xs uppercase tracking-wide text-cyan-200/80">
+                          Deposit method
+                          <select
+                            value={projectEditor.depositPaymentMethod}
+                            onChange={(e) =>
+                              setProjectEditor((current) =>
+                                current ? { ...current, depositPaymentMethod: e.target.value as typeof current.depositPaymentMethod } : current,
+                              )
+                            }
+                            className="mt-1 w-full rounded-xl border border-cyan-400/20 bg-slate-950/70 px-3 py-2 text-sm text-white"
+                          >
+                            {["UNSPECIFIED", "MPESA", "CASH", "BANK", "MIXED"].map((option) => (
+                              <option key={option} value={option}>
+                                {option === "UNSPECIFIED" ? "Unspecified" : option}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="text-xs uppercase tracking-wide text-cyan-200/80">
+                          Deposit reference
+                          <input
+                            value={projectEditor.depositReference}
+                            onChange={(e) =>
+                              setProjectEditor((current) =>
+                                current ? { ...current, depositReference: e.target.value } : current,
+                              )
+                            }
+                            className="mt-1 w-full rounded-xl border border-cyan-400/20 bg-slate-950/70 px-3 py-2 text-sm text-white"
+                          />
+                        </label>
+                        <label className="text-xs uppercase tracking-wide text-cyan-200/80">
+                          Balance paid
+                          <input
+                            type="number"
+                            min={0}
+                            value={projectEditor.balancePaidAmount}
+                            onChange={(e) =>
+                              setProjectEditor((current) =>
+                                current ? { ...current, balancePaidAmount: e.target.value } : current,
+                              )
+                            }
+                            className="mt-1 w-full rounded-xl border border-cyan-400/20 bg-slate-950/70 px-3 py-2 text-sm text-white"
+                          />
+                        </label>
+                        <label className="text-xs uppercase tracking-wide text-cyan-200/80">
+                          Balance method
+                          <select
+                            value={projectEditor.balancePaymentMethod}
+                            onChange={(e) =>
+                              setProjectEditor((current) =>
+                                current ? { ...current, balancePaymentMethod: e.target.value as typeof current.balancePaymentMethod } : current,
+                              )
+                            }
+                            className="mt-1 w-full rounded-xl border border-cyan-400/20 bg-slate-950/70 px-3 py-2 text-sm text-white"
+                          >
+                            {["UNSPECIFIED", "MPESA", "CASH", "BANK", "MIXED"].map((option) => (
+                              <option key={option} value={option}>
+                                {option === "UNSPECIFIED" ? "Unspecified" : option}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="text-xs uppercase tracking-wide text-cyan-200/80">
+                          Balance reference
+                          <input
+                            value={projectEditor.balanceReference}
+                            onChange={(e) =>
+                              setProjectEditor((current) =>
+                                current ? { ...current, balanceReference: e.target.value } : current,
+                              )
+                            }
+                            className="mt-1 w-full rounded-xl border border-cyan-400/20 bg-slate-950/70 px-3 py-2 text-sm text-white"
+                          />
+                        </label>
                         <label className="text-xs uppercase tracking-wide text-cyan-200/80 sm:col-span-2">
                           Project notes
                           <textarea
@@ -2464,12 +2573,28 @@ export default function ReceiptsAdminClient({
                             className="mt-1 min-h-[88px] w-full rounded-2xl border border-cyan-400/20 bg-slate-950/70 px-3 py-3 text-sm text-white"
                           />
                         </label>
+                        <label className="text-xs uppercase tracking-wide text-cyan-200/80 sm:col-span-2">
+                          Payment notes
+                          <textarea
+                            rows={2}
+                            value={projectEditor.paymentNotes}
+                            onChange={(e) =>
+                              setProjectEditor((current) =>
+                                current ? { ...current, paymentNotes: e.target.value } : current,
+                              )
+                            }
+                            className="mt-1 min-h-[72px] w-full rounded-2xl border border-cyan-400/20 bg-slate-950/70 px-3 py-3 text-sm text-white"
+                          />
+                        </label>
                       </div>
                       <div className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-xs text-slate-200 sm:grid-cols-2">
                         <div>Project value: {formatCurrency(projectFlow.projectValue)}</div>
-                        <div>Total paid: {formatCurrency(projectFlow.amountPaidTotal)}</div>
+                        <div>Total paid: {formatCurrency(projectFlow.totalPaidAmount)}</div>
                         <div>Required deposit: {formatCurrency(projectFlow.depositRequiredAmount)}</div>
-                        <div>Balance due: {formatCurrency(projectFlow.balanceAmount)}</div>
+                        <div>Deposit pending: {formatCurrency(projectFlow.depositPendingAmount)}</div>
+                        <div>Balance expected: {formatCurrency(projectFlow.balanceExpectedAmount)}</div>
+                        <div>Balance pending: {formatCurrency(projectFlow.balancePendingAmount)}</div>
+                        <div>Remaining unpaid: {formatCurrency(projectFlow.remainingAmount)}</div>
                       </div>
                       <div className="mt-4 flex flex-wrap gap-2">
                         <button
@@ -2480,8 +2605,15 @@ export default function ReceiptsAdminClient({
                               paymentTerm: projectEditor.paymentTerm,
                               depositType: projectEditor.depositType,
                               depositValue: Number(projectEditor.depositValue || 0),
+                              depositPaidAmount: Number(projectEditor.depositPaidAmount || 0),
+                              depositPaymentMethod: projectEditor.depositPaymentMethod,
+                              depositReference: projectEditor.depositReference || null,
+                              balancePaidAmount: Number(projectEditor.balancePaidAmount || 0),
+                              balancePaymentMethod: projectEditor.balancePaymentMethod,
+                              balanceReference: projectEditor.balanceReference || null,
                               scheduledDate: projectEditor.scheduledDate || null,
                               internalNotes: projectEditor.internalNotes || null,
+                              paymentNotes: projectEditor.paymentNotes || null,
                             })
                           }
                           disabled={projectActionId === detail.receipt.id}
