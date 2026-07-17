@@ -68,9 +68,47 @@ async function resolveViewer(impersonateId?: string | null) {
     redirect("/login");
   }
 
-  const canImpersonate = sessionUser.role === "ADMIN" && impersonateId;
-  const targetId = canImpersonate ? impersonateId! : sessionUser.id;
-  const viewer = await prisma.user.findUnique({
+  const isAdmin = sessionUser.role === "ADMIN";
+  const canImpersonate = isAdmin && impersonateId;
+
+  const adminPreviewUser = !canImpersonate && isAdmin
+    ? await prisma.user.findFirst({
+        where: {
+          attendantCategory: "TECHNICAL_TEAM",
+          isActive: true,
+        },
+        orderBy: [{ name: "asc" }, { createdAt: "asc" }],
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          role: true,
+          isActive: true,
+          attendantCategory: true,
+          technicalProfile: true,
+        },
+      })
+    : null;
+
+  const targetId = canImpersonate ? impersonateId! : adminPreviewUser?.id || sessionUser.id;
+  const viewer = canImpersonate || adminPreviewUser
+    ? adminPreviewUser && !canImpersonate
+      ? adminPreviewUser
+      : await prisma.user.findUnique({
+          where: { id: targetId },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            role: true,
+            isActive: true,
+            attendantCategory: true,
+            technicalProfile: true,
+          },
+        })
+    : await prisma.user.findUnique({
     where: { id: targetId },
     select: {
       id: true,
@@ -92,7 +130,13 @@ async function resolveViewer(impersonateId?: string | null) {
     redirect(getLandingPage(viewer.attendantCategory ?? null, viewer.role));
   }
 
-  return { sessionUser, viewer, impersonating: Boolean(canImpersonate) };
+  return {
+    sessionUser,
+    viewer,
+    impersonating: Boolean(canImpersonate),
+    previewingAsTechnical: Boolean(isAdmin && !canImpersonate && adminPreviewUser),
+    previewingEmptyState: Boolean(isAdmin && !canImpersonate && !adminPreviewUser),
+  };
 }
 
 export default async function TechnicalDashboardPage({
@@ -101,7 +145,9 @@ export default async function TechnicalDashboardPage({
   searchParams?: Promise<{ impersonateId?: string }>;
 }) {
   const params = (await searchParams) || {};
-  const { viewer, impersonating } = await resolveViewer(params.impersonateId?.trim() || null);
+  const { viewer, impersonating, previewingAsTechnical, previewingEmptyState } = await resolveViewer(
+    params.impersonateId?.trim() || null,
+  );
   const today = new Date();
   const period = getTradingPeriodFor(today);
 
@@ -316,6 +362,16 @@ export default async function TechnicalDashboardPage({
             {impersonating ? (
               <div className="mt-3 inline-flex rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-amber-100">
                 Admin impersonation view
+              </div>
+            ) : null}
+            {previewingAsTechnical ? (
+              <div className="mt-3 inline-flex rounded-full border border-sky-400/30 bg-sky-400/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-sky-100">
+                Admin preview using technical staff view
+              </div>
+            ) : null}
+            {previewingEmptyState ? (
+              <div className="mt-3 inline-flex rounded-full border border-slate-400/30 bg-slate-400/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-100">
+                Admin preview mode with no technical staff yet
               </div>
             ) : null}
           </div>
