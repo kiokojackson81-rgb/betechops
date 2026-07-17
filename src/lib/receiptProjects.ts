@@ -22,6 +22,13 @@ export const RECEIPT_PROJECT_PAYMENT_STATUSES = [
 
 export type ReceiptProjectPaymentStatus = (typeof RECEIPT_PROJECT_PAYMENT_STATUSES)[number];
 
+export const RECEIPT_PROJECT_DEPOSIT_TYPES = [
+  "PERCENT",
+  "AMOUNT",
+] as const;
+
+export type ReceiptProjectDepositType = (typeof RECEIPT_PROJECT_DEPOSIT_TYPES)[number];
+
 export const RECEIPT_PROJECT_HANDLER_TYPES = [
   "STAFF",
   "EXTERNAL",
@@ -35,6 +42,8 @@ export type ReceiptProjectFlow = {
   paymentTerm: ReceiptProjectPaymentTerm;
   paymentStatus: ReceiptProjectPaymentStatus;
   projectValue: number;
+  depositType: ReceiptProjectDepositType;
+  depositValue: number;
   depositPercent: number;
   depositRequiredAmount: number;
   amountPaidTotal: number;
@@ -79,6 +88,14 @@ export function normalizeReceiptProjectPaymentStatus(value: unknown): ReceiptPro
   return "UNPAID";
 }
 
+export function normalizeReceiptProjectDepositType(value: unknown): ReceiptProjectDepositType {
+  const candidate = String(value || "").trim().toUpperCase();
+  if (RECEIPT_PROJECT_DEPOSIT_TYPES.includes(candidate as ReceiptProjectDepositType)) {
+    return candidate as ReceiptProjectDepositType;
+  }
+  return "PERCENT";
+}
+
 export function normalizeReceiptProjectHandlerType(value: unknown): ReceiptProjectHandlerType | null {
   const candidate = String(value || "").trim().toUpperCase();
   if (RECEIPT_PROJECT_HANDLER_TYPES.includes(candidate as ReceiptProjectHandlerType)) {
@@ -98,9 +115,12 @@ export function buildReceiptProjectFlow(input: {
   existing?: Record<string, unknown> | null;
   stage?: unknown;
   paymentTerm?: unknown;
+  depositType?: unknown;
+  depositValue?: unknown;
   projectValue: number;
   amountPaidTotal: number;
   depositPercent?: unknown;
+  depositAmount?: unknown;
   scheduledDate?: unknown;
   postedReceiptNumber?: unknown;
   internalNotes?: unknown;
@@ -118,14 +138,33 @@ export function buildReceiptProjectFlow(input: {
   const paymentTerm = normalizeReceiptProjectPaymentTerm(
     input.paymentTerm ?? existing?.paymentTerm,
   );
-  const rawDepositPercent = Number(input.depositPercent ?? existing?.depositPercent ?? 30);
-  const depositPercent =
+  const depositType =
     paymentTerm === "DEPOSIT_AND_BALANCE"
-      ? Math.max(0, Math.min(100, Number.isFinite(rawDepositPercent) ? rawDepositPercent : 30))
+      ? normalizeReceiptProjectDepositType(input.depositType ?? existing?.depositType)
+      : "PERCENT";
+  const rawDepositValue =
+    input.depositValue ??
+    (depositType === "AMOUNT"
+      ? input.depositAmount ?? existing?.depositValue ?? existing?.depositRequiredAmount
+      : input.depositPercent ?? existing?.depositValue ?? existing?.depositPercent ?? 30);
+  const normalizedDepositValue = Number(rawDepositValue);
+  const depositValue =
+    paymentTerm === "DEPOSIT_AND_BALANCE"
+      ? depositType === "AMOUNT"
+        ? roundCurrency(Math.max(0, Math.min(projectValue, Number.isFinite(normalizedDepositValue) ? normalizedDepositValue : 0)))
+        : Math.max(0, Math.min(100, Number.isFinite(normalizedDepositValue) ? normalizedDepositValue : 30))
       : 0;
   const depositRequiredAmount =
     paymentTerm === "DEPOSIT_AND_BALANCE"
-      ? roundCurrency(projectValue * (depositPercent / 100))
+      ? depositType === "AMOUNT"
+        ? roundCurrency(depositValue)
+        : roundCurrency(projectValue * (depositValue / 100))
+      : 0;
+  const depositPercent =
+    paymentTerm === "DEPOSIT_AND_BALANCE"
+      ? projectValue > 0
+        ? roundCurrency((depositRequiredAmount / projectValue) * 100)
+        : 0
       : 0;
   const balanceAmount = roundCurrency(Math.max(0, projectValue - amountPaidTotal));
   const handlerType = normalizeReceiptProjectHandlerType(
@@ -161,6 +200,8 @@ export function buildReceiptProjectFlow(input: {
     paymentTerm,
     paymentStatus,
     projectValue,
+    depositType,
+    depositValue,
     depositPercent,
     depositRequiredAmount,
     amountPaidTotal,
@@ -192,6 +233,8 @@ export function readReceiptProjectFlow(value: unknown): ReceiptProjectFlow | nul
     paymentTerm: normalizeReceiptProjectPaymentTerm(source.paymentTerm),
     paymentStatus: normalizeReceiptProjectPaymentStatus(source.paymentStatus),
     projectValue: roundCurrency(Math.max(0, Number(source.projectValue || 0))),
+    depositType: normalizeReceiptProjectDepositType(source.depositType),
+    depositValue: roundCurrency(Math.max(0, Number(source.depositValue || 0))),
     depositPercent: Math.max(0, Number(source.depositPercent || 0)),
     depositRequiredAmount: roundCurrency(Math.max(0, Number(source.depositRequiredAmount || 0))),
     amountPaidTotal: roundCurrency(Math.max(0, Number(source.amountPaidTotal || 0))),

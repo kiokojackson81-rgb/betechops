@@ -20,6 +20,9 @@ type ProjectRow = {
   projectStage?: string | null;
   projectPaymentTerm?: string | null;
   projectPaymentStatus?: string | null;
+  projectDepositType?: "PERCENT" | "AMOUNT" | null;
+  projectDepositValue?: number | null;
+  projectDepositRequiredAmount?: number | null;
   projectScheduledDate?: string | null;
   projectHandlerType?: "STAFF" | "EXTERNAL" | null;
   projectHandlerStaffId?: string | null;
@@ -30,6 +33,8 @@ type ProjectRow = {
 
 type ProjectEditor = {
   paymentTerm: "FULL_BEFORE_INSTALLATION" | "DEPOSIT_AND_BALANCE" | "FULL_AFTER_INSTALLATION";
+  depositType: "PERCENT" | "AMOUNT";
+  depositValue: string;
   scheduledDate: string;
   handlerType: "STAFF" | "EXTERNAL" | "";
   handlerStaffId: string;
@@ -61,7 +66,7 @@ const formatPaymentTermLabel = (value?: string | null) => {
     case "FULL_BEFORE_INSTALLATION":
       return "Pay fully before installation";
     case "DEPOSIT_AND_BALANCE":
-      return "30% deposit and balance";
+      return "Deposit and balance";
     case "FULL_AFTER_INSTALLATION":
       return "Pay fully after installation";
     default:
@@ -76,6 +81,12 @@ const makeEditor = (row: ProjectRow): ProjectEditor => ({
     row.projectPaymentTerm === "DEPOSIT_AND_BALANCE"
       ? row.projectPaymentTerm
       : "DEPOSIT_AND_BALANCE",
+  depositType: row.projectDepositType === "AMOUNT" ? "AMOUNT" : "PERCENT",
+  depositValue: String(
+    row.projectDepositType === "AMOUNT"
+      ? row.projectDepositRequiredAmount ?? row.projectDepositValue ?? 0
+      : row.projectDepositValue ?? 30,
+  ),
   scheduledDate: row.projectScheduledDate ? row.projectScheduledDate.slice(0, 10) : "",
   handlerType: row.projectHandlerType ?? "",
   handlerStaffId: row.projectHandlerStaffId ?? "",
@@ -179,6 +190,8 @@ export default function ProjectsOperationsClient() {
         body: JSON.stringify({
           ...override,
           paymentTerm: editor.paymentTerm,
+          depositType: editor.depositType,
+          depositValue: Number(editor.depositValue || 0),
           scheduledDate: editor.scheduledDate || null,
           handlerType: editor.handlerType || null,
           handlerStaffId: editor.handlerType === "STAFF" ? editor.handlerStaffId || null : null,
@@ -331,10 +344,48 @@ export default function ProjectsOperationsClient() {
                       className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60"
                     >
                       <option value="FULL_BEFORE_INSTALLATION">Pay fully before installation</option>
-                      <option value="DEPOSIT_AND_BALANCE">30% deposit and balance</option>
+                      <option value="DEPOSIT_AND_BALANCE">Deposit and balance</option>
                       <option value="FULL_AFTER_INSTALLATION">Pay fully after installation</option>
                     </select>
                   </label>
+                  {editor.paymentTerm === "DEPOSIT_AND_BALANCE" ? (
+                    <>
+                      <label className="text-sm text-slate-200">
+                        Deposit type
+                        <select
+                          value={editor.depositType}
+                          onChange={(e) =>
+                            setEditorValue(row.id, {
+                              depositType: e.target.value as ProjectEditor["depositType"],
+                              depositValue:
+                                e.target.value === "AMOUNT"
+                                  ? editor.depositType === "AMOUNT"
+                                    ? editor.depositValue
+                                    : "5000"
+                                  : editor.depositType === "PERCENT"
+                                    ? editor.depositValue
+                                    : "30",
+                            })
+                          }
+                          className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60"
+                        >
+                          <option value="PERCENT">Percentage</option>
+                          <option value="AMOUNT">Fixed amount</option>
+                        </select>
+                      </label>
+                      <label className="text-sm text-slate-200">
+                        {editor.depositType === "AMOUNT" ? "Deposit amount (Ksh)" : "Deposit percentage"}
+                        <input
+                          type="number"
+                          min={0}
+                          max={editor.depositType === "AMOUNT" ? undefined : 100}
+                          value={editor.depositValue}
+                          onChange={(e) => setEditorValue(row.id, { depositValue: e.target.value })}
+                          className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60"
+                        />
+                      </label>
+                    </>
+                  ) : null}
                   <label className="text-sm text-slate-200">
                     Handler type
                     <select

@@ -12,6 +12,7 @@ import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 import {
   buildReceiptProjectFlow,
   readReceiptProjectFlow,
+  type ReceiptProjectDepositType,
   type ReceiptProjectFlow,
   type ReceiptProjectPaymentTerm,
   type ReceiptProjectStage,
@@ -450,7 +451,8 @@ export default function ReceiptsAdminClient({
   const [projectEditor, setProjectEditor] = useState<{
     stage: ReceiptProjectStage;
     paymentTerm: ReceiptProjectPaymentTerm;
-    depositPercent: string;
+    depositType: ReceiptProjectDepositType;
+    depositValue: string;
     scheduledDate: string;
     internalNotes: string;
   } | null>(null);
@@ -836,7 +838,12 @@ export default function ReceiptsAdminClient({
           ? {
               stage: nextProjectFlow.stage,
               paymentTerm: nextProjectFlow.paymentTerm,
-              depositPercent: String(nextProjectFlow.depositPercent || 30),
+              depositType: nextProjectFlow.depositType || "PERCENT",
+              depositValue: String(
+                nextProjectFlow.depositType === "AMOUNT"
+                  ? nextProjectFlow.depositRequiredAmount || 0
+                  : nextProjectFlow.depositValue || nextProjectFlow.depositPercent || 30,
+              ),
               scheduledDate: nextProjectFlow.scheduledDate ? nextProjectFlow.scheduledDate.slice(0, 10) : "",
               internalNotes: nextProjectFlow.internalNotes || "",
             }
@@ -960,6 +967,8 @@ export default function ReceiptsAdminClient({
     async (receiptId: string, body: {
       stage?: ReceiptProjectStage;
       paymentTerm?: ReceiptProjectPaymentTerm;
+      depositType?: ReceiptProjectDepositType;
+      depositValue?: number;
       depositPercent?: number;
       scheduledDate?: string | null;
       internalNotes?: string | null;
@@ -2396,21 +2405,51 @@ export default function ReceiptsAdminClient({
                           />
                         </label>
                         {projectEditor.paymentTerm === "DEPOSIT_AND_BALANCE" ? (
-                          <label className="text-xs uppercase tracking-wide text-cyan-200/80">
-                            Deposit percent
-                            <input
-                              type="number"
-                              min={0}
-                              max={100}
-                              value={projectEditor.depositPercent}
-                              onChange={(e) =>
-                                setProjectEditor((current) =>
-                                  current ? { ...current, depositPercent: e.target.value } : current,
-                                )
-                              }
-                              className="mt-1 w-full rounded-xl border border-cyan-400/20 bg-slate-950/70 px-3 py-2 text-sm text-white"
-                            />
-                          </label>
+                          <>
+                            <label className="text-xs uppercase tracking-wide text-cyan-200/80">
+                              Deposit type
+                              <select
+                                value={projectEditor.depositType}
+                                onChange={(e) =>
+                                  setProjectEditor((current) =>
+                                    current
+                                      ? {
+                                          ...current,
+                                          depositType: e.target.value as ReceiptProjectDepositType,
+                                          depositValue:
+                                            e.target.value === "AMOUNT"
+                                              ? current.depositType === "AMOUNT"
+                                                ? current.depositValue
+                                                : "5000"
+                                              : current.depositType === "PERCENT"
+                                                ? current.depositValue
+                                                : "30",
+                                        }
+                                      : current,
+                                  )
+                                }
+                                className="mt-1 w-full rounded-xl border border-cyan-400/20 bg-slate-950/70 px-3 py-2 text-sm text-white"
+                              >
+                                <option value="PERCENT">Percentage</option>
+                                <option value="AMOUNT">Fixed amount</option>
+                              </select>
+                            </label>
+                            <label className="text-xs uppercase tracking-wide text-cyan-200/80">
+                              {projectEditor.depositType === "AMOUNT" ? "Deposit amount (Ksh)" : "Deposit percentage"}
+                              <input
+                                type="number"
+                                min={0}
+                                max={projectEditor.depositType === "AMOUNT" ? undefined : 100}
+                                value={projectEditor.depositValue}
+                                onChange={(e) =>
+                                  setProjectEditor((current) =>
+                                    current ? { ...current, depositValue: e.target.value } : current,
+                                  )
+                                }
+                                className="mt-1 w-full rounded-xl border border-cyan-400/20 bg-slate-950/70 px-3 py-2 text-sm text-white"
+                              />
+                            </label>
+                          </>
                         ) : null}
                         <label className="text-xs uppercase tracking-wide text-cyan-200/80 sm:col-span-2">
                           Project notes
@@ -2439,7 +2478,8 @@ export default function ReceiptsAdminClient({
                             saveProjectFlow(detail.receipt.id, {
                               stage: projectEditor.stage,
                               paymentTerm: projectEditor.paymentTerm,
-                              depositPercent: Number(projectEditor.depositPercent || 30),
+                              depositType: projectEditor.depositType,
+                              depositValue: Number(projectEditor.depositValue || 0),
                               scheduledDate: projectEditor.scheduledDate || null,
                               internalNotes: projectEditor.internalNotes || null,
                             })

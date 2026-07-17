@@ -6,6 +6,7 @@ import {
   buildReceiptProjectFlow,
   readReceiptProjectFlow,
   RECEIPT_PROJECT_HANDLER_TYPES,
+  RECEIPT_PROJECT_DEPOSIT_TYPES,
   RECEIPT_PROJECT_PAYMENT_TERMS,
   RECEIPT_PROJECT_STAGES,
 } from "@/lib/receiptProjects";
@@ -15,6 +16,8 @@ export const dynamic = "force-dynamic";
 const updateSchema = z.object({
   stage: z.enum(RECEIPT_PROJECT_STAGES).optional(),
   paymentTerm: z.enum(RECEIPT_PROJECT_PAYMENT_TERMS).optional(),
+  depositType: z.enum(RECEIPT_PROJECT_DEPOSIT_TYPES).optional(),
+  depositValue: z.number().min(0).optional(),
   depositPercent: z.number().min(0).max(100).optional(),
   scheduledDate: z.string().trim().nullable().optional(),
   internalNotes: z.string().trim().nullable().optional(),
@@ -74,6 +77,8 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
     paymentTerm: parsed.data.paymentTerm ?? existingProjectFlow?.paymentTerm,
     projectValue: Number(existing.order?.totalAmount ?? existingProjectFlow?.projectValue ?? 0),
     amountPaidTotal: Number(existing.order?.paidAmount ?? existingProjectFlow?.amountPaidTotal ?? 0),
+    depositType: parsed.data.depositType ?? existingProjectFlow?.depositType,
+    depositValue: parsed.data.depositValue ?? existingProjectFlow?.depositValue,
     depositPercent: parsed.data.depositPercent ?? existingProjectFlow?.depositPercent,
     scheduledDate:
       parsed.data.scheduledDate !== undefined ? parsed.data.scheduledDate : existingProjectFlow?.scheduledDate,

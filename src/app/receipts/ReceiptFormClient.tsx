@@ -6,6 +6,7 @@ import { findSimilarProducts, getProductSimilarityScore } from "@/lib/posProduct
 import {
   buildReceiptProjectFlow,
   readReceiptProjectFlow,
+  type ReceiptProjectDepositType,
   type ReceiptProjectPaymentTerm,
 } from "@/lib/receiptProjects";
 import { showToast } from "@/lib/ui/toast";
@@ -81,7 +82,8 @@ type ReceiptFormProps = {
 
 type ProjectDraft = {
   paymentTerm: ReceiptProjectPaymentTerm;
-  depositPercent: string;
+  depositType: ReceiptProjectDepositType;
+  depositValue: string;
   scheduledDate: string;
   internalNotes: string;
 };
@@ -94,7 +96,8 @@ const PROJECT_PAYMENT_TERM_OPTIONS: ReceiptProjectPaymentTerm[] = [
 
 const createDefaultProjectDraft = (): ProjectDraft => ({
   paymentTerm: "DEPOSIT_AND_BALANCE",
-  depositPercent: "30",
+  depositType: "PERCENT",
+  depositValue: "30",
   scheduledDate: "",
   internalNotes: "",
 });
@@ -305,7 +308,12 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       if (parsedProjectFlow) {
         setProjectDraft({
           paymentTerm: parsedProjectFlow.paymentTerm,
-          depositPercent: String(parsedProjectFlow.depositPercent || 30),
+          depositType: parsedProjectFlow.depositType || "PERCENT",
+          depositValue: String(
+            parsedProjectFlow.depositType === "AMOUNT"
+              ? parsedProjectFlow.depositRequiredAmount || 0
+              : parsedProjectFlow.depositValue || parsedProjectFlow.depositPercent || 30,
+          ),
           scheduledDate: parsedProjectFlow.scheduledDate ? parsedProjectFlow.scheduledDate.slice(0, 10) : "",
           internalNotes: parsedProjectFlow.internalNotes || "",
         });
@@ -661,9 +669,10 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         ? buildReceiptProjectFlow({
             stage: "RECEIPT_CREATED",
             paymentTerm: projectDraft.paymentTerm,
+            depositType: projectDraft.depositType,
+            depositValue: Number(projectDraft.depositValue || 0),
             projectValue: total,
             amountPaidTotal: docType === "LAYAWAY" ? deposit : total,
-            depositPercent: Number(projectDraft.depositPercent || 30),
             scheduledDate: projectDraft.scheduledDate || null,
             postedReceiptNumber: serial,
             internalNotes: projectDraft.internalNotes || null,
@@ -947,9 +956,10 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         ? buildReceiptProjectFlow({
             stage: "RECEIPT_CREATED",
             paymentTerm: projectDraft.paymentTerm,
+            depositType: projectDraft.depositType,
+            depositValue: Number(projectDraft.depositValue || 0),
             projectValue: total,
             amountPaidTotal: docType === "LAYAWAY" ? deposit : total,
-            depositPercent: Number(projectDraft.depositPercent || 30),
             scheduledDate: projectDraft.scheduledDate || null,
             postedReceiptNumber: serial,
             internalNotes: projectDraft.internalNotes || null,
@@ -1451,22 +1461,48 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                 />
               </label>
               {projectDraft.paymentTerm === "DEPOSIT_AND_BALANCE" ? (
-                <label className={labelClass}>
-                  Deposit percent
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={projectDraft.depositPercent}
-                    onChange={(e) =>
-                      setProjectDraft((current) => ({
-                        ...current,
-                        depositPercent: e.target.value,
-                      }))
-                    }
-                    className={fieldClass}
-                  />
-                </label>
+                <>
+                  <label className={labelClass}>
+                    Deposit type
+                    <select
+                      value={projectDraft.depositType}
+                      onChange={(e) =>
+                        setProjectDraft((current) => ({
+                          ...current,
+                          depositType: e.target.value as ReceiptProjectDepositType,
+                          depositValue:
+                            e.target.value === "AMOUNT"
+                              ? current.depositType === "AMOUNT"
+                                ? current.depositValue
+                                : "5000"
+                              : current.depositType === "PERCENT"
+                                ? current.depositValue
+                                : "30",
+                        }))
+                      }
+                      className={fieldClass}
+                    >
+                      <option value="PERCENT">Percentage</option>
+                      <option value="AMOUNT">Fixed amount</option>
+                    </select>
+                  </label>
+                  <label className={labelClass}>
+                    {projectDraft.depositType === "AMOUNT" ? "Deposit amount (Ksh)" : "Deposit percentage"}
+                    <input
+                      type="number"
+                      min={0}
+                      max={projectDraft.depositType === "AMOUNT" ? undefined : 100}
+                      value={projectDraft.depositValue}
+                      onChange={(e) =>
+                        setProjectDraft((current) => ({
+                          ...current,
+                          depositValue: e.target.value,
+                        }))
+                      }
+                      className={fieldClass}
+                    />
+                  </label>
+                </>
               ) : (
                 <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-300">
                   This payment position follows the full receipt total automatically.
@@ -1499,7 +1535,9 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                   KES{" "}
                   {(
                     projectDraft.paymentTerm === "DEPOSIT_AND_BALANCE"
-                      ? total * (Number(projectDraft.depositPercent || 30) / 100)
+                      ? projectDraft.depositType === "AMOUNT"
+                        ? Math.max(0, Math.min(total, Number(projectDraft.depositValue || 0)))
+                        : total * (Number(projectDraft.depositValue || 30) / 100)
                       : 0
                   ).toLocaleString()}
                 </p>
@@ -1511,7 +1549,10 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                   {Math.max(
                     0,
                     projectDraft.paymentTerm === "DEPOSIT_AND_BALANCE"
-                      ? total * (1 - Number(projectDraft.depositPercent || 30) / 100)
+                      ? total -
+                        (projectDraft.depositType === "AMOUNT"
+                          ? Math.max(0, Math.min(total, Number(projectDraft.depositValue || 0)))
+                          : total * (Number(projectDraft.depositValue || 30) / 100))
                       : projectDraft.paymentTerm === "FULL_AFTER_INSTALLATION"
                         ? total
                         : 0,
