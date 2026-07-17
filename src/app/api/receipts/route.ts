@@ -171,9 +171,13 @@ export async function GET(req: NextRequest) {
   const normalizedDocType = docTypeParam ? docTypeParam.toUpperCase() : undefined;
   const isMarketingDocType = normalizedDocType === "MARKETING";
   const isSupportDocType = normalizedDocType === "SUPPORT";
+  const requestedCustomerType = (url.searchParams.get("customerType") || "").toLowerCase().trim();
+  const isProjectOnlyView = requestedCustomerType === "project";
   const includePosReceipts = !normalizedDocType || (!isMarketingDocType && !isSupportDocType);
-  const includeMarketingReceipts = !onlyPos && (isMarketingDocType || (includeLedger && !normalizedDocType));
-  const includeSupportReceipts = !onlyPos && (isSupportDocType || (includeLedger && !normalizedDocType));
+  const includeMarketingReceipts =
+    !isProjectOnlyView && !onlyPos && (isMarketingDocType || (includeLedger && !normalizedDocType));
+  const includeSupportReceipts =
+    !isProjectOnlyView && !onlyPos && (isSupportDocType || (includeLedger && !normalizedDocType));
   let profitContributors: ProfitReceiptContributor[] = [];
   const profitContributorBySourceId = new Map<string, ProfitReceiptContributor>();
   const profitContributorBySourceKey = new Map<string, ProfitReceiptContributor>();
@@ -279,7 +283,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Optional filter: customerType=pod/project to isolate those flows, customerType=normal to exclude special flows.
-  const customerType = url.searchParams.get('customerType') || undefined;
+  const customerType = requestedCustomerType || undefined;
   const podStatus = url.searchParams.get('status') || undefined; // expected values: 'pending'|'delivered'|'delivery_failed'
   if (customerType === 'pod') {
     if (podStatus) {
