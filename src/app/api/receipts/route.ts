@@ -26,6 +26,7 @@ import { waitForReceiptById } from "@/lib/receiptReadAfterWrite";
 import { getProductTableCapabilities, type ProductTableCapabilities } from "@/lib/productTableCapabilities";
 import { recordQuotationEvent } from "@/lib/quoteRequests";
 import { upsertQuoteProjectOrder, type QuoteProjectPaymentTerm } from "@/lib/quoteProjects";
+import { buildReceiptProjectFlow, readReceiptProjectFlow } from "@/lib/receiptProjects";
 
 const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" | null => {
   if (typeof value !== "string") return null;
@@ -277,18 +278,30 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // Optional filter: customerType=pod to show POD receipts only, customerType=normal to exclude POD receipts.
+  // Optional filter: customerType=pod/project to isolate those flows, customerType=normal to exclude special flows.
   const customerType = url.searchParams.get('customerType') || undefined;
   const podStatus = url.searchParams.get('status') || undefined; // expected values: 'pending'|'delivered'|'delivery_failed'
-    if (customerType === 'pod') {
+  if (customerType === 'pod') {
     if (podStatus) {
       and.push({ data: { path: ['podDelivery', 'status'], equals: podStatus } });
     } else {
       // any receipt that has podDelivery metadata
       and.push({ data: { path: ['podDelivery'], not: Prisma.JsonNull } });
     }
+  } else if (customerType === 'project') {
+    and.push({
+      OR: [
+        { data: { path: ['customerType'], equals: 'project' } },
+        { data: { path: ['projectFlow', 'isProject'], equals: true } },
+      ],
+    });
   } else if (customerType === 'normal') {
-    and.push({ data: { path: ['podDelivery'], equals: Prisma.JsonNull } });
+    and.push({
+      AND: [
+        { data: { path: ['podDelivery'], equals: Prisma.JsonNull } },
+        { NOT: { data: { path: ['projectFlow', 'isProject'], equals: true } } },
+      ],
+    });
   } else {
     // Do not exclude POD-pending receipts from the list API — the admin
     // UI wants to display POD receipts in the listing. Aggregation and
@@ -570,6 +583,7 @@ export async function GET(req: NextRequest) {
 
   const mapPosRow = (r: any) => {
     const podDeliveryData = (r.data as any)?.podDelivery;
+    const projectFlowData = readReceiptProjectFlow((r.data as any)?.projectFlow);
     const agentSaleCommission = Number((r.data as any)?.agentSale?.commissionAmount ?? 0) || 0;
     const podDeliveryFee = getPodDeliveryFee(r.data);
     const total = Number((r.totals as any)?.total ?? (r.order as any)?.totalAmount ?? 0) || 0;
@@ -623,6 +637,7 @@ export async function GET(req: NextRequest) {
       profit,
       attendantName: (r.order as any)?.attendant?.name ?? r.issuedBy?.name ?? null,
       status: r.order?.status ?? r.order?.paymentStatus ?? null,
+      customerType: String((r.data as any)?.customerType ?? "").trim() || null,
       items: includeItems ? ((r.order as any)?.items ?? []) : undefined,
       paymentMethod: normalizePaymentMethod((r.data as any)?.paymentMethod) ?? null,
       paymentStatus: (r.order as any)?.paymentStatus ?? null,
@@ -632,6 +647,10 @@ export async function GET(req: NextRequest) {
       podDeliveryNote: podDeliveryData?.note ?? null,
       podEvidenceUrl: podDeliveryData?.evidenceUrl ?? null,
       podDeliveryFee: podDeliveryFee > 0 ? podDeliveryFee : null,
+      isProjectReceipt: Boolean(projectFlowData?.isProject),
+      projectStage: projectFlowData?.stage ?? null,
+      projectPaymentTerm: projectFlowData?.paymentTerm ?? null,
+      projectPaymentStatus: projectFlowData?.paymentStatus ?? null,
     };
   };
 
@@ -963,6 +982,7 @@ export async function POST(req: NextRequest) {
     Boolean(payload?.podDelivery) ||
     isPodPaymentMethod(payload?.paymentMethod) ||
     normalizeCustomerType(payload?.customerType) === "pod";
+  const isProjectReceipt = normalizeCustomerType(payload?.customerType) === "project";
   const requestId = randomUUID();
 
   // use shared parse helpers from src/lib/parseNumber
@@ -1028,11 +1048,35 @@ export async function POST(req: NextRequest) {
     const result = await prisma.$transaction(async (tx) => {
       const entryDate = payload?.date ? new Date(payload.date) : new Date();
       const entryDateIso = entryDate.toISOString();
+      const normalizedProjectFlow =
+        isProjectReceipt
+          ? buildReceiptProjectFlow({
+              existing:
+                payload?.projectFlow && typeof payload.projectFlow === "object" && !Array.isArray(payload.projectFlow)
+                  ? (payload.projectFlow as Record<string, unknown>)
+                  : null,
+              stage: payload?.projectFlow?.stage,
+              paymentTerm: payload?.projectFlow?.paymentTerm,
+              projectValue: total,
+              amountPaidTotal: docType === "LAYAWAY" ? deposit : total,
+              depositPercent: payload?.projectFlow?.depositPercent,
+              scheduledDate: payload?.projectFlow?.scheduledDate,
+              postedReceiptNumber: serial,
+              internalNotes: payload?.projectFlow?.internalNotes,
+            })
+          : null;
       const metadataFromPayload =
         payload?.metadata ?? (payload?.deliveryAddress ? { deliveryAddress: payload.deliveryAddress } : undefined);
+      const receiptMetadata =
+        normalizedProjectFlow
+          ? {
+              ...(metadataFromPayload ?? {}),
+              projectFlow: normalizedProjectFlow,
+            }
+          : metadataFromPayload;
       const podMetadata = isPodDelivery
         ? {
-            ...(metadataFromPayload ?? {}),
+            ...(receiptMetadata ?? {}),
             podDelivery: {
               status: 'pending',
               type: 'pay_on_delivery',
@@ -1041,7 +1085,7 @@ export async function POST(req: NextRequest) {
               createdById: issuedById ?? null,
             },
           }
-        : metadataFromPayload;
+        : receiptMetadata;
       const dayOfWeek = entryDate.toLocaleDateString("en-KE", { weekday: "long" });
 
       const orderStatus = docType === "LAYAWAY" ? "PENDING" : isPodDelivery ? "PENDING" : "COMPLETED";
@@ -1343,6 +1387,11 @@ export async function POST(req: NextRequest) {
                   createdAt: entryDateIso,
                   createdById: issuedById ?? null,
                 },
+              }
+            : {}),
+          ...(normalizedProjectFlow
+            ? {
+                projectFlow: normalizedProjectFlow,
               }
             : {}),
         },

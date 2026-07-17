@@ -9,6 +9,13 @@ import MarkdownRendererClient, { RichFormattingToggle } from "@/components/Markd
 import { showToast } from "@/lib/ui/toast";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
+import {
+  buildReceiptProjectFlow,
+  readReceiptProjectFlow,
+  type ReceiptProjectFlow,
+  type ReceiptProjectPaymentTerm,
+  type ReceiptProjectStage,
+} from "@/lib/receiptProjects";
 
 type ReceiptRow = {
   id: string;
@@ -30,6 +37,11 @@ type ReceiptRow = {
   isPodDelivery?: boolean;
   podDeliveryStatus?: string | null;
   podDeliveryNote?: string | null;
+  customerType?: string | null;
+  isProjectReceipt?: boolean;
+  projectStage?: string | null;
+  projectPaymentTerm?: string | null;
+  projectPaymentStatus?: string | null;
 };
 
 type ReceiptSummary = {
@@ -170,6 +182,32 @@ const formatRangeLabel = (value?: string) => {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
   return parsed.toLocaleDateString("en-KE", { day: "numeric", month: "short" });
+};
+
+const formatProjectStageLabel = (value?: string | null) => {
+  switch (value) {
+    case "RECEIPT_CREATED":
+      return "Receipt created";
+    case "PROJECT_IN_PROGRESS":
+      return "Project in progress";
+    case "COMPLETED_POSTED":
+      return "Completed";
+    default:
+      return value ? value.replace(/_/g, " ") : "Project";
+  }
+};
+
+const formatProjectPaymentTermLabel = (value?: string | null) => {
+  switch (value) {
+    case "FULL_BEFORE_INSTALLATION":
+      return "Full before installation";
+    case "DEPOSIT_AND_BALANCE":
+      return "Deposit and balance";
+    case "FULL_AFTER_INSTALLATION":
+      return "Full after installation";
+    default:
+      return value ? value.replace(/_/g, " ") : "-";
+  }
 };
 
 const makeDefaultFilters = (): FilterState => {
@@ -408,6 +446,14 @@ export default function ReceiptsAdminClient({
   const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [podActionId, setPodActionId] = useState<string | null>(null);
+  const [projectActionId, setProjectActionId] = useState<string | null>(null);
+  const [projectEditor, setProjectEditor] = useState<{
+    stage: ReceiptProjectStage;
+    paymentTerm: ReceiptProjectPaymentTerm;
+    depositPercent: string;
+    scheduledDate: string;
+    internalNotes: string;
+  } | null>(null);
   const [podPanelStatus, setPodPanelStatus] = useState<PodPanelStatus>("delivered");
   const firstLoadRef = useRef(true);
   const STORAGE_KEYS = {
@@ -784,6 +830,18 @@ export default function ReceiptsAdminClient({
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(payload?.error || "Failed to load receipt");
       setDetail(payload as ReceiptDetailPayload);
+      const nextProjectFlow = readReceiptProjectFlow(payload?.receipt?.data?.projectFlow);
+      setProjectEditor(
+        nextProjectFlow
+          ? {
+              stage: nextProjectFlow.stage,
+              paymentTerm: nextProjectFlow.paymentTerm,
+              depositPercent: String(nextProjectFlow.depositPercent || 30),
+              scheduledDate: nextProjectFlow.scheduledDate ? nextProjectFlow.scheduledDate.slice(0, 10) : "",
+              internalNotes: nextProjectFlow.internalNotes || "",
+            }
+          : null,
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load receipt";
       showToast(message, "error");
@@ -894,8 +952,60 @@ export default function ReceiptsAdminClient({
     setDrawerOpen(false);
     setSelected(null);
     setDetail(null);
+    setProjectEditor(null);
     setDetailLoading(false);
   };
+
+  const saveProjectFlow = useCallback(
+    async (receiptId: string, body: {
+      stage?: ReceiptProjectStage;
+      paymentTerm?: ReceiptProjectPaymentTerm;
+      depositPercent?: number;
+      scheduledDate?: string | null;
+      internalNotes?: string | null;
+    }) => {
+      setProjectActionId(receiptId);
+      try {
+        const res = await fetch(`/api/receipts/${receiptId}/project`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify(body),
+        });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(payload?.error || "Failed to update project receipt");
+        }
+        showToast("Project receipt updated", "success");
+        await loadRows(page, { silent: true });
+        await fetchSummary();
+        if (selected?.id === receiptId) {
+          await fetchReceiptDetail(receiptId);
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to update project receipt";
+        showToast(message, "error");
+      } finally {
+        setProjectActionId(null);
+      }
+    },
+    [fetchReceiptDetail, fetchSummary, loadRows, page, selected],
+  );
+
+  const advanceProjectStage = useCallback(
+    async (row: ReceiptRow) => {
+      const currentStage = row.projectStage;
+      const nextStage: ReceiptProjectStage | null =
+        currentStage === "RECEIPT_CREATED"
+          ? "PROJECT_IN_PROGRESS"
+          : currentStage === "PROJECT_IN_PROGRESS"
+            ? "COMPLETED_POSTED"
+            : null;
+      if (!nextStage) return;
+      await saveProjectFlow(row.id, { stage: nextStage });
+    },
+    [saveProjectFlow],
+  );
 
   const handleRecalculateReceiptCosts = useCallback(
     async (receiptId: string) => {
@@ -1939,6 +2049,11 @@ export default function ReceiptsAdminClient({
                           POD {formatBadgeLabel(row.podDeliveryStatus)}
                         </div>
                       )}
+                      {row.isProjectReceipt && (
+                        <div className="mt-1 rounded-full border border-cyan-400/30 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.3em] text-cyan-100">
+                          Project {formatProjectStageLabel(row.projectStage)}
+                        </div>
+                      )}
                       {row.podDeliveryNote && (
                         <p className="mt-1 text-xs text-yellow-200">{row.podDeliveryNote}</p>
                       )}
@@ -1969,6 +2084,19 @@ export default function ReceiptsAdminClient({
                           isPodPending ? () => void handleMarkPodDelivered(row.id) : undefined
                         }
                         onMarkPaid={row.isPodDelivery && row.podDeliveryStatus === "delivered" ? () => void handleMarkPodPaid(row.id) : undefined}
+                        onProjectAction={
+                          row.isProjectReceipt && row.projectStage !== "COMPLETED_POSTED"
+                            ? () => void advanceProjectStage(row)
+                            : undefined
+                        }
+                        projectActionLabel={
+                          row.projectStage === "RECEIPT_CREATED"
+                            ? "Start project"
+                            : row.projectStage === "PROJECT_IN_PROGRESS"
+                              ? "Complete project"
+                              : "Project saved"
+                        }
+                        projectActionProcessing={projectActionId === row.id}
                         podActionLabel="Mark POD delivered"
                         podActionProcessing={podActionId === row.id}
                         disabled={loading}
@@ -2196,6 +2324,156 @@ export default function ReceiptsAdminClient({
                     )}
                   </div>
                 )}
+
+                {(() => {
+                  const projectFlow = readReceiptProjectFlow(detail.receipt.data?.projectFlow);
+                  if (!projectFlow || !projectEditor) return null;
+                  return (
+                    <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-sm text-cyan-100">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.3em] text-cyan-200">Project receipt</p>
+                          <p className="mt-1 text-sm text-white">
+                            {formatProjectStageLabel(projectFlow.stage)} · {formatProjectPaymentTermLabel(projectFlow.paymentTerm)}
+                          </p>
+                        </div>
+                        <div className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-100">
+                          {projectFlow.paymentStatus.replace(/_/g, " ")}
+                        </div>
+                      </div>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <label className="text-xs uppercase tracking-wide text-cyan-200/80">
+                          Stage
+                          <select
+                            value={projectEditor.stage}
+                            onChange={(e) =>
+                              setProjectEditor((current) =>
+                                current
+                                  ? { ...current, stage: e.target.value as ReceiptProjectStage }
+                                  : current,
+                              )
+                            }
+                            className="mt-1 w-full rounded-xl border border-cyan-400/20 bg-slate-950/70 px-3 py-2 text-sm text-white"
+                          >
+                            {(["RECEIPT_CREATED", "PROJECT_IN_PROGRESS", "COMPLETED_POSTED"] as const).map((option) => (
+                              <option key={option} value={option}>
+                                {formatProjectStageLabel(option)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="text-xs uppercase tracking-wide text-cyan-200/80">
+                          Payment position
+                          <select
+                            value={projectEditor.paymentTerm}
+                            onChange={(e) =>
+                              setProjectEditor((current) =>
+                                current
+                                  ? { ...current, paymentTerm: e.target.value as ReceiptProjectPaymentTerm }
+                                  : current,
+                              )
+                            }
+                            className="mt-1 w-full rounded-xl border border-cyan-400/20 bg-slate-950/70 px-3 py-2 text-sm text-white"
+                          >
+                            {(["FULL_BEFORE_INSTALLATION", "DEPOSIT_AND_BALANCE", "FULL_AFTER_INSTALLATION"] as const).map((option) => (
+                              <option key={option} value={option}>
+                                {formatProjectPaymentTermLabel(option)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="text-xs uppercase tracking-wide text-cyan-200/80">
+                          Scheduled date
+                          <input
+                            type="date"
+                            value={projectEditor.scheduledDate}
+                            onChange={(e) =>
+                              setProjectEditor((current) =>
+                                current ? { ...current, scheduledDate: e.target.value } : current,
+                              )
+                            }
+                            className="mt-1 w-full rounded-xl border border-cyan-400/20 bg-slate-950/70 px-3 py-2 text-sm text-white"
+                          />
+                        </label>
+                        {projectEditor.paymentTerm === "DEPOSIT_AND_BALANCE" ? (
+                          <label className="text-xs uppercase tracking-wide text-cyan-200/80">
+                            Deposit percent
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              value={projectEditor.depositPercent}
+                              onChange={(e) =>
+                                setProjectEditor((current) =>
+                                  current ? { ...current, depositPercent: e.target.value } : current,
+                                )
+                              }
+                              className="mt-1 w-full rounded-xl border border-cyan-400/20 bg-slate-950/70 px-3 py-2 text-sm text-white"
+                            />
+                          </label>
+                        ) : null}
+                        <label className="text-xs uppercase tracking-wide text-cyan-200/80 sm:col-span-2">
+                          Project notes
+                          <textarea
+                            rows={3}
+                            value={projectEditor.internalNotes}
+                            onChange={(e) =>
+                              setProjectEditor((current) =>
+                                current ? { ...current, internalNotes: e.target.value } : current,
+                              )
+                            }
+                            className="mt-1 min-h-[88px] w-full rounded-2xl border border-cyan-400/20 bg-slate-950/70 px-3 py-3 text-sm text-white"
+                          />
+                        </label>
+                      </div>
+                      <div className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-xs text-slate-200 sm:grid-cols-2">
+                        <div>Project value: {formatCurrency(projectFlow.projectValue)}</div>
+                        <div>Total paid: {formatCurrency(projectFlow.amountPaidTotal)}</div>
+                        <div>Required deposit: {formatCurrency(projectFlow.depositRequiredAmount)}</div>
+                        <div>Balance due: {formatCurrency(projectFlow.balanceAmount)}</div>
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            saveProjectFlow(detail.receipt.id, {
+                              stage: projectEditor.stage,
+                              paymentTerm: projectEditor.paymentTerm,
+                              depositPercent: Number(projectEditor.depositPercent || 30),
+                              scheduledDate: projectEditor.scheduledDate || null,
+                              internalNotes: projectEditor.internalNotes || null,
+                            })
+                          }
+                          disabled={projectActionId === detail.receipt.id}
+                          className="rounded-xl border border-cyan-400/40 bg-cyan-500/15 px-4 py-2 text-sm font-semibold text-cyan-100 hover:bg-cyan-500/25 disabled:opacity-50"
+                        >
+                          {projectActionId === detail.receipt.id ? "Saving..." : "Save project details"}
+                        </button>
+                        {projectFlow.stage !== "COMPLETED_POSTED" && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              saveProjectFlow(detail.receipt.id, {
+                                stage:
+                                  projectFlow.stage === "RECEIPT_CREATED"
+                                    ? "PROJECT_IN_PROGRESS"
+                                    : "COMPLETED_POSTED",
+                              })
+                            }
+                            disabled={projectActionId === detail.receipt.id}
+                            className="rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:opacity-50"
+                          >
+                            {projectActionId === detail.receipt.id
+                              ? "Saving..."
+                              : projectFlow.stage === "RECEIPT_CREATED"
+                                ? "Mark project in progress"
+                                : "Mark project completed"}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div className="rounded-2xl border border-white/5 bg-slate-900/40 p-4">
                   <p className="text-xs uppercase tracking-wide text-slate-400">Items</p>

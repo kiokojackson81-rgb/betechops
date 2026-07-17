@@ -3,6 +3,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import MarkdownRendererClient, { RichFormattingToggle } from "@/components/MarkdownRendererClient";
 import { findSimilarProducts, getProductSimilarityScore } from "@/lib/posProductSimilarity";
+import {
+  buildReceiptProjectFlow,
+  readReceiptProjectFlow,
+  type ReceiptProjectPaymentTerm,
+  type ReceiptProjectStage,
+} from "@/lib/receiptProjects";
 import { showToast } from "@/lib/ui/toast";
 import { generateReceiptSerial } from "@/lib/receipts/serial";
 import ReceiptDuplicateModal from "./_components/ReceiptDuplicateModal";
@@ -74,6 +80,56 @@ type ReceiptFormProps = {
   showHero?: boolean;
 };
 
+type ProjectDraft = {
+  stage: ReceiptProjectStage;
+  paymentTerm: ReceiptProjectPaymentTerm;
+  depositPercent: string;
+  scheduledDate: string;
+  internalNotes: string;
+};
+
+const PROJECT_STAGE_OPTIONS: ReceiptProjectStage[] = [
+  "RECEIPT_CREATED",
+  "PROJECT_IN_PROGRESS",
+  "COMPLETED_POSTED",
+];
+
+const PROJECT_PAYMENT_TERM_OPTIONS: ReceiptProjectPaymentTerm[] = [
+  "FULL_BEFORE_INSTALLATION",
+  "DEPOSIT_AND_BALANCE",
+  "FULL_AFTER_INSTALLATION",
+];
+
+const createDefaultProjectDraft = (): ProjectDraft => ({
+  stage: "RECEIPT_CREATED",
+  paymentTerm: "DEPOSIT_AND_BALANCE",
+  depositPercent: "30",
+  scheduledDate: "",
+  internalNotes: "",
+});
+
+const formatProjectStageLabel = (value: ReceiptProjectStage) => {
+  switch (value) {
+    case "RECEIPT_CREATED":
+      return "Receipt created";
+    case "PROJECT_IN_PROGRESS":
+      return "Project in progress";
+    case "COMPLETED_POSTED":
+      return "Completed and posted to POS";
+  }
+};
+
+const formatProjectPaymentTermLabel = (value: ReceiptProjectPaymentTerm) => {
+  switch (value) {
+    case "FULL_BEFORE_INSTALLATION":
+      return "Pay fully before installation";
+    case "DEPOSIT_AND_BALANCE":
+      return "30% deposit and balance";
+    case "FULL_AFTER_INSTALLATION":
+      return "Pay fully after installation";
+  }
+};
+
 export default function ReceiptFormClient({ onCreated, showHero = true }: ReceiptFormProps) {  
   const [staffMembers, setStaffMembers] = useState<Array<{ id: string; name: string; email?: string | null }>>([]);
   const [defaultStaffId, setDefaultStaffId] = useState<string | null>(null);
@@ -98,9 +154,10 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [deliveryAddress, setDeliveryAddress] = useState<string | undefined>(undefined);
   const [addressLoading, setAddressLoading] = useState(false);
   const [showAddressInput, setShowAddressInput] = useState<boolean>(false);
-  const [customerType, setCustomerType] = useState<"walk-in" | "online" | "delivery" | "pod" | "">("");
+  const [customerType, setCustomerType] = useState<"walk-in" | "online" | "delivery" | "pod" | "project" | "">("");
   const [deliveryStatus, setDeliveryStatus] = useState<"pending" | "delivered" | "failed">("pending");
   const [podNote, setPodNote] = useState<string>("");
+  const [projectDraft, setProjectDraft] = useState<ProjectDraft>(createDefaultProjectDraft());
   const [deposit, setDeposit] = useState<number>(0);
   const [showSerials, setShowSerials] = useState<boolean>(false);
   const [showWarranty, setShowWarranty] = useState<boolean>(false);
@@ -235,7 +292,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         setDeliveryAddress(String(parsed.deliveryAddress));
         setShowAddressInput(true);
       }
-      if (parsed.customerType && ["walk-in", "online", "delivery", "pod"].includes(parsed.customerType)) {
+      if (parsed.customerType && ["walk-in", "online", "delivery", "pod", "project"].includes(parsed.customerType)) {
         setCustomerType(parsed.customerType);
       }
       if (parsed.deliveryStatus && ["pending", "delivered", "failed"].includes(parsed.deliveryStatus)) {
@@ -263,6 +320,16 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
             sku: item.sku ? String(item.sku) : undefined,
           })),
         );
+      }
+      const parsedProjectFlow = readReceiptProjectFlow(parsed.projectFlow);
+      if (parsedProjectFlow) {
+        setProjectDraft({
+          stage: parsedProjectFlow.stage,
+          paymentTerm: parsedProjectFlow.paymentTerm,
+          depositPercent: String(parsedProjectFlow.depositPercent || 30),
+          scheduledDate: parsedProjectFlow.scheduledDate ? parsedProjectFlow.scheduledDate.slice(0, 10) : "",
+          internalNotes: parsedProjectFlow.internalNotes || "",
+        });
       }
     } catch (error) {
       showToast("Failed to load website order receipt draft", "error");
@@ -610,6 +677,19 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     // paperSize: fixed to A5, omitted from draft
     customerType,
     deliveryStatus: customerType === "delivery" ? deliveryStatus : undefined,
+    projectFlow:
+      customerType === "project"
+        ? buildReceiptProjectFlow({
+            stage: projectDraft.stage,
+            paymentTerm: projectDraft.paymentTerm,
+            projectValue: total,
+            amountPaidTotal: docType === "LAYAWAY" ? deposit : total,
+            depositPercent: Number(projectDraft.depositPercent || 30),
+            scheduledDate: projectDraft.scheduledDate || null,
+            postedReceiptNumber: serial,
+            internalNotes: projectDraft.internalNotes || null,
+          })
+        : undefined,
     paymentBreakdown: {
       cash: normalizedPaymentBreakdown.cash,
       mpesa: normalizedPaymentBreakdown.mpesa,
@@ -785,7 +865,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     });
   };
 
-  const handleCustomerTypeSelection = (type: "walk-in" | "online" | "delivery" | "pod") => {
+  const handleCustomerTypeSelection = (type: "walk-in" | "online" | "delivery" | "pod" | "project") => {
     setCustomerType(type);
     if (type === "delivery") {
       // ensure address input is visible for delivery customers
@@ -797,6 +877,9 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     if (type !== "pod") {
       setPodNote("");
     } else {
+      setShowAddressInput(true);
+    }
+    if (type === "project") {
       setShowAddressInput(true);
     }
   };
@@ -851,6 +934,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     setCustomerEmail("");
     setCustomerType("");
     setDeliveryStatus("pending");
+    setProjectDraft(createDefaultProjectDraft());
     setDeposit(0);
     setShowSerials(false);
     setShowWarranty(false);
@@ -879,6 +963,19 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     }
     if (total <= 0) return showToast("Total must be greater than zero", "error");
     const resolvedPaymentMethod = primaryPaymentMethod as "MPESA" | "CASH";
+    const projectFlow =
+      customerType === "project"
+        ? buildReceiptProjectFlow({
+            stage: projectDraft.stage,
+            paymentTerm: projectDraft.paymentTerm,
+            projectValue: total,
+            amountPaidTotal: docType === "LAYAWAY" ? deposit : total,
+            depositPercent: Number(projectDraft.depositPercent || 30),
+            scheduledDate: projectDraft.scheduledDate || null,
+            postedReceiptNumber: serial,
+            internalNotes: projectDraft.internalNotes || null,
+          })
+        : null;
     const normalizedItems = items.map((it) => ({
       title: it.title.trim(),
       quantity: Number(it.quantity || 1),
@@ -921,6 +1018,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         customerType,
         deliveryStatus: customerType === "delivery" ? deliveryStatus : undefined,
         podDelivery: customerType === "pod" ? { note: podNote || "" } : undefined,
+        projectFlow: projectFlow ?? undefined,
         notes,
         websiteOrderId: websiteOrderId || undefined,
         globalWarranty: globalWarranty || undefined,
@@ -1099,7 +1197,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
 
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-xs uppercase tracking-wide text-slate-400">Customer type*</span>
-        {(["walk-in", "online", "delivery", "pod"] as const).map((type) => (
+        {(["walk-in", "online", "delivery", "pod", "project"] as const).map((type) => (
           <button
             key={type}
             type="button"
@@ -1108,7 +1206,11 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
               customerType === type ? "bg-emerald-500 text-black" : "border border-white/10 text-slate-200"
             }`}
           >
-            {type === "pod" ? "POD (pay on delivery)" : type.replace("-", " ")}
+            {type === "pod"
+              ? "POD (pay on delivery)"
+              : type === "project"
+                ? "Project"
+                : type.replace("-", " ")}
           </button>
         ))}
       </div>
@@ -1148,6 +1250,130 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
             className="w-full rounded-xl border border-yellow-500/30 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
             rows={3}
           />
+        </div>
+      )}
+      {customerType === "project" && (
+        <div className="mt-3 space-y-4 rounded-3xl border border-cyan-500/30 bg-cyan-500/5 p-4 sm:p-5">
+          <div>
+            <p className="text-xs uppercase tracking-[0.25em] text-cyan-200">Project details</p>
+            <p className="mt-1 text-sm text-slate-300">
+              Capture the project stage and payment position now. After saving, the POS receipts page can keep moving the project forward.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className={labelClass}>
+              Project stage
+              <select
+                value={projectDraft.stage}
+                onChange={(e) =>
+                  setProjectDraft((current) => ({
+                    ...current,
+                    stage: e.target.value as ReceiptProjectStage,
+                  }))
+                }
+                className={fieldClass}
+              >
+                {PROJECT_STAGE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {formatProjectStageLabel(option)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={labelClass}>
+              Payment position
+              <select
+                value={projectDraft.paymentTerm}
+                onChange={(e) =>
+                  setProjectDraft((current) => ({
+                    ...current,
+                    paymentTerm: e.target.value as ReceiptProjectPaymentTerm,
+                  }))
+                }
+                className={fieldClass}
+              >
+                {PROJECT_PAYMENT_TERM_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {formatProjectPaymentTermLabel(option)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={labelClass}>
+              Scheduled date
+              <input
+                type="date"
+                value={projectDraft.scheduledDate}
+                onChange={(e) =>
+                  setProjectDraft((current) => ({
+                    ...current,
+                    scheduledDate: e.target.value,
+                  }))
+                }
+                className={fieldClass}
+              />
+            </label>
+            {projectDraft.paymentTerm === "DEPOSIT_AND_BALANCE" ? (
+              <label className={labelClass}>
+                Deposit percent
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={projectDraft.depositPercent}
+                  onChange={(e) =>
+                    setProjectDraft((current) => ({
+                      ...current,
+                      depositPercent: e.target.value,
+                    }))
+                  }
+                  className={fieldClass}
+                />
+              </label>
+            ) : (
+              <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-300">
+                This payment position follows the full receipt total automatically.
+              </div>
+            )}
+            <label className={`${labelClass} md:col-span-2`}>
+              Project notes
+              <textarea
+                rows={3}
+                value={projectDraft.internalNotes}
+                onChange={(e) =>
+                  setProjectDraft((current) => ({
+                    ...current,
+                    internalNotes: e.target.value,
+                  }))
+                }
+                placeholder="Installation timing, site preparation, customer follow-up, or internal handover notes"
+                className="mt-1 min-h-[96px] w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-400/60 focus:outline-none"
+              />
+            </label>
+          </div>
+          <div className="grid gap-3 rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-4 text-sm text-slate-200 sm:grid-cols-3">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Project value</p>
+              <p className="mt-1 font-semibold text-white">KES {total.toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Expected deposit</p>
+              <p className="mt-1 font-semibold text-cyan-200">
+                KES{" "}
+                {(
+                  projectDraft.paymentTerm === "DEPOSIT_AND_BALANCE"
+                    ? total * (Number(projectDraft.depositPercent || 30) / 100)
+                    : 0
+                ).toLocaleString()}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Balance after this receipt</p>
+              <p className="mt-1 font-semibold text-amber-200">
+                KES {Math.max(0, total - (docType === "LAYAWAY" ? deposit : total)).toLocaleString()}
+              </p>
+            </div>
+          </div>
         </div>
       )}
 

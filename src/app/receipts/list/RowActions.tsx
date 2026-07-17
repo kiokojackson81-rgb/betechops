@@ -13,6 +13,9 @@ export default function RowActions({
   onPodAction,
   onMarkPaid,
   onResendPod,
+  onProjectAction,
+  projectActionLabel = "Advance project",
+  projectActionProcessing = false,
   podActionLabel = "Mark delivered",
   podActionProcessing = false,
   disabled,
@@ -26,6 +29,9 @@ export default function RowActions({
   onPodAction?: () => void;
   onMarkPaid?: () => void;
   onResendPod?: () => void;
+  onProjectAction?: () => void;
+  projectActionLabel?: string;
+  projectActionProcessing?: boolean;
   podActionLabel?: string;
   podActionProcessing?: boolean;
   disabled?: boolean;
@@ -151,6 +157,22 @@ export default function RowActions({
         >
           <Send size={16} />
           <span className="hidden md:inline">Resend POD</span>
+        </button>
+      )}
+
+      {onProjectAction && (
+        <button
+          aria-label={projectActionLabel}
+          title={projectActionLabel}
+          onClick={(e) => {
+            e.stopPropagation();
+            onProjectAction();
+          }}
+          disabled={disabled || projectActionProcessing}
+          className={`${btnBase} bg-cyan-500/70 hover:bg-cyan-500 text-black`}
+        >
+          <Check size={16} />
+          <span className="hidden md:inline">{projectActionProcessing ? "Processing..." : projectActionLabel}</span>
         </button>
       )}
 
