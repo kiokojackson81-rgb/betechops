@@ -344,18 +344,17 @@ export default function ProjectsOperationsClient() {
                       {[row.orderRef, row.customerPhone, formatCurrency(row.total)].filter(Boolean).join(" · ")}
                     </div>
                     <div className="mt-1 text-xs text-slate-400">
-                      Created {new Date(row.createdAt).toLocaleString("en-KE")} · Payment {formatPaymentTermLabel(row.projectPaymentTerm)}
+                      Created {new Date(row.createdAt).toLocaleString("en-KE")}
                     </div>
                   </div>
-                  <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
-                    {row.attendantName ? <div>Assigned by receipt: {row.attendantName}</div> : null}
-                    <div className={row.attendantName ? "mt-1" : ""}>
-                      Payment status: {(row.projectPaymentStatus || "UNPAID").replace(/_/g, " ")}
+                  {row.attendantName ? (
+                    <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
+                      Assigned by receipt: {row.attendantName}
                     </div>
-                  </div>
+                  ) : null}
                 </div>
 
-                <div className="mt-5 grid gap-4 xl:grid-cols-5">
+                <div className="mt-5 grid gap-4 xl:grid-cols-4">
                   <label className="text-sm text-slate-200">
                     Scheduled date
                     <input
@@ -366,58 +365,6 @@ export default function ProjectsOperationsClient() {
                       className="mt-2 w-full cursor-pointer rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60"
                     />
                   </label>
-                  <label className="text-sm text-slate-200">
-                    Payment position
-                    <select
-                      value={editor.paymentTerm}
-                      onChange={(e) =>
-                        setEditorValue(row.id, { paymentTerm: e.target.value as ProjectEditor["paymentTerm"] })
-                      }
-                      className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60"
-                    >
-                      <option value="FULL_BEFORE_INSTALLATION">Pay fully before installation</option>
-                      <option value="DEPOSIT_AND_BALANCE">Deposit and balance</option>
-                      <option value="FULL_AFTER_INSTALLATION">Pay fully after installation</option>
-                    </select>
-                  </label>
-                  {editor.paymentTerm === "DEPOSIT_AND_BALANCE" ? (
-                    <>
-                      <label className="text-sm text-slate-200">
-                        Deposit type
-                        <select
-                          value={editor.depositType}
-                          onChange={(e) =>
-                            setEditorValue(row.id, {
-                              depositType: e.target.value as ProjectEditor["depositType"],
-                              depositValue:
-                                e.target.value === "AMOUNT"
-                                  ? editor.depositType === "AMOUNT"
-                                    ? editor.depositValue
-                                    : "5000"
-                                  : editor.depositType === "PERCENT"
-                                    ? editor.depositValue
-                                    : "30",
-                            })
-                          }
-                          className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60"
-                        >
-                          <option value="PERCENT">Percentage</option>
-                          <option value="AMOUNT">Fixed amount</option>
-                        </select>
-                      </label>
-                      <label className="text-sm text-slate-200">
-                        {editor.depositType === "AMOUNT" ? "Deposit amount (Ksh)" : "Deposit percentage"}
-                        <input
-                          type="number"
-                          min={0}
-                          max={editor.depositType === "AMOUNT" ? undefined : 100}
-                          value={editor.depositValue}
-                          onChange={(e) => setEditorValue(row.id, { depositValue: e.target.value })}
-                          className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60"
-                        />
-                      </label>
-                    </>
-                  ) : null}
                   <label className="text-sm text-slate-200">
                     Handler type
                     <select
