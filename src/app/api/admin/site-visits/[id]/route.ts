@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { isTechnicalTeamCategory } from "@/lib/technicalTeam";
 import {
   getSiteVisitById,
   listSiteVisitAttachments,
@@ -10,8 +11,8 @@ import {
 
 export const dynamic = "force-dynamic";
 
-function isAdminRole(role: string | null | undefined) {
-  return role === "ADMIN" || role === "SUPERVISOR";
+function canAccessSiteVisits(user: { role?: string | null; attendantCategory?: string | null } | null | undefined) {
+  return user?.role === "ADMIN" || user?.role === "SUPERVISOR" || isTechnicalTeamCategory(user?.attendantCategory);
 }
 
 export async function GET(
@@ -19,8 +20,8 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ) {
   const session = await auth().catch(() => null);
-  const role = (session?.user as { role?: string } | undefined)?.role ?? null;
-  if (!session || !isAdminRole(role)) {
+  const user = session?.user as { role?: string; attendantCategory?: string | null } | undefined;
+  if (!session || !canAccessSiteVisits(user)) {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
@@ -43,8 +44,8 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> },
 ) {
   const session = await auth().catch(() => null);
-  const user = session?.user as { id?: string; role?: string; name?: string | null; email?: string | null } | undefined;
-  if (!session || !isAdminRole(user?.role)) {
+  const user = session?.user as { id?: string; role?: string; name?: string | null; email?: string | null; attendantCategory?: string | null } | undefined;
+  if (!session || !canAccessSiteVisits(user)) {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 

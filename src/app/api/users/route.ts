@@ -59,6 +59,7 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as {
     email?: string;
     name?: string;
+    phone?: string;
     role?: Role;
     category?: string;
     categories?: string[];
@@ -68,6 +69,7 @@ export async function POST(request: Request) {
   if (!email) return NextResponse.json({ error: "email required" }, { status: 400 });
 
   const normalizedEmail = email.toLowerCase().trim();
+  const normalizedPhone = body.phone?.trim() || undefined;
   const primaryCandidate = body.category?.toUpperCase();
   const fallbackPrimary = primaryCandidate && categoryValues.has(primaryCandidate as AttendantCategory)
     ? (primaryCandidate as AttendantCategory)
@@ -80,6 +82,7 @@ export async function POST(request: Request) {
       where: { email: normalizedEmail },
       update: {
         name: name ?? undefined,
+        phone: normalizedPhone,
         role: role ?? undefined,
         isActive: true,
         attendantCategory: primaryCategory,
@@ -87,6 +90,7 @@ export async function POST(request: Request) {
       create: {
         email: normalizedEmail,
         name: name ?? normalizedEmail.split("@")[0],
+        phone: normalizedPhone,
         role: role ?? "ATTENDANT",
         attendantCategory: primaryCategory,
         isActive: true,

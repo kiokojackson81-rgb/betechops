@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import getLandingPage, { getAdminLandingPage } from "@/lib/getLandingPage";
+import { TECHNICAL_PERMISSION_SCOPES, TECHNICAL_TEAM_ROLE_OPTIONS } from "@/lib/technicalTeam";
 type AttendantRow = {
   id: string;
   name: string | null;
@@ -14,17 +15,44 @@ type AttendantRow = {
   createdAt?: string;
 };
 
+type CreateFormState = {
+  name: string;
+  email: string;
+  phone: string;
+  password: string;
+  category: string;
+  baseSalary: string;
+  isActive: boolean;
+  positionTitle: string;
+  teamRole: string;
+  employeeNumber: string;
+  epraLicenseNumber: string;
+  epraLicenseClass: string;
+  drivingLicenseDetails: string;
+  employmentDate: string;
+  permissionScope: string;
+};
+
 export default function AttendantsClient({ attendants }: { attendants: AttendantRow[] }) {
   const router = useRouter();
   const [rows, setRows] = useState<AttendantRow[]>(attendants);
   const [creating, setCreating] = useState(false);
-  const [createForm, setCreateForm] = useState({
+  const [createForm, setCreateForm] = useState<CreateFormState>({
     name: "",
     email: "",
+    phone: "",
     password: "",
     category: "GENERAL_OPS",
     baseSalary: "",
     isActive: true,
+    positionTitle: "",
+    teamRole: "",
+    employeeNumber: "",
+    epraLicenseNumber: "",
+    epraLicenseClass: "",
+    drivingLicenseDetails: "",
+    employmentDate: "",
+    permissionScope: TECHNICAL_PERMISSION_SCOPES[2],
   });
   const [filterCategory, setFilterCategory] = useState<any>("ALL");
   const [filterStatus, setFilterStatus] = useState<"ALL" | "ACTIVE" | "DISABLED">("ALL");
@@ -46,6 +74,7 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
   async function createUser() {
     const email = createForm.email.trim().toLowerCase();
     const name = createForm.name.trim();
+    const phone = createForm.phone.trim();
     const password = createForm.password;
     const baseSalary = Number(createForm.baseSalary || 0);
     if (!email) return alert("Email is required");
@@ -60,6 +89,7 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
         body: JSON.stringify({
           email,
           name: name || undefined,
+          phone: phone || undefined,
           role: "ATTENDANT",
           category: createForm.category,
           categories: [createForm.category],
@@ -100,13 +130,45 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
         });
       }
 
+      if (createForm.category === "TECHNICAL_TEAM") {
+        const technicalRes = await fetch(`/api/admin/technical-team/${userId}/profile`, {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            teamRole: createForm.teamRole || null,
+            positionTitle: createForm.positionTitle || null,
+            employeeNumber: createForm.employeeNumber || null,
+            phoneNumber: phone || null,
+            epraLicenseNumber: createForm.epraLicenseNumber || null,
+            epraLicenseClass: createForm.epraLicenseClass || null,
+            drivingLicenseDetails: createForm.drivingLicenseDetails || null,
+            employmentDate: createForm.employmentDate || null,
+            activeAccount: createForm.isActive,
+            permissionScope: createForm.permissionScope || null,
+          }),
+        });
+        if (!technicalRes.ok) {
+          const technicalJson = await technicalRes.json().catch(() => ({}));
+          throw new Error(String(technicalJson?.error || "Failed to save technical team profile"));
+        }
+      }
+
       setCreateForm({
         name: "",
         email: "",
+        phone: "",
         password: "",
         category: "GENERAL_OPS",
         baseSalary: "",
         isActive: true,
+        positionTitle: "",
+        teamRole: "",
+        employeeNumber: "",
+        epraLicenseNumber: "",
+        epraLicenseClass: "",
+        drivingLicenseDetails: "",
+        employmentDate: "",
+        permissionScope: TECHNICAL_PERMISSION_SCOPES[2],
       });
       router.refresh();
     } catch (err) {
@@ -137,6 +199,7 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
             <option value="MARKETING_OPS">Marketing Ops</option>
             <option value="JUMIA_KILIMALL_OPS">Jumia / Kilimall Ops</option>
             <option value="SUPPORT_OPS">Support Ops</option>
+            <option value="TECHNICAL_TEAM">Technical Team</option>
           </select>
           <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as any)} className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm">
             <option value="ALL">All statuses</option>
@@ -169,6 +232,12 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
           />
           <input
             className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
+            placeholder="Phone number"
+            value={createForm.phone}
+            onChange={(e) => setCreateForm((s) => ({ ...s, phone: e.target.value }))}
+          />
+          <input
+            className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
             placeholder="Password (min 6)"
             type="password"
             value={createForm.password}
@@ -184,6 +253,7 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
             <option value="MARKETING_OPS">Marketing Ops</option>
             <option value="JUMIA_KILIMALL_OPS">Jumia / Kilimall Ops</option>
             <option value="SUPPORT_OPS">Support Ops</option>
+            <option value="TECHNICAL_TEAM">Technical Team</option>
           </select>
           <input
             className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
@@ -202,6 +272,81 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
             Active account
           </label>
         </div>
+        {createForm.category === "TECHNICAL_TEAM" ? (
+          <div className="mt-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+            <div className="mb-3">
+              <h3 className="text-sm font-semibold text-emerald-100">Technical team profile</h3>
+              <p className="text-xs text-slate-400">These fields power the dedicated technical dashboard and staff profile.</p>
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <select
+                className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
+                value={createForm.teamRole}
+                onChange={(e) =>
+                  setCreateForm((s) => ({
+                    ...s,
+                    teamRole: e.target.value,
+                    positionTitle: s.positionTitle || e.target.value,
+                  }))
+                }
+              >
+                <option value="">Select team role</option>
+                {TECHNICAL_TEAM_ROLE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+              <input
+                className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
+                placeholder="Position / job title"
+                value={createForm.positionTitle}
+                onChange={(e) => setCreateForm((s) => ({ ...s, positionTitle: e.target.value }))}
+              />
+              <input
+                className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
+                placeholder="Employee number"
+                value={createForm.employeeNumber}
+                onChange={(e) => setCreateForm((s) => ({ ...s, employeeNumber: e.target.value }))}
+              />
+              <input
+                className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
+                placeholder="EPRA licence number"
+                value={createForm.epraLicenseNumber}
+                onChange={(e) => setCreateForm((s) => ({ ...s, epraLicenseNumber: e.target.value }))}
+              />
+              <input
+                className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
+                placeholder="Licence class"
+                value={createForm.epraLicenseClass}
+                onChange={(e) => setCreateForm((s) => ({ ...s, epraLicenseClass: e.target.value }))}
+              />
+              <input
+                className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
+                placeholder="Driving licence details"
+                value={createForm.drivingLicenseDetails}
+                onChange={(e) => setCreateForm((s) => ({ ...s, drivingLicenseDetails: e.target.value }))}
+              />
+              <input
+                className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
+                type="date"
+                value={createForm.employmentDate}
+                onChange={(e) => setCreateForm((s) => ({ ...s, employmentDate: e.target.value }))}
+              />
+              <select
+                className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
+                value={createForm.permissionScope}
+                onChange={(e) => setCreateForm((s) => ({ ...s, permissionScope: e.target.value }))}
+              >
+                {TECHNICAL_PERMISSION_SCOPES.map((option) => (
+                  <option key={option} value={option}>
+                    {option.replace(/_/g, " ")}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        ) : null}
         <div className="mt-3">
           <button
             className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black disabled:opacity-60"

@@ -24,6 +24,8 @@ export function getLandingPage(attendantCategory?: string | null) {
       return "/attendant/general";
     case "GENERAL_OPS":
       return "/attendant/general";
+    case "TECHNICAL_TEAM":
+      return "/technical/dashboard";
     default:
       return "/";
   }

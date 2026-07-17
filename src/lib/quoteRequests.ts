@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isTechnicalTeamCategory } from "@/lib/technicalTeam";
 import {
   getQuoteRequestStatusAliases,
   normalizeQuoteRequestStatus,
@@ -1119,11 +1120,22 @@ export function isQuoteRequestsStaffEmail(email: unknown) {
   );
 }
 
+function canUseQuotationDesk(input: {
+  email?: string | null;
+  attendantCategory?: string | null;
+  role?: string | null;
+}) {
+  if (input.role === "ADMIN" || input.role === "SUPERVISOR") return true;
+  if (isTechnicalTeamCategory(input.attendantCategory)) return true;
+  return isQuoteRequestsStaffEmail(input.email);
+}
+
 export async function requireQuoteRequestsStaffActor(options?: { impersonateId?: string | null }) {
   const session = await auth();
   const role = (session?.user as { role?: string } | undefined)?.role ?? null;
   const userId = (session?.user as { id?: string } | undefined)?.id ?? null;
   const email = normalizeEmail((session?.user as { email?: string } | undefined)?.email);
+  const attendantCategory = (session?.user as { attendantCategory?: string | null } | undefined)?.attendantCategory ?? null;
 
   if (!session || !userId) {
     return { ok: false as const, status: 401, error: "Unauthorized" };
@@ -1133,9 +1145,9 @@ export async function requireQuoteRequestsStaffActor(options?: { impersonateId?:
   if (hasElevatedRole && options?.impersonateId) {
     const targetUser = await prisma.user.findUnique({
       where: { id: options.impersonateId },
-      select: { id: true, name: true, email: true },
+      select: { id: true, name: true, email: true, attendantCategory: true },
     });
-    if (!targetUser || !isQuoteRequestsStaffEmail(targetUser.email)) {
+    if (!targetUser || !canUseQuotationDesk({ email: targetUser.email, attendantCategory: targetUser.attendantCategory })) {
       return { ok: false as const, status: 403, error: "Invalid quotation attendant target." };
     }
     return {
@@ -1150,7 +1162,7 @@ export async function requireQuoteRequestsStaffActor(options?: { impersonateId?:
     };
   }
 
-  if (!hasElevatedRole && !isQuoteRequestsStaffEmail(email)) {
+  if (!hasElevatedRole && !canUseQuotationDesk({ email, attendantCategory, role })) {
     return { ok: false as const, status: 403, error: "Forbidden" };
   }
 
@@ -1171,15 +1183,25 @@ export async function requireQuoteRequestsStaffActor(options?: { impersonateId?:
 
 export async function getOrderedQuoteStaffUsers() {
   const staffUsers = await prisma.user.findMany({
-    where: { email: { in: [...QUOTE_REQUEST_STAFF_EMAILS] } },
+    where: {
+      OR: [
+        { email: { in: [...QUOTE_REQUEST_STAFF_EMAILS] } },
+        { attendantCategory: "TECHNICAL_TEAM" },
+      ],
+      isActive: true,
+    },
+    orderBy: [{ attendantCategory: "asc" }, { name: "asc" }],
     select: { id: true, name: true, email: true },
   });
 
-  return QUOTE_REQUEST_STAFF_EMAILS.map((email) =>
-    staffUsers.find((user) => normalizeEmail(user.email) === email),
-  ).filter(
-    (user): user is { id: string; name: string | null; email: string | null } => Boolean(user?.id),
-  );
+  const preferredUsers = QUOTE_REQUEST_STAFF_EMAILS.map((value) =>
+    staffUsers.find((user) => normalizeEmail(user.email) === value),
+  ).filter((user): user is { id: string; name: string | null; email: string | null } => Boolean(user?.id));
+
+  const preferredIds = new Set(preferredUsers.map((user) => user.id));
+  const technicalUsers = staffUsers.filter((user) => !preferredIds.has(user.id));
+
+  return [...preferredUsers, ...technicalUsers];
 }
 
 export async function getQuoteStaffUserById(userId: string | null | undefined) {

@@ -19,6 +19,7 @@ export async function PATCH(request: Request) {
     role?: Role;
     isActive?: boolean;
     name?: string;
+    phone?: string | null;
     bankName?: string | null;
     bankAccountNumber?: string | null;
     categories?: string[];
@@ -28,6 +29,7 @@ export async function PATCH(request: Request) {
     typeof body.isActive === "boolean" ||
     Boolean(body.role) ||
     Boolean(body.name) ||
+    typeof body.phone !== "undefined" ||
     Boolean(body.attendantCategory) ||
     typeof body.bankName !== "undefined" ||
     typeof body.bankAccountNumber !== "undefined";
@@ -59,6 +61,7 @@ export async function PATCH(request: Request) {
       isActive: typeof body.isActive === "boolean",
       role: body.role ?? null,
       name: typeof body.name === "string",
+      phone: typeof body.phone !== "undefined",
       attendantCategory: attendantCategoryUpdate ?? null,
       bankName: typeof body.bankName !== "undefined",
       bankAccountNumber: typeof body.bankAccountNumber !== "undefined",
@@ -113,6 +116,9 @@ export async function PATCH(request: Request) {
       if (body.name) {
         data.name = body.name;
         safeUserUpdate.name = body.name;
+      }
+      if (typeof body.phone !== "undefined") {
+        safeUserUpdate.phone = body.phone;
       }
       if (typeof body.bankName !== "undefined") {
         safeUserUpdate.bankName = body.bankName;

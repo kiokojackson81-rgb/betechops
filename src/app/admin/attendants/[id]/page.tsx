@@ -27,10 +27,12 @@ export default async function AttendantEditPage({ params }: { params: { id: stri
       id: true,
       name: true,
       email: true,
+      phone: true,
       attendantCategory: true,
       isActive: true,
       bankName: true,
       bankAccountNumber: true,
+      technicalProfile: true,
     },
   });
   if (!attendant) return <div className="p-8">Attendant not found</div>;

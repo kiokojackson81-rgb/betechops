@@ -67,6 +67,14 @@ export const attendantCategoryDefinitions: AttendantCategoryDefinition[] = [
     defaultWidgets: ["QUEUE", "PRICING", "RETURNS", "ANNOUNCEMENTS", "SHORTCUTS"],
     highlight: "slate",
   },
+  {
+    id: "TECHNICAL_TEAM",
+    label: "Technical Team",
+    description: "Technical operations, site visits, project delivery, and field earnings.",
+    primaryMetrics: ["CUSTOM"],
+    defaultWidgets: ["QUEUE", "RETURNS", "DAILY_SALES", "ANNOUNCEMENTS", "SHORTCUTS"],
+    highlight: "emerald",
+  },
 ];
 
 export const attendantCategoryById = attendantCategoryDefinitions.reduce<Record<string, AttendantCategoryDefinition>>((acc, def) => {

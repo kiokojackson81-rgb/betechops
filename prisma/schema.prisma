@@ -106,6 +106,25 @@ model User {
   customerVoiceFollowUps               VoiceFollowUp[]                 @relation("VoiceFollowUpCustomer")
   assignedVoiceCallFeedback            VoiceCallFeedback[]             @relation("VoiceCallFeedbackAgent")
   assignedVoiceCallbackRequests        VoiceCallbackRequest[]          @relation("VoiceCallbackRequestAgent")
+  technicalProfile                     TechnicalProfile?
+}
+
+model TechnicalProfile {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  teamRole              String?
+  positionTitle         String?
+  employeeNumber        String?
+  phoneNumber           String?
+  epraLicenseNumber     String?
+  epraLicenseClass      String?
+  drivingLicenseDetails String?
+  employmentDate        DateTime?
+  activeAccount         Boolean  @default(true)
+  permissionScope       String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model OtpCode {
@@ -2282,6 +2301,7 @@ enum AttendantCategory {
   SUPPORT_OPS
   GENERAL_OPS
   BETECH_OPS
+  TECHNICAL_TEAM
 }
 
 enum Platform {

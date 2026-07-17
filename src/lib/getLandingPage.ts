@@ -24,6 +24,8 @@ export function getLandingPage(category?: string | null, role?: string): string 
     case "GENERAL_OPS":
     case "BETECH_OPS":
       return "/attendant/general";
+    case "TECHNICAL_TEAM":
+      return "/technical/dashboard";
     default:
       return "/attendant";
   }
@@ -45,6 +47,8 @@ export function getAdminLandingPage(category?: string | null): string {
     case "GENERAL_OPS":
     case "BETECH_OPS":
       return "/admin/online/summary";
+    case "TECHNICAL_TEAM":
+      return "/admin/technical-team";
     default:
       return "/admin";
   }
@@ -64,6 +68,8 @@ export function getCategoryLabel(category?: string | null) {
       return "General User Ops";
     case "BETECH_OPS":
       return "Betech Ops (Legacy)";
+    case "TECHNICAL_TEAM":
+      return "Technical Team";
     default:
       return "Unassigned";
   }

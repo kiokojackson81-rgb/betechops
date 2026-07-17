@@ -7,6 +7,7 @@ export const PAYROLL_ATTENDANT_CATEGORIES = [
   "SUPPORT_OPS",
   "GENERAL_OPS",
   "BETECH_OPS",
+  "TECHNICAL_TEAM",
 ] as const;
 
 export function payrollEligibleUserWhere(extra: Prisma.UserWhereInput = {}): Prisma.UserWhereInput {
