@@ -14,6 +14,7 @@ import {
   Receipt,
   ShieldCheck,
   Users,
+  Wallet,
   Wrench,
 } from "lucide-react";
 
@@ -38,6 +39,7 @@ const sections = [
     label: "Employee",
     items: [
       { href: "/technical/daily-report", label: "Daily Reports", icon: ClipboardList },
+      { href: "/technical/earnings", label: "Earnings & Payslip", icon: Wallet },
       { href: "/technical/wellness", label: "Wellness", icon: HeartPulse },
       { href: "/technical/wellness", label: "Compliance", icon: ShieldCheck },
       { href: "/receipts", label: "Customers", icon: Users },

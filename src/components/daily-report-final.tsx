@@ -267,7 +267,11 @@ function withImpersonateHash(
   return `${withImpersonateId(href, impersonateId)}${hash.startsWith("#") ? hash : `#${hash}`}`;
 }
 
-export default function DailyReportFinal() {
+export default function DailyReportFinal({
+  initialSection,
+}: {
+  initialSection?: "dashboard" | "daily-report";
+} = {}) {
   const [currentView, setCurrentView] = useState<
     "dashboard" | "receipts" | "web-orders" | "quote-requests" | "product-desk"
   >("dashboard");
@@ -355,6 +359,21 @@ export default function DailyReportFinal() {
     window.addEventListener("hashchange", sync);
     return () => window.removeEventListener("hashchange", sync);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.location.hash) return;
+    if (initialSection !== "daily-report") return;
+
+    const scrollToDailyReport = () => {
+      const el = document.getElementById("daily-report");
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+
+    const frame = window.requestAnimationFrame(scrollToDailyReport);
+    return () => window.cancelAnimationFrame(frame);
+  }, [initialSection]);
 
   useEffect(() => {
     if (!["receipts", "web-orders", "quote-requests", "product-desk"].includes(currentView)) return;
@@ -1855,7 +1874,7 @@ export default function DailyReportFinal() {
             </div>
           </header>
 
-          <section className={sectionPanelClasses}>
+          <section id="daily-report" className={sectionPanelClasses}>
             <div className="mb-5">
               <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Sales Action Center</div>
               <h2 className="mt-2 text-2xl font-semibold text-white">Pending customer work assigned to you</h2>

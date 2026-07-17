@@ -3,5 +3,5 @@
 import DailyReportFinal from "@/components/daily-report-final";
 
 export default function TechnicalDailyReportPage() {
-  return <DailyReportFinal />;
+  return <DailyReportFinal initialSection="daily-report" />;
 }

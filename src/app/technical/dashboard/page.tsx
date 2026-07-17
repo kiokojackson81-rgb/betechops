@@ -344,6 +344,7 @@ export default async function TechnicalDashboardPage({
     { href: "/technical/site-visits", label: "Schedule site visit" },
     { href: "/technical/projects", label: "Open projects" },
     { href: "/technical/daily-report", label: "Submit daily report" },
+    { href: "/technical/earnings", label: "Open earnings" },
     { href: "/technical/wellness", label: "Wellness / safety" },
   ];
 
@@ -505,11 +506,11 @@ export default async function TechnicalDashboardPage({
               <div className="flex items-center justify-between"><span>Deductions</span><span className="text-rose-300">-{formatCurrency(payrollRow.totalDeductions)}</span></div>
             </div>
             <div className="mt-5 grid grid-cols-2 gap-3">
-              <Link href={`/admin/attendants/${viewer.id}/payroll`} className="rounded-2xl bg-emerald-500 px-4 py-3 text-center text-sm font-semibold text-black">
+              <Link href="/technical/earnings" className="rounded-2xl bg-emerald-500 px-4 py-3 text-center text-sm font-semibold text-black">
                 View payslip
               </Link>
-              <Link href="/admin/payroll" className="rounded-2xl border border-white/10 px-4 py-3 text-center text-sm font-semibold text-white">
-                Full breakdown
+              <Link href="/technical/earnings" className="rounded-2xl border border-white/10 px-4 py-3 text-center text-sm font-semibold text-white">
+                Commission & deductions
               </Link>
             </div>
           </div>
