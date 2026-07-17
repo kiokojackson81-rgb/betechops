@@ -14,6 +14,7 @@ export async function GET(req: Request) {
   const auth = await requireAttendant(req, [
     "ADMIN",
     "SUPERVISOR",
+    "TECHNICAL_TEAM",
     "DIRECT_SALES_OPS",
     "MARKETING_OPS",
     "JUMIA_KILIMALL_OPS",
