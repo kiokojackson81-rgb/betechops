@@ -209,9 +209,9 @@ export default async function TechnicalSalesPage() {
           <div className="mt-1 text-sm text-slate-500">Your receipts in this trading period</div>
         </div>
         <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
-          <div className="text-sm text-slate-400">Priced profit</div>
-          <div className="mt-2 text-3xl font-semibold text-white">{formatCurrency(summary.totalProfit)}</div>
-          <div className="mt-1 text-sm text-slate-500">Commission only starts after pricing is completed</div>
+          <div className="text-sm text-slate-400">POS receipts created</div>
+          <div className="mt-2 text-3xl font-semibold text-white">{summary.receiptsCount}</div>
+          <div className="mt-1 text-sm text-slate-500">Receipts you have created in this trading period</div>
         </div>
         <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
           <div className="text-sm text-slate-400">POS commission</div>
