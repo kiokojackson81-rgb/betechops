@@ -51,6 +51,7 @@ type OverviewResponse = {
   canSubmitPayrollAdjustmentRequest?: boolean;
   staff?: Array<{ id: string; name?: string | null; email: string; attendantCategory?: string | null }>;
   payrollAdjustmentRequests?: PayrollAdjustmentRequestRow[];
+  employeeDocuments?: EmployeeDocumentRow[];
   leaveBalance: {
     annual: { entitlement: number; used: number; remaining: number };
     sick: { entitlement: number; used: number; remaining: number };
@@ -77,6 +78,20 @@ type OverviewResponse = {
   };
 };
 
+type EmployeeDocumentRow = {
+  id: string;
+  documentType: string;
+  title: string;
+  fileUrl: string;
+  notes?: string | null;
+  createdAt: string;
+  uploadedBy?: {
+    id: string;
+    name?: string | null;
+    email?: string | null;
+  } | null;
+};
+
 type PayrollAdjustmentRequestRow = {
   id: string;
   periodLabel: string;
@@ -97,7 +112,7 @@ type PayrollAdjustmentRequestRow = {
   decidedBy?: { id: string; name?: string | null; email: string; attendantCategory?: string | null } | null;
 };
 
-type WellnessTab = "leave" | "cash" | "discipline" | "history" | "balances";
+type WellnessTab = "leave" | "cash" | "documents" | "discipline" | "history" | "balances";
 
 const currency = new Intl.NumberFormat("en-KE", {
   style: "currency",
@@ -153,6 +168,14 @@ function buildInstallmentPreview(total: number, periods: number) {
   return Array.from({ length: normalizedPeriods }, (_, index) => base + (index < remainder ? 1 : 0));
 }
 
+function formatDocumentType(value: string) {
+  return String(value || "OTHER")
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 async function requestWellnessOverview(impersonateId: string | null) {
   const params = new URLSearchParams();
   if (impersonateId) params.set("impersonateId", impersonateId);
@@ -201,6 +224,7 @@ export default function WellnessClient() {
   const tabs: Array<{ id: WellnessTab; label: string; meta: string }> = [
     { id: "leave", label: "Leave", meta: `${overview?.leaveBalance.totalRemaining ?? "-"} days left` },
     { id: "cash", label: "Cash advance", meta: currency.format(overview?.cashAdvanceCapacity.availableToBorrow ?? 0) },
+    { id: "documents", label: "Compliance", meta: String(overview?.employeeDocuments?.length ?? 0) },
     ...(canSubmitAdjustmentRequest
       ? [{ id: "discipline" as WellnessTab, label: "Payroll discipline", meta: "Approval required" }]
       : []),
@@ -685,6 +709,50 @@ export default function WellnessClient() {
               loading={loading}
             />
             ) : null}
+
+          {activeTab === "documents" ? (
+            <section className={surfaceClass}>
+              <div className="mb-6">
+                <p className={sectionEyebrow}>Compliance</p>
+                <h2 className="mt-2 text-2xl font-semibold text-white">Employment Documents</h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+                  Admin uploads your employment documents here, including ID copies, contracts, licences, certificates, and other compliance records.
+                </p>
+              </div>
+              <div className="space-y-3">
+                {(overview?.employeeDocuments ?? []).map((document) => (
+                  <div key={document.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div className="text-[11px] uppercase tracking-[0.25em] text-slate-500">
+                          {formatDocumentType(document.documentType)}
+                        </div>
+                        <div className="mt-1 font-medium text-slate-100">{document.title}</div>
+                        <div className="mt-1 text-xs text-slate-400">
+                          Uploaded {dateFmt.format(new Date(document.createdAt))}
+                          {document.uploadedBy ? ` · by ${document.uploadedBy.name || document.uploadedBy.email}` : ""}
+                        </div>
+                        {document.notes ? <div className="mt-2 text-sm text-slate-300">{document.notes}</div> : null}
+                      </div>
+                      <a
+                        href={document.fileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex h-fit rounded-full border border-amber-300/30 bg-amber-400/10 px-3 py-1.5 text-sm font-medium text-amber-100"
+                      >
+                        Open document
+                      </a>
+                    </div>
+                  </div>
+                ))}
+                {!overview?.employeeDocuments?.length ? (
+                  <div className="rounded-2xl border border-dashed border-slate-700 px-4 py-6 text-sm text-slate-400">
+                    No employment documents have been uploaded yet.
+                  </div>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
 
           {activeTab === "balances" ? (
           <div className="grid gap-6 xl:grid-cols-[.85fr_1.15fr]">

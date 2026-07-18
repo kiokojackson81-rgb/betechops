@@ -107,6 +107,8 @@ model User {
   assignedVoiceCallFeedback            VoiceCallFeedback[]             @relation("VoiceCallFeedbackAgent")
   assignedVoiceCallbackRequests        VoiceCallbackRequest[]          @relation("VoiceCallbackRequestAgent")
   technicalProfile                     TechnicalProfile?
+  employeeDocuments                    EmployeeDocument[]             @relation("EmployeeDocumentOwner")
+  uploadedEmployeeDocuments            EmployeeDocument[]             @relation("EmployeeDocumentUploader")
 }
 
 model TechnicalProfile {
@@ -125,6 +127,25 @@ model TechnicalProfile {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
   user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model EmployeeDocument {
+  id           String   @id @default(cuid())
+  userId       String
+  uploadedById String?
+  documentType String
+  title        String
+  fileUrl      String
+  fileKey      String?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation("EmployeeDocumentOwner", fields: [userId], references: [id], onDelete: Cascade)
+  uploadedBy   User?    @relation("EmployeeDocumentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([uploadedById, createdAt])
+  @@index([documentType, createdAt])
 }
 
 model OtpCode {

@@ -59,10 +59,33 @@ export async function GET(req: Request) {
       : Promise.resolve([]),
   ]);
 
+  const employeeDocuments = await prisma.employeeDocument.findMany({
+    where: { userId },
+    orderBy: [{ createdAt: "desc" }],
+    include: {
+      uploadedBy: { select: { id: true, name: true, email: true } },
+    },
+  });
+
   return NextResponse.json(
     composeIdentityResponse(identity, {
       ...overview,
       user,
+      employeeDocuments: employeeDocuments.map((document) => ({
+        id: document.id,
+        documentType: document.documentType,
+        title: document.title,
+        fileUrl: document.fileUrl,
+        notes: document.notes,
+        createdAt: document.createdAt.toISOString(),
+        uploadedBy: document.uploadedBy
+          ? {
+              id: document.uploadedBy.id,
+              name: document.uploadedBy.name,
+              email: document.uploadedBy.email,
+            }
+          : null,
+      })),
       canSubmitPayrollAdjustmentRequest: canSubmitAdjustments,
       payrollAdjustmentRequests,
       staff,

@@ -27,7 +27,41 @@ type Attendant = {
     activeAccount?: boolean | null;
     permissionScope?: string | null;
   } | null;
+  employeeDocuments?: Array<{
+    id: string;
+    documentType: string;
+    title: string;
+    fileUrl: string;
+    notes?: string | null;
+    createdAt: string | Date;
+    uploadedBy?: {
+      id: string;
+      name?: string | null;
+      email?: string | null;
+    } | null;
+  }>;
 };
+
+type EmployeeDocumentRow = NonNullable<Attendant["employeeDocuments"]>[number];
+
+const EMPLOYMENT_DOCUMENT_TYPES = [
+  "NATIONAL_ID",
+  "CONTRACT",
+  "EPRA_LICENSE",
+  "DRIVING_LICENSE",
+  "CERTIFICATE",
+  "KRA_PIN",
+  "NSSF_NHIF",
+  "OTHER",
+] as const;
+
+function formatDocumentType(value: string) {
+  return String(value || "OTHER")
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
 
 export default function AttendantEditorClient({ attendant }: { attendant: Attendant }) {
   const router = useRouter();
@@ -63,6 +97,15 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
   });
   const [saving, setSaving] = useState(false);
   const [loadingCommission, setLoadingCommission] = useState(false);
+  const [employeeDocuments, setEmployeeDocuments] = useState<EmployeeDocumentRow[]>(attendant.employeeDocuments ?? []);
+  const [documentForm, setDocumentForm] = useState({
+    documentType: "NATIONAL_ID",
+    title: "",
+    notes: "",
+    file: null as File | null,
+  });
+  const [uploadingDocument, setUploadingDocument] = useState(false);
+  const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,6 +130,70 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
       cancelled = true;
     };
   }, [attendant.id]);
+
+  async function uploadEmployeeDocument() {
+    if (!documentForm.file) {
+      alert("Select a file first.");
+      return;
+    }
+    if (!documentForm.title.trim()) {
+      alert("Enter a document title.");
+      return;
+    }
+
+    setUploadingDocument(true);
+    try {
+      const formData = new FormData();
+      formData.set("file", documentForm.file);
+      formData.set("documentType", documentForm.documentType);
+      formData.set("title", documentForm.title.trim());
+      formData.set("notes", documentForm.notes.trim());
+
+      const res = await fetch(`/api/admin/attendants/${attendant.id}/documents`, {
+        method: "POST",
+        body: formData,
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok || !payload?.ok) {
+        throw new Error(payload?.error || "document_upload_failed");
+      }
+
+      setEmployeeDocuments((current) => [payload.document as EmployeeDocumentRow, ...current]);
+      setDocumentForm({
+        documentType: "NATIONAL_ID",
+        title: "",
+        notes: "",
+        file: null,
+      });
+      router.refresh();
+      alert("Employment document uploaded.");
+    } catch (error) {
+      alert(String(error));
+    } finally {
+      setUploadingDocument(false);
+    }
+  }
+
+  async function deleteEmployeeDocument(documentId: string) {
+    if (!confirm("Delete this employment document?")) return;
+
+    setDeletingDocumentId(documentId);
+    try {
+      const res = await fetch(`/api/admin/attendants/${attendant.id}/documents?documentId=${encodeURIComponent(documentId)}`, {
+        method: "DELETE",
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok || !payload?.ok) {
+        throw new Error(payload?.error || "document_delete_failed");
+      }
+      setEmployeeDocuments((current) => current.filter((document) => document.id !== documentId));
+      router.refresh();
+    } catch (error) {
+      alert(String(error));
+    } finally {
+      setDeletingDocumentId(null);
+    }
+  }
 
   async function save() {
     setSaving(true);
@@ -345,6 +452,91 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
               <option value="POS_PROFIT_10">10% of POS profit</option>
             </select>
           </label>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-sky-400/20 bg-sky-500/5 p-4 mb-4">
+        <h3 className="text-sm font-semibold mb-2">Employment documents</h3>
+        <p className="text-xs text-slate-400 mb-3">
+          Upload staff documents here so they appear on the employee compliance page. Use this for ID copies, contracts, licences, certificates, and related employment records.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+          <select
+            className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
+            value={documentForm.documentType}
+            onChange={(e) => setDocumentForm((s) => ({ ...s, documentType: e.target.value }))}
+          >
+            {EMPLOYMENT_DOCUMENT_TYPES.map((option) => (
+              <option key={option} value={option}>{formatDocumentType(option)}</option>
+            ))}
+          </select>
+          <input
+            type="text"
+            placeholder="Document title"
+            value={documentForm.title}
+            onChange={(e) => setDocumentForm((s) => ({ ...s, title: e.target.value }))}
+            className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
+          />
+          <input
+            type="text"
+            placeholder="Optional notes"
+            value={documentForm.notes}
+            onChange={(e) => setDocumentForm((s) => ({ ...s, notes: e.target.value }))}
+            className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm sm:col-span-2"
+          />
+          <input
+            type="file"
+            onChange={(e) => setDocumentForm((s) => ({ ...s, file: e.target.files?.[0] ?? null }))}
+            className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm sm:col-span-2"
+          />
+        </div>
+        <div className="flex flex-wrap gap-3 mb-4">
+          <button
+            type="button"
+            onClick={uploadEmployeeDocument}
+            disabled={uploadingDocument}
+            className="rounded-full bg-sky-400 px-4 py-2 text-black font-semibold disabled:opacity-60"
+          >
+            {uploadingDocument ? "Uploading…" : "Upload document"}
+          </button>
+        </div>
+        <div className="space-y-3">
+          {employeeDocuments.length ? employeeDocuments.map((document) => (
+            <div key={document.id} className="rounded-xl border border-white/10 bg-black/20 p-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-slate-400">{formatDocumentType(document.documentType)}</div>
+                  <div className="text-sm font-semibold text-white">{document.title}</div>
+                  <div className="text-xs text-slate-400">
+                    Uploaded {new Date(document.createdAt).toLocaleDateString("en-KE")} by {document.uploadedBy?.name || document.uploadedBy?.email || "Admin"}
+                  </div>
+                  {document.notes ? <div className="mt-1 text-xs text-slate-300">{document.notes}</div> : null}
+                </div>
+                <div className="flex gap-2">
+                  <a
+                    href={document.fileUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-full border border-slate-700 px-3 py-1.5 text-xs"
+                  >
+                    Open
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => void deleteEmployeeDocument(document.id)}
+                    disabled={deletingDocumentId === document.id}
+                    className="rounded-full border border-rose-500/40 px-3 py-1.5 text-xs text-rose-200 disabled:opacity-60"
+                  >
+                    {deletingDocumentId === document.id ? "Deleting…" : "Delete"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )) : (
+            <div className="rounded-xl border border-dashed border-white/10 p-4 text-sm text-slate-400">
+              No employment documents uploaded yet.
+            </div>
+          )}
         </div>
       </div>
 

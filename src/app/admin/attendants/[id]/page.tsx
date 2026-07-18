@@ -33,6 +33,24 @@ export default async function AttendantEditPage({ params }: { params: { id: stri
       bankName: true,
       bankAccountNumber: true,
       technicalProfile: true,
+      employeeDocuments: {
+        orderBy: [{ createdAt: "desc" }],
+        select: {
+          id: true,
+          documentType: true,
+          title: true,
+          fileUrl: true,
+          notes: true,
+          createdAt: true,
+          uploadedBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      },
     },
   });
   if (!attendant) return <div className="p-8">Attendant not found</div>;
