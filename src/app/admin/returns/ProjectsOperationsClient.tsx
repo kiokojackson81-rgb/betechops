@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { showToast } from "@/lib/ui/toast";
 
@@ -339,6 +340,14 @@ export default function ProjectsOperationsClient() {
                       <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-200">
                         {formatProjectStageLabel(row.projectStage)}
                       </span>
+                      <Link
+                        href={`/receipts/${encodeURIComponent(row.id)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20"
+                      >
+                        Preview receipt
+                      </Link>
                     </div>
                     <div className="mt-2 text-sm text-slate-300">
                       {[row.orderRef, row.customerPhone, formatCurrency(row.total)].filter(Boolean).join(" · ")}
