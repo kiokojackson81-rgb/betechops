@@ -88,6 +88,12 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     tagName,
     skipDefaultTags,
   } = input;
+  const customerDisplayName = String(customerName || '').trim() || 'Customer';
+  const customerFirstName =
+    customerDisplayName
+      .split(/\s+/)
+      .map((part) => part.trim())
+      .find(Boolean) || 'Customer';
   const receiptUrlTrimmed = receiptUrl?.trim();
   const debug: any = {
     ok: false,
@@ -239,14 +245,17 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   fieldActions.push(setFieldValue('media_url', finalReceiptUrl));
   fieldActions.push(setFieldValue('receipt_pdf_url', finalReceiptUrl));
   fieldActions.push(setFieldValue('file_url', finalReceiptUrl));
-  fieldActions.push(setFieldValue('customer_name', customerName || 'Customer'));
+  fieldActions.push(setFieldValue('customer_name', customerDisplayName));
+  fieldActions.push(setFieldValue('customer_full_name', customerDisplayName));
+  fieldActions.push(setFieldValue('customer_first_name', customerFirstName));
   // Some Chatrace flows map template var #1 to "contact.first_name". Chatrace
   // has a top-level "first_name" attribute (we set it in the /contacts body),
   // but we also set these custom-field aliases to prevent blank names when
   // flows/templates are misconfigured to read from a custom field instead.
   try {
-    fieldActions.push(setFieldValue('contact.first_name', customerName || 'Customer'));
-    fieldActions.push(setFieldValue('contact_first_name', customerName || 'Customer'));
+    fieldActions.push(setFieldValue('contact.first_name', customerFirstName));
+    fieldActions.push(setFieldValue('contact_first_name', customerFirstName));
+    fieldActions.push(setFieldValue('first_name', customerFirstName));
   } catch {
     // best-effort only
   }
@@ -358,7 +367,8 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
 
   debug.payloadPreview = {
     phone: phoneE164,
-    first_name: customerName || 'Customer',
+    first_name: customerFirstName,
+    customer_name: customerDisplayName,
     fieldActionsCount: fieldActions.length,
     tagActionsCount: tagActions.length,
     tag: finalTag || (skipDefaultTags ? null : 'receipt_created'),
@@ -401,8 +411,8 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   // Persist the exact request bodies into debug for post-mortem
   debug.steps = debug.steps || {};
   debug.steps.create = debug.steps.create || {};
-  debug.steps.create.request = { phone: phoneE164, first_name: customerName || 'Customer', actions: fieldActions };
-  const createRes = await runRequest(path, { phone: phoneE164, first_name: customerName || 'Customer', actions: fieldActions }, headers);
+  debug.steps.create.request = { phone: phoneE164, first_name: customerFirstName, actions: fieldActions };
+  const createRes = await runRequest(path, { phone: phoneE164, first_name: customerFirstName, actions: fieldActions }, headers);
   debug.steps.create = {
     status: createRes.status,
     bodySnippet: (createRes.text || '').slice(0, 200),
