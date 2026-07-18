@@ -29,6 +29,9 @@ export default async function AdminReceiptsPage({
     if (activeTab === "website-orders") {
       await ensureWebsiteOrdersSchema();
       const orders = await prisma.websiteOrder.findMany({
+        where: {
+          source: "WEBSITE",
+        },
         include: websiteOrderAdminInclude,
         orderBy: [{ createdAt: "desc" }],
       });

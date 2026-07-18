@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
 
   const orders = await prisma.websiteOrder.findMany({
     where: {
+      source: "WEBSITE",
       status: { in: statuses.length ? statuses : [WebsiteOrderStatus.PENDING] },
       ...(q
         ? {
