@@ -340,7 +340,7 @@ export default async function TechnicalDashboardPage({
 
   const actionLinks = [
     { href: "/technical/quotations", label: "Create quotation" },
-    { href: "/receipts", label: "Create receipt" },
+    { href: "/receipts", label: "Create receipt", newTab: true },
     { href: "/technical/site-visits", label: "Schedule site visit" },
     { href: "/technical/projects", label: "Open projects" },
     { href: "/technical/daily-report", label: "Submit daily report" },
@@ -522,7 +522,13 @@ export default async function TechnicalDashboardPage({
             </div>
             <div className="grid grid-cols-2 gap-3">
               {actionLinks.map((item) => (
-                <Link key={item.href} href={item.href} className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-200 transition hover:bg-white/[0.08]">
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  target={item.newTab ? "_blank" : undefined}
+                  rel={item.newTab ? "noreferrer" : undefined}
+                  className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-200 transition hover:bg-white/[0.08]"
+                >
                   {item.label}
                 </Link>
               ))}

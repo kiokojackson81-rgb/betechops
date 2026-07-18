@@ -31,7 +31,7 @@ const sections = [
       { href: "/technical/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/technical/site-visits", label: "Site Visits", icon: CalendarDays },
       { href: "/technical/projects", label: "Projects", icon: BriefcaseBusiness },
-      { href: "/receipts", label: "Receipts", icon: Receipt },
+      { href: "/receipts", label: "Receipts", icon: Receipt, newTab: true },
       { href: "/technical/quotations", label: "Quotations", icon: FileText },
     ],
   },
@@ -41,7 +41,7 @@ const sections = [
       { href: "/technical/daily-report", label: "Daily Reports", icon: ClipboardList },
       { href: "/technical/earnings", label: "Earnings & Payslip", icon: Wallet },
       { href: "/technical/wellness", label: "Wellness", icon: HeartPulse },
-      { href: "/technical/wellness", label: "Compliance", icon: ShieldCheck },
+      { href: "/technical/compliance", label: "Compliance", icon: ShieldCheck },
       { href: "/receipts", label: "Customers", icon: Users },
     ],
   },
@@ -95,6 +95,8 @@ export default function TechnicalShell({
                       <Link
                         key={item.href}
                         href={item.href}
+                        target={item.newTab ? "_blank" : undefined}
+                        rel={item.newTab ? "noreferrer" : undefined}
                         className={`flex items-center gap-3 rounded-2xl border px-3 py-3 text-sm transition ${navClass(active)}`}
                       >
                         <Icon className="h-4 w-4" />
