@@ -33,11 +33,24 @@ function extractProfit(receipt: {
     receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
       ? (receipt.data as Record<string, unknown>)
       : {};
-  const explicit =
-    Number(totals.profit ?? data.profit ?? 0) ||
-    (Number(totals.sellingTotal ?? 0) - Number(totals.buyingTotal ?? 0)) ||
-    (Number(data.sellingTotal ?? 0) - Number(data.buyingTotal ?? 0));
-  return Number.isFinite(explicit) ? explicit : 0;
+  const explicitProfit = Number(totals.profit ?? data.profit ?? 0);
+  if (Number.isFinite(explicitProfit) && explicitProfit > 0) {
+    return explicitProfit;
+  }
+
+  const totalsBuying = Number(totals.buyingTotal ?? 0);
+  const totalsSelling = Number(totals.sellingTotal ?? 0);
+  if (totalsBuying > 0 && Number.isFinite(totalsSelling)) {
+    return totalsSelling - totalsBuying;
+  }
+
+  const dataBuying = Number(data.buyingTotal ?? 0);
+  const dataSelling = Number(data.sellingTotal ?? 0);
+  if (dataBuying > 0 && Number.isFinite(dataSelling)) {
+    return dataSelling - dataBuying;
+  }
+
+  return 0;
 }
 
 async function resolveViewer() {
@@ -172,10 +185,12 @@ export default async function TechnicalSalesPage() {
       })
     : [];
   const supportProfitByReceipt = new Map(
-    supportPricing.map((row) => [
-      canonicalReceiptNumber(row.receiptNumber || undefined) || "",
-      Number(row.sellingTotal ?? 0) - Number(row.buyingTotal ?? 0),
-    ]),
+    supportPricing
+      .filter((row) => Number(row.buyingTotal ?? 0) > 0)
+      .map((row) => [
+        canonicalReceiptNumber(row.receiptNumber || undefined) || "",
+        Number(row.sellingTotal ?? 0) - Number(row.buyingTotal ?? 0),
+      ]),
   );
 
   return (
@@ -232,7 +247,7 @@ export default async function TechnicalSalesPage() {
           <div>
             <div className="text-lg font-semibold text-white">Receipt sales created by you</div>
             <div className="text-sm text-slate-400">
-              Each priced receipt earns {Math.round(TECHNICAL_POS_PROFIT_COMMISSION_RATE * 100)}% of its recognized profit. Unpriced receipts stay at zero commission until buying prices are completed.
+              Commission only starts after buying price has been entered. Until then, the receipt shows its selling price and stays at zero commission.
             </div>
           </div>
           <Link href="/receipts" target="_blank" rel="noreferrer" className="rounded-full border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/5">
@@ -265,8 +280,8 @@ export default async function TechnicalSalesPage() {
                     </div>
                     <div className="grid min-w-[280px] gap-2 rounded-2xl border border-white/10 bg-black/20 p-3 text-sm text-slate-200">
                       <div className="flex items-center justify-between">
-                        <span>Recognized profit</span>
-                        <span className="font-semibold text-white">{formatCurrency(profit)}</span>
+                        <span>Selling price</span>
+                        <span className="font-semibold text-white">{formatCurrency(Number(receipt.order?.totalAmount ?? 0))}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span>Commission on receipt</span>
