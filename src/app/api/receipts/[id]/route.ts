@@ -19,6 +19,7 @@ import { getShopProductHref } from "@/app/shop/storefrontPaths";
 import { getOpsCatalogueProductMappedById } from "@/app/shop/shopProductMapper";
 import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
 import { getProductTableCapabilities, type ProductTableCapabilities } from "@/lib/productTableCapabilities";
+import { isReceiptWithinEditableWindow, receiptEditRestrictionMessage } from "@/lib/receiptEditAccess";
 import { WebsiteOrderStatus } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -355,6 +356,9 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
         (actorId === existing.issuedById || actorId === existing.order?.attendantId || actorId === dataAttendantId);
       if (guard.role === "ATTENDANT" && !ownsReceipt) {
         return null;
+      }
+      if (guard.role !== "ADMIN" && !isReceiptWithinEditableWindow(existing.createdAt)) {
+        throw new Error(receiptEditRestrictionMessage());
       }
       const docType = body?.docType ? String(body.docType).toUpperCase() : String(existing.docType);
       const layawayDeposit = Number(existing.order?.layawayPlan?.deposit ?? existing.order?.paidAmount ?? 0);
@@ -799,6 +803,9 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
     return NextResponse.json({ ok: true, receipt: updated });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Failed to update receipt";
+    if (msg === receiptEditRestrictionMessage()) {
+      return NextResponse.json({ error: msg }, { status: 403 });
+    }
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

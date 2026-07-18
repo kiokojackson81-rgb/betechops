@@ -341,7 +341,7 @@ export default function ProjectsOperationsClient() {
                         {formatProjectStageLabel(row.projectStage)}
                       </span>
                       <Link
-                        href={`/receipts/${encodeURIComponent(row.id)}`}
+                        href={`/receipts/${encodeURIComponent(row.id)}?readonly=1`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20"

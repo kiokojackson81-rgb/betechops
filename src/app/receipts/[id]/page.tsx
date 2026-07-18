@@ -6,10 +6,17 @@ import renderReceiptHtml from "@/lib/receipts/renderReceiptHtml";
 import { auth } from "@/lib/auth";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 import { waitForReceiptById } from "@/lib/receiptReadAfterWrite";
+import { canEditReceiptByRole } from "@/lib/receiptEditAccess";
 
 export const dynamic = "force-dynamic";
 
-export default async function Page({ params }: { params: any }) {
+export default async function Page({
+  params,
+  searchParams,
+}: {
+  params: any;
+  searchParams?: Record<string, string | string[] | undefined> | Promise<Record<string, string | string[] | undefined>>;
+}) {
   // In some hosting/runtime environments `params` can be a Promise (e.g. when
   // edge/request context is provided lazily). Defensively await if needed.
   let resolvedParams = params;
@@ -21,6 +28,15 @@ export default async function Page({ params }: { params: any }) {
       // eslint-disable-next-line no-console
       console.error("[receipts page] failed to resolve params", { err: e });
       resolvedParams = null;
+    }
+  }
+
+  let resolvedSearchParams = searchParams;
+  if (resolvedSearchParams && typeof (resolvedSearchParams as Promise<Record<string, string | string[] | undefined>>).then === "function") {
+    try {
+      resolvedSearchParams = await (resolvedSearchParams as Promise<Record<string, string | string[] | undefined>>);
+    } catch {
+      resolvedSearchParams = {};
     }
   }
 
@@ -80,11 +96,22 @@ export default async function Page({ params }: { params: any }) {
         actor?.id === receipt.order?.attendantId ||
         actor?.id === dataAttendantId));
   if (!canViewReceipt) return <div className="p-4">Receipt not found</div>;
+  const readOnly =
+    String(
+      Array.isArray((resolvedSearchParams as Record<string, string | string[] | undefined> | undefined)?.readonly)
+        ? (resolvedSearchParams as Record<string, string[]>)?.readonly?.[0]
+        : (resolvedSearchParams as Record<string, string | undefined> | undefined)?.readonly ?? "",
+    ).trim() === "1";
   const snapshot = buildReceiptSnapshot(receipt);
   const html = await renderReceiptHtml(snapshot, { hideStamp: false });
   const initialPaymentMethod =
     String(snapshot?.paymentMethod ?? "").toUpperCase() === "CASH" ? "CASH" : "MPESA";
-  const canEditPaymentMethod = canViewReceipt;
+  const canEditPaymentMethod = canEditReceiptByRole({
+    role: actor?.role,
+    createdAt: receipt.createdAt,
+    canView: canViewReceipt,
+    readOnly,
+  });
   const supportCostMap = new Map<string, number>();
   const normalizedReceiptNumber = canonicalReceiptNumber(receipt.order?.orderNumber ?? "");
   if (normalizedReceiptNumber) {

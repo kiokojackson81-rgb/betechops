@@ -3,6 +3,7 @@ import { PaymentMethod } from "@prisma/client";
 import { requireRole } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
+import { isReceiptWithinEditableWindow, receiptEditRestrictionMessage } from "@/lib/receiptEditAccess";
 
 type ParamsContext = { params: { id: string } } | { params: Promise<{ id: string }> };
 
@@ -54,6 +55,9 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
         (actorId === receipt.issuedById || actorId === receipt.order?.attendantId || actorId === dataAttendantId);
       if (guard.role === "ATTENDANT" && !ownsReceipt) {
         return null;
+      }
+      if (guard.role !== "ADMIN" && !isReceiptWithinEditableWindow(receipt.createdAt)) {
+        throw new Error(receiptEditRestrictionMessage());
       }
 
       const nextData = {
@@ -121,6 +125,9 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
     const message = err instanceof Error ? err.message : "Failed to update payment method";
     if (message === "Receipt not found") {
       return NextResponse.json({ error: message }, { status: 404 });
+    }
+    if (message === receiptEditRestrictionMessage()) {
+      return NextResponse.json({ error: message }, { status: 403 });
     }
     return NextResponse.json({ error: message }, { status: 500 });
   }
