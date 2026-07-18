@@ -414,20 +414,22 @@ export default async function TechnicalDashboardPage({
         </div>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-6 md:grid-cols-2">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         {quickStats.map((item) => {
           const Icon = item.icon;
           return (
             <Link
               key={item.label}
               href={item.href}
-              className="rounded-[24px] border border-white/10 bg-white/5 p-5 transition hover:border-emerald-400/30 hover:bg-white/[0.08]"
+              className="min-w-0 rounded-[24px] border border-white/10 bg-white/5 p-5 transition hover:border-emerald-400/30 hover:bg-white/[0.08]"
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-start justify-between gap-3">
                 <span className="text-sm text-slate-300">{item.label}</span>
-                <Icon className="h-5 w-5 text-emerald-300" />
+                <Icon className="h-5 w-5 shrink-0 text-emerald-300" />
               </div>
-              <div className="mt-4 text-4xl font-semibold tracking-tight text-white">{item.value}</div>
+              <div className="mt-4 break-words text-3xl font-semibold leading-none tracking-tight text-white sm:text-4xl">
+                {item.value}
+              </div>
               <div className="mt-2 text-sm text-slate-400">{item.hint}</div>
             </Link>
           );
@@ -436,40 +438,48 @@ export default async function TechnicalDashboardPage({
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.8fr)_360px]">
         <div className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-4">
-            <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="min-w-0 rounded-[24px] border border-white/10 bg-white/5 p-5">
               <div className="text-sm text-slate-400">Receipts</div>
-              <div className="mt-2 text-3xl font-semibold text-white">{periodReceipts.length}</div>
+              <div className="mt-2 break-words text-2xl font-semibold leading-tight text-white sm:text-3xl">{periodReceipts.length}</div>
               <div className="mt-1 text-sm text-slate-500">Rows in this period</div>
             </div>
-            <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
+            <div className="min-w-0 rounded-[24px] border border-white/10 bg-white/5 p-5">
               <div className="text-sm text-slate-400">Sales (KES)</div>
-              <div className="mt-2 text-3xl font-semibold text-white">{formatCurrency(payrollRow.totalSales).replace("Ksh", "KES")}</div>
+              <div className="mt-2 break-words text-2xl font-semibold leading-tight text-white sm:text-3xl">
+                {formatCurrency(payrollRow.totalSales).replace("Ksh", "KES")}
+              </div>
               <div className="mt-1 text-sm text-slate-500">Receipts and attributed work</div>
             </div>
-            <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
+            <div className="min-w-0 rounded-[24px] border border-white/10 bg-white/5 p-5">
               <div className="text-sm text-slate-400">Commission</div>
-              <div className="mt-2 text-3xl font-semibold text-white">{formatCurrency(payrollRow.commission).replace("Ksh", "KES")}</div>
+              <div className="mt-2 break-words text-2xl font-semibold leading-tight text-white sm:text-3xl">
+                {formatCurrency(payrollRow.commission).replace("Ksh", "KES")}
+              </div>
               <div className="mt-1 text-sm text-slate-500">10% of priced POS profit plus completed projects</div>
             </div>
-            <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
+            <div className="min-w-0 rounded-[24px] border border-white/10 bg-white/5 p-5">
               <div className="text-sm text-slate-400">Items sold</div>
-              <div className="mt-2 text-3xl font-semibold text-white">{totalItems}</div>
+              <div className="mt-2 break-words text-2xl font-semibold leading-tight text-white sm:text-3xl">{totalItems}</div>
               <div className="mt-1 text-sm text-slate-500">Linked receipt items</div>
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-[24px] border border-amber-400/20 bg-amber-500/10 p-5">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="min-w-0 rounded-[24px] border border-amber-400/20 bg-amber-500/10 p-5">
               <div className="text-sm text-amber-100/80">Pending project commission</div>
-              <div className="mt-2 text-3xl font-semibold text-amber-100">{formatCurrency(projectCommission.pendingAmount).replace("Ksh", "KES")}</div>
+              <div className="mt-2 break-words text-2xl font-semibold leading-tight text-amber-100 sm:text-3xl">
+                {formatCurrency(projectCommission.pendingAmount).replace("Ksh", "KES")}
+              </div>
               <div className="mt-1 text-sm text-amber-100/70">
                 {projectCommission.pendingCount} assigned project{projectCommission.pendingCount === 1 ? "" : "s"} currently in progress at KES 2,000 each.
               </div>
             </div>
-            <div className="rounded-[24px] border border-emerald-400/20 bg-emerald-500/10 p-5">
+            <div className="min-w-0 rounded-[24px] border border-emerald-400/20 bg-emerald-500/10 p-5">
               <div className="text-sm text-emerald-100/80">Completed project commission</div>
-              <div className="mt-2 text-3xl font-semibold text-emerald-100">{formatCurrency(projectCommission.completedAmount).replace("Ksh", "KES")}</div>
+              <div className="mt-2 break-words text-2xl font-semibold leading-tight text-emerald-100 sm:text-3xl">
+                {formatCurrency(projectCommission.completedAmount).replace("Ksh", "KES")}
+              </div>
               <div className="mt-1 text-sm text-emerald-100/70">
                 {projectCommission.completedCount} completed project{projectCommission.completedCount === 1 ? "" : "s"} already posted into this payroll period.
               </div>
@@ -528,7 +538,9 @@ export default async function TechnicalDashboardPage({
             <div className="text-lg font-semibold text-white">Earnings this period</div>
             <div className="mt-1 text-sm text-slate-400">{period.label}</div>
             <div className="mt-5 text-sm uppercase tracking-[0.2em] text-slate-500">Net pay</div>
-            <div className="mt-2 text-4xl font-semibold tracking-tight text-emerald-300">{formatCurrency(payrollRow.netPay)}</div>
+            <div className="mt-2 break-words text-3xl font-semibold leading-tight tracking-tight text-emerald-300 sm:text-4xl">
+              {formatCurrency(payrollRow.netPay)}
+            </div>
             <div className="mt-5 space-y-2 text-sm text-slate-300">
               <div className="flex items-center justify-between"><span>Base salary</span><span>{formatCurrency(payrollRow.baseSalary)}</span></div>
               <div className="flex items-center justify-between"><span>Commission</span><span>{formatCurrency(payrollRow.commission)}</span></div>

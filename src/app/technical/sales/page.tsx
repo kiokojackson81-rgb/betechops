@@ -217,25 +217,25 @@ export default async function TechnicalSalesPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-4">
-        <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="min-w-0 rounded-[24px] border border-white/10 bg-white/5 p-5">
           <div className="text-sm text-slate-400">POS sales</div>
-          <div className="mt-2 text-3xl font-semibold text-white">{formatCurrency(summary.totalSales)}</div>
+          <div className="mt-2 break-words text-2xl font-semibold leading-tight text-white sm:text-3xl">{formatCurrency(summary.totalSales)}</div>
           <div className="mt-1 text-sm text-slate-500">Your receipts in this trading period</div>
         </div>
-        <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
+        <div className="min-w-0 rounded-[24px] border border-white/10 bg-white/5 p-5">
           <div className="text-sm text-slate-400">POS receipts created</div>
-          <div className="mt-2 text-3xl font-semibold text-white">{summary.receiptsCount}</div>
+          <div className="mt-2 break-words text-2xl font-semibold leading-tight text-white sm:text-3xl">{summary.receiptsCount}</div>
           <div className="mt-1 text-sm text-slate-500">Receipts you have created in this trading period</div>
         </div>
-        <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
+        <div className="min-w-0 rounded-[24px] border border-white/10 bg-white/5 p-5">
           <div className="text-sm text-slate-400">POS commission</div>
-          <div className="mt-2 text-3xl font-semibold text-white">{formatCurrency(payrollRow.commissionDirect)}</div>
+          <div className="mt-2 break-words text-2xl font-semibold leading-tight text-white sm:text-3xl">{formatCurrency(payrollRow.commissionDirect)}</div>
           <div className="mt-1 text-sm text-slate-500">10% profit share plus released POS product commission</div>
         </div>
-        <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
+        <div className="min-w-0 rounded-[24px] border border-white/10 bg-white/5 p-5">
           <div className="text-sm text-slate-400">Project commission</div>
-          <div className="mt-2 text-3xl font-semibold text-white">{formatCurrency(projectCommission.completedAmount)}</div>
+          <div className="mt-2 break-words text-2xl font-semibold leading-tight text-white sm:text-3xl">{formatCurrency(projectCommission.completedAmount)}</div>
           <div className="mt-1 text-sm text-slate-500">
             Pending {formatCurrency(projectCommission.pendingAmount)} across {projectCommission.pendingCount} in-progress assigned project{projectCommission.pendingCount === 1 ? "" : "s"}
           </div>
@@ -278,14 +278,14 @@ export default async function TechnicalSalesPage() {
                         Created {new Date(receipt.createdAt).toLocaleString("en-KE")} · Payment {String(receipt.order?.paymentStatus || "PENDING").replace(/_/g, " ")}
                       </div>
                     </div>
-                    <div className="grid min-w-[280px] gap-2 rounded-2xl border border-white/10 bg-black/20 p-3 text-sm text-slate-200">
+                    <div className="grid min-w-0 gap-2 rounded-2xl border border-white/10 bg-black/20 p-3 text-sm text-slate-200 lg:min-w-[280px]">
                       <div className="flex items-center justify-between">
                         <span>Selling price</span>
-                        <span className="font-semibold text-white">{formatCurrency(Number(receipt.order?.totalAmount ?? 0))}</span>
+                        <span className="break-words text-right font-semibold text-white">{formatCurrency(Number(receipt.order?.totalAmount ?? 0))}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span>Commission on receipt</span>
-                        <span className="font-semibold text-emerald-300">{formatCurrency(commission)}</span>
+                        <span className="break-words text-right font-semibold text-emerald-300">{formatCurrency(commission)}</span>
                       </div>
                       <div className="text-xs text-slate-500">
                         {profit > 0 ? "Pricing completed. This receipt already contributes to your POS commission." : "Awaiting pricing or buying-cost confirmation before commission can be recognized."}

@@ -27,6 +27,13 @@ type Viewer = {
   roleLabel: string;
 };
 
+type NavItem = {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  newTab?: boolean;
+};
+
 const sections = [
   {
     label: "Operations",
@@ -65,6 +72,7 @@ export default function TechnicalShell({
   children: ReactNode;
 }) {
   const pathname = usePathname();
+  const mobileItems: NavItem[] = sections.flatMap((section) => [...section.items]);
 
   return (
     <div className="min-h-screen bg-[#07111f] text-slate-100">
@@ -123,27 +131,47 @@ export default function TechnicalShell({
         </aside>
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between border-b border-white/10 bg-white/5 px-4 py-4 backdrop-blur lg:px-8">
-            <div>
+          <div className="flex flex-col gap-3 border-b border-white/10 bg-white/5 px-4 py-4 backdrop-blur lg:flex-row lg:items-center lg:justify-between lg:px-8">
+            <div className="min-w-0">
               <div className="flex items-center gap-2 text-white">
                 <Activity className="h-4 w-4 text-emerald-300" />
                 <span className="text-lg font-semibold">Technical Team Dashboard</span>
               </div>
               <div className="text-sm text-slate-400">Unified operations, receipts, payroll, and field activity.</div>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="text-right">
+            <div className="flex items-center justify-between gap-3 sm:justify-end">
+              <div className="min-w-0 sm:text-right">
                 <div className="text-sm font-medium text-white">{viewer.name}</div>
                 <div className="text-xs uppercase tracking-[0.2em] text-slate-400">{viewer.roleLabel}</div>
               </div>
               <button
                 type="button"
                 onClick={() => signOut({ callbackUrl: "/attendant/login" })}
-                className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-slate-100 transition hover:bg-white/5"
+                className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-slate-100 transition hover:bg-white/5"
               >
                 <LogOut className="h-4 w-4" />
                 <span>Log out</span>
               </button>
+            </div>
+          </div>
+          <div className="border-b border-white/10 bg-[#091223] px-4 py-3 lg:hidden">
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {mobileItems.map((item) => {
+                const Icon = item.icon;
+                const active = pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    target={item.newTab ? "_blank" : undefined}
+                    rel={item.newTab ? "noreferrer" : undefined}
+                    className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-4 py-2 text-sm transition ${navClass(active)}`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
             </div>
           </div>
           <main className="px-4 py-6 lg:px-8">{children}</main>
