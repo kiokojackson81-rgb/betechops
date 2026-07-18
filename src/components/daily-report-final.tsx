@@ -269,8 +269,10 @@ function withImpersonateHash(
 
 export default function DailyReportFinal({
   initialSection,
+  initialImpersonateId,
 }: {
   initialSection?: "dashboard" | "daily-report";
+  initialImpersonateId?: string | null;
 } = {}) {
   const [currentView, setCurrentView] = useState<
     "dashboard" | "receipts" | "web-orders" | "quote-requests" | "product-desk"
@@ -477,7 +479,7 @@ export default function DailyReportFinal({
     missedCount: 0,
     followUpCount: 0,
   });
-  const [impersonateId, setImpersonateId] = useState<string | null>(null);
+  const [impersonateId, setImpersonateId] = useState<string | null>(initialImpersonateId ?? null);
   const [impersonationReady, setImpersonationReady] = useState(false);
   const [resolvedAttendantEmail, setResolvedAttendantEmail] = useState<string | null>(null);
   const [, setHasAuthoritativeCommission] = useState(false);
@@ -534,9 +536,9 @@ export default function DailyReportFinal({
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
-    setImpersonateId(params.get("impersonateId"));
+    setImpersonateId(params.get("impersonateId") || initialImpersonateId || null);
     setImpersonationReady(true);
-  }, []);
+  }, [initialImpersonateId]);
 
   useEffect(() => {
     let cancelled = false;
