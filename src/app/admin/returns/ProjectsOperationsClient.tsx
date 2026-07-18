@@ -61,6 +61,11 @@ type ProjectEditor = {
   externalAgentPhone: string;
 };
 
+type ProjectsOperationsClientProps = {
+  scope?: "admin" | "technical";
+  viewerId?: string | null;
+};
+
 const formatCurrency = (value: number | string | null | undefined) => {
   const amount = Number(value ?? 0);
   if (!Number.isFinite(amount)) return "Ksh 0";
@@ -122,7 +127,11 @@ const makeEditor = (row: ProjectRow): ProjectEditor => ({
   externalAgentPhone: row.projectExternalAgentPhone ?? "",
 });
 
-export default function ProjectsOperationsClient() {
+export default function ProjectsOperationsClient({
+  scope = "admin",
+  viewerId = null,
+}: ProjectsOperationsClientProps) {
+  const isTechnicalScope = scope === "technical";
   const [rows, setRows] = useState<ProjectRow[]>([]);
   const [staff, setStaff] = useState<StaffOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -169,6 +178,12 @@ export default function ProjectsOperationsClient() {
   const filteredRows = useMemo(() => {
     const term = query.trim().toLowerCase();
     return rows.filter((row) => {
+      if (
+        scope === "technical" &&
+        String(row.projectHandlerStaffId || "").trim() !== String(viewerId || "").trim()
+      ) {
+        return false;
+      }
       if (stageFilter !== "ALL" && row.projectStage !== stageFilter) return false;
       if (!term) return true;
       return [
@@ -181,7 +196,7 @@ export default function ProjectsOperationsClient() {
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(term));
     });
-  }, [query, rows, stageFilter]);
+  }, [query, rows, scope, stageFilter, viewerId]);
 
   const summary = useMemo(() => {
     return {
@@ -389,6 +404,7 @@ export default function ProjectsOperationsClient() {
                     Handler type
                     <select
                       value={editor.handlerType}
+                      disabled={isTechnicalScope}
                       onChange={(e) =>
                         setEditorValue(row.id, {
                           handlerType: e.target.value as ProjectEditor["handlerType"],
@@ -397,7 +413,7 @@ export default function ProjectsOperationsClient() {
                           externalAgentPhone: e.target.value === "EXTERNAL" ? editor.externalAgentPhone : "",
                         })
                       }
-                      className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60"
+                      className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60 disabled:cursor-not-allowed disabled:opacity-70"
                     >
                       <option value="">Unassigned</option>
                       <option value="STAFF">Staff</option>
@@ -410,8 +426,9 @@ export default function ProjectsOperationsClient() {
                       Assigned staff
                       <select
                         value={editor.handlerStaffId}
+                        disabled={isTechnicalScope}
                         onChange={(e) => setEditorValue(row.id, { handlerStaffId: e.target.value })}
-                        className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60"
+                        className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60 disabled:cursor-not-allowed disabled:opacity-70"
                       >
                         <option value="">Select staff</option>
                         {staff.map((option) => (
@@ -427,16 +444,18 @@ export default function ProjectsOperationsClient() {
                         Agent name
                         <input
                           value={editor.externalAgentName}
+                          disabled={isTechnicalScope}
                           onChange={(e) => setEditorValue(row.id, { externalAgentName: e.target.value })}
-                          className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60"
+                          className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60 disabled:cursor-not-allowed disabled:opacity-70"
                         />
                       </label>
                       <label className="text-sm text-slate-200">
                         Agent phone
                         <input
                           value={editor.externalAgentPhone}
+                          disabled={isTechnicalScope}
                           onChange={(e) => setEditorValue(row.id, { externalAgentPhone: e.target.value })}
-                          className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60"
+                          className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-white outline-none focus:border-cyan-400/60 disabled:cursor-not-allowed disabled:opacity-70"
                         />
                       </label>
                     </>
