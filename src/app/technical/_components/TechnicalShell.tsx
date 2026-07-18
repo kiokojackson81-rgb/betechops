@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { signOut } from "next-auth/react";
 import {
   Activity,
   BriefcaseBusiness,
@@ -13,6 +14,7 @@ import {
   LayoutDashboard,
   Receipt,
   ShieldCheck,
+  LogOut,
   Users,
   Wallet,
   Wrench,
@@ -107,6 +109,14 @@ export default function TechnicalShell({
                 </div>
               </div>
             ))}
+            <button
+              type="button"
+              onClick={() => signOut({ callbackUrl: "/attendant/login" })}
+              className="flex w-full items-center gap-3 rounded-2xl border border-rose-500/20 px-3 py-3 text-sm text-rose-100 transition hover:border-rose-400/40 hover:bg-rose-500/10 hover:text-white"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Log out</span>
+            </button>
           </nav>
         </aside>
 
@@ -119,9 +129,19 @@ export default function TechnicalShell({
               </div>
               <div className="text-sm text-slate-400">Unified operations, receipts, payroll, and field activity.</div>
             </div>
-            <div className="text-right">
-              <div className="text-sm font-medium text-white">{viewer.name}</div>
-              <div className="text-xs uppercase tracking-[0.2em] text-slate-400">{viewer.roleLabel}</div>
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <div className="text-sm font-medium text-white">{viewer.name}</div>
+                <div className="text-xs uppercase tracking-[0.2em] text-slate-400">{viewer.roleLabel}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => signOut({ callbackUrl: "/attendant/login" })}
+                className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-slate-100 transition hover:bg-white/5"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Log out</span>
+              </button>
             </div>
           </div>
           <main className="px-4 py-6 lg:px-8">{children}</main>
