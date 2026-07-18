@@ -93,6 +93,8 @@ const formatPaymentTermLabel = (value?: string | null) => {
   }
 };
 
+const PROJECT_COMPLETION_COMMISSION = 2000;
+
 const makeEditor = (row: ProjectRow): ProjectEditor => ({
   paymentTerm:
     row.projectPaymentTerm === "FULL_BEFORE_INSTALLATION" ||
@@ -355,6 +357,15 @@ export default function ProjectsOperationsClient() {
                     <div className="mt-1 text-xs text-slate-400">
                       Created {new Date(row.createdAt).toLocaleString("en-KE")}
                     </div>
+                    {row.projectHandlerType === "STAFF" && row.projectHandlerStaffId ? (
+                      <div className="mt-2 text-xs text-slate-400">
+                        {row.projectStage === "PROJECT_IN_PROGRESS"
+                          ? `Pending assigned project commission: ${formatCurrency(PROJECT_COMPLETION_COMMISSION)}`
+                          : row.projectStage === "COMPLETED_POSTED"
+                            ? `Project commission earned: ${formatCurrency(PROJECT_COMPLETION_COMMISSION)}`
+                            : `Project commission unlocks after this assigned project moves into progress.`}
+                      </div>
+                    ) : null}
                   </div>
                   {row.attendantName ? (
                     <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">

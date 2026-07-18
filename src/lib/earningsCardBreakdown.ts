@@ -34,6 +34,7 @@ type SummaryLike = {
   totalDeductions?: number;
   netPay?: number;
   adjustmentEntries?: AdjustmentEntryLike[];
+  commissionBreakdown?: unknown | null;
 };
 
 export type EarningsCardLine = {
@@ -88,6 +89,20 @@ function commissionLines(summary: SummaryLike): EarningsCardLine[] {
       return direct || totalCommission
         ? [{ label: "Support commission", amount: direct || totalCommission, kind: "earning" }]
         : [];
+    case "TECHNICAL_TEAM": {
+      const breakdown =
+        summary.commissionBreakdown && typeof summary.commissionBreakdown === "object"
+          ? (summary.commissionBreakdown as Record<string, unknown>)
+          : {};
+      const posProfitShare = num(breakdown.posProfitShare);
+      const posProduct = num(breakdown.posProduct);
+      const projectCompleted = num(breakdown.projectCompleted);
+      return [
+        { label: "POS profit commission", amount: posProfitShare, kind: "earning" as const },
+        { label: "POS product commission", amount: posProduct, kind: "earning" as const },
+        { label: "Project commission", amount: projectCompleted, kind: "earning" as const },
+      ].filter((line) => line.amount !== 0);
+    }
     default:
       return totalCommission ? [{ label: "Commission", amount: totalCommission, kind: "earning" }] : [];
   }

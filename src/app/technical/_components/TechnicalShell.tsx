@@ -12,6 +12,7 @@ import {
   FileText,
   HeartPulse,
   LayoutDashboard,
+  LineChart,
   Receipt,
   ShieldCheck,
   LogOut,
@@ -31,6 +32,7 @@ const sections = [
     label: "Operations",
     items: [
       { href: "/technical/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/technical/sales", label: "Sales Monitor", icon: LineChart },
       { href: "/technical/site-visits", label: "Site Visits", icon: CalendarDays },
       { href: "/technical/projects", label: "Projects", icon: BriefcaseBusiness },
       { href: "/receipts", label: "Receipts", icon: Receipt, newTab: true },

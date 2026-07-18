@@ -21,14 +21,18 @@ export function deriveDefaultCommissionConfigFromUser(user: {
   const attendantCategory = (user.attendantCategory ?? "").toString().trim();
 
   const posTotalsMode: PosTotalsMode =
-    attendantCategory === "DIRECT_SALES_OPS" || email === "justus@betech.co.ke" ? "USER" : "NONE";
+    attendantCategory === "DIRECT_SALES_OPS" ||
+    attendantCategory === "TECHNICAL_TEAM" ||
+    email === "justus@betech.co.ke"
+      ? "USER"
+      : "NONE";
 
   const salesCommissionMode: SalesCommissionMode =
     email === "jeniffer@betech.co.ke"
       ? "JENIFFER_PRORATED"
       : email === "brendah@betech.co.ke"
         ? "BRENDAH_DIRECT"
-        : email === "justus@betech.co.ke"
+        : email === "justus@betech.co.ke" || attendantCategory === "TECHNICAL_TEAM"
           ? "POS_PROFIT_10"
         : "DEFAULT_TIERS";
 

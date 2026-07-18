@@ -19,6 +19,10 @@ import {
 import { getUserCommissionConfigLike } from "@/lib/userCommissionConfig";
 import { ensurePayrollAdjustmentStorage } from "@/lib/payrollAdjustmentStorage";
 import { getReleasedPosProductCommissionForStaffPeriod } from "@/lib/posProductCommission";
+import {
+  getTechnicalProjectCommissionSummary,
+  TECHNICAL_POS_PROFIT_COMMISSION_RATE,
+} from "@/lib/technicalCompensation";
 import type { AdjustmentBreakdown, AdjustmentEntry, AdjustmentKind, PayrollRow } from "@/app/admin/payroll/types";
 
 type AttendantRecord = {
@@ -241,6 +245,10 @@ function isDirectSalesCategory(category?: string | null) {
 
 function isMarketingCategory(category?: string | null) {
   return category === "MARKETING_OPS";
+}
+
+function isTechnicalCategory(category?: string | null) {
+  return category === "TECHNICAL_TEAM";
 }
 
 function withNegativeBalanceCarry(row: PayrollRow, amount: number, sourcePeriod: TradingPeriod): PayrollRow {
@@ -564,6 +572,85 @@ async function buildPayrollRowResolved(
       newProducts: Number(earningsSummary.totalNewProducts ?? 0),
       editedProducts: Number(earningsSummary.totalEditedProducts ?? 0),
       copiedProducts: Number(earningsSummary.totalCopiedProducts ?? 0),
+      adjustmentBreakdown: adjustmentSummary.breakdown,
+      adjustmentEntries: adjustmentSummary.entries,
+    };
+    return applyPreviousNegativeBalanceCarry(attendant, period, row, options);
+  }
+
+  if (isTechnicalCategory(attendant.attendantCategory)) {
+    const [earningsSummary, receiptSummary, releasedPosCommission, projectCommission] = await Promise.all([
+      getEarningsSummaryForUser({ userId: attendant.id, asOf: period.start }),
+      computeAdminReceiptSummary({
+        start: period.start,
+        end: period.end,
+        scope: "mine",
+        currentUserId: attendant.id,
+        attendantId: attendant.id,
+        salesOnly: true,
+      }),
+      getReleasedPosProductCommissionForStaffPeriod(attendant.id, period.start, period.end),
+      getTechnicalProjectCommissionSummary(attendant.id, period),
+    ]);
+
+    const totalSales = Math.max(Number(receiptSummary.totalSales ?? 0), Number(earningsSummary.totalSales ?? 0));
+    const totalReceipts = Math.max(
+      Number(receiptSummary.receiptsCount ?? 0),
+      Number(earningsSummary.totalReceipts ?? 0),
+    );
+    const totalItems = Math.max(
+      Number(receiptSummary.itemsCount ?? 0),
+      Number(earningsSummary.totalItems ?? 0),
+    );
+    const totalProfit =
+      Math.max(Number(receiptSummary.totalProfit ?? 0), Number(earningsSummary.totalProfit ?? 0)) -
+      Number(releasedPosCommission ?? 0);
+    const salesCommission = Math.round(Math.max(0, totalProfit) * TECHNICAL_POS_PROFIT_COMMISSION_RATE);
+    const directCommissionTotal = salesCommission + Number(releasedPosCommission ?? 0);
+    const projectWorkCommission = Number(projectCommission.completedAmount ?? 0);
+    const commissionTotal = directCommissionTotal + projectWorkCommission;
+    const totalEarnings =
+      Number(earningsSummary.baseSalary ?? 0) +
+      Number(earningsSummary.transportAllowance ?? 0) +
+      commissionTotal +
+      adjustmentSummary.totalBonus;
+    const totalDeductions = adjustmentSummary.totalDeduction + penalties;
+
+    const row = {
+      attendantId: attendant.id,
+      name: attendant.name,
+      email: attendant.email,
+      attendantCategory: attendant.attendantCategory,
+      isActive: attendant.isActive,
+      baseSalary: Number(earningsSummary.baseSalary ?? 0),
+      transportAllowance: Number(earningsSummary.transportAllowance ?? 0),
+      commission: commissionTotal,
+      commissionGross: commissionTotal,
+      commissionDirect: directCommissionTotal,
+      commissionMarketplaceJumia: 0,
+      commissionMarketplaceKilimall: 0,
+      commissionTotal,
+      commissionBreakdown: {
+        posProfitShare: salesCommission,
+        posProduct: Number(releasedPosCommission ?? 0),
+        projectCompleted: projectWorkCommission,
+        projectPending: Number(projectCommission.pendingAmount ?? 0),
+        projectCompletedCount: Number(projectCommission.completedCount ?? 0),
+        projectPendingCount: Number(projectCommission.pendingCount ?? 0),
+        total: commissionTotal,
+      },
+      bonusTotal: adjustmentSummary.totalBonus,
+      deductionTotal: totalDeductions,
+      totalEarnings,
+      totalDeductions,
+      netPay: totalEarnings - totalDeductions,
+      totalSales,
+      totalProfit,
+      totalReceipts,
+      totalItems,
+      newProducts: 0,
+      editedProducts: 0,
+      copiedProducts: 0,
       adjustmentBreakdown: adjustmentSummary.breakdown,
       adjustmentEntries: adjustmentSummary.entries,
     };

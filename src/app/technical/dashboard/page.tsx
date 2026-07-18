@@ -20,6 +20,7 @@ import { ensureSiteVisitsSchema, listAdminSiteVisits } from "@/lib/siteVisits";
 import { readReceiptProjectFlow } from "@/lib/receiptProjects";
 import getLandingPage from "@/lib/getLandingPage";
 import { buildTechnicalPermissionHints, isTechnicalTeamCategory } from "@/lib/technicalTeam";
+import { getTechnicalProjectCommissionSummary } from "@/lib/technicalCompensation";
 
 export const dynamic = "force-dynamic";
 
@@ -153,7 +154,7 @@ export default async function TechnicalDashboardPage({
 
   await Promise.all([ensureQuoteRequestsSchema(), ensureSiteVisitsSchema()]);
 
-  const [payrollRow, quotes, siteVisits, periodReceipts, projectReceipts, dailyReportCount] = await Promise.all([
+  const [payrollRow, quotes, siteVisits, periodReceipts, projectReceipts, dailyReportCount, projectCommission] = await Promise.all([
     buildPayrollRow(
       {
         id: viewer.id,
@@ -218,6 +219,7 @@ export default async function TechnicalDashboardPage({
         date: { gte: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0) },
       },
     }),
+    getTechnicalProjectCommissionSummary(viewer.id, period),
   ]);
 
   const assignedQuotes = quotes.filter((quote) => quote.assignedAttendant?.id === viewer.id);
@@ -339,6 +341,7 @@ export default async function TechnicalDashboardPage({
   );
 
   const actionLinks = [
+    { href: "/technical/sales", label: "Open sales monitor" },
     { href: "/technical/quotations", label: "Create quotation" },
     { href: "/receipts", label: "Create receipt", newTab: true },
     { href: "/technical/site-visits", label: "Schedule site visit" },
@@ -437,12 +440,29 @@ export default async function TechnicalDashboardPage({
             <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
               <div className="text-sm text-slate-400">Commission</div>
               <div className="mt-2 text-3xl font-semibold text-white">{formatCurrency(payrollRow.commission).replace("Ksh", "KES")}</div>
-              <div className="mt-1 text-sm text-slate-500">Current trading period</div>
+              <div className="mt-1 text-sm text-slate-500">10% of priced POS profit plus completed projects</div>
             </div>
             <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
               <div className="text-sm text-slate-400">Items sold</div>
               <div className="mt-2 text-3xl font-semibold text-white">{totalItems}</div>
               <div className="mt-1 text-sm text-slate-500">Linked receipt items</div>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-[24px] border border-amber-400/20 bg-amber-500/10 p-5">
+              <div className="text-sm text-amber-100/80">Pending project commission</div>
+              <div className="mt-2 text-3xl font-semibold text-amber-100">{formatCurrency(projectCommission.pendingAmount).replace("Ksh", "KES")}</div>
+              <div className="mt-1 text-sm text-amber-100/70">
+                {projectCommission.pendingCount} assigned project{projectCommission.pendingCount === 1 ? "" : "s"} currently in progress at KES 2,000 each.
+              </div>
+            </div>
+            <div className="rounded-[24px] border border-emerald-400/20 bg-emerald-500/10 p-5">
+              <div className="text-sm text-emerald-100/80">Completed project commission</div>
+              <div className="mt-2 text-3xl font-semibold text-emerald-100">{formatCurrency(projectCommission.completedAmount).replace("Ksh", "KES")}</div>
+              <div className="mt-1 text-sm text-emerald-100/70">
+                {projectCommission.completedCount} completed project{projectCommission.completedCount === 1 ? "" : "s"} already posted into this payroll period.
+              </div>
             </div>
           </div>
 

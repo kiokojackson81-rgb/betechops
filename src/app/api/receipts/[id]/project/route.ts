@@ -11,6 +11,8 @@ import {
   RECEIPT_PROJECT_PAYMENT_TERMS,
   RECEIPT_PROJECT_STAGES,
 } from "@/lib/receiptProjects";
+import { auth } from "@/lib/auth";
+import { isTechnicalTeamCategory } from "@/lib/technicalTeam";
 
 export const dynamic = "force-dynamic";
 
@@ -44,8 +46,11 @@ async function resolveId(context: ParamsContext) {
 }
 
 export async function PATCH(req: NextRequest, context: ParamsContext) {
-  const guard = await requireRole(["ADMIN", "SUPERVISOR"]);
+  const guard = await requireRole(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
   if (!guard.ok) return guard.res;
+  const session = await auth().catch(() => null);
+  const actor = session?.user as { id?: string | null; role?: string | null; attendantCategory?: string | null } | undefined;
+  const actorId = String(actor?.id || "").trim() || null;
 
   const id = await resolveId(context);
   const body = await req.json().catch(() => ({}));
@@ -77,6 +82,15 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
   const existingProjectFlow = readReceiptProjectFlow(existingData.projectFlow);
   if (!existingProjectFlow && String(existingData.customerType || "").toLowerCase() !== "project") {
     return NextResponse.json({ error: "This receipt is not tagged as a project receipt" }, { status: 400 });
+  }
+
+  if (guard.role === "ATTENDANT") {
+    const assignedToActor = String(existingProjectFlow?.handlerStaffId || "").trim() === actorId;
+    const createdByActor = String(existing.issuedById || "").trim() === actorId;
+    const isTechnicalActor = isTechnicalTeamCategory(actor?.attendantCategory);
+    if (!isTechnicalActor || (!assignedToActor && !createdByActor)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   const nextProjectFlow = buildReceiptProjectFlow({

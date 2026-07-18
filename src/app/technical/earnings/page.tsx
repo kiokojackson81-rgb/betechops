@@ -8,6 +8,7 @@ import { buildPayrollRow } from "@/lib/adminPayroll";
 import { buildEarningsCardBreakdown } from "@/lib/earningsCardBreakdown";
 import getLandingPage from "@/lib/getLandingPage";
 import { isTechnicalTeamCategory } from "@/lib/technicalTeam";
+import { getTechnicalProjectCommissionSummary } from "@/lib/technicalCompensation";
 
 export const dynamic = "force-dynamic";
 
@@ -80,16 +81,19 @@ async function resolveViewer() {
 export default async function TechnicalEarningsPage() {
   const viewer = await resolveViewer();
   const period = getTradingPeriodFor(new Date());
-  const payrollRow = await buildPayrollRow(
-    {
-      id: viewer.id,
-      name: viewer.name,
-      email: viewer.email,
-      attendantCategory: viewer.attendantCategory,
-      isActive: viewer.isActive,
-    },
-    period,
-  );
+  const [payrollRow, projectCommission] = await Promise.all([
+    buildPayrollRow(
+      {
+        id: viewer.id,
+        name: viewer.name,
+        email: viewer.email,
+        attendantCategory: viewer.attendantCategory,
+        isActive: viewer.isActive,
+      },
+      period,
+    ),
+    getTechnicalProjectCommissionSummary(viewer.id, period),
+  ]);
 
   const breakdown = buildEarningsCardBreakdown({
     baseSalary: payrollRow.baseSalary,
@@ -159,7 +163,7 @@ export default async function TechnicalEarningsPage() {
         <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
           <div className="text-sm text-slate-400">Commission</div>
           <div className="mt-2 text-3xl font-semibold text-white">{formatCurrency(payrollRow.commissionTotal)}</div>
-          <div className="mt-1 text-sm text-slate-500">Direct and product work commission</div>
+          <div className="mt-1 text-sm text-slate-500">POS profit share and completed project commission</div>
         </div>
         <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
           <div className="text-sm text-slate-400">Total deductions</div>
@@ -227,8 +231,11 @@ export default async function TechnicalEarningsPage() {
             <div className="text-lg font-semibold text-white">Performance snapshot</div>
             <div className="mt-4 space-y-2 text-sm text-slate-300">
               <div className="flex items-center justify-between"><span>Total sales</span><span>{formatCurrency(payrollRow.totalSales)}</span></div>
+              <div className="flex items-center justify-between"><span>Total profit</span><span>{formatCurrency(payrollRow.totalProfit)}</span></div>
               <div className="flex items-center justify-between"><span>Total receipts</span><span>{payrollRow.totalReceipts}</span></div>
               <div className="flex items-center justify-between"><span>Total items</span><span>{payrollRow.totalItems}</span></div>
+              <div className="flex items-center justify-between"><span>Pending project commission</span><span>{formatCurrency(projectCommission.pendingAmount)}</span></div>
+              <div className="flex items-center justify-between"><span>Completed project commission</span><span>{formatCurrency(projectCommission.completedAmount)}</span></div>
               <div className="flex items-center justify-between"><span>Bonuses / additions</span><span>{formatCurrency(payrollRow.bonusTotal)}</span></div>
             </div>
           </div>
