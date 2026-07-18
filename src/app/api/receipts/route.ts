@@ -270,6 +270,7 @@ export async function GET(req: NextRequest) {
       OR: [
         { order: { attendantId } },
         { data: { path: ["attendantId"], equals: attendantId } },
+        { data: { path: ["projectFlow", "handlerStaffId"], equals: attendantId } },
       ],
     });
   }
@@ -278,6 +279,7 @@ export async function GET(req: NextRequest) {
       OR: [
         { order: { attendantId: attendantFilterParam } },
         { data: { path: ["attendantId"], equals: attendantFilterParam } as any },
+        { data: { path: ["projectFlow", "handlerStaffId"], equals: attendantFilterParam } as any },
       ],
     });
   }
