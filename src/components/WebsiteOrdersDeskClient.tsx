@@ -127,6 +127,10 @@ function buildCustomerProfileHref(
   });
 }
 
+function getReceiptHref(order: Pick<SerializedWebsiteOrder, "receiptId">) {
+  return order.receiptId ? `/receipts/${encodeURIComponent(order.receiptId)}` : "/receipts";
+}
+
 export default function WebsiteOrdersDeskClient({
   initialOrders = [],
   apiBasePath,
@@ -512,7 +516,7 @@ export default function WebsiteOrdersDeskClient({
                                 <button type="button" onClick={() => setConfirmTarget(order)} disabled={busyAction?.startsWith(order.id)} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60">Start Processing</button>
                               )}
                               {order.status === "PROCESSING" && (
-                                <button type="button" onClick={() => handleStatusUpdate(order.id, "RECEIPT_ISSUED").catch((error: Error) => setMessage(error.message))} disabled={busyAction?.startsWith(order.id)} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60">Issue Receipt Automatically</button>
+                                <button type="button" onClick={() => handleStatusUpdate(order.id, "RECEIPT_ISSUED").catch((error: Error) => setMessage(error.message))} disabled={busyAction?.startsWith(order.id)} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60">{order.receiptId ? "Mark Receipt Issued" : "Issue Receipt Automatically"}</button>
                               )}
                               {order.status === "RECEIPT_ISSUED" && (
                                 <button type="button" onClick={() => handleStatusUpdate(order.id, "DISPATCHED").catch((error: Error) => setMessage(error.message))} disabled={busyAction?.startsWith(order.id)} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60">Mark Dispatch / Picked</button>
@@ -531,12 +535,12 @@ export default function WebsiteOrdersDeskClient({
                               )}
                             </div>
                           </div>
-                          {order.receiptId ? (
-                            <Link href="/receipts" className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm font-medium text-slate-100 transition hover:bg-white/10">
-                              Open receipts desk
-                              <ExternalLink className="h-4 w-4" />
-                            </Link>
-                          ) : null}
+                        {order.receiptId ? (
+                          <Link href={getReceiptHref(order)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm font-medium text-slate-100 transition hover:bg-white/10">
+                            Open linked receipt
+                            <ExternalLink className="h-4 w-4" />
+                          </Link>
+                        ) : null}
                         </div>
                       </div>
                     </div>
@@ -759,7 +763,7 @@ export default function WebsiteOrdersDeskClient({
                                 disabled={busyAction?.startsWith(order.id)}
                                 className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
                               >
-                                Issue Receipt Automatically
+                                {order.receiptId ? "Mark Receipt Issued" : "Issue Receipt Automatically"}
                               </button>
                             )}
                             {order.status === "RECEIPT_ISSUED" && (
@@ -838,10 +842,12 @@ export default function WebsiteOrdersDeskClient({
 
                         {order.receiptId ? (
                           <Link
-                            href="/receipts"
+                            href={getReceiptHref(order)}
+                            target="_blank"
+                            rel="noreferrer"
                             className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm font-medium text-slate-100 transition hover:bg-white/10"
                           >
-                            Open receipts desk
+                            Open linked receipt
                             <ExternalLink className="h-4 w-4" />
                           </Link>
                         ) : null}

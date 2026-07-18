@@ -478,7 +478,7 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
     safeLoad("voice operations", async () => {
       const voiceViewer = await resolveVoiceViewer();
       if (!voiceViewer) return null;
-      return getVoiceLiveSnapshot({ viewer: voiceViewer });
+      return getVoiceLiveSnapshot({ viewer: voiceViewer, scope: "mine" });
     }, null as Awaited<ReturnType<typeof getVoiceLiveSnapshot>> | null),
   ]);
 
