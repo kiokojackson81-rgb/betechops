@@ -46,7 +46,7 @@ const sections = [
       { href: "/technical/earnings", label: "Earnings & Payslip", icon: Wallet },
       { href: "/technical/wellness", label: "Wellness", icon: HeartPulse },
       { href: "/technical/compliance", label: "Compliance", icon: ShieldCheck },
-      { href: "/receipts", label: "Customers", icon: Users },
+      { href: "/technical/customers", label: "Customers", icon: Users },
     ],
   },
 ] as const;

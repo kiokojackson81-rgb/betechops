@@ -248,6 +248,9 @@ export default async function TechnicalDashboardPage({
   const activeInstallations = myProjectReceipts.filter(
     (receipt) => receipt.projectFlow?.stage === "PROJECT_IN_PROGRESS",
   );
+  const pendingProjects = myProjectReceipts.filter(
+    (receipt) => receipt.projectFlow?.stage === "RECEIPT_CREATED",
+  );
   const completedProjectsPeriod = myProjectReceipts.filter(
     (receipt) =>
       receipt.projectFlow?.stage === "COMPLETED_POSTED" &&
@@ -282,6 +285,13 @@ export default async function TechnicalDashboardPage({
       href: "/technical/site-visits",
     },
     {
+      label: "Projects pending",
+      value: pendingProjects.length,
+      hint: "Assigned projects waiting work to begin",
+      icon: BriefcaseBusiness,
+      href: "/technical/projects",
+    },
+    {
       label: "Installations in progress",
       value: activeInstallations.length,
       hint: "Project receipts still being executed",
@@ -303,7 +313,7 @@ export default async function TechnicalDashboardPage({
       href: "/technical/daily-report",
     },
     {
-      label: "Projects completed this period",
+      label: "Projects completed",
       value: completedProjectsPeriod.length,
       hint: "Completed and posted project receipts",
       icon: BriefcaseBusiness,

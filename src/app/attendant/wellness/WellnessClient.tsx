@@ -379,7 +379,7 @@ export default function WellnessClient() {
             <div className="max-w-3xl">
               <p className="text-xs uppercase tracking-[0.4em] text-amber-200/90">Wellness Center</p>
               <h1 className="mt-4 max-w-3xl text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                Leave requests and cash support without touching payroll screens.
+                Leave requests and cash support.
               </h1>
               <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300">
                 Submit leave, request a cash advance, upload supporting files, and track upcoming deductions from one place.
