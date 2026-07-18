@@ -29,7 +29,7 @@ import {
   QUOTE_REQUEST_SOURCES,
   type SerializedQuoteRequest,
 } from "@/lib/quoteRequests";
-import { getVoiceLiveSnapshot, resolveVoiceViewer } from "@/lib/voiceOperations";
+import { getVoiceLiveSnapshot, type VoiceViewer } from "@/lib/voiceOperations";
 import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 
 export const dynamic = "force-dynamic";
@@ -476,8 +476,16 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
     safeLoad("agent orders", () => getAdminAgentSales({ statuses: [...AGENT_OPEN_STATUSES] }), [] as TrackerAgentOrder[]),
     safeLoad("pod follow-up", () => listPodFollowUp(5), [] as PodFollowUpItem[]),
     safeLoad("voice operations", async () => {
-      const voiceViewer = await resolveVoiceViewer();
-      if (!voiceViewer) return null;
+      const voiceViewer: VoiceViewer = {
+        actorUserId: String(user.id),
+        actorRole: user.role ?? null,
+        actorEmail: user.email?.toLowerCase() ?? null,
+        targetUserId: String(user.id),
+        targetRole: user.role ?? null,
+        targetAttendantCategory: user.attendantCategory ?? null,
+        isAdmin: false,
+        impersonateId: null,
+      };
       return getVoiceLiveSnapshot({ viewer: voiceViewer, scope: "mine" });
     }, null as Awaited<ReturnType<typeof getVoiceLiveSnapshot>> | null),
   ]);
@@ -691,11 +699,9 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
     })
     .slice(0, 14);
 
-  const voiceQueueItems: Array<{ type?: string | null }> = Array.isArray(voiceSnapshot?.callQueue) ? voiceSnapshot.callQueue : [];
-  const voiceQueueSummary = summarizeVoiceQueueItems(voiceQueueItems);
-  const voiceMissedCount = voiceQueueSummary.missedCount;
-  const voiceFollowUpCount = voiceQueueSummary.followUpCount;
-  const voiceQueueCount = voiceQueueSummary.queueCount;
+  const voiceMissedCount = Array.isArray(voiceSnapshot?.missedLeads) ? voiceSnapshot.missedLeads.length : 0;
+  const voiceFollowUpCount = Array.isArray(voiceSnapshot?.followUps) ? voiceSnapshot.followUps.length : 0;
+  const voiceQueueCount = voiceMissedCount + voiceFollowUpCount;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
