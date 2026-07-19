@@ -128,7 +128,21 @@ export default function renderReceiptTemplate(
         return 'Unspecified';
     }
   };
-  const fallbackCollectionMethods = "M-Pesa Paybill / Absa Bank / Equity Bank";
+  const fallbackCollectionMethodsHtml = `
+    <div class="project-payment-method-list">
+      <div class="project-payment-method-option">
+        <div class="project-payment-method-title">M-Pesa Paybill</div>
+        <div class="project-payment-method-line"><span>Paybill Number:</span> <strong>516600</strong></div>
+        <div class="project-payment-method-line"><span>Account Number:</span> <strong>0710098001</strong></div>
+      </div>
+      <div class="project-payment-method-option">
+        <div class="project-payment-method-title">ABSA Bank</div>
+        <div class="project-payment-method-line"><span>Bank:</span> Absa Bank Kenya</div>
+        <div class="project-payment-method-line"><span>Account Name:</span> Betech Solar Solution</div>
+        <div class="project-payment-method-line"><span>Account Number:</span> <strong>2047639940</strong></div>
+      </div>
+    </div>
+  `;
 
   const itemsSubtotal = items.reduce((sum, it) => {
     const qty = toNumberOrNull(it.quantity) ?? 1;
@@ -203,23 +217,25 @@ export default function renderReceiptTemplate(
                 <strong>${formatProjectPaymentMethod(projectFlow.balancePaymentMethod)}</strong>
               </div>`
               : `
-              <div class="project-payment-summary__item">
+              <div class="project-payment-summary__item project-payment-summary__item--methods">
                 <span>Collection method</span>
-                <strong>${formatProjectPaymentMethod(
-                  (
-                    String(projectFlow.paymentTerm || '').trim().toUpperCase() === 'FULL_BEFORE_INSTALLATION'
-                      ? projectFlow.depositPaymentMethod
-                      : projectFlow.balancePaymentMethod
-                  ) || quotePaymentMethod,
-                ) === 'Unspecified'
-                  ? fallbackCollectionMethods
-                  : formatProjectPaymentMethod(
-                      (
-                        String(projectFlow.paymentTerm || '').trim().toUpperCase() === 'FULL_BEFORE_INSTALLATION'
-                          ? projectFlow.depositPaymentMethod
-                          : projectFlow.balancePaymentMethod
-                      ) || quotePaymentMethod,
-                    )}</strong>
+                ${
+                  formatProjectPaymentMethod(
+                    (
+                      String(projectFlow.paymentTerm || '').trim().toUpperCase() === 'FULL_BEFORE_INSTALLATION'
+                        ? projectFlow.depositPaymentMethod
+                        : projectFlow.balancePaymentMethod
+                    ) || quotePaymentMethod,
+                  ) === 'Unspecified'
+                    ? fallbackCollectionMethodsHtml
+                    : `<strong>${formatProjectPaymentMethod(
+                        (
+                          String(projectFlow.paymentTerm || '').trim().toUpperCase() === 'FULL_BEFORE_INSTALLATION'
+                            ? projectFlow.depositPaymentMethod
+                            : projectFlow.balancePaymentMethod
+                        ) || quotePaymentMethod,
+                      )}</strong>`
+                }
               </div>
               <div class="project-payment-summary__item">
                 <span>Expected payment</span>
@@ -527,6 +543,35 @@ export default function renderReceiptTemplate(
           font-size: 11.5px;
           color: #0f172a;
         }
+        .project-payment-summary__item--methods {
+          grid-column: 1 / -1;
+        }
+        .project-payment-method-list {
+          display: grid;
+          gap: 8px;
+          margin-top: 4px;
+        }
+        .project-payment-method-option {
+          border: 1px solid #e5e7eb;
+          border-radius: 8px;
+          background: #fffdf8;
+          padding: 8px;
+        }
+        .project-payment-method-title {
+          font-size: 11px;
+          font-weight: 800;
+          color: ${brandColor};
+          margin-bottom: 4px;
+        }
+        .project-payment-method-line {
+          font-size: 10.5px;
+          color: #1f2937;
+          line-height: 1.45;
+        }
+        .project-payment-method-line span {
+          font-weight: 700;
+          color: #475569;
+        }
 
       .receipt-footer {
         margin-top: 0;
@@ -684,6 +729,9 @@ export default function renderReceiptTemplate(
         .project-payment-summary__item { padding: 6px; }
         .project-payment-summary__item span { font-size: 8.8px; margin-bottom: 3px; }
         .project-payment-summary__item strong { font-size: 10px; }
+        .project-payment-method-option { padding: 6px; }
+        .project-payment-method-title { font-size: 9.2px; margin-bottom: 3px; }
+        .project-payment-method-line { font-size: 8.8px; }
         .signature { margin-top: 5px; font-size: 10.6px; line-height: 1.25; }
         .receipt-footer-container { margin-top: 2px; }
         .receipt-footer { margin-top: 0; padding-top: 5px; font-size: 10.3px; line-height: 1.25; }
