@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type KeyboardEvent } from "react";
+import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 
 type InvitationPayload = {
   invitationId: string;
@@ -65,25 +65,6 @@ type ReferralPayload = {
   };
 };
 
-type ReferralDashboardPayload = {
-  customerName: string;
-  customerPhoneMasked: string;
-  status: string;
-  activationExpiresAt: string;
-  totals: {
-    totalReferrals: number;
-    potentialCommission: number;
-    availableBalance: number;
-    pendingWithdrawalAmount: number;
-    paidWithdrawalAmount: number;
-  };
-  referrals: Array<{
-    referralCode: string;
-    status: string;
-    commissionStatus: string;
-  }>;
-};
-
 type ReviewJourneyClientProps = {
   invitation: InvitationPayload;
 };
@@ -134,20 +115,47 @@ function getFulfillmentCopy(deliveryMode: string | null | undefined) {
       };
 }
 
-function extractActivationToken(activationUrl: string) {
-  try {
-    const url = new URL(activationUrl);
-    return url.searchParams.get("token");
-  } catch {
-    return null;
+function isServiceTypeProduct(input: { name?: string | null; slug?: string | null; category?: string | null }) {
+  const text = `${input.name || ""} ${input.slug || ""} ${input.category || ""}`.toLowerCase();
+  return ["delivery", "service", "transport", "installation", "fee"].some((token) => text.includes(token));
+}
+
+function getHeroQuestion(productName: string, isServiceType: boolean) {
+  return isServiceType
+    ? `How was your experience with ${productName}?`
+    : `How has your experience been with ${productName}?`;
+}
+
+function maskPhoneNumber(value: string) {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (digits.length <= 4) return value || "";
+  return `${digits.slice(0, Math.max(0, digits.length - 4)).replace(/\d/g, "*")}${digits.slice(-4)}`;
+}
+
+function getReferralChannelHelp(channel: string) {
+  switch (channel) {
+    case "whatsapp":
+      return "The referral will be created, then WhatsApp will open with a prepared message.";
+    case "phone":
+      return "The referral will be created, then your phone dialler will open.";
+    case "sms":
+      return "The referral will be created, then an SMS draft will open.";
+    case "email":
+      return "The referral will be created, then an email draft will open.";
+    case "copy":
+      return "The referral will be created, then the referral link will be copied.";
+    default:
+      return "";
   }
 }
 
 function Stars({
+  label,
   name,
   value,
   onChange,
 }: {
+  label: string;
   name: string;
   value: number;
   onChange: (next: number) => void;
@@ -194,7 +202,7 @@ function Stars({
           onKeyDown={(event) => handleKeyDown(event, score)}
           role="radio"
           aria-checked={score === value}
-          aria-label={`Rate ${score} star${score === 1 ? "" : "s"}`}
+          aria-label={`Rate ${label} ${score} out of 5`}
           className={`group flex min-h-[5.5rem] w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-[22px] border px-2 py-3 text-center outline-none transition duration-200 ease-out focus-visible:ring-2 focus-visible:ring-[#7a0000]/30 focus-visible:ring-offset-2 sm:min-h-[6.2rem] ${
             score === value
               ? "scale-[1.05] border-[#f59e0b] bg-[#FBBF24] text-white shadow-[0_16px_34px_rgba(251,191,36,0.34)]"
@@ -260,18 +268,21 @@ function RatingField({
   onChange: (next: number) => void;
 }) {
   return (
-    <label className="rounded-[26px] border border-[#ecd7cb] bg-[linear-gradient(180deg,#ffffff_0%,#fffaf5_100%)] p-5 shadow-[0_16px_36px_rgba(15,23,42,0.04)]">
-      <div className="flex items-start gap-4">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#fff3ea] text-sm font-black text-[#7a0000]">
+    <label className="rounded-[24px] border border-[#ecd7cb] bg-[linear-gradient(180deg,#ffffff_0%,#fffaf7_100%)] p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+      <div className="flex items-start gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#fff3ea] text-sm font-black text-[#7a0000]">
           {index}
         </div>
         <div className="min-w-0">
-          <div className="text-lg font-black tracking-tight text-[#210505]">{title}</div>
+          <div className="text-base font-black tracking-tight text-[#210505] sm:text-lg">{title}</div>
           <div className="mt-1 text-sm leading-6 text-slate-600">{prompt}</div>
         </div>
       </div>
-      <div className="mt-5">
-        <Stars name={name} value={value} onChange={onChange} />
+      <div className="mt-4">
+        <Stars label={title} name={name} value={value} onChange={onChange} />
+      </div>
+      <div className="mt-3 text-xs font-medium text-amber-700" aria-live="polite">
+        Rating selected: {value} out of 5
       </div>
     </label>
   );
@@ -284,10 +295,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [referralError, setReferralError] = useState<string | null>(null);
   const [referralSuccess, setReferralSuccess] = useState<ReferralPayload | null>(null);
-  const [referralDashboard, setReferralDashboard] = useState<ReferralDashboardPayload | null>(null);
   const [creatingReferral, setCreatingReferral] = useState(false);
-  const [showReferralForm, setShowReferralForm] = useState(true);
-  const [referralTab, setReferralTab] = useState<"product" | "program">("product");
   const [copied, setCopied] = useState(false);
   const [form, setForm] = useState({
     overallRating: invitation.review?.overallRating ?? 5,
@@ -315,6 +323,19 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
   const projectedCommission = Number((invitation.product.currentPrice * (rewardRate / 100)).toFixed(2));
   const otherPurchasedItems = invitation.purchasedItems.filter((item) => !item.isPrimary);
   const fulfillmentCopy = getFulfillmentCopy(invitation.order.deliveryMode);
+  const isServiceType = useMemo(
+    () =>
+      isServiceTypeProduct({
+        name: invitation.product.name,
+        slug: invitation.product.slug,
+        category: invitation.product.category,
+      }),
+    [invitation.product.category, invitation.product.name, invitation.product.slug],
+  );
+  const heroQuestion = getHeroQuestion(invitation.product.name, isServiceType);
+  const supportStatusLabel = isServiceType ? "Did everything go as expected?" : "Is everything working as expected?";
+  const supportOkayLabel = isServiceType ? "Yes, everything went well." : "Yes, everything is working perfectly.";
+  const supportIssueLabel = "I need assistance from the support team.";
   const referralMessagePreview = referralSuccess
     ? buildReferralShareMessage({
         referredName: referralForm.referredName,
@@ -324,20 +345,8 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
         referralUrl: referralSuccess.referralUrl,
       })
     : null;
-  const successfulReferrals =
-    referralDashboard?.referrals.filter((item) => item.commissionStatus === "earned" || item.status === "converted").length ?? 0;
   const shareUrl = referralSuccess?.referralUrl || "";
   const activationUrl = referralSuccess?.activationUrl || "";
-
-  async function hydrateReferralDashboard(activationUrlToOpen: string) {
-    const token = extractActivationToken(activationUrlToOpen);
-    if (!token) return;
-    const response = await fetch(`/api/referral-account/dashboard?token=${encodeURIComponent(token)}`);
-    const payload = (await response.json()) as { ok: boolean; dashboard?: ReferralDashboardPayload };
-    if (response.ok && payload.ok && payload.dashboard) {
-      setReferralDashboard(payload.dashboard);
-    }
-  }
 
   function openShareChannel(message: string, channel: string) {
     if (channel === "whatsapp") {
@@ -414,7 +423,6 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
         throw new Error(payload.error || "Unable to create referral.");
       }
       setReferralSuccess(payload.referral);
-      await hydrateReferralDashboard(payload.referral.activationUrl);
       const shareMessage = buildReferralShareMessage({
         referredName: referralForm.referredName,
         customerFirstName: invitation.customer.firstName,
@@ -437,23 +445,20 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
     window.setTimeout(() => setCopied(false), 1800);
   }
 
-  function openReferralStart() {
-    setReferralTab("product");
-    setShowReferralForm(true);
-    window.setTimeout(() => {
-      reviewFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 50);
-  }
-
-  function renderReferralEntryCard(isPresubmit: boolean) {
+  function renderReferralEntryCard() {
     if (referralSuccess) return null;
-    if (!showReferralForm) return null;
     return (
-      <form onSubmit={handleCreateReferral} className="rounded-[28px] border border-[#ecd7cb] bg-white p-5">
-        <div className="text-sm font-semibold text-[#210505]">Refer Someone</div>
+      <form onSubmit={handleCreateReferral} className="rounded-[28px] border border-[#ecd7cb] bg-white p-5 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+        <div className="text-sm font-semibold text-[#210505]">Start your referral</div>
         <p className="mt-2 text-sm leading-7 text-slate-600">
-          Enter the details of the person you&apos;d like to refer. We&apos;ll contact them professionally about <span className="font-semibold text-[#210505]">{invitation.product.name}</span>, track any purchase made within the next 3 months, and automatically credit your commission after a successful purchase.
+          Enter the details of someone interested in <span className="font-semibold text-[#210505]">{invitation.product.name}</span>. We will create a tracked referral linked to you and this product. If they purchase within 3 months, your commission will be calculated and credited automatically.
         </p>
+        <div className="mt-4 grid grid-cols-4 gap-2 rounded-[20px] border border-[#ecd7cb] bg-[#fffaf5] p-3 text-center text-xs font-semibold text-slate-600 sm:text-sm">
+          <span>Refer</span>
+          <span>Share</span>
+          <span>Purchase</span>
+          <span>Earn</span>
+        </div>
         <div className="mt-5 grid gap-4">
           <label className="grid gap-2">
             <span className="text-sm font-semibold text-[#210505]">Friend&apos;s Phone Number</span>
@@ -477,7 +482,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
             />
           </label>
           <label className="grid gap-2">
-            <span className="text-sm font-semibold text-[#210505]">Preferred Contact Method</span>
+            <span className="text-sm font-semibold text-[#210505]">How would you like to share?</span>
             <select
               value={referralForm.channel}
               onChange={(event) => setReferralForm((current) => ({ ...current, channel: event.target.value }))}
@@ -490,21 +495,145 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
               <option value="copy">Copy link</option>
             </select>
           </label>
+          <div className="rounded-2xl border border-[#ecd7cb] bg-[#fffaf5] px-4 py-3 text-sm text-slate-600">
+            {getReferralChannelHelp(referralForm.channel)}
+          </div>
         </div>
-        {referralError ? <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{referralError}</div> : null}
+        {referralError ? <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" aria-live="polite">{referralError}</div> : null}
         <button
           type="submit"
           disabled={creatingReferral}
-          className="mt-5 inline-flex min-h-[3.4rem] w-full items-center justify-center rounded-[20px] bg-[#7a0000] px-6 py-3 text-sm font-bold text-white transition hover:bg-[#650000] disabled:cursor-not-allowed disabled:opacity-60"
+          className="mt-5 inline-flex min-h-[3.4rem] w-full items-center justify-center whitespace-nowrap rounded-[20px] bg-[#7a0000] px-6 py-3 text-sm font-bold text-white transition hover:bg-[#650000] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {creatingReferral ? "Submitting referral..." : "Submit Referral"}
+          {creatingReferral ? "Creating Referral and Sharing..." : "Create Referral and Share"}
         </button>
-        {isPresubmit ? (
-          <div className="mt-3 text-center text-sm text-slate-500">
-            You can submit a referral before or after leaving your review.
+      </form>
+    );
+  }
+
+  function renderReferralRewardCard() {
+    return (
+      <div className="rounded-[30px] border border-amber-300/35 bg-[linear-gradient(180deg,#fff6db_0%,#ffecbf_100%)] p-5 shadow-[0_18px_40px_rgba(245,158,11,0.10)] sm:p-6">
+        <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr] lg:items-start">
+          <div className="min-w-0">
+            <div className="text-xs font-black uppercase tracking-[0.16em] text-[#7a0000]">Referral reward for {invitation.product.name}</div>
+            <div className="mt-3 text-sm font-semibold uppercase tracking-[0.1em] text-[#7a0000]/80">Earn up to</div>
+            <div className="mt-1 break-words text-4xl font-black tracking-tight text-[#7a0000] sm:text-5xl">
+              {formatMoney(projectedCommission)}
+            </div>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-[#6b3d00]">
+              Refer someone who may be interested in {invitation.product.name}. If they complete a qualifying purchase within the tracking period, the applicable commission will be credited to your referral account.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+            <div className="rounded-[22px] border border-white/60 bg-white/75 px-4 py-4">
+              <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Commission rate</div>
+              <div className="mt-2 text-3xl font-black text-[#7a0000]">{rewardRate}%</div>
+            </div>
+            <div className="rounded-[22px] border border-white/60 bg-white/75 px-4 py-4">
+              <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Tracking period</div>
+              <div className="mt-2 text-lg font-black text-[#210505]">Up to 3 months</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderReferralProgramCard() {
+    return (
+      <div className="rounded-[28px] border border-[#ecd7cb] bg-white p-5 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+        <div className="text-xs font-black uppercase tracking-[0.16em] text-[#7a0000]">Want to earn more?</div>
+        <h3 className="mt-2 text-xl font-black tracking-tight text-[#210505] sm:text-2xl">
+          Join our wider referral program
+        </h3>
+        <p className="mt-3 text-sm leading-7 text-slate-600">
+          Open the full Betech referral program to manage your dashboard, track more products, and access wider withdrawal and commission tools.
+        </p>
+        <a
+          href="https://agents.betech.co.ke/"
+          target="_blank"
+          rel="noreferrer"
+          className="mt-4 inline-flex min-h-[3.2rem] w-full items-center justify-center rounded-[18px] border border-[#7a0000]/15 bg-[#fff7f3] px-4 py-3 text-sm font-bold text-[#7a0000]"
+        >
+          Join referral program
+        </a>
+      </div>
+    );
+  }
+
+  function renderReferralSuccessCard() {
+    if (!referralSuccess) return null;
+
+    const maskedPhone = maskPhoneNumber(referralForm.referredPhone);
+    const referredName = referralForm.referredName.trim() || "Not provided";
+    const selectedMethod =
+      referralForm.channel === "copy"
+        ? "Copy link"
+        : referralForm.channel === "phone"
+          ? "Phone call"
+          : referralForm.channel.charAt(0).toUpperCase() + referralForm.channel.slice(1);
+
+    return (
+      <div className="space-y-5 rounded-[28px] border border-[#ecd7cb] bg-white p-5 shadow-[0_10px_24px_rgba(15,23,42,0.04)]" aria-live="polite">
+        <div className="rounded-[22px] border border-emerald-200 bg-emerald-50 px-4 py-4">
+          <div className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700">Referral Created Successfully</div>
+          <div className="mt-2 text-lg font-black tracking-tight text-[#210505]">
+            Your referral for {invitation.product.name} has been recorded and will remain valid for up to 3 months.
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <MetricCard label="Friend" value={referredName} />
+          <MetricCard label="Phone" value={maskedPhone || "Not available"} />
+          <MetricCard label="Product" value={invitation.product.name} />
+          <MetricCard label="Sharing method" value={selectedMethod} />
+        </div>
+
+        {shareUrl ? (
+          <div className="rounded-[22px] border border-[#ecd7cb] bg-[#fffaf5] p-4">
+            <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Share your referral link</div>
+            <div className="mt-3 break-all rounded-2xl border border-[#ddc6ba] bg-white px-4 py-3 text-sm text-slate-700">{shareUrl}</div>
           </div>
         ) : null}
-      </form>
+
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <button
+            type="button"
+            onClick={() => openShareChannel(referralMessagePreview || "", referralForm.channel)}
+            className="inline-flex min-h-[3.2rem] items-center justify-center rounded-[18px] bg-[#7a0000] px-4 py-3 text-sm font-bold text-white"
+          >
+            Share Again
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setReferralSuccess(null);
+              setReferralError(null);
+              setReferralForm((current) => ({ ...current, referredName: "", referredPhone: "" }));
+            }}
+            className="inline-flex min-h-[3.2rem] items-center justify-center rounded-[18px] border border-[#ddc6ba] bg-white px-4 py-3 text-sm font-bold text-[#210505]"
+          >
+            Refer Another Person
+          </button>
+          {!alreadySubmitted ? (
+            <button
+              type="button"
+              onClick={() => reviewFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              className="inline-flex min-h-[3.2rem] items-center justify-center rounded-[18px] border border-amber-300/45 bg-amber-50 px-4 py-3 text-sm font-bold text-[#7a0000]"
+            >
+              Continue Reviewing
+            </button>
+          ) : (
+            <a
+              href={activationUrl}
+              className="inline-flex min-h-[3.2rem] items-center justify-center rounded-[18px] border border-amber-300/45 bg-amber-50 px-4 py-3 text-sm font-bold text-[#7a0000]"
+            >
+              Open referral dashboard
+            </a>
+          )}
+        </div>
+      </div>
     );
   }
 
@@ -523,15 +652,16 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
 
         {!alreadySubmitted ? (
           <>
-            <section className="overflow-hidden rounded-[28px] border border-[#7a0000]/10 bg-[linear-gradient(145deg,#2a0606_0%,#641010_52%,#930d0d_100%)] px-5 py-6 text-white shadow-[0_24px_60px_rgba(122,0,0,0.12)] sm:hidden">
-              <h1 className="text-[2rem] font-black leading-[1.02] tracking-tight">
-                Hello {invitation.customer.firstName} 👋
+            <section className="overflow-hidden rounded-[28px] border border-[#7a0000]/10 bg-[linear-gradient(145deg,#2a0606_0%,#641010_52%,#930d0d_100%)] px-5 py-5 text-white shadow-[0_16px_34px_rgba(122,0,0,0.10)] sm:hidden">
+              <div className="text-[11px] font-black uppercase tracking-[0.24em] text-amber-300">Verified Purchase Review</div>
+              <h1 className="mt-3 text-[1.9rem] font-black leading-[1.02] tracking-tight">
+                Hello, {invitation.customer.firstName}
               </h1>
-              <p className="mt-4 text-xl font-black leading-tight text-white">
-                How has your experience been with {invitation.product.name}?
+              <p className="mt-3 text-lg font-black leading-tight text-white [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] overflow-hidden">
+                {heroQuestion}
               </p>
-              <p className="mt-4 text-sm leading-7 text-amber-50/92">
-                We&apos;d love to hear your feedback. Your review helps us improve our service and helps other customers make informed purchasing decisions.
+              <p className="mt-3 text-sm leading-6 text-amber-50/92">
+                Share your experience with the product, delivery or installation, and support received from our team.
               </p>
             </section>
 
@@ -540,13 +670,13 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
               <div className="bg-[linear-gradient(145deg,#2a0606_0%,#641010_52%,#930d0d_100%)] px-6 py-8 text-white sm:px-8 sm:py-9">
                 <div className="text-xs font-black uppercase tracking-[0.28em] text-amber-300">Verified Purchase Review</div>
                 <h1 className="mt-4 max-w-2xl text-3xl font-black tracking-tight sm:text-[3.3rem] sm:leading-[1.02]">
-                  Hello {invitation.customer.firstName} 👋
+                  Hello, {invitation.customer.firstName}
                 </h1>
-                <div className="mt-4 max-w-2xl text-2xl font-black tracking-tight sm:text-[2.6rem] sm:leading-[1.08]">
-                  How has your experience been with {invitation.product.name}?
+                <div className="mt-4 max-w-2xl text-2xl font-black tracking-tight sm:text-[2.4rem] sm:leading-[1.08] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] overflow-hidden">
+                  {heroQuestion}
                 </div>
                 <p className="mt-4 max-w-xl text-sm leading-7 text-amber-50/92 sm:text-base">
-                  We&apos;d love to hear your feedback. Your review helps us improve our service and helps other customers make informed purchasing decisions.
+                  Share your experience with the product, delivery or installation, and support received from our team.
                 </p>
 
                 <div className="mt-8 grid gap-3 sm:grid-cols-2">
@@ -638,7 +768,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                 </div>
               </div>
 
-              <form ref={reviewFormRef} onSubmit={handleSubmit} className="grid gap-6 p-6 sm:p-8">
+              <form ref={reviewFormRef} onSubmit={handleSubmit} className="grid gap-5 p-5 sm:p-7">
                 <div className="grid gap-4 sm:gap-5 lg:grid-cols-2">
                   <RatingField
                     index="1"
@@ -691,7 +821,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                     <input
                       value={form.reviewTitle}
                       onChange={(event) => setForm((current) => ({ ...current, reviewTitle: event.target.value }))}
-                      placeholder="Excellent quality"
+                    placeholder="Summarise your experience"
                       className="rounded-2xl border border-[#ddc6ba] bg-white px-4 py-3 outline-none transition focus:border-[#7a0000]/45"
                     />
                   </label>
@@ -709,16 +839,16 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                   </label>
                 </div>
 
-                <div className="rounded-[24px] border border-[#ecd7cb] bg-[#fffaf5] p-4 sm:rounded-[28px] sm:p-5">
-                  <div className="text-sm font-bold text-[#210505]">Is everything working as expected?</div>
+                <div className="rounded-[22px] border border-[#ecd7cb] bg-[#fffaf5] p-4 sm:rounded-[24px]">
+                  <div className="text-sm font-bold text-[#210505]">{supportStatusLabel}</div>
                   <div className="mt-4 flex flex-wrap gap-4 text-sm">
                     <label className="inline-flex items-center gap-2">
                       <input type="radio" checked={!form.hasProblem} onChange={() => setForm((current) => ({ ...current, hasProblem: false }))} />
-                      ✅ Yes, everything is working perfectly.
+                      {supportOkayLabel}
                     </label>
                     <label className="inline-flex items-center gap-2">
                       <input type="radio" checked={form.hasProblem} onChange={() => setForm((current) => ({ ...current, hasProblem: true }))} />
-                      🛠️ I need assistance from the support team.
+                      {supportIssueLabel}
                     </label>
                   </div>
 
@@ -766,14 +896,14 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                   <span>I agree that Betech Solar Solutions may publish my review, first name, town, and any photos or videos I upload on our website and social media pages.</span>
                 </label>
 
-                {submitError ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{submitError}</div> : null}
+                {submitError ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" aria-live="polite">{submitError}</div> : null}
 
                 <div className="flex flex-wrap items-center justify-between gap-4">
-                  <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Only verified customers can submit a review. Each invitation can only be used once.</div>
+                  <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Verified purchases only. Each review invitation can be submitted once.</div>
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="inline-flex min-h-[3.5rem] items-center justify-center rounded-[20px] bg-[#7a0000] px-7 py-3 text-sm font-bold text-white transition hover:bg-[#650000] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex min-h-[3.5rem] w-full items-center justify-center rounded-[20px] bg-[#7a0000] px-7 py-3 text-sm font-bold text-white transition hover:bg-[#650000] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                   >
                     {submitting ? "Submitting review..." : "Submit Review"}
                   </button>
@@ -781,112 +911,29 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
               </form>
             </div>
 
-            <div className="rounded-[36px] border border-[#ecd7cb] bg-[linear-gradient(180deg,#fffdf9_0%,#fff3dd_100%)] p-6 shadow-[0_20px_60px_rgba(245,158,11,0.12)] sm:p-7">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                <div className="flex h-20 w-20 items-center justify-center rounded-[26px] bg-[radial-gradient(circle_at_top,#fff7d1_0%,#ffd79a_48%,#ffbe6f_100%)] text-[2.7rem] shadow-[0_18px_40px_rgba(245,158,11,0.18)]">
-                  🎁
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-black uppercase tracking-[0.22em] text-[#7a0000]">Refer Friends & Family — Earn Rewards</div>
-                  <h2 className="mt-2 text-3xl font-black tracking-tight text-[#210505] sm:text-[2.35rem]">
-                    Know someone who could benefit from {invitation.product.name}?
-                  </h2>
-                  <p className="mt-3 text-sm leading-7 text-slate-600">
-                    Refer them today and earn a commission when they complete a successful purchase.
-                  </p>
-                  <div className="mt-4 space-y-2 text-sm font-medium text-slate-700">
-                    <div>✔ No paperwork</div>
-                    <div>✔ We automatically track your referral using the phone number you provide.</div>
-                    <div>✔ Your commission is credited after the purchase is confirmed.</div>
-                  </div>
-                </div>
+            <div className="space-y-5 rounded-[36px] border border-[#ecd7cb] bg-[linear-gradient(180deg,#fffdf9_0%,#fff3dd_100%)] p-6 shadow-[0_20px_60px_rgba(245,158,11,0.12)] sm:p-7">
+              <div className="rounded-[28px] border border-[#ecd7cb] bg-white/70 px-5 py-4">
+                <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a0000]">Section Two</div>
+                <div className="mt-2 text-2xl font-black tracking-tight text-[#210505]">Refer Friends and Family</div>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  You can also refer someone. No review submission is required.
+                </p>
+                <div className="mt-2 text-sm font-medium text-slate-500">You may complete either section or both.</div>
               </div>
 
-              <div className="mt-6 flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={() => setReferralTab("product")}
-                  className={`inline-flex min-h-[3rem] items-center justify-center rounded-[18px] px-4 py-2 text-sm font-bold transition ${referralTab === "product" ? "bg-[#7a0000] text-white" : "border border-[#ddc6ba] bg-white text-[#210505]"}`}
-                >
-                  Refer this product
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setReferralTab("program")}
-                  className={`inline-flex min-h-[3rem] items-center justify-center rounded-[18px] px-4 py-2 text-sm font-bold transition ${referralTab === "program" ? "bg-[#7a0000] text-white" : "border border-[#ddc6ba] bg-white text-[#210505]"}`}
-                >
-                  Join referral program
-                </button>
+              <div className="rounded-[28px] border border-[#ecd7cb] bg-white/65 p-5">
+                <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a0000]">Refer friends and family</div>
+                <h2 className="mt-2 text-2xl font-black tracking-tight text-[#210505] sm:text-[2.1rem]">
+                  Know someone interested in {invitation.product.name}?
+                </h2>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  Know someone who may be interested in {invitation.product.name}? Refer them today and earn a commission if they complete a qualifying purchase within 3 months.
+                </p>
               </div>
 
-              {referralTab === "product" ? (
-                <>
-                  <div className="mt-5 rounded-[32px] border border-amber-300/35 bg-[linear-gradient(180deg,#fff5d3_0%,#ffebb7_100%)] p-6 shadow-[0_18px_40px_rgba(245,158,11,0.14)]">
-                    <div className="grid gap-5 md:grid-cols-[1.2fr_0.8fr] md:items-center">
-                      <div>
-                        <div className="text-xs font-black uppercase tracking-[0.14em] text-[#7a0000]">Earn up to</div>
-                        <div className="mt-3 text-5xl font-black tracking-tight text-[#7a0000] sm:text-6xl">
-                          {formatMoney(referralDashboard?.totals.potentialCommission ?? projectedCommission)}
-                        </div>
-                        <div className="mt-4 text-base font-medium leading-7 text-[#6b3d00]">
-                          Earn up to {formatMoney(projectedCommission)} when someone you refer completes a purchase for <span className="font-bold text-[#210505]">{invitation.product.name}</span>.
-                        </div>
-                      </div>
-                      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-1">
-                        <div className="rounded-[22px] border border-white/50 bg-white/70 px-4 py-4">
-                          <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Commission Rate</div>
-                          <div className="mt-2 text-3xl font-black text-[#7a0000]">{rewardRate}%</div>
-                        </div>
-                        <div className="rounded-[22px] border border-white/50 bg-white/70 px-4 py-4">
-                          <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Referral Validity</div>
-                          <div className="mt-2 text-lg font-bold text-[#210505]">Up to 3 months</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-5 rounded-[30px] border border-[#f0dccf] bg-white/80 p-4 shadow-[0_18px_40px_rgba(15,23,42,0.05)] sm:p-5">
-                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a0000]">Refer someone</div>
-                        <div className="mt-1 text-lg font-black tracking-tight text-[#210505]">Start earning today</div>
-                      </div>
-                      <div className="rounded-full border border-amber-300/50 bg-amber-50 px-3 py-1 text-xs font-bold text-[#7a0000]">
-                        Valid for 3 Months
-                      </div>
-                    </div>
-                    <div className="mb-5 rounded-[24px] border border-[#ecd7cb] bg-[#fffaf5] p-4">
-                      <div className="text-sm font-bold text-[#210505]">How the Referral Program Works</div>
-                      <div className="mt-3 grid gap-2 text-sm leading-7 text-slate-600">
-                        <div>Share the phone number of someone interested in {invitation.product.name}.</div>
-                        <div>We contact them professionally and provide product information.</div>
-                        <div>If they purchase within 3 months, your referral is automatically matched.</div>
-                        <div>Your commission is credited to your referral account.</div>
-                        <div>You can refer as many people as you like.</div>
-                      </div>
-                    </div>
-                    {renderReferralEntryCard(true)}
-                  </div>
-                </>
-              ) : (
-                <div className="mt-5 rounded-[30px] border border-[#ecd7cb] bg-white p-6 shadow-[0_18px_40px_rgba(15,23,42,0.05)]">
-                  <div className="text-xs font-black uppercase tracking-[0.14em] text-[#7a0000]">Join our referral program</div>
-                  <h3 className="mt-3 text-3xl font-black tracking-tight text-[#210505]">
-                    Join our referral program and earn more than Ksh 100,000 per referral.
-                  </h3>
-                  <p className="mt-4 text-sm leading-7 text-slate-600">
-                    Open the full Betech referral program to access your wider referral dashboard, withdrawals, and larger commission opportunities beyond this single product referral.
-                  </p>
-                  <a
-                    href="https://agents.betech.co.ke/"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-5 inline-flex min-h-[3.4rem] w-full items-center justify-center rounded-[20px] bg-[#7a0000] px-6 py-3 text-sm font-bold text-white"
-                  >
-                    Join referral program
-                  </a>
-                </div>
-              )}
+              {renderReferralRewardCard()}
+              {renderReferralSuccessCard() ?? renderReferralEntryCard()}
+              {renderReferralProgramCard()}
             </div>
           </section>
         ) : (
@@ -898,7 +945,8 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                   Thank you for your review, {invitation.customer.firstName}.
                 </h2>
                 <p className="mt-4 max-w-2xl text-sm leading-7 text-amber-50/92 sm:text-base">
-                  Your feedback has been submitted successfully. It will appear on the product page after moderation. If you reported a problem, our support team has already been alerted.
+                  Your review has been received and sent for moderation.
+                  {invitation.review?.hasProblem ? " Our support team has been notified and will follow up with you." : ""}
                 </p>
               </div>
 
@@ -942,184 +990,18 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
               </div>
             </div>
 
-            <div className="rounded-[36px] border border-[#ecd7cb] bg-[linear-gradient(180deg,#fffdf9_0%,#fff3dd_100%)] p-6 shadow-[0_20px_60px_rgba(245,158,11,0.12)] sm:p-7">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                <div className="flex h-20 w-20 items-center justify-center rounded-[26px] bg-[radial-gradient(circle_at_top,#fff7d1_0%,#ffd79a_48%,#ffbe6f_100%)] text-[2.7rem] shadow-[0_18px_40px_rgba(245,158,11,0.18)]">
-                  🎁
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-black uppercase tracking-[0.22em] text-[#7a0000]">Refer Friends & Family — Earn Rewards</div>
-                  <h2 className="mt-2 text-3xl font-black tracking-tight text-[#210505] sm:text-[2.35rem]">
-                    Know someone who could benefit from {invitation.product.name}?
-                  </h2>
-                  <p className="mt-3 text-sm leading-7 text-slate-600">
-                    Refer them today and earn a commission when they complete a successful purchase.
-                  </p>
-                </div>
+            <div className="space-y-5 rounded-[36px] border border-[#ecd7cb] bg-[linear-gradient(180deg,#fffdf9_0%,#fff3dd_100%)] p-6 shadow-[0_20px_60px_rgba(245,158,11,0.12)] sm:p-7">
+              <div className="rounded-[28px] border border-[#ecd7cb] bg-white/70 px-5 py-4">
+                <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a0000]">Section Two</div>
+                <div className="mt-2 text-2xl font-black tracking-tight text-[#210505]">Refer Friends and Family</div>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  Know someone interested in {invitation.product.name}? You can still refer friends, family, neighbours, or colleagues and earn a commission after a qualifying purchase.
+                </p>
               </div>
 
-              <div className="mt-6 flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={() => setReferralTab("product")}
-                  className={`inline-flex min-h-[3rem] items-center justify-center rounded-[18px] px-4 py-2 text-sm font-bold transition ${referralTab === "product" ? "bg-[#7a0000] text-white" : "border border-[#ddc6ba] bg-white text-[#210505]"}`}
-                >
-                  Refer this product
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setReferralTab("program")}
-                  className={`inline-flex min-h-[3rem] items-center justify-center rounded-[18px] px-4 py-2 text-sm font-bold transition ${referralTab === "program" ? "bg-[#7a0000] text-white" : "border border-[#ddc6ba] bg-white text-[#210505]"}`}
-                >
-                  Join referral program
-                </button>
-              </div>
-
-              {referralTab === "product" ? (
-                <>
-                  <div className="mt-5 rounded-[32px] border border-amber-300/35 bg-[linear-gradient(180deg,#fff5d3_0%,#ffebb7_100%)] p-6 shadow-[0_18px_40px_rgba(245,158,11,0.14)]">
-                    <div className="grid gap-5 md:grid-cols-[1.2fr_0.8fr] md:items-center">
-                      <div>
-                        <div className="text-xs font-black uppercase tracking-[0.14em] text-[#7a0000]">Earn up to</div>
-                        <div className="mt-3 text-5xl font-black tracking-tight text-[#7a0000] sm:text-6xl">
-                          {formatMoney(referralDashboard?.totals.potentialCommission ?? projectedCommission)}
-                        </div>
-                        <div className="mt-4 text-base font-medium leading-7 text-[#6b3d00]">
-                          Earn up to {formatMoney(projectedCommission)} when someone you refer completes a purchase for <span className="font-bold text-[#210505]">{invitation.product.name}</span>.
-                        </div>
-                      </div>
-                      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-1">
-                        <div className="rounded-[22px] border border-white/50 bg-white/70 px-4 py-4">
-                          <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Commission Rate</div>
-                          <div className="mt-2 text-3xl font-black text-[#7a0000]">{rewardRate}%</div>
-                        </div>
-                        <div className="rounded-[22px] border border-white/50 bg-white/70 px-4 py-4">
-                          <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Referral Validity</div>
-                          <div className="mt-2 text-lg font-bold text-[#210505]">Up to 3 months</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {!referralSuccess ? (
-                    <div className="mt-6 space-y-5 rounded-[30px] border border-[#f0dccf] bg-white/80 p-4 shadow-[0_18px_40px_rgba(15,23,42,0.05)] sm:p-5">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a0000]">Refer someone</div>
-                          <div className="mt-1 text-lg font-black tracking-tight text-[#210505]">Start earning today</div>
-                        </div>
-                        <div className="rounded-full border border-amber-300/50 bg-amber-50 px-3 py-1 text-xs font-bold text-[#7a0000]">
-                          Valid for 3 Months
-                        </div>
-                      </div>
-                      <div className="rounded-[24px] border border-[#ecd7cb] bg-[#fffaf5] p-4">
-                        <div className="text-sm font-bold text-[#210505]">How the Referral Program Works</div>
-                        <div className="mt-3 grid gap-2 text-sm leading-7 text-slate-600">
-                          <div>Share the phone number of someone interested in {invitation.product.name}.</div>
-                          <div>We contact them professionally and provide product information.</div>
-                          <div>If they purchase within 3 months, your referral is automatically matched.</div>
-                          <div>Your commission is credited to your referral account.</div>
-                          <div>You can refer as many people as you like.</div>
-                        </div>
-                      </div>
-                      {renderReferralEntryCard(false)}
-                    </div>
-                  ) : null}
-                </>
-              ) : (
-                <div className="mt-5 rounded-[30px] border border-[#ecd7cb] bg-white p-6 shadow-[0_18px_40px_rgba(15,23,42,0.05)]">
-                  <div className="text-xs font-black uppercase tracking-[0.14em] text-[#7a0000]">Join our referral program</div>
-                  <h3 className="mt-3 text-3xl font-black tracking-tight text-[#210505]">
-                    Join our referral program and earn more than Ksh 100,000 per referral.
-                  </h3>
-                  <p className="mt-4 text-sm leading-7 text-slate-600">
-                    Open the full Betech referral program to access your wider referral dashboard, withdrawals, and larger commission opportunities beyond this single product referral.
-                  </p>
-                  <a
-                    href="https://agents.betech.co.ke/"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-5 inline-flex min-h-[3.4rem] w-full items-center justify-center rounded-[20px] bg-[#7a0000] px-6 py-3 text-sm font-bold text-white"
-                  >
-                    Join referral program
-                  </a>
-                </div>
-              )}
-
-              {referralSuccess ? (
-                <div className="mt-6 space-y-5 rounded-[28px] border border-[#ecd7cb] bg-white p-5">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <button
-                      type="button"
-                      onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(referralMessagePreview || "")}`, "_blank", "noopener,noreferrer")}
-                      className="inline-flex min-h-[3.35rem] items-center justify-center rounded-[18px] bg-[#16a34a] px-4 py-3 text-sm font-bold text-white"
-                    >
-                      Share on WhatsApp
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        window.open(
-                          `sms:?body=${encodeURIComponent(referralMessagePreview || "")}`,
-                          "_self",
-                        )
-                      }
-                      className="inline-flex min-h-[3.35rem] items-center justify-center rounded-[18px] bg-[#2563eb] px-4 py-3 text-sm font-bold text-white"
-                    >
-                      Share via SMS
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        window.open(
-                          `mailto:?subject=${encodeURIComponent("Betech Solar referral")}&body=${encodeURIComponent(referralMessagePreview || "")}`,
-                          "_self",
-                        )
-                      }
-                      className="inline-flex min-h-[3.35rem] items-center justify-center rounded-[18px] border border-[#d7dde7] bg-white px-4 py-3 text-sm font-bold text-[#1f2937]"
-                    >
-                      Share by Email
-                    </button>
-                    <button
-                      type="button"
-                      onClick={copyReferralLink}
-                      className="inline-flex min-h-[3.35rem] items-center justify-center rounded-[18px] border border-[#d7dde7] bg-white px-4 py-3 text-sm font-bold text-[#1f2937]"
-                    >
-                      {copied ? "Link copied" : "Copy link"}
-                    </button>
-                  </div>
-
-                  <div className="rounded-[22px] border border-[#ecd7cb] bg-[#fffaf5] p-4">
-                    <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Share your link</div>
-                    <div className="mt-3 break-all rounded-2xl border border-[#ddc6ba] bg-white px-4 py-3 text-sm text-slate-700">{shareUrl}</div>
-                  </div>
-
-                  <div className="rounded-[22px] border border-[#ecd7cb] bg-[#fffaf5] p-4">
-                    <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">How it works</div>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-4">
-                      <MetricCard label="Step 1" value="Refer" />
-                      <MetricCard label="Step 2" value="They buy" />
-                      <MetricCard label="Step 3" value="We track" />
-                      <MetricCard label="Step 4" value="You earn" />
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-3">
-                    <a
-                      href={activationUrl}
-                      className="inline-flex min-h-[3.2rem] items-center justify-center rounded-[18px] border border-amber-400/30 bg-amber-50 px-4 py-3 text-sm font-bold text-[#7a0000]"
-                    >
-                      Open referral dashboard
-                    </a>
-                    <a
-                      href={`/shop/product/${invitation.product.slug}`}
-                      className="inline-flex min-h-[3.2rem] items-center justify-center rounded-[18px] border border-[#d7dde7] bg-white px-4 py-3 text-sm font-bold text-[#1f2937]"
-                    >
-                      View product details
-                    </a>
-                  </div>
-                </div>
-              ) : null}
+              {renderReferralRewardCard()}
+              {renderReferralSuccessCard() ?? renderReferralEntryCard()}
+              {renderReferralProgramCard()}
             </div>
           </section>
         )}
