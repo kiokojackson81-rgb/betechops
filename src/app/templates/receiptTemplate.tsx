@@ -31,6 +31,7 @@ export default function renderReceiptTemplate(
   const customerEmail = snapshot.customerEmail || order?.customerEmail || '';
   const projectFlow =
     snapshot.projectFlow && typeof snapshot.projectFlow === 'object' ? snapshot.projectFlow : null;
+  const quotePaymentMethod = snapshot.quotePaymentMethod || null;
   const formatWarrantyValue = (value: any) => {
     if (!value) return '';
     if (typeof value === 'string') return value;
@@ -109,6 +110,12 @@ export default function renderReceiptTemplate(
   };
   const formatProjectPaymentMethod = (value: unknown) => {
     switch (String(value || '').trim().toUpperCase()) {
+      case 'MPESA_PAYBILL':
+        return 'M-Pesa Paybill';
+      case 'ABSA_BANK':
+        return 'Absa Bank';
+      case 'EQUITY_BANK':
+        return 'Equity Bank';
       case 'MPESA':
         return 'M-Pesa';
       case 'CASH':
@@ -198,9 +205,11 @@ export default function renderReceiptTemplate(
               <div class="project-payment-summary__item">
                 <span>Collection method</span>
                 <strong>${formatProjectPaymentMethod(
-                  String(projectFlow.paymentTerm || '').trim().toUpperCase() === 'FULL_BEFORE_INSTALLATION'
-                    ? projectFlow.depositPaymentMethod
-                    : projectFlow.balancePaymentMethod,
+                  (
+                    String(projectFlow.paymentTerm || '').trim().toUpperCase() === 'FULL_BEFORE_INSTALLATION'
+                      ? projectFlow.depositPaymentMethod
+                      : projectFlow.balancePaymentMethod
+                  ) || quotePaymentMethod,
                 )}</strong>
               </div>
               <div class="project-payment-summary__item">

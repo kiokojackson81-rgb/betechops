@@ -50,6 +50,10 @@ export function buildReceiptSnapshot(receipt: any) {
     dataIsObject && dataAny?.projectFlow && typeof dataAny.projectFlow === "object"
       ? (dataAny.projectFlow as Record<string, unknown>)
       : null;
+  const metadata =
+    dataIsObject && dataAny?.metadata && typeof dataAny.metadata === "object"
+      ? (dataAny.metadata as Record<string, unknown>)
+      : null;
 
   return {
     order,
@@ -87,6 +91,12 @@ export function buildReceiptSnapshot(receipt: any) {
     paymentDetailsShown,
     warrantyText,
     serialNumber,
+    quotePaymentMethod:
+      typeof dataAny?.quotePaymentMethod === "string"
+        ? dataAny.quotePaymentMethod
+        : typeof metadata?.quotePaymentMethod === "string"
+          ? metadata.quotePaymentMethod
+          : null,
     projectFlow: projectFlowRaw
       ? {
           isProject: projectFlowRaw.isProject === true,
