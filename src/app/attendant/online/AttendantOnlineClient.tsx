@@ -17,6 +17,7 @@ import { computeMarketplaceCommission } from "@/lib/onlineCommission";
 import { showToast } from "@/lib/ui/toast";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { signOut } from "next-auth/react";
 import { buildEarningsCardBreakdown } from "@/lib/earningsCardBreakdown";
 
 type TradingWeekChip = { key: string; label: string; start: Date; end: Date };
@@ -1047,12 +1048,13 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
             >
               Create receipt
             </Link>
-            <Link
-              href="/api/auth/signout"
+            <button
+              type="button"
+              onClick={() => signOut({ callbackUrl: "/" })}
               className="rounded-full border border-transparent px-3 py-1 transition hover:border-slate-500"
             >
               Log out
-            </Link>
+            </button>
           </div>
         </header>
 

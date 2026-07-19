@@ -85,10 +85,26 @@ function commissionLines(summary: SummaryLike): EarningsCardLine[] {
         { label: "Jumia commission", amount: jumia, kind: "earning" as const },
         { label: "Kilimall commission", amount: kilimall, kind: "earning" as const },
       ].filter((line) => line.amount !== 0);
-    case "SUPPORT_OPS":
-      return direct || totalCommission
-        ? [{ label: "Support commission", amount: direct || totalCommission, kind: "earning" }]
-        : [];
+    case "SUPPORT_OPS": {
+      const breakdown =
+        summary.commissionBreakdown && typeof summary.commissionBreakdown === "object"
+          ? (summary.commissionBreakdown as Record<string, unknown>)
+          : {};
+      const posProfitShare = num(breakdown.posProfitShare);
+      const supportAdjustment = num(breakdown.supportAdjustment);
+      return [
+        {
+          label: "POS commission",
+          amount: posProfitShare || direct || totalCommission,
+          kind: "earning" as const,
+        },
+        {
+          label: "Support adjustment",
+          amount: supportAdjustment,
+          kind: "earning" as const,
+        },
+      ].filter((line) => line.amount !== 0);
+    }
     case "TECHNICAL_TEAM": {
       const breakdown =
         summary.commissionBreakdown && typeof summary.commissionBreakdown === "object"

@@ -661,7 +661,13 @@ async function buildPayrollRowResolved(
     getEarningsSummaryForUser({ userId: attendant.id, asOf: period.start }),
     getUserCommissionConfigLike(attendant.id),
   ]);
-  const detail = ledger?.detail as { totalSales?: number; totalProfit?: number } | undefined;
+  const detail = ledger?.detail as
+    | {
+        totalSales?: number;
+        totalProfit?: number;
+        support?: { commission?: number };
+      }
+    | undefined;
   const detailProfitValue = Number(detail?.totalProfit ?? Number.NaN);
   const resolvedProfit =
     !Number.isNaN(detailProfitValue) && detailProfitValue !== 0
@@ -681,6 +687,15 @@ async function buildPayrollRowResolved(
   const resolvedDirectCommission = usesConfiguredCommissionMode
     ? Number(earningsSummary?.salesCommission ?? commissionTotal)
     : Number(ledger?.commissionDirect ?? 0);
+  const supportAdjustment =
+    attendant.attendantCategory === "SUPPORT_OPS"
+      ? Math.max(
+          0,
+          Number(detail?.support?.commission ?? 0) > 0
+            ? commissionTotal - resolvedDirectCommission
+            : 0,
+        )
+      : 0;
 
   const totalEarnings =
     Number(plan?.baseSalary ?? 0) +
@@ -707,6 +722,8 @@ async function buildPayrollRowResolved(
       usesConfiguredCommissionMode
         ? {
             direct: resolvedDirectCommission,
+            posProfitShare: attendant.attendantCategory === "SUPPORT_OPS" ? resolvedDirectCommission : undefined,
+            supportAdjustment: attendant.attendantCategory === "SUPPORT_OPS" ? supportAdjustment : undefined,
             total: commissionTotal,
             source: commissionConfig.salesCommissionMode,
           }

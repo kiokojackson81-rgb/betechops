@@ -334,7 +334,7 @@ export default function SupportOpsPage() {
             </Link>
             <button
               type="button"
-              onClick={() => signOut({ callbackUrl: "/attendant/login" })}
+              onClick={() => signOut({ callbackUrl: "/" })}
               className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
             >
               Log out
@@ -517,7 +517,7 @@ function SupportQuickStats({
     { label: "Items sold", value: safeLocale(items) },
     // commission shown using SensitiveValue so it can be hidden; unhide requires login
     {
-      label: "Commission (KES)",
+      label: "POS commission (KES)",
       value: (
         <SensitiveValue
           value={commissionKes}
@@ -537,7 +537,7 @@ function SupportQuickStats({
     },
     // Placeholder total commission: commission + performance earnings
     {
-      label: "Total commission",
+      label: "POS + performance",
       value: (
         <SensitiveValue
           value={commissionKes + performanceBonus}
@@ -581,7 +581,9 @@ function SupportQuickStats({
           Commission basis
         </p>
         <p className="text-xs text-slate-200">
-          {mask(`10% of POS receipt profit. Current profit total: KES ${safeLocale(totalProfit)}`)}
+          {mask(
+            `10% of POS receipt profit. Current profit total: KES ${safeLocale(totalProfit)}. Any extra support adjustment appears separately in payroll.`
+          )}
         </p>
       </div>
     </Card>
