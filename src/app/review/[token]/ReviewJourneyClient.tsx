@@ -331,7 +331,10 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
   }
 
   function openReferralStart() {
-    reviewFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setShowReferralForm(true);
+    window.setTimeout(() => {
+      reviewFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
   }
 
   return (
@@ -645,6 +648,54 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                   Available immediately after you submit your review.
                 </div>
               </div>
+
+              {showReferralForm ? (
+                <div className="mt-5 rounded-[28px] border border-[#ecd7cb] bg-white p-5">
+                  <div className="text-sm font-semibold text-[#210505]">Start referring now</div>
+                  <p className="mt-2 text-sm leading-7 text-slate-600">
+                    Enter the details of the person you want to refer for <span className="font-semibold text-[#210505]">{invitation.product.name}</span>. Your details will stay here, then after you submit the review you can continue with the connected referral flow.
+                  </p>
+                  <div className="mt-5 grid gap-4">
+                    <label className="grid gap-2">
+                      <span className="text-sm font-semibold text-[#210505]">Phone number of the person you are referring</span>
+                      <input
+                        value={referralForm.referredPhone}
+                        onChange={(event) => setReferralForm((current) => ({ ...current, referredPhone: event.target.value }))}
+                        placeholder="0712345678"
+                        className="rounded-2xl border border-[#ddc6ba] bg-white px-4 py-3 outline-none transition focus:border-[#7a0000]/45"
+                      />
+                    </label>
+                    <label className="grid gap-2">
+                      <span className="text-sm font-semibold text-[#210505]">Referral name (optional)</span>
+                      <input
+                        value={referralForm.referredName}
+                        onChange={(event) => setReferralForm((current) => ({ ...current, referredName: event.target.value }))}
+                        placeholder="Peter"
+                        className="rounded-2xl border border-[#ddc6ba] bg-white px-4 py-3 outline-none transition focus:border-[#7a0000]/45"
+                      />
+                    </label>
+                    <label className="grid gap-2">
+                      <span className="text-sm font-semibold text-[#210505]">Send via</span>
+                      <select
+                        value={referralForm.channel}
+                        onChange={(event) => setReferralForm((current) => ({ ...current, channel: event.target.value }))}
+                        className="rounded-2xl border border-[#ddc6ba] bg-white px-4 py-3 outline-none transition focus:border-[#7a0000]/45"
+                      >
+                        <option value="whatsapp">WhatsApp</option>
+                        <option value="sms">SMS</option>
+                        <option value="copy">Copy link</option>
+                      </select>
+                    </label>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => reviewFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                    className="mt-5 inline-flex min-h-[3.4rem] w-full items-center justify-center rounded-[20px] bg-[#7a0000] px-6 py-3 text-sm font-bold text-white transition hover:bg-[#650000]"
+                  >
+                    Submit review to continue
+                  </button>
+                </div>
+              ) : null}
             </div>
           </section>
         ) : (
