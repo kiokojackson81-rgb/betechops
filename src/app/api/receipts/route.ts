@@ -219,7 +219,8 @@ export async function GET(req: NextRequest) {
   };
 
   const and: Prisma.ReceiptWhereInput[] = [];
-  if (!carryForwardPending) {
+  const shouldApplyGeneratedAtWindow = !carryForwardPending && !isProjectOnlyView;
+  if (shouldApplyGeneratedAtWindow) {
     and.push({ generatedAt: { gte: startDate, lte: endDate } });
   }
 
