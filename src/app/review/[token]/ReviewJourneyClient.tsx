@@ -153,13 +153,13 @@ function Stars({
   onChange: (next: number) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+    <div className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[#ecd7cb] bg-white px-2 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
       {[1, 2, 3, 4, 5].map((score) => (
         <button
           key={`${name}-${score}`}
           type="button"
           onClick={() => onChange(score)}
-          className={`flex h-14 w-14 items-center justify-center rounded-full text-[2.8rem] leading-none transition sm:h-16 sm:w-16 sm:text-[3.2rem] ${score <= value ? "text-amber-400" : "text-slate-300 hover:text-amber-300"}`}
+          className={`flex h-10 w-10 items-center justify-center rounded-full text-[2.05rem] leading-none transition sm:h-11 sm:w-11 sm:text-[2.2rem] ${score <= value ? "text-amber-400" : "text-slate-300 hover:text-amber-300"}`}
           aria-label={`${score} star${score === 1 ? "" : "s"}`}
           aria-pressed={score <= value}
         >
@@ -184,6 +184,39 @@ function MetricCard({
       <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">{label}</div>
       <div className={`mt-2 text-2xl font-black tracking-tight ${accent || "text-[#210505]"}`}>{value}</div>
     </div>
+  );
+}
+
+function RatingField({
+  index,
+  title,
+  prompt,
+  name,
+  value,
+  onChange,
+}: {
+  index: string;
+  title: string;
+  prompt: string;
+  name: string;
+  value: number;
+  onChange: (next: number) => void;
+}) {
+  return (
+    <label className="rounded-[26px] border border-[#ecd7cb] bg-[linear-gradient(180deg,#ffffff_0%,#fffaf5_100%)] p-5 shadow-[0_16px_36px_rgba(15,23,42,0.04)]">
+      <div className="flex items-start gap-4">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#fff3ea] text-sm font-black text-[#7a0000]">
+          {index}
+        </div>
+        <div className="min-w-0">
+          <div className="text-lg font-black tracking-tight text-[#210505]">{title}</div>
+          <div className="mt-1 text-sm leading-6 text-slate-600">{prompt}</div>
+        </div>
+      </div>
+      <div className="mt-5">
+        <Stars name={name} value={value} onChange={onChange} />
+      </div>
+    </label>
   );
 }
 
@@ -408,7 +441,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.26),transparent_28%),linear-gradient(180deg,#fff8ef_0%,#fffdfb_45%,#f8fafc_100%)] px-4 py-6 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.18),transparent_22%),radial-gradient(circle_at_top_right,rgba(122,0,0,0.08),transparent_25%),linear-gradient(180deg,#fffaf3_0%,#fffefc_42%,#f8fafc_100%)] px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-6">
         {invitation.isTestMode ? (
           <section className="rounded-[28px] border border-amber-300/45 bg-[linear-gradient(180deg,#fff7db_0%,#fff2c0_100%)] px-5 py-4 text-[#5a2400] shadow-[0_14px_30px_rgba(245,158,11,0.12)]">
@@ -421,14 +454,14 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
         ) : null}
 
         {!alreadySubmitted ? (
-          <section className="overflow-hidden rounded-[34px] border border-[#7a0000]/10 bg-white shadow-[0_28px_80px_rgba(122,0,0,0.10)]">
+          <section className="overflow-hidden rounded-[36px] border border-[#7a0000]/10 bg-white shadow-[0_28px_80px_rgba(122,0,0,0.08)]">
             <div className="grid gap-0 xl:grid-cols-[1.02fr_0.98fr]">
-              <div className="bg-[linear-gradient(145deg,#210505_0%,#4d0909_48%,#7a0000_100%)] px-6 py-8 text-white sm:px-8">
+              <div className="bg-[linear-gradient(145deg,#2a0606_0%,#641010_52%,#930d0d_100%)] px-6 py-8 text-white sm:px-8 sm:py-10">
                 <div className="text-xs font-black uppercase tracking-[0.28em] text-amber-300">Verified Purchase Review</div>
-                <h1 className="mt-4 text-3xl font-black tracking-tight sm:text-5xl">
+                <h1 className="mt-4 max-w-2xl text-3xl font-black tracking-tight sm:text-[3.6rem] sm:leading-[1.02]">
                   Hello {invitation.customer.firstName}, how is your product performing?
                 </h1>
-                <p className="mt-4 max-w-xl text-sm leading-7 text-amber-50/90 sm:text-base">
+                <p className="mt-4 max-w-xl text-sm leading-7 text-amber-50/92 sm:text-base">
                   Thank you for purchasing from Betech Solar Solutions. Share your experience below, then refer a friend or family member and earn after a successful sale.
                 </p>
 
@@ -452,7 +485,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                 </div>
               </div>
 
-              <div className="bg-[#fff8f2] p-5 sm:p-8">
+              <div className="bg-[linear-gradient(180deg,#fff9f3_0%,#fffdfb_100%)] p-5 sm:p-8">
                 <div className="rounded-[28px] border border-[#ecd7cb] bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.07)]">
                   <div className="flex flex-col gap-5 sm:flex-row">
                     <div className="h-32 w-full overflow-hidden rounded-[24px] bg-[#fff4e3] sm:h-40 sm:w-40 sm:shrink-0">
@@ -507,59 +540,63 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
 
         {!alreadySubmitted ? (
           <section className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
-            <div className="rounded-[34px] border border-[#ecd7cb] bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)] sm:p-8">
-              <div className="flex items-start gap-4">
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#fff2ec] text-2xl text-[#7a0000]">✦</div>
-                <div>
-                  <h2 className="text-3xl font-black tracking-tight text-[#210505]">Tell us about your experience</h2>
-                  <p className="mt-3 text-sm leading-7 text-slate-600">
-                    Your honest review helps other customers make informed decisions.
-                  </p>
+            <div className="overflow-hidden rounded-[36px] border border-[#ecd7cb] bg-white shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+              <div className="border-b border-[#f1e3d9] bg-[linear-gradient(180deg,#fffdf9_0%,#fff5ec_100%)] px-6 py-6 sm:px-8">
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+                  <div className="max-w-2xl">
+                    <div className="text-xs font-black uppercase tracking-[0.24em] text-[#7a0000]">Review form</div>
+                    <h2 className="mt-3 text-3xl font-black tracking-tight text-[#210505] sm:text-[2.5rem]">Tell us about your experience</h2>
+                    <p className="mt-3 text-sm leading-7 text-slate-600 sm:text-base">
+                      Rate the product, delivery or installation, and support experience. Your review helps future customers make better decisions.
+                    </p>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-[22px] border border-[#ecd7cb] bg-white px-4 py-3">
+                      <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Product</div>
+                      <div className="mt-2 text-sm font-semibold text-[#210505]">{invitation.product.name}</div>
+                    </div>
+                    <div className="rounded-[22px] border border-[#ecd7cb] bg-white px-4 py-3">
+                      <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Purchase date</div>
+                      <div className="mt-2 text-sm font-semibold text-[#210505]">{formatDate(invitation.purchaseDate)}</div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <form ref={reviewFormRef} onSubmit={handleSubmit} className="mt-8 grid gap-5 sm:gap-6">
+              <form ref={reviewFormRef} onSubmit={handleSubmit} className="grid gap-6 p-6 sm:p-8">
                 <div className="grid gap-4 sm:gap-5 lg:grid-cols-2">
-                  <label className="rounded-[24px] border border-[#eddacf] bg-[#fffaf5] p-4 sm:rounded-[26px] sm:p-5">
-                    <div className="text-base font-bold text-[#210505]">Overall experience</div>
-                    <div className="mt-2 text-sm leading-6 text-slate-600">How would you rate your overall experience with this product?</div>
-                    <div className="mt-4">
-                      <Stars name="overall" value={form.overallRating} onChange={(value) => setForm((current) => ({ ...current, overallRating: value }))} />
-                    </div>
-                  </label>
-                  <label className="rounded-[24px] border border-[#eddacf] bg-[#fffaf5] p-4 sm:rounded-[26px] sm:p-5">
-                    <div className="text-base font-bold text-[#210505]">Product performance</div>
-                    <div className="mt-2 text-sm leading-6 text-slate-600">How well is the product performing?</div>
-                    <div className="mt-4">
-                      <Stars
-                        name="performance"
-                        value={form.productPerformanceRating}
-                        onChange={(value) => setForm((current) => ({ ...current, productPerformanceRating: value }))}
-                      />
-                    </div>
-                  </label>
-                  <label className="rounded-[24px] border border-[#eddacf] bg-[#fffaf5] p-4 sm:rounded-[26px] sm:p-5">
-                    <div className="text-base font-bold text-[#210505]">{fulfillmentCopy.title}</div>
-                    <div className="mt-2 text-sm leading-6 text-slate-600">{fulfillmentCopy.prompt}</div>
-                    <div className="mt-4">
-                      <Stars
-                        name="fulfillment"
-                        value={form.fulfillmentRating}
-                        onChange={(value) => setForm((current) => ({ ...current, fulfillmentRating: value }))}
-                      />
-                    </div>
-                  </label>
-                  <label className="rounded-[24px] border border-[#eddacf] bg-[#fffaf5] p-4 sm:rounded-[26px] sm:p-5">
-                    <div className="text-base font-bold text-[#210505]">Customer service</div>
-                    <div className="mt-2 text-sm leading-6 text-slate-600">How would you rate the support you received from our team?</div>
-                    <div className="mt-4">
-                      <Stars
-                        name="service"
-                        value={form.customerServiceRating}
-                        onChange={(value) => setForm((current) => ({ ...current, customerServiceRating: value }))}
-                      />
-                    </div>
-                  </label>
+                  <RatingField
+                    index="1"
+                    title="Overall experience"
+                    prompt="How would you rate your overall experience with this product?"
+                    name="overall"
+                    value={form.overallRating}
+                    onChange={(value) => setForm((current) => ({ ...current, overallRating: value }))}
+                  />
+                  <RatingField
+                    index="2"
+                    title="Product performance"
+                    prompt="How well is the product performing?"
+                    name="performance"
+                    value={form.productPerformanceRating}
+                    onChange={(value) => setForm((current) => ({ ...current, productPerformanceRating: value }))}
+                  />
+                  <RatingField
+                    index="3"
+                    title={fulfillmentCopy.title}
+                    prompt={fulfillmentCopy.prompt}
+                    name="fulfillment"
+                    value={form.fulfillmentRating}
+                    onChange={(value) => setForm((current) => ({ ...current, fulfillmentRating: value }))}
+                  />
+                  <RatingField
+                    index="4"
+                    title="Customer service"
+                    prompt="How would you rate the support you received from our team?"
+                    name="service"
+                    value={form.customerServiceRating}
+                    onChange={(value) => setForm((current) => ({ ...current, customerServiceRating: value }))}
+                  />
                 </div>
 
                 <label className="grid gap-2">
@@ -569,7 +606,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                     onChange={(event) => setForm((current) => ({ ...current, reviewBody: event.target.value }))}
                     placeholder="Share more details about your experience with the product, delivery and service..."
                     rows={7}
-                    className="rounded-[24px] border border-[#ddc6ba] bg-white px-4 py-4 outline-none transition focus:border-[#7a0000]/45"
+                    className="rounded-[24px] border border-[#ddc6ba] bg-[#fffefd] px-4 py-4 outline-none transition focus:border-[#7a0000]/45"
                   />
                 </label>
 
@@ -666,14 +703,14 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
               </form>
             </div>
 
-            <div className="rounded-[34px] border border-[#ecd7cb] bg-[linear-gradient(180deg,#fffdfa_0%,#fff4df_100%)] p-6 shadow-[0_20px_60px_rgba(245,158,11,0.12)] sm:p-8">
+            <div className="rounded-[36px] border border-[#ecd7cb] bg-[linear-gradient(180deg,#fffdf9_0%,#fff3dd_100%)] p-6 shadow-[0_20px_60px_rgba(245,158,11,0.12)] sm:p-8">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                <div className="flex h-24 w-24 items-center justify-center rounded-[28px] bg-[radial-gradient(circle_at_top,#fff7d1_0%,#ffd79a_48%,#ffbe6f_100%)] text-[3rem] shadow-[0_18px_40px_rgba(245,158,11,0.18)]">
+                <div className="flex h-20 w-20 items-center justify-center rounded-[26px] bg-[radial-gradient(circle_at_top,#fff7d1_0%,#ffd79a_48%,#ffbe6f_100%)] text-[2.7rem] shadow-[0_18px_40px_rgba(245,158,11,0.18)]">
                   🎁
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-xs font-black uppercase tracking-[0.22em] text-[#7a0000]">Refer & earn rewards</div>
-                  <h2 className="mt-2 text-3xl font-black tracking-tight text-[#210505]">
+                  <h2 className="mt-2 text-3xl font-black tracking-tight text-[#210505] sm:text-[2.35rem]">
                     Refer someone to purchase the product you bought from us and earn commissions.
                   </h2>
                   <p className="mt-3 text-sm leading-7 text-slate-600">
@@ -701,13 +738,27 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
 
               {referralTab === "product" ? (
                 <>
-                  <div className="mt-5 rounded-[30px] border border-amber-300/35 bg-[linear-gradient(180deg,#fff4d0_0%,#ffe9ae_100%)] p-6 text-center shadow-[0_18px_40px_rgba(245,158,11,0.14)]">
-                    <div className="text-xs font-black uppercase tracking-[0.14em] text-[#7a0000]">Next reward pending</div>
-                    <div className="mt-3 text-5xl font-black tracking-tight text-[#7a0000] sm:text-6xl">
-                      {formatMoney(referralDashboard?.totals.potentialCommission ?? projectedCommission)}
-                    </div>
-                    <div className="mt-4 text-base font-medium leading-7 text-[#6b3d00]">
-                      Refer someone to purchase <span className="font-bold text-[#210505]">{invitation.product.name}</span> and earn up to {formatMoney(projectedCommission)} commission.
+                  <div className="mt-5 rounded-[32px] border border-amber-300/35 bg-[linear-gradient(180deg,#fff5d3_0%,#ffebb7_100%)] p-6 shadow-[0_18px_40px_rgba(245,158,11,0.14)]">
+                    <div className="grid gap-5 md:grid-cols-[1.2fr_0.8fr] md:items-center">
+                      <div>
+                        <div className="text-xs font-black uppercase tracking-[0.14em] text-[#7a0000]">Next reward pending</div>
+                        <div className="mt-3 text-5xl font-black tracking-tight text-[#7a0000] sm:text-6xl">
+                          {formatMoney(referralDashboard?.totals.potentialCommission ?? projectedCommission)}
+                        </div>
+                        <div className="mt-4 text-base font-medium leading-7 text-[#6b3d00]">
+                          Refer someone to purchase <span className="font-bold text-[#210505]">{invitation.product.name}</span> and earn up to {formatMoney(projectedCommission)} commission.
+                        </div>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-1">
+                        <div className="rounded-[22px] border border-white/50 bg-white/70 px-4 py-4">
+                          <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Reward rate</div>
+                          <div className="mt-2 text-3xl font-black text-[#7a0000]">{rewardRate}%</div>
+                        </div>
+                        <div className="rounded-[22px] border border-white/50 bg-white/70 px-4 py-4">
+                          <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Tracking window</div>
+                          <div className="mt-2 text-lg font-bold text-[#210505]">Up to 3 months</div>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
