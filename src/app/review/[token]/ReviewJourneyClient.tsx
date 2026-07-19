@@ -217,6 +217,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
   const [referralSuccess, setReferralSuccess] = useState<ReferralPayload | null>(null);
   const [referralDashboard, setReferralDashboard] = useState<ReferralDashboardPayload | null>(null);
   const [creatingReferral, setCreatingReferral] = useState(false);
+  const [showReferralForm, setShowReferralForm] = useState(false);
   const [copied, setCopied] = useState(false);
   const [form, setForm] = useState({
     overallRating: invitation.review?.overallRating ?? 5,
@@ -628,10 +629,15 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
               </div>
 
               <div className="mt-5 rounded-[26px] border border-[#ecd7cb] bg-white p-5">
-                <div className="text-sm font-semibold text-[#210505]">How referring will work</div>
-                <p className="mt-2 text-sm leading-7 text-slate-600">
-                  Submit the review first. Then this panel opens the live referral flow where you enter the person you are referring, generate a connected referral link, and send it through WhatsApp, SMS, email or copy link.
-                </p>
+                <button
+                  type="button"
+                  className="inline-flex min-h-[3.6rem] w-full items-center justify-center rounded-[20px] bg-[#7a0000] px-6 py-3 text-sm font-bold text-white opacity-90"
+                >
+                  Refer now and earn
+                </button>
+                <div className="mt-3 text-center text-sm leading-7 text-slate-600">
+                  Available immediately after you submit your review.
+                </div>
               </div>
             </div>
           </section>
@@ -733,52 +739,63 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
               </div>
 
               {!referralSuccess ? (
-                <form onSubmit={handleCreateReferral} className="mt-6 space-y-5 rounded-[28px] border border-[#ecd7cb] bg-white p-5">
-                  <div className="text-sm font-semibold text-[#210505]">Start referring now</div>
-                  <p className="text-sm leading-7 text-slate-600">
-                    Enter the details of the person you want to refer for <span className="font-semibold text-[#210505]">{invitation.product.name}</span>. We will connect this referral to your normal referral account automatically.
-                  </p>
-                  <div className="grid gap-4">
-                    <label className="grid gap-2">
-                      <span className="text-sm font-semibold text-[#210505]">Phone number of the person you are referring</span>
-                      <input
-                        value={referralForm.referredPhone}
-                        onChange={(event) => setReferralForm((current) => ({ ...current, referredPhone: event.target.value }))}
-                        placeholder="0712345678"
-                        className="rounded-2xl border border-[#ddc6ba] bg-white px-4 py-3 outline-none transition focus:border-[#7a0000]/45"
-                      />
-                    </label>
-                    <label className="grid gap-2">
-                      <span className="text-sm font-semibold text-[#210505]">Referral name (optional)</span>
-                      <input
-                        value={referralForm.referredName}
-                        onChange={(event) => setReferralForm((current) => ({ ...current, referredName: event.target.value }))}
-                        placeholder="Peter"
-                        className="rounded-2xl border border-[#ddc6ba] bg-white px-4 py-3 outline-none transition focus:border-[#7a0000]/45"
-                      />
-                    </label>
-                    <label className="grid gap-2">
-                      <span className="text-sm font-semibold text-[#210505]">Send via</span>
-                      <select
-                        value={referralForm.channel}
-                        onChange={(event) => setReferralForm((current) => ({ ...current, channel: event.target.value }))}
-                        className="rounded-2xl border border-[#ddc6ba] bg-white px-4 py-3 outline-none transition focus:border-[#7a0000]/45"
-                      >
-                        <option value="whatsapp">WhatsApp</option>
-                        <option value="sms">SMS</option>
-                        <option value="copy">Copy link</option>
-                      </select>
-                    </label>
-                  </div>
-                  {referralError ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{referralError}</div> : null}
+                <div className="mt-6 space-y-5">
                   <button
-                    type="submit"
-                    disabled={creatingReferral}
+                    type="button"
+                    onClick={() => setShowReferralForm(true)}
                     className="inline-flex min-h-[3.4rem] w-full items-center justify-center rounded-[20px] bg-[#7a0000] px-6 py-3 text-sm font-bold text-white transition hover:bg-[#650000] disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {creatingReferral ? "Creating referral..." : "Create referral and continue"}
+                    Refer now and earn
                   </button>
-                </form>
+                  {showReferralForm ? (
+                    <form onSubmit={handleCreateReferral} className="rounded-[28px] border border-[#ecd7cb] bg-white p-5">
+                      <div className="text-sm font-semibold text-[#210505]">Start referring now</div>
+                      <p className="mt-2 text-sm leading-7 text-slate-600">
+                        Enter the details of the person you want to refer for <span className="font-semibold text-[#210505]">{invitation.product.name}</span>. We will connect this referral to your normal referral account automatically.
+                      </p>
+                      <div className="mt-5 grid gap-4">
+                        <label className="grid gap-2">
+                          <span className="text-sm font-semibold text-[#210505]">Phone number of the person you are referring</span>
+                          <input
+                            value={referralForm.referredPhone}
+                            onChange={(event) => setReferralForm((current) => ({ ...current, referredPhone: event.target.value }))}
+                            placeholder="0712345678"
+                            className="rounded-2xl border border-[#ddc6ba] bg-white px-4 py-3 outline-none transition focus:border-[#7a0000]/45"
+                          />
+                        </label>
+                        <label className="grid gap-2">
+                          <span className="text-sm font-semibold text-[#210505]">Referral name (optional)</span>
+                          <input
+                            value={referralForm.referredName}
+                            onChange={(event) => setReferralForm((current) => ({ ...current, referredName: event.target.value }))}
+                            placeholder="Peter"
+                            className="rounded-2xl border border-[#ddc6ba] bg-white px-4 py-3 outline-none transition focus:border-[#7a0000]/45"
+                          />
+                        </label>
+                        <label className="grid gap-2">
+                          <span className="text-sm font-semibold text-[#210505]">Send via</span>
+                          <select
+                            value={referralForm.channel}
+                            onChange={(event) => setReferralForm((current) => ({ ...current, channel: event.target.value }))}
+                            className="rounded-2xl border border-[#ddc6ba] bg-white px-4 py-3 outline-none transition focus:border-[#7a0000]/45"
+                          >
+                            <option value="whatsapp">WhatsApp</option>
+                            <option value="sms">SMS</option>
+                            <option value="copy">Copy link</option>
+                          </select>
+                        </label>
+                      </div>
+                      {referralError ? <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{referralError}</div> : null}
+                      <button
+                        type="submit"
+                        disabled={creatingReferral}
+                        className="mt-5 inline-flex min-h-[3.4rem] w-full items-center justify-center rounded-[20px] bg-[#7a0000] px-6 py-3 text-sm font-bold text-white transition hover:bg-[#650000] disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {creatingReferral ? "Creating referral..." : "Create referral and continue"}
+                      </button>
+                    </form>
+                  ) : null}
+                </div>
               ) : (
                 <div className="mt-6 space-y-5 rounded-[28px] border border-[#ecd7cb] bg-white p-5">
                   <div className="grid gap-4 sm:grid-cols-2">
