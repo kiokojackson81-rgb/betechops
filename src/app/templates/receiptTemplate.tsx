@@ -128,6 +128,7 @@ export default function renderReceiptTemplate(
         return 'Unspecified';
     }
   };
+  const fallbackCollectionMethods = "M-Pesa Paybill / Absa Bank / Equity Bank";
 
   const itemsSubtotal = items.reduce((sum, it) => {
     const qty = toNumberOrNull(it.quantity) ?? 1;
@@ -210,7 +211,15 @@ export default function renderReceiptTemplate(
                       ? projectFlow.depositPaymentMethod
                       : projectFlow.balancePaymentMethod
                   ) || quotePaymentMethod,
-                )}</strong>
+                ) === 'Unspecified'
+                  ? fallbackCollectionMethods
+                  : formatProjectPaymentMethod(
+                      (
+                        String(projectFlow.paymentTerm || '').trim().toUpperCase() === 'FULL_BEFORE_INSTALLATION'
+                          ? projectFlow.depositPaymentMethod
+                          : projectFlow.balancePaymentMethod
+                      ) || quotePaymentMethod,
+                    )}</strong>
               </div>
               <div class="project-payment-summary__item">
                 <span>Expected payment</span>
