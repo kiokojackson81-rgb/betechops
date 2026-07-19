@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 
 type InvitationPayload = {
   invitationId: string;
@@ -152,20 +152,77 @@ function Stars({
   value: number;
   onChange: (next: number) => void;
 }) {
+  function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>, score: number) {
+    if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+      event.preventDefault();
+      onChange(Math.min(5, score + 1));
+      return;
+    }
+    if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+      event.preventDefault();
+      onChange(Math.max(1, score - 1));
+      return;
+    }
+    if (event.key === "Home") {
+      event.preventDefault();
+      onChange(1);
+      return;
+    }
+    if (event.key === "End") {
+      event.preventDefault();
+      onChange(5);
+      return;
+    }
+    if (event.key === " " || event.key === "Enter") {
+      event.preventDefault();
+      onChange(score);
+    }
+  }
+
   return (
-    <div className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[#ecd7cb] bg-white px-2 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+    <div
+      role="radiogroup"
+      aria-label={`${name} rating`}
+      aria-describedby={`${name}-rating-status`}
+      className="grid w-full grid-cols-5 gap-3 sm:gap-4"
+    >
       {[1, 2, 3, 4, 5].map((score) => (
         <button
           key={`${name}-${score}`}
           type="button"
           onClick={() => onChange(score)}
-          className={`flex h-10 w-10 items-center justify-center rounded-full text-[2.05rem] leading-none transition sm:h-11 sm:w-11 sm:text-[2.2rem] ${score <= value ? "text-amber-400" : "text-slate-300 hover:text-amber-300"}`}
-          aria-label={`${score} star${score === 1 ? "" : "s"}`}
-          aria-pressed={score <= value}
+          onKeyDown={(event) => handleKeyDown(event, score)}
+          role="radio"
+          aria-checked={score === value}
+          aria-label={`Rate ${score} star${score === 1 ? "" : "s"}`}
+          className={`group flex min-h-[5.5rem] w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-[22px] border px-2 py-3 text-center outline-none transition duration-200 ease-out focus-visible:ring-2 focus-visible:ring-[#7a0000]/30 focus-visible:ring-offset-2 sm:min-h-[6.2rem] ${
+            score === value
+              ? "scale-[1.05] border-[#f59e0b] bg-[#FBBF24] text-white shadow-[0_16px_34px_rgba(251,191,36,0.34)]"
+              : "border-slate-200 bg-white text-slate-400 shadow-[0_10px_24px_rgba(15,23,42,0.04)] hover:border-[#fbbf24] hover:bg-amber-50 hover:text-[#f59e0b] hover:shadow-[0_16px_30px_rgba(251,191,36,0.16)]"
+          }`}
         >
-          ★
+          <span
+            aria-hidden="true"
+            className={`flex h-14 w-14 items-center justify-center rounded-[18px] text-[1.8rem] leading-none transition duration-200 sm:h-[60px] sm:w-[60px] sm:text-[2rem] ${
+              score === value
+                ? "bg-white/18 text-white"
+                : "bg-slate-50 text-slate-300 group-hover:bg-amber-100 group-hover:text-[#f59e0b]"
+            }`}
+          >
+            ★
+          </span>
+          <span
+            className={`text-sm font-black leading-none transition ${
+              score === value ? "text-white" : "text-slate-500 group-hover:text-[#b45309]"
+            }`}
+          >
+            {score}
+          </span>
         </button>
       ))}
+      <div id={`${name}-rating-status`} className="sr-only">
+        Selected rating: {value} out of 5
+      </div>
     </div>
   );
 }
