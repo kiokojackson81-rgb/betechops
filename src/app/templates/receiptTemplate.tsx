@@ -217,8 +217,16 @@ export default function renderReceiptTemplate(
                 <strong>${formatProjectPaymentMethod(projectFlow.balancePaymentMethod)}</strong>
               </div>`
               : `
+              <div class="project-payment-summary__item">
+                <span>Expected payment</span>
+                <strong>KES ${formatAmount(
+                  String(projectFlow.paymentTerm || '').trim().toUpperCase() === 'FULL_BEFORE_INSTALLATION'
+                    ? toNumberOrNull(projectFlow.depositRequiredAmount) ?? 0
+                    : toNumberOrNull(projectFlow.balanceExpectedAmount) ?? 0,
+                )}</strong>
+              </div>
               <div class="project-payment-summary__item project-payment-summary__item--methods">
-                <span>Collection method</span>
+                <span>Payment method</span>
                 ${
                   formatProjectPaymentMethod(
                     (
@@ -236,14 +244,6 @@ export default function renderReceiptTemplate(
                         ) || quotePaymentMethod,
                       )}</strong>`
                 }
-              </div>
-              <div class="project-payment-summary__item">
-                <span>Expected payment</span>
-                <strong>KES ${formatAmount(
-                  String(projectFlow.paymentTerm || '').trim().toUpperCase() === 'FULL_BEFORE_INSTALLATION'
-                    ? toNumberOrNull(projectFlow.depositRequiredAmount) ?? 0
-                    : toNumberOrNull(projectFlow.balanceExpectedAmount) ?? 0,
-                )}</strong>
               </div>`
           }
         </div>
