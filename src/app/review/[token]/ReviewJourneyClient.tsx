@@ -787,38 +787,65 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
           </section>
         ) : (
           <section className="grid gap-6 xl:grid-cols-[1.02fr_0.98fr]">
-            <div className="rounded-[34px] border border-[#ecd7cb] bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)] sm:p-8">
-              <div className="text-xs font-black uppercase tracking-[0.24em] text-[#7a0000]">Thank you</div>
-              <h2 className="mt-3 text-3xl font-black tracking-tight text-[#210505]">Thank you for your review, {invitation.customer.firstName}.</h2>
-              <p className="mt-4 text-sm leading-7 text-slate-600">
-                Your feedback has been submitted successfully. It will appear on the product page after moderation. If you reported a problem, our support team has already been alerted.
-              </p>
-              {invitation.isTestMode ? (
-                <div className="mt-4 rounded-2xl border border-amber-300/40 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                  Test submission recorded successfully. Admin can now refresh the test monitor page and verify the submitted review.
-                </div>
-              ) : null}
+            <div className="overflow-hidden rounded-[36px] border border-[#ecd7cb] bg-white shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+              <div className="bg-[linear-gradient(145deg,#2a0606_0%,#641010_52%,#930d0d_100%)] px-6 py-7 text-white sm:px-8 sm:py-8">
+                <div className="text-xs font-black uppercase tracking-[0.24em] text-amber-300">Thank you</div>
+                <h2 className="mt-3 max-w-2xl text-3xl font-black tracking-tight sm:text-[3rem] sm:leading-[1.04]">
+                  Thank you for your review, {invitation.customer.firstName}.
+                </h2>
+                <p className="mt-4 max-w-2xl text-sm leading-7 text-amber-50/92 sm:text-base">
+                  Your feedback has been submitted successfully. It will appear on the product page after moderation. If you reported a problem, our support team has already been alerted.
+                </p>
+              </div>
 
-              <div className="mt-6 rounded-[28px] border border-[#eddacf] bg-[#fffaf5] p-5">
-                <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Submitted review</div>
-                <div className="mt-2 text-xl font-bold text-[#210505]">{invitation.review?.reviewTitle || "Customer review submitted"}</div>
-                <div className="mt-3 text-sm text-slate-600">{invitation.review?.reviewBody}</div>
-                <div className="mt-4 flex flex-wrap gap-3 text-sm text-slate-600">
-                  <span>Overall: {invitation.review?.overallRating}/5</span>
-                  <span>Recommend: {invitation.review?.wouldRecommend || "Not specified"}</span>
-                  <span>Status: {invitation.review?.moderationStatus || "pending"}</span>
+              <div className="grid gap-6 p-6 sm:p-8">
+                {invitation.isTestMode ? (
+                  <div className="rounded-[22px] border border-amber-300/40 bg-amber-50 px-4 py-4 text-sm leading-7 text-amber-900">
+                    Test submission recorded successfully. Admin can now refresh the test monitor page and verify the submitted review.
+                  </div>
+                ) : null}
+
+                <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+                  <div className="rounded-[28px] border border-[#eddacf] bg-[linear-gradient(180deg,#ffffff_0%,#fffaf5_100%)] p-5">
+                    <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Submitted review</div>
+                    <div className="mt-3 text-2xl font-black tracking-tight text-[#210505]">
+                      {invitation.review?.reviewTitle || "Customer review submitted"}
+                    </div>
+                    <div className="mt-4 text-sm leading-7 text-slate-600">{invitation.review?.reviewBody}</div>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
+                    <div className="rounded-[24px] border border-[#ecd7cb] bg-white px-5 py-4 shadow-[0_14px_30px_rgba(15,23,42,0.04)]">
+                      <div className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">Overall rating</div>
+                      <div className="mt-3 text-4xl font-black tracking-tight text-[#7a0000]">
+                        {invitation.review?.overallRating || 0}/5
+                      </div>
+                    </div>
+                    <div className="rounded-[24px] border border-[#ecd7cb] bg-white px-5 py-4 shadow-[0_14px_30px_rgba(15,23,42,0.04)]">
+                      <div className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">Recommend</div>
+                      <div className="mt-3 text-xl font-black capitalize tracking-tight text-[#210505]">
+                        {invitation.review?.wouldRecommend || "Not specified"}
+                      </div>
+                    </div>
+                    <div className="rounded-[24px] border border-[#ecd7cb] bg-white px-5 py-4 shadow-[0_14px_30px_rgba(15,23,42,0.04)]">
+                      <div className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">Status</div>
+                      <div className="mt-3 text-xl font-black capitalize tracking-tight text-[#210505]">
+                        {invitation.review?.moderationStatus || "pending"}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="rounded-[34px] border border-[#ecd7cb] bg-[linear-gradient(180deg,#fffdfa_0%,#fff4df_100%)] p-6 shadow-[0_20px_60px_rgba(245,158,11,0.12)] sm:p-8">
+            <div className="rounded-[36px] border border-[#ecd7cb] bg-[linear-gradient(180deg,#fffdf9_0%,#fff3dd_100%)] p-6 shadow-[0_20px_60px_rgba(245,158,11,0.12)] sm:p-8">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                <div className="flex h-24 w-24 items-center justify-center rounded-[28px] bg-[radial-gradient(circle_at_top,#fff7d1_0%,#ffd79a_48%,#ffbe6f_100%)] text-[3rem] shadow-[0_18px_40px_rgba(245,158,11,0.18)]">
+                <div className="flex h-20 w-20 items-center justify-center rounded-[26px] bg-[radial-gradient(circle_at_top,#fff7d1_0%,#ffd79a_48%,#ffbe6f_100%)] text-[2.7rem] shadow-[0_18px_40px_rgba(245,158,11,0.18)]">
                   🎁
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-xs font-black uppercase tracking-[0.22em] text-[#7a0000]">Refer & earn rewards</div>
-                  <h2 className="mt-2 text-3xl font-black tracking-tight text-[#210505]">
+                  <h2 className="mt-2 text-3xl font-black tracking-tight text-[#210505] sm:text-[2.35rem]">
                     Refer someone to purchase the product you purchased from us and earn {formatMoney(projectedCommission)} commission.
                   </h2>
                   <p className="mt-3 text-sm leading-7 text-slate-600">
@@ -846,14 +873,28 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
 
               {referralTab === "product" ? (
                 <>
-                  <div className="mt-5 rounded-[30px] border border-amber-300/35 bg-[linear-gradient(180deg,#fff4d0_0%,#ffe9ae_100%)] p-6 text-center shadow-[0_18px_40px_rgba(245,158,11,0.14)]">
-                    <div className="text-xs font-black uppercase tracking-[0.14em] text-[#7a0000]">Next reward pending</div>
-                    <div className="mt-3 text-5xl font-black tracking-tight text-[#7a0000] sm:text-6xl">
-                      {formatMoney(referralDashboard?.totals.potentialCommission ?? projectedCommission)}
+                  <div className="mt-5 rounded-[32px] border border-amber-300/35 bg-[linear-gradient(180deg,#fff5d3_0%,#ffebb7_100%)] p-6 shadow-[0_18px_40px_rgba(245,158,11,0.14)]">
+                    <div className="grid gap-5 md:grid-cols-[1.2fr_0.8fr] md:items-center">
+                      <div>
+                        <div className="text-xs font-black uppercase tracking-[0.14em] text-[#7a0000]">Next reward pending</div>
+                        <div className="mt-3 text-5xl font-black tracking-tight text-[#7a0000] sm:text-6xl">
+                          {formatMoney(referralDashboard?.totals.potentialCommission ?? projectedCommission)}
+                        </div>
+                        <div className="mt-4 text-base font-medium leading-7 text-[#6b3d00]">
+                          Refer someone to purchase <span className="font-bold text-[#210505]">{invitation.product.name}</span> and earn up to {formatMoney(projectedCommission)} commission.
+                        </div>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-1">
+                        <div className="rounded-[22px] border border-white/50 bg-white/70 px-4 py-4">
+                          <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Reward rate</div>
+                          <div className="mt-2 text-3xl font-black text-[#7a0000]">{rewardRate}%</div>
+                        </div>
+                        <div className="rounded-[22px] border border-white/50 bg-white/70 px-4 py-4">
+                          <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Tracking window</div>
+                          <div className="mt-2 text-lg font-bold text-[#210505]">Up to 3 months</div>
+                        </div>
+                      </div>
                     </div>
-                  <div className="mt-4 text-base font-medium leading-7 text-[#6b3d00]">
-                      Refer someone to purchase <span className="font-bold text-[#210505]">{invitation.product.name}</span> and earn up to {formatMoney(projectedCommission)} commission.
-                  </div>
                   </div>
 
                   {!referralSuccess ? (
