@@ -101,6 +101,7 @@ export default function AdminWellnessClient() {
   >({});
   const [adjustmentForms, setAdjustmentForms] = useState<Record<string, { amount: string; adminComment: string }>>({});
   const [balanceDrafts, setBalanceDrafts] = useState<Record<string, { annualEntitlement: string; sickEntitlement: string; emergencyEntitlement: string }>>({});
+  const [expandedRecentAdvanceId, setExpandedRecentAdvanceId] = useState<string | null>(null);
   const [adminAdvanceForm, setAdminAdvanceForm] = useState({
     userId: "",
     requestedAmount: "",
@@ -537,18 +538,17 @@ export default function AdminWellnessClient() {
           <section className="space-y-3">
             <div className="text-sm font-semibold text-slate-200">Cash advances</div>
             {(data?.recentCashAdvances ?? []).length ? (
-              <div className="overflow-hidden rounded-2xl border border-white/5 bg-slate-950/35">
-                <div className="hidden grid-cols-[1.2fr_.8fr_.65fr_.8fr_.9fr] gap-4 border-b border-white/5 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400 md:grid">
-                  <div>Staff</div>
-                  <div>Amount</div>
-                  <div>Months</div>
-                  <div>Status</div>
-                  <div>Created</div>
-                </div>
-                <div className="divide-y divide-white/5">
-                  {(data?.recentCashAdvances ?? []).slice(0, 12).map((row) => (
-                    <div key={row.id} className="p-4">
-                      <div className="grid gap-4 md:grid-cols-[1.2fr_.8fr_.65fr_.8fr_.9fr] md:items-center">
+              <div className="space-y-3">
+                {(data?.recentCashAdvances ?? []).slice(0, 12).map((row) => {
+                  const isExpanded = expandedRecentAdvanceId === row.id;
+                  return (
+                    <div key={row.id} className="overflow-hidden rounded-2xl border border-white/5 bg-slate-950/35">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedRecentAdvanceId((current) => (current === row.id ? null : row.id))}
+                        className="grid w-full gap-4 px-4 py-4 text-left transition hover:bg-white/[0.03] md:grid-cols-[1.2fr_.8fr_.65fr_.8fr_.9fr_auto] md:items-center"
+                        aria-expanded={isExpanded}
+                      >
                         <div>
                           <div className="font-medium text-slate-100">{row.user.name || row.user.email}</div>
                           <div className="text-xs text-slate-400">{row.user.email}</div>
@@ -567,114 +567,96 @@ export default function AdminWellnessClient() {
                           <StatusBadge status={row.status} />
                         </div>
                         <div className="text-sm text-slate-300">{dateFmt.format(new Date(row.createdAt))}</div>
-                      </div>
+                        <div className="flex items-center justify-start md:justify-end">
+                          <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-black/20 text-lg text-slate-200">
+                            {isExpanded ? "−" : "⌄"}
+                          </span>
+                        </div>
+                      </button>
 
-                      <div className="mt-4 hidden rounded-2xl border border-white/5 bg-black/10 p-4 md:block">
-                        <div className="mb-3 text-sm text-slate-300">{row.reason}</div>
-                        <div className="grid gap-3 md:grid-cols-2">
-                          <label className="space-y-2 text-sm">
-                            <span className="text-slate-300">Staff</span>
-                            <select
-                              className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 outline-none"
-                              value={recentAdvanceDrafts[row.id]?.userId ?? row.user.id}
-                              onChange={(e) =>
-                                setRecentAdvanceDrafts((state) => ({
-                                  ...state,
-                                  [row.id]: { ...state[row.id], userId: e.target.value },
-                                }))
-                              }
-                            >
-                              {staffOptions.map((option) => (
-                                <option key={option.id} value={option.id}>{option.label} - {option.sub}</option>
-                              ))}
-                            </select>
-                          </label>
-                          <Field
-                            label="Repayment months"
-                            value={recentAdvanceDrafts[row.id]?.repaymentPeriod ?? String(Math.max(1, Number(row.repaymentPeriod ?? 1)))}
-                            onChange={(value) =>
-                              setRecentAdvanceDrafts((state) => ({
-                                ...state,
-                                [row.id]: { ...state[row.id], repaymentPeriod: value },
-                              }))
-                            }
-                          />
-                          <Field
-                            label="Requested amount"
-                            value={recentAdvanceDrafts[row.id]?.requestedAmount ?? String(row.requestedAmount)}
-                            onChange={(value) =>
-                              setRecentAdvanceDrafts((state) => ({
-                                ...state,
-                                [row.id]: { ...state[row.id], requestedAmount: value },
-                              }))
-                            }
-                          />
-                          <Field
-                            label="Approved amount"
-                            value={recentAdvanceDrafts[row.id]?.approvedAmount ?? String(row.approvedAmount ?? row.requestedAmount)}
-                            onChange={(value) =>
-                              setRecentAdvanceDrafts((state) => ({
-                                ...state,
-                                [row.id]: { ...state[row.id], approvedAmount: value },
-                              }))
-                            }
-                          />
-                          <Field
-                            label="Reason"
-                            value={recentAdvanceDrafts[row.id]?.reason ?? row.reason}
-                            onChange={(value) =>
-                              setRecentAdvanceDrafts((state) => ({
-                                ...state,
-                                [row.id]: { ...state[row.id], reason: value },
-                              }))
-                            }
-                          />
-                          <Field
-                            label="HR comment"
-                            value={recentAdvanceDrafts[row.id]?.hrComment ?? ""}
-                            onChange={(value) =>
-                              setRecentAdvanceDrafts((state) => ({
-                                ...state,
-                                [row.id]: { ...state[row.id], hrComment: value },
-                              }))
-                            }
-                          />
+                      {isExpanded ? (
+                        <div className="border-t border-white/5 px-4 pb-4">
+                          <div className="mt-4 rounded-2xl border border-white/5 bg-black/10 p-4">
+                            <div className="mb-3 text-sm text-slate-300">{row.reason}</div>
+                            <div className="grid gap-3 md:grid-cols-2">
+                              <label className="space-y-2 text-sm">
+                                <span className="text-slate-300">Staff</span>
+                                <select
+                                  className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 outline-none"
+                                  value={recentAdvanceDrafts[row.id]?.userId ?? row.user.id}
+                                  onChange={(e) =>
+                                    setRecentAdvanceDrafts((state) => ({
+                                      ...state,
+                                      [row.id]: { ...state[row.id], userId: e.target.value },
+                                    }))
+                                  }
+                                >
+                                  {staffOptions.map((option) => (
+                                    <option key={option.id} value={option.id}>{option.label} - {option.sub}</option>
+                                  ))}
+                                </select>
+                              </label>
+                              <Field
+                                label="Repayment months"
+                                value={recentAdvanceDrafts[row.id]?.repaymentPeriod ?? String(Math.max(1, Number(row.repaymentPeriod ?? 1)))}
+                                onChange={(value) =>
+                                  setRecentAdvanceDrafts((state) => ({
+                                    ...state,
+                                    [row.id]: { ...state[row.id], repaymentPeriod: value },
+                                  }))
+                                }
+                              />
+                              <Field
+                                label="Requested amount"
+                                value={recentAdvanceDrafts[row.id]?.requestedAmount ?? String(row.requestedAmount)}
+                                onChange={(value) =>
+                                  setRecentAdvanceDrafts((state) => ({
+                                    ...state,
+                                    [row.id]: { ...state[row.id], requestedAmount: value },
+                                  }))
+                                }
+                              />
+                              <Field
+                                label="Approved amount"
+                                value={recentAdvanceDrafts[row.id]?.approvedAmount ?? String(row.approvedAmount ?? row.requestedAmount)}
+                                onChange={(value) =>
+                                  setRecentAdvanceDrafts((state) => ({
+                                    ...state,
+                                    [row.id]: { ...state[row.id], approvedAmount: value },
+                                  }))
+                                }
+                              />
+                              <Field
+                                label="Reason"
+                                value={recentAdvanceDrafts[row.id]?.reason ?? row.reason}
+                                onChange={(value) =>
+                                  setRecentAdvanceDrafts((state) => ({
+                                    ...state,
+                                    [row.id]: { ...state[row.id], reason: value },
+                                  }))
+                                }
+                              />
+                              <Field
+                                label="HR comment"
+                                value={recentAdvanceDrafts[row.id]?.hrComment ?? ""}
+                                onChange={(value) =>
+                                  setRecentAdvanceDrafts((state) => ({
+                                    ...state,
+                                    [row.id]: { ...state[row.id], hrComment: value },
+                                  }))
+                                }
+                              />
+                            </div>
+                            <div className="mt-3 flex gap-3">
+                              <Button variant="secondary" onClick={() => void updateRecentAdvance(row.id)}>Save changes</Button>
+                              <Button variant="secondary" onClick={() => void deleteRecentAdvance(row.id)}>Delete</Button>
+                            </div>
+                          </div>
                         </div>
-                        <div className="mt-3 flex gap-3">
-                          <Button variant="secondary" onClick={() => void updateRecentAdvance(row.id)}>Save changes</Button>
-                          <Button variant="secondary" onClick={() => void deleteRecentAdvance(row.id)}>Delete</Button>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 space-y-3 md:hidden">
-                        <Field
-                          label="Repayment months"
-                          value={recentAdvanceDrafts[row.id]?.repaymentPeriod ?? String(Math.max(1, Number(row.repaymentPeriod ?? 1)))}
-                          onChange={(value) =>
-                            setRecentAdvanceDrafts((state) => ({
-                              ...state,
-                              [row.id]: { ...state[row.id], repaymentPeriod: value },
-                            }))
-                          }
-                        />
-                        <Field
-                          label="Approved amount"
-                          value={recentAdvanceDrafts[row.id]?.approvedAmount ?? String(row.approvedAmount ?? row.requestedAmount)}
-                          onChange={(value) =>
-                            setRecentAdvanceDrafts((state) => ({
-                              ...state,
-                              [row.id]: { ...state[row.id], approvedAmount: value },
-                            }))
-                          }
-                        />
-                        <div className="flex gap-3">
-                          <Button variant="secondary" onClick={() => void updateRecentAdvance(row.id)}>Save changes</Button>
-                          <Button variant="secondary" onClick={() => void deleteRecentAdvance(row.id)}>Delete</Button>
-                        </div>
-                      </div>
+                      ) : null}
                     </div>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
             ) : null}
             {!data?.recentCashAdvances?.length && !loading ? <EmptyCard label="No cash advance requests yet." /> : null}
