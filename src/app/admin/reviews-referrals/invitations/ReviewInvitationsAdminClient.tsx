@@ -20,6 +20,7 @@ type InvitationRow = {
   lastSendAttemptAt: string | null;
   lastSendStatus: string | null;
   lastSendError: string | null;
+  lastViewedAt: string | null;
   websiteOrderId: string | null;
   orderId: string | null;
   receiptId: string | null;
@@ -166,6 +167,11 @@ export default function ReviewInvitationsAdminClient({
                   <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${String(row.reviewStatus || "").toUpperCase() === "SUBMITTED" ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100" : "border-white/10 bg-white/[0.04] text-slate-200"}`}>
                     {String(row.reviewStatus || "").toUpperCase() === "SUBMITTED" ? "review submitted" : "awaiting review"}
                   </span>
+                  {row.lastViewedAt ? (
+                    <span className="inline-flex rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
+                      link opened
+                    </span>
+                  ) : null}
                 </div>
                 <div className="mt-3 grid gap-2 text-sm text-slate-400 sm:grid-cols-2 xl:grid-cols-4">
                   <div>Product: {row.productName}</div>
@@ -192,6 +198,10 @@ export default function ReviewInvitationsAdminClient({
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                 <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Sent at</div>
                 <div className="mt-2 text-sm font-medium text-slate-100">{formatDate(row.sentAt)}</div>
+              </div>
+              <div className="rounded-2xl border border-cyan-400/15 bg-cyan-400/10 p-4">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-200">Opened at</div>
+                <div className="mt-2 text-sm font-medium text-cyan-50">{formatDate(row.lastViewedAt)}</div>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                 <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Expires</div>
