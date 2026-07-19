@@ -102,6 +102,7 @@ export default function AdminWellnessClient() {
   const [adjustmentForms, setAdjustmentForms] = useState<Record<string, { amount: string; adminComment: string }>>({});
   const [balanceDrafts, setBalanceDrafts] = useState<Record<string, { annualEntitlement: string; sickEntitlement: string; emergencyEntitlement: string }>>({});
   const [expandedRecentAdvanceId, setExpandedRecentAdvanceId] = useState<string | null>(null);
+  const [recentWellnessTab, setRecentWellnessTab] = useState<"leave" | "cash" | "payroll">("cash");
   const [adminAdvanceForm, setAdminAdvanceForm] = useState({
     userId: "",
     requestedAmount: "",
@@ -511,179 +512,221 @@ export default function AdminWellnessClient() {
             </p>
           </div>
         </div>
-        <div className="mt-4 grid gap-6 xl:grid-cols-3">
-          <section className="space-y-3">
-            <div className="text-sm font-semibold text-slate-200">Leave requests</div>
-            {(data?.recentLeaveRequests ?? []).slice(0, 12).map((row) => (
-              <div key={row.id} className="rounded-2xl border border-white/5 bg-slate-950/40 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="font-medium text-slate-100">{row.user.name || row.user.email}</div>
-                    <div className="text-xs text-slate-400">
-                      {row.type} · {row.daysRequested} day(s) · {dateFmt.format(new Date(row.createdAt))}
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => setRecentWellnessTab("leave")}
+            className={`inline-flex min-h-[2.9rem] items-center justify-center rounded-2xl px-4 py-2 text-sm font-semibold transition ${
+              recentWellnessTab === "leave"
+                ? "bg-white text-slate-950"
+                : "border border-white/10 bg-slate-950/50 text-slate-300 hover:bg-white/[0.06]"
+            }`}
+          >
+            Leave requests
+          </button>
+          <button
+            type="button"
+            onClick={() => setRecentWellnessTab("cash")}
+            className={`inline-flex min-h-[2.9rem] items-center justify-center rounded-2xl px-4 py-2 text-sm font-semibold transition ${
+              recentWellnessTab === "cash"
+                ? "bg-white text-slate-950"
+                : "border border-white/10 bg-slate-950/50 text-slate-300 hover:bg-white/[0.06]"
+            }`}
+          >
+            Cash advances
+          </button>
+          <button
+            type="button"
+            onClick={() => setRecentWellnessTab("payroll")}
+            className={`inline-flex min-h-[2.9rem] items-center justify-center rounded-2xl px-4 py-2 text-sm font-semibold transition ${
+              recentWellnessTab === "payroll"
+                ? "bg-white text-slate-950"
+                : "border border-white/10 bg-slate-950/50 text-slate-300 hover:bg-white/[0.06]"
+            }`}
+          >
+            Payroll adjustments
+          </button>
+        </div>
+
+        <div className="mt-4">
+          {recentWellnessTab === "leave" ? (
+            <section className="space-y-3">
+              <div className="text-sm font-semibold text-slate-200">Leave requests</div>
+              {(data?.recentLeaveRequests ?? []).slice(0, 12).map((row) => (
+                <div key={row.id} className="rounded-2xl border border-white/5 bg-slate-950/40 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="font-medium text-slate-100">{row.user.name || row.user.email}</div>
+                      <div className="text-xs text-slate-400">
+                        {row.type} · {row.daysRequested} day(s) · {dateFmt.format(new Date(row.createdAt))}
+                      </div>
                     </div>
+                    <StatusBadge status={row.status} />
                   </div>
-                  <StatusBadge status={row.status} />
+                  <div className="mt-2 text-sm text-slate-300">{row.reason}</div>
+                  <div className="mt-3 flex gap-3">
+                    <Button variant="secondary" onClick={() => void editLeaveRequest(row)}>Edit</Button>
+                    <Button variant="secondary" onClick={() => void deleteLeaveRequest(row.id)}>Delete</Button>
+                  </div>
                 </div>
-                <div className="mt-2 text-sm text-slate-300">{row.reason}</div>
-                <div className="mt-3 flex gap-3">
-                  <Button variant="secondary" onClick={() => void editLeaveRequest(row)}>Edit</Button>
-                  <Button variant="secondary" onClick={() => void deleteLeaveRequest(row.id)}>Delete</Button>
-                </div>
-              </div>
-            ))}
-            {!data?.recentLeaveRequests?.length && !loading ? <EmptyCard label="No leave requests yet." /> : null}
-          </section>
+              ))}
+              {!data?.recentLeaveRequests?.length && !loading ? <EmptyCard label="No leave requests yet." /> : null}
+            </section>
+          ) : null}
 
-          <section className="space-y-3">
-            <div className="text-sm font-semibold text-slate-200">Cash advances</div>
-            {(data?.recentCashAdvances ?? []).length ? (
-              <div className="space-y-3">
-                {(data?.recentCashAdvances ?? []).slice(0, 12).map((row) => {
-                  const isExpanded = expandedRecentAdvanceId === row.id;
-                  return (
-                    <div key={row.id} className="overflow-hidden rounded-2xl border border-white/5 bg-slate-950/35">
-                      <button
-                        type="button"
-                        onClick={() => setExpandedRecentAdvanceId((current) => (current === row.id ? null : row.id))}
-                        className="grid w-full gap-4 px-4 py-4 text-left transition hover:bg-white/[0.03] md:grid-cols-[1.2fr_.8fr_.65fr_.8fr_.9fr_auto] md:items-center"
-                        aria-expanded={isExpanded}
-                      >
-                        <div>
-                          <div className="font-medium text-slate-100">{row.user.name || row.user.email}</div>
-                          <div className="text-xs text-slate-400">{row.user.email}</div>
-                          <div className="mt-2 text-sm text-slate-300 md:hidden">{row.reason}</div>
-                        </div>
-                        <div>
-                          <div className="text-sm font-semibold text-white">
-                            {currency.format(row.approvedAmount ?? row.requestedAmount)}
+          {recentWellnessTab === "cash" ? (
+            <section className="space-y-3">
+              <div className="text-sm font-semibold text-slate-200">Cash advances</div>
+              {(data?.recentCashAdvances ?? []).length ? (
+                <div className="space-y-3">
+                  {(data?.recentCashAdvances ?? []).slice(0, 12).map((row) => {
+                    const isExpanded = expandedRecentAdvanceId === row.id;
+                    return (
+                      <div key={row.id} className="overflow-hidden rounded-2xl border border-white/5 bg-slate-950/35">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedRecentAdvanceId((current) => (current === row.id ? null : row.id))}
+                          className="grid w-full gap-4 px-4 py-4 text-left transition hover:bg-white/[0.03] md:grid-cols-[1.2fr_.8fr_.65fr_.8fr_.9fr_auto] md:items-center"
+                          aria-expanded={isExpanded}
+                        >
+                          <div>
+                            <div className="font-medium text-slate-100">{row.user.name || row.user.email}</div>
+                            <div className="text-xs text-slate-400">{row.user.email}</div>
+                            <div className="mt-2 text-sm text-slate-300 md:hidden">{row.reason}</div>
                           </div>
-                          <div className="text-xs text-slate-400">Requested {currency.format(row.requestedAmount)}</div>
-                        </div>
-                        <div className="text-sm text-slate-200">
-                          {recentAdvanceDrafts[row.id]?.repaymentPeriod ?? String(Math.max(1, Number(row.repaymentPeriod ?? 1)))} month(s)
-                        </div>
-                        <div>
-                          <StatusBadge status={row.status} />
-                        </div>
-                        <div className="text-sm text-slate-300">{dateFmt.format(new Date(row.createdAt))}</div>
-                        <div className="flex items-center justify-start md:justify-end">
-                          <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-black/20 text-lg text-slate-200">
-                            {isExpanded ? "−" : "⌄"}
-                          </span>
-                        </div>
-                      </button>
+                          <div>
+                            <div className="text-sm font-semibold text-white">
+                              {currency.format(row.approvedAmount ?? row.requestedAmount)}
+                            </div>
+                            <div className="text-xs text-slate-400">Requested {currency.format(row.requestedAmount)}</div>
+                          </div>
+                          <div className="text-sm text-slate-200">
+                            {recentAdvanceDrafts[row.id]?.repaymentPeriod ?? String(Math.max(1, Number(row.repaymentPeriod ?? 1)))} month(s)
+                          </div>
+                          <div>
+                            <StatusBadge status={row.status} />
+                          </div>
+                          <div className="text-sm text-slate-300">{dateFmt.format(new Date(row.createdAt))}</div>
+                          <div className="flex items-center justify-start md:justify-end">
+                            <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-black/20 text-lg text-slate-200">
+                              {isExpanded ? "−" : "⌄"}
+                            </span>
+                          </div>
+                        </button>
 
-                      {isExpanded ? (
-                        <div className="border-t border-white/5 px-4 pb-4">
-                          <div className="mt-4 rounded-2xl border border-white/5 bg-black/10 p-4">
-                            <div className="mb-3 text-sm text-slate-300">{row.reason}</div>
-                            <div className="grid gap-3 md:grid-cols-2">
-                              <label className="space-y-2 text-sm">
-                                <span className="text-slate-300">Staff</span>
-                                <select
-                                  className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 outline-none"
-                                  value={recentAdvanceDrafts[row.id]?.userId ?? row.user.id}
-                                  onChange={(e) =>
+                        {isExpanded ? (
+                          <div className="border-t border-white/5 px-4 pb-4">
+                            <div className="mt-4 rounded-2xl border border-white/5 bg-black/10 p-4">
+                              <div className="mb-3 text-sm text-slate-300">{row.reason}</div>
+                              <div className="grid gap-3 md:grid-cols-2">
+                                <label className="space-y-2 text-sm">
+                                  <span className="text-slate-300">Staff</span>
+                                  <select
+                                    className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 outline-none"
+                                    value={recentAdvanceDrafts[row.id]?.userId ?? row.user.id}
+                                    onChange={(e) =>
+                                      setRecentAdvanceDrafts((state) => ({
+                                        ...state,
+                                        [row.id]: { ...state[row.id], userId: e.target.value },
+                                      }))
+                                    }
+                                  >
+                                    {staffOptions.map((option) => (
+                                      <option key={option.id} value={option.id}>{option.label} - {option.sub}</option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <Field
+                                  label="Repayment months"
+                                  value={recentAdvanceDrafts[row.id]?.repaymentPeriod ?? String(Math.max(1, Number(row.repaymentPeriod ?? 1)))}
+                                  onChange={(value) =>
                                     setRecentAdvanceDrafts((state) => ({
                                       ...state,
-                                      [row.id]: { ...state[row.id], userId: e.target.value },
+                                      [row.id]: { ...state[row.id], repaymentPeriod: value },
                                     }))
                                   }
-                                >
-                                  {staffOptions.map((option) => (
-                                    <option key={option.id} value={option.id}>{option.label} - {option.sub}</option>
-                                  ))}
-                                </select>
-                              </label>
-                              <Field
-                                label="Repayment months"
-                                value={recentAdvanceDrafts[row.id]?.repaymentPeriod ?? String(Math.max(1, Number(row.repaymentPeriod ?? 1)))}
-                                onChange={(value) =>
-                                  setRecentAdvanceDrafts((state) => ({
-                                    ...state,
-                                    [row.id]: { ...state[row.id], repaymentPeriod: value },
-                                  }))
-                                }
-                              />
-                              <Field
-                                label="Requested amount"
-                                value={recentAdvanceDrafts[row.id]?.requestedAmount ?? String(row.requestedAmount)}
-                                onChange={(value) =>
-                                  setRecentAdvanceDrafts((state) => ({
-                                    ...state,
-                                    [row.id]: { ...state[row.id], requestedAmount: value },
-                                  }))
-                                }
-                              />
-                              <Field
-                                label="Approved amount"
-                                value={recentAdvanceDrafts[row.id]?.approvedAmount ?? String(row.approvedAmount ?? row.requestedAmount)}
-                                onChange={(value) =>
-                                  setRecentAdvanceDrafts((state) => ({
-                                    ...state,
-                                    [row.id]: { ...state[row.id], approvedAmount: value },
-                                  }))
-                                }
-                              />
-                              <Field
-                                label="Reason"
-                                value={recentAdvanceDrafts[row.id]?.reason ?? row.reason}
-                                onChange={(value) =>
-                                  setRecentAdvanceDrafts((state) => ({
-                                    ...state,
-                                    [row.id]: { ...state[row.id], reason: value },
-                                  }))
-                                }
-                              />
-                              <Field
-                                label="HR comment"
-                                value={recentAdvanceDrafts[row.id]?.hrComment ?? ""}
-                                onChange={(value) =>
-                                  setRecentAdvanceDrafts((state) => ({
-                                    ...state,
-                                    [row.id]: { ...state[row.id], hrComment: value },
-                                  }))
-                                }
-                              />
-                            </div>
-                            <div className="mt-3 flex gap-3">
-                              <Button variant="secondary" onClick={() => void updateRecentAdvance(row.id)}>Save changes</Button>
-                              <Button variant="secondary" onClick={() => void deleteRecentAdvance(row.id)}>Delete</Button>
+                                />
+                                <Field
+                                  label="Requested amount"
+                                  value={recentAdvanceDrafts[row.id]?.requestedAmount ?? String(row.requestedAmount)}
+                                  onChange={(value) =>
+                                    setRecentAdvanceDrafts((state) => ({
+                                      ...state,
+                                      [row.id]: { ...state[row.id], requestedAmount: value },
+                                    }))
+                                  }
+                                />
+                                <Field
+                                  label="Approved amount"
+                                  value={recentAdvanceDrafts[row.id]?.approvedAmount ?? String(row.approvedAmount ?? row.requestedAmount)}
+                                  onChange={(value) =>
+                                    setRecentAdvanceDrafts((state) => ({
+                                      ...state,
+                                      [row.id]: { ...state[row.id], approvedAmount: value },
+                                    }))
+                                  }
+                                />
+                                <Field
+                                  label="Reason"
+                                  value={recentAdvanceDrafts[row.id]?.reason ?? row.reason}
+                                  onChange={(value) =>
+                                    setRecentAdvanceDrafts((state) => ({
+                                      ...state,
+                                      [row.id]: { ...state[row.id], reason: value },
+                                    }))
+                                  }
+                                />
+                                <Field
+                                  label="HR comment"
+                                  value={recentAdvanceDrafts[row.id]?.hrComment ?? ""}
+                                  onChange={(value) =>
+                                    setRecentAdvanceDrafts((state) => ({
+                                      ...state,
+                                      [row.id]: { ...state[row.id], hrComment: value },
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="mt-3 flex gap-3">
+                                <Button variant="secondary" onClick={() => void updateRecentAdvance(row.id)}>Save changes</Button>
+                                <Button variant="secondary" onClick={() => void deleteRecentAdvance(row.id)}>Delete</Button>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : null}
-            {!data?.recentCashAdvances?.length && !loading ? <EmptyCard label="No cash advance requests yet." /> : null}
-          </section>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+              {!data?.recentCashAdvances?.length && !loading ? <EmptyCard label="No cash advance requests yet." /> : null}
+            </section>
+          ) : null}
 
-          <section className="space-y-3">
-            <div className="text-sm font-semibold text-slate-200">Payroll adjustments</div>
-            {(data?.recentAdjustmentRequests ?? []).slice(0, 12).map((row) => (
-              <div key={row.id} className="rounded-2xl border border-white/5 bg-slate-950/40 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="font-medium text-slate-100">{row.attendant.name || row.attendant.email}</div>
-                    <div className="text-xs text-slate-400">
-                      {row.label} · {currency.format(row.amount)} · {dateFmt.format(new Date(row.createdAt))}
+          {recentWellnessTab === "payroll" ? (
+            <section className="space-y-3">
+              <div className="text-sm font-semibold text-slate-200">Payroll adjustments</div>
+              {(data?.recentAdjustmentRequests ?? []).slice(0, 12).map((row) => (
+                <div key={row.id} className="rounded-2xl border border-white/5 bg-slate-950/40 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="font-medium text-slate-100">{row.attendant.name || row.attendant.email}</div>
+                      <div className="text-xs text-slate-400">
+                        {row.label} · {currency.format(row.amount)} · {dateFmt.format(new Date(row.createdAt))}
+                      </div>
                     </div>
+                    <StatusBadge status={row.status} />
                   </div>
-                  <StatusBadge status={row.status} />
+                  <div className="mt-2 text-sm text-slate-300">{row.details}</div>
+                  <div className="mt-3 flex gap-3">
+                    <Button variant="secondary" onClick={() => void editAdjustmentRequest(row)}>Edit</Button>
+                    <Button variant="secondary" onClick={() => void deleteAdjustmentRequest(row.id)}>Delete</Button>
+                  </div>
                 </div>
-                <div className="mt-2 text-sm text-slate-300">{row.details}</div>
-                <div className="mt-3 flex gap-3">
-                  <Button variant="secondary" onClick={() => void editAdjustmentRequest(row)}>Edit</Button>
-                  <Button variant="secondary" onClick={() => void deleteAdjustmentRequest(row.id)}>Delete</Button>
-                </div>
-              </div>
-            ))}
-            {!data?.recentAdjustmentRequests?.length && !loading ? <EmptyCard label="No payroll adjustment requests yet." /> : null}
-          </section>
+              ))}
+              {!data?.recentAdjustmentRequests?.length && !loading ? <EmptyCard label="No payroll adjustment requests yet." /> : null}
+            </section>
+          ) : null}
         </div>
       </section>
 
