@@ -196,7 +196,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
   const [referralSuccess, setReferralSuccess] = useState<ReferralPayload | null>(null);
   const [referralDashboard, setReferralDashboard] = useState<ReferralDashboardPayload | null>(null);
   const [creatingReferral, setCreatingReferral] = useState(false);
-  const [showReferralForm, setShowReferralForm] = useState(false);
+  const [showReferralForm, setShowReferralForm] = useState(true);
   const [referralTab, setReferralTab] = useState<"product" | "program">("product");
   const [copied, setCopied] = useState(false);
   const [form, setForm] = useState({
@@ -355,7 +355,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
       <form onSubmit={handleCreateReferral} className="rounded-[28px] border border-[#ecd7cb] bg-white p-5">
         <div className="text-sm font-semibold text-[#210505]">Start referring now</div>
         <p className="mt-2 text-sm leading-7 text-slate-600">
-          Enter the details of the person you want to refer for <span className="font-semibold text-[#210505]">{invitation.product.name}</span>. We will connect this referral to your normal referral account automatically.
+          Enter the details of the person you want to refer for <span className="font-semibold text-[#210505]">{invitation.product.name}</span>. We will connect this referral to our referral system, track any purchase made using the phone number you enter, and post your commission to your account once they purchase.
         </p>
         <div className="mt-5 grid gap-4">
           <label className="grid gap-2">
@@ -677,7 +677,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                     Refer someone to purchase the product you bought from us and earn commissions.
                   </h2>
                   <p className="mt-3 text-sm leading-7 text-slate-600">
-                    Refer a customer to purchase this same product and your share links, referral tracking, commissions and withdrawals stay inside the normal referral module.
+                    Refer a customer to purchase this product and earn commission. Submit their details, and if they purchase within the next 3 months, we will track the referral using their phone number, post the commission to your account, and you can withdraw it.
                   </p>
                 </div>
               </div>
@@ -711,15 +711,6 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                     </div>
                   </div>
 
-                  <div className="mt-5 rounded-[26px] border border-[#ecd7cb] bg-white p-5">
-                    <button
-                      type="button"
-                      onClick={openReferralStart}
-                      className="inline-flex min-h-[3.6rem] w-full items-center justify-center rounded-[20px] bg-[#7a0000] px-6 py-3 text-sm font-bold text-white"
-                    >
-                      Refer now and earn
-                    </button>
-                  </div>
                   <div className="mt-5">{renderReferralEntryCard(true)}</div>
                 </>
               ) : (
@@ -780,7 +771,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                     Refer someone to purchase the product you purchased from us and earn {formatMoney(projectedCommission)} commission.
                   </h2>
                   <p className="mt-3 text-sm leading-7 text-slate-600">
-                    This referral section is fully connected to the normal Betech referral system, so every referred customer, successful purchase, commission and withdrawal stays in one connected dashboard.
+                    Refer a customer to purchase this product and earn commission. Submit their details, and if they purchase within the next 3 months, we will track the referral using their phone number, post the commission to your account, and you can withdraw it.
                   </p>
                 </div>
               </div>
@@ -809,20 +800,13 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                     <div className="mt-3 text-5xl font-black tracking-tight text-[#7a0000] sm:text-6xl">
                       {formatMoney(referralDashboard?.totals.potentialCommission ?? projectedCommission)}
                     </div>
-                    <div className="mt-4 text-base font-medium leading-7 text-[#6b3d00]">
+                  <div className="mt-4 text-base font-medium leading-7 text-[#6b3d00]">
                       Refer someone to purchase <span className="font-bold text-[#210505]">{invitation.product.name}</span> and earn up to {formatMoney(projectedCommission)} commission.
-                    </div>
+                  </div>
                   </div>
 
                   {!referralSuccess ? (
                     <div className="mt-6 space-y-5">
-                      <button
-                        type="button"
-                        onClick={() => setShowReferralForm(true)}
-                        className="inline-flex min-h-[3.4rem] w-full items-center justify-center rounded-[20px] bg-[#7a0000] px-6 py-3 text-sm font-bold text-white transition hover:bg-[#650000] disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        Refer now and earn
-                      </button>
                       {renderReferralEntryCard(false)}
                     </div>
                   ) : null}

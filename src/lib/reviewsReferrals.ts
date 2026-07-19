@@ -2029,7 +2029,6 @@ export async function createReferralFromReview(input: z.infer<typeof createRefer
     asString(invitation.id),
   );
   const review = reviewRows[0];
-  if (!review) throw new Error("Submit the review before creating a referral.");
 
   const referredPhone = normalizeKenyanPhone(input.referredPhone);
   if (!referredPhone) throw new Error("A valid Kenyan phone number is required for the referral.");
@@ -2072,7 +2071,7 @@ export async function createReferralFromReview(input: z.infer<typeof createRefer
       customerUserId: cleanOptional(invitation.customerUserId),
       customerName: cleanOptional(input.referredName),
       productName: product.name,
-      reviewId: asString(review.id),
+      reviewId: cleanOptional(review?.id),
       referralLinkId: linkId,
       metadata: {
         invitationId: asString(invitation.id),
@@ -2096,7 +2095,7 @@ export async function createReferralFromReview(input: z.infer<typeof createRefer
       `,
       linkId,
       account.accountId,
-      asString(review.id),
+      cleanOptional(review?.id),
       product.id,
       product.name,
       cleanOptional(input.referredName),
@@ -2109,7 +2108,7 @@ export async function createReferralFromReview(input: z.infer<typeof createRefer
       JSON.stringify(policySnapshot),
       JSON.stringify({
         invitationId: asString(invitation.id),
-        source: "post_review_referral",
+        source: review ? "post_review_referral" : "review_invitation_referral",
       }),
     );
 
