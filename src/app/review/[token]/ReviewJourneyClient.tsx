@@ -120,12 +120,6 @@ function isServiceTypeProduct(input: { name?: string | null; slug?: string | nul
   return ["delivery", "service", "transport", "installation", "fee"].some((token) => text.includes(token));
 }
 
-function getHeroQuestion(productName: string, isServiceType: boolean) {
-  return isServiceType
-    ? `How was your experience with ${productName}?`
-    : `How has your experience been with ${productName}?`;
-}
-
 function maskPhoneNumber(value: string) {
   const digits = String(value || "").replace(/\D/g, "");
   if (digits.length <= 4) return value || "";
@@ -332,7 +326,6 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
       }),
     [invitation.product.category, invitation.product.name, invitation.product.slug],
   );
-  const heroQuestion = getHeroQuestion(invitation.product.name, isServiceType);
   const supportStatusLabel = isServiceType ? "Did everything go as expected?" : "Is everything working as expected?";
   const supportOkayLabel = isServiceType ? "Yes, everything went well." : "Yes, everything is working perfectly.";
   const supportIssueLabel = "I need assistance from the support team.";
@@ -451,7 +444,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
       <form onSubmit={handleCreateReferral} className="rounded-[28px] border border-[#ecd7cb] bg-white p-5 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
         <div className="text-sm font-semibold text-[#210505]">Start your referral</div>
         <p className="mt-2 text-sm leading-7 text-slate-600">
-          Enter the details of someone interested in <span className="font-semibold text-[#210505]">{invitation.product.name}</span>. We will create a tracked referral linked to you and this product. If they purchase within 3 months, your commission will be calculated and credited automatically.
+          Enter the details of someone who may benefit from the same product or service. We will create a tracked referral linked to your recent purchase. If they buy within 3 months, your commission will be calculated and credited automatically.
         </p>
         <div className="mt-4 grid grid-cols-4 gap-2 rounded-[20px] border border-[#ecd7cb] bg-[#fffaf5] p-3 text-center text-xs font-semibold text-slate-600 sm:text-sm">
           <span>Refer</span>
@@ -469,7 +462,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
               className="rounded-2xl border border-[#ddc6ba] bg-white px-4 py-3 outline-none transition focus:border-[#7a0000]/45"
             />
             <span className="text-xs leading-6 text-slate-500">
-              This number is used only to track your referral and contact them about {invitation.product.name}.
+              We will use this number to track the referral during the qualifying period and connect any completed purchase to your account.
             </span>
           </label>
           <label className="grid gap-2">
@@ -522,7 +515,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
               {formatMoney(projectedCommission)}
             </div>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-[#6b3d00]">
-              Refer someone who may be interested in {invitation.product.name}. If they complete a qualifying purchase within the tracking period, the applicable commission will be credited to your referral account.
+              Know someone who may benefit from the same product or service? Refer them today and earn a commission when they complete a qualifying purchase within the tracking period.
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
@@ -658,10 +651,14 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                 Hello, {invitation.customer.firstName}
               </h1>
               <p className="mt-3 text-lg font-black leading-tight text-white [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] overflow-hidden">
-                {heroQuestion}
+                How has your experience been with your recent purchase?
               </p>
-              <p className="mt-3 text-sm leading-6 text-amber-50/92">
-                Share your experience with the product, delivery or installation, and support received from our team.
+              <div className="mt-4 rounded-[22px] border border-white/10 bg-white/10 px-4 py-4 backdrop-blur">
+                <div className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-200">Purchased from Betech Solar Solutions</div>
+                <div className="mt-2 text-base font-bold leading-6 text-white">{invitation.product.name}</div>
+              </div>
+              <p className="mt-4 text-sm leading-6 text-amber-50/92">
+                We&apos;d love to hear about your experience with the product or service you recently purchased from Betech Solar Solutions. Your feedback helps us improve and helps future customers make informed decisions.
               </p>
             </section>
 
@@ -673,11 +670,16 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                   Hello, {invitation.customer.firstName}
                 </h1>
                 <div className="mt-4 max-w-2xl text-2xl font-black tracking-tight sm:text-[2.4rem] sm:leading-[1.08] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] overflow-hidden">
-                  {heroQuestion}
+                  How has your experience been with your recent purchase?
                 </div>
                 <p className="mt-4 max-w-xl text-sm leading-7 text-amber-50/92 sm:text-base">
-                  Share your experience with the product, delivery or installation, and support received from our team.
+                  We&apos;d love to hear about your experience with the product or service you recently purchased from Betech Solar Solutions. Your feedback helps us improve and helps future customers make informed decisions.
                 </p>
+
+                <div className="mt-6 max-w-xl rounded-[24px] border border-white/10 bg-white/10 px-5 py-4 backdrop-blur">
+                  <div className="text-xs uppercase tracking-[0.18em] text-amber-200">Purchased from Betech Solar Solutions</div>
+                  <div className="mt-2 text-xl font-black leading-tight text-white sm:text-2xl">{invitation.product.name}</div>
+                </div>
 
                 <div className="mt-8 grid gap-3 sm:grid-cols-2">
                   <div className="rounded-[24px] border border-white/10 bg-white/10 p-4 backdrop-blur">
@@ -762,7 +764,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                     <div className="text-xs font-black uppercase tracking-[0.24em] text-[#7a0000]">Share your experience</div>
                     <h2 className="mt-3 text-3xl font-black tracking-tight text-[#210505] sm:text-[2.5rem]">Share Your Experience</h2>
                     <p className="mt-3 text-sm leading-7 text-slate-600 sm:text-base">
-                      Please rate your experience with {invitation.product.name}, delivery, and customer support. Your honest feedback helps us improve and assists future customers in making confident decisions.
+                      Please rate the product or service you recently purchased from Betech Solar Solutions. Your honest feedback helps us improve our products, services, and customer experience while helping future customers make informed purchasing decisions.
                     </p>
                   </div>
                 </div>
@@ -781,7 +783,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                   <RatingField
                     index="2"
                     title="Product Performance"
-                    prompt={`How well is ${invitation.product.name} meeting your expectations?`}
+                    prompt="How well is your recent purchase meeting your expectations?"
                     name="performance"
                     value={form.productPerformanceRating}
                     onChange={(value) => setForm((current) => ({ ...current, productPerformanceRating: value }))}
@@ -809,7 +811,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                   <textarea
                     value={form.reviewBody}
                     onChange={(event) => setForm((current) => ({ ...current, reviewBody: event.target.value }))}
-                    placeholder={`Share what you liked, how ${invitation.product.name} is performing, or anything we can improve.`}
+                    placeholder="Tell us about your experience, what you liked, and anything we can improve."
                     rows={7}
                     className="rounded-[24px] border border-[#ddc6ba] bg-[#fffefd] px-4 py-4 outline-none transition focus:border-[#7a0000]/45"
                   />
@@ -826,7 +828,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                     />
                   </label>
                   <label className="grid gap-2">
-                    <span className="text-sm font-semibold text-[#210505]">Would you recommend {invitation.product.name} to your friends or family?</span>
+                    <span className="text-sm font-semibold text-[#210505]">Would you recommend this product or service to your friends, family, or colleagues?</span>
                     <select
                       value={form.wouldRecommend}
                       onChange={(event) => setForm((current) => ({ ...current, wouldRecommend: event.target.value }))}
@@ -920,7 +922,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                   <div className="min-w-0">
                     <div className="text-3xl font-black tracking-tight text-[#210505] sm:text-5xl">Refer Friends and Family</div>
                     <p className="mt-4 max-w-4xl text-base leading-8 text-slate-600 sm:text-[1.05rem]">
-                      Refer someone who may be interested in this product and earn a commission when they make a qualifying purchase.
+                      Refer someone who may benefit from the same product or service and earn a commission when they make a qualifying purchase.
                     </p>
                   </div>
                 </div>
@@ -1005,7 +1007,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                   <div className="min-w-0">
                     <div className="text-3xl font-black tracking-tight text-[#210505] sm:text-5xl">Refer Friends and Family</div>
                     <p className="mt-4 max-w-4xl text-base leading-8 text-slate-600 sm:text-[1.05rem]">
-                      Refer someone who may be interested in this product and earn a commission when they make a qualifying purchase.
+                      Refer someone who may benefit from the same product or service and earn a commission when they make a qualifying purchase.
                     </p>
                   </div>
                 </div>
