@@ -956,15 +956,21 @@ async function getReferralPolicyForProduct(productId: string): Promise<ReferralP
     select: {
       commissionEnabled: true,
       commissionAmount: true,
+      sellingPrice: true,
     },
   });
 
+  const configuredFixedAmount = product?.commissionAmount == null ? null : toNumber(product.commissionAmount);
+  const fallbackSalePrice = toNumber(product?.sellingPrice);
+  const hasFallbackSalePrice = Number.isFinite(fallbackSalePrice) && fallbackSalePrice > 0;
+  const useDefaultPercentageFallback = !Boolean(product?.commissionEnabled) && configuredFixedAmount == null && hasFallbackSalePrice;
+
   return {
     productId,
-    enabled: Boolean(product?.commissionEnabled),
-    commissionType: "FIXED",
-    commissionRate: null,
-    fixedAmount: product?.commissionAmount == null ? null : toNumber(product.commissionAmount),
+    enabled: Boolean(product?.commissionEnabled) || useDefaultPercentageFallback,
+    commissionType: useDefaultPercentageFallback ? "PERCENTAGE" : "FIXED",
+    commissionRate: useDefaultPercentageFallback ? 6 : null,
+    fixedAmount: useDefaultPercentageFallback ? null : configuredFixedAmount,
     maximumAmount: null,
     minimumQualifyingSale: null,
     holdingDays: 7,

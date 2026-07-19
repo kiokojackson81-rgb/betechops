@@ -912,23 +912,29 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
             </div>
 
             <div className="space-y-5 rounded-[36px] border border-[#ecd7cb] bg-[linear-gradient(180deg,#fffdf9_0%,#fff3dd_100%)] p-6 shadow-[0_20px_60px_rgba(245,158,11,0.12)] sm:p-7">
-              <div className="rounded-[28px] border border-[#ecd7cb] bg-white/70 px-5 py-4">
-                <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a0000]">Section Two</div>
-                <div className="mt-2 text-2xl font-black tracking-tight text-[#210505]">Refer Friends and Family</div>
-                <p className="mt-3 text-sm leading-7 text-slate-600">
-                  You can also refer someone. No review submission is required.
-                </p>
-                <div className="mt-2 text-sm font-medium text-slate-500">You may complete either section or both.</div>
-              </div>
+              <div className="rounded-[30px] border border-[#f0d8c7] bg-[linear-gradient(180deg,rgba(255,255,255,0.95)_0%,rgba(255,248,240,0.96)_100%)] px-6 py-6 shadow-[0_12px_28px_rgba(122,0,0,0.04)] sm:px-8 sm:py-7">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[radial-gradient(circle_at_top,#fff5df_0%,#fff0d3_45%,#ffe5c2_100%)] text-[1.7rem] shadow-[0_10px_24px_rgba(245,158,11,0.10)]">
+                    👥
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-3xl font-black tracking-tight text-[#210505] sm:text-5xl">Refer Friends and Family</div>
+                    <p className="mt-4 max-w-4xl text-base leading-8 text-slate-600 sm:text-[1.05rem]">
+                      Refer someone who may be interested in this product and earn a commission when they make a qualifying purchase.
+                    </p>
+                  </div>
+                </div>
 
-              <div className="rounded-[28px] border border-[#ecd7cb] bg-white/65 p-5">
-                <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a0000]">Refer friends and family</div>
-                <h2 className="mt-2 text-2xl font-black tracking-tight text-[#210505] sm:text-[2.1rem]">
-                  Know someone interested in {invitation.product.name}?
-                </h2>
-                <p className="mt-3 text-sm leading-7 text-slate-600">
-                  Know someone who may be interested in {invitation.product.name}? Refer them today and earn a commission if they complete a qualifying purchase within 3 months.
-                </p>
+                <div className="my-6 border-t border-dashed border-[#edd7ca]" />
+
+                <div className="flex items-start gap-4">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[radial-gradient(circle_at_top,#fff5df_0%,#fff0d3_45%,#ffe5c2_100%)] text-[1.5rem] shadow-[0_10px_24px_rgba(245,158,11,0.08)]">
+                    🎁
+                  </div>
+                  <div className="min-w-0 text-lg font-semibold tracking-tight text-[#210505] sm:text-[1.9rem]">
+                    Start referring anytime — it’s quick, easy, and rewarding.
+                  </div>
+                </div>
               </div>
 
               {renderReferralRewardCard()}
@@ -991,12 +997,29 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
             </div>
 
             <div className="space-y-5 rounded-[36px] border border-[#ecd7cb] bg-[linear-gradient(180deg,#fffdf9_0%,#fff3dd_100%)] p-6 shadow-[0_20px_60px_rgba(245,158,11,0.12)] sm:p-7">
-              <div className="rounded-[28px] border border-[#ecd7cb] bg-white/70 px-5 py-4">
-                <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a0000]">Section Two</div>
-                <div className="mt-2 text-2xl font-black tracking-tight text-[#210505]">Refer Friends and Family</div>
-                <p className="mt-3 text-sm leading-7 text-slate-600">
-                  Know someone interested in {invitation.product.name}? You can still refer friends, family, neighbours, or colleagues and earn a commission after a qualifying purchase.
-                </p>
+              <div className="rounded-[30px] border border-[#f0d8c7] bg-[linear-gradient(180deg,rgba(255,255,255,0.95)_0%,rgba(255,248,240,0.96)_100%)] px-6 py-6 shadow-[0_12px_28px_rgba(122,0,0,0.04)] sm:px-8 sm:py-7">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[radial-gradient(circle_at_top,#fff5df_0%,#fff0d3_45%,#ffe5c2_100%)] text-[1.7rem] shadow-[0_10px_24px_rgba(245,158,11,0.10)]">
+                    👥
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-3xl font-black tracking-tight text-[#210505] sm:text-5xl">Refer Friends and Family</div>
+                    <p className="mt-4 max-w-4xl text-base leading-8 text-slate-600 sm:text-[1.05rem]">
+                      Refer someone who may be interested in this product and earn a commission when they make a qualifying purchase.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="my-6 border-t border-dashed border-[#edd7ca]" />
+
+                <div className="flex items-start gap-4">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[radial-gradient(circle_at_top,#fff5df_0%,#fff0d3_45%,#ffe5c2_100%)] text-[1.5rem] shadow-[0_10px_24px_rgba(245,158,11,0.08)]">
+                    🎁
+                  </div>
+                  <div className="min-w-0 text-lg font-semibold tracking-tight text-[#210505] sm:text-[1.9rem]">
+                    Start referring anytime — it’s quick, easy, and rewarding.
+                  </div>
+                </div>
               </div>
 
               {renderReferralRewardCard()}
