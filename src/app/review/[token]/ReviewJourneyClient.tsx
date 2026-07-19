@@ -542,23 +542,13 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
           <section className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
             <div className="overflow-hidden rounded-[36px] border border-[#ecd7cb] bg-white shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
               <div className="border-b border-[#f1e3d9] bg-[linear-gradient(180deg,#fffdf9_0%,#fff5ec_100%)] px-6 py-6 sm:px-8">
-                <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+                <div className="max-w-3xl">
                   <div className="max-w-2xl">
                     <div className="text-xs font-black uppercase tracking-[0.24em] text-[#7a0000]">Review form</div>
                     <h2 className="mt-3 text-3xl font-black tracking-tight text-[#210505] sm:text-[2.5rem]">Tell us about your experience</h2>
                     <p className="mt-3 text-sm leading-7 text-slate-600 sm:text-base">
                       Rate the product, delivery or installation, and support experience. Your review helps future customers make better decisions.
                     </p>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-[22px] border border-[#ecd7cb] bg-white px-4 py-3">
-                      <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Product</div>
-                      <div className="mt-2 text-sm font-semibold text-[#210505]">{invitation.product.name}</div>
-                    </div>
-                    <div className="rounded-[22px] border border-[#ecd7cb] bg-white px-4 py-3">
-                      <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Purchase date</div>
-                      <div className="mt-2 text-sm font-semibold text-[#210505]">{formatDate(invitation.purchaseDate)}</div>
-                    </div>
                   </div>
                 </div>
               </div>
