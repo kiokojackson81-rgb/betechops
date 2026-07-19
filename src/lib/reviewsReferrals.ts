@@ -666,6 +666,35 @@ export function buildReviewInvitationWhatsAppMessage(input: {
   ].join("\n");
 }
 
+function buildReviewInvitationWhatsAppChatraceFields(input: {
+  invitationId: string;
+  customerName: string;
+  productName: string;
+  reviewUrl: string;
+  orderOrReceiptRef: string;
+  whatsappMessage: string;
+}) {
+  const firstName = firstNameOf(input.customerName);
+  return {
+    customer_name: input.customerName,
+    customer_full_name: input.customerName,
+    customer_first_name: firstName,
+    first_name: firstName,
+    review_url: input.reviewUrl,
+    review_link: input.reviewUrl,
+    review_invitation_url: input.reviewUrl,
+    receipt_url: input.reviewUrl,
+    receipt_link: input.reviewUrl,
+    review_invitation_id: input.invitationId,
+    review_reference: input.orderOrReceiptRef,
+    review_product_name: input.productName,
+    product_name: input.productName,
+    whatsapp_message_preview: input.whatsappMessage,
+    "1": firstName,
+    "2": input.reviewUrl,
+  } satisfies Record<string, string>;
+}
+
 function buildReviewInvitationEmailPayload(input: {
   customerName: string;
   reviewUrl: string;
@@ -1589,30 +1618,31 @@ async function processReviewInvitationSend(
 
   if (phone) {
     try {
-      const chatrace = await pushReceiptToChatrace({
-        phoneE164: phone,
-        customerName: asString(row.customerName),
-        receiptNumber: cleanOptional(row.orderOrReceiptRef) || invitationId,
-        amount: "0",
-        currency: "KES",
-        receiptLink: reviewUrl,
-        receiptUrl: reviewUrl,
-        tagName: REVIEW_INVITATION_CHATRACE_TAG,
-        skipDefaultTags: true,
-        extraFields: {
-          customer_name: asString(row.customerName),
-          review_url: reviewUrl,
-          review_link: reviewUrl,
-          review_invitation_url: reviewUrl,
-          review_invitation_id: invitationId,
-          review_reference: cleanOptional(row.orderOrReceiptRef) || invitationId,
-          review_product_name: asString(row.productName),
-          product_name: asString(row.productName),
-          whatsapp_message_preview: whatsappMessage,
-        },
-      });
-      if (!chatrace.ok) {
-        throw new Error(String(chatrace.debug?.error || "Chatrace WhatsApp trigger failed."));
+      if (hasWhatsAppConfig()) {
+        await sendWhatsAppTextMessage({ to: phone, body: whatsappMessage, previewUrl: true });
+      } else {
+        const chatrace = await pushReceiptToChatrace({
+          phoneE164: phone,
+          customerName: asString(row.customerName),
+          receiptNumber: cleanOptional(row.orderOrReceiptRef) || invitationId,
+          amount: "0",
+          currency: "KES",
+          receiptLink: reviewUrl,
+          receiptUrl: reviewUrl,
+          tagName: REVIEW_INVITATION_CHATRACE_TAG,
+          skipDefaultTags: true,
+          extraFields: buildReviewInvitationWhatsAppChatraceFields({
+            invitationId,
+            customerName: asString(row.customerName),
+            productName: asString(row.productName),
+            reviewUrl,
+            orderOrReceiptRef: cleanOptional(row.orderOrReceiptRef) || invitationId,
+            whatsappMessage,
+          }),
+        });
+        if (!chatrace.ok) {
+          throw new Error(String(chatrace.debug?.error || "Chatrace WhatsApp trigger failed."));
+        }
       }
       sent = true;
       channels.push("whatsapp");
@@ -3359,17 +3389,14 @@ export async function sendAdminReviewInvitationChannelTest(
         receiptUrl: reviewUrl,
         tagName: REVIEW_INVITATION_CHATRACE_TAG,
         skipDefaultTags: true,
-        extraFields: {
-          customer_name: asString(row.customerName),
-          review_url: reviewUrl,
-          review_link: reviewUrl,
-          review_invitation_url: reviewUrl,
-          review_invitation_id: invitationId,
-          review_reference: cleanOptional(row.orderOrReceiptRef) || invitationId,
-          review_product_name: asString(row.productName),
-          product_name: asString(row.productName),
-          whatsapp_message_preview: whatsappMessage,
-        },
+        extraFields: buildReviewInvitationWhatsAppChatraceFields({
+          invitationId,
+          customerName: asString(row.customerName),
+          productName: asString(row.productName),
+          reviewUrl,
+          orderOrReceiptRef: cleanOptional(row.orderOrReceiptRef) || invitationId,
+          whatsappMessage,
+        }),
       });
       if (!chatrace.ok) {
         throw new Error(String(chatrace.debug?.error || "Unable to trigger WhatsApp review flow."));
