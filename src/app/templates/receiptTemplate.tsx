@@ -774,8 +774,6 @@ export default function renderReceiptTemplate(
       </div>
     </div>
 
-      ${projectPaymentSummaryHtml}
-
       <table class="items-table">
         ${itemsHtml}
       </table>
@@ -785,6 +783,8 @@ export default function renderReceiptTemplate(
       ${snapshot.showDiscount ? `<tr><td></td><td class="right">Discount:</td><td class="right">${formatAmount(toNumberOrNull(snapshot.discount) ?? toNumberOrNull(totals.discount))}</td></tr>` : ''}
       <tr class="total-row"><td></td><td class="right"><strong>Total:</strong></td><td class="right"><strong>${formatAmount(totalValue)}</strong></td></tr>
     </table>
+
+      ${projectPaymentSummaryHtml}
 
       ${itemWarrantyEntries ? `<div class="item-warranty">${itemWarrantyEntries}</div>` : ''}
 
