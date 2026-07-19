@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 type InvitationPayload = {
   invitationId: string;
@@ -210,6 +210,7 @@ function ProcedureStep({
 }
 
 export default function ReviewJourneyClient({ invitation: initialInvitation }: ReviewJourneyClientProps) {
+  const reviewFormRef = useRef<HTMLFormElement | null>(null);
   const [invitation, setInvitation] = useState(initialInvitation);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -329,6 +330,10 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
     window.setTimeout(() => setCopied(false), 1800);
   }
 
+  function openReferralStart() {
+    reviewFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.26),transparent_28%),linear-gradient(180deg,#fff8ef_0%,#fffdfb_45%,#f8fafc_100%)] px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -440,7 +445,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                 </div>
               </div>
 
-              <form onSubmit={handleSubmit} className="mt-8 grid gap-5 sm:gap-6">
+              <form ref={reviewFormRef} onSubmit={handleSubmit} className="mt-8 grid gap-5 sm:gap-6">
                 <div className="grid gap-4 sm:gap-5 lg:grid-cols-2">
                   <label className="rounded-[24px] border border-[#eddacf] bg-[#fffaf5] p-4 sm:rounded-[26px] sm:p-5">
                     <div className="text-base font-bold text-[#210505]">Overall experience</div>
@@ -631,6 +636,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
               <div className="mt-5 rounded-[26px] border border-[#ecd7cb] bg-white p-5">
                 <button
                   type="button"
+                  onClick={openReferralStart}
                   className="inline-flex min-h-[3.6rem] w-full items-center justify-center rounded-[20px] bg-[#7a0000] px-6 py-3 text-sm font-bold text-white opacity-90"
                 >
                   Refer now and earn
