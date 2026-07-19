@@ -463,17 +463,25 @@ type SubmittedReviewAdminRow = {
   id: string;
   invitationId: string;
   customerName: string;
+  customerPhoneRaw: string;
   customerPhone: string;
   customerTown: string | null;
+  productId: string;
   productName: string;
+  productUrl: string;
   reviewTitle: string | null;
   reviewBody: string;
   overallRating: number;
   wouldRecommend: string | null;
   published: boolean;
+  publishedAt: string | null;
   moderationStatus: string;
   hasProblem: boolean;
+  websiteOrderId: string | null;
+  orderId: string | null;
+  receiptId: string | null;
   orderOrReceiptRef: string | null;
+  orderUrl: string | null;
   createdAt: string | null;
 };
 
@@ -556,6 +564,19 @@ function slugifyProductName(name: string) {
 
 function buildProductUrl(slug: string) {
   return `https://www.betech.co.ke/${slug}`;
+}
+
+function buildReviewOrderUrl(input: {
+  websiteOrderId?: string | null;
+  receiptId?: string | null;
+}) {
+  if (cleanOptional(input.receiptId)) {
+    return `/receipts/${cleanOptional(input.receiptId)}`;
+  }
+  if (cleanOptional(input.websiteOrderId)) {
+    return `/admin/receipts?tab=website-orders&orderId=${encodeURIComponent(cleanOptional(input.websiteOrderId) || "")}`;
+  }
+  return null;
 }
 
 function maskPhone(phone: string) {
@@ -3028,7 +3049,10 @@ export async function getSubmittedReviewOperations(limit = 120) {
     `
       SELECT
         prs.*,
-        ri."orderOrReceiptRef"
+        ri."orderOrReceiptRef",
+        ri."websiteOrderId",
+        ri."orderId",
+        ri."receiptId"
       FROM "ProductReviewSubmission" prs
       INNER JOIN "ReviewInvitation" ri ON ri."id" = prs."invitationId"
       ORDER BY prs."createdAt" DESC
@@ -3041,17 +3065,28 @@ export async function getSubmittedReviewOperations(limit = 120) {
     id: asString(row.id),
     invitationId: asString(row.invitationId),
     customerName: asString(row.customerName),
-    customerPhone: maskPhone(asString(row.customerPhone)),
+    customerPhoneRaw: asString(row.customerPhone),
+    customerPhone: asString(row.customerPhone),
     customerTown: cleanOptional(row.customerTown),
+    productId: asString(row.productId),
     productName: asString(row.productName),
+    productUrl: buildProductUrl(slugifyProductName(asString(row.productName))),
     reviewTitle: cleanOptional(row.reviewTitle),
     reviewBody: asString(row.reviewBody),
     overallRating: Number(row.overallRating || 0),
     wouldRecommend: cleanOptional(row.wouldRecommend),
     published: Boolean(row.published),
+    publishedAt: toDate(row.publishedAt)?.toISOString() || null,
     moderationStatus: asString(row.moderationStatus || "pending"),
     hasProblem: Boolean(row.hasProblem),
+    websiteOrderId: cleanOptional(row.websiteOrderId),
+    orderId: cleanOptional(row.orderId),
+    receiptId: cleanOptional(row.receiptId),
     orderOrReceiptRef: cleanOptional(row.orderOrReceiptRef),
+    orderUrl: buildReviewOrderUrl({
+      websiteOrderId: cleanOptional(row.websiteOrderId),
+      receiptId: cleanOptional(row.receiptId),
+    }),
     createdAt: toDate(row.createdAt)?.toISOString() || null,
   })) satisfies SubmittedReviewAdminRow[];
 }
@@ -3063,7 +3098,10 @@ export async function getPublishedReviewOperations(limit = 120) {
     `
       SELECT
         prs.*,
-        ri."orderOrReceiptRef"
+        ri."orderOrReceiptRef",
+        ri."websiteOrderId",
+        ri."orderId",
+        ri."receiptId"
       FROM "ProductReviewSubmission" prs
       INNER JOIN "ReviewInvitation" ri ON ri."id" = prs."invitationId"
       WHERE prs."published" = TRUE
@@ -3077,19 +3115,115 @@ export async function getPublishedReviewOperations(limit = 120) {
     id: asString(row.id),
     invitationId: asString(row.invitationId),
     customerName: asString(row.customerName),
-    customerPhone: maskPhone(asString(row.customerPhone)),
+    customerPhoneRaw: asString(row.customerPhone),
+    customerPhone: asString(row.customerPhone),
     customerTown: cleanOptional(row.customerTown),
+    productId: asString(row.productId),
     productName: asString(row.productName),
+    productUrl: buildProductUrl(slugifyProductName(asString(row.productName))),
     reviewTitle: cleanOptional(row.reviewTitle),
     reviewBody: asString(row.reviewBody),
     overallRating: Number(row.overallRating || 0),
     wouldRecommend: cleanOptional(row.wouldRecommend),
     published: Boolean(row.published),
+    publishedAt: toDate(row.publishedAt)?.toISOString() || null,
     moderationStatus: asString(row.moderationStatus || "pending"),
     hasProblem: Boolean(row.hasProblem),
+    websiteOrderId: cleanOptional(row.websiteOrderId),
+    orderId: cleanOptional(row.orderId),
+    receiptId: cleanOptional(row.receiptId),
     orderOrReceiptRef: cleanOptional(row.orderOrReceiptRef),
+    orderUrl: buildReviewOrderUrl({
+      websiteOrderId: cleanOptional(row.websiteOrderId),
+      receiptId: cleanOptional(row.receiptId),
+    }),
     createdAt: toDate(row.createdAt)?.toISOString() || null,
   })) satisfies SubmittedReviewAdminRow[];
+}
+
+export async function setReviewSubmissionPublished(reviewId: string, published: boolean) {
+  await ensureReviewReferralSchema();
+  const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `SELECT "id", "invitationId" FROM "ProductReviewSubmission" WHERE "id" = $1 LIMIT 1`,
+    reviewId,
+  );
+  const review = rows[0];
+  if (!review) {
+    throw new Error("Review not found.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(
+      `
+        UPDATE "ProductReviewSubmission"
+        SET
+          "published" = $2,
+          "publishedAt" = CASE WHEN $2 = TRUE THEN CURRENT_TIMESTAMP ELSE NULL END,
+          "moderationStatus" = $3,
+          "updatedAt" = CURRENT_TIMESTAMP
+        WHERE "id" = $1
+      `,
+      reviewId,
+      published,
+      published ? "published" : "pending",
+    );
+
+    await tx.$executeRawUnsafe(
+      `
+        UPDATE "ReviewInvitation"
+        SET "reviewStatus" = $2, "updatedAt" = CURRENT_TIMESTAMP
+        WHERE "id" = $1
+      `,
+      asString(review.invitationId),
+      published ? "PUBLISHED" : "SUBMITTED",
+    );
+  });
+}
+
+export async function deleteReviewSubmissionAdmin(reviewId: string) {
+  await ensureReviewReferralSchema();
+  const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `SELECT "id", "invitationId" FROM "ProductReviewSubmission" WHERE "id" = $1 LIMIT 1`,
+    reviewId,
+  );
+  const review = rows[0];
+  if (!review) {
+    throw new Error("Review not found.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(
+      `
+        DELETE FROM "ReferralEvent"
+        WHERE "referralLinkId" IN (
+          SELECT "id" FROM "ReferralLink" WHERE "reviewId" = $1
+        )
+      `,
+      reviewId,
+    );
+    await tx.$executeRawUnsafe(
+      `
+        DELETE FROM "ReferralWithdrawalAllocation"
+        WHERE "referralLinkId" IN (
+          SELECT "id" FROM "ReferralLink" WHERE "reviewId" = $1
+        )
+      `,
+      reviewId,
+    );
+    await tx.$executeRawUnsafe(`DELETE FROM "ReferralLink" WHERE "reviewId" = $1`, reviewId);
+    await tx.$executeRawUnsafe(`DELETE FROM "ReviewSupportRequest" WHERE "reviewId" = $1`, reviewId);
+    await tx.$executeRawUnsafe(`DELETE FROM "ProductReviewSubmission" WHERE "id" = $1`, reviewId);
+    await tx.$executeRawUnsafe(
+      `
+        UPDATE "ReviewInvitation"
+        SET "reviewStatus" = CASE WHEN "sentAt" IS NOT NULL THEN 'SENT' ELSE 'PENDING' END,
+            "usedAt" = NULL,
+            "updatedAt" = CURRENT_TIMESTAMP
+        WHERE "id" = $1
+      `,
+      asString(review.invitationId),
+    );
+  });
 }
 
 export async function getOpenReviewSupportOperations(limit = 120) {

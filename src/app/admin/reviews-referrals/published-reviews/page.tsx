@@ -2,13 +2,9 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { getPublishedReviewOperations } from "@/lib/reviewsReferrals";
+import ReviewsAdminListClient from "@/app/admin/reviews-referrals/ReviewsAdminListClient";
 
 export const dynamic = "force-dynamic";
-
-function formatDate(value: string | null) {
-  if (!value) return "Not available";
-  return new Intl.DateTimeFormat("en-KE", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
-}
 
 export default async function AdminPublishedReviewsPage() {
   const session = await auth();
@@ -44,36 +40,7 @@ export default async function AdminPublishedReviewsPage() {
         </div>
       ) : null}
 
-      {rows.map((row) => (
-        <article key={row.id} className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.96))] p-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <div className="flex flex-wrap items-center gap-3">
-                <h2 className="text-2xl font-semibold text-white">{row.customerName}</h2>
-                <span className="inline-flex rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-200">
-                  Published
-                </span>
-              </div>
-              <div className="mt-3 grid gap-2 text-sm text-slate-400 sm:grid-cols-2 xl:grid-cols-4">
-                <div>Product: {row.productName}</div>
-                <div>Phone: {row.customerPhone}</div>
-                <div>Order/receipt: {row.orderOrReceiptRef || "Not linked"}</div>
-                <div>Submitted: {formatDate(row.createdAt)}</div>
-              </div>
-            </div>
-            <div className="rounded-[24px] border border-white/10 bg-white/[0.04] px-5 py-4 text-right">
-              <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Overall rating</div>
-              <div className="mt-2 text-2xl font-black tracking-tight text-white">{row.overallRating}/5</div>
-            </div>
-          </div>
-
-          <div className="mt-5 rounded-[24px] border border-white/10 bg-white/[0.03] p-5">
-            <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Review title</div>
-            <div className="mt-2 text-lg font-semibold text-white">{row.reviewTitle || "Customer review submitted"}</div>
-            <div className="mt-4 text-sm leading-7 text-slate-300">{row.reviewBody}</div>
-          </div>
-        </article>
-      ))}
+      <ReviewsAdminListClient initialRows={rows} />
     </div>
   );
 }
