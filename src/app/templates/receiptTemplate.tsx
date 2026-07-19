@@ -548,6 +548,7 @@ export default function renderReceiptTemplate(
         }
         .project-payment-method-list {
           display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 8px;
           margin-top: 4px;
         }
@@ -555,18 +556,19 @@ export default function renderReceiptTemplate(
           border: 1px solid #e5e7eb;
           border-radius: 8px;
           background: #fffdf8;
-          padding: 8px;
+          padding: 7px 8px;
         }
         .project-payment-method-title {
           font-size: 11px;
           font-weight: 800;
           color: ${brandColor};
-          margin-bottom: 4px;
+          margin-bottom: 3px;
         }
         .project-payment-method-line {
-          font-size: 10.5px;
+          font-size: 10px;
           color: #1f2937;
-          line-height: 1.45;
+          line-height: 1.3;
+          margin-top: 2px;
         }
         .project-payment-method-line span {
           font-weight: 700;
@@ -729,6 +731,7 @@ export default function renderReceiptTemplate(
         .project-payment-summary__item { padding: 6px; }
         .project-payment-summary__item span { font-size: 8.8px; margin-bottom: 3px; }
         .project-payment-summary__item strong { font-size: 10px; }
+        .project-payment-method-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
         .project-payment-method-option { padding: 6px; }
         .project-payment-method-title { font-size: 9.2px; margin-bottom: 3px; }
         .project-payment-method-line { font-size: 8.8px; }
@@ -743,6 +746,11 @@ export default function renderReceiptTemplate(
           page-break-inside: avoid;
         }
         * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      }
+      @media (max-width: 720px) {
+        .project-payment-method-list {
+          grid-template-columns: 1fr;
+        }
       }
       </style>
   </head>
