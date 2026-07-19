@@ -511,7 +511,15 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
         ) : null}
 
         {!alreadySubmitted ? (
-          <section className="overflow-hidden rounded-[36px] border border-[#7a0000]/10 bg-white shadow-[0_28px_80px_rgba(122,0,0,0.08)]">
+          <>
+            <section className="overflow-hidden rounded-[28px] border border-[#7a0000]/10 bg-[linear-gradient(145deg,#2a0606_0%,#641010_52%,#930d0d_100%)] px-5 py-6 text-white shadow-[0_24px_60px_rgba(122,0,0,0.12)] sm:hidden">
+              <div className="text-xs font-black uppercase tracking-[0.22em] text-amber-300">Verified Purchase Review</div>
+              <h1 className="mt-4 text-[2rem] font-black leading-[1.02] tracking-tight">
+                Hello {invitation.customer.firstName}, how is {invitation.product.name} performing?
+              </h1>
+            </section>
+
+            <section className="hidden overflow-hidden rounded-[36px] border border-[#7a0000]/10 bg-white shadow-[0_28px_80px_rgba(122,0,0,0.08)] sm:block">
             <div className="grid gap-0 xl:grid-cols-[1.02fr_0.98fr]">
               <div className="bg-[linear-gradient(145deg,#2a0606_0%,#641010_52%,#930d0d_100%)] px-6 py-8 text-white sm:px-8 sm:py-9">
                 <div className="text-xs font-black uppercase tracking-[0.28em] text-amber-300">Verified Purchase Review</div>
@@ -592,7 +600,8 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                 </div>
               </div>
             </div>
-          </section>
+            </section>
+          </>
         ) : null}
 
         {!alreadySubmitted ? (
