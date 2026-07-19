@@ -456,16 +456,16 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
         {!alreadySubmitted ? (
           <section className="overflow-hidden rounded-[36px] border border-[#7a0000]/10 bg-white shadow-[0_28px_80px_rgba(122,0,0,0.08)]">
             <div className="grid gap-0 xl:grid-cols-[1.02fr_0.98fr]">
-              <div className="bg-[linear-gradient(145deg,#2a0606_0%,#641010_52%,#930d0d_100%)] px-6 py-8 text-white sm:px-8 sm:py-10">
+              <div className="bg-[linear-gradient(145deg,#2a0606_0%,#641010_52%,#930d0d_100%)] px-6 py-8 text-white sm:px-8 sm:py-9">
                 <div className="text-xs font-black uppercase tracking-[0.28em] text-amber-300">Verified Purchase Review</div>
-                <h1 className="mt-4 max-w-2xl text-3xl font-black tracking-tight sm:text-[3.6rem] sm:leading-[1.02]">
+                <h1 className="mt-4 max-w-2xl text-3xl font-black tracking-tight sm:text-[3.3rem] sm:leading-[1.02]">
                   Hello {invitation.customer.firstName}, how is your product performing?
                 </h1>
                 <p className="mt-4 max-w-xl text-sm leading-7 text-amber-50/92 sm:text-base">
                   Thank you for purchasing from Betech Solar Solutions. Share your experience below, then refer a friend or family member and earn after a successful sale.
                 </p>
 
-                <div className="mt-8 grid gap-4 sm:grid-cols-2">
+                <div className="mt-8 grid gap-3 sm:grid-cols-2">
                   <div className="rounded-[24px] border border-white/10 bg-white/10 p-4 backdrop-blur">
                     <div className="text-xs uppercase tracking-[0.18em] text-amber-200">Purchase date</div>
                     <div className="mt-2 text-lg font-semibold">{formatDate(invitation.purchaseDate)}</div>
@@ -485,10 +485,10 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                 </div>
               </div>
 
-              <div className="bg-[linear-gradient(180deg,#fff9f3_0%,#fffdfb_100%)] p-5 sm:p-8">
-                <div className="rounded-[28px] border border-[#ecd7cb] bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.07)]">
+              <div className="bg-[linear-gradient(180deg,#fff9f3_0%,#fffdfb_100%)] p-5 sm:p-7">
+                <div className="rounded-[30px] border border-[#ecd7cb] bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.07)] sm:p-6">
                   <div className="flex flex-col gap-5 sm:flex-row">
-                    <div className="h-32 w-full overflow-hidden rounded-[24px] bg-[#fff4e3] sm:h-40 sm:w-40 sm:shrink-0">
+                    <div className="h-32 w-full overflow-hidden rounded-[24px] bg-[#fff4e3] sm:h-44 sm:w-44 sm:shrink-0">
                       {invitation.product.imageUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={invitation.product.imageUrl} alt={invitation.product.name} className="h-full w-full object-cover" />
@@ -502,15 +502,15 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                       <div className="inline-flex rounded-full border border-[#0f9d58]/15 bg-[#eefcf4] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#0f9d58]">
                         Verified Purchase
                       </div>
-                      <h2 className="mt-3 text-2xl font-black tracking-tight text-[#210505]">{invitation.product.name}</h2>
-                      <div className="mt-4 grid gap-2 text-sm text-slate-600">
+                      <h2 className="mt-3 text-2xl font-black tracking-tight text-[#210505] sm:text-[2rem]">{invitation.product.name}</h2>
+                      <div className="mt-4 grid gap-2 text-sm leading-6 text-slate-600">
                         <div>Purchased: {formatDate(invitation.purchaseDate)}</div>
                         <div>Receipt / order: {invitation.order.orderOrReceiptRef || "Verified order"}</div>
                         <div>Current price: {formatMoney(invitation.product.currentPrice)}</div>
                         <div>Warranty: {invitation.product.warranty || "Manufacturer warranty available"}</div>
                       </div>
                       {otherPurchasedItems.length ? (
-                        <div className="mt-5 rounded-[22px] border border-[#ecd7cb] bg-[#fff8f2] p-4">
+                        <div className="mt-5 rounded-[24px] border border-[#ecd7cb] bg-[#fff8f2] p-4">
                           <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a0000]">Other items from this purchase</div>
                           <div className="mt-3 grid gap-2 text-sm text-slate-600">
                             {otherPurchasedItems.map((item, index) => (
@@ -526,7 +526,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                       ) : null}
                       <a
                         href={`/shop/product/${invitation.product.slug}`}
-                        className="mt-5 inline-flex rounded-2xl border border-[#7a0000]/15 px-4 py-2 text-sm font-semibold text-[#7a0000] transition hover:bg-[#fff7ee]"
+                        className="mt-5 inline-flex min-h-[3rem] items-center justify-center rounded-2xl border border-[#7a0000]/15 px-4 py-2 text-sm font-semibold text-[#7a0000] transition hover:bg-[#fff7ee]"
                       >
                         View product details
                       </a>
@@ -693,7 +693,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
               </form>
             </div>
 
-            <div className="rounded-[36px] border border-[#ecd7cb] bg-[linear-gradient(180deg,#fffdf9_0%,#fff3dd_100%)] p-6 shadow-[0_20px_60px_rgba(245,158,11,0.12)] sm:p-8">
+            <div className="rounded-[36px] border border-[#ecd7cb] bg-[linear-gradient(180deg,#fffdf9_0%,#fff3dd_100%)] p-6 shadow-[0_20px_60px_rgba(245,158,11,0.12)] sm:p-7">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
                 <div className="flex h-20 w-20 items-center justify-center rounded-[26px] bg-[radial-gradient(circle_at_top,#fff7d1_0%,#ffd79a_48%,#ffbe6f_100%)] text-[2.7rem] shadow-[0_18px_40px_rgba(245,158,11,0.18)]">
                   🎁
@@ -752,7 +752,18 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                     </div>
                   </div>
 
-                  <div className="mt-5">{renderReferralEntryCard(true)}</div>
+                  <div className="mt-5 rounded-[30px] border border-[#f0dccf] bg-white/80 p-4 shadow-[0_18px_40px_rgba(15,23,42,0.05)] sm:p-5">
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a0000]">Start referring</div>
+                        <div className="mt-1 text-lg font-black tracking-tight text-[#210505]">Refer this same product and earn</div>
+                      </div>
+                      <div className="rounded-full border border-amber-300/50 bg-amber-50 px-3 py-1 text-xs font-bold text-[#7a0000]">
+                        Tracked for 3 months
+                      </div>
+                    </div>
+                    {renderReferralEntryCard(true)}
+                  </div>
                 </>
               ) : (
                 <div className="mt-5 rounded-[30px] border border-[#ecd7cb] bg-white p-6 shadow-[0_18px_40px_rgba(15,23,42,0.05)]">
@@ -828,7 +839,7 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
               </div>
             </div>
 
-            <div className="rounded-[36px] border border-[#ecd7cb] bg-[linear-gradient(180deg,#fffdf9_0%,#fff3dd_100%)] p-6 shadow-[0_20px_60px_rgba(245,158,11,0.12)] sm:p-8">
+            <div className="rounded-[36px] border border-[#ecd7cb] bg-[linear-gradient(180deg,#fffdf9_0%,#fff3dd_100%)] p-6 shadow-[0_20px_60px_rgba(245,158,11,0.12)] sm:p-7">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
                 <div className="flex h-20 w-20 items-center justify-center rounded-[26px] bg-[radial-gradient(circle_at_top,#fff7d1_0%,#ffd79a_48%,#ffbe6f_100%)] text-[2.7rem] shadow-[0_18px_40px_rgba(245,158,11,0.18)]">
                   🎁
@@ -888,7 +899,16 @@ export default function ReviewJourneyClient({ invitation: initialInvitation }: R
                   </div>
 
                   {!referralSuccess ? (
-                    <div className="mt-6 space-y-5">
+                    <div className="mt-6 space-y-5 rounded-[30px] border border-[#f0dccf] bg-white/80 p-4 shadow-[0_18px_40px_rgba(15,23,42,0.05)] sm:p-5">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a0000]">Start referring</div>
+                          <div className="mt-1 text-lg font-black tracking-tight text-[#210505]">Refer this same product and earn</div>
+                        </div>
+                        <div className="rounded-full border border-amber-300/50 bg-amber-50 px-3 py-1 text-xs font-bold text-[#7a0000]">
+                          Tracked for 3 months
+                        </div>
+                      </div>
                       {renderReferralEntryCard(false)}
                     </div>
                   ) : null}
