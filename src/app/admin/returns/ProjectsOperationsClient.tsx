@@ -98,6 +98,32 @@ const formatPaymentTermLabel = (value?: string | null) => {
   }
 };
 
+const formatPaymentStatusLabel = (value?: string | null) => {
+  switch (value) {
+    case "FULLY_PAID":
+      return "Fully paid";
+    case "PARTIALLY_PAID":
+      return "Partially paid";
+    default:
+      return "Unpaid";
+  }
+};
+
+const formatPaymentMethodLabel = (value?: string | null) => {
+  switch (value) {
+    case "MPESA":
+      return "M-Pesa";
+    case "CASH":
+      return "Cash";
+    case "BANK":
+      return "Bank";
+    case "MIXED":
+      return "Mixed";
+    default:
+      return "Unspecified";
+  }
+};
+
 const PROJECT_COMPLETION_COMMISSION = 2000;
 
 const makeEditor = (row: ProjectRow): ProjectEditor => ({
@@ -198,14 +224,21 @@ export default function ProjectsOperationsClient({
     });
   }, [query, rows, scope, stageFilter, viewerId]);
 
+  const scopedRows = useMemo(() => {
+    if (!isTechnicalScope) return rows;
+    return rows.filter(
+      (row) => String(row.projectHandlerStaffId || "").trim() === String(viewerId || "").trim(),
+    );
+  }, [isTechnicalScope, rows, viewerId]);
+
   const summary = useMemo(() => {
     return {
-      total: rows.length,
-      receiptCreated: rows.filter((row) => row.projectStage === "RECEIPT_CREATED").length,
-      inProgress: rows.filter((row) => row.projectStage === "PROJECT_IN_PROGRESS").length,
-      completed: rows.filter((row) => row.projectStage === "COMPLETED_POSTED").length,
+      total: scopedRows.length,
+      receiptCreated: scopedRows.filter((row) => row.projectStage === "RECEIPT_CREATED").length,
+      inProgress: scopedRows.filter((row) => row.projectStage === "PROJECT_IN_PROGRESS").length,
+      completed: scopedRows.filter((row) => row.projectStage === "COMPLETED_POSTED").length,
     };
-  }, [rows]);
+  }, [scopedRows]);
 
   const setEditorValue = (receiptId: string, patch: Partial<ProjectEditor>) => {
     setEditors((current) => ({
@@ -358,7 +391,7 @@ export default function ProjectsOperationsClient({
                         {formatProjectStageLabel(row.projectStage)}
                       </span>
                       <Link
-                        href={`/receipts/${encodeURIComponent(row.id)}?readonly=1`}
+                        href={`/receipts/print/${encodeURIComponent(row.id)}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20"
@@ -387,6 +420,55 @@ export default function ProjectsOperationsClient({
                       Assigned by receipt: {row.attendantName}
                     </div>
                   ) : null}
+                </div>
+
+                <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+                      Payment status
+                    </div>
+                    <div className="mt-2 text-base font-semibold text-white">
+                      {formatPaymentStatusLabel(row.projectPaymentStatus)}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-400">
+                      {formatPaymentTermLabel(row.projectPaymentTerm)}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+                      Paid so far
+                    </div>
+                    <div className="mt-2 text-base font-semibold text-white">
+                      {formatCurrency(row.projectTotalPaidAmount)}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-400">
+                      Remaining {formatCurrency(row.projectRemainingAmount)}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+                      Deposit
+                    </div>
+                    <div className="mt-2 text-base font-semibold text-white">
+                      {formatCurrency(row.projectDepositPaidAmount)} / {formatCurrency(row.projectDepositRequiredAmount)}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-400">
+                      {formatPaymentMethodLabel(row.projectDepositPaymentMethod)}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+                      Balance
+                    </div>
+                    <div className="mt-2 text-base font-semibold text-white">
+                      {formatCurrency(row.projectBalancePendingAmount)}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-400">
+                      {row.projectPaymentTerm === "FULL_AFTER_INSTALLATION"
+                        ? "Pay after installation"
+                        : formatPaymentMethodLabel(row.projectBalancePaymentMethod)}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="mt-5 grid gap-4 xl:grid-cols-4">

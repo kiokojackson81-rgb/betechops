@@ -29,6 +29,8 @@ export default function renderReceiptTemplate(
   const paymentMethod = snapshot.paymentMethod || order?.paymentMethod || '';
   const deliveryAddress = snapshot.deliveryAddress || order?.deliveryAddress || '';
   const customerEmail = snapshot.customerEmail || order?.customerEmail || '';
+  const projectFlow =
+    snapshot.projectFlow && typeof snapshot.projectFlow === 'object' ? snapshot.projectFlow : null;
   const formatWarrantyValue = (value: any) => {
     if (!value) return '';
     if (typeof value === 'string') return value;
@@ -83,6 +85,42 @@ export default function renderReceiptTemplate(
     if (value === null || value === undefined || Number.isNaN(value)) return '';
     return new Intl.NumberFormat('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(value);
   };
+  const formatProjectPaymentTerm = (value: unknown) => {
+    switch (String(value || '').trim().toUpperCase()) {
+      case 'FULL_BEFORE_INSTALLATION':
+        return 'Pay fully before installation';
+      case 'DEPOSIT_AND_BALANCE':
+        return 'Deposit and balance';
+      case 'FULL_AFTER_INSTALLATION':
+        return 'Pay fully after installation';
+      default:
+        return 'Project payment flow';
+    }
+  };
+  const formatProjectPaymentStatus = (value: unknown) => {
+    switch (String(value || '').trim().toUpperCase()) {
+      case 'FULLY_PAID':
+        return 'Fully paid';
+      case 'PARTIALLY_PAID':
+        return 'Partially paid';
+      default:
+        return 'Unpaid';
+    }
+  };
+  const formatProjectPaymentMethod = (value: unknown) => {
+    switch (String(value || '').trim().toUpperCase()) {
+      case 'MPESA':
+        return 'M-Pesa';
+      case 'CASH':
+        return 'Cash';
+      case 'BANK':
+        return 'Bank';
+      case 'MIXED':
+        return 'Mixed';
+      default:
+        return 'Unspecified';
+    }
+  };
 
   const itemsSubtotal = items.reduce((sum, it) => {
     const qty = toNumberOrNull(it.quantity) ?? 1;
@@ -116,6 +154,67 @@ export default function renderReceiptTemplate(
     toNumberOrNull(snapshot.balance),
     totalValue
   );
+  const projectPaymentSummaryHtml =
+    projectFlow?.isProject
+      ? `
+      <div class="project-payment-summary">
+        <div class="project-payment-summary__header">
+          <div class="project-payment-summary__title">Project payment summary</div>
+          <div class="project-payment-summary__badge">${formatProjectPaymentStatus(projectFlow.paymentStatus)}</div>
+        </div>
+        <div class="project-payment-summary__grid">
+          <div class="project-payment-summary__item">
+            <span>Payment plan</span>
+            <strong>${formatProjectPaymentTerm(projectFlow.paymentTerm)}</strong>
+          </div>
+          <div class="project-payment-summary__item">
+            <span>Paid so far</span>
+            <strong>KES ${formatAmount(toNumberOrNull(projectFlow.totalPaidAmount) ?? 0)}</strong>
+          </div>
+          <div class="project-payment-summary__item">
+            <span>Remaining balance</span>
+            <strong>KES ${formatAmount(toNumberOrNull(projectFlow.remainingAmount) ?? 0)}</strong>
+          </div>
+          ${
+            String(projectFlow.paymentTerm || '').trim().toUpperCase() === 'DEPOSIT_AND_BALANCE'
+              ? `
+              <div class="project-payment-summary__item">
+                <span>Deposit</span>
+                <strong>KES ${formatAmount(toNumberOrNull(projectFlow.depositPaidAmount) ?? 0)} / ${formatAmount(toNumberOrNull(projectFlow.depositRequiredAmount) ?? 0)}</strong>
+              </div>
+              <div class="project-payment-summary__item">
+                <span>Deposit method</span>
+                <strong>${formatProjectPaymentMethod(projectFlow.depositPaymentMethod)}</strong>
+              </div>
+              <div class="project-payment-summary__item">
+                <span>Balance after installation</span>
+                <strong>KES ${formatAmount(toNumberOrNull(projectFlow.balancePendingAmount) ?? 0)}</strong>
+              </div>
+              <div class="project-payment-summary__item">
+                <span>Balance method</span>
+                <strong>${formatProjectPaymentMethod(projectFlow.balancePaymentMethod)}</strong>
+              </div>`
+              : `
+              <div class="project-payment-summary__item">
+                <span>Collection method</span>
+                <strong>${formatProjectPaymentMethod(
+                  String(projectFlow.paymentTerm || '').trim().toUpperCase() === 'FULL_BEFORE_INSTALLATION'
+                    ? projectFlow.depositPaymentMethod
+                    : projectFlow.balancePaymentMethod,
+                )}</strong>
+              </div>
+              <div class="project-payment-summary__item">
+                <span>Expected payment</span>
+                <strong>KES ${formatAmount(
+                  String(projectFlow.paymentTerm || '').trim().toUpperCase() === 'FULL_BEFORE_INSTALLATION'
+                    ? toNumberOrNull(projectFlow.depositRequiredAmount) ?? 0
+                    : toNumberOrNull(projectFlow.balanceExpectedAmount) ?? 0,
+                )}</strong>
+              </div>`
+          }
+        </div>
+      </div>`
+      : '';
 
   const itemsHtml = items
     .map((it: any, index: number) => {
@@ -352,12 +451,64 @@ export default function renderReceiptTemplate(
         font-size: 10px;
         color: rgba(15, 23, 42, 0.8);
       }
-      .item-meta span {
-        background: #f2f6ff;
-        border-radius: 4px;
-        padding: 2px 6px;
-        border: 1px solid rgba(15, 23, 42, 0.15);
-      }
+        .item-meta span {
+          background: #f2f6ff;
+          border-radius: 4px;
+          padding: 2px 6px;
+          border: 1px solid rgba(15, 23, 42, 0.15);
+        }
+        .project-payment-summary {
+          margin: 0 0 10px;
+          border: 1px solid #dbeafe;
+          border-radius: 10px;
+          background: #f8fbff;
+          padding: 10px;
+        }
+        .project-payment-summary__header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          margin-bottom: 8px;
+        }
+        .project-payment-summary__title {
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: ${brandColor};
+        }
+        .project-payment-summary__badge {
+          border: 1px solid rgba(122, 32, 32, 0.18);
+          border-radius: 999px;
+          padding: 4px 9px;
+          background: rgba(122, 32, 32, 0.06);
+          font-size: 10px;
+          font-weight: 700;
+          color: ${brandColor};
+        }
+        .project-payment-summary__grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
+        }
+        .project-payment-summary__item {
+          border: 1px solid #e5e7eb;
+          border-radius: 8px;
+          background: #fff;
+          padding: 8px;
+        }
+        .project-payment-summary__item span {
+          display: block;
+          font-size: 10px;
+          color: #64748b;
+          margin-bottom: 4px;
+        }
+        .project-payment-summary__item strong {
+          display: block;
+          font-size: 11.5px;
+          color: #0f172a;
+        }
 
       .receipt-footer {
         margin-top: 0;
@@ -507,6 +658,14 @@ export default function renderReceiptTemplate(
         .totals { margin-top: 5px; }
         .totals td { padding: 2px 0; }
         .notes { margin-top: 5px; padding: 6px; }
+        .project-payment-summary { margin-bottom: 6px; padding: 7px; }
+        .project-payment-summary__header { margin-bottom: 5px; }
+        .project-payment-summary__title { font-size: 9.2px; }
+        .project-payment-summary__badge { font-size: 8.8px; padding: 3px 7px; }
+        .project-payment-summary__grid { gap: 5px; }
+        .project-payment-summary__item { padding: 6px; }
+        .project-payment-summary__item span { font-size: 8.8px; margin-bottom: 3px; }
+        .project-payment-summary__item strong { font-size: 10px; }
         .signature { margin-top: 5px; font-size: 10.6px; line-height: 1.25; }
         .receipt-footer-container { margin-top: 2px; }
         .receipt-footer { margin-top: 0; padding-top: 5px; font-size: 10.3px; line-height: 1.25; }
@@ -540,6 +699,8 @@ export default function renderReceiptTemplate(
         <div style="margin-top:6px"><strong>Address :</strong> ${deliveryAddress || '-'}</div>
       </div>
     </div>
+
+      ${projectPaymentSummaryHtml}
 
       <table class="items-table">
         ${itemsHtml}

@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 import { waitForReceiptById } from "@/lib/receiptReadAfterWrite";
 import { canEditReceiptByRole } from "@/lib/receiptEditAccess";
+import { readReceiptProjectFlow } from "@/lib/receiptProjects";
 
 export const dynamic = "force-dynamic";
 
@@ -88,13 +89,18 @@ export default async function Page({
     receipt.data && typeof receipt.data === "object"
       ? String((receipt.data as Record<string, unknown>).attendantId ?? "").trim() || null
       : null;
+  const projectFlow =
+    receipt.data && typeof receipt.data === "object"
+      ? readReceiptProjectFlow((receipt.data as Record<string, unknown>).projectFlow)
+      : null;
   const canViewReceipt =
     actor?.role === "ADMIN" ||
     actor?.role === "SUPERVISOR" ||
     (Boolean(actor?.id) &&
       (actor?.id === receipt.issuedById ||
         actor?.id === receipt.order?.attendantId ||
-        actor?.id === dataAttendantId));
+        actor?.id === dataAttendantId ||
+        actor?.id === projectFlow?.handlerStaffId));
   if (!canViewReceipt) return <div className="p-4">Receipt not found</div>;
   const readOnly =
     String(

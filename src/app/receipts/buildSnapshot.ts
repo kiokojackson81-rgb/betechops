@@ -46,6 +46,10 @@ export function buildReceiptSnapshot(receipt: any) {
     (order.orderNumber as string | undefined) ||
     (dataIsObject ? (dataAny?.orderRef as string | undefined) : undefined) ||
     '';
+  const projectFlowRaw =
+    dataIsObject && dataAny?.projectFlow && typeof dataAny.projectFlow === "object"
+      ? (dataAny.projectFlow as Record<string, unknown>)
+      : null;
 
   return {
     order,
@@ -83,5 +87,36 @@ export function buildReceiptSnapshot(receipt: any) {
     paymentDetailsShown,
     warrantyText,
     serialNumber,
+    projectFlow: projectFlowRaw
+      ? {
+          isProject: projectFlowRaw.isProject === true,
+          stage: typeof projectFlowRaw.stage === "string" ? projectFlowRaw.stage : null,
+          paymentTerm:
+            typeof projectFlowRaw.paymentTerm === "string" ? projectFlowRaw.paymentTerm : null,
+          paymentStatus:
+            typeof projectFlowRaw.paymentStatus === "string"
+              ? projectFlowRaw.paymentStatus
+              : null,
+          depositType:
+            typeof projectFlowRaw.depositType === "string" ? projectFlowRaw.depositType : null,
+          depositPercent: Number(projectFlowRaw.depositPercent ?? 0) || 0,
+          depositRequiredAmount: Number(projectFlowRaw.depositRequiredAmount ?? 0) || 0,
+          depositPaidAmount: Number(projectFlowRaw.depositPaidAmount ?? 0) || 0,
+          depositPendingAmount: Number(projectFlowRaw.depositPendingAmount ?? 0) || 0,
+          depositPaymentMethod:
+            typeof projectFlowRaw.depositPaymentMethod === "string"
+              ? projectFlowRaw.depositPaymentMethod
+              : null,
+          balanceExpectedAmount: Number(projectFlowRaw.balanceExpectedAmount ?? 0) || 0,
+          balancePaidAmount: Number(projectFlowRaw.balancePaidAmount ?? 0) || 0,
+          balancePendingAmount: Number(projectFlowRaw.balancePendingAmount ?? 0) || 0,
+          balancePaymentMethod:
+            typeof projectFlowRaw.balancePaymentMethod === "string"
+              ? projectFlowRaw.balancePaymentMethod
+              : null,
+          totalPaidAmount: Number(projectFlowRaw.totalPaidAmount ?? 0) || 0,
+          remainingAmount: Number(projectFlowRaw.remainingAmount ?? 0) || 0,
+        }
+      : null,
   };
 }
