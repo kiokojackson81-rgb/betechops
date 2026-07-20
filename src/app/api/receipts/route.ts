@@ -616,15 +616,8 @@ export async function GET(req: NextRequest) {
       orderRef: (r.order as any)?.orderNumber ?? null,
       receiptNumber: r.receiptNumber ?? null,
     });
-    const explicitProfitRaw = (r as any)?.profit ?? (r.data as any)?.profit ?? (r.totals as any)?.profit;
-    const explicitProfit =
-      typeof explicitProfitRaw === "number" && Number.isFinite(explicitProfitRaw)
-        ? Number(explicitProfitRaw)
-        : typeof explicitProfitRaw === "string" && explicitProfitRaw.trim() !== "" && !Number.isNaN(Number(explicitProfitRaw))
-          ? Number(explicitProfitRaw)
-          : null;
     const resolvedBuyingTotal = contributor?.buyingTotal ?? buyingTotal;
-    const baseProfit = contributor?.profit ?? explicitProfit ?? (resolvedBuyingTotal > 0 ? total - resolvedBuyingTotal : null);
+    const baseProfit = contributor?.profit ?? (resolvedBuyingTotal > 0 ? total - resolvedBuyingTotal : null);
     const profit =
       typeof baseProfit === "number"
         ? adjustProfitForPodDeliveryFee(baseProfit - agentSaleCommission, podDeliveryFee)
@@ -947,12 +940,8 @@ export async function GET(req: NextRequest) {
     if (!isProfitSummaryView) return true;
     const contributor = getProfitContributorForRow(row);
     if (contributor) return true;
-    const explicitProfit = (row as any).profit;
     const buyingTotal = Number((row as any).buyingTotal ?? 0);
-    return (
-      (typeof explicitProfit === 'number' && Number.isFinite(explicitProfit)) ||
-      buyingTotal > 0
-    );
+    return buyingTotal > 0;
   });
 
   // Ensure each returned row has a computed `profit` where possible so the
