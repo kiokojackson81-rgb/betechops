@@ -231,7 +231,6 @@ export default async function TechnicalEarningsPage() {
             <div className="text-lg font-semibold text-white">Performance snapshot</div>
             <div className="mt-4 space-y-2 text-sm text-slate-300">
               <div className="flex items-center justify-between"><span>Total sales</span><span>{formatCurrency(payrollRow.totalSales)}</span></div>
-              <div className="flex items-center justify-between"><span>Total profit</span><span>{formatCurrency(payrollRow.totalProfit)}</span></div>
               <div className="flex items-center justify-between"><span>Total receipts</span><span>{payrollRow.totalReceipts}</span></div>
               <div className="flex items-center justify-between"><span>Total items</span><span>{payrollRow.totalItems}</span></div>
               <div className="flex items-center justify-between"><span>Pending project commission</span><span>{formatCurrency(projectCommission.pendingAmount)}</span></div>
