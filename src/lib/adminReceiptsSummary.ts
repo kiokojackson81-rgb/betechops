@@ -512,16 +512,8 @@ async function computePosOnlyReceiptSummary({
     const hasPendingItems = supportPending?.hasPendingItems ?? !allItemsPriced;
     const hasAggregateCost = resolvedBuyingTotal > 0;
     const buyingTotalForContributor = hasAggregateCost ? resolvedBuyingTotal : costFromItems;
-    const explicitProfitRaw = (receipt as any)?.profit ?? (receipt.data as any)?.profit;
-    const explicitProfit =
-      typeof explicitProfitRaw === "number" && Number.isFinite(explicitProfitRaw)
-        ? Number(explicitProfitRaw)
-        : typeof explicitProfitRaw === "string" && explicitProfitRaw.trim() !== "" && !Number.isNaN(Number(explicitProfitRaw))
-          ? Number(explicitProfitRaw)
-          : undefined;
-
     const supportRecognizedAt = supportBuying?.recognizedAt ?? null;
-    const hasRecognizableProfit = Boolean(supportProfit) || hasAggregateCost || allItemsPriced || explicitProfit !== undefined;
+    const hasRecognizableProfit = Boolean(supportProfit) || hasAggregateCost || allItemsPriced;
     const profitRecognizedAt = supportProfit
       ? start
       : supportRecognizedAt instanceof Date
@@ -540,11 +532,6 @@ async function computePosOnlyReceiptSummary({
       receiptProfit = salesValue - buyingSum;
       if (profitRecognizedAt && isDateInRange(profitRecognizedAt, start, end)) {
         totalCost += buyingSum;
-        totalProfitPriced += receiptProfit;
-      }
-    } else if (explicitProfit !== undefined) {
-      receiptProfit = explicitProfit;
-      if (profitRecognizedAt && isDateInRange(profitRecognizedAt, start, end)) {
         totalProfitPriced += receiptProfit;
       }
     }
@@ -1138,13 +1125,6 @@ export async function computeAdminReceiptSummary({
     const hasAggregateCost = aggregateCost > 0;
     const sell = Number(receipt.sellingTotal ?? 0);
 
-    // Some receipts persist a computed `profit` already (e.g. background jobs).
-    // Only use it as a fallback when we *can't* recompute profit from costs.
-    // This avoids masking real profit with a default/placeholder 0.
-    const explicitProfitRaw = (receipt as any).profit ?? undefined;
-    const explicitProfit =
-      typeof explicitProfitRaw === "number" && Number.isFinite(explicitProfitRaw) ? Number(explicitProfitRaw) : undefined;
-
     let receiptProfit = 0;
     if (hasAggregateCost || allItemsPriced) {
       const buyingSum = hasAggregateCost ? aggregateCost : costFromItems;
@@ -1152,11 +1132,6 @@ export async function computeAdminReceiptSummary({
       receiptProfit = adjustProfitForPodDeliveryFee(sell - buyingSum, deliveryFee);
       totalProfitPriced += receiptProfit;
       addProfitContributor(receipt, buyingSum, receiptProfit);
-    } else if (explicitProfit !== undefined) {
-      // Use explicit profit; do not mark as awaitingPricing.
-      receiptProfit = adjustProfitForPodDeliveryFee(explicitProfit, deliveryFee);
-      totalProfitPriced += receiptProfit;
-      addProfitContributor(receipt, aggregateCost > 0 ? aggregateCost : costFromItems, receiptProfit);
     }
 
     if (hasPendingItems) {

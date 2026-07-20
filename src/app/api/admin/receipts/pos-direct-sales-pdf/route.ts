@@ -58,22 +58,9 @@ function extractSales(receipt: { totals?: any; data?: any; order?: any }) {
 function extractProfit(receipt: { totals?: any; data?: any }, sales: number) {
   const totals = receipt.totals ?? {};
   const data = receipt.data ?? {};
-  const candidate =
-    toNumber(totals.profit) ||
-    toNumber(data.profit) ||
-    toNumber(totals.sellingTotal) - toNumber(totals.buyingTotal) ||
-    toNumber(data.sellingTotal) - toNumber(data.buyingTotal);
-  if (candidate !== 0) return candidate;
   const buying = toNumber(totals.buyingTotal) || toNumber(data.buyingTotal);
   if (buying > 0) return sales - buying;
   return 0;
-}
-
-function parseExplicitProfit(receipt: any): number | undefined {
-  const p = receipt?.profit ?? receipt?.data?.profit ?? receipt?.totals?.profit;
-  if (typeof p === "number" && Number.isFinite(p)) return p;
-  if (typeof p === "string" && p.trim() !== "" && !Number.isNaN(Number(p))) return Number(p);
-  return undefined;
 }
 const FALLBACK_TIERS = [
   { minSales: 500_000, maxSales: 1_000_000, payoutFlat: 10_000 },
@@ -443,14 +430,9 @@ export async function GET(req: Request) {
 
     const allItemsPriced = items.length > 0 && perItemUnitCosts.every((u: number) => Number(u) > 0);
     const hasAggregateCost = Number.isFinite(aggregateCost) && aggregateCost > 0;
-    const explicitProfit = parseExplicitProfit(receipt);
-
     if (hasAggregateCost || allItemsPriced) {
       const buyingSum = hasAggregateCost ? aggregateCost : costFromItems;
       return { profit: selling - buyingSum, hasCost: true };
-    }
-    if (explicitProfit !== undefined) {
-      return { profit: explicitProfit, hasCost: false };
     }
     // No cost/pricing info → profit unknown; treat as 0 for commission safety.
     return { profit: 0, hasCost: false };

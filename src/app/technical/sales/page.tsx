@@ -33,11 +33,6 @@ function extractProfit(receipt: {
     receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
       ? (receipt.data as Record<string, unknown>)
       : {};
-  const explicitProfit = Number(totals.profit ?? data.profit ?? 0);
-  if (Number.isFinite(explicitProfit) && explicitProfit > 0) {
-    return explicitProfit;
-  }
-
   const totalsBuying = Number(totals.buyingTotal ?? 0);
   const totalsSelling = Number(totals.sellingTotal ?? 0);
   if (totalsBuying > 0 && Number.isFinite(totalsSelling)) {

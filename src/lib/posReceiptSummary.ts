@@ -69,27 +69,11 @@ const extractSales = (row: PosReceiptRow) => {
 const extractProfit = (row: PosReceiptRow, sales: number) => {
   const totals = row.totals ?? {};
   const data = row.data ?? {};
-  const candidate =
-    toNumber(totals.profit) ||
-    toNumber(data.profit) ||
-    toNumber(totals.sellingTotal) - toNumber(totals.buyingTotal) ||
-    toNumber(data.sellingTotal) - toNumber(data.buyingTotal);
-
-  if (candidate !== 0) return adjustProfitForPodDeliveryFee(candidate, getPodDeliveryFee(row.data));
   const buying = toNumber(totals.buyingTotal) || toNumber(data.buyingTotal);
   if (buying > 0) {
     return adjustProfitForPodDeliveryFee(sales - buying, getPodDeliveryFee(row.data));
   }
   return 0;
-};
-
-const parseExplicitProfit = (row: PosReceiptRow): number | undefined => {
-  const totals = row.totals ?? {};
-  const data = row.data ?? {};
-  const p: any = (row as any).profit ?? (data as any).profit ?? (totals as any).profit;
-  if (typeof p === "number" && Number.isFinite(p)) return p;
-  if (typeof p === "string" && p.trim() !== "" && !Number.isNaN(Number(p))) return Number(p);
-  return undefined;
 };
 
 const countItems = (row: PosReceiptRow) => {
@@ -449,14 +433,9 @@ export async function summarizePosReceiptsForPeriod(period: {
     }, 0);
     const allItemsPriced = items.length > 0 && perItemUnitCosts.every((u: number) => Number(u) > 0);
     const hasAggregateCost = Number.isFinite(aggregateCost) && aggregateCost > 0;
-    const explicitProfit = parseExplicitProfit(row);
-
     if (hasAggregateCost || allItemsPriced) {
       const buyingSum = hasAggregateCost ? aggregateCost : costFromItems;
       return adjustProfitForPodDeliveryFee(selling - buyingSum - agentSaleCommission, deliveryFee);
-    }
-    if (explicitProfit !== undefined) {
-      return adjustProfitForPodDeliveryFee(explicitProfit - agentSaleCommission, deliveryFee);
     }
     return 0;
   };
