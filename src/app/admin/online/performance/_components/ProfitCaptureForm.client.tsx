@@ -7,7 +7,8 @@ import ToastContainer from "@/app/_components/ToastContainer";
 import MarketplaceWeeklyCsvUpload from "@/app/_components/MarketplaceWeeklyCsvUpload.client";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { getOnlineOpsWeeksForTradingPeriod } from "@/lib/onlineOpsWeeks";
-import { Platform } from "@prisma/client";
+
+type Platform = "JUMIA" | "KILIMALL";
 
 type AccountOption = { id: string; platform: Platform; displayName: string };
 

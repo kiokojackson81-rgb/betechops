@@ -7,7 +7,18 @@ import MarketplaceWeeklyCsvUpload from "@/app/_components/MarketplaceWeeklyCsvUp
 import { showToast } from "@/lib/ui/toast";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { ATTENDANT_ONLINE_OPS_WEEK_COUNT, getOnlineOpsWeeksForTradingPeriod } from "@/lib/onlineOpsWeeks";
-import { WeeklySaleSource, WeeklySaleStatus, type Platform } from "@prisma/client";
+
+type Platform = "JUMIA" | "KILIMALL";
+type WeeklySaleSource = "MANUAL" | "CSV" | "API" | "SYSTEM";
+type WeeklySaleStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+const WEEKLY_SALE_SOURCE = {
+  MANUAL: "MANUAL",
+} as const;
+
+const WEEKLY_SALE_STATUS = {
+  PENDING: "PENDING",
+} as const;
 
 type ShopPayload = {
   id: string;
@@ -132,7 +143,7 @@ export default function AttendantManualWeeklyPage() {
 
   const mySales = useMemo(() => {
     return sales
-      .filter((s) => String(s.source) === String(WeeklySaleSource.MANUAL))
+      .filter((s) => String(s.source) === String(WEEKLY_SALE_SOURCE.MANUAL))
       .filter((s) => (meId ? String(s.createdBy ?? "") === meId : true))
       .slice(0, 50);
   }, [sales, meId]);
@@ -271,7 +282,7 @@ export default function AttendantManualWeeklyPage() {
                       <button
                         type="button"
                         onClick={() => editAmount(row)}
-                        disabled={saving || row.status !== WeeklySaleStatus.PENDING}
+                        disabled={saving || row.status !== WEEKLY_SALE_STATUS.PENDING}
                         className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-100 hover:bg-white/10 disabled:opacity-60"
                       >
                         Edit
@@ -279,7 +290,7 @@ export default function AttendantManualWeeklyPage() {
                       <button
                         type="button"
                         onClick={() => deleteRow(row)}
-                        disabled={saving || row.status !== WeeklySaleStatus.PENDING}
+                        disabled={saving || row.status !== WEEKLY_SALE_STATUS.PENDING}
                         className="rounded-full border border-red-400/40 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-100 hover:bg-red-500/15 disabled:opacity-60"
                       >
                         Delete

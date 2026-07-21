@@ -1,10 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { Platform } from "@prisma/client";
 import MarketplaceAssignmentRole, { MarketplaceAssignmentRoleValues, type MarketplaceAssignmentRole as MarketplaceAssignmentRoleType } from "@/lib/marketplaceAssignment";
 import { useRouter } from "next/navigation";
 import { showToast } from "@/lib/ui/toast";
+
+type Platform = "JUMIA" | "KILIMALL";
+
+const PLATFORM = {
+  JUMIA: "JUMIA",
+  KILIMALL: "KILIMALL",
+} as const;
 
 type AccountOption = {
   id: string;
@@ -33,7 +39,7 @@ export function AccountAdminPanel({ accounts, attendants }: Props) {
   const [isCreating, startCreating] = useTransition();
   const [isAssigning, startAssigning] = useTransition();
   const [accountForm, setAccountForm] = useState({
-    platform: Platform.JUMIA as Platform,
+    platform: PLATFORM.JUMIA as Platform,
     displayName: "",
     countryCode: "KE",
     currency: "KES",
@@ -48,7 +54,7 @@ export function AccountAdminPanel({ accounts, attendants }: Props) {
     endsAt: "",
   });
 
-  const platformOptions = useMemo(() => Object.values(Platform), []);
+  const platformOptions = useMemo(() => Object.values(PLATFORM), []);
   const assignmentRoles = useMemo(() => MarketplaceAssignmentRoleValues, []);
 
   useEffect(() => {
@@ -82,11 +88,11 @@ export function AccountAdminPanel({ accounts, attendants }: Props) {
           countryCode: accountForm.countryCode.trim().toUpperCase(),
           currency: accountForm.currency.trim().toUpperCase(),
           jumiaShopSid:
-            accountForm.platform === Platform.JUMIA && accountForm.jumiaShopSid.trim()
+            accountForm.platform === PLATFORM.JUMIA && accountForm.jumiaShopSid.trim()
               ? accountForm.jumiaShopSid.trim()
               : undefined,
           kilimallShopCode:
-            accountForm.platform === Platform.KILIMALL && accountForm.kilimallShopCode.trim()
+            accountForm.platform === PLATFORM.KILIMALL && accountForm.kilimallShopCode.trim()
               ? accountForm.kilimallShopCode.trim()
               : undefined,
           isActive: accountForm.isActive,
@@ -229,21 +235,21 @@ export function AccountAdminPanel({ accounts, attendants }: Props) {
             <label className="text-sm text-slate-200">
               <span className="mb-1 block text-xs uppercase tracking-wide text-slate-400">Jumia shop SID</span>
               <input
-                className={`${inputClasses} ${accountForm.platform === Platform.JUMIA ? "" : "opacity-50"}`}
+                className={`${inputClasses} ${accountForm.platform === PLATFORM.JUMIA ? "" : "opacity-50"}`}
                 value={accountForm.jumiaShopSid}
                 onChange={(e) => setAccountForm((prev) => ({ ...prev, jumiaShopSid: e.target.value }))}
                 placeholder="e.g. shop_12345"
-                disabled={accountForm.platform !== Platform.JUMIA}
+                disabled={accountForm.platform !== PLATFORM.JUMIA}
               />
             </label>
             <label className="text-sm text-slate-200">
               <span className="mb-1 block text-xs uppercase tracking-wide text-slate-400">Kilimall shop code</span>
               <input
-                className={`${inputClasses} ${accountForm.platform === Platform.KILIMALL ? "" : "opacity-50"}`}
+                className={`${inputClasses} ${accountForm.platform === PLATFORM.KILIMALL ? "" : "opacity-50"}`}
                 value={accountForm.kilimallShopCode}
                 onChange={(e) => setAccountForm((prev) => ({ ...prev, kilimallShopCode: e.target.value }))}
                 placeholder="e.g. KLM-WILD01"
-                disabled={accountForm.platform !== Platform.KILIMALL}
+                disabled={accountForm.platform !== PLATFORM.KILIMALL}
               />
             </label>
           </div>

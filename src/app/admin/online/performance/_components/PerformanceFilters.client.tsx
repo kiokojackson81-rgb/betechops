@@ -2,7 +2,8 @@
 
 import { useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Platform } from "@prisma/client";
+
+type Platform = "JUMIA" | "KILIMALL";
 
 type AccountOption = { id: string; platform: Platform; displayName: string };
 

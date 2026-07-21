@@ -4,7 +4,18 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import ToastContainer from "@/app/_components/ToastContainer";
 import { showToast } from "@/lib/ui/toast";
-import { Platform, WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
+
+type Platform = "JUMIA" | "KILIMALL";
+type WeeklySaleSource = "MANUAL" | "CSV" | "API" | "SYSTEM";
+type WeeklySaleStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+const WEEKLY_SALE_SOURCE = {
+  MANUAL: "MANUAL",
+} as const;
+
+const WEEKLY_SALE_STATUS = {
+  PENDING: "PENDING",
+} as const;
 
 const currencyFormatter = new Intl.NumberFormat("en-KE", {
   style: "currency",
@@ -48,7 +59,7 @@ export default function ManualWeekViewClient(props: {
   }, [props.entries]);
 
   const editEntry = async (entry: WeekEntry) => {
-    if (entry.source !== WeeklySaleSource.MANUAL) {
+    if (entry.source !== WEEKLY_SALE_SOURCE.MANUAL) {
       showToast("Only manual entries can be edited", "error");
       return;
     }
@@ -81,11 +92,11 @@ export default function ManualWeekViewClient(props: {
   };
 
   const deleteEntry = async (entry: WeekEntry) => {
-    if (entry.source !== WeeklySaleSource.MANUAL) {
+    if (entry.source !== WEEKLY_SALE_SOURCE.MANUAL) {
       showToast("Only manual entries can be deleted", "error");
       return;
     }
-    if (entry.status !== WeeklySaleStatus.PENDING) {
+    if (entry.status !== WEEKLY_SALE_STATUS.PENDING) {
       showToast("Only pending entries can be deleted", "error");
       return;
     }
@@ -160,7 +171,7 @@ export default function ManualWeekViewClient(props: {
                         >
                           Edit
                         </button>
-                        {entry.source === WeeklySaleSource.MANUAL && entry.status === WeeklySaleStatus.PENDING && (
+                        {entry.source === WEEKLY_SALE_SOURCE.MANUAL && entry.status === WEEKLY_SALE_STATUS.PENDING && (
                           <button
                             type="button"
                             className="rounded-full border border-red-400/50 px-3 py-1 text-xs font-semibold text-red-200 hover:bg-red-500/10 disabled:opacity-60"

@@ -5,12 +5,28 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import ToastContainer from "@/app/_components/ToastContainer";
 import { showToast } from "@/lib/ui/toast";
-import { Platform, WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
 import { canonicalNairobiWeekStartUtc, formatNairobiDate, mondayToSundayNairobiWindow, parseDateOnlyUtc } from "@/lib/weekWindow";
 import { getRecentTradingPeriods, getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { getOnlineOpsWeeksForTradingPeriod } from "@/lib/onlineOpsWeeks";
 import { withImpersonateId } from "@/lib/impersonation";
 import MarketplaceWeeklyCsvUpload from "@/app/_components/MarketplaceWeeklyCsvUpload.client";
+
+type Platform = "JUMIA" | "KILIMALL";
+type WeeklySaleSource = "MANUAL" | "CSV" | "API" | "SYSTEM";
+type WeeklySaleStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+const WEEKLY_SALE_SOURCE = {
+  MANUAL: "MANUAL",
+} as const;
+
+const WEEKLY_SALE_STATUS = {
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+} as const;
+
+const PLATFORM_OPTIONS: Platform[] = ["JUMIA", "KILIMALL"];
+const WEEKLY_SALE_STATUS_OPTIONS: WeeklySaleStatus[] = ["PENDING", "APPROVED", "REJECTED"];
+const WEEKLY_SALE_SOURCE_OPTIONS: WeeklySaleSource[] = ["MANUAL", "CSV", "API", "SYSTEM"];
 
 const currency = new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 });
 
@@ -234,17 +250,17 @@ export default function ManualWeeklySalesPage() {
   };
 
   const voidEntry = async (sale: WeeklySaleRow) => {
-    if (sale.source !== WeeklySaleSource.MANUAL) {
+    if (sale.source !== WEEKLY_SALE_SOURCE.MANUAL) {
       showToast("Only manual entries can be voided", "error");
       return;
     }
-    if (sale.status === WeeklySaleStatus.REJECTED) return;
+    if (sale.status === WEEKLY_SALE_STATUS.REJECTED) return;
     if (!confirm("Void this entry (mark as REJECTED) so it can be captured again?")) return;
-    await updateStatus(sale.id, WeeklySaleStatus.REJECTED);
+    await updateStatus(sale.id, WEEKLY_SALE_STATUS.REJECTED);
   };
 
   const editEntry = async (sale: WeeklySaleRow) => {
-    if (sale.source !== WeeklySaleSource.MANUAL) {
+    if (sale.source !== WEEKLY_SALE_SOURCE.MANUAL) {
       showToast("Only manual entries can be edited", "error");
       return;
     }
@@ -392,7 +408,7 @@ export default function ManualWeeklySalesPage() {
                   onChange={(e) => onFilterChange("platform", e.target.value)}
                 >
                   <option value="">All platforms</option>
-                  {Object.values(Platform).map((p) => (
+                  {PLATFORM_OPTIONS.map((p) => (
                     <option key={p} value={p}>
                       {p}
                     </option>
@@ -432,7 +448,7 @@ export default function ManualWeeklySalesPage() {
               onChange={(e) => onFilterChange("platform", e.target.value)}
             >
               <option value="">All platforms</option>
-              {Object.values(Platform).map((p) => (
+              {PLATFORM_OPTIONS.map((p) => (
                 <option key={p} value={p}>
                   {p}
                 </option>
@@ -456,7 +472,7 @@ export default function ManualWeeklySalesPage() {
               onChange={(e) => onFilterChange("status", e.target.value)}
             >
               <option value="">All statuses</option>
-              {Object.values(WeeklySaleStatus).map((status) => (
+              {WEEKLY_SALE_STATUS_OPTIONS.map((status) => (
                 <option key={status} value={status}>
                   {status}
                 </option>
@@ -468,7 +484,7 @@ export default function ManualWeeklySalesPage() {
               onChange={(e) => onFilterChange("source", e.target.value)}
             >
               <option value="">All sources</option>
-              {Object.values(WeeklySaleSource).map((source) => (
+              {WEEKLY_SALE_SOURCE_OPTIONS.map((source) => (
                 <option key={source} value={source}>
                   {source}
                 </option>
@@ -530,14 +546,14 @@ export default function ManualWeeklySalesPage() {
                           <button
                             type="button"
                             className="rounded-full bg-emerald-500/90 px-3 py-1 font-semibold text-black hover:brightness-95"
-                            onClick={() => updateStatus(sale.id, WeeklySaleStatus.APPROVED)}
+                            onClick={() => updateStatus(sale.id, WEEKLY_SALE_STATUS.APPROVED)}
                           >
                             Approve
                           </button>
                           <button
                             type="button"
                             className="rounded-full border border-white/20 px-3 py-1 font-semibold text-slate-200 hover:bg-white/10"
-                            onClick={() => updateStatus(sale.id, WeeklySaleStatus.REJECTED)}
+                            onClick={() => updateStatus(sale.id, WEEKLY_SALE_STATUS.REJECTED)}
                           >
                             Reject
                           </button>
