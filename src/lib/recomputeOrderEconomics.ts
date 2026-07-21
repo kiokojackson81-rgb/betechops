@@ -1,3 +1,5 @@
+import "server-only";
+
 import { prisma } from '@/lib/prisma';
 import { canonicalReceiptNumber } from '@/lib/receiptGuard';
 import { recalcSupportEntry, recalcMarketingEntry } from '@/lib/marketingReceiptCleanup';

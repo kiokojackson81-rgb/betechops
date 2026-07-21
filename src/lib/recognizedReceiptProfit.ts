@@ -1,5 +1,3 @@
-import { adjustProfitForPodDeliveryFee } from "@/lib/podDeliveryFee";
-
 type MaybeNumber = number | string | null | undefined;
 
 export type RecognizedReceiptProfitLine = {
@@ -36,6 +34,9 @@ const toQty = (value: MaybeNumber) => {
   const qty = Math.trunc(toNumber(value));
   return qty > 0 ? qty : 1;
 };
+
+const adjustProfitForDeliveryFee = (profit: number, deliveryFee: number) =>
+  Number.isFinite(profit) ? profit - Math.max(0, deliveryFee) : profit;
 
 export function computeRecognizedReceiptProfit(
   input: RecognizedReceiptProfitInput,
@@ -78,7 +79,7 @@ export function computeRecognizedReceiptProfit(
   const rawProfit = recognizedSellingTotal - recognizedBuyingTotal - commissionTotal;
   const recognizedProfit =
     allItemsPriced && recognizedSellingTotal > 0
-      ? adjustProfitForPodDeliveryFee(rawProfit, deliveryFee)
+      ? adjustProfitForDeliveryFee(rawProfit, deliveryFee)
       : rawProfit;
 
   return {

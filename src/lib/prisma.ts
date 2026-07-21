@@ -1,3 +1,5 @@
+import "server-only";
+
 // src/lib/prisma.ts
 import { PrismaClient } from "@prisma/client";
 import { validateNotBackdatedDateInput, validateNotBackdatedWeekStart } from "@/lib/noBackdating";
