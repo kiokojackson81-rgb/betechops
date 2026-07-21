@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
+import { computeRecognizedReceiptProfit } from "@/lib/recognizedReceiptProfit";
 
 export type EntryTotals = {
   entryId: string;
@@ -17,13 +18,15 @@ export async function recalcMarketingEntry(tx: Prisma.TransactionClient, entryId
   const totalProfit = entryWithReceipts.receipts.reduce((sum, r) => {
     const items = r.items ?? [];
     const allItemsPriced = items.length > 0 && items.every((it) => Number(it.buyingPrice ?? 0) > 0);
-    const aggregateCost = Number((r as any).buyingTotal ?? 0);
-    if (aggregateCost > 0 || allItemsPriced) {
-      const buying = items.reduce((inner, it) => inner + Number(it.buyingPrice ?? 0), 0);
-      const costToUse = aggregateCost > 0 ? aggregateCost : buying;
-      return sum + (Number(r.sellingTotal ?? 0) - costToUse);
-    }
-    return sum;
+    if (!allItemsPriced) return sum;
+    const buying = items.reduce((inner, it) => inner + Number(it.buyingPrice ?? 0), 0);
+    const aggregateBuying = Number((r as any).buyingTotal ?? 0);
+    const recognized = computeRecognizedReceiptProfit({
+      items: [{ quantity: 1, sellingPrice: Number(r.sellingTotal ?? 0), buyingPrice: aggregateBuying > 0 ? aggregateBuying : buying }],
+      aggregateSellingTotal: Number(r.sellingTotal ?? 0),
+      aggregateBuyingTotal: aggregateBuying > 0 ? aggregateBuying : buying,
+    });
+    return sum + recognized.recognizedProfit;
   }, 0);
   await tx.marketingDailyEntry.update({
     where: { id: entryId },
@@ -93,13 +96,15 @@ export async function recalcSupportEntry(tx: Prisma.TransactionClient, entryId: 
     }
     const items = r.items ?? [];
     const allItemsPriced = items.length > 0 && items.every((it) => Number(it.buyingPrice ?? 0) > 0);
-    const aggregateCost = Number((r as any).buyingTotal ?? 0);
-    if (aggregateCost > 0 || allItemsPriced) {
-      const buying = items.reduce((inner, it) => inner + Number(it.buyingPrice ?? 0), 0);
-      const costToUse = aggregateCost > 0 ? aggregateCost : buying;
-      return sum + (Number(r.sellingTotal ?? 0) - costToUse);
-    }
-    return sum;
+    if (!allItemsPriced) return sum;
+    const buying = items.reduce((inner, it) => inner + Number(it.buyingPrice ?? 0), 0);
+    const aggregateBuying = Number((r as any).buyingTotal ?? 0);
+    const recognized = computeRecognizedReceiptProfit({
+      items: [{ quantity: 1, sellingPrice: Number(r.sellingTotal ?? 0), buyingPrice: aggregateBuying > 0 ? aggregateBuying : buying }],
+      aggregateSellingTotal: Number(r.sellingTotal ?? 0),
+      aggregateBuyingTotal: aggregateBuying > 0 ? aggregateBuying : buying,
+    });
+    return sum + recognized.recognizedProfit;
   }, 0);
   const totalProfit = salesProfit + receiptProfit;
   await tx.supportDailyEntry.update({

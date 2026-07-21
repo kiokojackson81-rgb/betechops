@@ -20,6 +20,7 @@ import { getOpsCatalogueProductMappedById } from "@/app/shop/shopProductMapper";
 import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
 import { getProductTableCapabilities, type ProductTableCapabilities } from "@/lib/productTableCapabilities";
 import { isReceiptWithinEditableWindow, receiptEditRestrictionMessage } from "@/lib/receiptEditAccess";
+import { computeRecognizedReceiptProfit } from "@/lib/recognizedReceiptProfit";
 import { WebsiteOrderStatus } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -546,6 +547,15 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
         buyingPrice: item.costPrice,
       })).filter((item) => !isDeliveryFeePayloadItem({ title: item.productName }));
       const totalBuying = createdItems.reduce((sum, item) => sum + item.costPrice * item.quantity, 0);
+      const recognized = computeRecognizedReceiptProfit({
+        items: createdItems.map((item) => ({
+          quantity: item.quantity,
+          sellingPrice: item.unitPrice,
+          buyingPrice: item.costPrice,
+        })),
+        aggregateSellingTotal: total,
+        aggregateBuyingTotal: totalBuying,
+      });
       const existingReceiptCandidates = Array.from(
         new Set(
           [existing.order?.orderNumber ?? null, normalizedReceiptNumber ?? null]
@@ -582,9 +592,9 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
             total,
             balance: existing.order?.layawayPlan ? Math.max(0, total - Number(existing.order.layawayPlan.deposit || 0)) : 0,
             buyingTotal: totalBuying,
-            profit: totalBuying > 0 ? total - totalBuying : 0,
+            profit: recognized.recognizedProfit,
           },
-          data: { ...(existing.data as any), ...body, totals: { subtotal, tax: taxAmount, total, buyingTotal: totalBuying, profit: totalBuying > 0 ? total - totalBuying : 0 } },
+          data: { ...(existing.data as any), ...body, totals: { subtotal, tax: taxAmount, total, buyingTotal: totalBuying, profit: recognized.recognizedProfit } },
         },
       });
 

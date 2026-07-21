@@ -21,6 +21,7 @@ import {
   type ProfitReceiptContributor,
 } from "@/lib/adminReceiptsSummary";
 import { adjustProfitForPodDeliveryFee, getPodDeliveryFee, loadPodDeliveryFeeMap } from "@/lib/podDeliveryFee";
+import { computeRecognizedReceiptProfit } from "@/lib/recognizedReceiptProfit";
 import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
 import { waitForReceiptById } from "@/lib/receiptReadAfterWrite";
 import { getProductTableCapabilities, type ProductTableCapabilities } from "@/lib/productTableCapabilities";
@@ -617,10 +618,32 @@ export async function GET(req: NextRequest) {
       receiptNumber: r.receiptNumber ?? null,
     });
     const resolvedBuyingTotal = contributor?.buyingTotal ?? buyingTotal;
-    const baseProfit = contributor?.profit ?? (resolvedBuyingTotal > 0 ? total - resolvedBuyingTotal : null);
+    const recognized = computeRecognizedReceiptProfit({
+      items: Array.isArray((r.order as any)?.items)
+        ? (r.order as any).items.map((item: any) => {
+            const costRows = Array.isArray(item?.orderCosts) ? item.orderCosts : [];
+            const orderCost = costRows.reduce((inner: number, cost: any) => inner + Number(cost?.unitCost ?? 0), 0);
+            const snapshot = Array.isArray(item?.profitSnapshots) ? item.profitSnapshots[0] : null;
+            const snapshotCost = Number(snapshot?.unitCost ?? 0);
+            const productCost = Number(item?.product?.lastBuyingPrice ?? 0);
+            const buyingPrice =
+              orderCost > 0 ? orderCost : snapshotCost > 0 ? snapshotCost : productCost > 0 ? productCost : 0;
+            return {
+              quantity: item?.quantity,
+              sellingPrice: item?.sellingPrice ?? item?.unitPrice ?? 0,
+              buyingPrice,
+            };
+          })
+        : [],
+      aggregateSellingTotal: total,
+      aggregateBuyingTotal: resolvedBuyingTotal,
+      commissionTotal: agentSaleCommission,
+      deliveryFee: podDeliveryFee,
+    });
+    const baseProfit = contributor?.profit ?? (recognized.hasAnyPricedItems ? recognized.recognizedProfit : null);
     const profit =
       typeof baseProfit === "number"
-        ? adjustProfitForPodDeliveryFee(baseProfit - agentSaleCommission, podDeliveryFee)
+        ? baseProfit
         : baseProfit;
     return {
       id: r.id,

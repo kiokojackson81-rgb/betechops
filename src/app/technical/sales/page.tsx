@@ -9,6 +9,7 @@ import { getTechnicalProjectCommissionSummary, TECHNICAL_POS_PROFIT_COMMISSION_R
 import getLandingPage from "@/lib/getLandingPage";
 import { isTechnicalTeamCategory } from "@/lib/technicalTeam";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
+import { computeRecognizedReceiptProfit } from "@/lib/recognizedReceiptProfit";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,14 @@ function formatCurrency(value: number) {
 function extractProfit(receipt: {
   totals?: unknown;
   data?: unknown;
+  order?: {
+    totalAmount?: number | null;
+    items?: Array<{
+      quantity?: number | null;
+      sellingPrice?: number | null;
+      orderCosts?: Array<{ unitCost?: unknown } | null> | null;
+    }> | null;
+  } | null;
 }, supportProfit?: number | null) {
   if (Number(supportProfit ?? 0) > 0) return Number(supportProfit ?? 0);
   const totals =
@@ -33,19 +42,21 @@ function extractProfit(receipt: {
     receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
       ? (receipt.data as Record<string, unknown>)
       : {};
-  const totalsBuying = Number(totals.buyingTotal ?? 0);
-  const totalsSelling = Number(totals.sellingTotal ?? 0);
-  if (totalsBuying > 0 && Number.isFinite(totalsSelling)) {
-    return totalsSelling - totalsBuying;
-  }
-
-  const dataBuying = Number(data.buyingTotal ?? 0);
-  const dataSelling = Number(data.sellingTotal ?? 0);
-  if (dataBuying > 0 && Number.isFinite(dataSelling)) {
-    return dataSelling - dataBuying;
-  }
-
-  return 0;
+  const aggregateSelling =
+    Number(totals.total ?? totals.sellingTotal ?? data.total ?? data.sellingTotal ?? receipt.order?.totalAmount ?? 0);
+  const aggregateBuying = Number(totals.buyingTotal ?? data.buyingTotal ?? 0);
+  const items = Array.isArray(receipt.order?.items) ? receipt.order.items : [];
+  return computeRecognizedReceiptProfit({
+    items: items.map((item) => ({
+      quantity: item?.quantity,
+      sellingPrice: item?.sellingPrice,
+      buyingPrice: Array.isArray(item?.orderCosts)
+        ? Number(item.orderCosts[0]?.unitCost ?? 0)
+        : 0,
+    })),
+    aggregateSellingTotal: aggregateSelling,
+    aggregateBuyingTotal: aggregateBuying,
+  }).recognizedProfit;
 }
 
 async function resolveViewer() {
@@ -151,6 +162,17 @@ export default async function TechnicalSalesPage() {
             totalAmount: true,
             orderNumber: true,
             paymentStatus: true,
+            items: {
+              select: {
+                quantity: true,
+                sellingPrice: true,
+                orderCosts: {
+                  orderBy: { createdAt: "desc" },
+                  take: 1,
+                  select: { unitCost: true },
+                },
+              },
+            },
           },
         },
       },

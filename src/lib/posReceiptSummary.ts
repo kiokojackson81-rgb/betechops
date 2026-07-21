@@ -4,6 +4,7 @@ import { buildReceiptKey, normalizePaymentMethod, normalizeReceiptNumber } from 
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 import { buildReceiptKey as buildDatedReceiptKey } from "@/lib/receipts/utils";
 import { adjustProfitForPodDeliveryFee, getPodDeliveryFee } from "@/lib/podDeliveryFee";
+import { computeRecognizedReceiptProfit } from "@/lib/recognizedReceiptProfit";
 
 type OrderItemCandidate = {
   quantity?: number | null;
@@ -426,18 +427,17 @@ export async function summarizePosReceiptsForPeriod(period: {
         snapUnitCost > 0 ? snapUnitCost : productLastBuying > 0 ? productLastBuying : productCost > 0 ? productCost : 0;
       return buyingSum > 0 ? buyingSum : fallbackUnitCost;
     });
-    const costFromItems = items.reduce((sum: number, item: any, idx: number) => {
-      const qty = Math.max(1, Math.trunc(Number(item?.quantity ?? 1)));
-      const unit = Number(perItemUnitCosts[idx] ?? 0);
-      return sum + unit * qty;
-    }, 0);
-    const allItemsPriced = items.length > 0 && perItemUnitCosts.every((u: number) => Number(u) > 0);
-    const hasAggregateCost = Number.isFinite(aggregateCost) && aggregateCost > 0;
-    if (hasAggregateCost || allItemsPriced) {
-      const buyingSum = hasAggregateCost ? aggregateCost : costFromItems;
-      return adjustProfitForPodDeliveryFee(selling - buyingSum - agentSaleCommission, deliveryFee);
-    }
-    return 0;
+    return computeRecognizedReceiptProfit({
+      items: items.map((item: any, idx: number) => ({
+        quantity: item?.quantity,
+        sellingPrice: item?.sellingPrice ?? item?.unitPrice ?? 0,
+        buyingPrice: Number(perItemUnitCosts[idx] ?? 0),
+      })),
+      aggregateSellingTotal: selling,
+      aggregateBuyingTotal: aggregateCost,
+      commissionTotal: agentSaleCommission,
+      deliveryFee,
+    }).recognizedProfit;
   };
 
   const seen = new Map<string, string>();

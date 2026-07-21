@@ -9,6 +9,7 @@ import MarkdownRendererClient, { RichFormattingToggle } from "@/components/Markd
 import { showToast } from "@/lib/ui/toast";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
+import { computeRecognizedReceiptProfit } from "@/lib/recognizedReceiptProfit";
 import {
   buildReceiptProjectFlow,
   readReceiptProjectFlow,
@@ -108,6 +109,8 @@ type ItemWithCost = {
 type CostSummary = {
   itemsWithCost: ItemWithCost[];
   supportBuyingTotal: number;
+  recognizedSellingTotal: number;
+  recognizedProfit: number;
   hasCompleteCosts: boolean;
   hasAuthoritativeBuyingTotal: boolean;
 };
@@ -1352,6 +1355,8 @@ export default function ReceiptsAdminClient({
       return {
         itemsWithCost: [],
         supportBuyingTotal: 0,
+        recognizedSellingTotal: 0,
+        recognizedProfit: 0,
         hasCompleteCosts: false,
         hasAuthoritativeBuyingTotal: false,
       };
@@ -1428,6 +1433,36 @@ export default function ReceiptsAdminClient({
           : supportReceiptBuyingTotal !== null
             ? supportReceiptBuyingTotal
             : matchedCost + supportCostSum,
+      recognizedSellingTotal: computeRecognizedReceiptProfit({
+        items: itemsWithCost.map((item) => ({
+          quantity: item.quantity,
+          sellingPrice: item.sellingPrice,
+          buyingPrice: item.buyingPrice,
+        })),
+        aggregateSellingTotal: Number(detail?.receipt?.totals?.total ?? detail?.receipt?.order?.totalAmount ?? 0),
+        aggregateBuyingTotal:
+          receiptBuyingTotal !== null
+            ? receiptBuyingTotal
+            : supportReceiptBuyingTotal !== null
+              ? supportReceiptBuyingTotal
+              : matchedCost + supportCostSum,
+        commissionTotal: Number(detail?.posCommissionTotal ?? 0),
+      }).recognizedSellingTotal,
+      recognizedProfit: computeRecognizedReceiptProfit({
+        items: itemsWithCost.map((item) => ({
+          quantity: item.quantity,
+          sellingPrice: item.sellingPrice,
+          buyingPrice: item.buyingPrice,
+        })),
+        aggregateSellingTotal: Number(detail?.receipt?.totals?.total ?? detail?.receipt?.order?.totalAmount ?? 0),
+        aggregateBuyingTotal:
+          receiptBuyingTotal !== null
+            ? receiptBuyingTotal
+            : supportReceiptBuyingTotal !== null
+              ? supportReceiptBuyingTotal
+              : matchedCost + supportCostSum,
+        commissionTotal: Number(detail?.posCommissionTotal ?? 0),
+      }).recognizedProfit,
       hasCompleteCosts,
       hasAuthoritativeBuyingTotal,
     };
@@ -1595,15 +1630,22 @@ export default function ReceiptsAdminClient({
       podStatus: undefined,
     });
   };
-  const { itemsWithCost, supportBuyingTotal, hasCompleteCosts, hasAuthoritativeBuyingTotal } = costSummary;
+  const {
+    itemsWithCost,
+    supportBuyingTotal,
+    recognizedSellingTotal,
+    recognizedProfit,
+    hasCompleteCosts,
+    hasAuthoritativeBuyingTotal,
+  } = costSummary;
   const receiptGrandTotal = Number(detail?.receipt?.totals?.total ?? detail?.receipt?.order?.totalAmount ?? 0);
   const posCommissionTotal = Number(detail?.posCommissionTotal ?? 0);
   const manualPosCommissionAmount = Number(detail?.manualPosCommissionAmount ?? 0);
   const earnedPosCommissionTotal = Number(
     detail?.earnedPosCommissionTotal ?? Math.max(0, posCommissionTotal - manualPosCommissionAmount),
   );
-  const canShowReceiptProfit = hasCompleteCosts || hasAuthoritativeBuyingTotal;
-  const profitAmount = canShowReceiptProfit ? receiptGrandTotal - supportBuyingTotal - posCommissionTotal : 0;
+  const canShowReceiptProfit = hasCompleteCosts || hasAuthoritativeBuyingTotal || recognizedSellingTotal > 0;
+  const profitAmount = canShowReceiptProfit ? recognizedProfit : 0;
   const profitColor =
     canShowReceiptProfit && profitAmount >= 0 ? "text-emerald-300" : canShowReceiptProfit ? "text-rose-400" : "text-slate-400";
   const hasSupportItems = Boolean(detail?.supportItems?.length);

@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { canonicalReceiptNumber } from '@/lib/receiptGuard';
 import { recalcSupportEntry, recalcMarketingEntry } from '@/lib/marketingReceiptCleanup';
+import { computeRecognizedReceiptProfit } from '@/lib/recognizedReceiptProfit';
 
 export async function recomputeOrderEconomics(orderId: string) {
   if (!orderId) return;
@@ -15,19 +16,34 @@ export async function recomputeOrderEconomics(orderId: string) {
     });
     if (!order) return;
 
-    // compute buying total from latest orderCost.unitCost per item
+    // Persist known buying total, but only recognize profit for priced items.
     let buyingTotal = 0;
+    const profitItems = [] as Array<{ quantity: number; sellingPrice: number; buyingPrice: number }>;
     for (const it of order.items || []) {
       const qty = it.quantity || 1;
       const oc = (it.orderCosts && it.orderCosts[0]) ? Number(it.orderCosts[0].unitCost || 0) : 0;
       buyingTotal += oc * qty;
+      profitItems.push({
+        quantity: qty,
+        sellingPrice: Number(it.sellingPrice || 0),
+        buyingPrice: oc,
+      });
     }
 
     // update receipt.totals and data.totals if receipt exists
     if (order.receipt) {
       const existingTotals = (order.receipt.totals as any) || {};
       const total = Number(existingTotals.total ?? existingTotals.totalAmount ?? 0);
-      const newTotals = { ...(existingTotals || {}), buyingTotal, profit: total && buyingTotal ? total - buyingTotal : 0 };
+      const recognized = computeRecognizedReceiptProfit({
+        items: profitItems,
+        aggregateSellingTotal: total,
+        aggregateBuyingTotal: buyingTotal,
+      });
+      const newTotals = {
+        ...(existingTotals || {}),
+        buyingTotal,
+        profit: recognized.recognizedProfit,
+      };
       try {
         await tx.receipt.update({ where: { id: order.receipt.id }, data: { totals: newTotals, data: { ...(order.receipt.data as any), totals: newTotals } } });
       } catch (e) {

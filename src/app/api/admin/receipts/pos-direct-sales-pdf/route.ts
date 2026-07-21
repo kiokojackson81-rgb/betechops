@@ -9,6 +9,7 @@ import { deriveDefaultCommissionConfigFromUser, getOrCreateUserCommissionConfig 
 import { computeBrendahDirectCommission } from "@/lib/onlineCommission";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 import { buildReceiptKey } from "@/lib/receiptKey";
+import { computeRecognizedReceiptProfit } from "@/lib/recognizedReceiptProfit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -422,20 +423,16 @@ export async function GET(req: Request) {
       return buyingSum > 0 ? buyingSum : fallbackUnitCost;
     });
 
-    const costFromItems = items.reduce((sum: number, item: any, idx: number) => {
-      const qty = Math.max(1, Math.trunc(Number(item?.quantity ?? 1)));
-      const unit = Number(perItemUnitCosts[idx] ?? 0);
-      return sum + unit * qty;
-    }, 0);
-
-    const allItemsPriced = items.length > 0 && perItemUnitCosts.every((u: number) => Number(u) > 0);
-    const hasAggregateCost = Number.isFinite(aggregateCost) && aggregateCost > 0;
-    if (hasAggregateCost || allItemsPriced) {
-      const buyingSum = hasAggregateCost ? aggregateCost : costFromItems;
-      return { profit: selling - buyingSum, hasCost: true };
-    }
-    // No cost/pricing info → profit unknown; treat as 0 for commission safety.
-    return { profit: 0, hasCost: false };
+    const recognized = computeRecognizedReceiptProfit({
+      items: items.map((item: any, idx: number) => ({
+        quantity: item?.quantity,
+        sellingPrice: item?.sellingPrice ?? item?.unitPrice ?? 0,
+        buyingPrice: Number(perItemUnitCosts[idx] ?? 0),
+      })),
+      aggregateSellingTotal: selling,
+      aggregateBuyingTotal: aggregateCost,
+    });
+    return { profit: recognized.recognizedProfit, hasCost: recognized.hasAnyPricedItems };
   };
 
   const rows = filteredReceipts.map((r: any) => {
