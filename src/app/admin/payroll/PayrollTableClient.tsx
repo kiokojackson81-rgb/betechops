@@ -20,6 +20,25 @@ const formatCurrency = (value: number) => `KES ${value.toLocaleString("en-US")}`
 const getDirectCommissionLabel = (category?: string | null) =>
   category === "JUMIA_KILIMALL_OPS" || category === "BETECH_OPS" || category === "GENERAL_OPS" ? "POS" : "Direct";
 
+function getGenericAdjustmentLabel(adjustmentType?: string | null, kind?: string | null) {
+  const type = String(adjustmentType ?? "").trim().toUpperCase();
+  if (type === "CHAMA") return "Chama";
+  if (type === "LATENESS") return "Lateness";
+  if (type === "DISCIPLINE") return "Discipline";
+  if (type === "BONUS") return "Bonus";
+  if (type === "COMMISSION_TOPUP") return "Top up";
+  if (type === "OTHER") return String(kind ?? "").trim().toUpperCase() === "ADDITION" ? "Additional" : "Deduction";
+  return null;
+}
+
+function getAdjustmentDetailLabel(entry: { label?: string | null; adjustmentType?: string | null; kind?: string | null }) {
+  const explicit = String(entry.label ?? "").trim();
+  if (!explicit) return null;
+  const generic = getGenericAdjustmentLabel(entry.adjustmentType, entry.kind);
+  if (generic && explicit.localeCompare(generic, undefined, { sensitivity: "accent" }) === 0) return null;
+  return explicit;
+}
+
 const getDisplayName = (row?: PayrollRow | null) => {
   if (!row) return "—";
   return row.name ?? row.email ?? "Unassigned";
@@ -308,8 +327,14 @@ export default function PayrollTableClient({
                   const n = Number(amount);
                   return !Number.isNaN(n) && n > 0;
                 });
-                const additionEntries = row.adjustmentEntries.filter((entry) => entry.kind === "ADDITION");
-                const deductionEntries = row.adjustmentEntries.filter((entry) => entry.kind === "DEDUCTION");
+                const additionEntries = row.adjustmentEntries
+                  .filter((entry) => entry.kind === "ADDITION")
+                  .map((entry) => ({ entry, detailLabel: getAdjustmentDetailLabel(entry) }))
+                  .filter((item): item is { entry: (typeof row.adjustmentEntries)[number]; detailLabel: string } => Boolean(item.detailLabel));
+                const deductionEntries = row.adjustmentEntries
+                  .filter((entry) => entry.kind === "DEDUCTION")
+                  .map((entry) => ({ entry, detailLabel: getAdjustmentDetailLabel(entry) }))
+                  .filter((item): item is { entry: (typeof row.adjustmentEntries)[number]; detailLabel: string } => Boolean(item.detailLabel));
 
                 return (
                   <tr
@@ -358,9 +383,9 @@ export default function PayrollTableClient({
                       </div>
                       {additionEntries.length > 0 && (
                         <div className="text-[11px] text-slate-400">
-                          {additionEntries.map((entry) => (
+                          {additionEntries.map(({ entry, detailLabel }) => (
                             <div key={entry.id} className="flex items-center justify-between">
-                              <span>{entry.label || entry.adjustmentType}</span>
+                              <span>{detailLabel}</span>
                               <span>{formatCurrency(entry.amount)}</span>
                             </div>
                           ))}
@@ -381,9 +406,9 @@ export default function PayrollTableClient({
                       )}
                       {deductionEntries.length > 0 && (
                         <div className="text-[11px] text-slate-400">
-                          {deductionEntries.map((entry) => (
+                          {deductionEntries.map(({ entry, detailLabel }) => (
                             <div key={entry.id} className="flex items-center justify-between">
-                              <span>{entry.label || entry.adjustmentType}</span>
+                              <span>{detailLabel}</span>
                               <span>{formatCurrency(entry.amount)}</span>
                             </div>
                           ))}

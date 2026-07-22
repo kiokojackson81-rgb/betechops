@@ -30,11 +30,37 @@ function formatDate(value: Date) {
   }).format(value);
 }
 
+function getGenericAdjustmentLabel(adjustmentType?: string | null, kind?: "ADDITION" | "DEDUCTION") {
+  const type = String(adjustmentType ?? "").trim().toUpperCase();
+  if (type === "CHAMA") return "Chama";
+  if (type === "LATENESS") return "Lateness";
+  if (type === "DISCIPLINE") return "Discipline";
+  if (type === "BONUS") return "Bonus";
+  if (type === "COMMISSION_TOPUP") return "Top up";
+  if (type === "OTHER") return kind === "ADDITION" ? "Additional" : "Deduction";
+  return null;
+}
+
+function getAdjustmentDetailLabel(entry: { label?: string | null; adjustmentType?: string | null }, kind: "ADDITION" | "DEDUCTION") {
+  const explicit = String(entry.label ?? "").trim();
+  if (!explicit) return null;
+  const generic = getGenericAdjustmentLabel(entry.adjustmentType, kind);
+  if (generic && explicit.localeCompare(generic, undefined, { sensitivity: "accent" }) === 0) return null;
+  return explicit;
+}
+
 function buildAdjustmentSummary(row: PayrollRow, kind: "ADDITION" | "DEDUCTION") {
   const entries = (row.adjustmentEntries ?? []).filter((entry) => entry.kind === kind);
   if (!entries.length) return "—";
-  return entries
-    .map((entry) => `${entry.label || entry.adjustmentType}: ${currency.format(Math.abs(Number(entry.amount ?? 0)))}`)
+  const detailedEntries = entries
+    .map((entry) => {
+      const detailLabel = getAdjustmentDetailLabel(entry, kind);
+      if (!detailLabel) return null;
+      return `${detailLabel}: ${currency.format(Math.abs(Number(entry.amount ?? 0)))}`;
+    })
+    .filter((value): value is string => Boolean(value));
+  if (!detailedEntries.length) return "—";
+  return detailedEntries
     .join(" · ");
 }
 
