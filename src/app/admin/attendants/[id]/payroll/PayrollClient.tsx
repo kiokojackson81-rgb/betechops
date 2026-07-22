@@ -425,9 +425,9 @@ export default function PayrollClient({
       }
       showToast("Recurring item added", "success");
       setNewRecurring((s) => ({ ...s, label: "", amount: "", endDate: "" }));
-      await fetchRecurringItems();
-      await fetchAdjustments();
       await fetchSummary();
+      await fetchAdjustments();
+      await fetchRecurringItems();
     } catch (err: any) {
       showToast(err?.message || "Failed to add recurring item", "error");
     } finally {
@@ -443,9 +443,9 @@ export default function PayrollClient({
         body: JSON.stringify({ id, isActive: !isActive }),
       });
       if (!res.ok) throw new Error("Failed to update recurring item");
-      await fetchRecurringItems();
-      await fetchAdjustments();
       await fetchSummary();
+      await fetchAdjustments();
+      await fetchRecurringItems();
     } catch (err: any) {
       showToast(err?.message || "Failed to update recurring item", "error");
     }
@@ -503,9 +503,9 @@ export default function PayrollClient({
       }
       showToast("Recurring item updated", "success");
       cancelEditRecurring();
-      await fetchRecurringItems();
-      await fetchAdjustments();
       await fetchSummary();
+      await fetchAdjustments();
+      await fetchRecurringItems();
     } catch (err: any) {
       showToast(err?.message || "Failed to save recurring item", "error");
     } finally {
@@ -553,9 +553,9 @@ export default function PayrollClient({
         throw new Error(err.error || "Failed to delete recurring item");
       }
       showToast("Recurring item deleted and payroll recalculated", "success");
-      await fetchRecurringItems();
-      await fetchAdjustments();
       await fetchSummary();
+      await fetchAdjustments();
+      await fetchRecurringItems();
     } catch (err: any) {
       showToast(err?.message || "Failed to delete recurring item", "error");
     }
