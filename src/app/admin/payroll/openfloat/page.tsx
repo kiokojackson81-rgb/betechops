@@ -27,8 +27,9 @@ export default async function AdminPayrollOpenfloatPage({
     : resolvedSearchParams.period;
   const period = parseTradingPeriodKey(rawPeriodParam ?? undefined) ?? getTradingPeriodFor(new Date());
   const rows = await buildOpenfloatReviewRows(period);
-  const readyRows = rows.filter((row) => row.isValid);
-  const invalidRows = rows.filter((row) => !row.isValid);
+  const readyRows = rows.filter((row) => row.isValid && !row.isSkipped);
+  const skippedRows = rows.filter((row) => row.isSkipped);
+  const invalidRows = rows.filter((row) => !row.isValid && !row.isSkipped);
   const totalAmount = readyRows.reduce((sum, row) => sum + row.amount, 0);
 
   return (
@@ -63,7 +64,7 @@ export default async function AdminPayrollOpenfloatPage({
           </div>
         </header>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
           <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4">
             <div className="text-xs uppercase tracking-wide text-slate-400">Ready rows</div>
             <div className="mt-2 text-3xl font-semibold text-emerald-300">{readyRows.length}</div>
@@ -73,6 +74,11 @@ export default async function AdminPayrollOpenfloatPage({
             <div className="text-xs uppercase tracking-wide text-slate-400">Rows with issues</div>
             <div className="mt-2 text-3xl font-semibold text-rose-300">{invalidRows.length}</div>
             <div className="mt-1 text-xs text-slate-500">Complete the missing payout profile fields first.</div>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4">
+            <div className="text-xs uppercase tracking-wide text-slate-400">Skipped rows</div>
+            <div className="mt-2 text-3xl font-semibold text-slate-300">{skippedRows.length}</div>
+            <div className="mt-1 text-xs text-slate-500">Zero or negative payroll balances are excluded from the file.</div>
           </div>
           <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4">
             <div className="text-xs uppercase tracking-wide text-slate-400">Ready amount</div>
@@ -87,9 +93,14 @@ export default async function AdminPayrollOpenfloatPage({
           </div>
         ) : (
           <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-            All payout rows are complete. The Openfloat workbook is ready for download and upload.
+            All exportable payout rows are complete. The Openfloat workbook is ready for download and upload.
           </div>
         )}
+        {skippedRows.length > 0 ? (
+          <div className="rounded-2xl border border-white/10 bg-slate-900/50 p-4 text-sm text-slate-300">
+            {skippedRows.length} employee{skippedRows.length === 1 ? "" : "s"} have zero or negative payroll balances and will be skipped from the Openfloat XLSX.
+          </div>
+        ) : null}
 
         <div className="overflow-x-auto rounded-2xl border border-white/10 bg-slate-900/60">
           <table className="min-w-full text-sm">
@@ -121,7 +132,9 @@ export default async function AdminPayrollOpenfloatPage({
                   <td className="px-4 py-3">{row.notificationPhoneNumber || "Missing"}</td>
                   <td className="px-4 py-3 text-right font-semibold text-slate-100">{formatCurrency(row.amount)}</td>
                   <td className="px-4 py-3 text-xs">
-                    {row.isValid ? (
+                    {row.isSkipped ? (
+                      <span className="rounded-full border border-white/10 bg-slate-800 px-2 py-1 text-slate-300">{row.skipReason}</span>
+                    ) : row.isValid ? (
                       <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-emerald-200">Ready</span>
                     ) : (
                       <div className="space-y-1 text-rose-200">

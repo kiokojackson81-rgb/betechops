@@ -19,7 +19,7 @@ export async function GET(req: Request) {
   const periodKey = (url.searchParams.get("periodKey") || "").trim();
   const period = parseTradingPeriodKey(periodKey) ?? getTradingPeriodFor(new Date());
   const rows = await buildOpenfloatReviewRows(period);
-  const invalidRows = rows.filter((row) => !row.isValid);
+  const invalidRows = rows.filter((row) => !row.isValid && !row.isSkipped);
 
   if (invalidRows.length > 0) {
     return NextResponse.json(

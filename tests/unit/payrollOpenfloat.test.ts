@@ -34,6 +34,7 @@ describe("buildOpenfloatReviewRow", () => {
     expect(row.accountNumber).toBe("254700111222");
     expect(row.amount).toBe(124479);
     expect(row.isValid).toBe(true);
+    expect(row.isSkipped).toBe(false);
   });
 
   test("reports missing fields for bank payouts", () => {
@@ -59,6 +60,7 @@ describe("buildOpenfloatReviewRow", () => {
     );
 
     expect(row.isValid).toBe(false);
+    expect(row.isSkipped).toBe(false);
     expect(row.validationErrors).toEqual(
       expect.arrayContaining([
         "Missing notification phone number",
@@ -66,5 +68,32 @@ describe("buildOpenfloatReviewRow", () => {
         "Missing bank name",
       ]),
     );
+  });
+
+  test("skips negative payroll balances from the export file", () => {
+    const row = buildOpenfloatReviewRow(
+      {
+        id: "u3",
+        name: "Stephen",
+        email: "stephen@betech.co.ke",
+        attendantCategory: "JUMIA_KILIMALL_OPS",
+        isActive: true,
+        bankName: null,
+        bankAccountNumber: null,
+        payoutMethod: "MPESA",
+        payoutAccountName: "Stephen",
+        mobileMoneyPhoneNumber: "254700333444",
+        tillPaybillNumber: null,
+        tillPaybillBusinessName: null,
+        paybillAccountNumber: null,
+        notificationPhoneNumber: "254700333444",
+      },
+      -1500,
+      period,
+    );
+
+    expect(row.isSkipped).toBe(true);
+    expect(row.skipReason).toBe("Negative payroll balance");
+    expect(row.validationErrors).toEqual([]);
   });
 });

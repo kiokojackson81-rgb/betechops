@@ -45,10 +45,11 @@ export async function buildOpenfloatReviewRows(period: TradingPeriod) {
 }
 
 export function buildOpenfloatWorkbook(rows: OpenfloatReviewRow[]) {
+  const exportRows = rows.filter((row) => !row.isSkipped);
   const workbook = XLSX.utils.book_new();
   const accountRows = [
     [...OPENFLOAT_HEADERS],
-    ...rows.map((row) => [
+    ...exportRows.map((row) => [
       row.accountType,
       row.accountName,
       row.accountNumber,
@@ -74,19 +75,28 @@ export function renderOpenfloatReviewHtml(input: { period: TradingPeriod; rows: 
   const { period, rows } = input;
   const totals = rows.reduce(
     (acc, row) => {
-      acc.totalAmount += row.amount;
-      acc.validCount += row.isValid ? 1 : 0;
-      acc.invalidCount += row.isValid ? 0 : 1;
+      if (!row.isSkipped && row.isValid) {
+        acc.totalAmount += row.amount;
+        acc.validCount += 1;
+      } else if (row.isSkipped) {
+        acc.skippedCount += 1;
+      } else {
+        acc.invalidCount += 1;
+      }
       return acc;
     },
-    { totalAmount: 0, validCount: 0, invalidCount: 0 },
+    { totalAmount: 0, validCount: 0, invalidCount: 0, skippedCount: 0 },
   );
 
   const bodyRows = rows
     .map((row) => {
-      const issues = row.validationErrors.length ? row.validationErrors.join("; ") : "Ready";
+      const issues = row.isSkipped
+        ? row.skipReason || "Skipped"
+        : row.validationErrors.length
+          ? row.validationErrors.join("; ")
+          : "Ready";
       return `
-        <tr class="${row.isValid ? "ok" : "bad"}">
+        <tr class="${row.isSkipped ? "skip" : row.isValid ? "ok" : "bad"}">
           <td>${escapeHtml(row.name)}</td>
           <td>${escapeHtml(row.accountType || "Missing")}</td>
           <td>${escapeHtml(row.accountName)}</td>
@@ -118,6 +128,7 @@ export function renderOpenfloatReviewHtml(input: { period: TradingPeriod; rows: 
         .num { text-align: right; }
         .ok { background: #f0fdf4; }
         .bad { background: #fff1f2; }
+        .skip { background: #f8fafc; color: #64748b; }
       </style>
     </head>
     <body>
@@ -128,6 +139,7 @@ export function renderOpenfloatReviewHtml(input: { period: TradingPeriod; rows: 
         <div class="card"><strong>Ready rows</strong><br />${totals.validCount}</div>
         <div class="card"><strong>Rows with issues</strong><br />${totals.invalidCount}</div>
       </div>
+      <p><strong>Skipped rows:</strong> ${totals.skippedCount} (zero or negative payroll balances are excluded from the Openfloat file)</p>
       <table>
         <thead>
           <tr>

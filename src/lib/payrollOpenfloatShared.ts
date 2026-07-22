@@ -25,6 +25,8 @@ export type OpenfloatReviewRow = {
   notificationPhoneNumber: string;
   amount: number;
   remark: string;
+  isSkipped: boolean;
+  skipReason: string | null;
   isValid: boolean;
   validationErrors: string[];
 };
@@ -82,9 +84,19 @@ export function buildOpenfloatReviewRow(user: PayoutUser, amount: number, period
     notificationPhoneNumber,
     amount: Number(amount || 0),
     remark: buildRemark(String(user.name || user.email || "Employee"), period),
+    isSkipped: false,
+    skipReason: null,
     isValid: true,
     validationErrors: [],
   };
+
+  if (!(row.amount > 0)) {
+    row.isSkipped = true;
+    row.skipReason = row.amount < 0 ? "Negative payroll balance" : "Zero payroll balance";
+    row.isValid = false;
+    row.validationErrors = [];
+    return row;
+  }
 
   switch (accountType) {
     case "Bank":
@@ -111,7 +123,6 @@ export function buildOpenfloatReviewRow(user: PayoutUser, amount: number, period
   if (!accountType) errors.push("Missing payout method");
   if (!accountName) errors.push("Missing account name");
   if (!notificationPhoneNumber) errors.push("Missing notification phone number");
-  if (!(row.amount > 0)) errors.push("Amount must be greater than zero");
 
   if (accountType === "Bank") {
     if (!row.accountNumber) errors.push("Missing bank account number");
