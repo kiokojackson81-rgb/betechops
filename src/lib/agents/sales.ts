@@ -4,6 +4,7 @@ import { findOrCreateCustomerIdentityUser } from "@/lib/customerIdentity";
 import { prisma } from "@/lib/prisma";
 import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
 import { generateReceiptSerial, normalizeReceiptSerial } from "@/lib/receipts/serial";
+import { readReceiptProjectFlow } from "@/lib/receiptProjects";
 
 export const AGENT_COMMISSION_RATE = 6;
 const AGENT_LEAD_OWNERSHIP_DAYS = 14;
@@ -235,7 +236,7 @@ function emptySalesSummary() {
 type AgentSaleRecord = Prisma.AgentSaleGetPayload<{
   include: {
     agent: { select: { id: true; name: true; email: true } };
-    receipt: { select: { id: true; receiptNumber: true; order: { select: { orderNumber: true } } } };
+    receipt: { select: { id: true; receiptNumber: true; data: true; order: { select: { orderNumber: true; paymentStatus: true } } } };
   };
 }>;
 
@@ -261,9 +262,22 @@ type AgentPayoutStatusRow = {
 type AgentSaleRecordLite = Prisma.AgentSaleGetPayload<{
   include: {
     agent: { select: { id: true; name: true; email: true } };
-    receipt: { select: { id: true; receiptNumber: true; order: { select: { orderNumber: true } } } };
+    receipt: { select: { id: true; receiptNumber: true; data: true; order: { select: { orderNumber: true; paymentStatus: true } } } };
   };
 }>;
+
+function formatProjectStageLabel(value: string | null | undefined) {
+  switch (String(value || "").toUpperCase()) {
+    case "RECEIPT_CREATED":
+      return "Receipt created";
+    case "PROJECT_IN_PROGRESS":
+      return "Project in progress";
+    case "COMPLETED_POSTED":
+      return "Completed and posted";
+    default:
+      return null;
+  }
+}
 
 function roundAmount(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -801,7 +815,7 @@ async function ensureAgentSaleReceipt(
     },
     include: {
       agent: { select: { id: true, name: true, email: true } },
-      receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
+      receipt: { select: { id: true, receiptNumber: true, data: true, order: { select: { orderNumber: true, paymentStatus: true } } } },
     },
   });
 }
@@ -1208,8 +1222,9 @@ export function presentAgentSale(
     : isRejected
       ? "The sale was rejected during review, so this commission is not payable."
       : isCancelled
-        ? "The sale was cancelled, so this commission is not payable."
+      ? "The sale was cancelled, so this commission is not payable."
         : "Commission will be earned after full payment and delivery confirmation.";
+  const receiptProjectFlow = readReceiptProjectFlow(sale.receipt?.data?.projectFlow);
   return {
     id: sale.id,
     agentId: sale.agentId,
@@ -1247,6 +1262,9 @@ export function presentAgentSale(
     commissionExplanation,
     receiptId: sale.receiptId,
     receiptNumber: ensureReceiptNumber(sale),
+    receiptPaymentStatus: sale.receipt?.order?.paymentStatus ?? null,
+    receiptProjectStage: receiptProjectFlow?.stage ?? null,
+    receiptProjectStageLabel: formatProjectStageLabel(receiptProjectFlow?.stage),
     completedAt: sale.completedAt,
     createdAt: sale.createdAt,
     updatedAt: sale.updatedAt,
@@ -1294,7 +1312,7 @@ export async function createAgentSale(agentId: string, body: unknown) {
         },
         include: {
           agent: { select: { id: true, name: true, email: true } },
-          receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
+          receipt: { select: { id: true, receiptNumber: true, data: true, order: { select: { orderNumber: true, paymentStatus: true } } } },
         },
       });
 
@@ -1352,7 +1370,7 @@ export async function getAgentSales(agentId: string) {
         where: { agentId },
         include: {
           agent: { select: { id: true, name: true, email: true } },
-          receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
+          receipt: { select: { id: true, receiptNumber: true, data: true, order: { select: { orderNumber: true, paymentStatus: true } } } },
         },
         orderBy: [{ createdAt: "desc" }],
       }),
@@ -1384,7 +1402,7 @@ export async function getAgentSaleById(agentId: string, saleId: string) {
         where: { id: saleId, agentId },
         include: {
           agent: { select: { id: true, name: true, email: true } },
-          receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
+          receipt: { select: { id: true, receiptNumber: true, data: true, order: { select: { orderNumber: true, paymentStatus: true } } } },
         },
       }),
       prisma.agentPayout.findMany({
@@ -1496,7 +1514,7 @@ export async function getAdminAgentSales(filters: AdminAgentSalesFilters = {}) {
       where,
       include: {
         agent: { select: { id: true, name: true, email: true } },
-        receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
+        receipt: { select: { id: true, receiptNumber: true, data: true, order: { select: { orderNumber: true, paymentStatus: true } } } },
       },
       orderBy: [{ createdAt: "desc" }],
     });
@@ -1646,7 +1664,7 @@ export async function getAdminAgentSaleById(saleId: string) {
       where: { id: saleId },
       include: {
         agent: { select: { id: true, name: true, email: true } },
-        receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
+        receipt: { select: { id: true, receiptNumber: true, data: true, order: { select: { orderNumber: true, paymentStatus: true } } } },
       },
     });
   } catch (error) {
@@ -1764,7 +1782,7 @@ export async function updateAgentSaleStatus(
         where: { id: saleId },
         include: {
           agent: { select: { id: true, name: true, email: true } },
-          receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
+          receipt: { select: { id: true, receiptNumber: true, data: true, order: { select: { orderNumber: true, paymentStatus: true } } } },
         },
       });
       if (!sale) throw new Error("Agent sale not found.");
@@ -1799,7 +1817,7 @@ export async function updateAgentSaleStatus(
         },
         include: {
           agent: { select: { id: true, name: true, email: true } },
-          receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
+          receipt: { select: { id: true, receiptNumber: true, data: true, order: { select: { orderNumber: true, paymentStatus: true } } } },
         },
       });
 
@@ -1947,7 +1965,7 @@ export async function linkAgentSaleReceipt(
       },
       include: {
         agent: { select: { id: true, name: true, email: true } },
-        receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
+        receipt: { select: { id: true, receiptNumber: true, data: true, order: { select: { orderNumber: true, paymentStatus: true } } } },
       },
     });
   } catch (error) {
@@ -2034,7 +2052,7 @@ export async function completeAgentSale(
         where: { id: saleId },
         include: {
           agent: { select: { id: true, name: true, email: true } },
-          receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
+          receipt: { select: { id: true, receiptNumber: true, data: true, order: { select: { orderNumber: true, paymentStatus: true } } } },
         },
       });
       if (!sale) throw new Error("Agent sale not found.");
@@ -2087,7 +2105,7 @@ export async function completeAgentSale(
         },
         include: {
           agent: { select: { id: true, name: true, email: true } },
-          receipt: { select: { id: true, receiptNumber: true, order: { select: { orderNumber: true } } } },
+          receipt: { select: { id: true, receiptNumber: true, data: true, order: { select: { orderNumber: true, paymentStatus: true } } } },
         },
       });
 

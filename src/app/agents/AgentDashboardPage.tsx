@@ -344,6 +344,15 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
                         <div className="mt-1 text-sm text-slate-600">
                           {sale.productName} · {sale.statusMeta.label} · {sale.receiptNumber || "No receipt linked"}
                         </div>
+                        {sale.receiptProjectStageLabel ? (
+                          <div className="mt-2 inline-flex rounded-full border border-[#f1b81d]/45 bg-[#fff3cf] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#7a0000]">
+                            {sale.receiptProjectStageLabel}
+                          </div>
+                        ) : sale.receiptPaymentStatus ? (
+                          <div className="mt-2 inline-flex rounded-full border border-[#d9c6ba] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
+                            {String(sale.receiptPaymentStatus).replace(/_/g, " ")}
+                          </div>
+                        ) : null}
                       </div>
                       <div className="text-right">
                         <div className="text-sm font-semibold text-[#210505]">

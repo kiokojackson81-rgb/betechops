@@ -130,6 +130,15 @@ export default async function AgentSalesPage({ useRootPaths = false }: AgentSale
                         <div>Balance: {money(sale.balance)}</div>
                         <div>Receipt: {sale.receiptNumber || "Not linked"}</div>
                       </div>
+                      {sale.receiptProjectStageLabel ? (
+                        <div className="inline-flex rounded-full border border-[#f1b81d]/45 bg-[#fff3cf] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#7a0000]">
+                          {sale.receiptProjectStageLabel}
+                        </div>
+                      ) : sale.receiptPaymentStatus ? (
+                        <div className="inline-flex rounded-full border border-[#d9c6ba] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
+                          Receipt {String(sale.receiptPaymentStatus).replace(/_/g, " ")}
+                        </div>
+                      ) : null}
                       <p className="text-sm text-slate-500">{status.note}</p>
                     </div>
                     <div className="w-full rounded-[24px] border border-[#f1b81d]/25 bg-[#fff3cf] p-4 xl:min-w-[260px] xl:max-w-[320px]">
