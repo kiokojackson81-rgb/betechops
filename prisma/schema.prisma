@@ -23,6 +23,13 @@ model User {
   locationNotes                        String?
   bankName                             String?
   bankAccountNumber                    String?
+  payoutMethod                         String?
+  payoutAccountName                    String?
+  mobileMoneyPhoneNumber               String?
+  tillPaybillNumber                    String?
+  tillPaybillBusinessName              String?
+  paybillAccountNumber                 String?
+  notificationPhoneNumber              String?
   image                                String?
   role                                 Role                            @default(ATTENDANT)
   isActive                             Boolean                         @default(true)

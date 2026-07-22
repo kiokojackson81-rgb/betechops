@@ -15,6 +15,13 @@ type Attendant = {
   isActive: boolean;
   bankName?: string | null;
   bankAccountNumber?: string | null;
+  payoutMethod?: string | null;
+  payoutAccountName?: string | null;
+  mobileMoneyPhoneNumber?: string | null;
+  tillPaybillNumber?: string | null;
+  tillPaybillBusinessName?: string | null;
+  paybillAccountNumber?: string | null;
+  notificationPhoneNumber?: string | null;
   technicalProfile?: {
     teamRole?: string | null;
     positionTitle?: string | null;
@@ -55,6 +62,14 @@ const EMPLOYMENT_DOCUMENT_TYPES = [
   "OTHER",
 ] as const;
 
+const PAYOUT_METHODS = [
+  { value: "", label: "Select payout method" },
+  { value: "BANK", label: "Bank" },
+  { value: "MPESA", label: "M-Pesa" },
+  { value: "TILL", label: "Till" },
+  { value: "PAYBILL", label: "Paybill" },
+] as const;
+
 function formatDocumentType(value: string) {
   return String(value || "OTHER")
     .toLowerCase()
@@ -72,6 +87,13 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
     phone: attendant.phone ?? "",
     bankName: attendant.bankName ?? "",
     bankAccountNumber: attendant.bankAccountNumber ?? "",
+    payoutMethod: attendant.payoutMethod ?? "",
+    payoutAccountName: attendant.payoutAccountName ?? attendant.name ?? "",
+    mobileMoneyPhoneNumber: attendant.mobileMoneyPhoneNumber ?? attendant.phone ?? "",
+    tillPaybillNumber: attendant.tillPaybillNumber ?? "",
+    tillPaybillBusinessName: attendant.tillPaybillBusinessName ?? "",
+    paybillAccountNumber: attendant.paybillAccountNumber ?? "",
+    notificationPhoneNumber: attendant.notificationPhoneNumber ?? attendant.phone ?? "",
     technical: {
       teamRole: attendant.technicalProfile?.teamRole ?? "",
       positionTitle: attendant.technicalProfile?.positionTitle ?? "",
@@ -207,6 +229,13 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
           phone: state.phone.trim() || null,
           bankName: state.bankName.trim() || null,
           bankAccountNumber: state.bankAccountNumber.trim() || null,
+          payoutMethod: state.payoutMethod || null,
+          payoutAccountName: state.payoutAccountName.trim() || null,
+          mobileMoneyPhoneNumber: state.mobileMoneyPhoneNumber.trim() || null,
+          tillPaybillNumber: state.tillPaybillNumber.trim() || null,
+          tillPaybillBusinessName: state.tillPaybillBusinessName.trim() || null,
+          paybillAccountNumber: state.paybillAccountNumber.trim() || null,
+          notificationPhoneNumber: state.notificationPhoneNumber.trim() || null,
         }),
       });
       if (!res.ok) {
@@ -303,11 +332,88 @@ export default function AttendantEditorClient({ attendant }: { attendant: Attend
       </div>
 
       <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4 mb-4">
-        <h3 className="text-sm font-semibold mb-2">Banking details</h3>
+        <h3 className="text-sm font-semibold mb-2">Payout details</h3>
         <p className="text-xs text-slate-400 mb-3">
-          Admin-only banking details for payroll and future payout exports.
+          Admin-only payout profile for payroll review, PDF export, and Openfloat upload files.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <select
+            value={state.payoutMethod}
+            onChange={(e) => setState((s) => ({ ...s, payoutMethod: e.target.value }))}
+            className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
+          >
+            {PAYOUT_METHODS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+          <input
+            type="text"
+            placeholder="Notification phone number"
+            value={state.notificationPhoneNumber}
+            onChange={(e) => setState((s) => ({ ...s, notificationPhoneNumber: e.target.value }))}
+            className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
+          />
+          <input
+            type="text"
+            placeholder="Account name"
+            value={state.payoutAccountName}
+            onChange={(e) => setState((s) => ({ ...s, payoutAccountName: e.target.value }))}
+            className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm sm:col-span-2"
+          />
+          {(state.payoutMethod === "BANK" || state.payoutMethod === "PAYBILL") ? (
+            <input
+              type="text"
+              placeholder={state.payoutMethod === "BANK" ? "Bank name" : "Paybill account number"}
+              value={state.payoutMethod === "BANK" ? state.bankName : state.paybillAccountNumber}
+              onChange={(e) =>
+                setState((s) => ({
+                  ...s,
+                  ...(state.payoutMethod === "BANK"
+                    ? { bankName: e.target.value }
+                    : { paybillAccountNumber: e.target.value }),
+                }))
+              }
+              className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
+            />
+          ) : null}
+          {state.payoutMethod === "BANK" ? (
+            <input
+              type="text"
+              placeholder="Bank account number"
+              value={state.bankAccountNumber}
+              onChange={(e) => setState((s) => ({ ...s, bankAccountNumber: e.target.value }))}
+              className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
+            />
+          ) : null}
+          {state.payoutMethod === "MPESA" ? (
+            <input
+              type="text"
+              placeholder="M-Pesa phone number"
+              value={state.mobileMoneyPhoneNumber}
+              onChange={(e) => setState((s) => ({ ...s, mobileMoneyPhoneNumber: e.target.value }))}
+              className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm sm:col-span-2"
+            />
+          ) : null}
+          {(state.payoutMethod === "TILL" || state.payoutMethod === "PAYBILL") ? (
+            <>
+              <input
+                type="text"
+                placeholder={state.payoutMethod === "TILL" ? "Till number" : "Paybill number"}
+                value={state.tillPaybillNumber}
+                onChange={(e) => setState((s) => ({ ...s, tillPaybillNumber: e.target.value }))}
+                className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
+              />
+              <input
+                type="text"
+                placeholder="Till or paybill business name"
+                value={state.tillPaybillBusinessName}
+                onChange={(e) => setState((s) => ({ ...s, tillPaybillBusinessName: e.target.value }))}
+                className="rounded-lg border border-slate-700 bg-black/40 px-3 py-2 text-sm"
+              />
+            </>
+          ) : null}
+        </div>
+        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
           <input
             type="text"
             placeholder="Bank name"

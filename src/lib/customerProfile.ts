@@ -8,6 +8,13 @@ const OPTIONAL_USER_PROFILE_COLUMNS = [
   "locationNotes",
   "bankName",
   "bankAccountNumber",
+  "payoutMethod",
+  "payoutAccountName",
+  "mobileMoneyPhoneNumber",
+  "tillPaybillNumber",
+  "tillPaybillBusinessName",
+  "paybillAccountNumber",
+  "notificationPhoneNumber",
   "referredByAgentId",
   "attributionCodeUsed",
   "referredAt",
@@ -42,6 +49,13 @@ type CustomerProfileInput = {
   locationNotes?: string | null;
   bankName?: string | null;
   bankAccountNumber?: string | null;
+  payoutMethod?: string | null;
+  payoutAccountName?: string | null;
+  mobileMoneyPhoneNumber?: string | null;
+  tillPaybillNumber?: string | null;
+  tillPaybillBusinessName?: string | null;
+  paybillAccountNumber?: string | null;
+  notificationPhoneNumber?: string | null;
   referredByAgentId?: string | null;
   attributionCodeUsed?: string | null;
   referredAt?: string | Date | null;
@@ -59,6 +73,13 @@ type SafeCustomerProfile = {
   locationNotes?: string | null;
   bankName?: string | null;
   bankAccountNumber?: string | null;
+  payoutMethod?: string | null;
+  payoutAccountName?: string | null;
+  mobileMoneyPhoneNumber?: string | null;
+  tillPaybillNumber?: string | null;
+  tillPaybillBusinessName?: string | null;
+  paybillAccountNumber?: string | null;
+  notificationPhoneNumber?: string | null;
   referredByAgentId?: string | null;
   attributionCodeUsed?: string | null;
   referredAt?: string | Date | null;
@@ -82,6 +103,13 @@ function defaultColumnMap(): UserProfileColumnMap {
     locationNotes: false,
     bankName: false,
     bankAccountNumber: false,
+    payoutMethod: false,
+    payoutAccountName: false,
+    mobileMoneyPhoneNumber: false,
+    tillPaybillNumber: false,
+    tillPaybillBusinessName: false,
+    paybillAccountNumber: false,
+    notificationPhoneNumber: false,
     referredByAgentId: false,
     attributionCodeUsed: false,
     referredAt: false,
@@ -102,7 +130,7 @@ export async function getUserProfileColumnMap(forceRefresh = false): Promise<Use
         FROM information_schema.columns
         WHERE table_schema = current_schema()
           AND table_name = 'User'
-          AND column_name IN ('whatsappNumber', 'county', 'town', 'estateLandmark', 'locationNotes', 'bankName', 'bankAccountNumber', 'referredByAgentId', 'attributionCodeUsed', 'referredAt')
+          AND column_name IN ('whatsappNumber', 'county', 'town', 'estateLandmark', 'locationNotes', 'bankName', 'bankAccountNumber', 'payoutMethod', 'payoutAccountName', 'mobileMoneyPhoneNumber', 'tillPaybillNumber', 'tillPaybillBusinessName', 'paybillAccountNumber', 'notificationPhoneNumber', 'referredByAgentId', 'attributionCodeUsed', 'referredAt')
       `,
     );
 
@@ -183,6 +211,27 @@ export async function updateSafeCustomerProfile(userId: string, input: CustomerP
   if (columns.bankAccountNumber && typeof input.bankAccountNumber !== "undefined") {
     updates.push(["bankAccountNumber", input.bankAccountNumber]);
   }
+  if (columns.payoutMethod && typeof input.payoutMethod !== "undefined") {
+    updates.push(["payoutMethod", input.payoutMethod]);
+  }
+  if (columns.payoutAccountName && typeof input.payoutAccountName !== "undefined") {
+    updates.push(["payoutAccountName", input.payoutAccountName]);
+  }
+  if (columns.mobileMoneyPhoneNumber && typeof input.mobileMoneyPhoneNumber !== "undefined") {
+    updates.push(["mobileMoneyPhoneNumber", input.mobileMoneyPhoneNumber]);
+  }
+  if (columns.tillPaybillNumber && typeof input.tillPaybillNumber !== "undefined") {
+    updates.push(["tillPaybillNumber", input.tillPaybillNumber]);
+  }
+  if (columns.tillPaybillBusinessName && typeof input.tillPaybillBusinessName !== "undefined") {
+    updates.push(["tillPaybillBusinessName", input.tillPaybillBusinessName]);
+  }
+  if (columns.paybillAccountNumber && typeof input.paybillAccountNumber !== "undefined") {
+    updates.push(["paybillAccountNumber", input.paybillAccountNumber]);
+  }
+  if (columns.notificationPhoneNumber && typeof input.notificationPhoneNumber !== "undefined") {
+    updates.push(["notificationPhoneNumber", input.notificationPhoneNumber]);
+  }
   if (columns.referredByAgentId && typeof input.referredByAgentId !== "undefined") {
     updates.push(["referredByAgentId", input.referredByAgentId]);
   }
@@ -220,6 +269,13 @@ export async function updateSafeCustomerProfile(userId: string, input: CustomerP
     locationNotes: columns.locationNotes ? (typeof input.locationNotes === "undefined" ? null : input.locationNotes) : null,
     bankName: columns.bankName ? (typeof input.bankName === "undefined" ? null : input.bankName) : null,
     bankAccountNumber: columns.bankAccountNumber ? (typeof input.bankAccountNumber === "undefined" ? null : input.bankAccountNumber) : null,
+    payoutMethod: columns.payoutMethod ? (typeof input.payoutMethod === "undefined" ? null : input.payoutMethod) : null,
+    payoutAccountName: columns.payoutAccountName ? (typeof input.payoutAccountName === "undefined" ? null : input.payoutAccountName) : null,
+    mobileMoneyPhoneNumber: columns.mobileMoneyPhoneNumber ? (typeof input.mobileMoneyPhoneNumber === "undefined" ? null : input.mobileMoneyPhoneNumber) : null,
+    tillPaybillNumber: columns.tillPaybillNumber ? (typeof input.tillPaybillNumber === "undefined" ? null : input.tillPaybillNumber) : null,
+    tillPaybillBusinessName: columns.tillPaybillBusinessName ? (typeof input.tillPaybillBusinessName === "undefined" ? null : input.tillPaybillBusinessName) : null,
+    paybillAccountNumber: columns.paybillAccountNumber ? (typeof input.paybillAccountNumber === "undefined" ? null : input.paybillAccountNumber) : null,
+    notificationPhoneNumber: columns.notificationPhoneNumber ? (typeof input.notificationPhoneNumber === "undefined" ? null : input.notificationPhoneNumber) : null,
     referredByAgentId: columns.referredByAgentId ? (typeof input.referredByAgentId === "undefined" ? null : input.referredByAgentId) : null,
     attributionCodeUsed: columns.attributionCodeUsed ? (typeof input.attributionCodeUsed === "undefined" ? null : input.attributionCodeUsed) : null,
     referredAt: columns.referredAt ? (typeof input.referredAt === "undefined" ? null : input.referredAt) : null,

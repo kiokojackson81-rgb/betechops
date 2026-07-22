@@ -32,6 +32,13 @@ export default async function AttendantEditPage({ params }: { params: { id: stri
       isActive: true,
       bankName: true,
       bankAccountNumber: true,
+      payoutMethod: true,
+      payoutAccountName: true,
+      mobileMoneyPhoneNumber: true,
+      tillPaybillNumber: true,
+      tillPaybillBusinessName: true,
+      paybillAccountNumber: true,
+      notificationPhoneNumber: true,
       technicalProfile: true,
       employeeDocuments: {
         orderBy: [{ createdAt: "desc" }],

@@ -1,0 +1,70 @@
+import { buildOpenfloatReviewRow } from "@/lib/payrollOpenfloatShared";
+
+describe("buildOpenfloatReviewRow", () => {
+  const period = {
+    key: "2026-06-25_2026-07-24",
+    label: "25 Jun 2026 - 24 Jul 2026",
+    start: new Date("2026-06-25T00:00:00.000Z"),
+    end: new Date("2026-07-24T23:59:59.999Z"),
+  };
+
+  test("maps M-Pesa payout details into Openfloat columns", () => {
+    const row = buildOpenfloatReviewRow(
+      {
+        id: "u1",
+        name: "Jeniffer",
+        email: "jeniffer@betech.co.ke",
+        attendantCategory: "MARKETING_OPS",
+        isActive: true,
+        bankName: null,
+        bankAccountNumber: null,
+        payoutMethod: "MPESA",
+        payoutAccountName: "Jeniffer",
+        mobileMoneyPhoneNumber: "254700111222",
+        tillPaybillNumber: null,
+        tillPaybillBusinessName: null,
+        paybillAccountNumber: null,
+        notificationPhoneNumber: "254700111222",
+      },
+      124479,
+      period,
+    );
+
+    expect(row.accountType).toBe("Mpesa");
+    expect(row.accountNumber).toBe("254700111222");
+    expect(row.amount).toBe(124479);
+    expect(row.isValid).toBe(true);
+  });
+
+  test("reports missing fields for bank payouts", () => {
+    const row = buildOpenfloatReviewRow(
+      {
+        id: "u2",
+        name: "Brian",
+        email: "brian@betech.co.ke",
+        attendantCategory: "SUPPORT_OPS",
+        isActive: true,
+        bankName: null,
+        bankAccountNumber: null,
+        payoutMethod: "BANK",
+        payoutAccountName: "",
+        mobileMoneyPhoneNumber: null,
+        tillPaybillNumber: null,
+        tillPaybillBusinessName: null,
+        paybillAccountNumber: null,
+        notificationPhoneNumber: "",
+      },
+      83000,
+      period,
+    );
+
+    expect(row.isValid).toBe(false);
+    expect(row.validationErrors).toEqual(
+      expect.arrayContaining([
+        "Missing notification phone number",
+        "Missing bank account number",
+        "Missing bank name",
+      ]),
+    );
+  });
+});

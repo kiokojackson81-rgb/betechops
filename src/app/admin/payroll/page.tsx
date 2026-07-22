@@ -78,6 +78,12 @@ export default async function AdminPayrollPage({
               Export all payslips
             </a>
             <Link
+              href={`/admin/payroll/openfloat?period=${encodeURIComponent(period.key)}`}
+              className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-100 border border-sky-500/30 bg-sky-500/10 hover:bg-sky-500/20"
+            >
+              Openfloat review
+            </Link>
+            <Link
               href={`/admin/payroll?period=${encodeURIComponent(previousPeriod.key)}`}
               className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-100 border border-white/10 bg-slate-900 hover:bg-slate-800"
             >

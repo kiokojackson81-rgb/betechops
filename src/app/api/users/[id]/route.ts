@@ -22,6 +22,13 @@ export async function PATCH(request: Request) {
     phone?: string | null;
     bankName?: string | null;
     bankAccountNumber?: string | null;
+    payoutMethod?: string | null;
+    payoutAccountName?: string | null;
+    mobileMoneyPhoneNumber?: string | null;
+    tillPaybillNumber?: string | null;
+    tillPaybillBusinessName?: string | null;
+    paybillAccountNumber?: string | null;
+    notificationPhoneNumber?: string | null;
     categories?: string[];
   };
 
@@ -32,7 +39,14 @@ export async function PATCH(request: Request) {
     typeof body.phone !== "undefined" ||
     Boolean(body.attendantCategory) ||
     typeof body.bankName !== "undefined" ||
-    typeof body.bankAccountNumber !== "undefined";
+    typeof body.bankAccountNumber !== "undefined" ||
+    typeof body.payoutMethod !== "undefined" ||
+    typeof body.payoutAccountName !== "undefined" ||
+    typeof body.mobileMoneyPhoneNumber !== "undefined" ||
+    typeof body.tillPaybillNumber !== "undefined" ||
+    typeof body.tillPaybillBusinessName !== "undefined" ||
+    typeof body.paybillAccountNumber !== "undefined" ||
+    typeof body.notificationPhoneNumber !== "undefined";
   const includesCategoryUpdate = Array.isArray(body.categories);
   if (!hasPrimitiveUpdate && !includesCategoryUpdate) {
     return NextResponse.json({ error: "no_updates" }, { status: 400 });
@@ -65,6 +79,13 @@ export async function PATCH(request: Request) {
       attendantCategory: attendantCategoryUpdate ?? null,
       bankName: typeof body.bankName !== "undefined",
       bankAccountNumber: typeof body.bankAccountNumber !== "undefined",
+      payoutMethod: typeof body.payoutMethod !== "undefined",
+      payoutAccountName: typeof body.payoutAccountName !== "undefined",
+      mobileMoneyPhoneNumber: typeof body.mobileMoneyPhoneNumber !== "undefined",
+      tillPaybillNumber: typeof body.tillPaybillNumber !== "undefined",
+      tillPaybillBusinessName: typeof body.tillPaybillBusinessName !== "undefined",
+      paybillAccountNumber: typeof body.paybillAccountNumber !== "undefined",
+      notificationPhoneNumber: typeof body.notificationPhoneNumber !== "undefined",
       categories: includesCategoryUpdate ? (body.categories?.length ?? 0) : null,
     },
   });
@@ -125,6 +146,27 @@ export async function PATCH(request: Request) {
       }
       if (typeof body.bankAccountNumber !== "undefined") {
         safeUserUpdate.bankAccountNumber = body.bankAccountNumber;
+      }
+      if (typeof body.payoutMethod !== "undefined") {
+        safeUserUpdate.payoutMethod = body.payoutMethod;
+      }
+      if (typeof body.payoutAccountName !== "undefined") {
+        safeUserUpdate.payoutAccountName = body.payoutAccountName;
+      }
+      if (typeof body.mobileMoneyPhoneNumber !== "undefined") {
+        safeUserUpdate.mobileMoneyPhoneNumber = body.mobileMoneyPhoneNumber;
+      }
+      if (typeof body.tillPaybillNumber !== "undefined") {
+        safeUserUpdate.tillPaybillNumber = body.tillPaybillNumber;
+      }
+      if (typeof body.tillPaybillBusinessName !== "undefined") {
+        safeUserUpdate.tillPaybillBusinessName = body.tillPaybillBusinessName;
+      }
+      if (typeof body.paybillAccountNumber !== "undefined") {
+        safeUserUpdate.paybillAccountNumber = body.paybillAccountNumber;
+      }
+      if (typeof body.notificationPhoneNumber !== "undefined") {
+        safeUserUpdate.notificationPhoneNumber = body.notificationPhoneNumber;
       }
       if (desiredAssignments && desiredAssignments.length) {
         data.attendantCategory = desiredAssignments[0];
