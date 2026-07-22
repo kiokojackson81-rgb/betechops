@@ -30,6 +30,7 @@ import {
   getReleasedPosCommissionEffectiveAt,
   isPosProductCommissionEntry,
 } from "@/lib/posProductCommission";
+import { readReceiptProjectFlow } from "@/lib/receiptProjects";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -848,12 +849,18 @@ export async function GET(req: Request) {
 
   const rows: PerformanceReceiptRow[] = [];
   const seen = new Set<string>();
+  const projectEligibilityByCanonical = new Map<string, boolean>();
 
   for (const row of receipts) {
     const canonical =
       normalizeReceiptNumber(row.receiptNumber) ||
       normalizeReceiptNumber(row.order?.orderNumber) ||
       row.id;
+    const projectFlow = readReceiptProjectFlow((row.data as Record<string, unknown> | null | undefined)?.projectFlow);
+    if (projectFlow?.isProject) {
+      projectEligibilityByCanonical.set(canonical, projectFlow.stage === "COMPLETED_POSTED");
+      if (projectFlow.stage !== "COMPLETED_POSTED") continue;
+    }
     const date = row.generatedAt ?? row.createdAt;
     const dateIso = new Date(date).toISOString().slice(0, 10);
     const receiptNumber = row.receiptNumber || row.order?.orderNumber || canonical;
@@ -871,15 +878,7 @@ export async function GET(req: Request) {
     seen.add(dedupeKey);
     const status =
       (row.order?.paymentStatus || row.order?.status || "").toString().toUpperCase() || "UNKNOWN";
-    const isProjectReceipt = Boolean(
-      row.data &&
-        typeof row.data === "object" &&
-        !Array.isArray(row.data) &&
-        (
-          String((row.data as Record<string, unknown>).customerType ?? "").trim().toLowerCase() === "project" ||
-          Boolean(((row.data as Record<string, unknown>).projectFlow as Record<string, unknown> | null | undefined)?.isProject)
-        ),
-    );
+    const isProjectReceipt = Boolean(projectFlow?.isProject);
     const isPodReceipt = Boolean(
       row.data &&
         typeof row.data === "object" &&
@@ -962,6 +961,11 @@ export async function GET(req: Request) {
         normalizeReceiptNumber(row.receiptNumber) ||
         normalizeReceiptNumber(row.order?.orderNumber) ||
         row.id;
+      const projectFlow = readReceiptProjectFlow((row.data as Record<string, unknown> | null | undefined)?.projectFlow);
+      if (projectFlow?.isProject) {
+        projectEligibilityByCanonical.set(canonical, projectFlow.stage === "COMPLETED_POSTED");
+        if (projectFlow.stage !== "COMPLETED_POSTED") continue;
+      }
       const paymentMethod = normalizePaymentMethod(
         (row.data as any)?.paymentMethod ?? (row.totals as any)?.paymentMethod ?? "MPESA",
       );
@@ -1042,6 +1046,7 @@ export async function GET(req: Request) {
         normalizeReceiptNumber(entry.receiptNumber) ||
         normalizeReceiptNumber(entry.receiptKey || "") ||
         entry.id;
+      if (projectEligibilityByCanonical.get(canonical) === false) continue;
       const method = normalizePaymentMethod(entry.paymentMethod ?? "MPESA");
       const dedupeKey = `${canonical}|${method}`;
       if (seen.has(dedupeKey)) continue;
@@ -1161,6 +1166,7 @@ export async function GET(req: Request) {
   for (const productCommission of productCommissions.values()) {
     const canonical = normalizeReceiptNumber(productCommission.receiptNumber);
     if (!canonical) continue;
+    if (projectEligibilityByCanonical.get(canonical) === false) continue;
     const existing = rows.find((row) => normalizeReceiptNumber(row.receiptNumber) === canonical);
     if (existing) {
       existing.productCommission += productCommission.amount;
