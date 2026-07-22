@@ -8,6 +8,7 @@ import { launchChromiumBrowser } from "@/lib/pdf/chromium";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 import { getEarningsSummaryForUser } from "@/lib/earningsSummary";
 import { normalizePaymentMethod, normalizeReceiptNumber } from "@/lib/receiptKey";
+import getAttendantCommissionSummary from "@/lib/attendantCommission";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -181,15 +182,22 @@ export async function GET(req: Request) {
 
   const [user, posSummary, earnings] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } }),
-    summarizePosReceiptsForPeriod({ start: period.start, end: period.end, userId }),
+    summarizePosReceiptsForPeriod({
+      start: period.start,
+      end: period.end,
+      userId,
+      ownershipMode: "staffOnly",
+      supportPricingScope: "any",
+      profitRecognitionMode: "salesDate",
+    }),
     getEarningsSummaryForUser({ userId, asOf: period.start }),
   ]);
+  const attendantCanonical = await getAttendantCommissionSummary({ attendantId: userId, start: period.start, end: period.end });
 
   const attendantName = user?.name ?? "Attendant";
   const attendantEmail = user?.email ?? "";
 
   const ownerOr = [
-    { issuedById: userId },
     { order: { attendantId: userId } },
     { data: { path: ["attendantId"], equals: userId } },
   ];
@@ -268,10 +276,10 @@ export async function GET(req: Request) {
     periodLabel: period.label,
     periodStartIso: period.start.toISOString().slice(0, 10),
     periodEndIso: period.end.toISOString().slice(0, 10),
-    totalSales: Number(posSummary.totalSales ?? 0),
-    totalReceipts: Number(posSummary.totalReceipts ?? 0),
+    totalSales: Number(attendantCanonical.totalSales ?? posSummary.totalSales ?? 0),
+    totalReceipts: Number(attendantCanonical.receiptsCount ?? posSummary.totalReceipts ?? 0),
     totalItems: Number(posSummary.totalItems ?? 0),
-    commission: Number((earnings as any)?.grossCommission ?? (earnings as any)?.commission ?? 0),
+    commission: Number(attendantCanonical.totalCommission ?? (earnings as any)?.grossCommission ?? (earnings as any)?.commission ?? 0),
     rows,
   });
 

@@ -1223,10 +1223,10 @@ export async function GET(req: Request) {
     itemsLabel: isOnlineCategory ? "POS items" : "Items",
     totalSales: isOnlineCategory
       ? Number(onlinePosSummary?.totalSales || onlineDirectSales || printedPosSales || 0)
-      : Number(payrollRow?.totalSales ?? earnings.totalSales ?? 0),
+      : Number(attendantCanonical.totalSales ?? payrollRow?.totalSales ?? earnings.totalSales ?? 0),
     totalReceipts: isOnlineCategory
       ? Number(onlinePosSummary?.totalReceipts || printedPosReceipts || 0)
-      : Number(payrollRow?.totalReceipts ?? earnings.totalReceipts ?? 0),
+      : Number(attendantCanonical.receiptsCount ?? payrollRow?.totalReceipts ?? earnings.totalReceipts ?? 0),
     totalItems: isOnlineCategory
       ? Number(onlinePosSummary?.totalItems || printedPosItems || 0)
       : Number(payrollRow?.totalItems ?? earnings.totalItems ?? 0),

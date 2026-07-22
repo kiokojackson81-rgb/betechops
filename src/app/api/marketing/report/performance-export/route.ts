@@ -14,6 +14,7 @@ import {
 } from "@/lib/commission";
 import { computeBrendahDirectCommission } from "@/lib/onlineCommission";
 import { getUnpricedDailySalesForCurrentPeriod } from "@/lib/marketingUnpricedSales";
+import getAttendantCommissionSummary from "@/lib/attendantCommission";
 
 export const dynamic = "force-dynamic";
 
@@ -124,12 +125,16 @@ export async function GET(req: Request) {
   let paymentStats = mergedStats;
 
   let posSummary: Awaited<ReturnType<typeof summarizePosReceiptsForPeriod>> | null = null;
+  let canonicalCommission: Awaited<ReturnType<typeof getAttendantCommissionSummary>> | null = null;
   if (usePosTotals) {
     const posUserId = commissionConfig.posTotalsMode === "GLOBAL" ? null : targetUserId;
     posSummary = await summarizePosReceiptsForPeriod({
       start: period.start,
       end: period.end,
       userId: posUserId,
+      ownershipMode: posUserId ? "staffOnly" : undefined,
+      supportPricingScope: posUserId ? "any" : undefined,
+      profitRecognitionMode: posUserId ? "salesDate" : undefined,
     });
 
     totalSales = posSummary.totalSales;
@@ -137,10 +142,22 @@ export async function GET(req: Request) {
     totalItems = posSummary.totalItems;
     totalReceipts = posSummary.totalReceipts;
     paymentStats = posSummary.paymentStats as any;
+    if (posUserId) {
+      canonicalCommission = await getAttendantCommissionSummary({
+        attendantId: posUserId,
+        start: period.start,
+        end: period.end,
+      });
+      totalSales = Number(canonicalCommission.totalSales ?? totalSales);
+      totalProfit = Number(canonicalCommission.totalProfit ?? totalProfit);
+      totalReceipts = Number(canonicalCommission.receiptsCount ?? totalReceipts);
+    }
   }
 
   let commission = 0;
-  if (usePosTotals && posSummary) {
+  if (canonicalCommission) {
+    commission = Number(canonicalCommission.totalCommission ?? 0);
+  } else if (usePosTotals && posSummary) {
     if (isBrendah) {
       commission = computeBrendahDirectCommission(posSummary.totalSales, posSummary.totalProfit).amount;
     } else if (isJeniffer) {
