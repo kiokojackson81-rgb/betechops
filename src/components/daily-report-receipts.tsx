@@ -68,6 +68,7 @@ type ReceiptsApiResponse = {
     totalCount?: number;
     totalSales?: number;
   };
+  error?: string;
 };
 
 const formatKES = (value?: number | null) =>
