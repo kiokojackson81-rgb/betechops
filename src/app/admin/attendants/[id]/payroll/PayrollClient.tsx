@@ -26,6 +26,7 @@ type Adjustment = {
   amount: number;
   adjustmentKind?: string | null;
   kind?: string | null;
+  recurringItemId?: string | null;
 };
 
 type RecurringItem = {
@@ -515,18 +516,29 @@ export default function PayrollClient({
     }
   };
 
-  const deleteAdjustment = async (id: string) => {
-    if (!confirm("Delete this adjustment?")) return;
+  const deleteAdjustment = async (adjustment: Adjustment) => {
+    const isRecurring = Boolean(adjustment.recurringItemId);
+    const confirmed = confirm(
+      isRecurring
+        ? "This is linked to a monthly/weekly recurring item. Delete it completely and recalculate payroll?"
+        : "Delete this adjustment and recalculate payroll?",
+    );
+    if (!confirmed) return;
     try {
-      const url = `/api/admin/attendants/${attendant.id}/payroll-adjustments?adjustmentId=${encodeURIComponent(id)}`;
+      const url = `/api/admin/attendants/${attendant.id}/payroll-adjustments?adjustmentId=${encodeURIComponent(adjustment.id)}`;
       const res = await fetch(url, { method: "DELETE" });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || "Failed to delete");
       }
-      showToast("Adjustment deleted", "success");
+      const payload = await res.json().catch(() => null);
+      showToast(
+        payload?.deletedMode === "recurring" ? "Recurring item deleted and payroll recalculated" : "Adjustment deleted and payroll recalculated",
+        "success",
+      );
       await fetchAdjustments();
       await fetchSummary();
+      await fetchRecurringItems();
     } catch (err: any) {
       showToast(err?.message || "Failed to delete adjustment", "error");
     }
@@ -702,7 +714,7 @@ export default function PayrollClient({
                       </div>
                       <button
                         type="button"
-                        onClick={() => deleteAdjustment(a.id)}
+                        onClick={() => deleteAdjustment(a)}
                         className="text-xs rounded-full border border-red-600 px-2 py-1 text-rose-400 hover:bg-red-800/20"
                       >
                         Delete

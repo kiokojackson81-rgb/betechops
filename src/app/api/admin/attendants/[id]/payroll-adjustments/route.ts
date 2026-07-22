@@ -162,8 +162,23 @@ export async function DELETE(req: Request, ctx: any) {
     const row = await prisma.attendantPayrollAdjustment.findUnique({ where: { id: adjustmentId } as any });
     if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (row.attendantId !== attendantId) return NextResponse.json({ error: "Mismatched attendant" }, { status: 403 });
+    if (row.recurringItemId) {
+      await prisma.$transaction([
+        prisma.attendantPayrollAdjustment.deleteMany({
+          where: {
+            attendantId,
+            recurringItemId: row.recurringItemId,
+          },
+        }),
+        prisma.attendantRecurringPayrollItem.delete({
+          where: { id: row.recurringItemId },
+        }),
+      ]);
+      return NextResponse.json({ ok: true, deletedRecurringItemId: row.recurringItemId, deletedMode: "recurring" });
+    }
+
     await prisma.attendantPayrollAdjustment.delete({ where: { id: adjustmentId } as any });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, deletedMode: "single" });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Failed to delete";
     return NextResponse.json({ error: msg }, { status: 500 });
