@@ -1209,7 +1209,27 @@ export async function GET(req: Request) {
     }
     return line;
   });
-  const onlineDirectSales = summaryLinesForRender.find((line) => line.label === "POS direct sales")?.sales ?? 0;
+  const directSummaryLine = summaryLinesForRender.find((line) => line.label === "POS direct sales") ?? null;
+  const onlineDirectSales = directSummaryLine?.sales ?? 0;
+  const directSummaryCommission = directSummaryLine?.commission ?? 0;
+  const canonicalHeaderSales = Number(attendantCanonical.totalSales ?? 0);
+  const canonicalHeaderReceipts = Number(attendantCanonical.receiptsCount ?? 0);
+  const canonicalHeaderCommission = Number(attendantCanonical.totalCommission ?? 0);
+  const renderedHeaderSales = Number(onlinePosSummary?.totalSales ?? onlineDirectSales ?? printedPosSales ?? 0);
+  const renderedHeaderReceipts = Number(onlinePosSummary?.totalReceipts ?? printedPosReceipts ?? 0);
+  const renderedHeaderItems = Number(onlinePosSummary?.totalItems ?? printedPosItems ?? 0);
+  const renderedHeaderCommission =
+    commissionConfig.salesCommissionMode === "POS_PROFIT_10"
+      ? renderedReceiptCommission
+      : Number(directSummaryCommission ?? renderedReceiptCommission ?? 0);
+  const headerSales = canonicalHeaderSales > 0 ? canonicalHeaderSales : renderedHeaderSales;
+  const headerReceipts = canonicalHeaderReceipts > 0 ? canonicalHeaderReceipts : renderedHeaderReceipts;
+  const headerItems =
+    Number(payrollRow?.totalItems ?? 0) > 0 ? Number(payrollRow?.totalItems ?? 0) : renderedHeaderItems;
+  const headerCommission =
+    canonicalHeaderCommission > 0
+      ? canonicalHeaderCommission
+      : renderedHeaderCommission;
 
   const html = renderHtml({
     attendantName: user?.name ?? "Attendant",
@@ -1221,19 +1241,10 @@ export async function GET(req: Request) {
     salesLabel: isOnlineCategory ? "POS sales" : "Sales",
     receiptsLabel: isOnlineCategory ? "POS receipts" : "Receipts",
     itemsLabel: isOnlineCategory ? "POS items" : "Items",
-    totalSales: isOnlineCategory
-      ? Number(onlinePosSummary?.totalSales || onlineDirectSales || printedPosSales || 0)
-      : Number(attendantCanonical.totalSales ?? payrollRow?.totalSales ?? earnings.totalSales ?? 0),
-    totalReceipts: isOnlineCategory
-      ? Number(onlinePosSummary?.totalReceipts || printedPosReceipts || 0)
-      : Number(attendantCanonical.receiptsCount ?? payrollRow?.totalReceipts ?? earnings.totalReceipts ?? 0),
-    totalItems: isOnlineCategory
-      ? Number(onlinePosSummary?.totalItems || printedPosItems || 0)
-      : Number(payrollRow?.totalItems ?? earnings.totalItems ?? 0),
-    commission:
-      commissionConfig.salesCommissionMode === "POS_PROFIT_10"
-        ? renderedReceiptCommission
-        : Number(attendantCanonical.totalCommission ?? payrollRow?.commissionTotal ?? (earnings as any).grossCommission ?? (earnings as any).commission ?? 0),
+    totalSales: headerSales,
+    totalReceipts: headerReceipts,
+    totalItems: headerItems,
+    commission: headerCommission,
     totalNewProducts: Number(payrollRow?.newProducts ?? reportAgg._sum.newProducts ?? 0),
     totalEditedProducts: Number(payrollRow?.editedProducts ?? reportAgg._sum.productsEdited ?? 0),
     totalCopiedProducts: Number(payrollRow?.copiedProducts ?? reportAgg._sum.copiesUploaded ?? 0),
