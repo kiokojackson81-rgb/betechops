@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Button from "@/app/_components/Button";
 import Card from "@/app/_components/Card";
 import Input from "@/app/_components/Input";
+import type { PayrollAppraisal } from "@/lib/payrollAppraisal";
 import { showToast } from "@/lib/ui/toast";
 import { getPreviousTradingPeriod, getTradingPeriodFor } from "@/lib/tradingPeriod";
 
@@ -39,49 +40,6 @@ type RecurringItem = {
   startDate?: string | null;
   endDate?: string | null;
   isActive: boolean;
-};
-
-type PayrollAppraisal = {
-  companyCount: number;
-  categoryCount: number;
-  valueCreated: {
-    sales: number;
-    profit: number;
-    profitAfterPay: number;
-    marginPct: number;
-  };
-  companyRank: {
-    sales: number;
-    profit: number;
-    commission: number;
-    netPay: number;
-    receipts: number;
-    items: number;
-  };
-  categoryRank: {
-    sales: number;
-    profit: number;
-    commission: number;
-    netPay: number;
-  };
-  companyAverage: {
-    sales: number;
-    profit: number;
-    commission: number;
-    netPay: number;
-  };
-  categoryAverage: {
-    sales: number;
-    profit: number;
-    commission: number;
-    netPay: number;
-  };
-  companyShare: {
-    salesPct: number;
-    profitPct: number;
-    commissionPct: number;
-  };
-  contributionScorePct: number;
 };
 
 const formatCurrency = (value: number) => `KES ${Number(value ?? 0).toLocaleString("en-US")}`;
@@ -139,7 +97,8 @@ export default function PayrollClient({
   const [adjustments, setAdjustments] = useState<Adjustment[]>(initialAdjustments || []);
   const [recurringItems, setRecurringItems] = useState<RecurringItem[]>(initialRecurringItems || []);
   const [summary, setSummary] = useState<any>(initialSummary || null);
-  const [appraisal] = useState<PayrollAppraisal>(initialAppraisal);
+  const [appraisal, setAppraisal] = useState<PayrollAppraisal>(initialAppraisal);
+  const [loadingAppraisal, setLoadingAppraisal] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadingAdjustments, setLoadingAdjustments] = useState(false);
   const [addingAdjustment, setAddingAdjustment] = useState(false);
@@ -276,6 +235,28 @@ export default function PayrollClient({
     fetchRecurringItems();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoadingAppraisal(true);
+      try {
+        const res = await fetch(`/api/admin/attendants/${attendant.id}/payroll-appraisal?periodKey=${encodeURIComponent(periodKey)}`, {
+          credentials: "same-origin",
+        });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => null);
+        if (!cancelled && data?.appraisal) {
+          setAppraisal(data.appraisal as PayrollAppraisal);
+        }
+      } finally {
+        if (!cancelled) setLoadingAppraisal(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [attendant.id, periodKey]);
 
   useEffect(() => {
     if (newRecurring.cadence !== "WEEKLY") return;
@@ -979,9 +960,15 @@ export default function PayrollClient({
             <p className="text-xs text-slate-400">Admin view of business impact, peer comparison, and appraisal support for this period.</p>
           </div>
           <div className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-200">
-            {performanceTone} contribution · {formatPercent(appraisal.contributionScorePct)}
+            {loadingAppraisal ? "Loading appraisal..." : `${performanceTone} contribution · ${formatPercent(appraisal.contributionScorePct)}`}
           </div>
         </div>
+
+        {loadingAppraisal ? (
+          <div className="mt-4 rounded-2xl border border-white/5 bg-slate-950/40 p-4 text-sm text-slate-400">
+            Loading company and category comparison in the background so payroll opens faster.
+          </div>
+        ) : null}
 
         <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-xl bg-slate-950/60 px-3 py-3">
