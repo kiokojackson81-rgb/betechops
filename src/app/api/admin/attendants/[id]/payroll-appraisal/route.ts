@@ -9,11 +9,11 @@ import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod"
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, context: { params: Promise<{ id: string }> }) {
   const auth = await requireRole("ADMIN");
   if (!auth.ok) return auth.res;
 
-  const attendantId = params.id;
+  const { id: attendantId } = await context.params;
   if (!attendantId) {
     return NextResponse.json({ error: "missing_id" }, { status: 400 });
   }
