@@ -284,7 +284,7 @@ export default async function TechnicalSalesPage() {
                   ? (receipt.data as Record<string, unknown>).projectFlow
                   : null,
               );
-              const isProjectPendingForSales = Boolean(projectFlow?.isProject) && projectFlow.stage !== "COMPLETED_POSTED";
+              const isProjectPendingForSales = Boolean(projectFlow?.isProject && projectFlow.stage !== "COMPLETED_POSTED");
               const supportProfit =
                 supportProfitByReceipt.get(canonicalReceiptNumber(receipt.order?.orderNumber || receipt.receiptNumber || undefined) || "") ?? null;
               const profit = extractProfit(receipt, supportProfit);
@@ -306,7 +306,7 @@ export default async function TechnicalSalesPage() {
                       </div>
                       {projectFlow?.isProject ? (
                         <div className="mt-2 inline-flex rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-amber-100">
-                          Project {projectFlow.stage.replace(/_/g, " ")}
+                          Project {projectFlow?.stage?.replace(/_/g, " ") ?? "IN PROGRESS"}
                         </div>
                       ) : null}
                     </div>

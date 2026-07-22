@@ -1224,7 +1224,11 @@ export function presentAgentSale(
       : isCancelled
       ? "The sale was cancelled, so this commission is not payable."
         : "Commission will be earned after full payment and delivery confirmation.";
-  const receiptProjectFlow = readReceiptProjectFlow(sale.receipt?.data?.projectFlow);
+  const receiptProjectFlow = readReceiptProjectFlow(
+    sale.receipt?.data && typeof sale.receipt.data === "object" && !Array.isArray(sale.receipt.data)
+      ? (sale.receipt.data as Record<string, unknown>).projectFlow
+      : null,
+  );
   return {
     id: sale.id,
     agentId: sale.agentId,
