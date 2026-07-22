@@ -620,6 +620,7 @@ function MarketingReceiptsPageInner() {
               attendantId={undefined}
               onlyPos
               hideHeader
+              showProjectFilter
               initialPodFilter={podFilter}
               emptyMessage="No receipts found for this range."
               onSummary={(panelSummary) =>

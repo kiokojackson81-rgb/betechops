@@ -1586,6 +1586,7 @@ export default function DailyReportFinal({
                 paidOnly={false}
                 includeLedger={!isBrendahView}
                 showPodFilters
+                showProjectFilter
                 hideHeader
                 extraFilterActions={[
                   ...(canAccessAgentOrders

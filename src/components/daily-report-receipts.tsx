@@ -56,6 +56,7 @@ type Props = {
   extraFilterActions?: ExtraFilterAction[];
   onSummary?: (s: { totalSales: number; count: number }) => void;
   carryForwardPending?: boolean;
+  showProjectFilter?: boolean;
 };
 
 const formatKES = (value?: number | null) =>
@@ -157,6 +158,7 @@ export default function DailyReportReceiptsPanel({
   extraFilterActions = [],
   onSummary,
   carryForwardPending = false,
+  showProjectFilter = false,
 }: Props) {
   const [receipts, setReceipts] = useState<DailyReportReceiptRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -182,6 +184,7 @@ export default function DailyReportReceiptsPanel({
   const [feeSaving, setFeeSaving] = useState(false);
   const [feeError, setFeeError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [receiptScopeFilter, setReceiptScopeFilter] = useState<"all" | "projects">("all");
   const onSummaryRef = useRef(onSummary);
   const lastRequestKeyRef = useRef<string | null>(null);
   const lastRequestAtRef = useRef(0);
@@ -237,7 +240,9 @@ export default function DailyReportReceiptsPanel({
         const settledOnly = podFilter === "settled";
         if (onlyPos) params.set("onlyPos", "1");
         if (paidOnly || settledOnly) params.set("paidOnly", "1");
-        if (podFilter === "normal_only") {
+        if (receiptScopeFilter === "projects") {
+          params.set("customerType", "project");
+        } else if (podFilter === "normal_only") {
           params.set("customerType", "normal");
         } else if (podFilter === "pod_pending") {
           params.set("customerType", "pod");
@@ -297,7 +302,7 @@ export default function DailyReportReceiptsPanel({
       cancelled = true;
       controller.abort();
     };
-  }, [attendantId, carryForwardPending, debouncedQuery, includeLedger, onlyPos, paidOnly, podFilter, reloadKey, resolvedAttendantId, start, end]);
+  }, [attendantId, carryForwardPending, debouncedQuery, includeLedger, onlyPos, paidOnly, podFilter, receiptScopeFilter, reloadKey, resolvedAttendantId, start, end]);
 
   // If we don't have an attendantId prop, try fetching the session to determine the logged-in user id
   useEffect(() => {
@@ -525,6 +530,32 @@ export default function DailyReportReceiptsPanel({
                 {action.label}
               </button>
             ))}
+            {showProjectFilter ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setReceiptScopeFilter("all")}
+                  className={`rounded-full border px-4 py-1 text-[11px] font-semibold uppercase tracking-wide transition ${
+                    receiptScopeFilter === "all"
+                      ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
+                      : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"
+                  }`}
+                >
+                  All receipts
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReceiptScopeFilter("projects")}
+                  className={`rounded-full border px-4 py-1 text-[11px] font-semibold uppercase tracking-wide transition ${
+                    receiptScopeFilter === "projects"
+                      ? "border-amber-500 bg-amber-500/20 text-amber-100"
+                      : "border-white/15 text-slate-200 hover:border-amber-500 hover:text-white"
+                  }`}
+                >
+                  Projects only
+                </button>
+              </>
+            ) : null}
             {[
               { key: "all", label: onlyPos ? "All POS receipts" : "All receipts" },
               { key: "normal_only", label: "Normal only" },
@@ -537,11 +568,12 @@ export default function DailyReportReceiptsPanel({
                 key={option.key}
                 type="button"
                 onClick={() => setPodFilter(option.key as PodFilterValue)}
+                disabled={receiptScopeFilter === "projects"}
                 className={`rounded-full border px-4 py-1 text-[11px] font-semibold uppercase tracking-wide transition ${
                   podFilter === option.key
                     ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
                     : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"
-                }`}
+                } ${receiptScopeFilter === "projects" ? "cursor-not-allowed opacity-40" : ""}`}
               >
                 {option.label}
               </button>
