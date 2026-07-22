@@ -1002,9 +1002,19 @@ export async function GET(req: NextRequest) {
 
   deduped.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const totalCount = deduped.length;
+  const totalSales = deduped.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
+  const totalProfit = deduped.reduce((sum, row) => sum + Number((row as any).profit ?? 0), 0);
   const paged = deduped.slice((page - 1) * size, page * size);
   const totalPages = Math.max(1, Math.ceil(totalCount / size));
-    const data = { receipts: paged, paging: { page, size, totalCount, totalPages } };
+    const data = {
+      receipts: paged,
+      paging: { page, size, totalCount, totalPages },
+      summary: {
+        totalCount,
+        totalSales,
+        totalProfit,
+      },
+    };
     return NextResponse.json(composeIdentityResponse(metaWithScope, data));
   } catch (err: any) {
     // Log and return error details to help debugging during development

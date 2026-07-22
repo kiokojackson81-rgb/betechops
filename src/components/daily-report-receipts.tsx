@@ -59,6 +59,17 @@ type Props = {
   showProjectFilter?: boolean;
 };
 
+type ReceiptsApiResponse = {
+  receipts?: DailyReportReceiptRow[];
+  paging?: {
+    totalCount?: number;
+  };
+  summary?: {
+    totalCount?: number;
+    totalSales?: number;
+  };
+};
+
 const formatKES = (value?: number | null) =>
   `KES ${Number(value ?? 0).toLocaleString("en-KE", {
     maximumFractionDigits: 0,
@@ -279,14 +290,23 @@ export default function DailyReportReceiptsPanel({
         console.debug("[DailyReportReceipts] fetch", { attendantId, url, status: res.status });
         setLastFetchUrl(url);
         setLastFetchStatus(res.status);
-        const data = await res.json().catch(() => ({}));
+        const data = (await res.json().catch(() => ({}))) as ReceiptsApiResponse;
         if (!res.ok) throw new Error(data?.error || "Failed to load receipts");
         if (!cancelled) {
           const arr = Array.isArray(data?.receipts) ? data.receipts : [];
           setReceipts(arr);
           setLastFetchCount(arr.length);
-          const totalSales = arr.reduce((s: number, r: DailyReportReceiptRow) => s + Number(r.total ?? 0), 0);
-          onSummaryRef.current?.({ totalSales, count: arr.length });
+          const totalSales =
+            typeof data?.summary?.totalSales === "number"
+              ? Number(data.summary.totalSales)
+              : arr.reduce((s: number, r: DailyReportReceiptRow) => s + Number(r.total ?? 0), 0);
+          const count =
+            typeof data?.summary?.totalCount === "number"
+              ? Number(data.summary.totalCount)
+              : typeof data?.paging?.totalCount === "number"
+                ? Number(data.paging.totalCount)
+                : arr.length;
+          onSummaryRef.current?.({ totalSales, count });
         }
       } catch (err) {
         if (!cancelled) {
