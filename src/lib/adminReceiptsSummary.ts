@@ -4,6 +4,7 @@ import { buildReceiptKey } from "@/lib/receiptKey";
 import { Prisma } from "@prisma/client";
 import { adjustProfitForPodDeliveryFee, getPodDeliveryFee } from "@/lib/podDeliveryFee";
 import { computeRecognizedReceiptProfit } from "@/lib/recognizedReceiptProfit";
+import { readReceiptProjectFlow } from "@/lib/receiptProjects";
 
 type PaymentBucket = { totalSales: number; count: number };
 
@@ -165,6 +166,16 @@ const isDateInRange = (value: unknown, start: Date, end: Date): boolean => {
   if (!(value instanceof Date)) return false;
   const time = value.getTime();
   return Number.isFinite(time) && time >= start.getTime() && time <= end.getTime();
+};
+
+const isCompletedProjectReceiptForSales = (receipt: any) => {
+  const rawData =
+    receipt?.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
+      ? (receipt.data as Record<string, unknown>)
+      : {};
+  const flow = readReceiptProjectFlow(rawData.projectFlow);
+  if (!flow?.isProject) return true;
+  return flow.stage === "COMPLETED_POSTED";
 };
 
 async function computePosOnlyReceiptSummary({
@@ -854,6 +865,11 @@ export async function computeAdminReceiptSummary({
     if (!salesOnly) return rows;
     return rows.filter((r) => {
       const sale = Number((r?.totals as any)?.total ?? r?.order?.totalAmount ?? 0);
+      if (!isCompletedProjectReceiptForSales(r)) {
+        excludedUnpaidPos += 1;
+        excludedTotalSales += sale;
+        return false;
+      }
       if (isPodReceipt(r)) {
         const keep = isPodSettledForSales(r);
         if (!keep) {

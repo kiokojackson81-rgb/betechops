@@ -94,6 +94,16 @@ export default async function AgentSalesPage({ useRootPaths = false }: AgentSale
             </Link>
           </div>
 
+          <div className="mt-5 rounded-[24px] border border-[#f1b81d]/30 bg-[#fff3cf] p-4 text-sm text-[#5a4300]">
+            <p className="font-semibold text-[#7a0000]">How projects work for agents</p>
+            <p className="mt-2">
+              If your customer order becomes a project, it does not enter BETECH sales totals immediately. The project stays out of sales calculations while it is still at receipt created or in progress.
+            </p>
+            <p className="mt-2">
+              It only starts counting after admin marks the project as completed and posted to POS. After that, the normal agent order completion flow can finish and your commission can unlock.
+            </p>
+          </div>
+
           <div className="mt-6 space-y-4">
             {sales.length ? sales.map((sale) => {
               const status = getAgentSaleStatusMeta(sale.status);

@@ -86,10 +86,11 @@ export default async function AgentWithdrawalsPage({ useRootPaths = false }: Age
             <div className="mt-5 space-y-3">
               {[
                 "1. Submit customer orders and let BETECH complete payment and delivery.",
-                "2. Once commission is unlocked, it becomes available for withdrawal.",
-                "3. Request withdrawal here using your saved M-Pesa number.",
-                "4. Admin reviews the request and processes payout.",
-                "5. Your withdrawal history and status update here automatically.",
+                "2. If the order becomes a project, it only starts counting after the project is marked completed and posted to POS.",
+                "3. Once commission is unlocked, it becomes available for withdrawal.",
+                "4. Request withdrawal here using your saved M-Pesa number.",
+                "5. Admin reviews the request and processes payout.",
+                "6. Your withdrawal history and status update here automatically.",
               ].map((item) => (
                 <div key={item} className="rounded-[20px] border border-[#ece1d9] bg-[#fffaf5] px-4 py-3 text-sm text-slate-700">
                   {item}

@@ -5,6 +5,7 @@ import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 import { buildReceiptKey as buildDatedReceiptKey } from "@/lib/receipts/utils";
 import { adjustProfitForPodDeliveryFee, getPodDeliveryFee } from "@/lib/podDeliveryFee";
 import { computeRecognizedReceiptProfit } from "@/lib/recognizedReceiptProfit";
+import { readReceiptProjectFlow } from "@/lib/receiptProjects";
 
 type OrderItemCandidate = {
   quantity?: number | null;
@@ -118,6 +119,16 @@ const normalizeOptionalId = (value: unknown) => {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length ? trimmed : null;
+};
+
+const isCompletedProjectReceiptForSales = (receipt: PosReceiptRow) => {
+  const rawData =
+    receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
+      ? (receipt.data as Record<string, unknown>)
+      : {};
+  const flow = readReceiptProjectFlow(rawData.projectFlow);
+  if (!flow?.isProject) return true;
+  return flow.stage === "COMPLETED_POSTED";
 };
 
 const matchesOwnershipMode = (
@@ -297,6 +308,7 @@ export async function summarizePosReceiptsForPeriod(period: {
   //   the separate POD `paidAt` marker has not been set yet.
   const filteredReceipts = receipts
     .filter((r: any) => {
+      if (!isCompletedProjectReceiptForSales(r)) return false;
       if (period.paymentScope === "all") return true;
       if (isPodReceipt(r)) {
         return isPodSettledForSales(r);
