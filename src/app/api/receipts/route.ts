@@ -493,8 +493,17 @@ export async function GET(req: NextRequest) {
   const isPodPaidReceipt = (row: any) => Boolean((row?.data as any)?.podDelivery?.paidAt);
   const podStatusOf = (row: any) => ((row?.data as any)?.podDelivery?.status ?? "").toString().toLowerCase();
   const isPodReceipt = (row: any) => Boolean((row?.data as any)?.podDelivery);
-  const isPosPaidReceipt = (row: any) =>
-    ((row?.order?.paymentStatus ?? "").toString().toUpperCase().trim() === "PAID");
+  const isPosPaidReceipt = (row: any) => {
+    const rawData =
+      row?.data && typeof row.data === "object" && !Array.isArray(row.data)
+        ? (row.data as Record<string, unknown>)
+        : {};
+    const flow = readReceiptProjectFlow(rawData.projectFlow);
+    if (flow?.isProject && flow.stage === "COMPLETED_POSTED") {
+      return true;
+    }
+    return (row?.order?.paymentStatus ?? "").toString().toUpperCase().trim() === "PAID";
+  };
   const isPodSettledForSales = (row: any) => {
     if (!isPodReceipt(row)) return false;
     if (podStatusOf(row) === "pending") return false;
@@ -645,6 +654,15 @@ export async function GET(req: NextRequest) {
       typeof baseProfit === "number"
         ? baseProfit
         : baseProfit;
+    const effectivePaymentStatus =
+      projectFlowData?.isProject && projectFlowData.stage === "COMPLETED_POSTED"
+        ? "PAID"
+        : (r.order as any)?.paymentStatus ?? null;
+    const effectiveProjectPaymentStatus =
+      projectFlowData?.isProject && projectFlowData.stage === "COMPLETED_POSTED"
+        ? "FULLY_PAID"
+        : projectFlowData?.paymentStatus ?? null;
+
     return {
       id: r.id,
       source: "pos" as const,
@@ -663,7 +681,7 @@ export async function GET(req: NextRequest) {
       customerType: String((r.data as any)?.customerType ?? "").trim() || null,
       items: includeItems ? ((r.order as any)?.items ?? []) : undefined,
       paymentMethod: normalizePaymentMethod((r.data as any)?.paymentMethod) ?? null,
-      paymentStatus: (r.order as any)?.paymentStatus ?? null,
+      paymentStatus: effectivePaymentStatus,
       detailUrl: `/receipts/${r.id}`,
       isPodDelivery: Boolean(podDeliveryData?.status),
       podDeliveryStatus: podDeliveryData?.status ?? null,
@@ -673,7 +691,7 @@ export async function GET(req: NextRequest) {
       isProjectReceipt: Boolean(projectFlowData?.isProject),
       projectStage: projectFlowData?.stage ?? null,
       projectPaymentTerm: projectFlowData?.paymentTerm ?? null,
-      projectPaymentStatus: projectFlowData?.paymentStatus ?? null,
+      projectPaymentStatus: effectiveProjectPaymentStatus,
       projectDepositType: projectFlowData?.depositType ?? null,
       projectDepositValue: projectFlowData?.depositValue ?? null,
       projectDepositRequiredAmount: projectFlowData?.depositRequiredAmount ?? null,

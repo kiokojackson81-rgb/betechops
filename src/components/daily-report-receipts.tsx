@@ -24,6 +24,9 @@ type DailyReportReceiptRow = {
   podEvidenceUrl?: string | null;
   podDeliveryFee?: number | null;
   detailUrl?: string | null;
+  isProjectReceipt?: boolean;
+  projectStage?: string | null;
+  projectPaymentStatus?: string | null;
 };
 
 type PodFilterValue = "all" | "normal_only" | "settled" | "pod_pending" | "pod_delivered" | "pod_failed";
@@ -75,6 +78,19 @@ const formatDateTime = (value?: string | null) => {
     minute: "2-digit",
     timeZone: kenyaTimeZone,
   });
+};
+
+const formatProjectStageLabel = (value?: string | null) => {
+  switch (String(value ?? "").trim().toUpperCase()) {
+    case "RECEIPT_CREATED":
+      return "Receipt created";
+    case "PROJECT_IN_PROGRESS":
+      return "Project in progress";
+    case "COMPLETED_POSTED":
+      return "Completed and posted";
+    default:
+      return null;
+  }
 };
 
 function buildCustomerProfileHref(receipt: Pick<DailyReportReceiptRow, "customerName" | "customerPhone" | "customerEmail">) {
@@ -543,6 +559,10 @@ export default function DailyReportReceiptsPanel({
           <div className="space-y-2">
             {receipts.map((receipt) => {
               const customerProfileHref = buildCustomerProfileHref(receipt);
+              const projectStageLabel = receipt.isProjectReceipt ? formatProjectStageLabel(receipt.projectStage) : null;
+              const projectPaymentLabel = receipt.isProjectReceipt
+                ? String(receipt.projectPaymentStatus ?? "").replace(/_/g, " ").trim()
+                : "";
               return (
               <div
                 key={receipt.id}
@@ -580,11 +600,22 @@ export default function DailyReportReceiptsPanel({
                     )}
                   </div>
                   <div>
-                    <span className="inline-flex rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-200">
+                    <span
+                      className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] ${
+                        projectStageLabel
+                          ? "border border-amber-400/30 bg-amber-500/10 text-amber-100"
+                          : "border border-white/10 bg-white/[0.03] text-slate-200"
+                      }`}
+                    >
                       {receipt.isPodDelivery
                         ? `POD ${String(receipt.podDeliveryStatus ?? "pending").replace(/_/g, " ")}`
-                        : String(receipt.paymentStatus ?? receipt.status ?? "open").replace(/_/g, " ")}
+                        : projectStageLabel ?? String(receipt.paymentStatus ?? receipt.status ?? "open").replace(/_/g, " ")}
                     </span>
+                    {projectStageLabel && projectPaymentLabel ? (
+                      <div className="mt-2 text-[11px] uppercase tracking-[0.12em] text-slate-500">
+                        Payment {projectPaymentLabel}
+                      </div>
+                    ) : null}
                     <div className="mt-2 text-xs text-slate-500">{formatDateTime(receipt.createdAt)}</div>
                   </div>
                   <div className="flex flex-wrap gap-2 lg:justify-end">

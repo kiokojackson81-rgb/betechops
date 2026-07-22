@@ -250,6 +250,7 @@ export function roundProjectCurrency(value: number) {
 }
 
 export function computeQuoteProjectFinancials(input: {
+  stage?: QuoteProjectStage | null;
   totalAmount: number;
   paymentTerm: QuoteProjectPaymentTerm;
   depositPercent?: number | null;
@@ -258,6 +259,7 @@ export function computeQuoteProjectFinancials(input: {
   amountPaidTotal?: number | null;
 }) {
   const totalAmount = roundProjectCurrency(Math.max(0, Number(input.totalAmount || 0)));
+  const stage = input.stage ? normalizeProjectStage(input.stage) : "RECEIPT_CREATED";
   const paymentTerm = normalizePaymentTerm(input.paymentTerm);
   const rawDepositPercent = Number(input.depositPercent ?? 30);
   const depositPercent = paymentTerm === "DEPOSIT_AND_BALANCE"
@@ -278,9 +280,12 @@ export function computeQuoteProjectFinancials(input: {
   const depositPaidAmount = roundProjectCurrency(
     Math.min(totalAmount, Math.max(0, Number(input.depositPaidAmount || 0))),
   );
-  const amountPaidTotal = roundProjectCurrency(
+  let amountPaidTotal = roundProjectCurrency(
     Math.min(totalAmount, Math.max(depositPaidAmount, Number(input.amountPaidTotal || 0))),
   );
+  if (stage === "COMPLETED_POSTED" && totalAmount > 0) {
+    amountPaidTotal = totalAmount;
+  }
   const balanceAmount = roundProjectCurrency(Math.max(0, totalAmount - amountPaidTotal));
 
   let paymentStatus: QuoteProjectPaymentStatus = "UNPAID";
@@ -292,6 +297,7 @@ export function computeQuoteProjectFinancials(input: {
 
   return {
     totalAmount,
+    stage,
     paymentTerm,
     paymentStatus,
     depositPercent,
@@ -478,6 +484,7 @@ export async function upsertQuoteProjectOrder(input: {
     ? normalizeProjectStage(input.stage)
     : existing?.stage ?? "RECEIPT_CREATED";
   const financials = computeQuoteProjectFinancials({
+    stage: currentStage,
     totalAmount: input.totalAmount,
     paymentTerm: input.paymentTerm ?? existing?.paymentTerm ?? "DEPOSIT_AND_BALANCE",
     depositPercent: input.depositPercent ?? existing?.depositPercent ?? 30,

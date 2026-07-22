@@ -169,6 +169,7 @@ export function buildReceiptProjectFlow(input: {
 }) {
   const existing = input.existing ?? null;
   const projectValue = roundCurrency(Math.max(0, Number(input.projectValue || 0)));
+  const stage = normalizeReceiptProjectStage(input.stage ?? existing?.stage);
   const paymentTerm = normalizeReceiptProjectPaymentTerm(
     input.paymentTerm ?? existing?.paymentTerm,
   );
@@ -216,7 +217,7 @@ export function buildReceiptProjectFlow(input: {
   const balancePaidAmount = roundCurrency(
     Math.max(0, Math.min(projectValue, Number(input.balancePaidAmount ?? existing?.balancePaidAmount ?? 0))),
   );
-  const totalPaidAmount = roundCurrency(
+  let totalPaidAmount = roundCurrency(
     Math.max(
       0,
       Math.min(
@@ -228,8 +229,15 @@ export function buildReceiptProjectFlow(input: {
       ),
     ),
   );
-  const depositPendingAmount = roundCurrency(Math.max(0, depositRequiredAmount - depositPaidAmount));
-  const balancePendingAmount = roundCurrency(Math.max(0, balanceExpectedAmount - balancePaidAmount));
+  if (stage === "COMPLETED_POSTED" && projectValue > 0) {
+    totalPaidAmount = projectValue;
+  }
+  const depositPendingAmount = roundCurrency(
+    stage === "COMPLETED_POSTED" ? 0 : Math.max(0, depositRequiredAmount - depositPaidAmount),
+  );
+  const balancePendingAmount = roundCurrency(
+    stage === "COMPLETED_POSTED" ? 0 : Math.max(0, balanceExpectedAmount - balancePaidAmount),
+  );
   const remainingAmount = roundCurrency(Math.max(0, projectValue - totalPaidAmount));
   const amountPaidTotal = totalPaidAmount;
   const balanceAmount = remainingAmount;
@@ -268,7 +276,7 @@ export function buildReceiptProjectFlow(input: {
 
   return {
     isProject: true as const,
-    stage: normalizeReceiptProjectStage(input.stage ?? existing?.stage),
+    stage,
     paymentTerm,
     paymentStatus,
     projectValue,
