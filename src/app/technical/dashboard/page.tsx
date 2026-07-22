@@ -373,6 +373,9 @@ export default async function TechnicalDashboardPage({
             <p className="mt-2 max-w-3xl text-sm text-slate-300">
               Here is your technical operations summary for today. Quotations, site visits, project receipts, payroll, and wellness remain connected to the same Ops account.
             </p>
+            <p className="mt-3 max-w-3xl text-sm text-amber-100/85">
+              Project receipts stay operational while pending or in progress, but they only count into sales and completed project earnings after they are marked completed and posted to POS.
+            </p>
             {impersonating ? (
               <div className="mt-3 inline-flex rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-amber-100">
                 Admin impersonation view
@@ -436,6 +439,25 @@ export default async function TechnicalDashboardPage({
         })}
       </section>
 
+      <section className="rounded-[28px] border border-amber-400/20 bg-amber-500/10 p-5 text-sm text-amber-100/80">
+        <div className="text-xs uppercase tracking-[0.22em] text-amber-200">Project workflow guardrail</div>
+        <div className="mt-2 font-semibold text-white">Dashboard counts now separate project operations from project sales recognition.</div>
+        <div className="mt-3 grid gap-3 md:grid-cols-3">
+          <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
+            <div className="font-semibold text-white">Receipt created</div>
+            <div className="mt-1">Project appears as pending work only.</div>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
+            <div className="font-semibold text-white">In progress</div>
+            <div className="mt-1">Project stays visible for operations and pending project commission only.</div>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
+            <div className="font-semibold text-white">Completed and posted</div>
+            <div className="mt-1">Only at this point does it count in finalized project totals and payroll completion earnings.</div>
+          </div>
+        </div>
+      </section>
+
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.8fr)_360px]">
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -472,7 +494,7 @@ export default async function TechnicalDashboardPage({
                 {formatCurrency(projectCommission.pendingAmount).replace("Ksh", "KES")}
               </div>
               <div className="mt-1 text-sm text-amber-100/70">
-                {projectCommission.pendingCount} assigned project{projectCommission.pendingCount === 1 ? "" : "s"} currently in progress at KES 2,000 each.
+                {projectCommission.pendingCount} assigned project{projectCommission.pendingCount === 1 ? "" : "s"} currently in progress at KES 2,000 each, waiting for final completion and POS posting.
               </div>
             </div>
             <div className="min-w-0 rounded-[24px] border border-emerald-400/20 bg-emerald-500/10 p-5">
@@ -481,7 +503,7 @@ export default async function TechnicalDashboardPage({
                 {formatCurrency(projectCommission.completedAmount).replace("Ksh", "KES")}
               </div>
               <div className="mt-1 text-sm text-emerald-100/70">
-                {projectCommission.completedCount} completed project{projectCommission.completedCount === 1 ? "" : "s"} already posted into this payroll period.
+                {projectCommission.completedCount} completed project{projectCommission.completedCount === 1 ? "" : "s"} already completed and posted into this payroll period.
               </div>
             </div>
           </div>

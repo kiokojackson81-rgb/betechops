@@ -118,7 +118,7 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
     <AgentPortalShell
       useRootPaths={useRootPaths}
       title="Your Sales Dashboard"
-      description="Track your customer orders, sales progress, and commissions all in one place."
+      description="Track your customer orders, project progress, and commissions in one place, with projects only counting after completion and POS posting."
       agent={{
         displayName: dashboard.displayName,
         email: dashboard.profile.email || dashboard.profile.user.email,
@@ -227,7 +227,7 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
                 <div className="text-sm font-semibold uppercase tracking-[0.18em]">Ready To Withdraw</div>
               </div>
               <div className="mt-3 text-3xl font-black tracking-tight text-[#210505]">{money(combinedEarnedCommission)}</div>
-              <p className="mt-2 text-sm text-slate-600">Completed sales and released customer review referral commissions appear here.</p>
+              <p className="mt-2 text-sm text-slate-600">Completed sales, plus projects already completed and posted to POS, appear here once commission is released.</p>
             </div>
             <div className="rounded-[28px] border border-[#e4d4cb] bg-white p-5 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
               <div className="flex items-center gap-3 text-[#7a0000]">
@@ -255,6 +255,25 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
               </article>
             );
           })}
+        </section>
+
+        <section className="rounded-[28px] border border-[#f1b81d]/35 bg-[#fff3cf] p-5 shadow-[0_12px_40px_rgba(64,32,18,0.08)]">
+          <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a0000]">Project sales rule</div>
+          <h3 className="mt-2 text-2xl font-black tracking-tight text-[#210505]">When project orders start counting</h3>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <div className="rounded-[22px] border border-[#f0d18a] bg-white/55 p-4 text-sm text-[#5a4300]">
+              <div className="font-semibold text-[#210505]">1. Receipt created / in progress</div>
+              <p className="mt-2">The order is visible for follow-up, but it stays out of BETECH sales totals and commission calculations.</p>
+            </div>
+            <div className="rounded-[22px] border border-[#f0d18a] bg-white/55 p-4 text-sm text-[#5a4300]">
+              <div className="font-semibold text-[#210505]">2. Completed and posted to POS</div>
+              <p className="mt-2">That is the point where the project starts counting in sales totals inside Ops.</p>
+            </div>
+            <div className="rounded-[22px] border border-[#f0d18a] bg-white/55 p-4 text-sm text-[#5a4300]">
+              <div className="font-semibold text-[#210505]">3. Agent commission unlock</div>
+              <p className="mt-2">After the order then finishes the normal completion flow, your commission moves from potential to earned.</p>
+            </div>
+          </div>
         </section>
 
         <section className="rounded-[30px] bg-[linear-gradient(135deg,#8b0b0b_0%,#530707_55%,#2f0808_100%)] p-6 text-white shadow-[0_18px_55px_rgba(122,0,0,0.22)]">
@@ -385,11 +404,11 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
               <div className="mt-5 space-y-4">
                 <div className="rounded-[24px] bg-[#fff3cf] p-4">
                   <div className="text-sm font-semibold text-[#210505]">Potential Earnings</div>
-                  <p className="mt-1 text-sm text-[#6a5000]">Appears after you submit a customer order.</p>
+                  <p className="mt-1 text-sm text-[#6a5000]">Appears after you submit a customer order. If it becomes a project, totals stay pending until it is completed and posted to POS.</p>
                 </div>
                 <div className="rounded-[24px] bg-[#fceeee] p-4">
                   <div className="text-sm font-semibold text-[#210505]">Commission Ready</div>
-                  <p className="mt-1 text-sm text-[#7a0000]">Unlocked after customer payment and successful delivery.</p>
+                  <p className="mt-1 text-sm text-[#7a0000]">Unlocked after customer payment and successful delivery, or after the project route has been completed, posted to POS, and fully finished.</p>
                 </div>
                 <div className="rounded-[24px] bg-[#edf9f0] p-4">
                   <div className="text-sm font-semibold text-[#210505]">Withdrawn Earnings</div>
@@ -473,14 +492,14 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
                 )) : (
                   <div className="rounded-[24px] border border-dashed border-[#d9c6ba] bg-[#fffaf5] p-6 text-sm text-slate-500">
                     No withdrawals yet.
-                    <div className="mt-2">Your earnings will appear here once customer orders are completed and paid.</div>
+                    <div className="mt-2">Your earnings will appear here once customer orders are completed and paid. Project deals first have to be completed and posted to POS.</div>
                   </div>
                 )}
               </div>
               <div className="mt-5 rounded-[24px] border border-[#f1b81d]/30 bg-[#fff3cf] p-4">
                 <div className="text-sm font-semibold text-[#210505]">Withdrawal procedure</div>
                 <p className="mt-2 text-sm text-[#5a4300]">
-                  Complete customer orders, wait for commission to unlock, then request withdrawal to your saved M-Pesa number.
+                  Complete customer orders, or for projects wait until they are completed and posted to POS, then let commission unlock before requesting withdrawal to your saved M-Pesa number.
                 </p>
                 <Link
                   href={agentPath("/withdrawals", useRootPaths)}

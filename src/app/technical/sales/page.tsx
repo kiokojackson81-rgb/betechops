@@ -10,6 +10,7 @@ import getLandingPage from "@/lib/getLandingPage";
 import { isTechnicalTeamCategory } from "@/lib/technicalTeam";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 import { computeRecognizedReceiptProfit } from "@/lib/recognizedReceiptProfit";
+import { readReceiptProjectFlow } from "@/lib/receiptProjects";
 
 export const dynamic = "force-dynamic";
 
@@ -220,6 +221,9 @@ export default async function TechnicalSalesPage() {
             <p className="mt-2 max-w-3xl text-sm text-slate-300">
               Watch the receipts you created, the profit already recognized after pricing, and the commission that will flow into payroll. Technical POS commission defaults to 10% of priced profit only.
             </p>
+            <p className="mt-3 max-w-3xl text-sm text-amber-100/85">
+              Project receipts do not count in POS sales while they are still at receipt created or in progress. They only start counting after completion and POS posting.
+            </p>
           </div>
           <div className="grid gap-3 rounded-3xl border border-white/10 bg-[#091223] p-4 text-sm text-slate-300 sm:grid-cols-2">
             <div>
@@ -264,7 +268,7 @@ export default async function TechnicalSalesPage() {
           <div>
             <div className="text-lg font-semibold text-white">Receipt sales created by you</div>
             <div className="text-sm text-slate-400">
-              Commission only starts after buying price has been entered. Until then, the receipt shows its selling price and stays at zero commission.
+              Commission only starts after buying price has been entered. For project receipts, sales recognition also waits until the project is completed and posted to POS.
             </div>
           </div>
           <Link href="/receipts" target="_blank" rel="noreferrer" className="rounded-full border border-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/5">
@@ -275,10 +279,16 @@ export default async function TechnicalSalesPage() {
         <div className="mt-5 space-y-3">
           {receipts.length ? (
             receipts.map((receipt) => {
+              const projectFlow = readReceiptProjectFlow(
+                receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
+                  ? (receipt.data as Record<string, unknown>).projectFlow
+                  : null,
+              );
+              const isProjectPendingForSales = Boolean(projectFlow?.isProject) && projectFlow.stage !== "COMPLETED_POSTED";
               const supportProfit =
                 supportProfitByReceipt.get(canonicalReceiptNumber(receipt.order?.orderNumber || receipt.receiptNumber || undefined) || "") ?? null;
               const profit = extractProfit(receipt, supportProfit);
-              const commission = profit > 0 ? Math.round(profit * TECHNICAL_POS_PROFIT_COMMISSION_RATE) : 0;
+              const commission = !isProjectPendingForSales && profit > 0 ? Math.round(profit * TECHNICAL_POS_PROFIT_COMMISSION_RATE) : 0;
               return (
                 <div key={receipt.id} className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -294,6 +304,11 @@ export default async function TechnicalSalesPage() {
                       <div className="mt-1 text-xs text-slate-500">
                         Created {new Date(receipt.createdAt).toLocaleString("en-KE")} · Payment {String(receipt.order?.paymentStatus || "PENDING").replace(/_/g, " ")}
                       </div>
+                      {projectFlow?.isProject ? (
+                        <div className="mt-2 inline-flex rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-amber-100">
+                          Project {projectFlow.stage.replace(/_/g, " ")}
+                        </div>
+                      ) : null}
                     </div>
                     <div className="grid min-w-0 gap-2 rounded-2xl border border-white/10 bg-black/20 p-3 text-sm text-slate-200 lg:min-w-[280px]">
                       <div className="flex items-center justify-between">
@@ -305,7 +320,11 @@ export default async function TechnicalSalesPage() {
                         <span className="break-words text-right font-semibold text-emerald-300">{formatCurrency(commission)}</span>
                       </div>
                       <div className="text-xs text-slate-500">
-                        {profit > 0 ? "Pricing completed. This receipt already contributes to your POS commission." : "Awaiting pricing or buying-cost confirmation before commission can be recognized."}
+                        {isProjectPendingForSales
+                          ? "Project workflow is not yet completed and posted to POS, so this receipt is still excluded from sales and commission totals."
+                          : profit > 0
+                            ? "Pricing completed. This receipt already contributes to your POS commission."
+                            : "Awaiting pricing or buying-cost confirmation before commission can be recognized."}
                       </div>
                       <div className="pt-1">
                         <Link href={`/receipts/${encodeURIComponent(receipt.id)}`} target="_blank" rel="noreferrer" className="inline-flex rounded-full border border-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/5">
