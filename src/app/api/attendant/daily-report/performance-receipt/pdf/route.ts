@@ -76,6 +76,7 @@ type PerformanceReceiptRow = {
   profit: number;
   paymentMethod: "MPESA" | "CASH";
   status: string;
+  source: string;
   commissionImpact: number;
   productCommission: number;
 };
@@ -589,8 +590,7 @@ function renderHtml(args: {
     receiptNumber: string;
     amount: number;
     itemCount: number;
-    commissionImpact: number;
-    productCommission: number;
+    source: string;
     paymentMethod: "MPESA" | "CASH";
     status: string;
   }>;
@@ -615,9 +615,7 @@ function renderHtml(args: {
         <td>${escapeHtml(r.dateIso)}</td>
         <td>${escapeHtml(r.receiptNumber)}</td>
         <td style="text-align:right">${escapeHtml(formatKes(r.amount))}</td>
-        <td style="text-align:right">${escapeHtml(formatKes(r.commissionImpact))}</td>
-        <td style="text-align:right">${escapeHtml(formatKes(r.productCommission))}</td>
-        <td style="text-align:right">${escapeHtml(formatKes(r.commissionImpact + r.productCommission))}</td>
+        <td>${escapeHtml(r.source)}</td>
         <td>${escapeHtml(r.paymentMethod)}</td>
         <td>${escapeHtml(r.status)}</td>
       </tr>
@@ -728,23 +726,21 @@ function renderHtml(args: {
             <th style="width:110px;">Date</th>
             <th>Receipt #</th>
             <th style="text-align:right; width:130px;">Amount</th>
-            <th style="text-align:right; width:105px;">Sales comm.</th>
-            <th style="text-align:right; width:105px;">Product comm.</th>
-            <th style="text-align:right; width:105px;">Total comm.</th>
+            <th style="width:100px;">Source</th>
             <th style="width:80px;">Method</th>
             <th style="width:110px;">Status</th>
           </tr>
         </thead>
         <tbody>
-          ${rowsHtml || `<tr><td colspan="8" class="muted">No receipts found in this period.</td></tr>`}
+          ${rowsHtml || `<tr><td colspan="6" class="muted">No receipts found in this period.</td></tr>`}
         </tbody>
       </table>
 
       <div class="note">
         ${
           args.attendantEmail.toLowerCase() === "justus@betech.co.ke"
-            ? "Sales commission is 10% of each receipt's profit for this period. Product commission comes from POS management product commissions assigned to the receipt items."
-            : "Sales commission is each receipt's marginal contribution to the period sales commission. Product commission comes from POS management product commissions assigned to the receipt items. This report intentionally excludes profit and buying price values."
+            ? "Receipt source shows whether each row came from POS, POD, PROJECT, MARKETING, or SUPPORT."
+            : "Receipt source shows whether each row came from POS, POD, PROJECT, MARKETING, or SUPPORT."
         }
       </div>
     </body>
@@ -875,6 +871,24 @@ export async function GET(req: Request) {
     seen.add(dedupeKey);
     const status =
       (row.order?.paymentStatus || row.order?.status || "").toString().toUpperCase() || "UNKNOWN";
+    const isProjectReceipt = Boolean(
+      row.data &&
+        typeof row.data === "object" &&
+        !Array.isArray(row.data) &&
+        (
+          String((row.data as Record<string, unknown>).customerType ?? "").trim().toLowerCase() === "project" ||
+          Boolean(((row.data as Record<string, unknown>).projectFlow as Record<string, unknown> | null | undefined)?.isProject)
+        ),
+    );
+    const isPodReceipt = Boolean(
+      row.data &&
+        typeof row.data === "object" &&
+        !Array.isArray(row.data) &&
+        (
+          String((row.data as Record<string, unknown>).customerType ?? "").trim().toLowerCase() === "pod" ||
+          Boolean((row.data as Record<string, unknown>).podDelivery)
+        ),
+    );
 
     rows.push({
       dateIso,
@@ -885,6 +899,7 @@ export async function GET(req: Request) {
       profit,
       paymentMethod,
       status,
+      source: isProjectReceipt ? "PROJECT" : isPodReceipt ? "POD" : "POS",
       commissionImpact: 0,
       productCommission: 0,
     });
@@ -966,6 +981,7 @@ export async function GET(req: Request) {
         profit: extractReceiptProfit(row, extractReceiptAmount(row)),
         paymentMethod,
         status: (row.order?.paymentStatus || row.order?.status || "").toString().toUpperCase() || "UNKNOWN",
+        source: "POS",
         commissionImpact: 0,
         productCommission: 0,
       });
@@ -1039,6 +1055,7 @@ export async function GET(req: Request) {
         profit: resolveLedgerReceiptProfit(entry),
         paymentMethod: method,
         status,
+        source: status,
         commissionImpact: 0,
         productCommission: 0,
       });
@@ -1091,6 +1108,7 @@ export async function GET(req: Request) {
         profit: 0,
         paymentMethod: value.method,
         status: "SUBMITTED",
+        source: "POS",
         commissionImpact: 0,
         productCommission: 0,
       });
@@ -1161,6 +1179,7 @@ export async function GET(req: Request) {
       profit: 0,
       paymentMethod: "MPESA",
       status: "PRODUCT COMMISSION",
+      source: "POS",
       commissionImpact: 0,
       productCommission: productCommission.amount,
     });
