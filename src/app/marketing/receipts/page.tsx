@@ -619,6 +619,7 @@ function MarketingReceiptsPageInner() {
               q={filters.query}
               attendantId={undefined}
               onlyPos
+              summarySalesOnly
               hideHeader
               showProjectFilter
               initialPodFilter={podFilter}

@@ -131,6 +131,7 @@ export async function GET(req: NextRequest) {
   const includeLedgerParam = url.searchParams.get("includeLedger");
   const includeLedger = includeLedgerParam === null ? true : includeLedgerParam !== "false";
   const paidOnly = ["1", "true", "yes"].includes((url.searchParams.get("paidOnly") || "").toLowerCase());
+  const summarySalesOnly = ["1", "true", "yes"].includes((url.searchParams.get("summarySalesOnly") || "").toLowerCase());
   const carryForwardPending = ["1", "true", "yes"].includes((url.searchParams.get("carryForwardPending") || "").toLowerCase());
   const start = url.searchParams.get("start");
   const end = url.searchParams.get("end");
@@ -1000,10 +1001,24 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  const summaryRows = summarySalesOnly
+    ? deduped.filter((row) => {
+        if (row.source === "marketing" || row.source === "support") return true;
+        if (row.isPodDelivery) {
+          const podStatus = String(row.podDeliveryStatus ?? "").trim().toLowerCase();
+          return podStatus !== "pending" && String(row.paymentStatus ?? "").trim().toUpperCase() === "PAID";
+        }
+        if (row.isProjectReceipt) {
+          return String(row.projectStage ?? "").trim().toUpperCase() === "COMPLETED_POSTED";
+        }
+        return String(row.paymentStatus ?? "").trim().toUpperCase() === "PAID";
+      })
+    : deduped;
+
   deduped.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  const totalCount = deduped.length;
-  const totalSales = deduped.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
-  const totalProfit = deduped.reduce((sum, row) => sum + Number((row as any).profit ?? 0), 0);
+  const totalCount = summaryRows.length;
+  const totalSales = summaryRows.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
+  const totalProfit = summaryRows.reduce((sum, row) => sum + Number((row as any).profit ?? 0), 0);
   const paged = deduped.slice((page - 1) * size, page * size);
   const totalPages = Math.max(1, Math.ceil(totalCount / size));
     const data = {

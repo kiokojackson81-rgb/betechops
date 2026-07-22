@@ -57,6 +57,7 @@ type Props = {
   onSummary?: (s: { totalSales: number; count: number }) => void;
   carryForwardPending?: boolean;
   showProjectFilter?: boolean;
+  summarySalesOnly?: boolean;
 };
 
 type ReceiptsApiResponse = {
@@ -171,6 +172,7 @@ export default function DailyReportReceiptsPanel({
   onSummary,
   carryForwardPending = false,
   showProjectFilter = false,
+  summarySalesOnly = false,
 }: Props) {
   const [receipts, setReceipts] = useState<DailyReportReceiptRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -249,6 +251,7 @@ export default function DailyReportReceiptsPanel({
         if (debouncedQuery) params.set("q", debouncedQuery);
         params.set("scope", "mine");
         if (carryForwardPending) params.set("carryForwardPending", "1");
+        if (summarySalesOnly) params.set("summarySalesOnly", "1");
         const settledOnly = podFilter === "settled";
         if (onlyPos) params.set("onlyPos", "1");
         if (paidOnly || settledOnly) params.set("paidOnly", "1");
@@ -323,7 +326,7 @@ export default function DailyReportReceiptsPanel({
       cancelled = true;
       controller.abort();
     };
-  }, [attendantId, carryForwardPending, debouncedQuery, includeLedger, onlyPos, paidOnly, podFilter, receiptScopeFilter, reloadKey, resolvedAttendantId, start, end]);
+  }, [attendantId, carryForwardPending, debouncedQuery, includeLedger, onlyPos, paidOnly, podFilter, receiptScopeFilter, reloadKey, resolvedAttendantId, start, end, summarySalesOnly]);
 
   // If we don't have an attendantId prop, try fetching the session to determine the logged-in user id
   useEffect(() => {
