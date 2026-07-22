@@ -6,7 +6,7 @@ import Card from "@/app/_components/Card";
 import Input from "@/app/_components/Input";
 import type { PayrollAppraisal } from "@/lib/payrollAppraisal";
 import { showToast } from "@/lib/ui/toast";
-import { getPreviousTradingPeriod, getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 
 type CompPlan = {
   id?: string;
@@ -104,7 +104,6 @@ export default function PayrollClient({
   const [loadingAdjustments, setLoadingAdjustments] = useState(false);
   const [addingAdjustment, setAddingAdjustment] = useState(false);
   const [addingRecurring, setAddingRecurring] = useState(false);
-  const [recurringStartPeriod, setRecurringStartPeriod] = useState<"CURRENT" | "PREVIOUS">("CURRENT");
   const [weeklyStartWeek, setWeeklyStartWeek] = useState("");
   const [savingRecurringEdit, setSavingRecurringEdit] = useState(false);
   const [editingRecurringId, setEditingRecurringId] = useState<string | null>(null);
@@ -142,13 +141,11 @@ export default function PayrollClient({
   });
 
   const currentTradingPeriod = useMemo(() => getTradingPeriodFor(new Date()), []);
-  const previousTradingPeriod = useMemo(() => getPreviousTradingPeriod(currentTradingPeriod), [currentTradingPeriod]);
-  const selectedStartPeriod = recurringStartPeriod === "CURRENT" ? currentTradingPeriod : previousTradingPeriod;
   const weeklyStartOptions = useMemo(() => {
     const options: Array<{ value: string; label: string }> = [];
-    const cursor = new Date(selectedStartPeriod.start);
+    const cursor = new Date(currentTradingPeriod.start);
     cursor.setHours(0, 0, 0, 0);
-    const periodEnd = new Date(selectedStartPeriod.end);
+    const periodEnd = new Date(currentTradingPeriod.end);
     periodEnd.setHours(0, 0, 0, 0);
     while (cursor.getTime() <= periodEnd.getTime()) {
       const start = new Date(cursor);
@@ -157,7 +154,7 @@ export default function PayrollClient({
       cursor.setDate(cursor.getDate() + 7);
     }
     return options;
-  }, [selectedStartPeriod]);
+  }, [currentTradingPeriod]);
 
   const [newAdjustment, setNewAdjustment] = useState<{ adjustmentType: string; label: string; amount: number | ""; adjustmentKind?: "ADDITION" | "DEDUCTION" }>(
     { adjustmentType: "BONUS", label: "", amount: "", adjustmentKind: "ADDITION" }
@@ -414,7 +411,7 @@ export default function PayrollClient({
       }
       if (newRecurring.cadence === "MONTHLY") {
         body.dayOfMonth = newRecurring.dayOfMonth;
-        body.startDate = ymd(selectedStartPeriod.start);
+        body.startDate = ymd(currentTradingPeriod.start);
       }
       if (newRecurring.endDate) body.endDate = newRecurring.endDate;
       const res = await fetch(`/api/admin/attendants/${attendant.id}/payroll-recurring`, {
@@ -541,6 +538,26 @@ export default function PayrollClient({
       await fetchRecurringItems();
     } catch (err: any) {
       showToast(err?.message || "Failed to delete adjustment", "error");
+    }
+  };
+
+  const deleteRecurring = async (item: RecurringItem) => {
+    const confirmed = confirm("Delete this recurring item, remove its generated deductions/additions, and recalculate payroll?");
+    if (!confirmed) return;
+    try {
+      const res = await fetch(`/api/admin/attendants/${attendant.id}/payroll-recurring?id=${encodeURIComponent(item.id)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to delete recurring item");
+      }
+      showToast("Recurring item deleted and payroll recalculated", "success");
+      await fetchRecurringItems();
+      await fetchAdjustments();
+      await fetchSummary();
+    } catch (err: any) {
+      showToast(err?.message || "Failed to delete recurring item", "error");
     }
   };
 
@@ -867,9 +884,9 @@ export default function PayrollClient({
                       </div>
                       {(r.startDate || r.endDate) && (
                         <div className="text-slate-500">
-                          {r.startDate ? `From ${new Date(r.startDate).toISOString().slice(0, 10)}` : "From any date"}
+                          {r.startDate ? `Effective from ${ymd(new Date(r.startDate))}` : "Effective from current trading period"}
                           {" · "}
-                          {r.endDate ? `To ${new Date(r.endDate).toISOString().slice(0, 10)}` : "No end date"}
+                          {r.endDate ? `Stop date ${ymd(new Date(r.endDate))}` : "No stop date"}
                         </div>
                       )}
                     </div>
@@ -880,6 +897,12 @@ export default function PayrollClient({
                       </button>
                       <button className="rounded border border-white/10 px-2 py-1" onClick={() => toggleRecurring(r.id, r.isActive)}>
                         {r.isActive ? "Disable" : "Enable"}
+                      </button>
+                      <button
+                        className="rounded border border-rose-500/40 px-2 py-1 text-rose-200"
+                        onClick={() => deleteRecurring(r)}
+                      >
+                        Delete
                       </button>
                     </div>
                   </div>
@@ -923,7 +946,7 @@ export default function PayrollClient({
               </div>
               {newRecurring.cadence === "WEEKLY" ? (
                 <div>
-                  <label className="text-xs text-slate-400">Start trading week</label>
+                  <label className="text-xs text-slate-400">Effective from current trading week</label>
                   <select
                     value={weeklyStartWeek}
                     onChange={(e) => setWeeklyStartWeek(e.target.value)}
@@ -941,18 +964,13 @@ export default function PayrollClient({
                 </div>
               )}
               <div>
-                <label className="text-xs text-slate-400">Start trading period</label>
-                <select
-                  value={recurringStartPeriod}
-                  onChange={(e) => setRecurringStartPeriod(e.target.value as "CURRENT" | "PREVIOUS")}
-                  className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-slate-100"
-                >
-                  <option value="CURRENT">Current ({ymd(currentTradingPeriod.start)} to {ymd(currentTradingPeriod.end)})</option>
-                  <option value="PREVIOUS">Previous ({ymd(previousTradingPeriod.start)} to {ymd(previousTradingPeriod.end)})</option>
-                </select>
+                <label className="text-xs text-slate-400">Effective from current trading period</label>
+                <div className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-slate-100">
+                  {ymd(currentTradingPeriod.start)} to {ymd(currentTradingPeriod.end)}
+                </div>
               </div>
               <div>
-                <label className="text-xs text-slate-400">Effective to</label>
+                <label className="text-xs text-slate-400">Stop date</label>
                 <Input type="date" value={newRecurring.endDate} onChange={(e) => setNewRecurring((s) => ({ ...s, endDate: e.target.value }))} />
               </div>
               <div>

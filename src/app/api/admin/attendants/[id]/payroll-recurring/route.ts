@@ -151,6 +151,14 @@ export async function DELETE(req: Request, ctx: any) {
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (existing.attendantId !== attendantId) return NextResponse.json({ error: "Mismatched attendant" }, { status: 403 });
 
-  await prisma.attendantRecurringPayrollItem.delete({ where: { id } });
+  await prisma.$transaction([
+    prisma.attendantPayrollAdjustment.deleteMany({
+      where: {
+        attendantId,
+        recurringItemId: id,
+      },
+    }),
+    prisma.attendantRecurringPayrollItem.delete({ where: { id } }),
+  ]);
   return NextResponse.json({ ok: true });
 }
