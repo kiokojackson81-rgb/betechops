@@ -236,18 +236,18 @@ function StatsCard({
           <p className="text-xs uppercase tracking-wide text-slate-400">Receipts</p>
           <p className="mt-1 text-2xl font-semibold text-emerald-400">{mask(receipts)}</p>
           <p className="text-[11px] text-slate-400">
-            Recognized: {mask(recognizedReceipts.toLocaleString())} • Rows: {mask(receiptRows.toLocaleString())}
+            POS receipts in selected range
           </p>
         </div>
 
         {/* Sales */}
         <div className="rounded-2xl bg-slate-950/60 px-4 py-3">
-          <p className="text-xs uppercase tracking-wide text-slate-400">Visible Sales (KES)</p>
+          <p className="text-xs uppercase tracking-wide text-slate-400">Sales (KES)</p>
           <p className="mt-1 text-2xl font-semibold text-emerald-400">
-            {mask(visibleSalesKes.toLocaleString())}
+            {mask(recognizedSalesKes.toLocaleString())}
           </p>
           <p className="text-[11px] text-slate-400">
-            Recognized for commission: {mask(recognizedSalesKes.toLocaleString())}
+            {periodLabel}
           </p>
         </div>
 
@@ -257,7 +257,7 @@ function StatsCard({
             Commission (KES)
           </p>
           <p className="mt-1 text-2xl font-semibold text-emerald-400">{mask(commissionKes.toLocaleString())}</p>
-          <p className="text-[11px] text-slate-400">Calculated from recognized sales only</p>
+          <p className="text-[11px] text-slate-400">Calculated sales commission</p>
           {commissionBreakdown ? (
             <div className="mt-2 text-xs text-slate-300 space-y-1">
               <div>POS Direct: KES {Number(commissionBreakdown.directSalesCommission ?? 0).toLocaleString()}</div>
