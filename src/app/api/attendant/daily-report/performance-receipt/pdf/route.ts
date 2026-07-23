@@ -30,7 +30,7 @@ import {
   getReleasedPosCommissionEffectiveAt,
   isPosProductCommissionEntry,
 } from "@/lib/posProductCommission";
-import { readReceiptProjectFlow } from "@/lib/receiptProjects";
+import { getReceiptProjectCompletionDate, readReceiptProjectFlow } from "@/lib/receiptProjects";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,6 +40,7 @@ type PosReceiptRow = {
   receiptNumber: string | null;
   generatedAt: Date | null;
   createdAt: Date;
+  updatedAt?: Date | null;
   totals: Record<string, unknown> | null;
   data: Record<string, unknown> | null;
   order: {
@@ -799,6 +800,12 @@ export async function GET(req: Request) {
           OR: [
             { generatedAt: { gte: period.start, lte: period.end } },
             { createdAt: { gte: period.start, lte: period.end } },
+            {
+              AND: [
+                { updatedAt: { gte: period.start, lte: period.end } } as any,
+                { data: { path: ["projectFlow", "isProject"], equals: true } },
+              ],
+            },
           ],
         },
         { OR: ownerOr },
@@ -819,6 +826,7 @@ export async function GET(req: Request) {
       receiptNumber: true,
       generatedAt: true,
       createdAt: true,
+      updatedAt: true,
       totals: true,
       data: true,
       order: {
@@ -861,7 +869,11 @@ export async function GET(req: Request) {
       projectEligibilityByCanonical.set(canonical, projectFlow.stage === "COMPLETED_POSTED");
       if (projectFlow.stage !== "COMPLETED_POSTED") continue;
     }
-    const date = row.generatedAt ?? row.createdAt;
+    const date = projectFlow?.isProject
+      ? (getReceiptProjectCompletionDate((row.data as Record<string, unknown> | null | undefined)?.projectFlow, row.updatedAt, row.generatedAt ?? row.createdAt) ??
+        row.generatedAt ??
+        row.createdAt)
+      : (row.generatedAt ?? row.createdAt);
     const dateIso = new Date(date).toISOString().slice(0, 10);
     const receiptNumber = row.receiptNumber || row.order?.orderNumber || canonical;
     const amount = extractReceiptAmount(row);
@@ -928,6 +940,7 @@ export async function GET(req: Request) {
         receiptNumber: true,
         generatedAt: true,
         createdAt: true,
+        updatedAt: true,
         totals: true,
         data: true,
         order: {
@@ -972,7 +985,11 @@ export async function GET(req: Request) {
       const dedupeKey = `${canonical}|${paymentMethod}`;
       if (seen.has(dedupeKey)) continue;
       seen.add(dedupeKey);
-      const date = row.generatedAt ?? row.createdAt;
+      const date = projectFlow?.isProject
+        ? (getReceiptProjectCompletionDate((row.data as Record<string, unknown> | null | undefined)?.projectFlow, row.updatedAt, row.generatedAt ?? row.createdAt) ??
+          row.generatedAt ??
+          row.createdAt)
+        : (row.generatedAt ?? row.createdAt);
       rows.push({
         dateIso: new Date(date).toISOString().slice(0, 10),
         sortAt: date.toISOString(),

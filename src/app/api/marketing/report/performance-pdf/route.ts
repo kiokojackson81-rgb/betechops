@@ -11,6 +11,7 @@ import { nowInNairobi } from "@/lib/timezone";
 import { getUserCommissionConfigLike } from "@/lib/userCommissionConfig";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 import { normalizePaymentMethod, normalizeReceiptNumber } from "@/lib/receiptKey";
+import { getReceiptProjectCompletionDate, readReceiptProjectFlow } from "@/lib/receiptProjects";
 import {
   computeJenifferProratedCommission,
   computeSalesCommissionFromTiers,
@@ -35,7 +36,7 @@ type ReceiptListRow = {
   paymentMethod: "MPESA" | "CASH";
   itemsCount: number;
   amountKes: number;
-  source: "POS" | "MARKETING" | "SUPPORT";
+  source: "POS" | "PROJECT" | "MARKETING" | "SUPPORT";
 };
 
 function sanitizeFilename(value: string) {
@@ -44,6 +45,24 @@ function sanitizeFilename(value: string) {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 120);
+}
+
+function getReceiptSalesRecognitionDate(row: {
+  data?: unknown;
+  updatedAt?: Date | null;
+  generatedAt?: Date | null;
+  createdAt?: Date | null;
+}) {
+  const rawData =
+    row?.data && typeof row.data === "object" && !Array.isArray(row.data)
+      ? (row.data as Record<string, unknown>)
+      : {};
+  return (
+    getReceiptProjectCompletionDate(rawData.projectFlow, row.updatedAt, row.generatedAt ?? row.createdAt) ??
+    row.generatedAt ??
+    row.createdAt ??
+    null
+  );
 }
 
 function renderHtml(opts: {
@@ -409,7 +428,15 @@ export async function GET(req: Request) {
 
       const receipts = await prisma.receipt.findMany({
         where: {
-          generatedAt: { gte: period.start, lte: period.end },
+          OR: [
+            { generatedAt: { gte: period.start, lte: period.end } },
+            {
+              AND: [
+                { updatedAt: { gte: period.start, lte: period.end } },
+                { data: { path: ["projectFlow", "isProject"], equals: true } },
+              ],
+            },
+          ],
           ...(ownerOr ? { AND: [{ OR: ownerOr }] } : {}),
         },
         include: {
@@ -433,6 +460,14 @@ export async function GET(req: Request) {
         const paymentStatus = (r?.order?.paymentStatus ?? "").toString().toUpperCase().trim();
         if (!paymentStatus) return false;
         return paymentStatus === "PAID";
+      };
+      const isCompletedProjectReceipt = (r: any) => {
+        const rawData =
+          r?.data && typeof r.data === "object" && !Array.isArray(r.data)
+            ? (r.data as Record<string, unknown>)
+            : {};
+        const projectFlow = readReceiptProjectFlow(rawData.projectFlow);
+        return Boolean(projectFlow?.isProject && projectFlow.stage === "COMPLETED_POSTED");
       };
       const isPodSettledForSales = (r: any) => {
         if (!isPodReceipt(r)) return false;
@@ -469,11 +504,22 @@ export async function GET(req: Request) {
 
       const seen = new Set<string>();
       for (const r of receipts as any[]) {
+        const isProjectReceipt = Boolean(
+          r?.data &&
+            typeof r.data === "object" &&
+            !Array.isArray(r.data) &&
+            Boolean((r.data as Record<string, unknown>).projectFlow),
+        );
         if (isPodReceipt(r)) {
           if (!isPodSettledForSales(r)) continue;
+        } else if (isProjectReceipt) {
+          if (!isCompletedProjectReceipt(r)) continue;
         } else {
           if (!isPosPaid(r)) continue;
         }
+
+        const recognitionDate = getReceiptSalesRecognitionDate(r);
+        if (!recognitionDate || recognitionDate < period.start || recognitionDate > period.end) continue;
 
         const canonical =
           normalizeReceiptNumber(r?.receiptNumber) ||
@@ -489,12 +535,12 @@ export async function GET(req: Request) {
         );
 
         receiptRows.push({
-          createdAtIso: (r?.generatedAt ?? r?.createdAt ?? new Date()).toISOString(),
+          createdAtIso: recognitionDate.toISOString(),
           receiptNumber: (r?.receiptNumber ?? r?.order?.orderNumber ?? r.id ?? "").toString(),
           paymentMethod,
           itemsCount,
           amountKes,
-          source: "POS",
+          source: isProjectReceipt ? "PROJECT" : "POS",
         });
       }
     } else {

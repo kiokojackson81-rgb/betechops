@@ -97,7 +97,7 @@ const formatDateTime = (value?: string | null) => {
 const formatProjectStageLabel = (value?: string | null) => {
   switch (String(value ?? "").trim().toUpperCase()) {
     case "RECEIPT_CREATED":
-      return "Receipt created";
+      return "Project pending";
     case "PROJECT_IN_PROGRESS":
       return "Project in progress";
     case "COMPLETED_POSTED":

@@ -27,7 +27,7 @@ import { waitForReceiptById } from "@/lib/receiptReadAfterWrite";
 import { getProductTableCapabilities, type ProductTableCapabilities } from "@/lib/productTableCapabilities";
 import { recordQuotationEvent } from "@/lib/quoteRequests";
 import { upsertQuoteProjectOrder, type QuoteProjectPaymentTerm } from "@/lib/quoteProjects";
-import { buildReceiptProjectFlow, readReceiptProjectFlow } from "@/lib/receiptProjects";
+import { buildReceiptProjectFlow, getReceiptProjectCompletionDate, readReceiptProjectFlow } from "@/lib/receiptProjects";
 
 const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" | null => {
   if (typeof value !== "string") return null;
@@ -223,7 +223,17 @@ export async function GET(req: NextRequest) {
   const and: Prisma.ReceiptWhereInput[] = [];
   const shouldApplyGeneratedAtWindow = !carryForwardPending && !isProjectOnlyView;
   if (shouldApplyGeneratedAtWindow) {
-    and.push({ generatedAt: { gte: startDate, lte: endDate } });
+    and.push({
+      OR: [
+        { generatedAt: { gte: startDate, lte: endDate } },
+        {
+          AND: [
+            { updatedAt: { gte: startDate, lte: endDate } } as any,
+            { data: { path: ["projectFlow", "isProject"], equals: true } },
+          ],
+        },
+      ],
+    });
   }
 
   if (normalizedDocType && !isMarketingDocType && !isSupportDocType) {
@@ -664,13 +674,18 @@ export async function GET(req: NextRequest) {
         ? "FULLY_PAID"
         : projectFlowData?.paymentStatus ?? null;
 
+    const recognitionDate =
+      getReceiptProjectCompletionDate(rawData.projectFlow, r.updatedAt, r.generatedAt ?? r.createdAt) ??
+      r.generatedAt ??
+      r.createdAt;
+
     return {
       id: r.id,
       source: "pos" as const,
       orderRef: r.order?.orderNumber,
       receiptNumber: r.receiptNumber ?? null,
       docType: r.docType,
-      createdAt: r.generatedAt,
+      createdAt: recognitionDate,
       customerName: r.order?.customerName,
       customerPhone: (r.order as any)?.customerPhone ?? null,
       customerEmail: (r.order as any)?.customerEmail ?? null,

@@ -356,3 +356,24 @@ export function readReceiptProjectFlow(value: unknown): ReceiptProjectFlow | nul
     updatedAt: String(source.updatedAt || "").trim() || null,
   };
 }
+
+function normalizeOptionalDateObject(value: unknown): Date | null {
+  const candidate = String(value || "").trim();
+  if (!candidate) return null;
+  const parsed = new Date(candidate);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+export function getReceiptProjectCompletionDate(
+  value: unknown,
+  fallbackUpdatedAt?: unknown,
+  fallbackCreatedAt?: unknown,
+): Date | null {
+  const flow = readReceiptProjectFlow(value);
+  if (!flow?.isProject || flow.stage !== "COMPLETED_POSTED") return null;
+  return (
+    normalizeOptionalDateObject(flow.updatedAt) ??
+    normalizeOptionalDateObject(fallbackUpdatedAt) ??
+    normalizeOptionalDateObject(fallbackCreatedAt)
+  );
+}

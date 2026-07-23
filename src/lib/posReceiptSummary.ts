@@ -5,7 +5,7 @@ import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 import { buildReceiptKey as buildDatedReceiptKey } from "@/lib/receipts/utils";
 import { adjustProfitForPodDeliveryFee, getPodDeliveryFee } from "@/lib/podDeliveryFee";
 import { computeRecognizedReceiptProfit } from "@/lib/recognizedReceiptProfit";
-import { readReceiptProjectFlow } from "@/lib/receiptProjects";
+import { getReceiptProjectCompletionDate, readReceiptProjectFlow } from "@/lib/receiptProjects";
 
 type OrderItemCandidate = {
   quantity?: number | null;
@@ -19,6 +19,7 @@ type PosReceiptRow = {
   id: string;
   createdAt?: Date | null;
   generatedAt?: Date | null;
+  updatedAt?: Date | null;
   receiptNumber: string | null;
   totals: Record<string, unknown> | null;
   data: Record<string, unknown> | null;
@@ -131,6 +132,25 @@ const isCompletedProjectReceiptForSales = (receipt: PosReceiptRow) => {
   return flow.stage === "COMPLETED_POSTED";
 };
 
+const getReceiptSalesRecognitionDate = (receipt: PosReceiptRow) => {
+  const rawData =
+    receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
+      ? (receipt.data as Record<string, unknown>)
+      : {};
+  return (
+    getReceiptProjectCompletionDate(
+      rawData.projectFlow,
+      receipt.updatedAt,
+      receipt.generatedAt instanceof Date ? receipt.generatedAt : receipt.createdAt,
+    ) ??
+    (receipt.generatedAt instanceof Date
+      ? receipt.generatedAt
+      : receipt.createdAt instanceof Date
+        ? receipt.createdAt
+        : null)
+  );
+};
+
 const matchesOwnershipMode = (
   receipt: PosReceiptRow,
   userId: string | null | undefined,
@@ -204,6 +224,12 @@ export async function summarizePosReceiptsForPeriod(period: {
             OR: [
               { generatedAt: { gte: period.start, lte: period.end } },
               { createdAt: { gte: period.start, lte: period.end } },
+              {
+                AND: [
+                  { updatedAt: { gte: period.start, lte: period.end } } as any,
+                  { data: { path: ["projectFlow", "isProject"], equals: true } },
+                ],
+              },
             ],
           },
           ...(ownerOr ? [{ OR: ownerOr }] : []),
@@ -468,12 +494,7 @@ export async function summarizePosReceiptsForPeriod(period: {
   const candidateReceiptNumbers = Array.from(
     new Set(
       filteredReceipts.flatMap((receipt) => {
-        const salesDate =
-          receipt.generatedAt instanceof Date
-            ? receipt.generatedAt
-            : receipt.createdAt instanceof Date
-              ? receipt.createdAt
-              : null;
+        const salesDate = getReceiptSalesRecognitionDate(receipt);
         const variants = collectReceiptVariants(
           receipt.order?.orderNumber ?? undefined,
           receipt.receiptNumber ?? undefined,
@@ -539,8 +560,7 @@ export async function summarizePosReceiptsForPeriod(period: {
     seen.set(key, receipt.id);
 
     const sales = extractSales(receipt);
-    const salesDate =
-      receipt.generatedAt instanceof Date ? receipt.generatedAt : receipt.createdAt instanceof Date ? receipt.createdAt : null;
+    const salesDate = getReceiptSalesRecognitionDate(receipt);
     const salesIncluded = isDateInRange(salesDate, period.start, period.end);
     const canonicalOrderNumber =
       canonicalReceiptNumber(receipt.order?.orderNumber ?? undefined) ??
@@ -588,8 +608,7 @@ export async function summarizePosReceiptsForPeriod(period: {
     receiptKeys: Array.from(seen.entries())
       .filter(([receiptId]) => {
         const row = filteredReceipts.find((receipt) => canonicalKeyForRow(receipt) === receiptId);
-        const salesDate =
-          row?.generatedAt instanceof Date ? row.generatedAt : row?.createdAt instanceof Date ? row.createdAt : null;
+        const salesDate = row ? getReceiptSalesRecognitionDate(row) : null;
         return isDateInRange(salesDate, period.start, period.end);
       })
       .map(([receiptId]) => receiptId),

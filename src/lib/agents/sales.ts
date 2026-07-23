@@ -269,7 +269,7 @@ type AgentSaleRecordLite = Prisma.AgentSaleGetPayload<{
 function formatProjectStageLabel(value: string | null | undefined) {
   switch (String(value || "").toUpperCase()) {
     case "RECEIPT_CREATED":
-      return "Receipt created";
+      return "Project pending";
     case "PROJECT_IN_PROGRESS":
       return "Project in progress";
     case "COMPLETED_POSTED":

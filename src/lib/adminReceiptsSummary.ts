@@ -4,7 +4,7 @@ import { buildReceiptKey } from "@/lib/receiptKey";
 import { Prisma } from "@prisma/client";
 import { adjustProfitForPodDeliveryFee, getPodDeliveryFee } from "@/lib/podDeliveryFee";
 import { computeRecognizedReceiptProfit } from "@/lib/recognizedReceiptProfit";
-import { readReceiptProjectFlow } from "@/lib/receiptProjects";
+import { getReceiptProjectCompletionDate, readReceiptProjectFlow } from "@/lib/receiptProjects";
 
 type PaymentBucket = { totalSales: number; count: number };
 
@@ -178,6 +178,17 @@ const isCompletedProjectReceiptForSales = (receipt: any) => {
   return flow.stage === "COMPLETED_POSTED";
 };
 
+const getReceiptSalesRecognitionDate = (receipt: any) => {
+  const rawData =
+    receipt?.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
+      ? (receipt.data as Record<string, unknown>)
+      : {};
+  return (
+    getReceiptProjectCompletionDate(rawData.projectFlow, receipt?.updatedAt, receipt?.generatedAt ?? receipt?.createdAt) ??
+    (receipt?.generatedAt instanceof Date ? receipt.generatedAt : receipt?.createdAt instanceof Date ? receipt.createdAt : null)
+  );
+};
+
 async function computePosOnlyReceiptSummary({
   start,
   end,
@@ -204,7 +215,17 @@ async function computePosOnlyReceiptSummary({
 
   const basePosWhere: Prisma.ReceiptWhereInput = {
     AND: [
-      { generatedAt: { gte: start, lte: end } },
+      {
+        OR: [
+          { generatedAt: { gte: start, lte: end } },
+          {
+            AND: [
+              { updatedAt: { gte: start, lte: end } } as any,
+              { data: { path: ["projectFlow", "isProject"], equals: true } },
+            ],
+          },
+        ],
+      },
     ],
   };
 
@@ -483,7 +504,7 @@ async function computePosOnlyReceiptSummary({
   const profitContributors = new Map<string, ProfitReceiptContributor>();
 
   for (const receipt of posReceiptsFinal as any[]) {
-    const salesDate = receipt.generatedAt instanceof Date ? receipt.generatedAt : receipt.createdAt;
+    const salesDate = getReceiptSalesRecognitionDate(receipt);
     const salesIncluded = isDateInRange(salesDate, start, end);
     const salesValue = Number((receipt.totals as any)?.total ?? receipt.order?.totalAmount ?? 0);
     const payment = normalizePaymentMethod((receipt.data as any)?.paymentMethod) ?? null;

@@ -262,7 +262,7 @@ export default async function AgentDashboardPage({ useRootPaths = false }: Agent
           <h3 className="mt-2 text-2xl font-black tracking-tight text-[#210505]">When project orders start counting</h3>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             <div className="rounded-[22px] border border-[#f0d18a] bg-white/55 p-4 text-sm text-[#5a4300]">
-              <div className="font-semibold text-[#210505]">1. Receipt created / in progress</div>
+              <div className="font-semibold text-[#210505]">1. Project pending / in progress</div>
               <p className="mt-2">The order is visible for follow-up, but it stays out of BETECH sales totals and commission calculations.</p>
             </div>
             <div className="rounded-[22px] border border-[#f0d18a] bg-white/55 p-4 text-sm text-[#5a4300]">

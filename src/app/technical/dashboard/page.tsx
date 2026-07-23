@@ -444,7 +444,7 @@ export default async function TechnicalDashboardPage({
         <div className="mt-2 font-semibold text-white">Dashboard counts now separate project operations from project sales recognition.</div>
         <div className="mt-3 grid gap-3 md:grid-cols-3">
           <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
-            <div className="font-semibold text-white">Receipt created</div>
+            <div className="font-semibold text-white">Project pending</div>
             <div className="mt-1">Project appears as pending work only.</div>
           </div>
           <div className="rounded-2xl border border-white/10 bg-black/10 p-4">

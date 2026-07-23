@@ -75,13 +75,13 @@ const formatCurrency = (value: number | string | null | undefined) => {
 const formatProjectStageLabel = (value?: string | null) => {
   switch (value) {
     case "RECEIPT_CREATED":
-      return "Receipt created";
+      return "Project pending";
     case "PROJECT_IN_PROGRESS":
       return "Project in progress";
     case "COMPLETED_POSTED":
       return "Completed and posted";
     default:
-      return "Receipt created";
+      return "Project pending";
   }
 };
 
@@ -320,7 +320,7 @@ export default function ProjectsOperationsClient({
             <div className="mt-2 text-3xl font-semibold text-white">{summary.total}</div>
           </div>
           <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
-            <div className="text-xs uppercase tracking-[0.25em] text-amber-200">Receipt created</div>
+            <div className="text-xs uppercase tracking-[0.25em] text-amber-200">Project pending</div>
             <div className="mt-2 text-3xl font-semibold text-amber-100">{summary.receiptCreated}</div>
           </div>
           <div className="rounded-2xl border border-sky-500/20 bg-sky-500/10 p-4">
@@ -347,7 +347,7 @@ export default function ProjectsOperationsClient({
           className="rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm text-white outline-none focus:border-cyan-400/60"
         >
           <option value="ALL">All stages</option>
-          <option value="RECEIPT_CREATED">Receipt created</option>
+          <option value="RECEIPT_CREATED">Project pending</option>
           <option value="PROJECT_IN_PROGRESS">Project in progress</option>
           <option value="COMPLETED_POSTED">Completed</option>
         </select>

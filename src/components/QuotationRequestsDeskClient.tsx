@@ -216,7 +216,7 @@ function formatSource(value: string) {
 function formatProjectStage(value: QuoteProjectStage) {
   switch (value) {
     case "RECEIPT_CREATED":
-      return "Receipt created";
+      return "Project pending";
     case "PROJECT_IN_PROGRESS":
       return "Project in progress";
     case "COMPLETED_POSTED":
