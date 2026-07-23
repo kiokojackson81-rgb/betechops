@@ -341,38 +341,96 @@ export function readReceiptProjectFlow(value: unknown): ReceiptProjectFlow | nul
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const source = value as Record<string, unknown>;
   if (source.isProject !== true) return null;
+  const projectValue = roundCurrency(Math.max(0, Number(source.projectValue || 0)));
+  const depositType = normalizeReceiptProjectDepositType(source.depositType);
+  const depositValue = roundCurrency(Math.max(0, Number(source.depositValue || 0)));
+  const depositPercent = Math.max(0, Number(source.depositPercent || 0));
+  const depositRequiredAmount = roundCurrency(Math.max(0, Number(source.depositRequiredAmount || 0)));
+  const depositPaidAmount = roundCurrency(Math.max(0, Number(source.depositPaidAmount || 0)));
+  const depositPendingAmount = roundCurrency(Math.max(0, Number(source.depositPendingAmount || 0)));
+  const balanceExpectedAmount = roundCurrency(Math.max(0, Number(source.balanceExpectedAmount || 0)));
+  const balancePaidAmount = roundCurrency(Math.max(0, Number(source.balancePaidAmount || 0)));
+  const balancePendingAmount = roundCurrency(Math.max(0, Number(source.balancePendingAmount || 0)));
+  const totalPaidAmount = roundCurrency(Math.max(0, Number(source.totalPaidAmount || source.amountPaidTotal || 0)));
+  const remainingAmount = roundCurrency(Math.max(0, Number(source.remainingAmount || source.balanceAmount || Math.max(0, projectValue - totalPaidAmount))));
+  const amountPaidTotal = roundCurrency(Math.max(0, Number(source.amountPaidTotal || totalPaidAmount || 0)));
+  const balanceAmount = roundCurrency(Math.max(0, Number(source.balanceAmount || remainingAmount || 0)));
+  const postedReceiptNumber = String(source.postedReceiptNumber || "").trim() || null;
+  const scheduledDate = normalizeOptionalDate(source.scheduledDate);
+  const handlerType = normalizeReceiptProjectHandlerType(source.handlerType);
+  const handlerStaffId = String(source.handlerStaffId || "").trim() || null;
+  const handlerStaffName = String(source.handlerStaffName || "").trim() || null;
+  const externalAgentName = String(source.externalAgentName || "").trim() || null;
+  const externalAgentPhone = String(source.externalAgentPhone || "").trim() || null;
+
+  const hasExplicitStage = RECEIPT_PROJECT_STAGES.includes(
+    String(source.stage || "").trim().toUpperCase() as ReceiptProjectStage,
+  );
+  const hasExplicitPaymentStatus = RECEIPT_PROJECT_PAYMENT_STATUSES.includes(
+    String(source.paymentStatus || "").trim().toUpperCase() as ReceiptProjectPaymentStatus,
+  );
+
+  const derivedPaymentStatus: ReceiptProjectPaymentStatus =
+    totalPaidAmount >= projectValue && projectValue > 0
+      ? "FULLY_PAID"
+      : totalPaidAmount > 0
+        ? "PARTIALLY_PAID"
+        : "UNPAID";
+  const paymentStatus = hasExplicitPaymentStatus
+    ? normalizeReceiptProjectPaymentStatus(source.paymentStatus)
+    : derivedPaymentStatus;
+
+  const looksCompletedLegacy =
+    Boolean(postedReceiptNumber) ||
+    (projectValue > 0 && totalPaidAmount >= projectValue) ||
+    (projectValue > 0 && remainingAmount <= 0);
+  const looksInProgressLegacy =
+    Boolean(scheduledDate) ||
+    Boolean(handlerStaffId) ||
+    Boolean(handlerStaffName) ||
+    Boolean(externalAgentName) ||
+    Boolean(externalAgentPhone) ||
+    handlerType !== null;
+  const stage = hasExplicitStage
+    ? normalizeReceiptProjectStage(source.stage)
+    : looksCompletedLegacy
+      ? "COMPLETED_POSTED"
+      : looksInProgressLegacy
+        ? "PROJECT_IN_PROGRESS"
+        : "RECEIPT_CREATED";
+
   return {
     isProject: true,
-    stage: normalizeReceiptProjectStage(source.stage),
+    stage,
     paymentTerm: normalizeReceiptProjectPaymentTerm(source.paymentTerm),
-    paymentStatus: normalizeReceiptProjectPaymentStatus(source.paymentStatus),
-    projectValue: roundCurrency(Math.max(0, Number(source.projectValue || 0))),
-    depositType: normalizeReceiptProjectDepositType(source.depositType),
-    depositValue: roundCurrency(Math.max(0, Number(source.depositValue || 0))),
-    depositPercent: Math.max(0, Number(source.depositPercent || 0)),
-    depositRequiredAmount: roundCurrency(Math.max(0, Number(source.depositRequiredAmount || 0))),
-    depositPaidAmount: roundCurrency(Math.max(0, Number(source.depositPaidAmount || 0))),
-    depositPendingAmount: roundCurrency(Math.max(0, Number(source.depositPendingAmount || 0))),
+    paymentStatus,
+    projectValue,
+    depositType,
+    depositValue,
+    depositPercent,
+    depositRequiredAmount,
+    depositPaidAmount,
+    depositPendingAmount,
     depositPaymentMethod: normalizeReceiptProjectPaymentMethod(source.depositPaymentMethod),
     depositReference: String(source.depositReference || "").trim() || null,
-    balanceExpectedAmount: roundCurrency(Math.max(0, Number(source.balanceExpectedAmount || 0))),
-    balancePaidAmount: roundCurrency(Math.max(0, Number(source.balancePaidAmount || 0))),
-    balancePendingAmount: roundCurrency(Math.max(0, Number(source.balancePendingAmount || 0))),
+    balanceExpectedAmount,
+    balancePaidAmount,
+    balancePendingAmount,
     balancePaymentMethod: normalizeReceiptProjectPaymentMethod(source.balancePaymentMethod),
     balanceReference: String(source.balanceReference || "").trim() || null,
-    totalPaidAmount: roundCurrency(Math.max(0, Number(source.totalPaidAmount || source.amountPaidTotal || 0))),
-    remainingAmount: roundCurrency(Math.max(0, Number(source.remainingAmount || source.balanceAmount || 0))),
-    amountPaidTotal: roundCurrency(Math.max(0, Number(source.amountPaidTotal || 0))),
-    balanceAmount: roundCurrency(Math.max(0, Number(source.balanceAmount || 0))),
-    scheduledDate: normalizeOptionalDate(source.scheduledDate),
-    postedReceiptNumber: String(source.postedReceiptNumber || "").trim() || null,
+    totalPaidAmount,
+    remainingAmount,
+    amountPaidTotal,
+    balanceAmount,
+    scheduledDate,
+    postedReceiptNumber,
     internalNotes: String(source.internalNotes || "").trim() || null,
     paymentNotes: String(source.paymentNotes || "").trim() || null,
-    handlerType: normalizeReceiptProjectHandlerType(source.handlerType),
-    handlerStaffId: String(source.handlerStaffId || "").trim() || null,
-    handlerStaffName: String(source.handlerStaffName || "").trim() || null,
-    externalAgentName: String(source.externalAgentName || "").trim() || null,
-    externalAgentPhone: String(source.externalAgentPhone || "").trim() || null,
+    handlerType,
+    handlerStaffId,
+    handlerStaffName,
+    externalAgentName,
+    externalAgentPhone,
     createdAt: String(source.createdAt || "").trim() || null,
     updatedAt: String(source.updatedAt || "").trim() || null,
   };
