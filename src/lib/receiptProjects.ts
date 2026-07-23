@@ -86,6 +86,13 @@ function roundCurrency(value: number) {
   return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
 }
 
+function hasMeaningfulValue(value: unknown) {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (typeof value === "number") return Number.isFinite(value);
+  return true;
+}
+
 export function normalizeReceiptProjectStage(value: unknown): ReceiptProjectStage {
   const candidate = String(value || "").trim().toUpperCase();
   if (RECEIPT_PROJECT_STAGES.includes(candidate as ReceiptProjectStage)) {
@@ -211,8 +218,22 @@ export function buildReceiptProjectFlow(input: {
       : paymentTerm === "FULL_AFTER_INSTALLATION"
         ? projectValue
         : roundCurrency(Math.max(0, projectValue - depositRequiredAmount));
+  const shouldAssumeDepositWasPaid =
+    paymentTerm === "DEPOSIT_AND_BALANCE" &&
+    !hasMeaningfulValue(input.depositPaidAmount) &&
+    !hasMeaningfulValue(existing?.depositPaidAmount);
   const depositPaidAmount = roundCurrency(
-    Math.max(0, Math.min(projectValue, Number(input.depositPaidAmount ?? existing?.depositPaidAmount ?? 0))),
+    Math.max(
+      0,
+      Math.min(
+        projectValue,
+        Number(
+          shouldAssumeDepositWasPaid
+            ? depositRequiredAmount
+            : input.depositPaidAmount ?? existing?.depositPaidAmount ?? 0,
+        ) || 0,
+      ),
+    ),
   );
   const balancePaidAmount = roundCurrency(
     Math.max(0, Math.min(projectValue, Number(input.balancePaidAmount ?? existing?.balancePaidAmount ?? 0))),

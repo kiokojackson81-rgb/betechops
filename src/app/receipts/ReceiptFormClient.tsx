@@ -65,6 +65,13 @@ const sanitizeNumericInput = (value: string): number | "" => {
   return Number.isFinite(parsed) ? parsed : "";
 };
 
+const parseOptionalProjectAmount = (value: string): number | undefined => {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
 const isBlankReceiptRow = (row: ItemRow) =>
   !row.isDeliveryFee &&
   !row.productId &&
@@ -658,10 +665,10 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
             paymentTerm: projectDraft.paymentTerm,
             depositType: projectDraft.depositType,
             depositValue: Number(projectDraft.depositValue || 0),
-            depositPaidAmount: Number(projectDraft.depositPaidAmount || 0),
+            depositPaidAmount: parseOptionalProjectAmount(projectDraft.depositPaidAmount),
             depositPaymentMethod: projectDraft.depositPaymentMethod,
             depositReference: projectDraft.depositReference || null,
-            balancePaidAmount: Number(projectDraft.balancePaidAmount || 0),
+            balancePaidAmount: parseOptionalProjectAmount(projectDraft.balancePaidAmount),
             balancePaymentMethod: projectDraft.balancePaymentMethod,
             balanceReference: projectDraft.balanceReference || null,
             projectValue: total,
@@ -725,10 +732,10 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
             paymentTerm: projectDraft.paymentTerm,
             depositType: projectDraft.depositType,
             depositValue: Number(projectDraft.depositValue || 0),
-            depositPaidAmount: Number(projectDraft.depositPaidAmount || 0),
+            depositPaidAmount: parseOptionalProjectAmount(projectDraft.depositPaidAmount),
             depositPaymentMethod: projectDraft.depositPaymentMethod,
             depositReference: projectDraft.depositReference || null,
-            balancePaidAmount: Number(projectDraft.balancePaidAmount || 0),
+            balancePaidAmount: parseOptionalProjectAmount(projectDraft.balancePaidAmount),
             balancePaymentMethod: projectDraft.balancePaymentMethod,
             balanceReference: projectDraft.balanceReference || null,
             projectValue: total,
@@ -1018,10 +1025,10 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
             paymentTerm: projectDraft.paymentTerm,
             depositType: projectDraft.depositType,
             depositValue: Number(projectDraft.depositValue || 0),
-            depositPaidAmount: Number(projectDraft.depositPaidAmount || 0),
+            depositPaidAmount: parseOptionalProjectAmount(projectDraft.depositPaidAmount),
             depositPaymentMethod: projectDraft.depositPaymentMethod,
             depositReference: projectDraft.depositReference || null,
-            balancePaidAmount: Number(projectDraft.balancePaidAmount || 0),
+            balancePaidAmount: parseOptionalProjectAmount(projectDraft.balancePaidAmount),
             balancePaymentMethod: projectDraft.balancePaymentMethod,
             balanceReference: projectDraft.balanceReference || null,
             projectValue: total,

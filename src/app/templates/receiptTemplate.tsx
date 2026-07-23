@@ -31,7 +31,6 @@ export default function renderReceiptTemplate(
   const customerEmail = snapshot.customerEmail || order?.customerEmail || '';
   const projectFlow =
     snapshot.projectFlow && typeof snapshot.projectFlow === 'object' ? snapshot.projectFlow : null;
-  const quotePaymentMethod = snapshot.quotePaymentMethod || null;
   const formatWarrantyValue = (value: any) => {
     if (!value) return '';
     if (typeof value === 'string') return value;
@@ -108,38 +107,28 @@ export default function renderReceiptTemplate(
         return 'Unpaid';
     }
   };
-  const formatProjectPaymentMethod = (value: unknown) => {
-    switch (String(value || '').trim().toUpperCase()) {
-      case 'MPESA_PAYBILL':
-        return 'M-Pesa Paybill';
-      case 'ABSA_BANK':
-        return 'Absa Bank';
-      case 'EQUITY_BANK':
-        return 'Equity Bank';
-      case 'MPESA':
-        return 'M-Pesa';
-      case 'CASH':
-        return 'Cash';
-      case 'BANK':
-        return 'Bank';
-      case 'MIXED':
-        return 'Mixed';
-      default:
-        return 'Unspecified';
-    }
-  };
   const fallbackCollectionMethodsHtml = `
-    <div class="project-payment-method-list">
-      <div class="project-payment-method-option">
-        <div class="project-payment-method-title">M-Pesa Paybill</div>
-        <div class="project-payment-method-line"><span>Paybill Number:</span> <strong>516600</strong></div>
-        <div class="project-payment-method-line"><span>Account Number:</span> <strong>0710098001</strong></div>
-      </div>
-      <div class="project-payment-method-option">
-        <div class="project-payment-method-title">ABSA Bank</div>
-        <div class="project-payment-method-line"><span>Bank:</span> Absa Bank Kenya</div>
-        <div class="project-payment-method-line"><span>Account Name:</span> Betech Solar Solution</div>
-        <div class="project-payment-method-line"><span>Account Number:</span> <strong>2047639940</strong></div>
+    <div class="project-payment-options">
+      <div class="project-payment-options__label">Payment options</div>
+      <div class="project-payment-method-list">
+        <div class="project-payment-method-option">
+          <div class="project-payment-method-title">M-Pesa Paybill</div>
+          <div class="project-payment-method-line"><span>Paybill Number:</span> <strong>516600</strong></div>
+          <div class="project-payment-method-line"><span>Account Number:</span> <strong>0710098001</strong></div>
+        </div>
+        <div class="project-payment-method-option">
+          <div class="project-payment-method-title">ABSA Bank</div>
+          <div class="project-payment-method-line"><span>Bank:</span> Absa Bank Kenya</div>
+          <div class="project-payment-method-line"><span>Account Name:</span> Betech Solar Solution</div>
+          <div class="project-payment-method-line"><span>Account Number:</span> <strong>2047639940</strong></div>
+        </div>
+        <div class="project-payment-method-option">
+          <div class="project-payment-method-title">Equity Bank</div>
+          <div class="project-payment-method-line"><span>Bank:</span> Equity Bank</div>
+          <div class="project-payment-method-line"><span>Account Name:</span> Betech Technologies Limited</div>
+          <div class="project-payment-method-line"><span>Branch:</span> Moi Avenue</div>
+          <div class="project-payment-method-line"><span>Account Number:</span> <strong>0470265072030</strong></div>
+        </div>
       </div>
     </div>
   `;
@@ -193,60 +182,29 @@ export default function renderReceiptTemplate(
             <span>Paid so far</span>
             <strong>KES ${formatAmount(toNumberOrNull(projectFlow.totalPaidAmount) ?? 0)}</strong>
           </div>
-          <div class="project-payment-summary__item">
-            <span>Remaining balance</span>
-            <strong>KES ${formatAmount(toNumberOrNull(projectFlow.remainingAmount) ?? 0)}</strong>
-          </div>
           ${
             String(projectFlow.paymentTerm || '').trim().toUpperCase() === 'DEPOSIT_AND_BALANCE'
               ? `
               <div class="project-payment-summary__item">
-                <span>Deposit</span>
-                <strong>KES ${formatAmount(toNumberOrNull(projectFlow.depositPaidAmount) ?? 0)} / ${formatAmount(toNumberOrNull(projectFlow.depositRequiredAmount) ?? 0)}</strong>
-              </div>
-              <div class="project-payment-summary__item">
-                <span>Deposit method</span>
-                <strong>${formatProjectPaymentMethod(projectFlow.depositPaymentMethod)}</strong>
+                <span>Deposit paid</span>
+                <strong>KES ${formatAmount(toNumberOrNull(projectFlow.depositPaidAmount) ?? 0)}</strong>
               </div>
               <div class="project-payment-summary__item">
                 <span>Balance after installation</span>
-                <strong>KES ${formatAmount(toNumberOrNull(projectFlow.balancePendingAmount) ?? 0)}</strong>
-              </div>
-              <div class="project-payment-summary__item">
-                <span>Balance method</span>
-                <strong>${formatProjectPaymentMethod(projectFlow.balancePaymentMethod)}</strong>
+                <strong>KES ${formatAmount(toNumberOrNull(projectFlow.remainingAmount) ?? 0)}</strong>
               </div>`
               : `
               <div class="project-payment-summary__item">
-                <span>Expected payment</span>
-                <strong>KES ${formatAmount(
+                <span>${
                   String(projectFlow.paymentTerm || '').trim().toUpperCase() === 'FULL_BEFORE_INSTALLATION'
-                    ? toNumberOrNull(projectFlow.depositRequiredAmount) ?? 0
-                    : toNumberOrNull(projectFlow.balanceExpectedAmount) ?? 0,
-                )}</strong>
-              </div>
-              <div class="project-payment-summary__item project-payment-summary__item--methods">
-                <span>Payment method</span>
-                ${
-                  formatProjectPaymentMethod(
-                    (
-                      String(projectFlow.paymentTerm || '').trim().toUpperCase() === 'FULL_BEFORE_INSTALLATION'
-                        ? projectFlow.depositPaymentMethod
-                        : projectFlow.balancePaymentMethod
-                    ) || quotePaymentMethod,
-                  ) === 'Unspecified'
-                    ? fallbackCollectionMethodsHtml
-                    : `<strong>${formatProjectPaymentMethod(
-                        (
-                          String(projectFlow.paymentTerm || '').trim().toUpperCase() === 'FULL_BEFORE_INSTALLATION'
-                            ? projectFlow.depositPaymentMethod
-                            : projectFlow.balancePaymentMethod
-                        ) || quotePaymentMethod,
-                      )}</strong>`
-                }
+                    ? 'Amount due before installation'
+                    : 'Balance after installation'
+                }</span>
+                <strong>KES ${formatAmount(toNumberOrNull(projectFlow.remainingAmount) ?? 0)}</strong>
               </div>`
           }
         </div>
+        ${fallbackCollectionMethodsHtml}
       </div>`
       : '';
 
@@ -543,14 +501,21 @@ export default function renderReceiptTemplate(
           font-size: 11.5px;
           color: #0f172a;
         }
-        .project-payment-summary__item--methods {
-          grid-column: 1 / -1;
+        .project-payment-options {
+          margin-top: 10px;
+        }
+        .project-payment-options__label {
+          font-size: 10px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.18em;
+          color: #64748b;
+          margin-bottom: 6px;
         }
         .project-payment-method-list {
           display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
+          grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 8px;
-          margin-top: 4px;
         }
         .project-payment-method-option {
           border: 1px solid #e5e7eb;
@@ -731,7 +696,9 @@ export default function renderReceiptTemplate(
         .project-payment-summary__item { padding: 6px; }
         .project-payment-summary__item span { font-size: 8.8px; margin-bottom: 3px; }
         .project-payment-summary__item strong { font-size: 10px; }
-        .project-payment-method-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+        .project-payment-options { margin-top: 7px; }
+        .project-payment-options__label { font-size: 8.5px; margin-bottom: 4px; }
+        .project-payment-method-list { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
         .project-payment-method-option { padding: 6px; }
         .project-payment-method-title { font-size: 9.2px; margin-bottom: 3px; }
         .project-payment-method-line { font-size: 8.8px; }
