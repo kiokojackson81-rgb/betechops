@@ -420,7 +420,7 @@ export default function AttendantsClient({ attendants }: { attendants: Attendant
                       Payroll
                     </Link>
                     <a
-                      href={`/api/attendant/daily-report/performance-receipt/pdf?impersonateId=${encodeURIComponent(a.id)}`}
+                      href={`/api/attendant/daily-report/performance-receipt/pdf?impersonateId=${encodeURIComponent(a.id)}&ts=${Date.now()}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-xs rounded-full border border-emerald-700 px-3 py-1 text-emerald-200 hover:bg-slate-800 inline-flex items-center justify-center"

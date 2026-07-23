@@ -957,6 +957,7 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
   const performanceReportHref = (() => {
     const params = new URLSearchParams({ periodKey: selectedPeriodKey });
     if (impersonateId) params.set("impersonateId", impersonateId);
+    params.set("ts", String(Date.now()));
     return `/api/attendant/daily-report/performance-receipt/pdf?${params.toString()}`;
   })();
   const marketplaceWeeksExportHref = (() => {

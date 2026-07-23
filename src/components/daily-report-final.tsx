@@ -848,6 +848,7 @@ export default function DailyReportFinal({
       const params = new URLSearchParams();
       if (selectedPeriodKey) params.set("periodKey", selectedPeriodKey);
       if (impersonateId) params.set("impersonateId", impersonateId);
+      params.set("ts", String(Date.now()));
       const url = `/api/marketing/report/performance-pdf?${params.toString()}`;
       window.open(url, "_blank", "noopener,noreferrer");
     } finally {
@@ -915,6 +916,7 @@ export default function DailyReportFinal({
     const params = new URLSearchParams({ periodKey });
     params.set("view", "print");
     if (impersonateId) params.set("impersonateId", impersonateId);
+    params.set("ts", String(Date.now()));
     params.set("totalSales", String(displayedSalesKes));
     params.set("totalReceipts", String(displayedReceipts));
     params.set("totalNewProducts", String(displayedNewProducts));

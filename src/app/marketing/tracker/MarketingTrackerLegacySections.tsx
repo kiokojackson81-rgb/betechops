@@ -654,6 +654,7 @@ export function MarketingTrackerTopActions() {
       if (selectedPeriod?.key) params.set("periodKey", selectedPeriod.key);
       const imp = impersonateIdFromWindow();
       if (imp) params.set("impersonateId", imp);
+      params.set("ts", String(Date.now()));
       const url = `/api/attendant/daily-report/performance-receipt/pdf?${params.toString()}`;
       window.open(url, "_blank", "noopener,noreferrer");
     } finally {
