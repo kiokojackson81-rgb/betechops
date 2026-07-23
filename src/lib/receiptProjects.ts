@@ -347,14 +347,14 @@ export function readReceiptProjectFlow(value: unknown): ReceiptProjectFlow | nul
   const depositPercent = Math.max(0, Number(source.depositPercent || 0));
   const depositRequiredAmount = roundCurrency(Math.max(0, Number(source.depositRequiredAmount || 0)));
   const depositPaidAmount = roundCurrency(Math.max(0, Number(source.depositPaidAmount || 0)));
-  const depositPendingAmount = roundCurrency(Math.max(0, Number(source.depositPendingAmount || 0)));
+  let depositPendingAmount = roundCurrency(Math.max(0, Number(source.depositPendingAmount || 0)));
   const balanceExpectedAmount = roundCurrency(Math.max(0, Number(source.balanceExpectedAmount || 0)));
   const balancePaidAmount = roundCurrency(Math.max(0, Number(source.balancePaidAmount || 0)));
-  const balancePendingAmount = roundCurrency(Math.max(0, Number(source.balancePendingAmount || 0)));
-  const totalPaidAmount = roundCurrency(Math.max(0, Number(source.totalPaidAmount || source.amountPaidTotal || 0)));
-  const remainingAmount = roundCurrency(Math.max(0, Number(source.remainingAmount || source.balanceAmount || Math.max(0, projectValue - totalPaidAmount))));
-  const amountPaidTotal = roundCurrency(Math.max(0, Number(source.amountPaidTotal || totalPaidAmount || 0)));
-  const balanceAmount = roundCurrency(Math.max(0, Number(source.balanceAmount || remainingAmount || 0)));
+  let balancePendingAmount = roundCurrency(Math.max(0, Number(source.balancePendingAmount || 0)));
+  let totalPaidAmount = roundCurrency(Math.max(0, Number(source.totalPaidAmount || source.amountPaidTotal || 0)));
+  let remainingAmount = roundCurrency(Math.max(0, Number(source.remainingAmount || source.balanceAmount || Math.max(0, projectValue - totalPaidAmount))));
+  let amountPaidTotal = roundCurrency(Math.max(0, Number(source.amountPaidTotal || totalPaidAmount || 0)));
+  let balanceAmount = roundCurrency(Math.max(0, Number(source.balanceAmount || remainingAmount || 0)));
   const postedReceiptNumber = String(source.postedReceiptNumber || "").trim() || null;
   const scheduledDate = normalizeOptionalDate(source.scheduledDate);
   const handlerType = normalizeReceiptProjectHandlerType(source.handlerType);
@@ -370,15 +370,12 @@ export function readReceiptProjectFlow(value: unknown): ReceiptProjectFlow | nul
     String(source.paymentStatus || "").trim().toUpperCase() as ReceiptProjectPaymentStatus,
   );
 
-  const derivedPaymentStatus: ReceiptProjectPaymentStatus =
+  let derivedPaymentStatus: ReceiptProjectPaymentStatus =
     totalPaidAmount >= projectValue && projectValue > 0
       ? "FULLY_PAID"
       : totalPaidAmount > 0
         ? "PARTIALLY_PAID"
         : "UNPAID";
-  const paymentStatus = hasExplicitPaymentStatus
-    ? normalizeReceiptProjectPaymentStatus(source.paymentStatus)
-    : derivedPaymentStatus;
 
   const looksCompletedLegacy =
     Boolean(postedReceiptNumber) ||
@@ -398,6 +395,20 @@ export function readReceiptProjectFlow(value: unknown): ReceiptProjectFlow | nul
       : looksInProgressLegacy
         ? "PROJECT_IN_PROGRESS"
         : "RECEIPT_CREATED";
+
+  if (!hasExplicitPaymentStatus && stage === "COMPLETED_POSTED" && projectValue > 0) {
+    totalPaidAmount = projectValue;
+    amountPaidTotal = projectValue;
+    remainingAmount = 0;
+    balanceAmount = 0;
+    depositPendingAmount = 0;
+    balancePendingAmount = 0;
+    derivedPaymentStatus = "FULLY_PAID";
+  }
+
+  const paymentStatus = hasExplicitPaymentStatus
+    ? normalizeReceiptProjectPaymentStatus(source.paymentStatus)
+    : derivedPaymentStatus;
 
   return {
     isProject: true,
