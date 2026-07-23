@@ -140,6 +140,27 @@ export default function AgentsAdminClient({ agents }: { agents: AgentRow[] }) {
     startTransition(() => router.refresh());
   }
 
+  async function deleteAgent(profileId: string, displayName: string) {
+    const confirmed = window.confirm(
+      `Delete ${displayName}? This removes the agent profile, sales, commissions, payouts, and related records.`,
+    );
+    if (!confirmed) return;
+
+    setBusyId(`${profileId}:delete`);
+    const res = await fetch(`/api/admin/agents/${profileId}`, {
+      method: "DELETE",
+    });
+    setBusyId(null);
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({ error: "Unable to delete agent." }));
+      window.alert(payload.error || "Unable to delete agent.");
+      return;
+    }
+    setSelectedIds((current) => current.filter((id) => id !== profileId));
+    setExpandedIds((current) => current.filter((id) => id !== profileId));
+    startTransition(() => router.refresh());
+  }
+
   function toggleSelected(userId: string) {
     setSelectedIds((current) =>
       current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId],
@@ -390,6 +411,13 @@ export default function AgentsAdminClient({ agents }: { agents: AgentRow[] }) {
                       >
                         Open Sales Queue
                       </Link>
+                      <button
+                        onClick={() => deleteAgent(agent.profile.id, agent.displayName)}
+                        disabled={busyId !== null}
+                        className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-2 text-sm font-semibold text-rose-100 disabled:opacity-60"
+                      >
+                        {busyId === `${agent.profile.id}:delete` ? "Deleting..." : "Delete Agent"}
+                      </button>
                     </div>
                   </div>
                 ) : null}
@@ -440,6 +468,13 @@ export default function AgentsAdminClient({ agents }: { agents: AgentRow[] }) {
                     <button onClick={() => updateStatus(agent.profile.id, "approved")} className="rounded-xl bg-emerald-400 px-3 py-2 text-xs font-semibold text-slate-950">Approve</button>
                     <button onClick={() => updateStatus(agent.profile.id, "suspended")} className="rounded-xl bg-amber-300 px-3 py-2 text-xs font-semibold text-slate-950">Suspend</button>
                     <button onClick={() => updateStatus(agent.profile.id, "rejected")} className="rounded-xl bg-rose-400 px-3 py-2 text-xs font-semibold text-slate-950">Reject</button>
+                    <button
+                      onClick={() => deleteAgent(agent.profile.id, agent.displayName)}
+                      disabled={busyId !== null}
+                      className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs font-semibold text-rose-100 disabled:opacity-60"
+                    >
+                      {busyId === `${agent.profile.id}:delete` ? "Deleting..." : "Delete"}
+                    </button>
                   </div>
                 </div>
               ) : null}

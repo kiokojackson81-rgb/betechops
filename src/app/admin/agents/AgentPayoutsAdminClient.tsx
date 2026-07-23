@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { ChevronDown, ChevronRight, Eye } from "lucide-react";
 
 type PayoutRow = {
@@ -48,6 +49,7 @@ export default function AgentPayoutsAdminClient({
   rows: PayoutRow[];
   activeQueue?: string;
 }) {
+  const router = useRouter();
   const [localRows, setLocalRows] = useState<PayoutRow[]>(rows);
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -55,6 +57,7 @@ export default function AgentPayoutsAdminClient({
   const [activeActionById, setActiveActionById] = useState<Record<string, "paid" | "rejected" | null>>({});
   const [paymentReferenceById, setPaymentReferenceById] = useState<Record<string, string>>({});
   const [rejectionReasonById, setRejectionReasonById] = useState<Record<string, string>>({});
+  const [, startTransition] = useTransition();
   useEffect(() => {
     setLocalRows(rows);
   }, [rows]);
@@ -162,6 +165,26 @@ export default function AgentPayoutsAdminClient({
 
   function toggleSelectAll() {
     setSelectedIds(allSelected ? [] : localRows.map((row) => row.id));
+  }
+
+  async function deletePayout(id: string, agentName: string) {
+    const confirmed = window.confirm(`Delete the payout record for ${agentName}?`);
+    if (!confirmed) return;
+
+    setBusy(`${id}:delete`);
+    const res = await fetch(`/api/admin/agents/payouts/${id}`, {
+      method: "DELETE",
+    });
+    setBusy(null);
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({ error: "Unable to delete payout." }));
+      window.alert(payload.error || "Unable to delete payout.");
+      return;
+    }
+    setLocalRows((current) => current.filter((row) => row.id !== id));
+    setExpandedIds((current) => current.filter((rowId) => rowId !== id));
+    setSelectedIds((current) => current.filter((rowId) => rowId !== id));
+    startTransition(() => router.refresh());
   }
 
   if (!localRows.length) {
@@ -353,6 +376,13 @@ export default function AgentPayoutsAdminClient({
                           </button>
                         )
                       )}
+                      <button
+                        onClick={() => deletePayout(row.id, row.agentName)}
+                        disabled={busy !== null}
+                        className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-2 text-sm font-semibold text-rose-100 disabled:opacity-60"
+                      >
+                        {busy === `${row.id}:delete` ? "Deleting..." : "Delete Payout"}
+                      </button>
                     </div>
                   </div>
                 ) : null}
@@ -380,6 +410,17 @@ export default function AgentPayoutsAdminClient({
                 <InfoCard label="Status" value={row.status} />
                 <InfoCard label="Available" value={money(row.availableBalance)} />
               </div>
+              {expanded ? (
+                <div className="mt-4 border-t border-white/10 pt-4">
+                  <button
+                    onClick={() => deletePayout(row.id, row.agentName)}
+                    disabled={busy !== null}
+                    className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-2 text-sm font-semibold text-rose-100 disabled:opacity-60"
+                  >
+                    {busy === `${row.id}:delete` ? "Deleting..." : "Delete Payout"}
+                  </button>
+                </div>
+              ) : null}
             </article>
           );
         })}

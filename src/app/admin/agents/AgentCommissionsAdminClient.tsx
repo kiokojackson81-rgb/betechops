@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useMemo, useState, useTransition } from "react";
 import { ChevronDown, ChevronRight, Eye } from "lucide-react";
 import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 
@@ -54,8 +55,11 @@ function InfoCard({ label, value }: { label: string; value: string }) {
 }
 
 export default function AgentCommissionsAdminClient({ rows }: { rows: CommissionRow[] }) {
+  const router = useRouter();
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
 
   const allSelected = rows.length > 0 && selectedIds.length === rows.length;
   const selectedRows = useMemo(() => rows.filter((row) => selectedIds.includes(row.id)), [rows, selectedIds]);
@@ -70,6 +74,28 @@ export default function AgentCommissionsAdminClient({ rows }: { rows: Commission
 
   function toggleSelectAll() {
     setSelectedIds(allSelected ? [] : rows.map((row) => row.id));
+  }
+
+  async function deleteRow(row: CommissionRow) {
+    const target = row.kind === "locked" && row.saleId ? `/api/admin/agents/sales/${row.saleId}` : `/api/admin/agents/commissions/${row.id.replace(/^commission:/, "")}`;
+    const confirmed = window.confirm(
+      row.kind === "locked"
+        ? `Delete the locked commission row for ${row.customerName}? This removes the underlying sale and any linked commission records.`
+        : `Delete the commission row for ${row.customerName}?`,
+    );
+    if (!confirmed) return;
+
+    setBusyId(`${row.id}:delete`);
+    const res = await fetch(target, { method: "DELETE" });
+    setBusyId(null);
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({ error: "Unable to delete commission row." }));
+      window.alert(payload.error || "Unable to delete commission row.");
+      return;
+    }
+    setSelectedIds((current) => current.filter((id) => id !== row.id));
+    setExpandedIds((current) => current.filter((id) => id !== row.id));
+    startTransition(() => router.refresh());
   }
 
   if (!rows.length) {
@@ -206,6 +232,13 @@ export default function AgentCommissionsAdminClient({ rows }: { rows: Commission
                       <button className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200">Approve Commission</button>
                       <button className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200">Hold</button>
                       <button className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200">Flag</button>
+                      <button
+                        onClick={() => deleteRow(row)}
+                        disabled={busyId !== null}
+                        className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-2 text-sm font-semibold text-rose-100 disabled:opacity-60"
+                      >
+                        {busyId === `${row.id}:delete` ? "Deleting..." : row.kind === "locked" ? "Delete Sale" : "Delete Commission"}
+                      </button>
                     </div>
                   </div>
                 ) : null}
@@ -247,6 +280,13 @@ export default function AgentCommissionsAdminClient({ rows }: { rows: Commission
                   <Link href={customerHref} className="inline-flex rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-100">
                     Open customer
                   </Link>
+                  <button
+                    onClick={() => deleteRow(row)}
+                    disabled={busyId !== null}
+                    className="inline-flex rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-2 text-sm font-semibold text-rose-100 disabled:opacity-60"
+                  >
+                    {busyId === `${row.id}:delete` ? "Deleting..." : row.kind === "locked" ? "Delete Sale" : "Delete Commission"}
+                  </button>
                 </div>
               ) : null}
             </article>

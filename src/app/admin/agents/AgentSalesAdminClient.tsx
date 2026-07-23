@@ -166,6 +166,25 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
     startTransition(() => router.refresh());
   }
 
+  async function deleteSale(saleId: string, customerName: string) {
+    const confirmed = window.confirm(
+      `Delete the sale for ${customerName}? This also removes any linked agent commission rows.`,
+    );
+    if (!confirmed) return;
+
+    setBusy(`${saleId}:delete`);
+    const res = await fetch(`/api/admin/agents/sales/${saleId}`, { method: "DELETE" });
+    setBusy(null);
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({ error: "Unable to delete sale." }));
+      window.alert(payload.error || "Unable to delete sale.");
+      return;
+    }
+    setSelectedIds((current) => current.filter((id) => id !== saleId));
+    setExpandedIds((current) => current.filter((id) => id !== saleId));
+    startTransition(() => router.refresh());
+  }
+
   async function bulkStage(status: "processing" | "dispatched" | "delivered_pending_balance") {
     if (!selectedIds.length) return;
     const eligibleSales = selectedSales.filter((sale) => canMoveTo(sale.status, status));
@@ -615,6 +634,13 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
                                     {busy === `${sale.id}:rejected` ? "Saving..." : "Reject Sale"}
                                   </button>
                                 ) : null}
+                                <button
+                                  onClick={() => deleteSale(sale.id, sale.customerName)}
+                                  disabled={busy !== null}
+                                  className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-2 text-sm font-semibold text-rose-100 disabled:opacity-60"
+                                >
+                                  {busy === `${sale.id}:delete` ? "Deleting..." : "Delete Sale"}
+                                </button>
                               </div>
                             </section>
                           </div>
@@ -841,6 +867,13 @@ export default function AgentSalesAdminClient({ sales }: { sales: AdminSaleRow[]
                             {busy === `${sale.id}:rejected` ? "Saving..." : "Reject Sale"}
                           </button>
                         ) : null}
+                        <button
+                          onClick={() => deleteSale(sale.id, sale.customerName)}
+                          disabled={busy !== null}
+                          className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm font-semibold text-rose-100 disabled:opacity-60"
+                        >
+                          {busy === `${sale.id}:delete` ? "Deleting..." : "Delete Sale"}
+                        </button>
                       </div>
                     </section>
                   </div>
