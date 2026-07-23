@@ -398,6 +398,7 @@ export function getReceiptProjectCompletionDate(
 ): Date | null {
   if (!isReceiptProjectRecognizedForSales(value)) return null;
   const flow = readReceiptProjectFlow(value);
+  if (!flow) return null;
   return (
     normalizeOptionalDateObject(flow.updatedAt) ??
     normalizeOptionalDateObject(fallbackUpdatedAt) ??
