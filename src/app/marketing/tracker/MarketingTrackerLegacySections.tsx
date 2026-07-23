@@ -257,14 +257,6 @@ function StatsCard({
             Commission (KES)
           </p>
           <p className="mt-1 text-2xl font-semibold text-emerald-400">{mask(commissionKes.toLocaleString())}</p>
-          <p className="text-[11px] text-slate-400">Calculated sales commission</p>
-          {commissionBreakdown ? (
-            <div className="mt-2 text-xs text-slate-300 space-y-1">
-              <div>POS Direct: KES {Number(commissionBreakdown.directSalesCommission ?? 0).toLocaleString()}</div>
-              <div>POS Product: KES {Number(commissionBreakdown.posProductCommission ?? 0).toLocaleString()}</div>
-              <div>Uploads: KES {Number(commissionBreakdown.productUploadCommission ?? 0).toLocaleString()}</div>
-            </div>
-          ) : null}
         </div>
 
         {/* Items */}
