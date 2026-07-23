@@ -35,28 +35,38 @@ import { getReceiptProjectCompletionDate, readReceiptProjectFlow } from "@/lib/r
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type PosReceiptRow = {
-  id: string;
-  receiptNumber: string | null;
-  generatedAt: Date | null;
-  createdAt: Date;
-  updatedAt?: Date | null;
-  totals: Record<string, unknown> | null;
-  data: Record<string, unknown> | null;
+const posReceiptSelect = {
+  id: true,
+  receiptNumber: true,
+  generatedAt: true,
+  createdAt: true,
+  updatedAt: true,
+  totals: true,
+  data: true,
   order: {
-    orderNumber: string | null;
-    status: string | null;
-    paymentStatus: string | null;
-    totalAmount: number | null;
-    items?: Array<{
-      quantity?: number | null;
-      sellingPrice?: number | null;
-      orderCosts?: Array<{ unitCost?: unknown } | null> | null;
-      profitSnapshots?: Array<{ profit?: unknown; unitCost?: unknown; qty?: unknown } | null> | null;
-      product?: { lastBuyingPrice?: unknown } | null;
-    }>;
-  } | null;
-};
+    select: {
+      orderNumber: true,
+      status: true,
+      paymentStatus: true,
+      totalAmount: true,
+      items: {
+        select: {
+          quantity: true,
+          sellingPrice: true,
+          orderCosts: { select: { unitCost: true } },
+          profitSnapshots: {
+            orderBy: { computedAt: "desc" },
+            take: 1,
+            select: { profit: true, unitCost: true, qty: true },
+          },
+          product: { select: { lastBuyingPrice: true } },
+        },
+      },
+    },
+  },
+} satisfies Prisma.ReceiptSelect;
+
+type PosReceiptRow = Prisma.ReceiptGetPayload<{ select: typeof posReceiptSelect }>;
 
 type LedgerReceiptRow = {
   id: string;
@@ -821,36 +831,7 @@ export async function GET(req: Request) {
             ]),
       ],
     },
-    select: {
-      id: true,
-      receiptNumber: true,
-      generatedAt: true,
-      createdAt: true,
-      updatedAt: true,
-      totals: true,
-      data: true,
-      order: {
-        select: {
-          orderNumber: true,
-          status: true,
-          paymentStatus: true,
-          totalAmount: true,
-          items: {
-            select: {
-              quantity: true,
-              sellingPrice: true,
-              orderCosts: { select: { unitCost: true } },
-              profitSnapshots: {
-                orderBy: { computedAt: "desc" },
-                take: 1,
-                select: { profit: true, unitCost: true, qty: true },
-              },
-              product: { select: { lastBuyingPrice: true } },
-            },
-          },
-        },
-      },
-    },
+    select: posReceiptSelect,
     orderBy: { createdAt: "desc" },
     take: 1200,
   })) as PosReceiptRow[];
@@ -935,36 +916,7 @@ export async function GET(req: Request) {
           },
         ],
       },
-      select: {
-        id: true,
-        receiptNumber: true,
-        generatedAt: true,
-        createdAt: true,
-        updatedAt: true,
-        totals: true,
-        data: true,
-        order: {
-          select: {
-            orderNumber: true,
-            status: true,
-            paymentStatus: true,
-            totalAmount: true,
-            items: {
-              select: {
-                quantity: true,
-                sellingPrice: true,
-                orderCosts: { select: { unitCost: true } },
-                profitSnapshots: {
-                  orderBy: { computedAt: "desc" },
-                  take: 1,
-                  select: { profit: true, unitCost: true, qty: true },
-                },
-                product: { select: { lastBuyingPrice: true } },
-              },
-            },
-          },
-        },
-      },
+      select: posReceiptSelect,
       orderBy: { createdAt: "desc" },
       take: 1200,
     })) as PosReceiptRow[];
