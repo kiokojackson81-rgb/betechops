@@ -378,6 +378,12 @@ export function readReceiptProjectFlow(value: unknown): ReceiptProjectFlow | nul
   };
 }
 
+export function isReceiptProjectRecognizedForSales(value: unknown): boolean {
+  const flow = readReceiptProjectFlow(value);
+  if (!flow?.isProject) return false;
+  return flow.stage === "COMPLETED_POSTED" && flow.paymentStatus === "FULLY_PAID";
+}
+
 function normalizeOptionalDateObject(value: unknown): Date | null {
   const candidate = String(value || "").trim();
   if (!candidate) return null;
@@ -390,8 +396,8 @@ export function getReceiptProjectCompletionDate(
   fallbackUpdatedAt?: unknown,
   fallbackCreatedAt?: unknown,
 ): Date | null {
+  if (!isReceiptProjectRecognizedForSales(value)) return null;
   const flow = readReceiptProjectFlow(value);
-  if (!flow?.isProject || flow.stage !== "COMPLETED_POSTED") return null;
   return (
     normalizeOptionalDateObject(flow.updatedAt) ??
     normalizeOptionalDateObject(fallbackUpdatedAt) ??

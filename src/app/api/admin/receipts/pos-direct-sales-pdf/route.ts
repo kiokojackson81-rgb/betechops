@@ -10,6 +10,7 @@ import { computeBrendahDirectCommission } from "@/lib/onlineCommission";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 import { buildReceiptKey } from "@/lib/receiptKey";
 import { computeRecognizedReceiptProfit } from "@/lib/recognizedReceiptProfit";
+import { isReceiptProjectRecognizedForSales, readReceiptProjectFlow } from "@/lib/receiptProjects";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -216,6 +217,14 @@ export async function GET(req: Request) {
   const podStatusOf = (r: any) => ((r?.data as any)?.podDelivery?.status ?? "").toString().toLowerCase();
   const isPodPaid = (r: any) => Boolean((r?.data as any)?.podDelivery?.paidAt);
   const isPosPaid = (r: any) => {
+    const rawData =
+      r?.data && typeof r.data === "object" && !Array.isArray(r.data)
+        ? (r.data as Record<string, unknown>)
+        : {};
+    const projectFlow = readReceiptProjectFlow(rawData.projectFlow);
+    if (projectFlow?.isProject) {
+      return isReceiptProjectRecognizedForSales(rawData.projectFlow);
+    }
     const paymentStatus = (r?.order?.paymentStatus ?? "").toString().toUpperCase().trim();
     if (!paymentStatus) return false;
     return paymentStatus === "PAID";

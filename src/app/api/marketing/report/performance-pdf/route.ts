@@ -11,7 +11,10 @@ import { nowInNairobi } from "@/lib/timezone";
 import { getUserCommissionConfigLike } from "@/lib/userCommissionConfig";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 import { normalizePaymentMethod, normalizeReceiptNumber } from "@/lib/receiptKey";
-import { getReceiptProjectCompletionDate, readReceiptProjectFlow } from "@/lib/receiptProjects";
+import {
+  getReceiptProjectCompletionDate,
+  isReceiptProjectRecognizedForSales,
+} from "@/lib/receiptProjects";
 import {
   computeJenifferProratedCommission,
   computeSalesCommissionFromTiers,
@@ -465,8 +468,7 @@ export async function GET(req: Request) {
           r?.data && typeof r.data === "object" && !Array.isArray(r.data)
             ? (r.data as Record<string, unknown>)
             : {};
-        const projectFlow = readReceiptProjectFlow(rawData.projectFlow);
-        return Boolean(projectFlow?.isProject && projectFlow.stage === "COMPLETED_POSTED");
+        return isReceiptProjectRecognizedForSales(rawData.projectFlow);
       };
       const isPodSettledForSales = (r: any) => {
         if (!isPodReceipt(r)) return false;

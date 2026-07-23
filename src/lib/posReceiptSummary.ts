@@ -5,7 +5,11 @@ import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 import { buildReceiptKey as buildDatedReceiptKey } from "@/lib/receipts/utils";
 import { adjustProfitForPodDeliveryFee, getPodDeliveryFee } from "@/lib/podDeliveryFee";
 import { computeRecognizedReceiptProfit } from "@/lib/recognizedReceiptProfit";
-import { getReceiptProjectCompletionDate, readReceiptProjectFlow } from "@/lib/receiptProjects";
+import {
+  getReceiptProjectCompletionDate,
+  isReceiptProjectRecognizedForSales,
+  readReceiptProjectFlow,
+} from "@/lib/receiptProjects";
 
 type OrderItemCandidate = {
   quantity?: number | null;
@@ -128,7 +132,7 @@ const isCompletedProjectReceiptForSales = (receipt: PosReceiptRow) => {
       : {};
   const flow = readReceiptProjectFlow(rawData.projectFlow);
   if (!flow?.isProject) return true;
-  return flow.stage === "COMPLETED_POSTED";
+  return isReceiptProjectRecognizedForSales(rawData.projectFlow);
 };
 
 const getReceiptSalesRecognitionDate = (receipt: PosReceiptRow) => {

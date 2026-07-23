@@ -4,7 +4,11 @@ import { buildReceiptKey } from "@/lib/receiptKey";
 import { Prisma } from "@prisma/client";
 import { adjustProfitForPodDeliveryFee, getPodDeliveryFee } from "@/lib/podDeliveryFee";
 import { computeRecognizedReceiptProfit } from "@/lib/recognizedReceiptProfit";
-import { getReceiptProjectCompletionDate, readReceiptProjectFlow } from "@/lib/receiptProjects";
+import {
+  getReceiptProjectCompletionDate,
+  isReceiptProjectRecognizedForSales,
+  readReceiptProjectFlow,
+} from "@/lib/receiptProjects";
 
 type PaymentBucket = { totalSales: number; count: number };
 
@@ -175,7 +179,7 @@ const isCompletedProjectReceiptForSales = (receipt: any) => {
       : {};
   const flow = readReceiptProjectFlow(rawData.projectFlow);
   if (!flow?.isProject) return true;
-  return flow.stage === "COMPLETED_POSTED";
+  return isReceiptProjectRecognizedForSales(rawData.projectFlow);
 };
 
 const getReceiptSalesRecognitionDate = (receipt: any) => {

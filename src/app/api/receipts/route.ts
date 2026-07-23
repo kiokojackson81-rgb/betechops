@@ -27,7 +27,12 @@ import { waitForReceiptById } from "@/lib/receiptReadAfterWrite";
 import { getProductTableCapabilities, type ProductTableCapabilities } from "@/lib/productTableCapabilities";
 import { recordQuotationEvent } from "@/lib/quoteRequests";
 import { upsertQuoteProjectOrder, type QuoteProjectPaymentTerm } from "@/lib/quoteProjects";
-import { buildReceiptProjectFlow, getReceiptProjectCompletionDate, readReceiptProjectFlow } from "@/lib/receiptProjects";
+import {
+  buildReceiptProjectFlow,
+  getReceiptProjectCompletionDate,
+  isReceiptProjectRecognizedForSales,
+  readReceiptProjectFlow,
+} from "@/lib/receiptProjects";
 
 const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" | null => {
   if (typeof value !== "string") return null;
@@ -131,7 +136,6 @@ export async function GET(req: NextRequest) {
   const includeLedgerParam = url.searchParams.get("includeLedger");
   const includeLedger = includeLedgerParam === null ? true : includeLedgerParam !== "false";
   const paidOnly = ["1", "true", "yes"].includes((url.searchParams.get("paidOnly") || "").toLowerCase());
-  const summarySalesOnly = ["1", "true", "yes"].includes((url.searchParams.get("summarySalesOnly") || "").toLowerCase());
   const carryForwardPending = ["1", "true", "yes"].includes((url.searchParams.get("carryForwardPending") || "").toLowerCase());
   const start = url.searchParams.get("start");
   const end = url.searchParams.get("end");
@@ -510,8 +514,8 @@ export async function GET(req: NextRequest) {
         ? (row.data as Record<string, unknown>)
         : {};
     const flow = readReceiptProjectFlow(rawData.projectFlow);
-    if (flow?.isProject && flow.stage === "COMPLETED_POSTED") {
-      return true;
+    if (flow?.isProject) {
+      return isReceiptProjectRecognizedForSales(rawData.projectFlow);
     }
     return (row?.order?.paymentStatus ?? "").toString().toUpperCase().trim() === "PAID";
   };
@@ -669,14 +673,8 @@ export async function GET(req: NextRequest) {
       typeof baseProfit === "number"
         ? baseProfit
         : baseProfit;
-    const effectivePaymentStatus =
-      projectFlowData?.isProject && projectFlowData.stage === "COMPLETED_POSTED"
-        ? "PAID"
-        : (r.order as any)?.paymentStatus ?? null;
-    const effectiveProjectPaymentStatus =
-      projectFlowData?.isProject && projectFlowData.stage === "COMPLETED_POSTED"
-        ? "FULLY_PAID"
-        : projectFlowData?.paymentStatus ?? null;
+    const effectivePaymentStatus = (r.order as any)?.paymentStatus ?? null;
+    const effectiveProjectPaymentStatus = projectFlowData?.paymentStatus ?? null;
 
     const recognitionDate =
       getReceiptProjectCompletionDate(rawData.projectFlow, undefined, r.generatedAt ?? r.createdAt) ??
@@ -1020,19 +1018,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const summaryRows = summarySalesOnly
-    ? deduped.filter((row) => {
-        if (row.source === "marketing" || row.source === "support") return true;
-        if (row.isPodDelivery) {
-          const podStatus = String(row.podDeliveryStatus ?? "").trim().toLowerCase();
-          return podStatus !== "pending" && String(row.paymentStatus ?? "").trim().toUpperCase() === "PAID";
-        }
-        if (row.isProjectReceipt) {
-          return String(row.projectStage ?? "").trim().toUpperCase() === "COMPLETED_POSTED";
-        }
-        return String(row.paymentStatus ?? "").trim().toUpperCase() === "PAID";
-      })
-    : deduped;
+  const summaryRows = deduped;
 
   deduped.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const totalCount = summaryRows.length;

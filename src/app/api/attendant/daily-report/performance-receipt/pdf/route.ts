@@ -30,7 +30,11 @@ import {
   getReleasedPosCommissionEffectiveAt,
   isPosProductCommissionEntry,
 } from "@/lib/posProductCommission";
-import { getReceiptProjectCompletionDate, readReceiptProjectFlow } from "@/lib/receiptProjects";
+import {
+  getReceiptProjectCompletionDate,
+  isReceiptProjectRecognizedForSales,
+  readReceiptProjectFlow,
+} from "@/lib/receiptProjects";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -846,8 +850,9 @@ export async function GET(req: Request) {
       row.id;
     const projectFlow = readReceiptProjectFlow((row.data as Record<string, unknown> | null | undefined)?.projectFlow);
     if (projectFlow?.isProject) {
-      projectEligibilityByCanonical.set(canonical, projectFlow.stage === "COMPLETED_POSTED");
-      if (projectFlow.stage !== "COMPLETED_POSTED") continue;
+      const isRecognized = isReceiptProjectRecognizedForSales((row.data as Record<string, unknown> | null | undefined)?.projectFlow);
+      projectEligibilityByCanonical.set(canonical, isRecognized);
+      if (!isRecognized) continue;
     }
     const date = projectFlow?.isProject
       ? (getReceiptProjectCompletionDate((row.data as Record<string, unknown> | null | undefined)?.projectFlow, undefined, row.generatedAt ?? row.createdAt) ??
@@ -927,8 +932,9 @@ export async function GET(req: Request) {
         row.id;
       const projectFlow = readReceiptProjectFlow((row.data as Record<string, unknown> | null | undefined)?.projectFlow);
       if (projectFlow?.isProject) {
-        projectEligibilityByCanonical.set(canonical, projectFlow.stage === "COMPLETED_POSTED");
-        if (projectFlow.stage !== "COMPLETED_POSTED") continue;
+        const isRecognized = isReceiptProjectRecognizedForSales((row.data as Record<string, unknown> | null | undefined)?.projectFlow);
+        projectEligibilityByCanonical.set(canonical, isRecognized);
+        if (!isRecognized) continue;
       }
       const paymentMethod = normalizePaymentMethod(
         (row.data as any)?.paymentMethod ?? (row.totals as any)?.paymentMethod ?? "MPESA",
