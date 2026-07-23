@@ -396,13 +396,15 @@ export function readReceiptProjectFlow(value: unknown): ReceiptProjectFlow | nul
         ? "PROJECT_IN_PROGRESS"
         : "RECEIPT_CREATED";
 
-  if (!hasExplicitPaymentStatus && stage === "COMPLETED_POSTED" && projectValue > 0) {
-    totalPaidAmount = projectValue;
-    amountPaidTotal = projectValue;
-    remainingAmount = 0;
-    balanceAmount = 0;
-    depositPendingAmount = 0;
-    balancePendingAmount = 0;
+  if (!hasExplicitPaymentStatus && stage === "COMPLETED_POSTED") {
+    if (projectValue > 0) {
+      totalPaidAmount = projectValue;
+      amountPaidTotal = projectValue;
+      remainingAmount = 0;
+      balanceAmount = 0;
+      depositPendingAmount = 0;
+      balancePendingAmount = 0;
+    }
     derivedPaymentStatus = "FULLY_PAID";
   }
 
