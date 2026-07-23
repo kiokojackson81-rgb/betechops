@@ -54,10 +54,20 @@ type RemoteSummaryPayload = {
   period?: { key?: string; label?: string; start?: string; end?: string };
   aggregates?: {
     totalSales?: number;
+    visibleSales?: number;
     totalItems?: number;
+    totalReceipts?: number;
+    visibleReceipts?: number;
     totalReceiptRows?: number;
     paymentStats?: { totalSalesMpesa?: number; totalSalesCash?: number };
     commission?: { commission?: number };
+    commissionBreakdown?: {
+      directSalesCommission?: number;
+      posProductCommission?: number;
+      productUploadCommission?: number;
+      otherCommission?: number;
+      totalCommission?: number;
+    };
   };
 };
 
@@ -167,7 +177,9 @@ type StatsCardProps = {
   periodLabel: string;
   receipts: number;
   receiptRows: number;
-  salesKes: number;
+  visibleSalesKes: number;
+  recognizedSalesKes: number;
+  recognizedReceipts?: number;
   items: number;
   commissionKes: number;
   commissionBreakdown?: {
@@ -185,7 +197,9 @@ function StatsCard({
   periodLabel,
   receipts,
   receiptRows,
-  salesKes,
+  visibleSalesKes,
+  recognizedSalesKes,
+  recognizedReceipts = receipts,
   items,
   commissionKes,
   commissionBreakdown = null,
@@ -221,14 +235,19 @@ function StatsCard({
         <div className="rounded-2xl bg-slate-950/60 px-4 py-3">
           <p className="text-xs uppercase tracking-wide text-slate-400">Receipts</p>
           <p className="mt-1 text-2xl font-semibold text-emerald-400">{mask(receipts)}</p>
-          <p className="text-[11px] text-slate-400">Rows: {mask(receiptRows.toLocaleString())}</p>
+          <p className="text-[11px] text-slate-400">
+            Recognized: {mask(recognizedReceipts.toLocaleString())} • Rows: {mask(receiptRows.toLocaleString())}
+          </p>
         </div>
 
         {/* Sales */}
         <div className="rounded-2xl bg-slate-950/60 px-4 py-3">
-          <p className="text-xs uppercase tracking-wide text-slate-400">Sales (KES)</p>
+          <p className="text-xs uppercase tracking-wide text-slate-400">Visible Sales (KES)</p>
           <p className="mt-1 text-2xl font-semibold text-emerald-400">
-            {mask(salesKes.toLocaleString())}
+            {mask(visibleSalesKes.toLocaleString())}
+          </p>
+          <p className="text-[11px] text-slate-400">
+            Recognized for commission: {mask(recognizedSalesKes.toLocaleString())}
           </p>
         </div>
 
@@ -238,6 +257,7 @@ function StatsCard({
             Commission (KES)
           </p>
           <p className="mt-1 text-2xl font-semibold text-emerald-400">{mask(commissionKes.toLocaleString())}</p>
+          <p className="text-[11px] text-slate-400">Calculated from recognized sales only</p>
           {commissionBreakdown ? (
             <div className="mt-2 text-xs text-slate-300 space-y-1">
               <div>POS Direct: KES {Number(commissionBreakdown.directSalesCommission ?? 0).toLocaleString()}</div>
@@ -1209,6 +1229,9 @@ export default function MarketingTrackerLegacySections() {
         },
       aggregates: {
         totalSales: data.aggregates?.totalSales ?? 0,
+        visibleSales: data.aggregates?.visibleSales ?? data.aggregates?.totalSales ?? 0,
+        totalReceipts: data.aggregates?.totalReceipts ?? 0,
+        visibleReceipts: data.aggregates?.visibleReceipts ?? data.aggregates?.totalReceipts ?? 0,
         totalItems: data.aggregates?.totalItems ?? 0,
         totalReceiptRows: data.aggregates?.totalReceiptRows ?? 0,
         paymentStats: {
@@ -1220,6 +1243,7 @@ export default function MarketingTrackerLegacySections() {
           commission: {
             commission: data.aggregates?.commission?.commission ?? 0,
           },
+          commissionBreakdown: data.aggregates?.commissionBreakdown ?? null,
         },
       };
     };
@@ -1262,6 +1286,7 @@ export default function MarketingTrackerLegacySections() {
           if (!prev) return safeNext;
           const changed =
             prev.aggregates.totalSales !== safeNext.aggregates.totalSales ||
+            (prev.aggregates as any).visibleSales !== (safeNext.aggregates as any).visibleSales ||
             prev.aggregates.totalItems !== safeNext.aggregates.totalItems ||
             prev.aggregates.paymentStats.totalSalesMpesa !== safeNext.aggregates.paymentStats.totalSalesMpesa ||
             prev.aggregates.paymentStats.totalSalesCash !== safeNext.aggregates.paymentStats.totalSalesCash ||
@@ -1436,13 +1461,20 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
   // Use `serverPeriodSummary` (authoritative) for calculations so the visible
   // panel (`periodSummary`) can remain hidden while Quick stats stay accurate.
   const serverPeriodTotalSales = serverPeriodSummary?.aggregates?.totalSales ?? 0;
+  const serverVisiblePeriodSales =
+    Number((serverPeriodSummary?.aggregates as any)?.visibleSales ?? serverPeriodSummary?.aggregates?.totalSales ?? 0);
   const isJeniffer = currentUserEmail === "jeniffer@betech.co.ke";
   const earningsSales = Number((earningsSummary as any)?.totalSales ?? 0);
   const combinedPeriodSalesRaw = serverPeriodTotalSales + totalSales;
+  const combinedVisibleSalesRaw = serverVisiblePeriodSales + totalSales;
   const combinedPeriodSales =
     isJeniffer && combinedPeriodSalesRaw <= 0 && earningsSales > 0
       ? earningsSales
       : combinedPeriodSalesRaw;
+  const combinedVisibleSales =
+    isJeniffer && combinedVisibleSalesRaw <= 0 && earningsSales > 0
+      ? earningsSales
+      : combinedVisibleSalesRaw;
   const serverPeriodTotalItems = serverPeriodSummary?.aggregates?.totalItems ?? 0;
   const earningsItems = Number((earningsSummary as any)?.totalItems ?? 0);
   const combinedPeriodItemsRaw = serverPeriodTotalItems + totalItems;
@@ -1452,14 +1484,20 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
       : combinedPeriodItemsRaw;
   // receipts: server may provide counts per payment method in paymentStats
   const serverPeriodReceipts =
-    (serverPeriodSummary?.aggregates?.paymentStats?.countMpesaReceipts ?? 0) +
-    (serverPeriodSummary?.aggregates?.paymentStats?.countCashReceipts ?? 0);
+    Number((serverPeriodSummary?.aggregates as any)?.totalReceipts ?? 0);
+  const serverVisibleReceipts =
+    Number((serverPeriodSummary?.aggregates as any)?.visibleReceipts ?? serverPeriodReceipts);
   const earningsReceipts = Number((earningsSummary as any)?.totalReceipts ?? 0);
   const combinedPeriodReceiptsRaw = serverPeriodReceipts + totalReceipts;
+  const combinedVisibleReceiptsRaw = serverVisibleReceipts + totalReceipts;
   const combinedPeriodReceipts =
     isJeniffer && combinedPeriodReceiptsRaw <= 0 && earningsReceipts > 0
       ? earningsReceipts
       : combinedPeriodReceiptsRaw;
+  const combinedVisibleReceipts =
+    isJeniffer && combinedVisibleReceiptsRaw <= 0 && earningsReceipts > 0
+      ? earningsReceipts
+      : combinedVisibleReceiptsRaw;
   const serverPeriodReceiptRows = (serverPeriodSummary?.aggregates as any)?.totalReceiptRows ?? 0;
   const combinedPeriodReceiptRows = serverPeriodReceiptRows + totalReceiptRows;
 
@@ -1491,9 +1529,11 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
     serverPeriodSummary?.period.label ??
     selectedPeriod.label ??
     "Loading current period\u2026";
-  const displayedSalesKes = combinedPeriodSales;
+  const displayedVisibleSalesKes = combinedVisibleSales;
+  const displayedRecognizedSalesKes = combinedPeriodSales;
   const displayedItems = combinedPeriodItems;
-  const displayedReceipts = combinedPeriodReceipts;
+  const displayedVisibleReceipts = combinedVisibleReceipts;
+  const displayedRecognizedReceipts = combinedPeriodReceipts;
 
   const serverCommissionBreakdown =
     (serverPeriodSummary?.aggregates as any)?.commissionBreakdown ?? (periodSummary?.aggregates as any)?.commissionBreakdown ?? null;
@@ -1967,9 +2007,11 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
           <aside className="space-y-6 lg:sticky lg:top-6">
             <StatsCard
               periodLabel={periodLabel}
-              receipts={displayedReceipts}
+              receipts={displayedVisibleReceipts}
               receiptRows={combinedPeriodReceiptRows}
-              salesKes={displayedSalesKes}
+              visibleSalesKes={displayedVisibleSalesKes}
+              recognizedSalesKes={displayedRecognizedSalesKes}
+              recognizedReceipts={displayedRecognizedReceipts}
               items={displayedItems}
               commissionKes={commissionKes}
               commissionBreakdown={serverCommissionBreakdown}

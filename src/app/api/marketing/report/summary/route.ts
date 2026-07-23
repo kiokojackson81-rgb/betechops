@@ -125,8 +125,16 @@ export async function GET(req: Request) {
   let totalProfit = 0;
   let totalItems = 0;
   let totalReceipts = 0;
+  let visibleSales = 0;
+  let visibleReceipts = 0;
   let mergedPaymentStats = { totalSalesMpesa: 0, totalSalesCash: 0, countMpesaReceipts: 0, countCashReceipts: 0 };
   let posSummary: PosReceiptSummary | null = null;
+  let posVisibleSummary:
+    | {
+        totalSales: number;
+        receiptsCount: number;
+      }
+    | null = null;
   // Always compute merged (marketing+support) totals as a fallback/diagnostic baseline.
   // Precedence per receipt: MARKETING > SUPPORT (unless marketing profit missing but support has profit).
   const merged = new Map<string, { sales: number; profit: number; items: number; mpesa: number; cash: number }>();
@@ -181,18 +189,34 @@ export async function GET(req: Request) {
       },
     };
 
+    const adminVisibleSummary = await computeAdminReceiptSummary({
+      start: argPeriod.start,
+      end: argPeriod.end,
+      scope: commissionConfig.posTotalsMode === "GLOBAL" ? "global" : "mine",
+      currentUserId: commissionConfig.posTotalsMode === "GLOBAL" ? undefined : targetUserId,
+      salesOnly: false,
+    });
+    posVisibleSummary = {
+      totalSales: adminVisibleSummary.totalSales,
+      receiptsCount: adminVisibleSummary.receiptsCount,
+    };
+
     // For the tracker quick-stats we align with the POS receipts view (PDF/report).
     // Avoid mixing in WeeklySale totals (global, not per attendant) for user-scoped views.
     totalSales = posSummary.totalSales;
     totalProfit = posSummary.totalProfit;
     totalItems = posSummary.totalItems;
     totalReceipts = posSummary.totalReceipts;
+    visibleSales = posVisibleSummary.totalSales;
+    visibleReceipts = posVisibleSummary.receiptsCount;
     mergedPaymentStats = posSummary.paymentStats;
   } else {
     totalSales = mergedSales;
     totalProfit = mergedProfit;
     totalItems = mergedItems;
     totalReceipts = mergedReceipts;
+    visibleSales = mergedSales;
+    visibleReceipts = mergedReceipts;
     mergedPaymentStats = mergedStats;
   }
 
@@ -307,7 +331,9 @@ export async function GET(req: Request) {
     },
     aggregates: {
       totalSales,
+      visibleSales,
       totalReceipts,
+      visibleReceipts,
       totalItems,
       paymentStats: mergedPaymentStats,
       commission: { commission },
