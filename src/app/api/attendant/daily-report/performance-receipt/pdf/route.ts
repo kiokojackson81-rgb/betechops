@@ -40,7 +40,6 @@ const posReceiptSelect = {
   receiptNumber: true,
   generatedAt: true,
   createdAt: true,
-  updatedAt: true,
   totals: true,
   data: true,
   order: {
@@ -812,7 +811,7 @@ export async function GET(req: Request) {
             { createdAt: { gte: period.start, lte: period.end } },
             {
               AND: [
-                { updatedAt: { gte: period.start, lte: period.end } } as any,
+                { createdAt: { lte: period.end } },
                 { data: { path: ["projectFlow", "isProject"], equals: true } },
               ],
             },
@@ -851,7 +850,7 @@ export async function GET(req: Request) {
       if (projectFlow.stage !== "COMPLETED_POSTED") continue;
     }
     const date = projectFlow?.isProject
-      ? (getReceiptProjectCompletionDate((row.data as Record<string, unknown> | null | undefined)?.projectFlow, row.updatedAt, row.generatedAt ?? row.createdAt) ??
+      ? (getReceiptProjectCompletionDate((row.data as Record<string, unknown> | null | undefined)?.projectFlow, undefined, row.generatedAt ?? row.createdAt) ??
         row.generatedAt ??
         row.createdAt)
       : (row.generatedAt ?? row.createdAt);
@@ -938,7 +937,7 @@ export async function GET(req: Request) {
       if (seen.has(dedupeKey)) continue;
       seen.add(dedupeKey);
       const date = projectFlow?.isProject
-        ? (getReceiptProjectCompletionDate((row.data as Record<string, unknown> | null | undefined)?.projectFlow, row.updatedAt, row.generatedAt ?? row.createdAt) ??
+        ? (getReceiptProjectCompletionDate((row.data as Record<string, unknown> | null | undefined)?.projectFlow, undefined, row.generatedAt ?? row.createdAt) ??
           row.generatedAt ??
           row.createdAt)
         : (row.generatedAt ?? row.createdAt);

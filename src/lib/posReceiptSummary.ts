@@ -19,7 +19,6 @@ type PosReceiptRow = {
   id: string;
   createdAt?: Date | null;
   generatedAt?: Date | null;
-  updatedAt?: Date | null;
   receiptNumber: string | null;
   totals: Record<string, unknown> | null;
   data: Record<string, unknown> | null;
@@ -140,7 +139,7 @@ const getReceiptSalesRecognitionDate = (receipt: PosReceiptRow) => {
   return (
     getReceiptProjectCompletionDate(
       rawData.projectFlow,
-      receipt.updatedAt,
+      undefined,
       receipt.generatedAt instanceof Date ? receipt.generatedAt : receipt.createdAt,
     ) ??
     (receipt.generatedAt instanceof Date
@@ -226,7 +225,7 @@ export async function summarizePosReceiptsForPeriod(period: {
               { createdAt: { gte: period.start, lte: period.end } },
               {
                 AND: [
-                  { updatedAt: { gte: period.start, lte: period.end } } as any,
+                  { createdAt: { lte: period.end } },
                   { data: { path: ["projectFlow", "isProject"], equals: true } },
                 ],
               },

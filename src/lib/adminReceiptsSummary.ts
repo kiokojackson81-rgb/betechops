@@ -184,7 +184,7 @@ const getReceiptSalesRecognitionDate = (receipt: any) => {
       ? (receipt.data as Record<string, unknown>)
       : {};
   return (
-    getReceiptProjectCompletionDate(rawData.projectFlow, receipt?.updatedAt, receipt?.generatedAt ?? receipt?.createdAt) ??
+    getReceiptProjectCompletionDate(rawData.projectFlow, undefined, receipt?.generatedAt ?? receipt?.createdAt) ??
     (receipt?.generatedAt instanceof Date ? receipt.generatedAt : receipt?.createdAt instanceof Date ? receipt.createdAt : null)
   );
 };
@@ -220,7 +220,7 @@ async function computePosOnlyReceiptSummary({
           { generatedAt: { gte: start, lte: end } },
           {
             AND: [
-              { updatedAt: { gte: start, lte: end } } as any,
+              { createdAt: { lte: end } },
               { data: { path: ["projectFlow", "isProject"], equals: true } },
             ],
           },

@@ -49,7 +49,6 @@ function sanitizeFilename(value: string) {
 
 function getReceiptSalesRecognitionDate(row: {
   data?: unknown;
-  updatedAt?: Date | null;
   generatedAt?: Date | null;
   createdAt?: Date | null;
 }) {
@@ -58,7 +57,7 @@ function getReceiptSalesRecognitionDate(row: {
       ? (row.data as Record<string, unknown>)
       : {};
   return (
-    getReceiptProjectCompletionDate(rawData.projectFlow, row.updatedAt, row.generatedAt ?? row.createdAt) ??
+    getReceiptProjectCompletionDate(rawData.projectFlow, undefined, row.generatedAt ?? row.createdAt) ??
     row.generatedAt ??
     row.createdAt ??
     null
@@ -432,7 +431,7 @@ export async function GET(req: Request) {
             { generatedAt: { gte: period.start, lte: period.end } },
             {
               AND: [
-                { updatedAt: { gte: period.start, lte: period.end } },
+                { createdAt: { lte: period.end } },
                 { data: { path: ["projectFlow", "isProject"], equals: true } },
               ],
             },

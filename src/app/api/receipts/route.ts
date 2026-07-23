@@ -228,7 +228,7 @@ export async function GET(req: NextRequest) {
         { generatedAt: { gte: startDate, lte: endDate } },
         {
           AND: [
-            { updatedAt: { gte: startDate, lte: endDate } } as any,
+            { createdAt: { lte: endDate } },
             { data: { path: ["projectFlow", "isProject"], equals: true } },
           ],
         },
@@ -675,7 +675,7 @@ export async function GET(req: NextRequest) {
         : projectFlowData?.paymentStatus ?? null;
 
     const recognitionDate =
-      getReceiptProjectCompletionDate(rawData.projectFlow, r.updatedAt, r.generatedAt ?? r.createdAt) ??
+      getReceiptProjectCompletionDate(rawData.projectFlow, undefined, r.generatedAt ?? r.createdAt) ??
       r.generatedAt ??
       r.createdAt;
 
