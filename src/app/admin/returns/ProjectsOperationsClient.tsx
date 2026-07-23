@@ -124,6 +124,17 @@ const formatPaymentMethodLabel = (value?: string | null) => {
   }
 };
 
+const formatProjectDate = (value?: string | null) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return null;
+  return date.toLocaleDateString("en-KE", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+};
+
 const PROJECT_COMPLETION_COMMISSION = 2000;
 
 const makeEditor = (row: ProjectRow): ProjectEditor => ({
@@ -405,6 +416,11 @@ export default function ProjectsOperationsClient({
                     <div className="mt-1 text-xs text-slate-400">
                       Created {new Date(row.createdAt).toLocaleString("en-KE")}
                     </div>
+                    {row.projectScheduledDate ? (
+                      <div className="mt-1 text-xs text-slate-400">
+                        Installation date: {formatProjectDate(row.projectScheduledDate)}
+                      </div>
+                    ) : null}
                     {row.projectHandlerType === "STAFF" && row.projectHandlerStaffId ? (
                       <div className="mt-2 text-xs text-slate-400">
                         {row.projectStage === "PROJECT_IN_PROGRESS"
@@ -473,7 +489,7 @@ export default function ProjectsOperationsClient({
 
                 <div className="mt-5 grid gap-4 xl:grid-cols-4">
                   <label className="text-sm text-slate-200">
-                    Scheduled date
+                    Installation date
                     <input
                       type="date"
                       value={editor.scheduledDate}

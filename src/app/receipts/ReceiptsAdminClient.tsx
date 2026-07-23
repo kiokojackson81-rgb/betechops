@@ -2455,7 +2455,7 @@ export default function ReceiptsAdminClient({
                           </select>
                         </label>
                         <label className="text-xs uppercase tracking-wide text-cyan-200/80">
-                          Scheduled date
+                          Installation date
                           <input
                             type="date"
                             value={projectEditor.scheduledDate}

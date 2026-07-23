@@ -1512,7 +1512,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
                 </select>
               </label>
               <label className={labelClass}>
-                Scheduled date
+                Installation date
                 <input
                   type="date"
                   value={projectDraft.scheduledDate}
