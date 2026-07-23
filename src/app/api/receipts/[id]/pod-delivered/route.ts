@@ -152,7 +152,23 @@ export async function POST(req: NextRequest, context: ParamsContext) {
   try {
     await prisma.$transaction(async (tx) => {
       const deliveredOrder = desiredStatus === 'delivered'
-        ? await tx.order.findUnique({ where: { id: receipt.orderId! }, include: { items: true } })
+        ? await tx.order.findUnique({
+            where: { id: receipt.orderId! },
+            include: {
+              items: {
+                include: {
+                  product: {
+                    select: {
+                      id: true,
+                      commissionEnabled: true,
+                      commissionAmount: true,
+                      commissionRequiresApproval: true,
+                    },
+                  },
+                },
+              },
+            },
+          })
         : null;
       const deliveredReceiptItems = (deliveredOrder?.items || []).map((it: any) => ({
         productName: String(it.title || it.productName || 'Item').trim(),
@@ -356,9 +372,69 @@ export async function POST(req: NextRequest, context: ParamsContext) {
               await tx.commissionRecord.update({ where: { id: provisional.id }, data: { amount: String(salesCommission), status: 'RELEASED', releasedAt: new Date(), periodId: period.id } });
             }
 
-            // Release pending earnings for this order
+            // Create and release gross earnings only when POD is actually delivered.
             if (tx.commissionEarning) {
-              await tx.commissionEarning.updateMany({ where: { orderItem: { orderId: receipt.orderId } as any, status: 'PENDING' }, data: { status: 'RELEASED' } });
+              const deliveredItems = deliveredOrder?.items ?? [];
+              const deliveredItemIds = deliveredItems.map((item) => item.id);
+              if (deliveredItemIds.length) {
+                await tx.commissionEarning.deleteMany({
+                  where: {
+                    orderItemId: { in: deliveredItemIds },
+                    basis: { in: ['gross', 'product_flat'] },
+                  } as any,
+                });
+
+                await tx.commissionEarning.createMany({
+                  data: deliveredItems.map((item) => ({
+                    staffId: attendantId,
+                    orderItemId: item.id,
+                    basis: 'gross',
+                    qty: item.quantity,
+                    amount: Number(item.sellingPrice || 0) * Number(item.quantity || 1),
+                    status: 'RELEASED',
+                    calcDetail: {
+                      reason: 'receipt_seed_pod_delivered',
+                      orderNumber: receipt.order?.orderNumber ?? null,
+                      receiptId,
+                      customerType: 'pod',
+                      releasedAt: new Date().toISOString(),
+                    },
+                  })),
+                });
+
+                const podProductEarnings = deliveredItems
+                  .map((item) => {
+                    const unitCommission = Number(item.product?.commissionAmount ?? 0);
+                    const amount = unitCommission * Number(item.quantity || 1);
+                    if (!item.product?.commissionEnabled || amount <= 0) return null;
+                    const requiresAdminApproval = Boolean(item.product?.commissionRequiresApproval);
+                    return {
+                      staffId: attendantId,
+                      orderItemId: item.id,
+                      basis: 'product_flat',
+                      qty: item.quantity,
+                      amount,
+                      status: requiresAdminApproval ? 'PENDING_APPROVAL' : 'RELEASED',
+                      calcDetail: {
+                        reason: 'pos_product_commission',
+                        productId: item.product?.id ?? null,
+                        productName: resolveOrderItemName(item),
+                        orderNumber: receipt.order?.orderNumber ?? null,
+                        receiptId,
+                        requiresApproval: requiresAdminApproval,
+                        unitCommission,
+                        customerType: 'pod',
+                        releasedAt: requiresAdminApproval ? undefined : new Date().toISOString(),
+                        approvedAt: requiresAdminApproval ? undefined : new Date().toISOString(),
+                      },
+                    };
+                  })
+                  .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+
+                if (podProductEarnings.length) {
+                  await tx.commissionEarning.createMany({ data: podProductEarnings });
+                }
+              }
             }
 
             // Upsert balance

@@ -375,6 +375,8 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
       const isPodDelivery =
         String(body?.customerType ?? existingData.customerType ?? "").toLowerCase() === "pod" ||
         Boolean(existingPodDelivery);
+      const podDeliveryStatus = String(existingPodDelivery?.status ?? "").trim().toLowerCase();
+      const isDeliveredPod = isPodDelivery && podDeliveryStatus === "delivered";
 
       // refresh products + items
       // Delete dependent CommissionEarning rows first to avoid foreign-key violations
@@ -601,52 +603,56 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
       // Refresh commission earnings on edit, including per-product POS commissions.
       if (createdOrderItems.length) {
         await tx.commissionEarning.deleteMany({ where: { orderItem: { orderId: existing.orderId } } });
-        const grossEarnings = createdOrderItems.map((it) => ({
-            staffId: attendantId || existing.order?.attendantId || null,
-            orderItemId: it.id,
-            basis: "gross",
-            qty: it.quantity,
-            amount: Number(it.sellingPrice || 0) * Number(it.quantity || 1),
-            status: docType === "LAYAWAY" ? "PENDING" : "PENDING",
-            calcDetail: { reason: "receipt_edit_seed" },
-          }));
-        await tx.commissionEarning.createMany({ data: grossEarnings });
-
-        const posProductEarnings = createdOrderItems
-          .map((orderItem, index) => {
-            const sourceItem = createdItems[index];
-            const amount = Number(sourceItem?.commissionAmount || 0) * Number(orderItem.quantity || 1);
-            if (!sourceItem?.commissionEnabled || amount <= 0) return null;
-            const requiresAdminApproval = isPodDelivery || Boolean(sourceItem.commissionRequiresApproval);
-            const status =
-              requiresAdminApproval
-                ? "PENDING_APPROVAL"
-                : docType === "LAYAWAY"
-                  ? "PENDING"
-                  : "RELEASED";
-            return {
+        if (!isPodDelivery || isDeliveredPod) {
+          const grossEarnings = createdOrderItems.map((it) => ({
               staffId: attendantId || existing.order?.attendantId || null,
-              orderItemId: orderItem.id,
-              basis: "product_flat",
-              qty: orderItem.quantity,
-              amount,
-              status,
-              calcDetail: {
-                reason: "pos_product_commission",
-                productId: sourceItem.productId,
-                productName: sourceItem.title,
-                orderNumber: existing.order?.orderNumber ?? null,
-                receiptId: existing.id,
-                requiresApproval: requiresAdminApproval,
-                unitCommission: Number(sourceItem.commissionAmount || 0),
-                customerType: body?.customerType ?? existingData.customerType ?? null,
-              },
-            };
-          })
-          .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+              orderItemId: it.id,
+              basis: "gross",
+              qty: it.quantity,
+              amount: Number(it.sellingPrice || 0) * Number(it.quantity || 1),
+              status: isDeliveredPod ? "RELEASED" : docType === "LAYAWAY" ? "PENDING" : "PENDING",
+              calcDetail: { reason: "receipt_edit_seed", customerType: body?.customerType ?? existingData.customerType ?? null },
+            }));
+          await tx.commissionEarning.createMany({ data: grossEarnings });
 
-        if (posProductEarnings.length) {
-          await tx.commissionEarning.createMany({ data: posProductEarnings });
+          const posProductEarnings = createdOrderItems
+            .map((orderItem, index) => {
+              const sourceItem = createdItems[index];
+              const amount = Number(sourceItem?.commissionAmount || 0) * Number(orderItem.quantity || 1);
+              if (!sourceItem?.commissionEnabled || amount <= 0) return null;
+              const requiresAdminApproval = isPodDelivery || Boolean(sourceItem.commissionRequiresApproval);
+              const status =
+                requiresAdminApproval
+                  ? "PENDING_APPROVAL"
+                  : isDeliveredPod
+                    ? "RELEASED"
+                    : docType === "LAYAWAY"
+                      ? "PENDING"
+                      : "RELEASED";
+              return {
+                staffId: attendantId || existing.order?.attendantId || null,
+                orderItemId: orderItem.id,
+                basis: "product_flat",
+                qty: orderItem.quantity,
+                amount,
+                status,
+                calcDetail: {
+                  reason: "pos_product_commission",
+                  productId: sourceItem.productId,
+                  productName: sourceItem.title,
+                  orderNumber: existing.order?.orderNumber ?? null,
+                  receiptId: existing.id,
+                  requiresApproval: requiresAdminApproval,
+                  unitCommission: Number(sourceItem.commissionAmount || 0),
+                  customerType: body?.customerType ?? existingData.customerType ?? null,
+                },
+              };
+            })
+            .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+
+          if (posProductEarnings.length) {
+            await tx.commissionEarning.createMany({ data: posProductEarnings });
+          }
         }
       }
 
@@ -665,7 +671,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
         // best-effort audit log
       }
 
-      if (normalizedReceiptNumber && entryAttendantId && receiptItemsData.length) {
+      if ((!isPodDelivery || isDeliveredPod) && normalizedReceiptNumber && entryAttendantId && receiptItemsData.length) {
         let supportEntryId: string | null = null;
         if (tx.supportDailyEntry) {
           const supportEntry = await tx.supportDailyEntry.findFirst({

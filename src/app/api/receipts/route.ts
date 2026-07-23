@@ -1571,7 +1571,8 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Seed CommissionEarning rows (pending) for this order's items; recompute jobs can overwrite
+      // Seed CommissionEarning rows (pending) for this order's items; recompute jobs can overwrite.
+      // POD receipts must only enter commission recordings after delivery is finalized.
       if (createdOrderItems.length && attendantId && tx.commissionEarning && typeof tx.commissionEarning.createMany === 'function') {
         try {
           if (!isPodDelivery) {
@@ -1584,19 +1585,6 @@ export async function POST(req: NextRequest) {
                 amount: 0,
                 status: docType === "LAYAWAY" ? "PENDING" : (total >= IMMEDIATE_THRESHOLD ? "RELEASED" : "PENDING"),
                 calcDetail: { reason: "receipt_seed", total },
-              })),
-            });
-          } else {
-            // For POD receipts, seed earnings as PENDING so no immediate releases occur
-            await tx.commissionEarning.createMany({
-              data: createdOrderItems.map((it) => ({
-                staffId: attendantId,
-                orderItemId: it.id,
-                basis: "gross",
-                qty: it.quantity,
-                amount: 0,
-                status: "PENDING",
-                calcDetail: { reason: "receipt_seed_pod", total },
               })),
             });
           }
@@ -1845,50 +1833,42 @@ export async function POST(req: NextRequest) {
                 // ignore in partial mocks
               }
             }
-          } else {
-            // For POD receipts, create per-item earnings but leave as PENDING (no immediate releases)
-            const perItemEarnings = createdOrderItems.map((it) => {
-              const gross = Number(it.sellingPrice || 0) * Number(it.quantity || 1);
-              return { staffId: attendantId, orderItemId: it.id, basis: "gross", qty: it.quantity, amount: gross, status: "PENDING", calcDetail: { reason: "receipt_seed_pod", total } };
-            });
-            await tx.commissionEarning.createMany({ data: perItemEarnings });
-          }
+            const posProductEarnings = createdOrderItems
+              .map((orderItem, index) => {
+                const sourceItem = createdItems[index];
+                const amount = Number(sourceItem?.commissionAmount || 0) * Number(orderItem.quantity || 1);
+                if (!sourceItem?.commissionEnabled || amount <= 0) return null;
+                const requiresAdminApproval = Boolean(sourceItem.commissionRequiresApproval);
+                const status =
+                  requiresAdminApproval
+                    ? "PENDING_APPROVAL"
+                    : docType === "LAYAWAY"
+                      ? "PENDING"
+                      : "RELEASED";
+                return {
+                  staffId: attendantId,
+                  orderItemId: orderItem.id,
+                  basis: "product_flat",
+                  qty: orderItem.quantity,
+                  amount,
+                  status,
+                  calcDetail: {
+                    reason: "pos_product_commission",
+                    productId: sourceItem.product.id,
+                    productName: sourceItem.title,
+                    orderNumber: serial,
+                    receiptId: receipt.id,
+                    requiresApproval: requiresAdminApproval,
+                    unitCommission: Number(sourceItem.commissionAmount || 0),
+                    customerType: payload?.customerType ?? null,
+                  },
+                };
+              })
+              .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
 
-          const posProductEarnings = createdOrderItems
-            .map((orderItem, index) => {
-              const sourceItem = createdItems[index];
-              const amount = Number(sourceItem?.commissionAmount || 0) * Number(orderItem.quantity || 1);
-              if (!sourceItem?.commissionEnabled || amount <= 0) return null;
-              const requiresAdminApproval = isPodDelivery || Boolean(sourceItem.commissionRequiresApproval);
-              const status =
-                requiresAdminApproval
-                  ? "PENDING_APPROVAL"
-                  : docType === "LAYAWAY"
-                    ? "PENDING"
-                    : "RELEASED";
-              return {
-                staffId: attendantId,
-                orderItemId: orderItem.id,
-                basis: "product_flat",
-                qty: orderItem.quantity,
-                amount,
-                status,
-                calcDetail: {
-                  reason: "pos_product_commission",
-                  productId: sourceItem.product.id,
-                  productName: sourceItem.title,
-                  orderNumber: serial,
-                  receiptId: receipt.id,
-                  requiresApproval: requiresAdminApproval,
-                  unitCommission: Number(sourceItem.commissionAmount || 0),
-                  customerType: payload?.customerType ?? null,
-                },
-              };
-            })
-            .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
-
-          if (posProductEarnings.length) {
-            await tx.commissionEarning.createMany({ data: posProductEarnings });
+            if (posProductEarnings.length) {
+              await tx.commissionEarning.createMany({ data: posProductEarnings });
+            }
           }
         } catch (e) {
           // ignore commission earnings in partial tx mocks
