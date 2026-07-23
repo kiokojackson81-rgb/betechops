@@ -148,6 +148,34 @@ function normalizeOptionalDate(value: unknown) {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
+function looksLikeLegacyProjectFlow(source: Record<string, unknown>) {
+  const markerKeys = [
+    "stage",
+    "paymentTerm",
+    "paymentStatus",
+    "depositType",
+    "depositValue",
+    "depositPercent",
+    "depositRequiredAmount",
+    "depositPaidAmount",
+    "balanceExpectedAmount",
+    "balancePaidAmount",
+    "totalPaidAmount",
+    "amountPaidTotal",
+    "remainingAmount",
+    "balanceAmount",
+    "scheduledDate",
+    "postedReceiptNumber",
+    "handlerType",
+    "handlerStaffId",
+    "handlerStaffName",
+    "externalAgentName",
+    "externalAgentPhone",
+  ] as const;
+
+  return markerKeys.some((key) => hasMeaningfulValue(source[key]));
+}
+
 export function buildReceiptProjectFlow(input: {
   existing?: Record<string, unknown> | null;
   stage?: unknown;
@@ -340,7 +368,9 @@ export function buildReceiptProjectFlow(input: {
 export function readReceiptProjectFlow(value: unknown): ReceiptProjectFlow | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const source = value as Record<string, unknown>;
-  if (source.isProject !== true) return null;
+  const isExplicitProject = source.isProject === true;
+  const isLegacyProject = !isExplicitProject && looksLikeLegacyProjectFlow(source);
+  if (!isExplicitProject && !isLegacyProject) return null;
   const projectValue = roundCurrency(Math.max(0, Number(source.projectValue || 0)));
   const depositType = normalizeReceiptProjectDepositType(source.depositType);
   const depositValue = roundCurrency(Math.max(0, Number(source.depositValue || 0)));
