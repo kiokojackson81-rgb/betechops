@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentTradingPeriodFor } from "./marketingPeriod";
 import { nowInNairobi } from "@/lib/timezone";
 import { canonicalReceiptNumber } from "./receiptGuard";
+import { readReceiptProjectFlow } from "./receiptProjects";
 
 export type PendingReceiptItem = {
   id: string;
@@ -214,6 +215,11 @@ export async function getUnpricedDailySalesForRange({
   };
 
   for (const receipt of linkedReceipts) {
+    const projectFlow = readReceiptProjectFlow(
+      receipt?.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
+        ? (receipt.data as Record<string, unknown>).projectFlow
+        : null,
+    );
     const rawItems = (receipt.data as any)?.items;
     if (!Array.isArray(rawItems)) continue;
     const payloadItems = rawItems
@@ -275,6 +281,23 @@ export async function getUnpricedDailySalesForRange({
         orderItemsByReceiptNumber.get(receiptNumber) ??
         orderItemsByReceiptNumber.get(canonicalReceiptNumber(receiptNumber) ?? "") ??
         null;
+      const linkedReceipt =
+        linkedReceipts.find((entry) => entry.receiptNumber?.trim() === receiptNumber) ??
+        linkedReceipts.find((entry) => entry.order?.orderNumber?.trim() === receiptNumber) ??
+        linkedReceipts.find(
+          (entry) =>
+            canonicalReceiptNumber(entry.receiptNumber ?? undefined) === canonicalReceiptNumber(receiptNumber) ||
+            canonicalReceiptNumber(entry.order?.orderNumber ?? undefined) === canonicalReceiptNumber(receiptNumber),
+        ) ??
+        null;
+      const linkedProjectFlow = readReceiptProjectFlow(
+        linkedReceipt?.data && typeof linkedReceipt.data === "object" && !Array.isArray(linkedReceipt.data)
+          ? (linkedReceipt.data as Record<string, unknown>).projectFlow
+          : null,
+      );
+      if (linkedProjectFlow?.isProject && linkedProjectFlow.stage !== "COMPLETED_POSTED") {
+        return null;
+      }
       const payloadItems =
         payloadItemsByReceiptNumber.get(receiptNumber) ??
         payloadItemsByReceiptNumber.get(canonicalReceiptNumber(receiptNumber) ?? "") ??

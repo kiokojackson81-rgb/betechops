@@ -66,6 +66,8 @@ type ProjectsOperationsClientProps = {
   viewerId?: string | null;
 };
 
+type ProjectStageFilter = "ALL" | "RECEIPT_CREATED" | "PROJECT_IN_PROGRESS" | "COMPLETED_POSTED";
+
 const formatCurrency = (value: number | string | null | undefined) => {
   const amount = Number(value ?? 0);
   if (!Number.isFinite(amount)) return "Ksh 0";
@@ -174,7 +176,7 @@ export default function ProjectsOperationsClient({
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [stageFilter, setStageFilter] = useState<"ALL" | "RECEIPT_CREATED" | "PROJECT_IN_PROGRESS" | "COMPLETED_POSTED">("ALL");
+  const [stageFilter, setStageFilter] = useState<ProjectStageFilter>("ALL");
   const [editors, setEditors] = useState<Record<string, ProjectEditor>>({});
 
   const load = async () => {
@@ -251,6 +253,23 @@ export default function ProjectsOperationsClient({
     };
   }, [scopedRows]);
 
+  const stageFilterLabel = useMemo(() => {
+    switch (stageFilter) {
+      case "RECEIPT_CREATED":
+        return "pending projects";
+      case "PROJECT_IN_PROGRESS":
+        return "projects in progress";
+      case "COMPLETED_POSTED":
+        return "completed projects";
+      default:
+        return "all projects";
+    }
+  }, [stageFilter]);
+
+  const toggleStageFilter = (value: ProjectStageFilter) => {
+    setStageFilter((current) => (current === value ? "ALL" : value));
+  };
+
   const setEditorValue = (receiptId: string, patch: Partial<ProjectEditor>) => {
     setEditors((current) => ({
       ...current,
@@ -326,22 +345,55 @@ export default function ProjectsOperationsClient({
           Manage scheduled installations, assign the handler, move the project into progress, and complete it before the receipt continues through the normal POS pricing flow.
         </p>
         <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <div className="text-xs uppercase tracking-[0.25em] text-slate-400">All projects</div>
-            <div className="mt-2 text-3xl font-semibold text-white">{summary.total}</div>
-          </div>
-          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
+          <button
+            type="button"
+            onClick={() => setStageFilter("ALL")}
+            className={`rounded-2xl border p-4 text-left transition ${
+              stageFilter === "ALL"
+                ? "border-cyan-400/40 bg-cyan-500/10"
+                : "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/[0.07]"
+            }`}
+          >
+            <div className="text-xs uppercase tracking-[0.25em] text-slate-400">Visible projects</div>
+            <div className="mt-2 text-3xl font-semibold text-white">{filteredRows.length}</div>
+            <div className="mt-2 text-xs text-slate-400">Showing {stageFilterLabel}</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => toggleStageFilter("RECEIPT_CREATED")}
+            className={`rounded-2xl border p-4 text-left transition ${
+              stageFilter === "RECEIPT_CREATED"
+                ? "border-amber-400/50 bg-amber-500/15"
+                : "border-amber-500/20 bg-amber-500/10 hover:border-amber-400/35 hover:bg-amber-500/15"
+            }`}
+          >
             <div className="text-xs uppercase tracking-[0.25em] text-amber-200">Project pending</div>
             <div className="mt-2 text-3xl font-semibold text-amber-100">{summary.receiptCreated}</div>
-          </div>
-          <div className="rounded-2xl border border-sky-500/20 bg-sky-500/10 p-4">
+          </button>
+          <button
+            type="button"
+            onClick={() => toggleStageFilter("PROJECT_IN_PROGRESS")}
+            className={`rounded-2xl border p-4 text-left transition ${
+              stageFilter === "PROJECT_IN_PROGRESS"
+                ? "border-sky-400/50 bg-sky-500/15"
+                : "border-sky-500/20 bg-sky-500/10 hover:border-sky-400/35 hover:bg-sky-500/15"
+            }`}
+          >
             <div className="text-xs uppercase tracking-[0.25em] text-sky-200">In progress</div>
             <div className="mt-2 text-3xl font-semibold text-sky-100">{summary.inProgress}</div>
-          </div>
-          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+          </button>
+          <button
+            type="button"
+            onClick={() => toggleStageFilter("COMPLETED_POSTED")}
+            className={`rounded-2xl border p-4 text-left transition ${
+              stageFilter === "COMPLETED_POSTED"
+                ? "border-emerald-400/50 bg-emerald-500/15"
+                : "border-emerald-500/20 bg-emerald-500/10 hover:border-emerald-400/35 hover:bg-emerald-500/15"
+            }`}
+          >
             <div className="text-xs uppercase tracking-[0.25em] text-emerald-200">Completed</div>
             <div className="mt-2 text-3xl font-semibold text-emerald-100">{summary.completed}</div>
-          </div>
+          </button>
         </div>
       </header>
 
