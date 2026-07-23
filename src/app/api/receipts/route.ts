@@ -610,6 +610,10 @@ export async function GET(req: NextRequest) {
   }
 
   const mapPosRow = (r: any) => {
+    const rawData =
+      r?.data && typeof r.data === "object" && !Array.isArray(r.data)
+        ? (r.data as Record<string, unknown>)
+        : {};
     const podDeliveryData = (r.data as any)?.podDelivery;
     const projectFlowData = readReceiptProjectFlow((r.data as any)?.projectFlow);
     const agentSaleCommission = Number((r.data as any)?.agentSale?.commissionAmount ?? 0) || 0;
