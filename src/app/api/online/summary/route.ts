@@ -8,6 +8,7 @@ import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import { getOrCreateCommissionPeriod } from "@/lib/commission";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
+import { getUserCommissionConfigLike } from "@/lib/userCommissionConfig";
 import {
   computeOnlinePeriodCommission,
   resolveDirectCommissionMode,
@@ -172,6 +173,7 @@ export async function GET(req: Request) {
     where: { id: targetUserId },
     select: { email: true },
   });
+  const commissionConfig = await getUserCommissionConfigLike(targetUserId);
 
   const url = new URL(req.url);
   if (url.searchParams.has("start") || url.searchParams.has("end")) {
@@ -191,7 +193,12 @@ export async function GET(req: Request) {
     day: "2-digit",
     month: "short",
   })} - ${end.toLocaleDateString("en-KE", { day: "2-digit", month: "short" })}`;
-  const directCommissionMode = resolveDirectCommissionMode(targetUser?.email);
+  const directCommissionMode =
+    commissionConfig.salesCommissionMode === "POS_PROFIT_10"
+      ? "PROFIT_10"
+      : commissionConfig.salesCommissionMode === "BRENDAH_DIRECT"
+        ? "BRENDAH"
+        : resolveDirectCommissionMode(targetUser?.email);
   const directPosSummary = await summarizePosReceiptsForPeriod({
     start,
     end,

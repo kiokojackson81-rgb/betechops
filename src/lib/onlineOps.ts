@@ -20,6 +20,7 @@ import { getPeriodKeyVariantsFromDates } from "@/lib/payrollPeriodKey";
 import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 import { resolveShopIdsForMarketplaceAccount } from "@/lib/marketplaceAccountShopResolve";
 import { ensurePayrollAdjustmentStorage } from "@/lib/payrollAdjustmentStorage";
+import { getUserCommissionConfigLike } from "@/lib/userCommissionConfig";
 
 type AssignmentWithAccount = any;
 
@@ -118,6 +119,13 @@ export type OnlineEarningsSummary = {
 
 const COMMISSION_PROGRESS_TARGET = 2_000_000;
 const DIRECT_SALES_TIER_THRESHOLD = 500_000;
+
+async function resolveStoredDirectCommissionMode(attendantId: string, email?: string | null) {
+  const commissionConfig = await getUserCommissionConfigLike(attendantId);
+  if (commissionConfig.salesCommissionMode === "POS_PROFIT_10") return "PROFIT_10" as const;
+  if (commissionConfig.salesCommissionMode === "BRENDAH_DIRECT") return "BRENDAH" as const;
+  return resolveDirectCommissionMode(email);
+}
 
 const normalizeReceiptNumber = (input: unknown) => {
   if (input == null) return "";
@@ -729,7 +737,7 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
   const returnsDeduction = returns.reduce((sum, entry) => sum + Number(entry.expectedAmount ?? 0), 0);
 
   const summed = sumAdjustments(adjustments);
-  const directCommissionMode = resolveDirectCommissionMode(user?.email);
+  const directCommissionMode = await resolveStoredDirectCommissionMode(attendantId, user?.email);
   const isBrendah = directCommissionMode === "BRENDAH";
   const fallbackDirectReceiptSummary =
     directCommissionMode === "PROFIT_10"
@@ -894,7 +902,7 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
 
 async function getDirectSalesStats(attendantId: string, period: TradingPeriod) {
   const user = await prisma.user.findUnique({ where: { id: attendantId }, select: { email: true } });
-  const directCommissionMode = resolveDirectCommissionMode(user?.email);
+  const directCommissionMode = await resolveStoredDirectCommissionMode(attendantId, user?.email);
   const posSummary = await summarizePosReceiptsForPeriod({
     start: period.start,
     end: period.end,
