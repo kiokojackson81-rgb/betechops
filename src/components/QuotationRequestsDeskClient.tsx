@@ -379,6 +379,173 @@ type QuoteItemDraft = {
   warrantySource: QuoteWarrantySource;
 };
 
+type ParsedQuotationTemplateDraft = {
+  quoteItems: QuoteItemDraft[];
+  discountAmount: string;
+  quoteTitle: string;
+  notes: string;
+};
+
+function normalizePastedTemplateLine(value: string) {
+  return value
+    .replace(/\*\*/g, "")
+    .replace(/[•·]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseKesValue(value: string) {
+  const match = value.match(/ksh\s*([\d,]+(?:\.\d+)?)/i);
+  if (!match) return null;
+  const parsed = Number(match[1].replace(/,/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isSectionHeadingLine(value: string) {
+  if (!value) return false;
+  if (/:/.test(value)) return false;
+  if (/ksh/i.test(value)) return false;
+  if (/@/.test(value)) return false;
+  if (/[×x]/.test(value)) return false;
+  return /^[a-z][a-z0-9/&,+()\-. ]+$/i.test(value);
+}
+
+function parsePastedTemplateItemLine(
+  value: string,
+  currentSection: string,
+): QuoteItemDraft | null {
+  const line = normalizePastedTemplateLine(value);
+  if (!line) return null;
+  if (/^itemized equipment list$/i.test(line)) return null;
+  if (/^project summary$/i.test(line)) return null;
+  if (/^(subtotal|special project discount|final project cost|main equipment|mounting materials|electrical accessories|services)\s*:/i.test(line)) {
+    return null;
+  }
+  if (/total:\s*ksh/i.test(line) && !/@/i.test(line) && !/[×x]/.test(line)) {
+    return null;
+  }
+
+  if (/@/i.test(line)) {
+    const [leftRaw, rightRaw] = line.split(/\s+@\s+/i, 2);
+    const right = rightRaw || "";
+    let quantity = "1";
+    let itemName = leftRaw.trim();
+
+    const timesMatch = leftRaw.match(/^(\d+(?:\.\d+)?)\s*[×x]\s+(.+)$/i);
+    const packMatch = leftRaw.match(/^(\d+(?:\.\d+)?)\s+(?:packs?\s+)?(.+)$/i);
+    if (timesMatch) {
+      quantity = timesMatch[1];
+      itemName = timesMatch[2].trim();
+    } else if (packMatch) {
+      quantity = packMatch[1];
+      itemName = packMatch[2].trim();
+    }
+
+    const unitPrice = parseKesValue(right);
+    if (unitPrice === null) return null;
+
+    return hydrateQuoteItemDraft({
+      itemName,
+      description: currentSection && currentSection !== "Project Summary" ? currentSection : "",
+      quantity,
+      unitPrice: String(unitPrice),
+      warranty: suggestWarrantyForItem(itemName),
+      warrantySource: "CUSTOM",
+    });
+  }
+
+  const serviceMatch = line.match(/^(.+?)\s+[—-]\s+ksh\s*([\d,]+(?:\.\d+)?)(?:\s*\(.*\))?$/i);
+  if (serviceMatch) {
+    const amount = Number(serviceMatch[2].replace(/,/g, ""));
+    if (!Number.isFinite(amount)) return null;
+    return hydrateQuoteItemDraft({
+      itemName: serviceMatch[1].trim(),
+      description: currentSection && currentSection !== "Project Summary" ? currentSection : "",
+      quantity: "1",
+      unitPrice: String(amount),
+      warranty: suggestWarrantyForItem(serviceMatch[1].trim()),
+      warrantySource: "CUSTOM",
+    });
+  }
+
+  return null;
+}
+
+function parsePastedQuotationTemplate(text: string): ParsedQuotationTemplateDraft {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => normalizePastedTemplateLine(line))
+    .filter(Boolean);
+
+  if (!lines.length) {
+    throw new Error("Paste the itemized quotation text first.");
+  }
+
+  let currentSection = "";
+  let subtotalAmount: number | null = null;
+  let discountAmount: number | null = null;
+  let finalProjectCost: number | null = null;
+  const quoteItems: QuoteItemDraft[] = [];
+
+  for (const line of lines) {
+    if (isSectionHeadingLine(line)) {
+      currentSection = line;
+      continue;
+    }
+    if (/^subtotal\s*:/i.test(line)) {
+      subtotalAmount = parseKesValue(line);
+      continue;
+    }
+    if (/^special project discount\s*:/i.test(line)) {
+      discountAmount = parseKesValue(line);
+      continue;
+    }
+    if (/^final project cost\s*:/i.test(line)) {
+      finalProjectCost = parseKesValue(line);
+      continue;
+    }
+
+    const nextItem = parsePastedTemplateItemLine(line, currentSection);
+    if (nextItem) {
+      quoteItems.push(nextItem);
+    }
+  }
+
+  if (!quoteItems.length) {
+    throw new Error("No quotation items were found. Paste the full BOQ with item lines and prices.");
+  }
+
+  const computedSubtotal = buildSanitizedQuoteItems(quoteItems).reduce(
+    (sum, item) => sum + Number(item.quantity || 0) * Number(item.unitPrice || 0),
+    0,
+  );
+  const normalizedSubtotal = subtotalAmount ?? computedSubtotal;
+  const normalizedDiscount =
+    discountAmount ??
+    (finalProjectCost !== null && normalizedSubtotal > finalProjectCost
+      ? Math.max(0, normalizedSubtotal - finalProjectCost)
+      : 0);
+
+  const leadItems = dedupeItemNames(quoteItems).slice(0, 2);
+  const quoteTitle = leadItems.length
+    ? `${leadItems.join(" + ")} template`
+    : "Quotation template";
+
+  const notes = [
+    subtotalAmount !== null ? `Parsed subtotal: ${formatQuoteCurrency(subtotalAmount)}` : null,
+    finalProjectCost !== null ? `Parsed final project cost: ${formatQuoteCurrency(finalProjectCost)}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return {
+    quoteItems,
+    discountAmount: normalizedDiscount > 0 ? String(normalizedDiscount) : "",
+    quoteTitle,
+    notes,
+  };
+}
+
 type QuoteDeskFormState = {
   status: QuoteRequestStatus;
   quoteTitle: string;
@@ -1334,6 +1501,8 @@ export default function QuotationRequestsDeskClient({
   const [templateSaving, setTemplateSaving] = useState(false);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [templateDeletingId, setTemplateDeletingId] = useState<string | null>(null);
+  const [templateBuilderMode, setTemplateBuilderMode] = useState(false);
+  const [templatePasteText, setTemplatePasteText] = useState("");
   const [draftOpening, setDraftOpening] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -2009,6 +2178,8 @@ export default function QuotationRequestsDeskClient({
       setShowCreatePanel(createOnlyMode);
       setShowCreateMoreOptions(false);
       setEditingTemplateId(null);
+      setTemplateBuilderMode(false);
+      setTemplatePasteText("");
       setCreateDraft(createDefaultQuotationDraft());
       setCreateItemAccordion([true]);
       setCreateCatalogQuery("");
@@ -2129,6 +2300,8 @@ export default function QuotationRequestsDeskClient({
   function handleEditTemplate(template: SerializedQuotationTemplate) {
     const nextDraft = applyTemplateToCreateDraft(createDefaultQuotationDraft(), template);
     setEditingTemplateId(template.id);
+    setTemplateBuilderMode(true);
+    setTemplatePasteText("");
     setShowTemplatesPanel(false);
     setShowCreatePanel(true);
     setShowCreateMoreOptions(false);
@@ -2143,6 +2316,8 @@ export default function QuotationRequestsDeskClient({
   function handleUseTemplate(template: SerializedQuotationTemplate) {
     const nextDraft = applyTemplateToCreateDraft(createDefaultQuotationDraft(), template);
     setEditingTemplateId(null);
+    setTemplateBuilderMode(false);
+    setTemplatePasteText("");
     setShowTemplatesPanel(false);
     setShowCreatePanel(true);
     setShowCreateMoreOptions(false);
@@ -2187,6 +2362,8 @@ export default function QuotationRequestsDeskClient({
     setShowTemplatesPanel(false);
     setShowCreateMoreOptions(false);
     setEditingTemplateId(null);
+    setTemplateBuilderMode(false);
+    setTemplatePasteText("");
     setCreateMode("manual");
     if (nextOpen) {
       const nextDraft = prefillRequest ? buildCreateDraftFromRequest(prefillRequest) : createDefaultQuotationDraft();
@@ -2195,6 +2372,22 @@ export default function QuotationRequestsDeskClient({
       setCreateCatalogQuery("");
       setCreateCatalogResults([]);
     }
+  }
+
+  function openTemplateBuilder() {
+    const nextDraft = createDefaultQuotationDraft();
+    setShowCreatePanel(true);
+    setShowTemplatesPanel(false);
+    setShowCreateMoreOptions(true);
+    setEditingTemplateId(null);
+    setTemplateBuilderMode(true);
+    setTemplatePasteText("");
+    setCreateMode("manual");
+    setCreateDraft(nextDraft);
+    setCreateItemAccordion([true]);
+    setCreateCatalogQuery("");
+    setCreateCatalogResults([]);
+    setMessage("Paste the quotation BOQ text, parse it, review the items, then save the template.");
   }
 
   function handleDownloadTemplateFormat() {
@@ -2233,6 +2426,7 @@ export default function QuotationRequestsDeskClient({
       if (data.template?.id) {
         const nextDraft = applyTemplateToCreateDraft(createDefaultQuotationDraft(), data.template);
         setCreateMode("template");
+        setTemplateBuilderMode(true);
         setShowCreateMoreOptions(false);
         setCreateDraft(nextDraft);
         setCreateItemAccordion(nextDraft.quoteItems.length ? nextDraft.quoteItems.map(() => true) : [true]);
@@ -2245,6 +2439,28 @@ export default function QuotationRequestsDeskClient({
         templateUploadInputRef.current.value = "";
       }
       setTemplateSaving(false);
+    }
+  }
+
+  function handleParseTemplatePaste() {
+    setMessage(null);
+    try {
+      const parsed = parsePastedQuotationTemplate(templatePasteText);
+      const autoTitle = generateQuoteTitleFromItems(parsed.quoteItems, createDraft.projectType);
+      setCreateDraft((current) => ({
+        ...current,
+        quoteItems: parsed.quoteItems,
+        discountAmount: parsed.discountAmount,
+        quoteTitle: current.quoteTitle.trim() || parsed.quoteTitle || autoTitle,
+        preferredProducts: summarizeSelectedProducts(parsed.quoteItems),
+        quoteMessage: current.quoteMessage.trim() || "Prepared quotation template parsed from the supplied BOQ.",
+        followUpNotes: parsed.notes || current.followUpNotes,
+      }));
+      setCreateItemAccordion(parsed.quoteItems.map(() => true));
+      setShowCreateMoreOptions(true);
+      setMessage(`Parsed ${parsed.quoteItems.length} quotation item${parsed.quoteItems.length === 1 ? "" : "s"} from the pasted template.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Failed to parse the pasted template.");
     }
   }
 
@@ -3028,10 +3244,21 @@ export default function QuotationRequestsDeskClient({
               {allowTemplateManager ? (
                 <button
                   type="button"
+                  onClick={openTemplateBuilder}
+                  className="inline-flex items-center gap-2 rounded-full border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-amber-100 transition hover:border-amber-400 hover:text-white"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add Template
+                </button>
+              ) : null}
+              {allowTemplateManager ? (
+                <button
+                  type="button"
                   onClick={() => {
                     setShowTemplatesPanel((current) => !current);
                     setShowCreatePanel(false);
                     setEditingTemplateId(null);
+                    setTemplateBuilderMode(false);
                   }}
                   className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
                     showTemplatesPanel
@@ -3201,10 +3428,18 @@ export default function QuotationRequestsDeskClient({
                   Quotation Center
                 </div>
                 <div className="mt-2 text-lg font-semibold text-white">
-                  {editingTemplateId ? "Edit template" : "Create quotation"}
+                  {templateBuilderMode
+                    ? editingTemplateId
+                      ? "Edit template"
+                      : "Add template"
+                    : editingTemplateId
+                      ? "Edit template"
+                      : "Create quotation"}
                 </div>
                 <div className="mt-1 text-sm text-slate-300">
-                  {editingTemplateId
+                  {templateBuilderMode
+                    ? "Paste a full BOQ or itemized quotation text, let the system break it into clean line items, then save it as a reusable template."
+                    : editingTemplateId
                     ? "Update the saved template using only the fields staff actually maintain in day-to-day quotation work."
                     : "Start a quotation for walk-in, WhatsApp, phone, or template-based customers without waiting for the website form."}
                 </div>
@@ -3236,6 +3471,44 @@ export default function QuotationRequestsDeskClient({
             </div>
 
             <div className="mt-4 grid gap-3 lg:grid-cols-2">
+              {templateBuilderMode ? (
+                <div className="lg:col-span-2 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-3 sm:p-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-200">
+                        Paste itemized quotation
+                      </div>
+                      <div className="mt-1 text-sm text-slate-300">
+                        Paste the raw BOQ text exactly as shared on WhatsApp or email. The system will pull out items, quantities, prices, and discount automatically.
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={handleParseTemplatePaste}
+                        className="rounded-full border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-amber-100 transition hover:border-amber-400"
+                      >
+                        Parse pasted template
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTemplatePasteText("")}
+                        className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-300 transition hover:border-white/20"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                  <textarea
+                    value={templatePasteText}
+                    onChange={(event) => setTemplatePasteText(event.target.value)}
+                    rows={14}
+                    placeholder="Paste the full itemized quotation text here..."
+                    className="mt-3 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm normal-case tracking-normal text-slate-100 outline-none"
+                  />
+                </div>
+              ) : null}
+              {!templateBuilderMode ? (
               <label className="text-xs uppercase tracking-wide text-slate-400">
                 Customer name
                 <input
@@ -3244,6 +3517,8 @@ export default function QuotationRequestsDeskClient({
                   className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
                 />
               </label>
+              ) : null}
+              {!templateBuilderMode ? (
               <label className="text-xs uppercase tracking-wide text-slate-400">
                 Phone number
                 <input
@@ -3252,6 +3527,8 @@ export default function QuotationRequestsDeskClient({
                   className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
                 />
               </label>
+              ) : null}
+              {!templateBuilderMode ? (
               <label className="text-xs uppercase tracking-wide text-slate-400">
                 Email
                 <input
@@ -3260,6 +3537,7 @@ export default function QuotationRequestsDeskClient({
                   className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
                 />
               </label>
+              ) : null}
               <label className="text-xs uppercase tracking-wide text-slate-400">
                 Project type
                 <select
@@ -3274,6 +3552,7 @@ export default function QuotationRequestsDeskClient({
                   ))}
                 </select>
               </label>
+              {!templateBuilderMode ? (
               <label className="text-xs uppercase tracking-wide text-slate-400 lg:col-span-2">
                 Location
                 <input
@@ -3282,7 +3561,8 @@ export default function QuotationRequestsDeskClient({
                   className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
                 />
               </label>
-              {assigneeOptions.length ? (
+              ) : null}
+              {assigneeOptions.length && !templateBuilderMode ? (
                 <label className="text-xs uppercase tracking-wide text-slate-400 lg:col-span-2">
                   {assigneeLabel}
                   <select
@@ -3302,11 +3582,11 @@ export default function QuotationRequestsDeskClient({
                 </label>
               ) : null}
               <label className="text-xs uppercase tracking-wide text-slate-400 lg:col-span-2">
-                Quotation Name
+                {templateBuilderMode ? "Template name" : "Quotation Name"}
                 <input
                   value={createDraft.quoteTitle}
                   onChange={(event) => setCreateDraft((current) => ({ ...current, quoteTitle: event.target.value }))}
-                  placeholder="Optional custom quotation name to print on the PDF"
+                  placeholder={templateBuilderMode ? "Reusable template name" : "Optional custom quotation name to print on the PDF"}
                   className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 outline-none"
                 />
               </label>
@@ -3849,26 +4129,30 @@ export default function QuotationRequestsDeskClient({
                   </button>
                 </>
               ) : null}
-              <button
-                type="button"
-                disabled={
-                  createSaving ||
-                  !createDraft.customerName.trim() ||
-                  !createDraft.customerPhone.trim() ||
-                  (requireAssigneeSelection && !createDraft.assignedAttendantId.trim()) ||
-                  (createMode === "template" && !createDraft.templateId)
-                }
-                onClick={() => void handleCreateQuotation()}
-                className="w-full rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:py-2"
-              >
-                {createSaving ? "Saving..." : createActionLabel}
-              </button>
+              {!templateBuilderMode ? (
+                <button
+                  type="button"
+                  disabled={
+                    createSaving ||
+                    !createDraft.customerName.trim() ||
+                    !createDraft.customerPhone.trim() ||
+                    (requireAssigneeSelection && !createDraft.assignedAttendantId.trim()) ||
+                    (createMode === "template" && !createDraft.templateId)
+                  }
+                  onClick={() => void handleCreateQuotation()}
+                  className="w-full rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:py-2"
+                >
+                  {createSaving ? "Saving..." : createActionLabel}
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => {
                   setShowCreatePanel(createOnlyMode);
                   setShowCreateMoreOptions(false);
                   setEditingTemplateId(null);
+                  setTemplateBuilderMode(false);
+                  setTemplatePasteText("");
                   setCreateDraft(createDefaultQuotationDraft());
                   setCreateItemAccordion([true]);
                 }}
@@ -3895,26 +4179,30 @@ export default function QuotationRequestsDeskClient({
                         : "Save As Template"}
                   </button>
                 ) : null}
-                <button
-                  type="button"
-                  disabled={
-                    createSaving ||
-                    !createDraft.customerName.trim() ||
-                    !createDraft.customerPhone.trim() ||
-                    (requireAssigneeSelection && !createDraft.assignedAttendantId.trim()) ||
-                    (createMode === "template" && !createDraft.templateId)
-                  }
-                  onClick={() => void handleCreateQuotation()}
-                  className="w-full rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {createSaving ? "Saving..." : createActionLabel}
-                </button>
+                {!templateBuilderMode ? (
+                  <button
+                    type="button"
+                    disabled={
+                      createSaving ||
+                      !createDraft.customerName.trim() ||
+                      !createDraft.customerPhone.trim() ||
+                      (requireAssigneeSelection && !createDraft.assignedAttendantId.trim()) ||
+                      (createMode === "template" && !createDraft.templateId)
+                    }
+                    onClick={() => void handleCreateQuotation()}
+                    className="w-full rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {createSaving ? "Saving..." : createActionLabel}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => {
                     setShowCreatePanel(createOnlyMode);
                     setShowCreateMoreOptions(false);
                     setEditingTemplateId(null);
+                    setTemplateBuilderMode(false);
+                    setTemplatePasteText("");
                     setCreateDraft(createDefaultQuotationDraft());
                     setCreateItemAccordion([true]);
                   }}
