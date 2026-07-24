@@ -3236,6 +3236,49 @@ export default function QuotationRequestsDeskClient({
             {message}
           </div>
         ) : null}
+        {enableCreate || allowTemplateManager ? (
+          <div className="mt-4 flex flex-wrap justify-end gap-2">
+            {allowTemplateManager ? (
+              <button
+                type="button"
+                onClick={openTemplateBuilder}
+                className="inline-flex items-center gap-2 rounded-full border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-amber-100 transition hover:border-amber-400 hover:text-white"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add Template
+              </button>
+            ) : null}
+            {allowTemplateManager ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowTemplatesPanel((current) => !current);
+                  setShowCreatePanel(false);
+                  setEditingTemplateId(null);
+                  setTemplateBuilderMode(false);
+                }}
+                className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                  showTemplatesPanel
+                    ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-200"
+                    : "border-white/15 text-slate-100 hover:border-cyan-400 hover:text-white"
+                }`}
+              >
+                <LayoutTemplate className="h-3.5 w-3.5" />
+                Saved Templates
+              </button>
+            ) : null}
+            {enableCreate ? (
+              <button
+                type="button"
+                onClick={() => openCreatePanel(expandedRequest)}
+                className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 hover:text-white"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Create Quotation
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
       ) : !createOnlyMode ? (
         <>
