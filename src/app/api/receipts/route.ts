@@ -233,7 +233,7 @@ export async function GET(req: NextRequest) {
         {
           AND: [
             { createdAt: { lte: endDate } },
-            { data: { path: ["projectFlow", "isProject"], equals: true } },
+            { data: { path: ["projectFlow"], not: Prisma.JsonNull } },
           ],
         },
       ],
@@ -316,6 +316,7 @@ export async function GET(req: NextRequest) {
       OR: [
         { data: { path: ['customerType'], equals: 'project' } },
         { data: { path: ['projectFlow', 'isProject'], equals: true } },
+        { data: { path: ['projectFlow'], not: Prisma.JsonNull } },
       ],
     });
   } else if (customerType === 'normal') {

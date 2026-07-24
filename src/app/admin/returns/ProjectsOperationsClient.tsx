@@ -182,7 +182,7 @@ export default function ProjectsOperationsClient({
   const load = async () => {
     setLoading(true);
     try {
-      const [receiptsRes, staffRes] = await Promise.all([
+      const [firstReceiptsRes, staffRes] = await Promise.all([
         fetch("/api/receipts?customerType=project&scope=global&page=1&size=200", {
           cache: "no-store",
           credentials: "same-origin",
@@ -192,12 +192,31 @@ export default function ProjectsOperationsClient({
           credentials: "same-origin",
         }),
       ]);
-      const receiptsPayload = await receiptsRes.json().catch(() => ({}));
+      const receiptsPayload = await firstReceiptsRes.json().catch(() => ({}));
       const staffPayload = await staffRes.json().catch(() => []);
-      if (!receiptsRes.ok) {
+      if (!firstReceiptsRes.ok) {
         throw new Error(receiptsPayload?.error || "Failed to load project receipts");
       }
-      const nextRows = Array.isArray(receiptsPayload?.receipts) ? receiptsPayload.receipts : [];
+      let nextRows = Array.isArray(receiptsPayload?.receipts) ? receiptsPayload.receipts : [];
+      const totalPages = Math.max(1, Number(receiptsPayload?.paging?.totalPages || 1));
+
+      if (totalPages > 1) {
+        const remainingPayloads = await Promise.all(
+          Array.from({ length: totalPages - 1 }, (_, index) =>
+            fetch(`/api/receipts?customerType=project&scope=global&page=${index + 2}&size=200`, {
+              cache: "no-store",
+              credentials: "same-origin",
+            }).then((response) => response.json().catch(() => ({}))),
+          ),
+        );
+
+        for (const payload of remainingPayloads) {
+          if (Array.isArray(payload?.receipts)) {
+            nextRows = nextRows.concat(payload.receipts);
+          }
+        }
+      }
+
       setRows(nextRows);
       setEditors(
         Object.fromEntries(nextRows.map((row: ProjectRow) => [row.id, makeEditor(row)])),
