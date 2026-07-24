@@ -1003,9 +1003,20 @@ export async function GET(req: NextRequest) {
     return buyingTotal > 0;
   });
 
+  const filteredByEffectiveDate = deduped.filter((row) => {
+    const effectiveDate =
+      row.createdAt instanceof Date
+        ? row.createdAt
+        : typeof row.createdAt === "string"
+          ? new Date(row.createdAt)
+          : null;
+    if (!effectiveDate || Number.isNaN(effectiveDate.getTime())) return false;
+    return effectiveDate >= startDate && effectiveDate <= endDate;
+  });
+
   // Ensure each returned row has a computed `profit` where possible so the
   // UI can always sum and display a meaningful value.
-  for (const row of deduped) {
+  for (const row of filteredByEffectiveDate) {
     const total = Number(row.total ?? 0);
     const buying = Number((row as any).buyingTotal ?? 0);
     const explicit = typeof (row as any).profit === 'number' ? (row as any).profit : undefined;
@@ -1018,13 +1029,13 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const summaryRows = deduped;
+  const summaryRows = filteredByEffectiveDate;
 
-  deduped.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  filteredByEffectiveDate.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const totalCount = summaryRows.length;
   const totalSales = summaryRows.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
   const totalProfit = summaryRows.reduce((sum, row) => sum + Number((row as any).profit ?? 0), 0);
-  const paged = deduped.slice((page - 1) * size, page * size);
+  const paged = filteredByEffectiveDate.slice((page - 1) * size, page * size);
   const totalPages = Math.max(1, Math.ceil(totalCount / size));
     const data = {
       receipts: paged,
