@@ -33,7 +33,7 @@ export async function GET(req: Request) {
 
   const workbook = buildOpenfloatWorkbook(rows);
   const buffer = workbookToBuffer(workbook);
-  return new Response(buffer, {
+  return new Response(new Uint8Array(buffer), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": `attachment; filename="openfloat-payroll-${period.key}.xlsx"`,
