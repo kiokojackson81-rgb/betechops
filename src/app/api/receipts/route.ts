@@ -1004,16 +1004,18 @@ export async function GET(req: NextRequest) {
     return buyingTotal > 0;
   });
 
-  const filteredByEffectiveDate = deduped.filter((row) => {
-    const effectiveDate =
-      row.createdAt instanceof Date
-        ? row.createdAt
-        : typeof row.createdAt === "string"
-          ? new Date(row.createdAt)
-          : null;
-    if (!effectiveDate || Number.isNaN(effectiveDate.getTime())) return false;
-    return effectiveDate >= startDate && effectiveDate <= endDate;
-  });
+  const filteredByEffectiveDate = isProjectOnlyView
+    ? deduped
+    : deduped.filter((row) => {
+        const effectiveDate =
+          row.createdAt instanceof Date
+            ? row.createdAt
+            : typeof row.createdAt === "string"
+              ? new Date(row.createdAt)
+              : null;
+        if (!effectiveDate || Number.isNaN(effectiveDate.getTime())) return false;
+        return effectiveDate >= startDate && effectiveDate <= endDate;
+      });
 
   // Ensure each returned row has a computed `profit` where possible so the
   // UI can always sum and display a meaningful value.
