@@ -4,6 +4,11 @@ import { normalizePaymentMethod } from "@/lib/receiptKey";
 import { normalizeReceiptNumber } from "@/lib/receiptKey";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 import { buildReceiptKey as buildDatedReceiptKey } from "@/lib/receipts/utils";
+import {
+  getReceiptProjectCompletionDate,
+  isReceiptProjectRecognizedForSales,
+  readReceiptProjectFlow,
+} from "@/lib/receiptProjects";
 
 type OrderItemCandidate = {
   quantity?: number | null;
@@ -121,6 +126,43 @@ const normalizeOptionalId = (value: unknown) => {
   return trimmed.length ? trimmed : null;
 };
 
+const getProjectHandlerStaffId = (receipt: PosReceiptRow) => {
+  const rawData =
+    receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
+      ? (receipt.data as Record<string, unknown>)
+      : {};
+  const flow = readReceiptProjectFlow(rawData.projectFlow);
+  return normalizeOptionalId(flow?.handlerStaffId);
+};
+
+const isCompletedProjectReceiptForSales = (receipt: PosReceiptRow) => {
+  const rawData =
+    receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
+      ? (receipt.data as Record<string, unknown>)
+      : {};
+  const flow = readReceiptProjectFlow(rawData.projectFlow);
+  if (!flow?.isProject) return true;
+  return isReceiptProjectRecognizedForSales(rawData.projectFlow);
+};
+
+const getReceiptSalesRecognitionDate = (receipt: PosReceiptRow) => {
+  const rawData =
+    receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
+      ? (receipt.data as Record<string, unknown>)
+      : {};
+  return (
+    getReceiptProjectCompletionDate(
+      rawData.projectFlow,
+      undefined,
+      receipt.generatedAt instanceof Date ? receipt.generatedAt : receipt.createdAt,
+    ) ??
+    (receipt.generatedAt instanceof Date
+      ? receipt.generatedAt
+      : receipt.createdAt instanceof Date
+        ? receipt.createdAt
+        : null)
+  );
+};
 const matchesOwnershipMode = (
   receipt: PosReceiptRow,
   userId: string | null | undefined,
@@ -130,21 +172,27 @@ const matchesOwnershipMode = (
   const dataAttendantId = normalizeOptionalId(receipt.data?.attendantId);
   const orderAttendantId = normalizeOptionalId(receipt.order?.attendantId);
   const issuedById = normalizeOptionalId(receipt.issuedById);
+  const projectHandlerStaffId = getProjectHandlerStaffId(receipt);
   const hasExplicitStaff = Boolean(orderAttendantId || dataAttendantId);
 
   if (ownershipMode === "issuerOnly") {
     return issuedById === userId;
   }
   if (ownershipMode === "staffOnly") {
-    return orderAttendantId === userId || dataAttendantId === userId;
+    return orderAttendantId === userId || dataAttendantId === userId || projectHandlerStaffId === userId;
   }
   if (ownershipMode === "staffDisplay") {
-    if (orderAttendantId === userId || dataAttendantId === userId) return true;
+    if (orderAttendantId === userId || dataAttendantId === userId || projectHandlerStaffId === userId) return true;
     if (!hasExplicitStaff && issuedById === userId) return true;
     return false;
   }
 
-  return issuedById === userId || orderAttendantId === userId || dataAttendantId === userId;
+  return (
+    issuedById === userId ||
+    orderAttendantId === userId ||
+    dataAttendantId === userId ||
+    projectHandlerStaffId === userId
+  );
 };
 
 export async function summarizePosReceiptsForPeriod(period: {
@@ -163,17 +211,20 @@ export async function summarizePosReceiptsForPeriod(period: {
           ? [
               { order: { attendantId: period.userId } },
               { data: { path: ["attendantId"], equals: period.userId } },
+              { data: { path: ["projectFlow", "handlerStaffId"], equals: period.userId } },
             ]
         : period.ownershipMode === "staffDisplay"
           ? [
               { issuedById: period.userId },
               { order: { attendantId: period.userId } },
               { data: { path: ["attendantId"], equals: period.userId } },
+              { data: { path: ["projectFlow", "handlerStaffId"], equals: period.userId } },
             ]
         : [
             { issuedById: period.userId },
             { order: { attendantId: period.userId } },
             { data: { path: ["attendantId"], equals: period.userId } },
+            { data: { path: ["projectFlow", "handlerStaffId"], equals: period.userId } },
           ]
       : null;
 
@@ -193,6 +244,12 @@ export async function summarizePosReceiptsForPeriod(period: {
             OR: [
               { generatedAt: { gte: period.start, lte: period.end } },
               { createdAt: { gte: period.start, lte: period.end } },
+              {
+                AND: [
+                  { createdAt: { lte: period.end } },
+                  { data: { path: ["projectFlow", "isProject"], equals: true } },
+                ],
+              },
             ],
           },
           ...(ownerOr ? [{ OR: ownerOr }] : []),
@@ -272,6 +329,7 @@ export async function summarizePosReceiptsForPeriod(period: {
   // Ensure POD-pending receipts are excluded at the application layer
   // to avoid any inconsistencies with Prisma JSON path filters.
   const filteredReceipts = receipts.filter((r) => {
+    if (!isCompletedProjectReceiptForSales(r)) return false;
     const pod = r.data?.podDelivery as any | undefined;
     if (!pod) return true;
     return (pod.status || '').toString().toLowerCase() !== 'pending';
@@ -293,12 +351,7 @@ export async function summarizePosReceiptsForPeriod(period: {
   const candidateReceiptNumbers = Array.from(
     new Set(
       filteredReceipts.flatMap((receipt) => {
-        const salesDate =
-          receipt.generatedAt instanceof Date
-            ? receipt.generatedAt
-            : receipt.createdAt instanceof Date
-              ? receipt.createdAt
-              : null;
+        const salesDate = getReceiptSalesRecognitionDate(receipt);
         const variants = collectReceiptVariants(
           receipt.order?.orderNumber ?? undefined,
           receipt.receiptNumber ?? undefined,
@@ -381,8 +434,7 @@ export async function summarizePosReceiptsForPeriod(period: {
     seen.set(key, receipt.id);
 
     const sales = extractSales(receipt);
-    const salesDate =
-      receipt.generatedAt instanceof Date ? receipt.generatedAt : receipt.createdAt instanceof Date ? receipt.createdAt : null;
+    const salesDate = getReceiptSalesRecognitionDate(receipt);
     const salesIncluded = isDateInRange(salesDate, period.start, period.end);
     const canonicalOrderNumber =
       canonicalReceiptNumber(receipt.order?.orderNumber ?? undefined) ??
@@ -431,8 +483,7 @@ export async function summarizePosReceiptsForPeriod(period: {
     receiptKeys: Array.from(seen.entries())
       .filter(([receiptId]) => {
         const row = filteredReceipts.find((receipt) => canonicalKeyForRow(receipt) === receiptId);
-        const salesDate =
-          row?.generatedAt instanceof Date ? row.generatedAt : row?.createdAt instanceof Date ? row.createdAt : null;
+        const salesDate = row ? getReceiptSalesRecognitionDate(row) : null;
         return isDateInRange(salesDate, period.start, period.end);
       })
       .map(([receiptId]) => receiptId),
