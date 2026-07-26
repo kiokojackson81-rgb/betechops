@@ -4,11 +4,6 @@ import { normalizePaymentMethod } from "@/lib/receiptKey";
 import { normalizeReceiptNumber } from "@/lib/receiptKey";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 import { buildReceiptKey as buildDatedReceiptKey } from "@/lib/receipts/utils";
-import {
-  getReceiptProjectCompletionDate,
-  isReceiptProjectRecognizedForSales,
-  readReceiptProjectFlow,
-} from "@/lib/receiptProjects";
 
 type OrderItemCandidate = {
   quantity?: number | null;
@@ -124,6 +119,53 @@ const normalizeOptionalId = (value: unknown) => {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length ? trimmed : null;
+};
+
+type MinimalProjectFlow = {
+  isProject: boolean;
+  stage: string | null;
+  paymentStatus: string | null;
+  handlerStaffId: string | null;
+  updatedAt: string | null;
+};
+
+const readReceiptProjectFlow = (value: unknown): MinimalProjectFlow | null => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const source = value as Record<string, unknown>;
+  const isProject = source.isProject === true || Boolean(source.stage) || Boolean(source.handlerStaffId);
+  if (!isProject) return null;
+
+  return {
+    isProject: true,
+    stage: typeof source.stage === "string" ? source.stage.trim().toUpperCase() : null,
+    paymentStatus: typeof source.paymentStatus === "string" ? source.paymentStatus.trim().toUpperCase() : null,
+    handlerStaffId: normalizeOptionalId(source.handlerStaffId),
+    updatedAt: typeof source.updatedAt === "string" ? source.updatedAt.trim() || null : null,
+  };
+};
+
+const isReceiptProjectRecognizedForSales = (value: unknown) => {
+  const flow = readReceiptProjectFlow(value);
+  if (!flow?.isProject) return false;
+  return flow.stage === "COMPLETED_POSTED" && flow.paymentStatus === "FULLY_PAID";
+};
+
+const parseOptionalDate = (value: unknown) => {
+  const raw = typeof value === "string" ? value.trim() : "";
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const getReceiptProjectCompletionDate = (
+  value: unknown,
+  _fallbackUpdatedAt?: unknown,
+  fallbackCreatedAt?: unknown,
+) => {
+  if (!isReceiptProjectRecognizedForSales(value)) return null;
+  const flow = readReceiptProjectFlow(value);
+  if (!flow) return null;
+  return parseOptionalDate(flow.updatedAt) ?? (fallbackCreatedAt instanceof Date ? fallbackCreatedAt : null);
 };
 
 const getProjectHandlerStaffId = (receipt: PosReceiptRow) => {
