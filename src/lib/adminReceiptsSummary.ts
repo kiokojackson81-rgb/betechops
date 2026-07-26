@@ -136,6 +136,7 @@ const buildPosStaffOwnerCondition = (userId?: string | null): Prisma.ReceiptWher
   return [
     { order: { attendantId: userId } },
     { data: { path: ["attendantId"], equals: userId } },
+    { data: { path: ["projectFlow", "handlerStaffId"], equals: userId } },
   ];
 };
 
@@ -733,7 +734,15 @@ export async function computeAdminReceiptSummary({
   })();
 
   const posWhere: any = {
-    generatedAt: { gte: start, lte: end },
+    OR: [
+      { generatedAt: { gte: start, lte: end } },
+      {
+        AND: [
+          { createdAt: { lte: end } },
+          { data: { path: ["projectFlow", "isProject"], equals: true } },
+        ],
+      },
+    ],
   };
   if (normalizedDocType && includePosReceipts) {
     posWhere.docType = normalizedDocType;
@@ -805,8 +814,12 @@ export async function computeAdminReceiptSummary({
       : [],
   ]);
 
+  const posReceiptsForSalesPeriod = (posReceipts as any[]).filter((receipt) =>
+    isDateInRange(getReceiptSalesRecognitionDate(receipt), start, end),
+  );
+
   const supportLedgerCandidates = new Set<string>();
-  for (const receipt of posReceipts) {
+  for (const receipt of posReceiptsForSalesPeriod) {
     const orderNumber = receipt.order?.orderNumber;
     if (!orderNumber) continue;
     supportLedgerCandidates.add(orderNumber);
@@ -990,7 +1003,9 @@ export async function computeAdminReceiptSummary({
     })(),
   }));
 
-  const posRecords: ReceiptSummaryRecord[] = posReceiptsFinal.map((receipt) => {
+  const posRecords: ReceiptSummaryRecord[] = posReceiptsFinal
+    .filter((receipt) => isDateInRange(getReceiptSalesRecognitionDate(receipt), start, end))
+    .map((receipt) => {
     const orderRef = receipt.order?.orderNumber ?? null;
     const normalizedOrderNumber = canonicalReceiptNumber(orderRef ?? undefined);
     const keyCandidates = [
@@ -1006,50 +1021,50 @@ export async function computeAdminReceiptSummary({
         break;
       }
     }
-    return {
-      source: "pos" as const,
-      id: receipt.id,
-      key: buildReceiptKey(orderRef, receipt.id),
-      receiptNumber: receipt.receiptNumber ?? orderRef ?? null,
-      paymentMethod: normalizePaymentMethod((receipt.data as any)?.paymentMethod) ?? null,
-      sellingTotal: Number((receipt.totals as any)?.total ?? receipt.order?.totalAmount ?? 0),
-      // Prefer an explicit aggregate buying total stored on the receipt (if present),
-      // otherwise fall back to item-level costs computed below.
-      buyingTotal: Number((receipt as any)?.buyingTotal ?? (receipt.data as any)?.buyingTotal ?? 0),
-      supportBuyingTotal: supportBuyingTotal,
-      deliveryFee: getPodDeliveryFee(receipt.data),
-      profit: (() => {
-        const agentSaleCommission = Number((receipt.data as any)?.agentSale?.commissionAmount ?? 0) || 0;
-        const p = (receipt as any).profit ?? (receipt.data as any)?.profit;
-        if (typeof p === 'number' && Number.isFinite(p)) return Number(p) - agentSaleCommission;
-        if (typeof p === 'string' && p.trim() !== '' && !Number.isNaN(Number(p))) return Number(p) - agentSaleCommission;
-        return undefined;
-      })(),
-      items: (receipt.order?.items ?? []).map((item) => {
-        const costs = Array.isArray((item as any).orderCosts) ? (item as any).orderCosts : [];
-        const buyingSum = costs.reduce((sum: number, cost: any) => sum + Number(cost.unitCost ?? 0), 0);
+      return {
+        source: "pos" as const,
+        id: receipt.id,
+        key: buildReceiptKey(orderRef, receipt.id),
+        receiptNumber: receipt.receiptNumber ?? orderRef ?? null,
+        paymentMethod: normalizePaymentMethod((receipt.data as any)?.paymentMethod) ?? null,
+        sellingTotal: Number((receipt.totals as any)?.total ?? receipt.order?.totalAmount ?? 0),
+        // Prefer an explicit aggregate buying total stored on the receipt (if present),
+        // otherwise fall back to item-level costs computed below.
+        buyingTotal: Number((receipt as any)?.buyingTotal ?? (receipt.data as any)?.buyingTotal ?? 0),
+        supportBuyingTotal: supportBuyingTotal,
+        deliveryFee: getPodDeliveryFee(receipt.data),
+        profit: (() => {
+          const agentSaleCommission = Number((receipt.data as any)?.agentSale?.commissionAmount ?? 0) || 0;
+          const p = (receipt as any).profit ?? (receipt.data as any)?.profit;
+          if (typeof p === 'number' && Number.isFinite(p)) return Number(p) - agentSaleCommission;
+          if (typeof p === 'string' && p.trim() !== '' && !Number.isNaN(Number(p))) return Number(p) - agentSaleCommission;
+          return undefined;
+        })(),
+        items: (receipt.order?.items ?? []).map((item) => {
+          const costs = Array.isArray((item as any).orderCosts) ? (item as any).orderCosts : [];
+          const buyingSum = costs.reduce((sum: number, cost: any) => sum + Number(cost.unitCost ?? 0), 0);
 
-        // Fallback cost sources (in priority order):
-        // - Latest profit snapshot unitCost (if computed)
-        // - Product.lastBuyingPrice (if available)
-        // - ProductCost.latest (if available)
-        const snapUnitCost = (() => {
-          const snap = Array.isArray((item as any).profitSnapshots) ? (item as any).profitSnapshots[0] : null;
-          const n = snap ? Number(snap.unitCost ?? 0) : 0;
-          return Number.isFinite(n) ? n : 0;
-        })();
-        const productLastBuying = Number((item as any).product?.lastBuyingPrice ?? 0) || 0;
-        const productCost = productCostMap.get(String((item as any).productId ?? "")) ?? 0;
-        const fallbackUnitCost =
-          snapUnitCost > 0 ? snapUnitCost : productLastBuying > 0 ? productLastBuying : productCost > 0 ? productCost : 0;
-        return {
-          quantity: item.quantity,
-          sellingPrice: Number((item as any).sellingPrice ?? (item as any).unitPrice ?? 0),
-          buyingPrice: buyingSum > 0 ? buyingSum : fallbackUnitCost,
-        };
-      }),
-    };
-  });
+          // Fallback cost sources (in priority order):
+          // - Latest profit snapshot unitCost (if computed)
+          // - Product.lastBuyingPrice (if available)
+          // - ProductCost.latest (if available)
+          const snapUnitCost = (() => {
+            const snap = Array.isArray((item as any).profitSnapshots) ? (item as any).profitSnapshots[0] : null;
+            const n = snap ? Number(snap.unitCost ?? 0) : 0;
+            return Number.isFinite(n) ? n : 0;
+          })();
+          const productLastBuying = Number((item as any).product?.lastBuyingPrice ?? 0) || 0;
+          const productCost = productCostMap.get(String((item as any).productId ?? "")) ?? 0;
+          const fallbackUnitCost =
+            snapUnitCost > 0 ? snapUnitCost : productLastBuying > 0 ? productLastBuying : productCost > 0 ? productCost : 0;
+          return {
+            quantity: item.quantity,
+            sellingPrice: Number((item as any).sellingPrice ?? (item as any).unitPrice ?? 0),
+            buyingPrice: buyingSum > 0 ? buyingSum : fallbackUnitCost,
+          };
+        }),
+      };
+    });
 
   const combinedRecords = [...marketingRecords, ...supportRecords, ...posRecords];
 
