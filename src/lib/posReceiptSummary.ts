@@ -125,6 +125,15 @@ const normalizeOptionalId = (value: unknown) => {
   return trimmed.length ? trimmed : null;
 };
 
+const getProjectHandlerStaffId = (receipt: PosReceiptRow) => {
+  const rawData =
+    receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
+      ? (receipt.data as Record<string, unknown>)
+      : {};
+  const flow = readReceiptProjectFlow(rawData.projectFlow);
+  return normalizeOptionalId(flow?.handlerStaffId);
+};
+
 const isCompletedProjectReceiptForSales = (receipt: PosReceiptRow) => {
   const rawData =
     receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
@@ -163,21 +172,27 @@ const matchesOwnershipMode = (
   const dataAttendantId = normalizeOptionalId(receipt.data?.attendantId);
   const orderAttendantId = normalizeOptionalId(receipt.order?.attendantId);
   const issuedById = normalizeOptionalId(receipt.issuedById);
+  const projectHandlerStaffId = getProjectHandlerStaffId(receipt);
   const hasExplicitStaff = Boolean(orderAttendantId || dataAttendantId);
 
   if (ownershipMode === "issuerOnly") {
     return issuedById === userId;
   }
   if (ownershipMode === "staffOnly") {
-    return orderAttendantId === userId || dataAttendantId === userId;
+    return orderAttendantId === userId || dataAttendantId === userId || projectHandlerStaffId === userId;
   }
   if (ownershipMode === "staffDisplay") {
-    if (orderAttendantId === userId || dataAttendantId === userId) return true;
+    if (orderAttendantId === userId || dataAttendantId === userId || projectHandlerStaffId === userId) return true;
     if (!hasExplicitStaff && issuedById === userId) return true;
     return false;
   }
 
-  return issuedById === userId || orderAttendantId === userId || dataAttendantId === userId;
+  return (
+    issuedById === userId ||
+    orderAttendantId === userId ||
+    dataAttendantId === userId ||
+    projectHandlerStaffId === userId
+  );
 };
 
 export async function summarizePosReceiptsForPeriod(period: {
@@ -197,17 +212,20 @@ export async function summarizePosReceiptsForPeriod(period: {
           ? [
               { order: { attendantId: period.userId } },
               { data: { path: ["attendantId"], equals: period.userId } },
+              { data: { path: ["projectFlow", "handlerStaffId"], equals: period.userId } },
             ]
         : period.ownershipMode === "staffDisplay"
           ? [
               { issuedById: period.userId },
               { order: { attendantId: period.userId } },
               { data: { path: ["attendantId"], equals: period.userId } },
+              { data: { path: ["projectFlow", "handlerStaffId"], equals: period.userId } },
             ]
         : [
             { issuedById: period.userId },
             { order: { attendantId: period.userId } },
             { data: { path: ["attendantId"], equals: period.userId } },
+            { data: { path: ["projectFlow", "handlerStaffId"], equals: period.userId } },
           ]
       : null;
 
