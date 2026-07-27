@@ -116,6 +116,15 @@ const QUOTE_REQUEST_SCHEMA_SQL = [
   `ALTER TABLE "QuoteRequest" ADD COLUMN IF NOT EXISTS "manualCustomerPhone" TEXT`,
   `ALTER TABLE "QuoteRequest" ADD COLUMN IF NOT EXISTS "manualCustomerEmail" TEXT`,
   `ALTER TABLE "QuoteRequest" ADD COLUMN IF NOT EXISTS "approvalReason" TEXT`,
+  `ALTER TABLE "QuoteRequest" ADD COLUMN IF NOT EXISTS "quotationDate" TIMESTAMP(3)`,
+  `ALTER TABLE "QuoteRequest" ADD COLUMN IF NOT EXISTS "quotationLink" TEXT`,
+  `ALTER TABLE "QuoteRequest" ADD COLUMN IF NOT EXISTS "quotationPdfLink" TEXT`,
+  `ALTER TABLE "QuoteRequest" ADD COLUMN IF NOT EXISTS "followUpSent" BOOLEAN NOT NULL DEFAULT FALSE`,
+  `ALTER TABLE "QuoteRequest" ADD COLUMN IF NOT EXISTS "followUpScheduledAt" TIMESTAMP(3)`,
+  `ALTER TABLE "QuoteRequest" ADD COLUMN IF NOT EXISTS "followUpSentAt" TIMESTAMP(3)`,
+  `ALTER TABLE "QuoteRequest" ADD COLUMN IF NOT EXISTS "secondFollowUpScheduledAt" TIMESTAMP(3)`,
+  `ALTER TABLE "QuoteRequest" ADD COLUMN IF NOT EXISTS "secondFollowUpSentAt" TIMESTAMP(3)`,
+  `ALTER TABLE "QuoteRequest" ADD COLUMN IF NOT EXISTS "followUpCancelledAt" TIMESTAMP(3)`,
   `ALTER TABLE "QuoteRequest" ALTER COLUMN "status" SET DEFAULT 'PENDING'`,
   `UPDATE "QuoteRequest" SET "status" = 'PENDING' WHERE "status" IN ('NEW', 'PENDING_APPROVAL', 'DRAFT', 'CONTACTED', 'VIEWED')`,
   `UPDATE "QuoteRequest" SET "status" = 'QUOTED' WHERE "status" = 'SENT'`,
@@ -124,6 +133,8 @@ const QUOTE_REQUEST_SCHEMA_SQL = [
   `UPDATE "QuoteRequest" SET "status" = 'CLOSED' WHERE "status" IN ('REJECTED', 'EXPIRED')`,
   `CREATE INDEX IF NOT EXISTS "QuoteRequest_source_createdAt_idx" ON "QuoteRequest"("source","createdAt")`,
   `CREATE INDEX IF NOT EXISTS "QuoteRequest_templateId_createdAt_idx" ON "QuoteRequest"("templateId","createdAt")`,
+  `CREATE INDEX IF NOT EXISTS "QuoteRequest_followUpScheduledAt_idx" ON "QuoteRequest"("followUpScheduledAt")`,
+  `CREATE INDEX IF NOT EXISTS "QuoteRequest_secondFollowUpScheduledAt_idx" ON "QuoteRequest"("secondFollowUpScheduledAt")`,
   `CREATE TABLE IF NOT EXISTS "QuotationTemplate" (
     "id" TEXT NOT NULL,
     "templateName" TEXT NOT NULL,
@@ -611,6 +622,15 @@ type QuoteRequestRow = {
   manualCustomerPhone: string | null;
   manualCustomerEmail: string | null;
   approvalReason: string | null;
+  quotationDate: Date | string | null;
+  quotationLink: string | null;
+  quotationPdfLink: string | null;
+  followUpSent: boolean | null;
+  followUpScheduledAt: Date | string | null;
+  followUpSentAt: Date | string | null;
+  secondFollowUpScheduledAt: Date | string | null;
+  secondFollowUpSentAt: Date | string | null;
+  followUpCancelledAt: Date | string | null;
   quoteTitle: string | null;
   quoteMessage: string | null;
   quotationData: Prisma.JsonValue | null;
@@ -666,6 +686,15 @@ export const QUOTE_REQUEST_SELECT_SQL = Prisma.sql`
   "manualCustomerPhone",
   "manualCustomerEmail",
   "approvalReason",
+  "quotationDate",
+  "quotationLink",
+  "quotationPdfLink",
+  "followUpSent",
+  "followUpScheduledAt",
+  "followUpSentAt",
+  "secondFollowUpScheduledAt",
+  "secondFollowUpSentAt",
+  "followUpCancelledAt",
   "quoteTitle",
   "quoteMessage",
   "quotationData",
@@ -723,6 +752,15 @@ export type SerializedQuoteRequest = {
   manualCustomerPhone: string | null;
   manualCustomerEmail: string | null;
   approvalReason: string | null;
+  quotationDate: string | null;
+  quotationLink: string | null;
+  quotationPdfLink: string | null;
+  followUpSent: boolean;
+  followUpScheduledAt: string | null;
+  followUpSentAt: string | null;
+  secondFollowUpScheduledAt: string | null;
+  secondFollowUpSentAt: string | null;
+  followUpCancelledAt: string | null;
   quoteTitle: string | null;
   quoteMessage: string | null;
   quotationData: Record<string, unknown> | null;
@@ -1324,6 +1362,15 @@ export function serializeQuoteRequest(row: QuoteRequestRow): SerializedQuoteRequ
     manualCustomerPhone: row.manualCustomerPhone,
     manualCustomerEmail: row.manualCustomerEmail,
     approvalReason: row.approvalReason,
+    quotationDate: toIsoString(row.quotationDate),
+    quotationLink: row.quotationLink,
+    quotationPdfLink: row.quotationPdfLink,
+    followUpSent: Boolean(row.followUpSent),
+    followUpScheduledAt: toIsoString(row.followUpScheduledAt),
+    followUpSentAt: toIsoString(row.followUpSentAt),
+    secondFollowUpScheduledAt: toIsoString(row.secondFollowUpScheduledAt),
+    secondFollowUpSentAt: toIsoString(row.secondFollowUpSentAt),
+    followUpCancelledAt: toIsoString(row.followUpCancelledAt),
     quoteTitle: row.quoteTitle,
     quoteMessage: row.quoteMessage,
     quotationData: asJsonObject(row.quotationData),

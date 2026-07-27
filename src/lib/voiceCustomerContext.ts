@@ -73,6 +73,15 @@ type QuoteRequestRow = {
   manualCustomerPhone: string | null;
   manualCustomerEmail: string | null;
   approvalReason: string | null;
+  quotationDate: Date | string | null;
+  quotationLink: string | null;
+  quotationPdfLink: string | null;
+  followUpSent: boolean | null;
+  followUpScheduledAt: Date | string | null;
+  followUpSentAt: Date | string | null;
+  secondFollowUpScheduledAt: Date | string | null;
+  secondFollowUpSentAt: Date | string | null;
+  followUpCancelledAt: Date | string | null;
   quoteTitle: string | null;
   quoteMessage: string | null;
   quotationData: Prisma.JsonValue | null;

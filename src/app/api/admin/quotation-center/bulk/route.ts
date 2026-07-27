@@ -4,6 +4,10 @@ import {
   bulkUpdateQuoteRequests,
   requireQuoteRequestsStaffActor,
 } from "@/lib/quoteRequests";
+import {
+  cancelQuotationFollowUps,
+  scheduleQuotationFollowUps,
+} from "@/lib/quotationFollowUps";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +38,36 @@ export async function POST(request: NextRequest) {
       name: guard.name,
       email: guard.email,
     });
+
+    if (parsed.data.status) {
+      await Promise.all(
+        result.requests.map(async (request) => {
+          if (["QUOTED", "FOLLOW_UP", "REVISED"].includes(request.status)) {
+            await scheduleQuotationFollowUps(request.id, {
+              resetAutomaticFollowUps: true,
+              actor: {
+                userId: guard.actorUserId,
+                name: guard.name,
+                email: guard.email,
+              },
+            }).catch(() => undefined);
+            return;
+          }
+
+          if (["APPROVED", "CONVERTED", "CLOSED"].includes(request.status)) {
+            await cancelQuotationFollowUps(request.id, {
+              reason: `Bulk update moved quotation to ${request.status}.`,
+              actor: {
+                userId: guard.actorUserId,
+                name: guard.name,
+                email: guard.email,
+              },
+            }).catch(() => undefined);
+          }
+        }),
+      );
+    }
+
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     const message =

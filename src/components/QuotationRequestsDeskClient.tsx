@@ -1505,6 +1505,7 @@ export default function QuotationRequestsDeskClient({
   const [templatePasteText, setTemplatePasteText] = useState("");
   const [draftOpening, setDraftOpening] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
+  const [followUpSendingId, setFollowUpSendingId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -2832,6 +2833,36 @@ export default function QuotationRequestsDeskClient({
       setMessage(error instanceof Error ? error.message : "Failed to save quotation response.");
     } finally {
       setSaving(null);
+    }
+  }
+
+  async function handleSendFollowUp(request: SerializedQuoteRequest) {
+    setFollowUpSendingId(request.id);
+    setMessage(null);
+    try {
+      const response = await fetch(buildApiUrl(apiBasePath, apiQueryParams, `${request.id}/follow-up`), {
+        method: "POST",
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Failed to send quotation follow-up.");
+      }
+      if (data.request?.id) {
+        setRequests((current) =>
+          current.map((row) => (row.id === data.request.id ? (data.request as SerializedQuoteRequest) : row)),
+        );
+      }
+      setEventsByRequestId((current) => {
+        const next = { ...current };
+        delete next[request.id];
+        return next;
+      });
+      await loadRequestEvents(request.id);
+      setMessage(data.skipped ? data.reason || "Follow-up was skipped." : "Quotation follow-up sent.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Failed to send quotation follow-up.");
+    } finally {
+      setFollowUpSendingId(null);
     }
   }
 
@@ -5089,6 +5120,9 @@ export default function QuotationRequestsDeskClient({
                           <div className="mt-3 space-y-2 text-sm text-slate-300">
                             <div>Email: {request.customerEmail || "No email saved"}</div>
                             <div>Phone: {request.customerPhone || "No phone saved"}</div>
+                            <div>7-day follow-up: {request.followUpScheduledAt ? formatDateTime(request.followUpScheduledAt) : "Not scheduled"}</div>
+                            <div>21-day follow-up: {request.secondFollowUpScheduledAt ? formatDateTime(request.secondFollowUpScheduledAt) : "Not scheduled"}</div>
+                            <div>Last follow-up: {request.secondFollowUpSentAt || request.followUpSentAt ? formatDateTime(request.secondFollowUpSentAt || request.followUpSentAt) : "Not sent"}</div>
                           </div>
                           <div className="mt-5 flex flex-wrap gap-2">
                             <button
@@ -5133,6 +5167,15 @@ export default function QuotationRequestsDeskClient({
                             >
                               <MessageCircle className="h-4 w-4" />
                               WhatsApp
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleSendFollowUp(request)}
+                              disabled={followUpSendingId === request.id}
+                              className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-100 transition hover:border-amber-400 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              {followUpSendingId === request.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
+                              Send Follow-up
                             </button>
                             <button
                               type="button"
@@ -5416,6 +5459,9 @@ export default function QuotationRequestsDeskClient({
                             <div>Source: {formatSource(request.source)}</div>
                             <div>Created: {formatDateTime(request.createdAt)}</div>
                             <div>Updated: {formatDateTime(request.updatedAt)}</div>
+                            {request.quotationDate ? <div>Quotation sent: {formatDateTime(request.quotationDate)}</div> : null}
+                            {request.quotationLink ? <div>Quotation link saved</div> : null}
+                            {request.quotationPdfLink ? <div>Quotation PDF link saved</div> : null}
                             {request.viewedAt ? <div>Viewed by customer: {formatDateTime(request.viewedAt)}</div> : null}
                             {request.customerActionAt ? (
                               <div>Customer action: {formatDateTime(request.customerActionAt)}</div>

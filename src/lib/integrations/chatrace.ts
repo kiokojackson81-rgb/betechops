@@ -349,6 +349,7 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
       'pod_receipt_admin_alert',
       'followup_responsible_alert',
       'quotation_ready',
+      'quotation_follow_up',
       // legacy/internal
       'receipt_admin_alert',
     ]);

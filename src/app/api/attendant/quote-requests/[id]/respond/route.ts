@@ -10,6 +10,10 @@ import {
   deliverQuotationNotifications,
   prepareQuotationPdfAssets,
 } from "@/lib/quotationNotifications";
+import {
+  cancelQuotationFollowUps,
+  scheduleQuotationFollowUps,
+} from "@/lib/quotationFollowUps";
 
 export const dynamic = "force-dynamic";
 
@@ -148,6 +152,28 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     // quotation_ready flow unless we add an explicit resend action.
     triggerWhatsapp: false,
   });
+
+  if (["QUOTED", "FOLLOW_UP", "REVISED"].includes(updated.status)) {
+    await scheduleQuotationFollowUps(updated.id, {
+      quotationPdfLink: assets.pdfUrl,
+      resetAutomaticFollowUps: true,
+      actor: {
+        userId: guard.userId,
+        name: guard.name,
+        email: guard.email,
+      },
+      applyChatraceTag: true,
+    }).catch(() => undefined);
+  } else if (["APPROVED", "CONVERTED", "CLOSED"].includes(updated.status)) {
+    await cancelQuotationFollowUps(updated.id, {
+      reason: `Quotation moved to ${updated.status}.`,
+      actor: {
+        userId: guard.userId,
+        name: guard.name,
+        email: guard.email,
+      },
+    }).catch(() => undefined);
+  }
 
   return NextResponse.json({
     ok: true,

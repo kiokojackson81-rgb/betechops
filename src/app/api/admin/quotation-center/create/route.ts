@@ -9,6 +9,7 @@ import {
   deliverQuotationNotifications,
   prepareQuotationPdfAssets,
 } from "@/lib/quotationNotifications";
+import { scheduleQuotationFollowUps } from "@/lib/quotationFollowUps";
 
 export const dynamic = "force-dynamic";
 
@@ -183,6 +184,17 @@ export async function POST(request: NextRequest) {
         error: message,
       });
     }
+
+    await scheduleQuotationFollowUps(created.id, {
+      quotationPdfLink: pdfUrl,
+      resetAutomaticFollowUps: true,
+      actor: {
+        userId: guard.actorUserId,
+        name: guard.name,
+        email: guard.email,
+      },
+      applyChatraceTag: true,
+    }).catch(() => undefined);
 
     return NextResponse.json({ ok: true, request: created, pdfUrl, notifications });
   } catch (error) {

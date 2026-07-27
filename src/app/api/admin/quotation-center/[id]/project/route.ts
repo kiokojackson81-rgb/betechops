@@ -7,6 +7,7 @@ import {
   recordQuotationEvent,
   requireQuoteRequestsStaffActor,
 } from "@/lib/quoteRequests";
+import { cancelQuotationFollowUps } from "@/lib/quotationFollowUps";
 import { parseStoredQuoteProposal, type QuotePaymentTerms } from "@/lib/quoteProposal";
 import {
   QUOTE_PROJECT_PAYMENT_TERMS,
@@ -15,7 +16,6 @@ import {
   listQuoteProjectEvents,
   upsertQuoteProjectOrder,
   type QuoteProjectPaymentTerm,
-  type QuoteProjectStage,
 } from "@/lib/quoteProjects";
 
 export const dynamic = "force-dynamic";
@@ -247,6 +247,16 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         SET "status" = ${quoteStatus}, "updatedAt" = CURRENT_TIMESTAMP
         WHERE "id" = ${quoteRequest.id}
       `);
+      if (quoteStatus === "CONVERTED") {
+        await cancelQuotationFollowUps(quoteRequest.id, {
+          reason: "Quotation converted into a completed posted project.",
+          actor: {
+            userId: guard.userId,
+            name: guard.name,
+            email: guard.email,
+          },
+        }).catch(() => undefined);
+      }
     }
     await recordQuotationEvent({
       quoteRequestId: quoteRequest.id,
