@@ -3,11 +3,20 @@
 import React, { useMemo } from "react";
 import { usePathname } from "next/navigation";
 import { NAV } from "./adminNav";
+import { useAdminPendingCounts } from "./useAdminPendingCounts";
 
 type Props = { mobile?: boolean; className?: string };
 
 export default function AdminTopNav({ mobile = false, className = "" }: Props) {
   const pathname = usePathname() || "/admin";
+  const counts = useAdminPendingCounts();
+
+  const withCount = (label: string, countKey?: string) => {
+    if (!countKey || !counts) return label;
+    const value = counts[countKey as keyof typeof counts];
+    if (typeof value !== "number") return label;
+    return `${label} (${value})`;
+  };
 
   const isItemActive = useMemo(
     () => (href: string, children?: Array<{ href: string }>) => {
@@ -44,7 +53,7 @@ export default function AdminTopNav({ mobile = false, className = "" }: Props) {
         aria-label="Admin primary"
         role="navigation"
       >
-        {NAV.map(({ href, label, icon: Icon, children }) => {
+        {NAV.map(({ href, label, icon: Icon, children, countKey }) => {
           const active = isItemActive(href, children);
           return (
             <a
@@ -60,7 +69,7 @@ export default function AdminTopNav({ mobile = false, className = "" }: Props) {
               tabIndex={0}
             >
               <Icon className="h-4 w-4 opacity-80 group-hover:opacity-100" />
-              <span>{label}</span>
+              <span>{withCount(label, countKey)}</span>
               <span
                 className={
                   "absolute left-2 right-2 -bottom-[2px] h-[2px] rounded bg-gradient-to-r from-indigo-400 via-pink-400 to-violet-400 transform transition-all origin-left " +
@@ -102,7 +111,7 @@ export default function AdminTopNav({ mobile = false, className = "" }: Props) {
                         : "border-white/10 bg-slate-950/40 text-slate-300 hover:border-white/20 hover:bg-white/[0.06] hover:text-white")
                     }
                   >
-                    {child.label}
+                    {withCount(child.label, child.countKey)}
                   </a>
                 );
               })}
