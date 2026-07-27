@@ -8,6 +8,7 @@ import {
   ensureLeaveBalance,
   syncApprovedLeaveBalance,
 } from "@/lib/wellness";
+import { notifyLeaveApproved, notifyLeaveRejected } from "@/lib/wellnessNotifications";
 
 export const dynamic = "force-dynamic";
 const leaveDecisionValues = ["APPROVED", "REJECTED"] as const;
@@ -78,8 +79,32 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       return {
         updated,
         leaveBalance: buildLeaveBalanceSummary(balance),
+        recipient: await tx.user.findUnique({
+          where: { id: existing.userId },
+          select: { name: true, phone: true },
+        }),
       };
     });
+
+    if (decision === "APPROVED") {
+      await notifyLeaveApproved({
+        recipient: result.recipient ?? {},
+        type: result.updated.type,
+        startDate: result.updated.startDate,
+        endDate: result.updated.endDate,
+        daysRequested: result.updated.daysRequested,
+        managerComment,
+      });
+    } else {
+      await notifyLeaveRejected({
+        recipient: result.recipient ?? {},
+        type: result.updated.type,
+        startDate: result.updated.startDate,
+        endDate: result.updated.endDate,
+        daysRequested: result.updated.daysRequested,
+        managerComment,
+      });
+    }
 
     return NextResponse.json(result);
   } catch (error) {

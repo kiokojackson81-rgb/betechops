@@ -15,7 +15,7 @@ type LeaveRequest = {
   reason: string;
   managerComment?: string | null;
   createdAt: string;
-  user: { id: string; name?: string | null; email: string; attendantCategory?: string | null };
+  user: { id: string; name?: string | null; email: string; phone?: string | null; attendantCategory?: string | null };
 };
 
 type CashAdvance = {
@@ -28,7 +28,7 @@ type CashAdvance = {
   remainingBalance: number;
   createdAt: string;
   hrComment?: string | null;
-  user: { id: string; name?: string | null; email: string; attendantCategory?: string | null };
+  user: { id: string; name?: string | null; email: string; phone?: string | null; attendantCategory?: string | null };
   installments?: Array<{ id: string; dueDate: string; amount: number; isPaid: boolean }>;
 };
 
@@ -46,8 +46,8 @@ type PayrollAdjustmentRequest = {
   status: string;
   adminComment?: string | null;
   createdAt: string;
-  attendant: { id: string; name?: string | null; email: string; attendantCategory?: string | null };
-  requestedBy: { id: string; name?: string | null; email: string; attendantCategory?: string | null };
+  attendant: { id: string; name?: string | null; email: string; phone?: string | null; attendantCategory?: string | null };
+  requestedBy: { id: string; name?: string | null; email: string; phone?: string | null; attendantCategory?: string | null };
 };
 
 type LeaveBalance = {
@@ -58,7 +58,7 @@ type LeaveBalance = {
   annualUsed: number;
   sickUsed: number;
   emergencyUsed: number;
-  user: { id: string; name?: string | null; email: string; attendantCategory?: string | null };
+  user: { id: string; name?: string | null; email: string; phone?: string | null; attendantCategory?: string | null };
 };
 
 type SummaryResponse = {
@@ -560,11 +560,18 @@ export default function AdminWellnessClient() {
                       <div className="text-xs text-slate-400">
                         {row.type} · {row.daysRequested} day(s) · {dateFmt.format(new Date(row.createdAt))}
                       </div>
+                      {row.user.phone ? <div className="text-xs text-slate-500">{row.user.phone}</div> : null}
                     </div>
                     <StatusBadge status={row.status} />
                   </div>
                   <div className="mt-2 text-sm text-slate-300">{row.reason}</div>
                   <div className="mt-3 flex gap-3">
+                    {String(row.status).toUpperCase() === "PENDING" ? (
+                      <>
+                        <Button onClick={() => void decideLeave(row.id, "APPROVED")}>Approve</Button>
+                        <Button variant="secondary" onClick={() => void decideLeave(row.id, "REJECTED")}>Reject</Button>
+                      </>
+                    ) : null}
                     <Button variant="secondary" onClick={() => void editLeaveRequest(row)}>Edit</Button>
                     <Button variant="secondary" onClick={() => void deleteLeaveRequest(row.id)}>Delete</Button>
                   </div>
@@ -592,6 +599,7 @@ export default function AdminWellnessClient() {
                           <div>
                             <div className="font-medium text-slate-100">{row.user.name || row.user.email}</div>
                             <div className="text-xs text-slate-400">{row.user.email}</div>
+                            {row.user.phone ? <div className="text-xs text-slate-500">{row.user.phone}</div> : null}
                             <div className="mt-2 text-sm text-slate-300 md:hidden">{row.reason}</div>
                           </div>
                           <div>
@@ -688,6 +696,12 @@ export default function AdminWellnessClient() {
                                 />
                               </div>
                               <div className="mt-3 flex gap-3">
+                                {String(row.status).toUpperCase() === "PENDING" ? (
+                                  <>
+                                    <Button onClick={() => void decideAdvance(row.id, "APPROVED")}>Approve</Button>
+                                    <Button variant="secondary" onClick={() => void decideAdvance(row.id, "REJECTED")}>Reject</Button>
+                                  </>
+                                ) : null}
                                 <Button variant="secondary" onClick={() => void updateRecentAdvance(row.id)}>Save changes</Button>
                                 <Button variant="secondary" onClick={() => void deleteRecentAdvance(row.id)}>Delete</Button>
                               </div>

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
+import { Prisma, type LeaveRequestType } from "@prisma/client";
 import { requireRole } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import {
@@ -8,6 +8,7 @@ import {
   ensureLeaveBalance,
   syncApprovedLeaveBalance,
 } from "@/lib/wellness";
+import { notifyLeaveDeleted, notifyLeaveUpdated } from "@/lib/wellnessNotifications";
 
 export const dynamic = "force-dynamic";
 
@@ -64,7 +65,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 
       if (existing.status === "APPROVED") {
         const balance = await ensureLeaveBalance(existing.userId, tx);
-        assertLeaveBalanceCanCover(balance, type as any, nextDaysRequested);
+        assertLeaveBalanceCanCover(balance, type as LeaveRequestType, nextDaysRequested);
       }
 
       const updated = await tx.leaveRequest.update({
@@ -72,7 +73,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         data: {
           startDate: new Date(startDate),
           endDate: new Date(endDate),
-          type: type as any,
+          type: type as LeaveRequestType,
           reason,
           supportingDocumentUrl,
           managerComment,
@@ -95,10 +96,25 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         },
       });
 
-      return updated;
+      return {
+        updated,
+        recipient: await tx.user.findUnique({
+          where: { id: existing.userId },
+          select: { name: true, phone: true },
+        }),
+      };
     });
 
-    return NextResponse.json({ updated: result });
+    await notifyLeaveUpdated({
+      recipient: result.recipient ?? {},
+      type: result.updated.type,
+      startDate: result.updated.startDate,
+      endDate: result.updated.endDate,
+      daysRequested: result.updated.daysRequested,
+      managerComment: result.updated.managerComment,
+    });
+
+    return NextResponse.json({ updated: result.updated });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to update leave request";
     return NextResponse.json({ error: message }, { status: 400 });
@@ -116,7 +132,7 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   const id = params.id;
 
   try {
-    await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const existing = await tx.leaveRequest.findUnique({ where: { id } });
       if (!existing) throw new Error("Leave request not found");
 
@@ -134,6 +150,21 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
           before: existing as unknown as Prisma.InputJsonValue,
         },
       });
+      return {
+        deleted: existing,
+        recipient: await tx.user.findUnique({
+          where: { id: existing.userId },
+          select: { name: true, phone: true },
+        }),
+      };
+    });
+
+    await notifyLeaveDeleted({
+      recipient: result.recipient ?? {},
+      type: result.deleted.type,
+      startDate: result.deleted.startDate,
+      endDate: result.deleted.endDate,
+      daysRequested: result.deleted.daysRequested,
     });
 
     return NextResponse.json({ ok: true });

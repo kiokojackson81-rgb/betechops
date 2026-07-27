@@ -9,6 +9,7 @@ import {
   normalizeCashAdvanceRepaymentPeriodValue,
 } from "@/lib/wellness";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { notifyCashAdvanceApproved, notifyCashAdvanceRejected } from "@/lib/wellnessNotifications";
 
 export const dynamic = "force-dynamic";
 const advanceDecisionValues = ["APPROVED", "REJECTED"] as const;
@@ -189,7 +190,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         },
       });
 
-      return tx.cashAdvance.findUnique({
+      const finalRecord = await tx.cashAdvance.findUnique({
         where: { id },
         include: {
           installments: {
@@ -200,9 +201,32 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           },
         },
       });
+      const recipient = await tx.user.findUnique({
+        where: { id: existing.userId },
+        select: { name: true, phone: true },
+      });
+      return { updated: finalRecord, recipient, previous: existing };
     });
 
-    return NextResponse.json({ updated: result });
+    if (decision === "APPROVED") {
+      await notifyCashAdvanceApproved({
+        recipient: result.recipient ?? {},
+        requestedAmount: Number(result.previous.requestedAmount ?? 0),
+        approvedAmount: Number(result.updated?.approvedAmount ?? approvedAmount),
+        repaymentPeriod: Number(result.updated?.repaymentPeriod ?? repaymentPeriod),
+        hrComment,
+      });
+    } else {
+      await notifyCashAdvanceRejected({
+        recipient: result.recipient ?? {},
+        requestedAmount: Number(result.previous.requestedAmount ?? 0),
+        approvedAmount: null,
+        repaymentPeriod: Number(result.updated?.repaymentPeriod ?? 0),
+        hrComment,
+      });
+    }
+
+    return NextResponse.json({ updated: result.updated });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to update cash advance";
     return NextResponse.json({ error: message }, { status: 400 });

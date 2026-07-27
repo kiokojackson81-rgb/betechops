@@ -9,6 +9,7 @@ import {
   normalizeCashAdvanceRepaymentPeriodValue,
 } from "@/lib/wellness";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { notifyCashAdvanceDeleted, notifyCashAdvanceUpdated } from "@/lib/wellnessNotifications";
 
 export const dynamic = "force-dynamic";
 
@@ -141,7 +142,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       if (!reason) throw new Error("Reason is required");
       if (repaymentPeriod <= 0) throw new Error("Repayment period must be at least 1 month");
 
-      const updated = await tx.cashAdvance.update({
+      await tx.cashAdvance.update({
         where: { id },
         data: {
           userId,
@@ -191,10 +192,24 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         },
       });
 
-      return finalRecord;
+      return {
+        updated: finalRecord,
+        recipient: await tx.user.findUnique({
+          where: { id: userId },
+          select: { name: true, phone: true },
+        }),
+      };
     });
 
-    return NextResponse.json({ updated: result });
+    await notifyCashAdvanceUpdated({
+      recipient: result.recipient ?? {},
+      requestedAmount: Number(result.updated?.requestedAmount ?? 0),
+      approvedAmount: Number(result.updated?.approvedAmount ?? 0),
+      repaymentPeriod: Number(result.updated?.repaymentPeriod ?? 0),
+      hrComment: result.updated?.hrComment ?? null,
+    });
+
+    return NextResponse.json({ updated: result.updated });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to update cash advance";
     return NextResponse.json({ error: message }, { status: 400 });
@@ -212,7 +227,7 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   const id = params.id;
 
   try {
-    await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const existing = await tx.cashAdvance.findUnique({
         where: { id },
         include: { installments: true },
@@ -241,6 +256,21 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
           before: existing as unknown as Prisma.InputJsonValue,
         },
       });
+      return {
+        deleted: existing,
+        recipient: await tx.user.findUnique({
+          where: { id: existing.userId },
+          select: { name: true, phone: true },
+        }),
+      };
+    });
+
+    await notifyCashAdvanceDeleted({
+      recipient: result.recipient ?? {},
+      requestedAmount: Number(result.deleted.requestedAmount ?? 0),
+      approvedAmount: Number(result.deleted.approvedAmount ?? 0),
+      repaymentPeriod: Number(result.deleted.repaymentPeriod ?? 0),
+      hrComment: result.deleted.hrComment ?? null,
     });
 
     return NextResponse.json({ ok: true });

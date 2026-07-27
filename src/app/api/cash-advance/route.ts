@@ -11,6 +11,7 @@ import {
   normalizeCashAdvanceRepaymentPeriodValue,
 } from "@/lib/wellness";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
+import { notifyCashAdvanceApproved } from "@/lib/wellnessNotifications";
 
 export const dynamic = "force-dynamic";
 
@@ -166,6 +167,20 @@ export async function POST(req: Request) {
         after: created as unknown as Prisma.InputJsonValue,
       },
     });
+
+    if (isAdminCreatingForStaff) {
+      const recipient = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { name: true, phone: true },
+      });
+      await notifyCashAdvanceApproved({
+        recipient: recipient ?? {},
+        requestedAmount,
+        approvedAmount: requestedAmount,
+        repaymentPeriod: created.repaymentPeriod,
+        hrComment: "Created and approved by admin.",
+      });
+    }
 
     return NextResponse.json({ created }, { status: 201 });
   } catch (error) {

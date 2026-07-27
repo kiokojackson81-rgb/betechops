@@ -15,6 +15,16 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const auth = await requireRole(["ADMIN", "SUPERVISOR"]);
   if (!auth.ok) return auth.res;
+  const prismaWithPayrollAdjustmentRequests = prisma as typeof prisma & {
+    payrollAdjustmentRequest?: {
+      findMany: (args: {
+        where?: { status?: string };
+        include?: Record<string, unknown>;
+        orderBy?: Array<{ createdAt: "asc" | "desc" }>;
+        take?: number;
+      }) => Promise<unknown[]>;
+    };
+  };
 
   const [
     pendingLeaveRequests,
@@ -29,7 +39,7 @@ export async function GET() {
     prisma.leaveRequest.findMany({
       where: { status: "PENDING" },
       include: {
-        user: { select: { id: true, name: true, email: true, attendantCategory: true } },
+        user: { select: { id: true, name: true, email: true, phone: true, attendantCategory: true } },
       },
       orderBy: [{ createdAt: "asc" }],
       take: 30,
@@ -37,30 +47,30 @@ export async function GET() {
     prisma.cashAdvance.findMany({
       where: { status: "PENDING" },
       include: {
-        user: { select: { id: true, name: true, email: true, attendantCategory: true } },
+        user: { select: { id: true, name: true, email: true, phone: true, attendantCategory: true } },
       },
       orderBy: [{ createdAt: "asc" }],
       take: 30,
     }),
-    (prisma as any).payrollAdjustmentRequest.findMany({
+    prismaWithPayrollAdjustmentRequests.payrollAdjustmentRequest?.findMany({
       where: { status: "PENDING" },
       include: {
-        attendant: { select: { id: true, name: true, email: true, attendantCategory: true } },
-        requestedBy: { select: { id: true, name: true, email: true, attendantCategory: true } },
+        attendant: { select: { id: true, name: true, email: true, phone: true, attendantCategory: true } },
+        requestedBy: { select: { id: true, name: true, email: true, phone: true, attendantCategory: true } },
       },
       orderBy: [{ createdAt: "asc" }],
       take: 50,
-    }),
+    }) ?? [],
     prisma.leaveRequest.findMany({
       include: {
-        user: { select: { id: true, name: true, email: true, attendantCategory: true } },
+        user: { select: { id: true, name: true, email: true, phone: true, attendantCategory: true } },
       },
       orderBy: [{ createdAt: "desc" }],
       take: 80,
     }),
     prisma.cashAdvance.findMany({
       include: {
-        user: { select: { id: true, name: true, email: true, attendantCategory: true } },
+        user: { select: { id: true, name: true, email: true, phone: true, attendantCategory: true } },
         installments: {
           orderBy: [{ dueDate: "asc" }],
           take: 3,
@@ -69,18 +79,18 @@ export async function GET() {
       orderBy: [{ createdAt: "desc" }],
       take: 80,
     }),
-    (prisma as any).payrollAdjustmentRequest.findMany({
+    prismaWithPayrollAdjustmentRequests.payrollAdjustmentRequest?.findMany({
       include: {
-        attendant: { select: { id: true, name: true, email: true, attendantCategory: true } },
-        requestedBy: { select: { id: true, name: true, email: true, attendantCategory: true } },
+        attendant: { select: { id: true, name: true, email: true, phone: true, attendantCategory: true } },
+        requestedBy: { select: { id: true, name: true, email: true, phone: true, attendantCategory: true } },
       },
       orderBy: [{ createdAt: "desc" }],
       take: 80,
-    }),
+    }) ?? [],
     prisma.cashAdvance.findMany({
       where: { status: "APPROVED" },
       include: {
-        user: { select: { id: true, name: true, email: true, attendantCategory: true } },
+        user: { select: { id: true, name: true, email: true, phone: true, attendantCategory: true } },
         installments: {
           orderBy: [{ dueDate: "asc" }],
           take: 3,
@@ -96,6 +106,7 @@ export async function GET() {
         id: true,
         name: true,
         email: true,
+        phone: true,
         attendantCategory: true,
         leaveBalance: true,
       },
@@ -113,6 +124,7 @@ export async function GET() {
           id: user.id,
           name: user.name,
           email: user.email,
+          phone: user.phone,
           attendantCategory: user.attendantCategory,
         },
       };
