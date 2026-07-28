@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { PaymentMethod } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/api";
 import {
   buildReceiptProjectFlow,
+  getReceiptProjectCompletionDate,
   readReceiptProjectFlow,
   RECEIPT_PROJECT_HANDLER_TYPES,
   RECEIPT_PROJECT_DEPOSIT_TYPES,
@@ -13,6 +15,9 @@ import {
 } from "@/lib/receiptProjects";
 import { auth } from "@/lib/auth";
 import { isTechnicalTeamCategory } from "@/lib/technicalTeam";
+import { buildReceiptKey, canonicalReceiptNumber, parsePaymentMethod } from "@/lib/receipts/utils";
+import { isDeliveryFeePayloadItem } from "@/lib/supportPricing";
+import { recalcSupportEntry } from "@/lib/marketingReceiptCleanup";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +50,30 @@ async function resolveId(context: ParamsContext) {
   return params.id;
 }
 
+function extractSupportReceiptItems(data: Record<string, unknown>) {
+  const rawItems = data.items;
+  if (!Array.isArray(rawItems)) return [] as Array<{ productName: string; buyingPrice: number | null }>;
+
+  return rawItems
+    .map((item) => {
+      const entry = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
+      const productName = String(
+        entry.title ??
+          entry.productName ??
+          entry.name ??
+          ((entry.product as Record<string, unknown> | undefined)?.name ?? ""),
+      ).trim();
+      if (!productName || isDeliveryFeePayloadItem(entry)) return null;
+      const quantity = Math.max(1, Math.trunc(Number(entry.quantity ?? 1) || 1));
+      const unitBuyingPrice = Number(entry.costPrice ?? entry.buyingPrice ?? 0);
+      const buyingPrice = Number.isFinite(unitBuyingPrice) && unitBuyingPrice > 0
+        ? Math.max(0, Math.round(unitBuyingPrice * quantity))
+        : null;
+      return { productName, buyingPrice };
+    })
+    .filter((item): item is { productName: string; buyingPrice: number | null } => Boolean(item));
+}
+
 export async function PATCH(req: NextRequest, context: ParamsContext) {
   const guard = await requireRole(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
   if (!guard.ok) return guard.res;
@@ -67,6 +96,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
           totalAmount: true,
           paidAmount: true,
           orderNumber: true,
+          attendantId: true,
         },
       },
     },
@@ -133,41 +163,152 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
         : existingProjectFlow?.externalAgentPhone,
   });
 
-  const updated = await prisma.receipt.update({
-    where: { id },
-    data: {
+  const updated = await prisma.$transaction(async (tx) => {
+    const receipt = await tx.receipt.update({
+      where: { id },
       data: {
-        ...existingData,
-        customerType: "project",
-        projectFlow: nextProjectFlow,
+        data: {
+          ...existingData,
+          customerType: "project",
+          projectFlow: nextProjectFlow,
+        },
+        order: existing.order
+          ? {
+              update: {
+                paidAmount: nextProjectFlow.totalPaidAmount,
+                paymentStatus:
+                  nextProjectFlow.paymentStatus === "FULLY_PAID"
+                    ? "PAID"
+                    : nextProjectFlow.paymentStatus === "PARTIALLY_PAID"
+                      ? "PARTIAL"
+                      : "UNPAID",
+                status:
+                  nextProjectFlow.stage === "COMPLETED_POSTED"
+                    ? "COMPLETED"
+                    : "PENDING",
+              },
+            }
+          : undefined,
       },
-      order: existing.order
-        ? {
-            update: {
-              paidAmount: nextProjectFlow.totalPaidAmount,
-              paymentStatus:
-                nextProjectFlow.paymentStatus === "FULLY_PAID"
-                  ? "PAID"
-                  : nextProjectFlow.paymentStatus === "PARTIALLY_PAID"
-                    ? "PARTIAL"
-                    : "UNPAID",
-              status:
-                nextProjectFlow.stage === "COMPLETED_POSTED"
-                  ? "COMPLETED"
-                  : "PENDING",
-            },
-          }
-        : undefined,
-    },
-    include: {
-      order: {
-        select: {
-          orderNumber: true,
-          totalAmount: true,
-          paidAmount: true,
+      include: {
+        order: {
+          select: {
+            orderNumber: true,
+            totalAmount: true,
+            paidAmount: true,
+            attendantId: true,
+          },
         },
       },
-    },
+    });
+
+    const attendantId = String(receipt.order?.attendantId ?? existing.issuedById ?? "").trim() || null;
+    const rawReceiptNumber = String(receipt.order?.orderNumber ?? existing.receiptNumber ?? "").trim();
+    const normalizedReceiptNumber = canonicalReceiptNumber(rawReceiptNumber);
+
+    if (
+      nextProjectFlow.stage === "COMPLETED_POSTED" &&
+      attendantId &&
+      normalizedReceiptNumber &&
+      tx.supportDailyEntry &&
+      tx.supportReceipt
+    ) {
+      const completionDate =
+        getReceiptProjectCompletionDate(nextProjectFlow, new Date(), receipt.createdAt) ?? new Date();
+      const dayStart = new Date(completionDate);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(completionDate);
+      dayEnd.setHours(23, 59, 59, 999);
+      const dayOfWeek = completionDate.toLocaleDateString("en-KE", { weekday: "long" });
+      const sellingTotal = Math.max(
+        0,
+        Math.round(
+          Number(
+            ((receipt.totals as Record<string, unknown> | null)?.total as number | undefined) ??
+              receipt.order?.totalAmount ??
+              0,
+          ),
+        ),
+      );
+      const receiptItems = extractSupportReceiptItems(existingData);
+      const derivedBuyingTotal = receiptItems.reduce((sum, item) => sum + Number(item.buyingPrice ?? 0), 0);
+      const receiptKey = buildReceiptKey(completionDate, normalizedReceiptNumber);
+      const paymentMethod = parsePaymentMethod(
+        (existingData as Record<string, unknown>).paymentMethod,
+        PaymentMethod,
+      );
+      const supportEntry =
+        await tx.supportDailyEntry.findFirst({
+          where: { submittedById: attendantId, date: { gte: dayStart, lte: dayEnd } },
+          select: { id: true },
+        }) ??
+        (await tx.supportDailyEntry.create({
+          data: {
+            date: dayStart,
+            dayOfWeek,
+            totalSales: 0,
+            totalProfit: 0,
+            newBatteries: 0,
+            changedBatteries: 0,
+            submittedById: attendantId,
+          },
+          select: { id: true },
+        }));
+
+      const existingSupportReceipt = await tx.supportReceipt.findFirst({
+        where: {
+          OR: [
+            { receiptNumber: normalizedReceiptNumber },
+            ...(receiptKey ? [{ receiptKey }] : []),
+          ],
+        },
+        include: {
+          items: true,
+        },
+      });
+
+      if (existingSupportReceipt) {
+        const nextBuyingTotal =
+          derivedBuyingTotal > 0 || (existingSupportReceipt.items?.length ?? 0) === 0
+            ? derivedBuyingTotal
+            : Number(existingSupportReceipt.buyingTotal ?? 0);
+        const shouldSeedItems = (existingSupportReceipt.items?.length ?? 0) === 0 && receiptItems.length > 0;
+        if (shouldSeedItems) {
+          await tx.supportReceiptItem.deleteMany({ where: { receiptId: existingSupportReceipt.id } });
+        }
+        await tx.supportReceipt.update({
+          where: { id: existingSupportReceipt.id },
+          data: {
+            dailyEntryId: supportEntry.id,
+            receiptNumber: normalizedReceiptNumber,
+            receiptKey,
+            paymentMethod: existingSupportReceipt.paymentMethod ?? paymentMethod,
+            sellingTotal,
+            buyingTotal: nextBuyingTotal,
+            ...(shouldSeedItems ? { items: { create: receiptItems } } : {}),
+          },
+        });
+        await recalcSupportEntry(tx, supportEntry.id);
+        if (existingSupportReceipt.dailyEntryId !== supportEntry.id) {
+          await recalcSupportEntry(tx, existingSupportReceipt.dailyEntryId);
+        }
+      } else {
+        await tx.supportReceipt.create({
+          data: {
+            dailyEntryId: supportEntry.id,
+            receiptNumber: normalizedReceiptNumber,
+            receiptKey,
+            paymentMethod,
+            sellingTotal,
+            buyingTotal: derivedBuyingTotal,
+            ...(receiptItems.length ? { items: { create: receiptItems } } : {}),
+          },
+        });
+        await recalcSupportEntry(tx, supportEntry.id);
+      }
+    }
+
+    return receipt;
   });
 
   return NextResponse.json({
