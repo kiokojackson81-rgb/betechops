@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/api";
-import { readReceiptProjectFlow } from "@/lib/receiptProjects";
+import { getReceiptProjectCompletionDate, readReceiptProjectFlow } from "@/lib/receiptProjects";
 import { syncCompletedProjectReceiptToPricing } from "@/lib/projectPricingSync";
 
 export const dynamic = "force-dynamic";
@@ -34,20 +34,18 @@ export async function POST(req: NextRequest) {
         },
       },
       ...(receiptIds.length ? [{ id: { in: receiptIds } }] : []),
-      ...(startDate || endDate
-        ? [{
-            updatedAt: {
-              ...(startDate ? { gte: startDate } : {}),
-              ...(endDate ? { lte: endDate } : {}),
-            },
-          }]
-        : []),
     ],
   };
 
   const receipts = await prisma.receipt.findMany({
     where,
-    include: {
+    select: {
+      id: true,
+      createdAt: true,
+      receiptNumber: true,
+      issuedById: true,
+      totals: true,
+      data: true,
       order: {
         select: {
           orderNumber: true,
@@ -56,20 +54,30 @@ export async function POST(req: NextRequest) {
         },
       },
     },
-    orderBy: { updatedAt: "desc" },
+    orderBy: { createdAt: "desc" },
     take: limit,
   });
 
   const candidates = receipts
-    .map((receipt) => ({
-      receipt,
-      flow: readReceiptProjectFlow(
+    .map((receipt) => {
+      const flow = readReceiptProjectFlow(
         receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
           ? (receipt.data as Record<string, unknown>).projectFlow
           : null,
-      ),
-    }))
-    .filter((entry) => entry.flow?.stage === "COMPLETED_POSTED");
+      );
+      const completionDate = flow
+        ? getReceiptProjectCompletionDate(flow, flow.updatedAt, receipt.createdAt)
+        : null;
+      return { receipt, flow, completionDate };
+    })
+    .filter((entry) => {
+      if (entry.flow?.stage !== "COMPLETED_POSTED") return false;
+      if (!startDate && !endDate) return true;
+      if (!entry.completionDate) return false;
+      if (startDate && entry.completionDate < startDate) return false;
+      if (endDate && entry.completionDate > endDate) return false;
+      return true;
+    });
 
   const results: Array<{
     receiptId: string;
