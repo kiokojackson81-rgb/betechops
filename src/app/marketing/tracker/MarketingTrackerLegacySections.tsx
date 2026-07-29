@@ -436,7 +436,7 @@ function ReceiptsList({ anchorId = "receipts" }: { anchorId?: string }) {
         const params = new URLSearchParams();
         params.set("includeItems", "false");
         params.set("size", "40");
-        params.set("onlyPos", "1");
+        params.set("includeLedger", "true");
         params.set("attendantId", attendantId);
         params.set("start", filters.start);
         params.set("end", filters.end);

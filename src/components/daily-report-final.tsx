@@ -481,17 +481,12 @@ export default function DailyReportFinal({
   });
   const [impersonateId, setImpersonateId] = useState<string | null>(initialImpersonateId ?? null);
   const [impersonationReady, setImpersonationReady] = useState(false);
-  const [resolvedAttendantEmail, setResolvedAttendantEmail] = useState<string | null>(null);
   const [, setHasAuthoritativeCommission] = useState(false);
   const [downloadingPerformance, setDownloadingPerformance] = useState(false);
   const sessionResponse = useSession();
   const session = sessionResponse?.data;
   const attendantId =
     impersonateId ?? ((session?.user as { id?: string } | undefined)?.id ?? null);
-  const sessionEmail =
-    typeof (session?.user as { email?: string } | undefined)?.email === "string"
-      ? (session?.user as { email?: string }).email!.toLowerCase().trim()
-      : null;
   const sessionRole =
     typeof (session?.user as { role?: string | null } | undefined)?.role === "string"
       ? ((session?.user as { role?: string | null }).role ?? null)
@@ -500,8 +495,6 @@ export default function DailyReportFinal({
     typeof (session?.user as { attendantCategory?: string | null } | undefined)?.attendantCategory === "string"
       ? ((session?.user as { attendantCategory?: string | null }).attendantCategory ?? null)
       : null;
-  const effectiveAttendantEmail = resolvedAttendantEmail ?? (impersonateId ? null : sessionEmail);
-  const isBrendahView = effectiveAttendantEmail === "brendah@betech.co.ke";
   const canAccessAgentOrders =
     sessionRole === "ADMIN" ||
     sessionAttendantCategory === "DIRECT_SALES_OPS" ||
@@ -662,10 +655,8 @@ export default function DailyReportFinal({
 
         setEarningsError(null);
         setEarningsSummary(mapped);
-        const nextAttendantEmail =
-          typeof row.email === "string" ? row.email.toLowerCase().trim() : null;
-        const prefersEarningsQuickStats = nextAttendantEmail === "brendah@betech.co.ke";
-        setResolvedAttendantEmail(nextAttendantEmail);
+        const prefersEarningsQuickStats =
+          typeof row.email === "string" && row.email.toLowerCase().trim() === "brendah@betech.co.ke";
         const authoritativeCommission = prefersEarningsQuickStats
           ? Number(mapped.salesCommission ?? 0)
           : Number(mapped.grossCommission ?? 0);
@@ -793,19 +784,6 @@ export default function DailyReportFinal({
         if (!res.ok) return null;
         const data = await res.json().catch(() => null);
         if (!data) return null;
-        if (isBrendahView) {
-          setServerQuickStats((prev) => ({
-            totalSales: Number(prev?.totalSales ?? data.aggregates?.totalSales ?? 0),
-            totalItems: Number(data.aggregates?.totalItems ?? 0),
-            totalNewProducts: Number(prev?.totalNewProducts ?? 0),
-            totalEditedProducts: Number(prev?.totalEditedProducts ?? 0),
-            totalCopiedProducts: Number(prev?.totalCopiedProducts ?? 0),
-            walkInsServed: Number(prev?.walkInsServed ?? 0),
-            walkInsPurchased: Number(prev?.walkInsPurchased ?? 0),
-            totalReceipts: Number(prev?.totalReceipts ?? data.aggregates?.totalReceipts ?? 0),
-          }));
-          return data;
-        }
         const commission = data?.aggregates?.commission?.commission;
         if (
           typeof commission === "number" &&
@@ -828,7 +806,6 @@ export default function DailyReportFinal({
       date,
       impersonateId,
       impersonationReady,
-      isBrendahView,
       selectedPeriodKey,
     ],
   );
@@ -905,12 +882,10 @@ export default function DailyReportFinal({
     timeZone: kenyaTimeZone,
   }).format(new Date());
   const effectiveStaffName =
-    effectiveAttendantEmail === "brendah@betech.co.ke"
-      ? "Brendah"
-      : typeof (session?.user as { name?: string } | undefined)?.name === "string" &&
-          (session?.user as { name?: string }).name?.trim()
-        ? (session?.user as { name?: string }).name!.trim()
-        : "Marketing staff";
+    typeof (session?.user as { name?: string } | undefined)?.name === "string" &&
+    (session?.user as { name?: string }).name?.trim()
+      ? (session?.user as { name?: string }).name!.trim()
+      : "Marketing staff";
   const downloadPerformanceReceiptPdf = useCallback(() => {
     const periodKey = selectedPeriodKey || currentPeriod.key;
     const params = new URLSearchParams({ periodKey });
@@ -1177,8 +1152,7 @@ export default function DailyReportFinal({
         receiptParams.set("carryForwardPending", "1");
         if (attendantId) receiptParams.set("attendantId", attendantId);
         if (impersonateId) receiptParams.set("impersonateId", impersonateId);
-        if (isBrendahView) receiptParams.set("onlyPos", "1");
-        if (!isBrendahView) receiptParams.set("includeLedger", "true");
+        receiptParams.set("includeLedger", "true");
 
         const [webOrdersRes, quoteRequestsRes, agentOrdersRes, receiptsRes] = await Promise.all([
           fetch(`/api/attendant/website-orders?${params.toString()}`, {
@@ -1300,7 +1274,6 @@ export default function DailyReportFinal({
     currentView,
     impersonateId,
     impersonationReady,
-    isBrendahView,
     selectedPeriod.end,
     selectedPeriod.start,
   ]);
@@ -1584,9 +1557,8 @@ export default function DailyReportFinal({
                 end={endDate}
                 q={debouncedSearch}
                 attendantId={attendantId}
-                onlyPos={isBrendahView}
                 paidOnly={false}
-                includeLedger={!isBrendahView}
+                includeLedger
                 showPodFilters
                 showProjectFilter
                 hideHeader
@@ -1649,7 +1621,7 @@ export default function DailyReportFinal({
     );
   }
 
-  if (currentView === "product-desk" && isBrendahView) {
+  if (currentView === "product-desk") {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100">
         <main className="mx-auto max-w-7xl space-y-6 p-6">
@@ -1822,21 +1794,19 @@ export default function DailyReportFinal({
                   >
                     Quotations
                   </Link>
-                  {isBrendahView ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCurrentView("product-desk");
-                        if (typeof window !== "undefined") {
-                          window.history.replaceState(null, "", productDeskHref);
-                          window.scrollTo({ top: 0, behavior: "smooth" });
-                        }
-                      }}
-                      className={navPillClasses}
-                    >
-                      Product Desk
-                    </button>
-                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentView("product-desk");
+                      if (typeof window !== "undefined") {
+                        window.history.replaceState(null, "", productDeskHref);
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }
+                    }}
+                    className={navPillClasses}
+                  >
+                    Product Desk
+                  </button>
                 </div>
 
                 <div className="flex flex-wrap justify-start gap-2 xl:justify-end">

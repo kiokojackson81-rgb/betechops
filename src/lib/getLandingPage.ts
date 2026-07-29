@@ -16,7 +16,7 @@ export function getLandingPage(category?: string | null, role?: string): string 
     case "DIRECT_SALES_OPS":
       return "/marketing/tracker";
     case "MARKETING_OPS":
-      return "/attendant/daily-report";
+      return "/marketing/tracker";
     case "JUMIA_KILIMALL_OPS":
       return "/attendant/online";
     case "SUPPORT_OPS":
@@ -39,7 +39,7 @@ export function getAdminLandingPage(category?: string | null): string {
     case "DIRECT_SALES_OPS":
       return "/admin/marketing-report";
     case "MARKETING_OPS":
-      return "/admin/daily-report";
+      return "/admin/marketing-report";
     case "JUMIA_KILIMALL_OPS":
       return "/admin/online/summary";
     case "SUPPORT_OPS":
