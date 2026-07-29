@@ -1925,6 +1925,7 @@ model MarketplaceAccount {
   assignments               MarketplaceAccountAssignment[]
   orders                    MarketplaceOrder[]
   payoutWeeks               MarketplacePayoutWeek[]
+  operatingCapitalWeeks     MarketplaceOperatingCapitalWeek[]
   returns                   MarketplaceReturn[]
   dailyOrderDigests         MarketplaceDailyOrderDigest[]
   dailyOrderDigestSnapshots MarketplaceDailyOrderDigestSnapshot[]
@@ -1970,6 +1971,30 @@ model MarketplacePayoutWeek {
   @@unique([accountId, statementNumber])
   @@unique([statementNumber, weekStart])
   @@index([accountId, weekEnd])
+}
+
+model MarketplaceOperatingCapitalWeek {
+  id                String             @id @default(cuid())
+  scopeKey          String             @unique
+  accountId         String?
+  weekStart         DateTime           @db.Timestamptz(0)
+  weekEnd           DateTime           @db.Timestamptz(3)
+  periodKey         String
+  profitAmount      Decimal            @db.Decimal(14, 2)
+  currentNetPayout  Decimal            @db.Decimal(14, 2)
+  operatingCapital  Decimal            @db.Decimal(14, 2)
+  adjustedNetPayout Decimal            @db.Decimal(14, 2)
+  status            String             @default("FINAL")
+  finalizedAt       DateTime?
+  finalizedById     String?
+  reopenedAt        DateTime?
+  reopenedById      String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  account           MarketplaceAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  @@index([weekStart, status])
+  @@index([accountId, weekStart])
 }
 
 model MarketplaceOrder {

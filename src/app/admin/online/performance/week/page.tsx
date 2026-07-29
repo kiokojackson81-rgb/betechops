@@ -8,6 +8,8 @@ import { WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
 import WeekProfitEntriesClient from "@/app/admin/online/performance/_components/WeekProfitEntries.client";
 import { resolveShopIdsForMarketplaceAccount } from "@/lib/marketplaceAccountShopResolve";
 import { getPricingWeekSummary, type PricingWeekAccountStatus } from "@/lib/pricingWeekWhatsapp";
+import { getOperatingCapitalSummary } from "@/lib/operatingCapital";
+import OperatingCapitalAdminCard from "@/app/admin/online/performance/_components/OperatingCapitalAdminCard.client";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +32,7 @@ export default async function OnlinePerformanceWeekPage({
 }) {
   const session = await auth();
   const role = (session?.user as any)?.role;
+  const actorId = String((session?.user as any)?.id ?? "").trim() || null;
   const email = String((session?.user as any)?.email ?? "").toLowerCase();
   const isBenjamin = email === "benjamin@betech.co.ke";
   const limitedView = isBenjamin && role !== "ADMIN";
@@ -192,6 +195,15 @@ export default async function OnlinePerformanceWeekPage({
   const avgMargin = Number(typedAgg?._avg?.marginPct ?? 0);
   const manualWeeklyTotal = Number(manualWeeklyAgg._sum.amount ?? 0);
   const netToShow = manualWeeklyTotal !== 0 ? manualWeeklyTotal : totalNet;
+  const operatingCapital = await getOperatingCapitalSummary({
+    weekStartRaw,
+    periodKey: period.key,
+    completionSummary: completion,
+    profit: totalProfit,
+    currentNetPayout: netToShow,
+    accountId: accountId || null,
+    actorId,
+  });
 
   const rows = (entries as any[]).map((e) => ({
     id: String(e.id),
@@ -272,8 +284,8 @@ export default async function OnlinePerformanceWeekPage({
               <p className="mt-2 text-xl font-semibold text-white">{currency.format(totalRevenue)}</p>
             </div>
             <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
-              <p className="text-xs uppercase tracking-wide text-slate-400">Net payout</p>
-              <p className="mt-2 text-xl font-semibold text-emerald-300">{currency.format(netToShow)}</p>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Net payout after deduction</p>
+              <p className="mt-2 text-xl font-semibold text-emerald-300">{currency.format(operatingCapital.adjustedNetPayout)}</p>
             </div>
             <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
               <p className="text-xs uppercase tracking-wide text-slate-400">Profit</p>
@@ -284,6 +296,10 @@ export default async function OnlinePerformanceWeekPage({
             <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
               <p className="text-xs uppercase tracking-wide text-slate-400">Loss entries</p>
               <p className="mt-2 text-xl font-semibold text-amber-200">{lossCount}</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
+              <p className="text-xs uppercase tracking-wide text-slate-400">{operatingCapital.label}</p>
+              <p className="mt-2 text-xl font-semibold text-slate-100">{currency.format(operatingCapital.operatingCapital)}</p>
             </div>
           </div>
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -304,6 +320,12 @@ export default async function OnlinePerformanceWeekPage({
               <p className="mt-2 text-xl font-semibold text-slate-100">{currency.format(manualWeeklyTotal)}</p>
             </div>
             <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Operating capital status</p>
+              <p className={`mt-2 text-xl font-semibold ${operatingCapital.isFinal ? "text-emerald-200" : "text-amber-200"}`}>
+                {operatingCapital.statusLabel}
+              </p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
               <p className="text-xs uppercase tracking-wide text-slate-400">Products missing pricing</p>
               <p className={`mt-2 text-xl font-semibold ${missingPricingCount > 0 ? "text-rose-300" : "text-emerald-200"}`}>
                 {missingPricingCount}
@@ -317,6 +339,16 @@ export default async function OnlinePerformanceWeekPage({
           <p className="text-sm text-slate-400">Totals hidden for supervisor view. Review profit per order below.</p>
         </section>
       )}
+
+      {role === "ADMIN" ? (
+        <OperatingCapitalAdminCard
+          weekStart={weekStartRaw}
+          periodKey={period.key}
+          accountId={accountId || null}
+          canFinalize={operatingCapital.canFinalize}
+          isFinal={operatingCapital.isFinal}
+        />
+      ) : null}
 
       <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
         <h2 className="text-lg font-semibold text-white">Loss entries</h2>

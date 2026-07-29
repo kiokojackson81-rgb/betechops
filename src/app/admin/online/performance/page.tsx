@@ -9,6 +9,7 @@ import PricingWeekWhatsappButton from "@/app/admin/online/performance/_component
 import { WeeklySaleStatus } from "@prisma/client";
 import { resolveShopIdsForMarketplaceAccount } from "@/lib/marketplaceAccountShopResolve";
 import { getPricingWeekSummary, PRICING_WEEK_ENTITY, PRICING_WEEK_SUCCESS_ACTION } from "@/lib/pricingWeekWhatsapp";
+import { getOperatingCapitalSummary } from "@/lib/operatingCapital";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,7 @@ export default async function OnlinePerformancePage({
 }) {
   const session = await auth();
   const role = (session?.user as any)?.role;
+  const actorId = String((session?.user as any)?.id ?? "").trim() || null;
   const email = String((session?.user as any)?.email ?? "").toLowerCase();
   const isBenjamin = email === "benjamin@betech.co.ke";
   const limitedView = isBenjamin && role !== "ADMIN";
@@ -179,6 +181,27 @@ export default async function OnlinePerformancePage({
     ? await Promise.all(weeks.map((wk) => getPricingWeekSummary(wk.startInput, { accountIds: [accountId] })))
     : await Promise.all(weeks.map((wk) => getPricingWeekSummary(wk.startInput)));
   const completionSummaryMap = new Map(completionSummaries.map((summary) => [summary.week_start, summary]));
+  const operatingCapitalSummaries = await Promise.all(
+    weeks.map(async (wk) => {
+      const agg = aggMap.get(wk.weekStart.toISOString()) ?? { netPayout: 0, profit: 0, avgCommissionRate: 0 };
+      const weeklyNet = weeklySaleMap.get(wk.weekStart.toISOString()) ?? null;
+      const currentNetPayout =
+        typeof weeklyNet === "number" && Number.isFinite(weeklyNet) && weeklyNet !== 0 ? weeklyNet : agg.netPayout;
+      const completion = completionSummaryMap.get(wk.startInput);
+      if (!completion) return [wk.startInput, null] as const;
+      const summary = await getOperatingCapitalSummary({
+        weekStartRaw: wk.startInput,
+        periodKey: period.key,
+        completionSummary: completion,
+        profit: agg.profit,
+        currentNetPayout,
+        accountId: accountId || null,
+        actorId,
+      });
+      return [wk.startInput, summary] as const;
+    }),
+  );
+  const operatingCapitalSummaryMap = new Map(operatingCapitalSummaries);
   const successLogs = await prisma.actionLog.findMany({
     where: {
       entity: PRICING_WEEK_ENTITY,
@@ -297,6 +320,7 @@ export default async function OnlinePerformancePage({
             const lossCount = lossMap.get(wk.weekStart.toISOString()) ?? 0;
             const weekHref = `/admin/online/performance/week?periodKey=${encodeURIComponent(period.key)}&weekStart=${encodeURIComponent(wk.startInput)}${accountId ? `&accountId=${encodeURIComponent(accountId)}` : ""}#missing-pricing`;
             const completion = completionSummaryMap.get(wk.startInput) ?? null;
+            const operatingCapital = operatingCapitalSummaryMap.get(wk.startInput) ?? null;
             const submittedAccounts = completion?.accounts_completed ?? 0;
             const totalAccounts = completion?.accounts_total ?? totalAccountsForCoverage;
             const missingPricingCount = completion?.missing_pricing ?? (missingPricingMap.get(wk.weekStart.toISOString()) ?? 0);
@@ -350,13 +374,27 @@ export default async function OnlinePerformancePage({
                 ) : (
                   <div className="mt-4 grid gap-2 text-sm">
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-400">Net payout</span>
-                      <span className="font-semibold text-emerald-300">{currency.format(netToShow)}</span>
+                      <span className="text-slate-400">Net payout after deduction</span>
+                      <span className="font-semibold text-emerald-300">
+                        {currency.format(operatingCapital?.adjustedNetPayout ?? netToShow)}
+                      </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-slate-400">Profit</span>
                       <span className={`font-semibold ${agg.profit < 0 ? "text-red-300" : "text-emerald-200"}`}>
                         {currency.format(agg.profit)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">{operatingCapital?.label ?? "Estimated operating capital"}</span>
+                      <span className="font-semibold text-slate-100">
+                        {currency.format(operatingCapital?.operatingCapital ?? 0)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Operating capital status</span>
+                      <span className={`font-semibold ${operatingCapital?.isFinal ? "text-emerald-200" : "text-amber-200"}`}>
+                        {operatingCapital?.statusLabel ?? "Estimated"}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -422,6 +460,7 @@ export default async function OnlinePerformancePage({
         <h2 className="text-lg font-semibold text-white">Notes</h2>
         <ul className="mt-2 space-y-1 text-sm text-slate-400">
           <li>- Net payout is loaded via weekly statements (CSV) or manual weekly totals.</li>
+          <li>- Operating capital is 50% of profit, rounded to whole Kenya shillings, and deducted from displayed payout.</li>
           <li>- Net payout = item credit + commission + shipping (commission/shipping stored as negative).</li>
           <li>- Profit = net payout - buying price.</li>
           <li>- Accounts submitted includes fully priced accounts plus accounts marked zero.</li>
