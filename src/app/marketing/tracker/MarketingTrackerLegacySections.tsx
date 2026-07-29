@@ -1456,6 +1456,7 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
   const serverVisiblePeriodSales =
     Number((serverPeriodSummary?.aggregates as any)?.visibleSales ?? serverPeriodSummary?.aggregates?.totalSales ?? 0);
   const isJeniffer = currentUserEmail === "jeniffer@betech.co.ke";
+  const isBrendah = currentUserEmail === "brendah@betech.co.ke";
   const earningsSales = Number((earningsSummary as any)?.totalSales ?? 0);
   const combinedPeriodSalesRaw = serverPeriodTotalSales + totalSales;
   const combinedVisibleSalesRaw = serverVisiblePeriodSales + totalSales;
@@ -1522,7 +1523,10 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
     selectedPeriod.label ??
     "Loading current period\u2026";
   const displayedVisibleSalesKes = combinedVisibleSales;
-  const displayedRecognizedSalesKes = combinedPeriodSales;
+  const displayedRecognizedSalesKes =
+    isBrendah && combinedPeriodSales <= 0 && combinedVisibleSales > 0
+      ? combinedVisibleSales
+      : combinedPeriodSales;
   const displayedItems = combinedPeriodItems;
   const displayedVisibleReceipts = combinedVisibleReceipts;
   const displayedRecognizedReceipts = combinedPeriodReceipts;
