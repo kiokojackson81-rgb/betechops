@@ -48,6 +48,9 @@ export default async function AdminOnlineDividedPage({ searchParams }: { searchP
 
   const last4Weeks = getLast4FullWeeksForTradingPeriod(period, now);
   const last4WeekStartInputs = new Set(last4Weeks.map((w) => w.startInput));
+  const currentWeekStartKey = canonicalNairobiWeekStartUtc(now).toISOString().slice(0, 10);
+  const defaultSelectedWeek =
+    last4Weeks.find((w) => w.startInput === currentWeekStartKey) ?? last4Weeks[last4Weeks.length - 1] ?? null;
 
   const selectedWeekStartRaw = resolved.weekStart?.trim() ?? "";
   const selectedWeekStartDate = selectedWeekStartRaw ? parseDateOnlyUtc(selectedWeekStartRaw) : null;
@@ -55,7 +58,7 @@ export default async function AdminOnlineDividedPage({ searchParams }: { searchP
   const selectedWeekKey = selectedWeekStart ? selectedWeekStart.toISOString().slice(0, 10) : "";
 
   // Keep behavior consistent with Summary page: only allow selection from the same 4-week window.
-  const safeSelectedWeekKey = last4WeekStartInputs.has(selectedWeekKey) ? selectedWeekKey : "";
+  const safeSelectedWeekKey = last4WeekStartInputs.has(selectedWeekKey) ? selectedWeekKey : (defaultSelectedWeek?.startInput ?? "");
   const selectedWeek = safeSelectedWeekKey ? last4Weeks.find((w) => w.startInput === safeSelectedWeekKey) ?? null : null;
 
   return (

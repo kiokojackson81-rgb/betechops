@@ -24,7 +24,6 @@ async function loadLetterheadJpg() {
 
 export async function buildDividedPdfBuffer(report: DividedReportPayload) {
   const metrics = computeDividedValues(report);
-  const mpesaTo0722 = DIVIDED_FIXED_DEDUCTION;
 
   const pdf = await PDFDocument.create();
   const page = pdf.addPage([595.28, 841.89]);
@@ -214,7 +213,6 @@ export async function buildDividedPdfBuffer(report: DividedReportPayload) {
   drawCard(marginX + cardW + 12, "Hitech payout instruction", [
     ["Hitech payout", formatKes(metrics.hitechPayout), "normal"],
     ["Less divided", `- ${formatKes(metrics.divided)}`, "neg"],
-    ["Send to 0722151083", `- ${formatKes(mpesaTo0722)}`, "neg"],
     ["Send to Equity", formatKes(metrics.equity), "pos"],
   ]);
 

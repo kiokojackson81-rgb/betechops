@@ -177,11 +177,17 @@ export default async function AdminOnlineSummaryPage({ searchParams }: { searchP
   const last4Weeks = getLast4FullWeeksForTradingPeriod(period, now);
   const last4WeekStarts = last4Weeks.map((w) => w.weekStart);
   const last4WeekStartInputs = new Set(last4Weeks.map((w) => w.startInput));
+  const currentWeekStartKey = canonicalNairobiWeekStartUtc(now).toISOString().slice(0, 10);
+  const defaultSelectedWeek =
+    last4Weeks.find((w) => w.startInput === currentWeekStartKey) ?? last4Weeks[last4Weeks.length - 1] ?? null;
   const selectedWeekStartRaw = resolvedParams.weekStart?.trim() ?? "";
   const selectedWeekStartDate = selectedWeekStartRaw ? parseDateOnlyUtc(selectedWeekStartRaw) : null;
   const selectedWeekStart = selectedWeekStartDate ? canonicalNairobiWeekStartUtc(selectedWeekStartDate) : null;
-  const selectedWeekKey = selectedWeekStart ? selectedWeekStart.toISOString().slice(0, 10) : "";
-  const selectedWeekWindow = selectedWeekStart ? mondayToSundayNairobiWindow(selectedWeekStart) : null;
+  const selectedWeekKey =
+    selectedWeekStart && last4WeekStartInputs.has(selectedWeekStart.toISOString().slice(0, 10))
+      ? selectedWeekStart.toISOString().slice(0, 10)
+      : (defaultSelectedWeek?.startInput ?? "");
+  const selectedWeekWindow = selectedWeekKey ? mondayToSundayNairobiWindow(parseDateOnlyUtc(selectedWeekKey)!) : null;
 
   const previousPeriod = getPreviousTradingPeriod(period);
   const nextPeriod = getNextTradingPeriod(period);

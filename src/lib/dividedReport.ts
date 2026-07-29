@@ -5,6 +5,7 @@ import {
   mondayToSundayNairobiWindow,
   parseDateOnlyUtc,
 } from "@/lib/weekWindow";
+import { getDraftCompletionStats } from "@/lib/marketplaceDraftCompletion";
 import { isMarketplaceStatementDraftTableAvailable } from "@/lib/statementDraftTable";
 
 export const DIVIDED_FIXED_DEDUCTION = 35000;
@@ -297,7 +298,7 @@ export function computeDividedValues(report: Pick<DividedReportPayload, "account
   const baseProfit = grossProfit - DIVIDED_FIXED_DEDUCTION;
   const divided = Math.max(0, Math.round((baseProfit * DIVIDED_RATE_PCT) / 100));
   const hitechPayout = money(report.accounts.find((row) => row.key === "hitech-power")?.salesNetPayout);
-  const equity = Math.round(hitechPayout - divided - DIVIDED_FIXED_DEDUCTION);
+  const equity = Math.round(hitechPayout - divided);
   const reference = buildDividedReference(report.week.weekEndInput);
 
   return {
@@ -460,7 +461,7 @@ export async function getDividedCompletionStateForWeek(weekStartRaw: string): Pr
   );
 
   const draftTableAvailable = await isMarketplaceStatementDraftTableAvailable();
-  const latestDraftByTargetKey = new Map<string, { rowCount: number; submittedCount: number }>();
+  const latestDraftByTargetKey = new Map<string, { requiredRowCount: number; submittedCount: number; isComplete: boolean }>();
   if (draftTableAvailable && (allShopIds.length || allAccountIds.length)) {
     try {
       const drafts = await prisma.marketplaceStatementDraft.findMany({
@@ -471,7 +472,7 @@ export async function getDividedCompletionStateForWeek(weekStartRaw: string): Pr
           OR: [{ shopId: { in: allShopIds } }, { accountId: { in: allAccountIds } }],
         },
         orderBy: { updatedAt: "desc" },
-        select: { shopId: true, accountId: true, rowCount: true, submittedByTxn: true },
+        select: { shopId: true, accountId: true, rowCount: true, rows: true, submittedByTxn: true },
         take: Math.max(20, targetResolved.length * 4),
       });
       for (const draft of drafts) {
@@ -479,11 +480,15 @@ export async function getDividedCompletionStateForWeek(weekStartRaw: string): Pr
           (item) => item.shopIds.includes(String(draft.shopId ?? "")) || item.accountIds.includes(String(draft.accountId ?? "")),
         );
         if (!target || latestDraftByTargetKey.has(target.key)) continue;
-        const submittedCount =
-          draft.submittedByTxn && typeof draft.submittedByTxn === "object" ? Object.keys(draft.submittedByTxn as any).length : 0;
+        const stats = getDraftCompletionStats({
+          rows: draft.rows,
+          submittedByTxn: draft.submittedByTxn,
+          fallbackRowCount: Number(draft.rowCount ?? 0),
+        });
         latestDraftByTargetKey.set(target.key, {
-          rowCount: Number(draft.rowCount ?? 0),
-          submittedCount,
+          requiredRowCount: stats.requiredRowCount,
+          submittedCount: stats.submittedCount,
+          isComplete: stats.isComplete,
         });
       }
     } catch (err: any) {
@@ -510,7 +515,7 @@ export async function getDividedCompletionStateForWeek(weekStartRaw: string): Pr
   const targets: DividedCompletionTargetState[] = targetResolved.map((target) => {
     const draftState = latestDraftByTargetKey.get(target.key) ?? null;
     const hasDraft = Boolean(draftState);
-    const draftComplete = Boolean(draftState && draftState.rowCount > 0 && draftState.submittedCount >= draftState.rowCount);
+    const draftComplete = Boolean(draftState?.isComplete);
     const markedZero = target.shopIds.some((shopId) => zeroShopIds.has(shopId));
     const hasProfitEntries = target.accountIds.some((accountId) => (profitCountByAccountId.get(accountId) ?? 0) > 0);
     const ready = markedZero || draftComplete || (!hasDraft && hasProfitEntries);

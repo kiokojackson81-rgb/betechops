@@ -32,11 +32,6 @@ type DividedPayload = {
   totals: { sales: number; profit: number; returns: number; grossProfit: number; duplicates: number };
 };
 
-function numberOr(value: unknown, fallback: number) {
-  const n = typeof value === "number" ? value : Number(value ?? NaN);
-  return Number.isFinite(n) ? n : fallback;
-}
-
 function clamp0(n: number) {
   return n < 0 ? 0 : n;
 }
@@ -46,38 +41,12 @@ export default function DividedViewClient(props: {
   periodKey: string;
   impersonateId?: string | null;
 }) {
-  const storageKey = `betechops:divided:v2:${props.weekStart}`;
   const fixedDeduction = 35000;
   const dividendRatePct = 7;
 
   const [loading, setLoading] = useState(false);
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
   const [data, setData] = useState<DividedPayload | null>(null);
-
-  const [mpesaTo0722, setMpesaTo0722] = useState<number>(fixedDeduction);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(storageKey);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as any;
-      setMpesaTo0722(numberOr(parsed?.mpesaTo0722, fixedDeduction));
-    } catch {
-      // ignore
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storageKey]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(
-        storageKey,
-        JSON.stringify({ mpesaTo0722 }),
-      );
-    } catch {
-      // ignore
-    }
-  }, [storageKey, mpesaTo0722]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -137,7 +106,7 @@ export default function DividedViewClient(props: {
 
     const hitech = (data?.accounts ?? []).find((a) => a.key === "hitech-power") ?? null;
     const hitechPayout = hitech?.salesNetPayout ?? 0;
-    const equityBalance = hitechPayout - dividend - mpesaTo0722;
+    const equityBalance = hitechPayout - dividend;
 
     return {
       baseProfit,
@@ -146,14 +115,14 @@ export default function DividedViewClient(props: {
       hitechPayout,
       equityBalance,
     };
-  }, [data, dividendRatePct, fixedDeduction, mpesaTo0722]);
+  }, [data, dividendRatePct, fixedDeduction]);
 
   const downloadPdf = () => {
     const deductionsJson = encodeURIComponent(
       JSON.stringify({
         fixedDeduction,
         dividendRatePct,
-        mpesaTo0722,
+        mpesaTo0722: 0,
         weekStart: props.weekStart,
       }),
     );
@@ -289,8 +258,8 @@ export default function DividedViewClient(props: {
             <div className="text-xs uppercase tracking-wide text-slate-400">Deductions</div>
             <div className="mt-3 space-y-3">
               <div className="rounded-lg border border-white/10 bg-slate-950 px-3 py-3 text-sm text-slate-100">
-                <div className="mb-1 text-xs text-slate-400">Fixed deduction</div>
-                <div className="font-semibold text-white">{currency.format(fixedDeduction)}</div>
+                <div className="mb-1 text-xs text-slate-400">Applied deduction</div>
+                <div className="font-semibold text-white">{currency.format(0)}</div>
               </div>
               <div className="rounded-lg border border-white/10 bg-slate-950 px-3 py-3 text-sm text-slate-100">
                 <div className="mb-1 text-xs text-slate-400">Divided rate</div>
@@ -326,15 +295,6 @@ export default function DividedViewClient(props: {
 
             <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
               <div className="text-xs uppercase tracking-wide text-slate-400">Hitech payout instruction</div>
-              <label className="mt-2 block">
-                <div className="mb-1 text-xs text-slate-400">Send to 0722151083</div>
-                <input
-                  className="w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-slate-100"
-                  inputMode="numeric"
-                  value={mpesaTo0722}
-                  onChange={(e) => setMpesaTo0722(numberOr(e.target.value, 0))}
-                />
-              </label>
               <div className="mt-3 space-y-1 text-sm text-slate-200">
                 <div className="flex justify-between">
                   <span>Hitech payout (sales)</span>
@@ -343,10 +303,6 @@ export default function DividedViewClient(props: {
                 <div className="flex justify-between">
                   <span>Less divided</span>
                   <span className="font-semibold text-rose-300">- {currency.format(derived.dividend)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Less MPESA 0722151083</span>
-                  <span className="font-semibold text-rose-300">- {currency.format(mpesaTo0722)}</span>
                 </div>
                 <div className="mt-2 flex justify-between border-t border-white/10 pt-2">
                   <span className="font-semibold text-white">Send to Equity</span>
