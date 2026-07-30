@@ -307,6 +307,7 @@ function MarketingReceiptsPageInner() {
         customerType: "pod",
         status: "pending",
         carryForwardPending: "1",
+        sharedPodQueue: "1",
       });
 
       const [podPayload, webPayload, quotePayload] = await Promise.all([

@@ -137,6 +137,7 @@ export async function GET(req: NextRequest) {
   const includeLedger = includeLedgerParam === null ? true : includeLedgerParam !== "false";
   const paidOnly = ["1", "true", "yes"].includes((url.searchParams.get("paidOnly") || "").toLowerCase());
   const carryForwardPending = ["1", "true", "yes"].includes((url.searchParams.get("carryForwardPending") || "").toLowerCase());
+  const sharedPodQueue = ["1", "true", "yes"].includes((url.searchParams.get("sharedPodQueue") || "").toLowerCase());
   const start = url.searchParams.get("start");
   const end = url.searchParams.get("end");
   const paymentMethodParam = normalizePaymentMethod(url.searchParams.get("paymentMethod"));
@@ -282,7 +283,11 @@ export async function GET(req: NextRequest) {
   const scope = isImpersonating ? "mine" : allowGlobalScope ? "global" : "mine";
   const metaWithScope = { ...meta, scope };
 
-  if (scope === "mine") {
+  const customerType = requestedCustomerType || undefined;
+  const podStatus = url.searchParams.get('status') || undefined; // expected values: 'pending'|'delivered'|'delivery_failed'
+  const useSharedPodQueue = sharedPodQueue && customerType === "pod" && podStatus === "pending";
+
+  if (scope === "mine" && !useSharedPodQueue) {
     and.push({
       OR: [
         { order: { attendantId } },
@@ -302,8 +307,6 @@ export async function GET(req: NextRequest) {
   }
 
   // Optional filter: customerType=pod/project to isolate those flows, customerType=normal to exclude special flows.
-  const customerType = requestedCustomerType || undefined;
-  const podStatus = url.searchParams.get('status') || undefined; // expected values: 'pending'|'delivered'|'delivery_failed'
   if (customerType === 'pod') {
     if (podStatus) {
       and.push({ data: { path: ['podDelivery', 'status'], equals: podStatus } });

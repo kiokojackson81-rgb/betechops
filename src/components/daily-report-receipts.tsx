@@ -262,6 +262,7 @@ export default function DailyReportReceiptsPanel({
         } else if (podFilter === "pod_pending") {
           params.set("customerType", "pod");
           params.set("status", "pending");
+          params.set("sharedPodQueue", "1");
         } else if (podFilter === "pod_delivered") {
           params.set("customerType", "pod");
           params.set("status", "delivered");
