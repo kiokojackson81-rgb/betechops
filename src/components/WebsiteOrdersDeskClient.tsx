@@ -238,19 +238,21 @@ export default function WebsiteOrdersDeskClient({
   }
 
   useEffect(() => {
+    if (compactMode) return;
     if (filterStorageKey && typeof window !== "undefined") {
       const saved = window.localStorage.getItem(filterStorageKey);
       if (saved && STATUS_OPTIONS.includes(saved as WebsiteOrderStatusFilter)) {
         setStatusFilter(saved as WebsiteOrderStatusFilter);
       }
     }
-  }, [filterStorageKey]);
+  }, [compactMode, filterStorageKey]);
 
   useEffect(() => {
+    if (compactMode) return;
     if (filterStorageKey && typeof window !== "undefined") {
       window.localStorage.setItem(filterStorageKey, statusFilter);
     }
-  }, [filterStorageKey, statusFilter]);
+  }, [compactMode, filterStorageKey, statusFilter]);
 
   useEffect(() => {
     refreshOrders(statusFilter, query)

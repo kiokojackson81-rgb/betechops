@@ -163,6 +163,7 @@ function MarketingReceiptsPageInner() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const impersonateId = searchParams.get("impersonateId")?.trim() || undefined;
   const today = useMemo(() => new Date(), []);
   const defaultDate = useMemo(() => toDateInput(today), [today]);
   const tradingPeriod = useMemo(() => getTradingPeriodFor(today), [today]);
@@ -473,13 +474,13 @@ function MarketingReceiptsPageInner() {
                 Quotations
               </button>
               <Link
-                href="/marketing/agent-orders"
+                href={impersonateId ? `/marketing/agent-orders?impersonateId=${encodeURIComponent(impersonateId)}` : "/marketing/agent-orders"}
                 className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.06]"
               >
                 Agent Orders
               </Link>
               <Link
-                href="/marketing/tracker"
+                href={impersonateId ? `/marketing/tracker?impersonateId=${encodeURIComponent(impersonateId)}` : "/marketing/tracker"}
                 className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.06]"
               >
                 Operations Overview
@@ -635,6 +636,7 @@ function MarketingReceiptsPageInner() {
           ) : viewMode === "web-orders" ? (
             <WebsiteOrdersDeskClient
               apiBasePath="/api/attendant/website-orders"
+              apiQueryParams={impersonateId ? { impersonateId } : undefined}
               defaultStatusFilter="ALL"
               orderListLabel="Website orders"
               orderListTitle="Assigned web orders"
@@ -649,6 +651,7 @@ function MarketingReceiptsPageInner() {
           ) : (
             <QuotationRequestsDeskClient
               apiBasePath="/api/attendant/quote-requests"
+              apiQueryParams={impersonateId ? { impersonateId } : undefined}
               defaultStatusFilter="ALL"
               filterStorageKey="marketing:quote-requests:list-status:v4"
               deskTitle="Quotation Center"
