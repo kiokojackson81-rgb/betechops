@@ -235,6 +235,7 @@ export async function GET(req: Request) {
     totalSales = Number(canonicalCommission.totalSales ?? totalSales);
     totalProfit = Number(canonicalCommission.totalProfit ?? totalProfit);
     totalReceipts = Number(canonicalCommission.receiptsCount ?? totalReceipts);
+    totalItems = Number(canonicalCommission.totalItems ?? totalItems);
   } else {
     if (usePosTotals && posSummary) {
       if (isBrendah) {

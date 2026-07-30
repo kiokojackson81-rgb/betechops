@@ -11,6 +11,7 @@ export type AttendantCommissionSummary = {
   attendantId: string;
   period: TradingPeriod;
   receiptsCount: number;
+  totalItems: number;
   totalSales: number;
   totalProfit: number;
   directSalesCommission: number;
@@ -134,6 +135,7 @@ export async function getAttendantCommissionSummary(opts: { attendantId: string;
     attendantId,
     period,
     receiptsCount: Number(posSummary.totalReceipts ?? 0),
+    totalItems: Number(posSummary.totalItems ?? 0),
     totalSales: Number(posSummary.totalSales ?? 0),
     totalProfit: Number(posSummary.totalProfit ?? 0),
     directSalesCommission: Number(directSalesCommission ?? 0),
