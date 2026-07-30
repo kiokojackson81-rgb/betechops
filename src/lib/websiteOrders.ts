@@ -300,7 +300,7 @@ export type SerializedWebsiteOrder = {
     email: string | null;
   } | null;
   assignedAttendant: {
-    id: string;
+    id: string | null;
     name: string;
     email: string | null;
   } | null;
@@ -363,7 +363,7 @@ function readWebsiteOrderAssignment(metadata: unknown) {
       ? base.assignedAttendantName.trim()
       : null;
 
-  if (!assignedAttendantId) return null;
+  if (!assignedAttendantId && !assignedAttendantEmail && !assignedAttendantName) return null;
   return {
     id: assignedAttendantId,
     email: assignedAttendantEmail,
@@ -759,11 +759,36 @@ export async function ensureWebsiteOrderAssignments() {
 
   for (const order of orders) {
     const currentAssignment = readWebsiteOrderAssignment(order.metadata);
-    if (currentAssignment?.id && staffIds.has(currentAssignment.id)) {
+    const assignedById =
+      currentAssignment?.id && staffIds.has(currentAssignment.id)
+        ? orderedStaff.find((user) => user.id === currentAssignment.id) ?? null
+        : null;
+    const assignedByEmail =
+      currentAssignment?.email
+        ? orderedStaff.find((user) => normalizeEmail(user.email) === currentAssignment.email) ?? null
+        : null;
+    const resolvedCurrentAssignee = assignedById ?? assignedByEmail;
+
+    if (resolvedCurrentAssignee) {
       assignmentCounts.set(
-        currentAssignment.id,
-        Number(assignmentCounts.get(currentAssignment.id) ?? 0) + 1,
+        resolvedCurrentAssignee.id,
+        Number(assignmentCounts.get(resolvedCurrentAssignee.id) ?? 0) + 1,
       );
+      if (
+        currentAssignment?.id !== resolvedCurrentAssignee.id ||
+        currentAssignment?.email !== normalizeEmail(resolvedCurrentAssignee.email) ||
+        currentAssignment?.name !== (resolvedCurrentAssignee.name ?? resolvedCurrentAssignee.email ?? "Website order attendant")
+      ) {
+        const metadata =
+          order.metadata && typeof order.metadata === "object"
+            ? { ...(order.metadata as Record<string, unknown>) }
+            : {};
+        queuedAssignments.push({
+          id: order.id,
+          metadata,
+          assignee: resolvedCurrentAssignee,
+        });
+      }
       continue;
     }
 
@@ -816,9 +841,16 @@ export async function ensureWebsiteOrderAssignments() {
   return orderedStaff;
 }
 
-export function isWebsiteOrderAssignedToUser(metadata: unknown, userId: string) {
+export function isWebsiteOrderAssignedToUser(
+  metadata: unknown,
+  userId: string,
+  email?: string | null,
+) {
   const assigned = readWebsiteOrderAssignment(metadata);
-  return assigned?.id === userId;
+  if (!assigned) return false;
+  if (assigned.id === userId) return true;
+  if (email && assigned.email === normalizeEmail(email)) return true;
+  return false;
 }
 
 export function withWebsiteOrderAssignmentMetadata(

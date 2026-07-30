@@ -29,7 +29,7 @@ export async function POST(request: NextRequest, context: { params: Promise<any>
     where: { id },
     select: { id: true, status: true, metadata: true },
   });
-  if (!existing || !isWebsiteOrderAssignedToUser(existing.metadata, guard.userId)) {
+  if (!existing || !isWebsiteOrderAssignedToUser(existing.metadata, guard.userId, guard.email)) {
     return NextResponse.json({ ok: false, error: "Website order not found." }, { status: 404 });
   }
 

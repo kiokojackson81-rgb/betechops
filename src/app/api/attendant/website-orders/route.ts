@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
   });
 
   const assignedOrders = orders.filter((order) =>
-    isWebsiteOrderAssignedToUser(order.metadata, guard.userId),
+    isWebsiteOrderAssignedToUser(order.metadata, guard.userId, guard.email),
   );
   const serializedOrders = await serializeWebsiteOrders(assignedOrders);
 
