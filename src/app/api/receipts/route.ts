@@ -529,7 +529,7 @@ export async function GET(req: NextRequest) {
     return isPodPaidReceipt(row) || isPosPaidReceipt(row);
   };
   const issuerLockedPosReceipts =
-    onlyPos && attendantFilterParam
+    onlyPos && attendantFilterParam && !useSharedPodQueue
       ? posReceipts.filter((row: any) => {
           const dataAttendantId =
             row?.data && typeof row.data === "object" ? String((row.data as any).attendantId ?? "").trim() : "";
