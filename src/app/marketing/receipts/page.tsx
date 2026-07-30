@@ -619,7 +619,7 @@ function MarketingReceiptsPageInner() {
               start={filters.start}
               end={filters.end}
               q={filters.query}
-              attendantId={undefined}
+              attendantId={impersonateId ?? undefined}
               onlyPos
               summarySalesOnly
               hideHeader

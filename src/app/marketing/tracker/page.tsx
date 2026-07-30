@@ -96,6 +96,16 @@ function websiteStatusLabel(status: string) {
   return status.replace(/_/g, " ").toLowerCase();
 }
 
+function withImpersonateId(href: string, impersonateId: string | null) {
+  if (!impersonateId) return href;
+  const [path, hash = ""] = href.split("#", 2);
+  const [base, query = ""] = path.split("?", 2);
+  const params = new URLSearchParams(query);
+  params.set("impersonateId", impersonateId);
+  const next = `${base}?${params.toString()}`;
+  return hash ? `${next}#${hash}` : next;
+}
+
 function pendingToneClasses(count: number) {
   if (count === 0) {
     return "border-emerald-400/20 bg-emerald-400/10 text-emerald-100";
@@ -459,6 +469,12 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
   const periodKeyParam = Array.isArray(resolvedSearchParams.periodKey)
     ? resolvedSearchParams.periodKey[0]
     : resolvedSearchParams.periodKey;
+  const impersonateIdParam = Array.isArray(resolvedSearchParams.impersonateId)
+    ? resolvedSearchParams.impersonateId[0]
+    : resolvedSearchParams.impersonateId;
+  const impersonateId = typeof impersonateIdParam === "string" && impersonateIdParam.trim()
+    ? impersonateIdParam.trim()
+    : null;
   const period = parseTradingPeriodKey(periodKeyParam) ?? getTradingPeriodFor(new Date());
   const nairobiDate = new Intl.DateTimeFormat("en-KE", {
     weekday: "short",
@@ -614,7 +630,10 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
       assignedTo: order.assignedAttendant?.name || order.assignedAttendant?.email || null,
-      href: `/marketing/receipts?tab=web-orders&orderId=${encodeURIComponent(order.id)}`,
+      href: withImpersonateId(
+        `/marketing/receipts?tab=web-orders&orderId=${encodeURIComponent(order.id)}`,
+        impersonateId,
+      ),
       carriedForward: isCarriedForwardPendingItem({
         status: order.status,
         createdAt: order.createdAt,
@@ -635,7 +654,7 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
       createdAt: sale.createdAt,
       updatedAt: sale.updatedAt,
       assignedTo: sale.assignedProcessorName || sale.assignedProcessorEmail || null,
-      href: `/marketing/agent-orders?saleId=${encodeURIComponent(sale.id)}`,
+      href: withImpersonateId(`/marketing/agent-orders?saleId=${encodeURIComponent(sale.id)}`, impersonateId),
       carriedForward: isCarriedForwardPendingItem({
         status: sale.status,
         createdAt: sale.createdAt,
@@ -658,7 +677,10 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
       createdAt: request.createdAt,
       updatedAt: request.updatedAt,
       assignedTo: request.assignedAttendant?.name || request.assignedAttendant?.email || null,
-      href: `/marketing/receipts?tab=quotations&quoteId=${encodeURIComponent(request.id)}`,
+      href: withImpersonateId(
+        `/marketing/receipts?tab=quotations&quoteId=${encodeURIComponent(request.id)}`,
+        impersonateId,
+      ),
       carriedForward: isCarriedForwardPendingItem({
         status: request.status,
         createdAt: request.createdAt,
@@ -679,7 +701,10 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
       assignedTo: null,
-      href: `/marketing/receipts?tab=pos&pod=pending&receiptId=${encodeURIComponent(item.id)}`,
+      href: withImpersonateId(
+        `/marketing/receipts?tab=pos&pod=pending&receiptId=${encodeURIComponent(item.id)}`,
+        impersonateId,
+      ),
       carriedForward: isCarriedForwardPendingItem({
         status: item.status,
         createdAt: item.createdAt,
