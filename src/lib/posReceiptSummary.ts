@@ -32,6 +32,7 @@ type PosReceiptRow = {
     totalAmount?: number | null;
     attendantId?: string | null;
     paymentStatus?: string | null;
+    status?: string | null;
     items?: OrderItemCandidate[];
   } | null;
 };
@@ -262,6 +263,8 @@ export async function summarizePosReceiptsForPeriod(period: {
             orderNumber: true,
             totalAmount: true,
             attendantId: true,
+            paymentStatus: true,
+            status: true,
             items: {
               select: {
                 productId: true,
@@ -322,6 +325,8 @@ export async function summarizePosReceiptsForPeriod(period: {
                 orderNumber: true,
                 totalAmount: true,
                 attendantId: true,
+                paymentStatus: true,
+                status: true,
                 items: {
                   select: {
                     quantity: true,
