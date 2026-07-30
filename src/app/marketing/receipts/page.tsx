@@ -164,6 +164,7 @@ function MarketingReceiptsPageInner() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const impersonateId = searchParams.get("impersonateId")?.trim() || undefined;
+  const selectedOrderId = searchParams.get("orderId")?.trim() || undefined;
   const today = useMemo(() => new Date(), []);
   const defaultDate = useMemo(() => toDateInput(today), [today]);
   const tradingPeriod = useMemo(() => getTradingPeriodFor(today), [today]);
@@ -638,6 +639,7 @@ function MarketingReceiptsPageInner() {
               apiBasePath="/api/attendant/website-orders"
               apiQueryParams={impersonateId ? { impersonateId } : undefined}
               defaultStatusFilter="ALL"
+              initialExpandedId={selectedOrderId}
               orderListLabel="Website orders"
               orderListTitle="Assigned web orders"
               orderListDescription="Process your assigned website orders here using the same lifecycle used in admin."

@@ -234,7 +234,10 @@ function readWebsiteOrderAssignment(
 
 async function listTrackerWebsiteOrders(): Promise<TrackerWebsiteOrder[]> {
   const rows = await prisma.websiteOrder.findMany({
-    where: { status: { in: WEBSITE_ORDER_ACTIVE_STATUSES } },
+    where: {
+      source: "WEBSITE",
+      status: { in: WEBSITE_ORDER_ACTIVE_STATUSES },
+    },
     orderBy: { createdAt: "desc" },
     take: 60,
     select: {
