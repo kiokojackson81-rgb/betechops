@@ -19,18 +19,21 @@ export function deriveDefaultCommissionConfigFromUser(user: {
 }): UserCommissionConfigLike {
   const email = (user.email ?? "").toLowerCase().trim();
   const attendantCategory = (user.attendantCategory ?? "").toString().trim();
+  const isBrendah = email === "brendah@betech.co.ke";
+  const isJeniffer = email === "jeniffer@betech.co.ke";
 
   const posTotalsMode: PosTotalsMode =
     attendantCategory === "DIRECT_SALES_OPS" ||
+    isBrendah ||
     attendantCategory === "TECHNICAL_TEAM" ||
     email === "justus@betech.co.ke"
       ? "USER"
       : "NONE";
 
   const salesCommissionMode: SalesCommissionMode =
-    email === "jeniffer@betech.co.ke"
+    isJeniffer
       ? "JENIFFER_PRORATED"
-      : email === "brendah@betech.co.ke"
+      : isBrendah
         ? "BRENDAH_DIRECT"
         : email === "justus@betech.co.ke" || attendantCategory === "TECHNICAL_TEAM"
           ? "POS_PROFIT_10"
@@ -68,6 +71,33 @@ export async function getOrCreateUserCommissionConfig(userId: string): Promise<U
 
   const existing = await prismaAny.userCommissionConfig.findUnique({ where: { userId } });
   if (existing) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, attendantCategory: true },
+    });
+    const derived = deriveDefaultCommissionConfigFromUser(user ?? { email: null, attendantCategory: null });
+    const normalizedEmail = (user?.email ?? "").toLowerCase().trim();
+    const shouldAutoHealBrendah =
+      normalizedEmail === "brendah@betech.co.ke" &&
+      (existing.posTotalsMode !== derived.posTotalsMode ||
+        existing.salesCommissionMode !== derived.salesCommissionMode);
+
+    if (shouldAutoHealBrendah) {
+      const updated = await prismaAny.userCommissionConfig.update({
+        where: { userId },
+        data: {
+          posTotalsMode: derived.posTotalsMode,
+          salesCommissionMode: derived.salesCommissionMode,
+        },
+      });
+      return {
+        id: updated.id,
+        userId: updated.userId,
+        posTotalsMode: updated.posTotalsMode,
+        salesCommissionMode: updated.salesCommissionMode,
+      };
+    }
+
     return {
       id: existing.id,
       userId: existing.userId,
