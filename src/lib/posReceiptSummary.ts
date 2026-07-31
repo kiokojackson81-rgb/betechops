@@ -76,9 +76,17 @@ const extractSales = (row: PosReceiptRow) => {
 const extractProfit = (row: PosReceiptRow, sales: number) => {
   const totals = row.totals ?? {};
   const data = row.data ?? {};
+  const directProfit =
+    toNumber((row as any)?.profit) ||
+    toNumber((totals as any)?.profit) ||
+    toNumber((data as any)?.profit);
+  const agentSaleCommission = toNumber((data as any)?.agentSale?.commissionAmount);
+  if (directProfit > 0) {
+    return Math.max(0, directProfit - agentSaleCommission);
+  }
   const buying = toNumber(totals.buyingTotal) || toNumber(data.buyingTotal);
   if (buying > 0) {
-    return adjustProfitForPodDeliveryFee(sales - buying, getPodDeliveryFee(row.data));
+    return adjustProfitForPodDeliveryFee(sales - buying - agentSaleCommission, getPodDeliveryFee(row.data));
   }
   return 0;
 };
@@ -451,6 +459,10 @@ export async function summarizePosReceiptsForPeriod(period: {
 
   const computeProfitFromCosts = (row: PosReceiptRow) => {
     const selling = extractSales(row);
+    const persistedProfit = extractProfit(row, selling);
+    if (persistedProfit > 0) {
+      return persistedProfit;
+    }
     const agentSaleCommission = Number((row?.data as any)?.agentSale?.commissionAmount ?? 0) || 0;
     const deliveryFee = getPodDeliveryFee(row.data);
     const orderRef = String(row?.order?.orderNumber ?? "");
