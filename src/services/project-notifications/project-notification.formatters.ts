@@ -14,6 +14,13 @@ export function formatKenyaCurrency(amount: number) {
     .replace("KES", "KSh");
 }
 
+export function formatKenyaNumber(amount: number) {
+  const value = Number.isFinite(amount) ? amount : 0;
+  return new Intl.NumberFormat("en-KE", {
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
 export function formatKenyaDate(value?: string | Date | null) {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);

@@ -47,8 +47,10 @@ export type ProjectNotificationContext = {
   balance: number;
   receiptLink: string;
   receiptPdfLink: string;
+  reviewLink: string | null;
   assignedHandlerName: string | null;
   assignedHandlerPhone: string | null;
+  assignedHandlerId: string | null;
   bookedByName: string | null;
   updatedByName: string | null;
   completedByName: string | null;

@@ -240,6 +240,20 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
       changedFields,
       previousHandler,
     });
+    if (
+      nextProjectFlow.handlerStaffId ||
+      nextProjectFlow.handlerStaffName ||
+      nextProjectFlow.externalAgentPhone ||
+      nextProjectFlow.externalAgentName
+    ) {
+      await queueProjectNotification({
+        receiptId: id,
+        event: "PROJECT_BOOKING_UPDATED",
+        triggeredByUserId: actorId,
+        changedFields: changedFields.length ? changedFields : ["handlerType"],
+        previousHandler,
+      });
+    }
   } else if (isBooked && changedFields.some((field) => field === "scheduledDate" || field === "handlerStaffId" || field === "handlerStaffName" || field === "handlerType" || field === "externalAgentName" || field === "externalAgentPhone")) {
     await queueProjectNotification({
       receiptId: id,
