@@ -3,6 +3,7 @@ import { sendReceiptChannels } from '@/workers/receiptSender';
 import { auth } from '@/lib/auth';
 import { randomUUID } from 'crypto';
 import { waitForReceiptById } from '@/lib/receiptReadAfterWrite';
+import { shouldUseGenericReceiptNotifications } from '@/lib/receiptNotificationEligibility';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -74,11 +75,25 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     const receipt = await waitForReceiptById({
       receiptId,
       loggerPrefix: `[receiptSend][rid=${requestId}]`,
-      select: { id: true },
+      select: { id: true, data: true },
     });
     if (!receipt) {
       console.error(`[receiptSend][rid=${requestId}] DB:missing receipt ${receiptId}`);
       return NextResponse.json({ error: 'Receipt not found' }, { status: 404 });
+    }
+    const receiptData =
+      receipt.data && typeof receipt.data === 'object' && !Array.isArray(receipt.data)
+        ? (receipt.data as Record<string, unknown>)
+        : {};
+    if (
+      !shouldUseGenericReceiptNotifications({
+        customerType: typeof receiptData.customerType === 'string' ? receiptData.customerType : null,
+      })
+    ) {
+      return NextResponse.json(
+        { error: 'Generic receipt resend is disabled for project receipts. Use the project notification workflow.' },
+        { status: 400 },
+      );
     }
     console.info(`[receiptSend][rid=${requestId}] DB:loaded ok`);
 

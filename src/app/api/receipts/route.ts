@@ -26,7 +26,7 @@ import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
 import { waitForReceiptById } from "@/lib/receiptReadAfterWrite";
 import { getProductTableCapabilities, type ProductTableCapabilities } from "@/lib/productTableCapabilities";
 import { recordQuotationEvent } from "@/lib/quoteRequests";
-import { upsertQuoteProjectOrder, type QuoteProjectPaymentTerm } from "@/lib/quoteProjects";
+import { upsertQuoteProjectOrder, type QuoteProjectPaymentTerm } from "@/lib/quoteProjects";`nimport { shouldUseGenericReceiptNotifications } from "@/lib/receiptNotificationEligibility";
 import {
   buildReceiptProjectFlow,
   getReceiptProjectCompletionDate,
@@ -2182,7 +2182,11 @@ export async function POST(req: NextRequest) {
     }
  
     let sendResult: any = null;
-    if (!isPodDelivery) {
+    const shouldSendGenericCustomerNotifications = shouldUseGenericReceiptNotifications({
+      customerType: payload?.customerType ?? null,
+    });
+
+    if (!isPodDelivery && shouldSendGenericCustomerNotifications) {
       const internalPromise = (async () => {
         try {
           await notifyInternalReceipt(result.receiptId, docType, requestId);
@@ -2210,6 +2214,12 @@ export async function POST(req: NextRequest) {
       // Ensure internal admin notification completes within the request lifecycle
       // (important for serverless runtimes).
       await internalPromise;
+    } else if (!isPodDelivery) {
+        console.info(`[receiptSender][${requestId}] SKIP generic customer send pipeline`, {
+          receiptId: result.receiptId,
+          customerType: payload?.customerType ?? null,
+          reason: "generic_notifications_disabled_for_project",
+        });
     } else {
       // For POD receipts, still trigger an immediate WhatsApp via Chatrace at
       // creation time (whatsapp-only). This sends using the POD dispatch tag and
@@ -2255,4 +2265,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
-

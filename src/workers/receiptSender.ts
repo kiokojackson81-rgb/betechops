@@ -12,6 +12,7 @@ import { uploadReceiptPdfToBlob } from '@/lib/blob/uploadReceiptPdf';
 import { getBranding } from '@/lib/branding';
 import { describeEmailError, sendReceiptEmail } from '@/lib/email';
 import { sendTransactionalSms } from '@/lib/africasTalking';
+import { shouldUseGenericReceiptNotifications } from '@/lib/receiptNotificationEligibility';
 
 
 function getSiteUrl() {
@@ -174,6 +175,8 @@ type SendReceiptChannelsOptions = {
   chatraceTag?: string;
   skipDefaultChatraceTags?: boolean;
   markPodSent?: boolean;
+  source?: string;
+  suppressGenericCustomerNotifications?: boolean;
   // Optional explicit fallback channels when chatrace/whatsapp fails (e.g. ['sms','email'])
   fallbackChannels?: string[];
 };
@@ -475,6 +478,37 @@ export async function sendReceiptChannels(
   const wantSms = channels.length === 0 || channels.includes('sms');
   const baseDataAny = (typeof receipt.data === 'object' && receipt.data ? (receipt.data as any) : {}) as any;
   const isPodReceipt = Boolean(baseDataAny?.podDelivery) || Boolean(opts?.markPodSent) || isPodDispatchTag(opts?.chatraceTag);
+  if (
+    !isPodReceipt &&
+    !shouldUseGenericReceiptNotifications({
+      customerType: typeof baseDataAny?.customerType === 'string' ? baseDataAny.customerType : null,
+      source: opts?.source ?? null,
+      suppressGenericCustomerNotifications: opts?.suppressGenericCustomerNotifications,
+    })
+  ) {
+    logStep(requestId, 'SKIP', 'generic_notifications_disabled', {
+      receiptId,
+      customerType: baseDataAny?.customerType ?? null,
+      source: opts?.source ?? null,
+    });
+    return {
+      ok: false,
+      sent: [],
+      errors: [{ channel: 'send', error: 'Generic receipt notifications are disabled for project receipts' }],
+      channelStatus: {
+        pdf: 'skipped',
+        pdfUpload: 'skipped',
+        email: 'skipped',
+        whatsapp: 'skipped',
+        sms: 'skipped',
+        chatrace: 'skipped',
+      },
+      pdfUrlCustomer: null,
+      pdfUrlFull: null,
+      pdfKeyCustomer: null,
+      pdfKeyFull: null,
+    };
+  }
   logStep(requestId, 'START', 'send_pipeline', { wantEmail, wantWhatsapp, wantSms });
   // Normalize receipt.data into a mutable object for template rendering and metadata additions.
   // `receipt.data` is a Prisma JsonValue (could be string/number/etc) so narrow it to an object first.
