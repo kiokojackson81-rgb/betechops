@@ -26,7 +26,8 @@ import { syncPosReceiptToCustomerAccount } from "@/lib/posCustomerAccountSync";
 import { waitForReceiptById } from "@/lib/receiptReadAfterWrite";
 import { getProductTableCapabilities, type ProductTableCapabilities } from "@/lib/productTableCapabilities";
 import { recordQuotationEvent } from "@/lib/quoteRequests";
-import { upsertQuoteProjectOrder, type QuoteProjectPaymentTerm } from "@/lib/quoteProjects";`nimport { shouldUseGenericReceiptNotifications } from "@/lib/receiptNotificationEligibility";
+import { upsertQuoteProjectOrder, type QuoteProjectPaymentTerm } from "@/lib/quoteProjects";
+import { shouldUseGenericReceiptNotifications } from "@/lib/receiptNotificationEligibility";
 import {
   buildReceiptProjectFlow,
   getReceiptProjectCompletionDate,
