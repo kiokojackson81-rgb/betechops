@@ -33,6 +33,32 @@ export type ProjectNotificationQueueInput = {
   } | null;
 };
 
+export type ProjectNotificationChannelResultStatus =
+  | "SENT"
+  | "FAILED"
+  | "SKIPPED"
+  | "SKIPPED_ALREADY_SENT";
+
+export type ProjectNotificationChannelResult = {
+  key: string;
+  eventType: ProjectNotificationEvent;
+  channel: ProjectNotificationChannel;
+  recipientType: ProjectNotificationRecipientType;
+  templateKey: string;
+  recipientAddress: string | null;
+  status: ProjectNotificationChannelResultStatus;
+  providerMessageId?: string | null;
+  reason?: string | null;
+  error?: string | null;
+};
+
+export type ProjectNotificationPublishResult = {
+  receiptId: string;
+  eventType: ProjectNotificationEvent;
+  dispatched: boolean;
+  results: ProjectNotificationChannelResult[];
+};
+
 export type ProjectNotificationContext = {
   receiptId: string;
   event: ProjectNotificationEvent;

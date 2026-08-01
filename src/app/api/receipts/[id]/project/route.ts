@@ -14,7 +14,13 @@ import {
 import { auth } from "@/lib/auth";
 import { isTechnicalTeamCategory } from "@/lib/technicalTeam";
 import { syncCompletedProjectReceiptToPricing } from "@/lib/projectPricingSync";
-import { queueProjectNotification } from "@/services/project-notifications/project-notification.service";
+import { publishProjectNotification } from "@/services/project-notifications/project-notification.service";
+import {
+  hasProjectAssignedHandler,
+  hasProjectBookingDate,
+  shouldSendProjectAssigned,
+  shouldSendProjectBooked,
+} from "@/services/project-notifications/project-notification.logic";
 
 export const dynamic = "force-dynamic";
 
@@ -155,7 +161,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
   >;
 
   const wasBooked = Boolean(existingProjectFlow?.scheduledDate && (existingProjectFlow?.handlerStaffId || existingProjectFlow?.externalAgentPhone || existingProjectFlow?.handlerStaffName));
-  const isBooked = Boolean(nextProjectFlow.scheduledDate && (nextProjectFlow.handlerStaffId || nextProjectFlow.externalAgentPhone || nextProjectFlow.handlerStaffName));
+  const isBooked = hasProjectBookingDate(nextProjectFlow);
   const wasCompleted = existingProjectFlow?.stage === "COMPLETED_POSTED";
   const isCompleted = nextProjectFlow.stage === "COMPLETED_POSTED";
 
@@ -224,49 +230,149 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
             phone: null,
           };
 
+  const bookedLog = isBooked
+    ? await prisma.projectNotificationLog.findFirst({
+        where: {
+          receiptId: id,
+          eventType: "PROJECT_BOOKED",
+          status: "SENT",
+        },
+        select: { id: true },
+      })
+    : null;
+  const hasSuccessfulBookedLog = Boolean(bookedLog);
+  const shouldQueueBooked = shouldSendProjectBooked({
+    previousProjectFlow: existingProjectFlow,
+    nextProjectFlow,
+    hasSuccessfulBookedLog,
+  });
+  const shouldQueueAssigned = shouldSendProjectAssigned({
+    previousProjectFlow: existingProjectFlow,
+    nextProjectFlow,
+    changedFields,
+  });
+
+  console.info("[PROJECT_NOTIFY] project saved", {
+    receiptId: updated.id,
+    customerType: "project",
+    previousStage: existingProjectFlow?.stage ?? null,
+    currentStage: nextProjectFlow.stage ?? null,
+    previousScheduledDate: existingProjectFlow?.scheduledDate ?? null,
+    currentScheduledDate: nextProjectFlow.scheduledDate ?? null,
+    previousAssignedHandler: hasProjectAssignedHandler(existingProjectFlow),
+    currentAssignedHandler: hasProjectAssignedHandler(nextProjectFlow),
+  });
+
+  const notificationResults: Array<unknown> = [];
   if (isCompleted && !wasCompleted) {
-    await queueProjectNotification({
-      receiptId: id,
-      event: "PROJECT_COMPLETED",
-      triggeredByUserId: actorId,
-      changedFields,
-      previousHandler,
+    console.info("[PROJECT_NOTIFY] event selected", {
+      receiptId: updated.id,
+      eventType: "PROJECT_COMPLETED",
     });
-  } else if (isBooked && !wasBooked) {
-    await queueProjectNotification({
-      receiptId: id,
-      event: "PROJECT_BOOKED",
-      triggeredByUserId: actorId,
-      changedFields,
-      previousHandler,
-    });
-    if (
-      nextProjectFlow.handlerStaffId ||
-      nextProjectFlow.handlerStaffName ||
-      nextProjectFlow.externalAgentPhone ||
-      nextProjectFlow.externalAgentName
-    ) {
-      await queueProjectNotification({
+    try {
+      const result = await publishProjectNotification({
         receiptId: id,
-        event: "PROJECT_BOOKING_UPDATED",
+        event: "PROJECT_COMPLETED",
         triggeredByUserId: actorId,
-        changedFields: changedFields.length ? changedFields : ["handlerType"],
+        changedFields,
         previousHandler,
       });
+      notificationResults.push(result);
+      console.info("[PROJECT_NOTIFY] service result", {
+        receiptId: updated.id,
+        eventType: "PROJECT_COMPLETED",
+        result,
+      });
+    } catch (error) {
+      console.error("[PROJECT_NOTIFY] service failed", {
+        receiptId: updated.id,
+        eventType: "PROJECT_COMPLETED",
+        error:
+          error instanceof Error
+            ? { name: error.name, message: error.message, stack: error.stack }
+            : error,
+      });
     }
-  } else if (isBooked && changedFields.some((field) => field === "scheduledDate" || field === "handlerStaffId" || field === "handlerStaffName" || field === "handlerType" || field === "externalAgentName" || field === "externalAgentPhone")) {
-    await queueProjectNotification({
-      receiptId: id,
-      event: "PROJECT_BOOKING_UPDATED",
-      triggeredByUserId: actorId,
-      changedFields,
-      previousHandler,
-    });
+  } else {
+    if (shouldQueueBooked) {
+      console.info("[PROJECT_NOTIFY] event selected", {
+        receiptId: updated.id,
+        eventType: "PROJECT_BOOKED",
+      });
+      try {
+        const result = await publishProjectNotification({
+          receiptId: id,
+          event: "PROJECT_BOOKED",
+          triggeredByUserId: actorId,
+          changedFields,
+          previousHandler,
+        });
+        notificationResults.push(result);
+        console.info("[PROJECT_NOTIFY] service result", {
+          receiptId: updated.id,
+          eventType: "PROJECT_BOOKED",
+          result,
+        });
+      } catch (error) {
+        console.error("[PROJECT_NOTIFY] service failed", {
+          receiptId: updated.id,
+          eventType: "PROJECT_BOOKED",
+          error:
+            error instanceof Error
+              ? { name: error.name, message: error.message, stack: error.stack }
+              : error,
+        });
+      }
+    }
+
+    if (shouldQueueAssigned) {
+      console.info("[PROJECT_NOTIFY] event selected", {
+        receiptId: updated.id,
+        eventType: "PROJECT_BOOKING_UPDATED",
+      });
+      try {
+        const result = await publishProjectNotification({
+          receiptId: id,
+          event: "PROJECT_BOOKING_UPDATED",
+          triggeredByUserId: actorId,
+          changedFields: changedFields.length ? changedFields : ["handlerType"],
+          previousHandler,
+        });
+        notificationResults.push(result);
+        console.info("[PROJECT_NOTIFY] service result", {
+          receiptId: updated.id,
+          eventType: "PROJECT_BOOKING_UPDATED",
+          result,
+        });
+      } catch (error) {
+        console.error("[PROJECT_NOTIFY] service failed", {
+          receiptId: updated.id,
+          eventType: "PROJECT_BOOKING_UPDATED",
+          error:
+            error instanceof Error
+              ? { name: error.name, message: error.message, stack: error.stack }
+              : error,
+        });
+      }
+    }
+
+    if (!shouldQueueBooked && !shouldQueueAssigned) {
+      console.warn("[PROJECT_NOTIFY] no event selected", {
+        receiptId: updated.id,
+        customerType: "project",
+        previousStage: existingProjectFlow?.stage ?? null,
+        currentStage: nextProjectFlow.stage ?? null,
+        previousScheduledDate: existingProjectFlow?.scheduledDate ?? null,
+        currentScheduledDate: nextProjectFlow.scheduledDate ?? null,
+      });
+    }
   }
 
   return NextResponse.json({
     ok: true,
     projectFlow: nextProjectFlow,
     receipt: updated,
+    projectSaved: true,
+    notificationResults,
   });
 }

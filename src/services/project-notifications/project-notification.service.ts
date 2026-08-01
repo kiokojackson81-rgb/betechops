@@ -14,10 +14,13 @@ import {
   isValidEmailAddress,
   normalizeProjectPhone,
 } from "./project-notification.formatters";
+import { hasProjectAssignmentChange, hasProjectBookingDate } from "./project-notification.logic";
 import type {
   ProjectNotificationContext,
   ProjectNotificationDraft,
+  ProjectNotificationChannelResult,
   ProjectNotificationEvent,
+  ProjectNotificationPublishResult,
   ProjectNotificationQueueInput,
 } from "./project-notification.types";
 
@@ -74,7 +77,7 @@ function buildIdempotencyKey(
 }
 
 function isBookedContext(context: ProjectNotificationContext) {
-  return Boolean(context.installationDate && context.assignedHandlerName);
+  return hasProjectBookingDate({ scheduledDate: context.installationDate });
 }
 
 async function loadProjectNotificationContext(
@@ -308,6 +311,12 @@ async function postChatraceActions(input: {
   actions: Array<Record<string, unknown>>;
 }) {
   ensureChatraceConfig(input.accountId);
+  console.info("[PROJECT_NOTIFY] chatrace request", {
+    accountId: input.accountId,
+    phone: input.phone,
+    actionCount: input.actions.length,
+    actions: input.actions.map((action) => String(action.action ?? "unknown")),
+  });
   const response = await fetch(`${CHATRACE_BASE_URL}/contacts`, {
     method: "POST",
     headers: {
@@ -369,6 +378,13 @@ async function triggerChatraceFlow(input: {
     actions: fieldActions,
   });
   if (!fieldsResult.ok) {
+    console.error("[PROJECT_NOTIFY] chatrace field sync failed", {
+      accountId: input.accountId,
+      phone: input.phone,
+      triggerTag: input.triggerTag,
+      status: fieldsResult.status,
+      raw: fieldsResult.raw,
+    });
     return {
       ok: false,
       accountId: input.accountId,
@@ -393,6 +409,15 @@ async function triggerChatraceFlow(input: {
     actions: tagActions,
   });
 
+  console.info("[PROJECT_NOTIFY] chatrace tag sync result", {
+    accountId: input.accountId,
+    phone: input.phone,
+    triggerTag: input.triggerTag,
+    ok: tagResult.ok,
+    status: tagResult.status,
+    raw: tagResult.raw,
+  });
+
   return {
     ok: tagResult.ok,
     accountId: input.accountId,
@@ -408,23 +433,59 @@ async function triggerChatraceFlow(input: {
 async function ensureLogs(context: ProjectNotificationContext) {
   const drafts = createDrafts(context);
   for (const draft of drafts) {
-    await prisma.projectNotificationLog.upsert({
-      where: { idempotencyKey: draft.idempotencyKey },
-      update: {},
-      create: {
+    try {
+      await prisma.projectNotificationLog.upsert({
+        where: { idempotencyKey: draft.idempotencyKey },
+        update:
+          draft.status === "SKIPPED"
+            ? {
+                recipientName: draft.recipientName ?? null,
+                recipientAddress: draft.recipientAddress ?? null,
+                templateKey: draft.templateKey,
+                status: "SKIPPED",
+                errorMessage: draft.errorMessage ?? null,
+                payloadSnapshot: draft.payloadSnapshot as Prisma.InputJsonValue,
+              }
+            : {
+                recipientName: draft.recipientName ?? null,
+                recipientAddress: draft.recipientAddress ?? null,
+                templateKey: draft.templateKey,
+                errorMessage: null,
+                failedAt: null,
+                payloadSnapshot: draft.payloadSnapshot as Prisma.InputJsonValue,
+                ...(draft.status === "PENDING"
+                  ? {
+                      status: {
+                        set: "PENDING" as ProjectNotificationStatus,
+                      },
+                    }
+                  : {}),
+              },
+        create: {
+          receiptId: context.receiptId,
+          eventType: draft.eventType,
+          channel: draft.channel,
+          recipientType: draft.recipientType,
+          recipientName: draft.recipientName ?? null,
+          recipientAddress: draft.recipientAddress ?? null,
+          templateKey: draft.templateKey,
+          idempotencyKey: draft.idempotencyKey,
+          status: draft.status,
+          errorMessage: draft.errorMessage ?? null,
+          payloadSnapshot: draft.payloadSnapshot as Prisma.InputJsonValue,
+        },
+      });
+    } catch (error) {
+      console.error("[PROJECT_NOTIFY] log creation failed", {
         receiptId: context.receiptId,
         eventType: draft.eventType,
-        channel: draft.channel,
-        recipientType: draft.recipientType,
-        recipientName: draft.recipientName ?? null,
-        recipientAddress: draft.recipientAddress ?? null,
-        templateKey: draft.templateKey,
         idempotencyKey: draft.idempotencyKey,
-        status: draft.status,
-        errorMessage: draft.errorMessage ?? null,
-        payloadSnapshot: draft.payloadSnapshot as Prisma.InputJsonValue,
-      },
-    });
+        error:
+          error instanceof Error
+            ? { name: error.name, message: error.message, stack: error.stack }
+            : error,
+      });
+    }
   }
 }
 
@@ -494,28 +555,153 @@ async function ensureProjectReviewLink(receiptId: string) {
   return review.reviewUrl;
 }
 
-async function processLog(logId: string, context: ProjectNotificationContext) {
-  const log = await prisma.projectNotificationLog.findUnique({ where: { id: logId } });
-  if (!log || log.status === ProjectNotificationStatus.SENT || log.status === ProjectNotificationStatus.SKIPPED) return;
+async function findExistingSentLog(idempotencyKey: string) {
+  try {
+    return await prisma.projectNotificationLog.findFirst({
+      where: {
+        idempotencyKey,
+        status: "SENT",
+      },
+    });
+  } catch (error) {
+    console.error("[PROJECT_NOTIFY] sent-log lookup failed", {
+      idempotencyKey,
+      error:
+        error instanceof Error
+          ? { name: error.name, message: error.message, stack: error.stack }
+          : error,
+    });
+    return null;
+  }
+}
 
-  await prisma.projectNotificationLog.update({
-    where: { id: log.id },
-    data: {
-      status: "PROCESSING",
-      attemptCount: { increment: 1 },
-      errorMessage: null,
-      failedAt: null,
-    },
+async function markLogProcessing(idempotencyKey: string) {
+  try {
+    const current = await prisma.projectNotificationLog.findUnique({ where: { idempotencyKey } });
+    if (!current) return null;
+    return await prisma.projectNotificationLog.update({
+      where: { id: current.id },
+      data: {
+        status: "PROCESSING",
+        attemptCount: { increment: 1 },
+        errorMessage: null,
+        failedAt: null,
+      },
+    });
+  } catch (error) {
+    console.error("[PROJECT_NOTIFY] log processing update failed", {
+      idempotencyKey,
+      error:
+        error instanceof Error
+          ? { name: error.name, message: error.message, stack: error.stack }
+          : error,
+    });
+    return null;
+  }
+}
+
+async function updateLogFinalState(input: {
+  idempotencyKey: string;
+  status: ProjectNotificationStatus;
+  providerMessageId?: string | null;
+  errorMessage?: string | null;
+  payloadSnapshot?: Prisma.InputJsonValue;
+}) {
+  try {
+    const current = await prisma.projectNotificationLog.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+    if (!current) return;
+    await prisma.projectNotificationLog.update({
+      where: { id: current.id },
+      data: {
+        status: input.status,
+        providerMessageId: input.providerMessageId ?? null,
+        errorMessage: input.errorMessage ?? null,
+        sentAt: input.status === "SENT" ? new Date() : null,
+        failedAt: input.status === "FAILED" ? new Date() : null,
+        payloadSnapshot: input.payloadSnapshot,
+      },
+    });
+  } catch (error) {
+    console.error("[PROJECT_NOTIFY] final log update failed", {
+      idempotencyKey: input.idempotencyKey,
+      status: input.status,
+      error:
+        error instanceof Error
+          ? { name: error.name, message: error.message, stack: error.stack }
+          : error,
+    });
+  }
+}
+
+function buildChannelResultKey(draft: ProjectNotificationDraft) {
+  if (draft.recipientType === "CUSTOMER" && draft.channel === "WHATSAPP") return "customerWhatsApp";
+  if (draft.recipientType === "CUSTOMER" && draft.channel === "SMS") return "customerSms";
+  if (draft.recipientType === "CUSTOMER" && draft.channel === "EMAIL") return "customerEmail";
+  if (draft.recipientType === "ADMIN" && draft.channel === "WHATSAPP") return "adminWhatsApp";
+  if (draft.recipientType === "ASSIGNED_HANDLER" && draft.channel === "WHATSAPP") return "assignedHandlerWhatsApp";
+  return `${draft.recipientType.toLowerCase()}${draft.channel.toLowerCase()}`;
+}
+
+async function processDraft(
+  draft: ProjectNotificationDraft,
+  context: ProjectNotificationContext,
+): Promise<ProjectNotificationChannelResult> {
+  const resultBase = {
+    key: buildChannelResultKey(draft),
+    eventType: draft.eventType,
+    channel: draft.channel,
+    recipientType: draft.recipientType,
+    templateKey: draft.templateKey,
+    recipientAddress: draft.recipientAddress ?? null,
+  } as const;
+
+  const existingSent = await findExistingSentLog(draft.idempotencyKey);
+  if (existingSent) {
+    return {
+      ...resultBase,
+      status: "SKIPPED_ALREADY_SENT",
+      providerMessageId: existingSent.providerMessageId ?? null,
+      reason: "Already sent",
+    };
+  }
+
+  if (draft.status === "SKIPPED") {
+    await updateLogFinalState({
+      idempotencyKey: draft.idempotencyKey,
+      status: "SKIPPED",
+      errorMessage: draft.errorMessage ?? null,
+      payloadSnapshot: draft.payloadSnapshot as Prisma.InputJsonValue,
+    });
+    return {
+      ...resultBase,
+      status: "SKIPPED",
+      reason: draft.errorMessage ?? "Skipped",
+    };
+  }
+
+  await markLogProcessing(draft.idempotencyKey);
+
+  console.info("[PROJECT_NOTIFY] channel dispatch starting", {
+    receiptId: context.receiptId,
+    eventType: draft.eventType,
+    channel: draft.channel,
+    recipientType: draft.recipientType,
+    templateKey: draft.templateKey,
+    recipientAddress: draft.recipientAddress ?? null,
   });
 
   try {
     let providerMessageId: string | null = null;
-    if (log.channel === "WHATSAPP") {
+    let providerSnapshot: Prisma.InputJsonValue | undefined = undefined;
+    if (draft.channel === "WHATSAPP") {
+      if (!context.receiptLink) {
+        throw new Error("Missing public receipt link");
+      }
       const response =
-        log.templateKey === "project_installation_booked_customer"
+        draft.templateKey === "project_installation_booked_customer"
           ? await triggerChatraceFlow({
               accountId: CUSTOMER_CHATRACE_ACCOUNT_ID,
-              phone: log.recipientAddress || "",
+              phone: draft.recipientAddress || "",
               firstName: context.customerName.split(/\s+/)[0] || "Customer",
               triggerTag: PROJECT_TRIGGER_TAGS.customerBooked,
               fields: {
@@ -527,10 +713,10 @@ async function processLog(logId: string, context: ProjectNotificationContext) {
                 project_receipt_link: context.receiptLink,
               },
             })
-          : log.templateKey === "project_installation_booked_admin"
+          : draft.templateKey === "project_installation_booked_admin"
             ? await triggerChatraceFlow({
                 accountId: INTERNAL_CHATRACE_ACCOUNT_ID,
-                phone: log.recipientAddress || "",
+                phone: draft.recipientAddress || "",
                 firstName: "Admin",
                 triggerTag: PROJECT_TRIGGER_TAGS.adminBooked,
                 fields: {
@@ -545,10 +731,10 @@ async function processLog(logId: string, context: ProjectNotificationContext) {
                   project_receipt_link: context.receiptLink,
                 },
               })
-            : log.templateKey === "project_assigned_handler"
+            : draft.templateKey === "project_assigned_handler"
               ? await triggerChatraceFlow({
                   accountId: INTERNAL_CHATRACE_ACCOUNT_ID,
-                  phone: log.recipientAddress || "",
+                  phone: draft.recipientAddress || "",
                   firstName: context.assignedHandlerName?.split(/\s+/)[0] || "Handler",
                   triggerTag: PROJECT_TRIGGER_TAGS.handlerAssigned,
                   fields: {
@@ -566,7 +752,7 @@ async function processLog(logId: string, context: ProjectNotificationContext) {
                 })
               : await triggerChatraceFlow({
                   accountId: CUSTOMER_CHATRACE_ACCOUNT_ID,
-                  phone: log.recipientAddress || "",
+                  phone: draft.recipientAddress || "",
                   firstName: context.customerName.split(/\s+/)[0] || "Customer",
                   triggerTag: PROJECT_TRIGGER_TAGS.customerCompleted,
                   fields: {
@@ -583,54 +769,62 @@ async function processLog(logId: string, context: ProjectNotificationContext) {
         throw new Error(response.error || "ChatRace sync failed");
       }
       providerMessageId = response.contactId;
-      await prisma.projectNotificationLog.update({
-        where: { id: log.id },
-        data: {
-          payloadSnapshot: {
-            ...(log.payloadSnapshot && typeof log.payloadSnapshot === "object" && !Array.isArray(log.payloadSnapshot)
-              ? (log.payloadSnapshot as Record<string, unknown>)
-              : {}),
-            chatraceAccountId: response.accountId,
-            triggerTag:
-              log.templateKey === "project_installation_booked_customer"
-                ? PROJECT_TRIGGER_TAGS.customerBooked
-                : log.templateKey === "project_installation_booked_admin"
-                  ? PROJECT_TRIGGER_TAGS.adminBooked
-                  : log.templateKey === "project_assigned_handler"
-                    ? PROJECT_TRIGGER_TAGS.handlerAssigned
-                    : PROJECT_TRIGGER_TAGS.customerCompleted,
-            providerResponse: response.providerResponse,
-          } as Prisma.InputJsonValue,
-        },
-      });
-    } else if (log.channel === "SMS") {
+      providerSnapshot = {
+        ...(draft.payloadSnapshot ?? {}),
+        chatraceAccountId: response.accountId,
+        triggerTag:
+          draft.templateKey === "project_installation_booked_customer"
+            ? PROJECT_TRIGGER_TAGS.customerBooked
+            : draft.templateKey === "project_installation_booked_admin"
+              ? PROJECT_TRIGGER_TAGS.adminBooked
+              : draft.templateKey === "project_assigned_handler"
+                ? PROJECT_TRIGGER_TAGS.handlerAssigned
+                : PROJECT_TRIGGER_TAGS.customerCompleted,
+        providerResponse: response.providerResponse,
+      } as Prisma.InputJsonValue;
+    } else if (draft.channel === "SMS") {
       const body =
-        log.templateKey === "project_booking_customer_sms"
+        draft.templateKey === "project_booking_customer_sms"
           ? `Hi ${context.customerName}. Your installation has been booked. Project No: ${context.projectNumber}. Installation Date: ${formatKenyaDate(context.installationDate) || ""}. Paid: KSh ${formatKenyaNumber(context.amountPaid)}. Balance: KSh ${formatKenyaNumber(context.balance)}. Receipt: ${context.receiptLink}. - Betech Solar Solutions`
           : `Hi ${context.customerName}. Project No. ${context.projectNumber} has been completed successfully. Total Paid: KSh ${formatKenyaNumber(context.amountPaid)}. Balance: KSh ${formatKenyaNumber(context.balance)}. Receipt: ${context.receiptLink}. Thank you for choosing Betech Solar Solutions.`;
-      const response = (await sendTransactionalSms(log.recipientAddress || "", body)) as {
+      const response = (await sendTransactionalSms(draft.recipientAddress || "", body)) as {
         SMSMessageData?: { Recipients?: Array<{ messageId?: string }> };
       };
       providerMessageId = response.SMSMessageData?.Recipients?.[0]?.messageId ?? null;
-    } else if (log.channel === "EMAIL") {
+      providerSnapshot = {
+        ...(draft.payloadSnapshot ?? {}),
+        provider: "africasTalking",
+        providerResponse: response,
+      } as Prisma.InputJsonValue;
+    } else if (draft.channel === "EMAIL") {
+      if (!context.receiptLink) {
+        throw new Error("Missing public receipt link");
+      }
       const attachmentName =
-        log.templateKey === "project_booking_customer_email"
+        draft.templateKey === "project_booking_customer_email"
           ? `Betech-${context.projectNumber}-Receipt.pdf`
           : `Betech-${context.projectNumber}-Final-Receipt.pdf`;
       const attachment = await buildReceiptAttachment(context.receiptId, attachmentName);
+      console.info("[PROJECT_NOTIFY] email eligibility", {
+        receiptId: context.receiptId,
+        customerEmail: context.customerEmail,
+        valid: isValidEmailAddress(context.customerEmail),
+        receiptPdfAvailable: Boolean(attachment),
+        publicReceiptLinkAvailable: Boolean(context.receiptLink),
+      });
       const response = await sendGeneralCustomerNotificationEmail({
-        to: log.recipientAddress || "",
+        to: draft.recipientAddress || "",
         subject:
-          log.templateKey === "project_booking_customer_email"
+          draft.templateKey === "project_booking_customer_email"
             ? `Installation Booking Confirmation - Project No. ${context.projectNumber}`
             : `Project Completion - ${context.projectNumber}`,
         title:
-          log.templateKey === "project_booking_customer_email"
+          draft.templateKey === "project_booking_customer_email"
             ? "Installation booking confirmation"
             : "Project completion",
         intro: `Dear ${context.customerName},`,
         bodyHtml:
-          log.templateKey === "project_booking_customer_email"
+          draft.templateKey === "project_booking_customer_email"
             ? `<p>We are pleased to confirm that your installation has been successfully booked.</p>
                <p><strong>Project Number:</strong> ${context.projectNumber}<br />
                <strong>Installation Date:</strong> ${formatKenyaDate(context.installationDate) || ""}<br />
@@ -651,61 +845,135 @@ async function processLog(logId: string, context: ProjectNotificationContext) {
         attachments: attachment ? [attachment] : undefined,
       });
       providerMessageId = typeof response?.messageId === "string" ? response.messageId : null;
+      providerSnapshot = {
+        ...(draft.payloadSnapshot ?? {}),
+        provider: "email",
+        providerResponse: response,
+      } as Prisma.InputJsonValue;
     }
 
-    await prisma.projectNotificationLog.update({
-      where: { id: log.id },
-      data: {
-        status: "SENT",
-        providerMessageId,
-        sentAt: new Date(),
-        errorMessage: null,
-      },
+    await updateLogFinalState({
+      idempotencyKey: draft.idempotencyKey,
+      status: "SENT",
+      providerMessageId,
+      payloadSnapshot: providerSnapshot,
     });
+    const result: ProjectNotificationChannelResult = {
+      ...resultBase,
+      status: "SENT",
+      providerMessageId,
+    };
+    console.info("[PROJECT_NOTIFY] channel dispatch result", {
+      receiptId: context.receiptId,
+      eventType: draft.eventType,
+      result,
+    });
+    return result;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await prisma.projectNotificationLog.update({
-      where: { id: log.id },
-      data: {
-        status: log.recipientAddress ? "FAILED" : "SKIPPED",
-        errorMessage: message,
-        failedAt: new Date(),
-      },
+    await updateLogFinalState({
+      idempotencyKey: draft.idempotencyKey,
+      status: draft.recipientAddress ? "FAILED" : "SKIPPED",
+      errorMessage: message,
     });
+    console.error("[PROJECT_NOTIFY] channel dispatch failed", {
+      receiptId: context.receiptId,
+      eventType: draft.eventType,
+      channel: draft.channel,
+      recipientType: draft.recipientType,
+      recipientAddress: draft.recipientAddress ?? null,
+      error:
+        error instanceof Error
+          ? { name: error.name, message: error.message, stack: error.stack }
+          : error,
+    });
+    return {
+      ...resultBase,
+      status: draft.recipientAddress ? "FAILED" : "SKIPPED",
+      error: message,
+      reason: draft.recipientAddress ? null : message,
+    };
   }
 }
 
-export async function processProjectNotificationQueue(input: ProjectNotificationQueueInput) {
-  const context = await loadProjectNotificationContext(input);
-  if (!context) return;
+function formatSettledResult(
+  settled: PromiseSettledResult<ProjectNotificationChannelResult>,
+): ProjectNotificationChannelResult {
+  if (settled.status === "fulfilled") return settled.value;
+  return {
+    key: "unknown",
+    eventType: "PROJECT_BOOKING_UPDATED",
+    channel: "WHATSAPP",
+    recipientType: "ADMIN",
+    templateKey: "unknown",
+    recipientAddress: null,
+    status: "FAILED",
+    error: settled.reason instanceof Error ? settled.reason.message : String(settled.reason),
+  };
+}
 
-  const pendingLogs = await prisma.projectNotificationLog.findMany({
-    where: {
+export async function publishProjectNotification(
+  input: ProjectNotificationQueueInput,
+): Promise<ProjectNotificationPublishResult> {
+  const context = await loadProjectNotificationContext(input);
+  if (!context) {
+    console.warn("[PROJECT_NOTIFY] no context loaded", {
       receiptId: input.receiptId,
       eventType: input.event,
-      status: { in: ["PENDING", "FAILED"] },
-    },
-    orderBy: { createdAt: "asc" },
-  });
-
-  for (const log of pendingLogs) {
-    await processLog(log.id, context);
+    });
+    return {
+      receiptId: input.receiptId,
+      eventType: input.event,
+      dispatched: false,
+      results: [],
+    };
   }
-}
 
-export async function queueProjectNotification(input: ProjectNotificationQueueInput) {
-  const context = await loadProjectNotificationContext(input);
-  if (!context) return;
   if ((input.event === "PROJECT_BOOKED" || input.event === "PROJECT_BOOKING_UPDATED") && !isBookedContext(context)) {
-    return;
+    console.warn("[PROJECT_NOTIFY] event skipped because booking data is incomplete", {
+      receiptId: input.receiptId,
+      eventType: input.event,
+      installationDate: context.installationDate,
+    });
+    return {
+      receiptId: input.receiptId,
+      eventType: input.event,
+      dispatched: false,
+      results: [],
+    };
   }
 
   await ensureLogs(context);
-  void processProjectNotificationQueue(input).catch((error) => {
-    console.error("[project-notifications] background processing failed", {
-      receiptId: input.receiptId,
-      event: input.event,
-      error: error instanceof Error ? error.message : String(error),
-    });
+  const drafts = createDrafts(context).filter((draft) => {
+    if (draft.eventType === "PROJECT_BOOKING_UPDATED") {
+      return hasProjectAssignmentChange(context.changedFields);
+    }
+    return true;
   });
+  console.info("[PROJECT_NOTIFY] dispatch starting", {
+    receiptId: input.receiptId,
+    eventType: input.event,
+    draftCount: drafts.length,
+  });
+  const settled = await Promise.allSettled(drafts.map((draft) => processDraft(draft, context)));
+  const results = settled.map(formatSettledResult);
+  console.info("[PROJECT_NOTIFY] dispatch result", {
+    receiptId: input.receiptId,
+    eventType: input.event,
+    results,
+  });
+  return {
+    receiptId: input.receiptId,
+    eventType: input.event,
+    dispatched: drafts.length > 0,
+    results,
+  };
+}
+
+export async function processProjectNotificationQueue(input: ProjectNotificationQueueInput) {
+  return publishProjectNotification(input);
+}
+
+export async function queueProjectNotification(input: ProjectNotificationQueueInput) {
+  return publishProjectNotification(input);
 }
