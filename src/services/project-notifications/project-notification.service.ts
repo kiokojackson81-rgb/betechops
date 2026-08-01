@@ -1,10 +1,10 @@
-import { randomUUID } from "node:crypto";
 import { Prisma, ProjectNotificationStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { buildReceiptSnapshot } from "@/app/receipts/buildSnapshot";
 import { generateReceiptPdf } from "@/workers/receiptSender";
 import { sendTransactionalSms } from "@/lib/africasTalking";
 import { sendGeneralCustomerNotificationEmail } from "@/lib/email";
+import { pushReceiptToChatrace } from "@/lib/integrations/chatrace";
 import { readReceiptProjectFlow } from "@/lib/receiptProjects";
 import { createReviewInvitation } from "@/lib/reviewsReferrals";
 import { getPublicReceiptUrl } from "@/lib/publicReceiptLinks";
@@ -34,8 +34,6 @@ function getProjectAdminWhatsApp() {
 
 const CUSTOMER_CHATRACE_ACCOUNT_ID = (process.env.CHATRACE_PROJECT_CUSTOMER_ACCOUNT_ID || "1705099").trim();
 const INTERNAL_CHATRACE_ACCOUNT_ID = (process.env.CHATRACE_PROJECT_INTERNAL_ACCOUNT_ID || "1802145").trim();
-const CHATRACE_BASE_URL = (process.env.CHATRACE_BASE_URL || "https://api.chatrace.com").replace(/\/$/, "");
-const CHATRACE_API_TOKEN = (process.env.CHATRACE_API_TOKEN || "").trim();
 
 const PROJECT_TRIGGER_TAGS = {
   customerBooked: "project_installation_booked_customer",
@@ -292,142 +290,6 @@ function createDrafts(context: ProjectNotificationContext): ProjectNotificationD
   }
 
   return drafts;
-}
-
-function sanitizeChatracePhone(phone: string) {
-  return phone.replace(/^\+/, "");
-}
-
-function ensureChatraceConfig(accountId: string) {
-  if (!CHATRACE_API_TOKEN || !CHATRACE_BASE_URL || !accountId) {
-    throw new Error("Missing ChatRace configuration.");
-  }
-}
-
-async function postChatraceActions(input: {
-  accountId: string;
-  phone: string;
-  firstName: string;
-  actions: Array<Record<string, unknown>>;
-}) {
-  ensureChatraceConfig(input.accountId);
-  console.info("[PROJECT_NOTIFY] chatrace request", {
-    accountId: input.accountId,
-    phone: input.phone,
-    actionCount: input.actions.length,
-    actions: input.actions.map((action) => String(action.action ?? "unknown")),
-  });
-  const response = await fetch(`${CHATRACE_BASE_URL}/contacts`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      "X-ACCESS-TOKEN": CHATRACE_API_TOKEN,
-      "X-ACCOUNT-ID": input.accountId,
-    },
-    body: JSON.stringify({
-      phone: sanitizeChatracePhone(input.phone),
-      first_name: input.firstName,
-      actions: input.actions,
-    }),
-  });
-  const raw = await response.text().catch(() => "");
-  let json: unknown = null;
-  try {
-    json = raw ? JSON.parse(raw) : null;
-  } catch {
-    json = null;
-  }
-  return {
-    ok: response.ok && Boolean((json as { success?: boolean } | null)?.success ?? response.ok),
-    status: response.status,
-    raw,
-    json,
-    contactId: ((json as { data?: { id?: string | number }; id?: string | number } | null)?.data?.id ??
-      (json as { id?: string | number } | null)?.id ??
-      null) as string | number | null,
-  };
-}
-
-function buildChatraceSetField(fieldName: string, value: string | number | null | undefined) {
-  return {
-    action: "set_field_value",
-    field_name: fieldName,
-    value:
-      typeof value === "number"
-        ? value
-        : String(value ?? "")
-            .replace(/[\r\n\t]+/g, " ")
-            .replace(/ {2,}/g, " ")
-            .trim(),
-  };
-}
-
-async function triggerChatraceFlow(input: {
-  accountId: string;
-  phone: string;
-  firstName: string;
-  fields: Record<string, string | number | null | undefined>;
-  triggerTag: string;
-}) {
-  const fieldActions = Object.entries(input.fields).map(([fieldName, value]) => buildChatraceSetField(fieldName, value));
-  const fieldsResult = await postChatraceActions({
-    accountId: input.accountId,
-    phone: input.phone,
-    firstName: input.firstName,
-    actions: fieldActions,
-  });
-  if (!fieldsResult.ok) {
-    console.error("[PROJECT_NOTIFY] chatrace field sync failed", {
-      accountId: input.accountId,
-      phone: input.phone,
-      triggerTag: input.triggerTag,
-      status: fieldsResult.status,
-      raw: fieldsResult.raw,
-    });
-    return {
-      ok: false,
-      accountId: input.accountId,
-      contactId: fieldsResult.contactId ? String(fieldsResult.contactId) : null,
-      providerResponse: {
-        fields: { status: fieldsResult.status, raw: fieldsResult.raw, json: fieldsResult.json },
-      },
-      error: "chatrace_field_sync_failed",
-    };
-  }
-
-  await new Promise((resolve) => setTimeout(resolve, 400));
-
-  const tagActions = [
-    { action: "remove_tag", tag_name: input.triggerTag },
-    { action: "add_tag", tag_name: input.triggerTag },
-  ];
-  const tagResult = await postChatraceActions({
-    accountId: input.accountId,
-    phone: input.phone,
-    firstName: input.firstName,
-    actions: tagActions,
-  });
-
-  console.info("[PROJECT_NOTIFY] chatrace tag sync result", {
-    accountId: input.accountId,
-    phone: input.phone,
-    triggerTag: input.triggerTag,
-    ok: tagResult.ok,
-    status: tagResult.status,
-    raw: tagResult.raw,
-  });
-
-  return {
-    ok: tagResult.ok,
-    accountId: input.accountId,
-    contactId: fieldsResult.contactId ? String(fieldsResult.contactId) : tagResult.contactId ? String(tagResult.contactId) : null,
-    providerResponse: {
-      fields: { status: fieldsResult.status, raw: fieldsResult.raw, json: fieldsResult.json },
-      tag: { status: tagResult.status, raw: tagResult.raw, json: tagResult.json },
-    },
-    error: tagResult.ok ? null : "chatrace_tag_sync_failed",
-  };
 }
 
 async function ensureLogs(context: ProjectNotificationContext) {
@@ -699,12 +561,18 @@ async function processDraft(
       }
       const response =
         draft.templateKey === "project_installation_booked_customer"
-          ? await triggerChatraceFlow({
+          ? await pushReceiptToChatrace({
               accountId: CUSTOMER_CHATRACE_ACCOUNT_ID,
-              phone: draft.recipientAddress || "",
-              firstName: context.customerName.split(/\s+/)[0] || "Customer",
-              triggerTag: PROJECT_TRIGGER_TAGS.customerBooked,
-              fields: {
+              phoneE164: draft.recipientAddress || "",
+              customerName: context.customerName,
+              receiptNumber: context.projectNumber,
+              amount: formatKenyaNumber(context.amountPaid),
+              currency: "KES",
+              receiptLink: context.receiptLink,
+              receiptId: context.receiptId,
+              tagName: PROJECT_TRIGGER_TAGS.customerBooked,
+              skipDefaultTags: true,
+              extraFields: {
                 customer_name: context.customerName,
                 project_number: context.projectNumber,
                 project_installation_date: formatKenyaDate(context.installationDate) || "",
@@ -714,12 +582,18 @@ async function processDraft(
               },
             })
           : draft.templateKey === "project_installation_booked_admin"
-            ? await triggerChatraceFlow({
+            ? await pushReceiptToChatrace({
                 accountId: INTERNAL_CHATRACE_ACCOUNT_ID,
-                phone: draft.recipientAddress || "",
-                firstName: "Admin",
-                triggerTag: PROJECT_TRIGGER_TAGS.adminBooked,
-                fields: {
+                phoneE164: draft.recipientAddress || "",
+                customerName: "Admin",
+                receiptNumber: context.projectNumber,
+                amount: formatKenyaNumber(context.projectValue),
+                currency: "KES",
+                receiptLink: context.receiptLink,
+                receiptId: context.receiptId,
+                tagName: PROJECT_TRIGGER_TAGS.adminBooked,
+                skipDefaultTags: true,
+                extraFields: {
                   customer_name: context.customerName,
                   customer_phone: context.customerPhone || "",
                   project_number: context.projectNumber,
@@ -732,12 +606,18 @@ async function processDraft(
                 },
               })
             : draft.templateKey === "project_assigned_handler"
-              ? await triggerChatraceFlow({
+              ? await pushReceiptToChatrace({
                   accountId: INTERNAL_CHATRACE_ACCOUNT_ID,
-                  phone: draft.recipientAddress || "",
-                  firstName: context.assignedHandlerName?.split(/\s+/)[0] || "Handler",
-                  triggerTag: PROJECT_TRIGGER_TAGS.handlerAssigned,
-                  fields: {
+                  phoneE164: draft.recipientAddress || "",
+                  customerName: context.assignedHandlerName || "Handler",
+                  receiptNumber: context.projectNumber,
+                  amount: formatKenyaNumber(context.projectValue),
+                  currency: "KES",
+                  receiptLink: context.receiptLink,
+                  receiptId: context.receiptId,
+                  tagName: PROJECT_TRIGGER_TAGS.handlerAssigned,
+                  skipDefaultTags: true,
+                  extraFields: {
                     project_assigned_handler_name: context.assignedHandlerName || "",
                     customer_name: context.customerName,
                     customer_phone: context.customerPhone || "",
@@ -750,12 +630,18 @@ async function processDraft(
                     project_receipt_link: context.receiptLink,
                   },
                 })
-              : await triggerChatraceFlow({
+              : await pushReceiptToChatrace({
                   accountId: CUSTOMER_CHATRACE_ACCOUNT_ID,
-                  phone: draft.recipientAddress || "",
-                  firstName: context.customerName.split(/\s+/)[0] || "Customer",
-                  triggerTag: PROJECT_TRIGGER_TAGS.customerCompleted,
-                  fields: {
+                  phoneE164: draft.recipientAddress || "",
+                  customerName: context.customerName,
+                  receiptNumber: context.projectNumber,
+                  amount: formatKenyaNumber(context.amountPaid),
+                  currency: "KES",
+                  receiptLink: context.receiptLink,
+                  receiptId: context.receiptId,
+                  tagName: PROJECT_TRIGGER_TAGS.customerCompleted,
+                  skipDefaultTags: true,
+                  extraFields: {
                     customer_name: context.customerName,
                     project_number: context.projectNumber,
                     project_value: formatKenyaNumber(context.projectValue),
@@ -766,12 +652,16 @@ async function processDraft(
                   },
                 });
       if (!response.ok) {
-        throw new Error(response.error || "ChatRace sync failed");
+        throw new Error(String(response.debug?.error || "ChatRace sync failed"));
       }
-      providerMessageId = response.contactId;
+      providerMessageId =
+        response.debug?.contactId == null ? null : String(response.debug.contactId);
       providerSnapshot = {
         ...(draft.payloadSnapshot ?? {}),
-        chatraceAccountId: response.accountId,
+        chatraceAccountId:
+          draft.templateKey === "project_installation_booked_customer" || draft.templateKey === "project_completed_customer"
+            ? CUSTOMER_CHATRACE_ACCOUNT_ID
+            : INTERNAL_CHATRACE_ACCOUNT_ID,
         triggerTag:
           draft.templateKey === "project_installation_booked_customer"
             ? PROJECT_TRIGGER_TAGS.customerBooked
@@ -780,7 +670,7 @@ async function processDraft(
               : draft.templateKey === "project_assigned_handler"
                 ? PROJECT_TRIGGER_TAGS.handlerAssigned
                 : PROJECT_TRIGGER_TAGS.customerCompleted,
-        providerResponse: response.providerResponse,
+        providerResponse: response.debug,
       } as Prisma.InputJsonValue;
     } else if (draft.channel === "SMS") {
       const body =

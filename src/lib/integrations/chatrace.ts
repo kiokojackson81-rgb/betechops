@@ -65,13 +65,14 @@ export type SendReceiptToChatraceInput = {
   attendant?: string;
   // extra custom fields to set with exact field names (e.g. formatted_amount)
   extraFields?: Record<string, string | number | null | undefined>;
+  accountId?: string;
 };
 
-function checkConfig() {
+function checkConfig(accountIdOverride?: string) {
   const missing: string[] = [];
   if (!BASE_URL) missing.push('CHATRACE_BASE_URL');
   if (!API_TOKEN) missing.push('CHATRACE_API_TOKEN');
-  if (!ACCOUNT_ID) missing.push('CHATRACE_ACCOUNT_ID');
+  if (!(accountIdOverride?.trim() || ACCOUNT_ID)) missing.push('CHATRACE_ACCOUNT_ID');
   return missing;
 }
 
@@ -87,7 +88,9 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     receiptId,
     tagName,
     skipDefaultTags,
+    accountId,
   } = input;
+  const resolvedAccountId = accountId?.trim() || ACCOUNT_ID || '';
   const customerDisplayName = String(customerName || '').trim() || 'Customer';
   const customerFirstName =
     customerDisplayName
@@ -107,7 +110,7 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
       accountIdPresent: !!ACCOUNT_ID,
       tokenPresent: !!API_TOKEN,
       baseUrl: BASE_URL,
-      accountId: ACCOUNT_ID,
+      accountId: resolvedAccountId,
       headerKeys: [],
       skipDefaultTags: Boolean(skipDefaultTags),
     },
@@ -120,7 +123,7 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   if (!currency) throw new Error('currency is required');
   if (!receiptLink) throw new Error('receiptLink is required');
 
-  const missingConfig = checkConfig();
+  const missingConfig = checkConfig(resolvedAccountId);
   if (missingConfig.length) {
     const message = `Missing Chatrace env vars: ${missingConfig.join(', ')}`;
     console.error('[chatrace] config missing', message);
@@ -133,8 +136,8 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     'X-ACCESS-TOKEN': API_TOKEN || '',
     Accept: 'application/json',
   } as Record<string, string>;
-  if (ACCOUNT_ID) {
-    headers['X-ACCOUNT-ID'] = ACCOUNT_ID;
+  if (resolvedAccountId) {
+    headers['X-ACCOUNT-ID'] = resolvedAccountId;
   }
   const headerKeys = Object.keys(headers);
   debug.env.headerKeys = headerKeys;
