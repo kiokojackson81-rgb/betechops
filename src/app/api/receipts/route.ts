@@ -34,6 +34,15 @@ import {
   isReceiptProjectRecognizedForSales,
   readReceiptProjectFlow,
 } from "@/lib/receiptProjects";
+import { publishProjectNotification } from "@/services/project-notifications/project-notification.service";
+import {
+  hasProjectAssignedHandler,
+  hasProjectBookingDate,
+} from "@/services/project-notifications/project-notification.logic";
+import type {
+  ProjectNotificationChangedField,
+  ProjectNotificationPublishResult,
+} from "@/services/project-notifications/project-notification.types";
 
 const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" | null => {
   if (typeof value !== "string") return null;
@@ -2031,7 +2040,11 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      return { orderRef: orderUpsert.orderNumber, receiptId: receipt.id };
+      return {
+        orderRef: orderUpsert.orderNumber,
+        receiptId: receipt.id,
+        projectFlow: normalizedProjectFlow,
+      };
     });
 
     const quoteMetadata =
@@ -2165,6 +2178,71 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    const projectNotificationResults: ProjectNotificationPublishResult[] = [];
+    if (isProjectReceipt && result.projectFlow) {
+      const changedFields: ProjectNotificationChangedField[] = [];
+      if (hasProjectBookingDate(result.projectFlow)) changedFields.push("scheduledDate");
+      if (result.projectFlow.handlerType) changedFields.push("handlerType");
+      if (result.projectFlow.handlerStaffId) changedFields.push("handlerStaffId");
+      if (result.projectFlow.handlerStaffName) changedFields.push("handlerStaffName");
+      if (result.projectFlow.externalAgentName) changedFields.push("externalAgentName");
+      if (result.projectFlow.externalAgentPhone) changedFields.push("externalAgentPhone");
+
+      if (hasProjectBookingDate(result.projectFlow)) {
+        try {
+          const bookedResult = await publishProjectNotification({
+            receiptId: result.receiptId,
+            event: "PROJECT_BOOKED",
+            triggeredByUserId: issuedById ?? attendantId ?? null,
+            changedFields,
+            previousHandler: null,
+          });
+          projectNotificationResults.push(bookedResult);
+          console.info("[PROJECT_NOTIFY] receipt created service result", {
+            receiptId: result.receiptId,
+            eventType: "PROJECT_BOOKED",
+            result: bookedResult,
+          });
+        } catch (error) {
+          console.error("[PROJECT_NOTIFY] receipt created service failed", {
+            receiptId: result.receiptId,
+            eventType: "PROJECT_BOOKED",
+            error:
+              error instanceof Error
+                ? { name: error.name, message: error.message, stack: error.stack }
+                : error,
+          });
+        }
+      }
+
+      if (hasProjectAssignedHandler(result.projectFlow)) {
+        try {
+          const assignedResult = await publishProjectNotification({
+            receiptId: result.receiptId,
+            event: "PROJECT_BOOKING_UPDATED",
+            triggeredByUserId: issuedById ?? attendantId ?? null,
+            changedFields: changedFields.length ? changedFields : ["handlerType"],
+            previousHandler: null,
+          });
+          projectNotificationResults.push(assignedResult);
+          console.info("[PROJECT_NOTIFY] receipt created service result", {
+            receiptId: result.receiptId,
+            eventType: "PROJECT_BOOKING_UPDATED",
+            result: assignedResult,
+          });
+        } catch (error) {
+          console.error("[PROJECT_NOTIFY] receipt created service failed", {
+            receiptId: result.receiptId,
+            eventType: "PROJECT_BOOKING_UPDATED",
+            error:
+              error instanceof Error
+                ? { name: error.name, message: error.message, stack: error.stack }
+                : error,
+          });
+        }
+      }
+    }
+
     // Recompute support commission ledger after committing the transaction
     if (attendantId) {
       try {
@@ -2255,7 +2333,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ ok: true, ...result, send: sendResult });
+    return NextResponse.json({ ok: true, ...result, send: sendResult, notificationResults: projectNotificationResults });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     try {
