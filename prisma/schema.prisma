@@ -1503,7 +1503,61 @@ model Receipt {
   issuedBy            User?         @relation("issuedBy", fields: [issuedById], references: [id])
   order               Order         @relation(fields: [orderId], references: [id])
   files               ReceiptFile[]
+  projectNotifications ProjectNotificationLog[]
   websiteOrders       WebsiteOrder[]
+}
+
+enum ProjectNotificationEventType {
+  PROJECT_BOOKED
+  PROJECT_BOOKING_UPDATED
+  PROJECT_COMPLETED
+}
+
+enum ProjectNotificationChannel {
+  WHATSAPP
+  SMS
+  EMAIL
+}
+
+enum ProjectNotificationRecipientType {
+  CUSTOMER
+  ADMIN
+  ASSIGNED_HANDLER
+  COMPLETING_USER
+  PREVIOUS_HANDLER
+}
+
+enum ProjectNotificationStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+model ProjectNotificationLog {
+  id               String                           @id @default(cuid())
+  receiptId        String
+  eventType        ProjectNotificationEventType
+  channel          ProjectNotificationChannel
+  recipientType    ProjectNotificationRecipientType
+  recipientName    String?
+  recipientAddress String?
+  templateKey      String
+  idempotencyKey   String                           @unique
+  status           ProjectNotificationStatus        @default(PENDING)
+  providerMessageId String?
+  attemptCount     Int                              @default(0)
+  errorMessage     String?
+  payloadSnapshot  Json?
+  createdAt        DateTime                         @default(now())
+  sentAt           DateTime?
+  failedAt         DateTime?
+  receipt          Receipt                          @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+
+  @@index([receiptId, createdAt])
+  @@index([status, createdAt])
+  @@index([eventType, createdAt])
 }
 
 model WebsiteOrder {

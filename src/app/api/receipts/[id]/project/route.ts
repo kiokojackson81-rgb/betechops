@@ -14,6 +14,7 @@ import {
 import { auth } from "@/lib/auth";
 import { isTechnicalTeamCategory } from "@/lib/technicalTeam";
 import { syncCompletedProjectReceiptToPricing } from "@/lib/projectPricingSync";
+import { queueProjectNotification } from "@/services/project-notifications/project-notification.service";
 
 export const dynamic = "force-dynamic";
 
@@ -135,6 +136,29 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
         : existingProjectFlow?.externalAgentPhone,
   });
 
+  const changedFields = [
+    existingProjectFlow?.scheduledDate !== nextProjectFlow.scheduledDate ? "scheduledDate" : null,
+    existingProjectFlow?.handlerStaffId !== nextProjectFlow.handlerStaffId ? "handlerStaffId" : null,
+    existingProjectFlow?.handlerStaffName !== nextProjectFlow.handlerStaffName ? "handlerStaffName" : null,
+    existingProjectFlow?.handlerType !== nextProjectFlow.handlerType ? "handlerType" : null,
+    existingProjectFlow?.externalAgentName !== nextProjectFlow.externalAgentName ? "externalAgentName" : null,
+    existingProjectFlow?.externalAgentPhone !== nextProjectFlow.externalAgentPhone ? "externalAgentPhone" : null,
+    existingProjectFlow?.stage !== nextProjectFlow.stage ? "stage" : null,
+  ].filter(Boolean) as Array<
+    | "scheduledDate"
+    | "handlerStaffId"
+    | "handlerStaffName"
+    | "handlerType"
+    | "externalAgentName"
+    | "externalAgentPhone"
+    | "stage"
+  >;
+
+  const wasBooked = Boolean(existingProjectFlow?.scheduledDate && (existingProjectFlow?.handlerStaffId || existingProjectFlow?.externalAgentPhone || existingProjectFlow?.handlerStaffName));
+  const isBooked = Boolean(nextProjectFlow.scheduledDate && (nextProjectFlow.handlerStaffId || nextProjectFlow.externalAgentPhone || nextProjectFlow.handlerStaffName));
+  const wasCompleted = existingProjectFlow?.stage === "COMPLETED_POSTED";
+  const isCompleted = nextProjectFlow.stage === "COMPLETED_POSTED";
+
   const updated = await prisma.$transaction(async (tx) => {
     const receipt = await tx.receipt.update({
       where: { id },
@@ -180,6 +204,51 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
 
     return receipt;
   });
+
+  const previousHandler =
+    existingProjectFlow?.handlerType === "EXTERNAL"
+      ? {
+          name: existingProjectFlow.externalAgentName ?? null,
+          phone: existingProjectFlow.externalAgentPhone ?? null,
+        }
+      : existingProjectFlow?.handlerStaffId
+        ? await prisma.user.findUnique({
+            where: { id: existingProjectFlow.handlerStaffId },
+            select: { name: true, email: true, phone: true, whatsappNumber: true },
+          }).then((user) => ({
+            name: user?.name ?? user?.email ?? existingProjectFlow.handlerStaffName ?? null,
+            phone: user?.whatsappNumber ?? user?.phone ?? null,
+          }))
+        : {
+            name: existingProjectFlow?.handlerStaffName ?? null,
+            phone: null,
+          };
+
+  if (isCompleted && !wasCompleted) {
+    await queueProjectNotification({
+      receiptId: id,
+      event: "PROJECT_COMPLETED",
+      triggeredByUserId: actorId,
+      changedFields,
+      previousHandler,
+    });
+  } else if (isBooked && !wasBooked) {
+    await queueProjectNotification({
+      receiptId: id,
+      event: "PROJECT_BOOKED",
+      triggeredByUserId: actorId,
+      changedFields,
+      previousHandler,
+    });
+  } else if (isBooked && changedFields.some((field) => field === "scheduledDate" || field === "handlerStaffId" || field === "handlerStaffName" || field === "handlerType" || field === "externalAgentName" || field === "externalAgentPhone")) {
+    await queueProjectNotification({
+      receiptId: id,
+      event: "PROJECT_BOOKING_UPDATED",
+      triggeredByUserId: actorId,
+      changedFields,
+      previousHandler,
+    });
+  }
 
   return NextResponse.json({
     ok: true,
