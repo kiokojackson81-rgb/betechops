@@ -504,6 +504,20 @@ function buildChannelResultKey(draft: ProjectNotificationDraft) {
   return `${draft.recipientType.toLowerCase()}${draft.channel.toLowerCase()}`;
 }
 
+function getExpectedProjectFlow(templateKey: string) {
+  if (templateKey === "project_installation_booked_customer") return "Project Installation Booked - Customer";
+  if (templateKey === "project_completed_customer") return "project_completed_customer";
+  if (templateKey === "project_installation_booked_admin") return "Project Installation Booked - Admin";
+  if (templateKey === "project_assigned_handler") return "project_assigned_handler";
+  return templateKey;
+}
+
+function getProjectWhatsAppAccountId(templateKey: string) {
+  return templateKey === "project_installation_booked_customer" || templateKey === "project_completed_customer"
+    ? CUSTOMER_CHATRACE_ACCOUNT_ID
+    : INTERNAL_CHATRACE_ACCOUNT_ID;
+}
+
 async function processDraft(
   draft: ProjectNotificationDraft,
   context: ProjectNotificationContext,
@@ -572,6 +586,7 @@ async function processDraft(
               receiptId: context.receiptId,
               tagName: PROJECT_TRIGGER_TAGS.customerBooked,
               skipDefaultTags: true,
+              forceTriggerTagReapply: true,
               extraFields: {
                 customer_name: context.customerName,
                 project_number: context.projectNumber,
@@ -593,6 +608,7 @@ async function processDraft(
                 receiptId: context.receiptId,
                 tagName: PROJECT_TRIGGER_TAGS.adminBooked,
                 skipDefaultTags: true,
+                forceTriggerTagReapply: true,
                 extraFields: {
                   customer_name: context.customerName,
                   customer_phone: context.customerPhone || "",
@@ -617,6 +633,7 @@ async function processDraft(
                   receiptId: context.receiptId,
                   tagName: PROJECT_TRIGGER_TAGS.handlerAssigned,
                   skipDefaultTags: true,
+                  forceTriggerTagReapply: true,
                   extraFields: {
                     project_assigned_handler_name: context.assignedHandlerName || "",
                     customer_name: context.customerName,
@@ -641,6 +658,7 @@ async function processDraft(
                   receiptId: context.receiptId,
                   tagName: PROJECT_TRIGGER_TAGS.customerCompleted,
                   skipDefaultTags: true,
+                  forceTriggerTagReapply: true,
                   extraFields: {
                     customer_name: context.customerName,
                     project_number: context.projectNumber,
@@ -654,14 +672,50 @@ async function processDraft(
       if (!response.ok) {
         throw new Error(String(response.debug?.error || "ChatRace sync failed"));
       }
+      const projectWhatsAppDiagnostic = {
+        accountId: getProjectWhatsAppAccountId(draft.templateKey),
+        recipientPhone: draft.recipientAddress ?? null,
+        contactUpdated: Boolean(response.debug?.contactUpdated),
+        tagRemoved: Boolean(response.debug?.tagRemoved),
+        tagApplied: Boolean(response.debug?.tagApplied),
+        tagName:
+          draft.templateKey === "project_installation_booked_customer"
+            ? PROJECT_TRIGGER_TAGS.customerBooked
+            : draft.templateKey === "project_installation_booked_admin"
+              ? PROJECT_TRIGGER_TAGS.adminBooked
+              : draft.templateKey === "project_assigned_handler"
+                ? PROJECT_TRIGGER_TAGS.handlerAssigned
+                : PROJECT_TRIGGER_TAGS.customerCompleted,
+        flowExpected: getExpectedProjectFlow(draft.templateKey),
+        providerStatus: String(response.debug?.providerStatus || "SUCCESS"),
+        providerError: response.debug?.error ?? null,
+      };
+      console.info("[PROJECT_WHATSAPP] diagnostic", {
+        receiptId: context.receiptId,
+        eventType: draft.eventType,
+        recipientType: draft.recipientType,
+        templateKey: draft.templateKey,
+        diagnostic: projectWhatsAppDiagnostic,
+        contactResult: response.debug?.steps?.create
+          ? {
+              status: response.debug.steps.create.status ?? null,
+              ok: response.debug.steps.create.ok ?? null,
+              bodySnippet: response.debug.steps.create.bodySnippet ?? null,
+            }
+          : null,
+        tagResult: response.debug?.steps?.tag
+          ? {
+              status: response.debug.steps.tag.status ?? null,
+              ok: response.debug.steps.tag.ok ?? null,
+              bodySnippet: response.debug.steps.tag.bodySnippet ?? null,
+            }
+          : null,
+      });
       providerMessageId =
         response.debug?.contactId == null ? null : String(response.debug.contactId);
       providerSnapshot = {
         ...(draft.payloadSnapshot ?? {}),
-        chatraceAccountId:
-          draft.templateKey === "project_installation_booked_customer" || draft.templateKey === "project_completed_customer"
-            ? CUSTOMER_CHATRACE_ACCOUNT_ID
-            : INTERNAL_CHATRACE_ACCOUNT_ID,
+        chatraceAccountId: getProjectWhatsAppAccountId(draft.templateKey),
         triggerTag:
           draft.templateKey === "project_installation_booked_customer"
             ? PROJECT_TRIGGER_TAGS.customerBooked
@@ -670,6 +724,7 @@ async function processDraft(
               : draft.templateKey === "project_assigned_handler"
                 ? PROJECT_TRIGGER_TAGS.handlerAssigned
                 : PROJECT_TRIGGER_TAGS.customerCompleted,
+        diagnostic: projectWhatsAppDiagnostic,
         providerResponse: response.debug,
       } as Prisma.InputJsonValue;
     } else if (draft.channel === "SMS") {

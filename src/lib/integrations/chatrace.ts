@@ -66,6 +66,7 @@ export type SendReceiptToChatraceInput = {
   // extra custom fields to set with exact field names (e.g. formatted_amount)
   extraFields?: Record<string, string | number | null | undefined>;
   accountId?: string;
+  forceTriggerTagReapply?: boolean;
 };
 
 function checkConfig(accountIdOverride?: string) {
@@ -89,6 +90,7 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     tagName,
     skipDefaultTags,
     accountId,
+    forceTriggerTagReapply,
   } = input;
   const resolvedAccountId = accountId?.trim() || ACCOUNT_ID || '';
   const customerDisplayName = String(customerName || '').trim() || 'Customer';
@@ -107,7 +109,7 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     receiptUrlLength: receiptUrlTrimmed?.length ?? 0,
     env: {
       baseUrlPresent: !!BASE_URL,
-      accountIdPresent: !!ACCOUNT_ID,
+      accountIdPresent: !!resolvedAccountId,
       tokenPresent: !!API_TOKEN,
       baseUrl: BASE_URL,
       accountId: resolvedAccountId,
@@ -353,11 +355,17 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
       'followup_responsible_alert',
       'quotation_ready',
       'quotation_follow_up',
+      'project_installation_booked_customer',
+      'project_completed_customer',
+      'project_installation_booked_admin',
+      'project_assigned_handler',
       // legacy/internal
       'receipt_admin_alert',
     ]);
     const forceRetrigger =
-      process.env.CHATRACE_FORCE_RETRIGGER_TAGS === '1' || FORCE_RETRIGGER_TAGS.has(finalTag);
+      Boolean(forceTriggerTagReapply) ||
+      process.env.CHATRACE_FORCE_RETRIGGER_TAGS === '1' ||
+      FORCE_RETRIGGER_TAGS.has(finalTag);
 
     // Avoid duplicating the default trigger when skipDefaultTags is false and caller
     // explicitly passes receipt_created.
@@ -392,7 +400,7 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     receiptNumber,
     phoneE164,
     baseUrl: BASE_URL,
-    accountId: ACCOUNT_ID,
+    accountId: resolvedAccountId,
     headerKeys,
     receiptMode,
     receiptUrlTrimmedLength: receiptUrlTrimmed?.length ?? 0,
@@ -447,6 +455,10 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   // If we are not applying any tags, we're done (fields are set, but no Flow is triggered).
   if (tagActions.length === 0) {
     debug.steps.tag = { skipped: true };
+    debug.contactUpdated = true;
+    debug.tagRemoved = false;
+    debug.tagApplied = false;
+    debug.providerStatus = 'SUCCESS';
     debug.ok = true;
     await persistDebug(receiptNumber, debug);
     return { ok: true, debug };
@@ -470,6 +482,15 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     debug.steps.tag.response = tagJson;
   } catch {}
 
+  const tagRequestActions = Array.isArray(debug.steps.tag?.request?.actions) ? debug.steps.tag.request.actions : [];
+  debug.contactUpdated = true;
+  debug.tagRemoved = Boolean(
+    tagRes.ok && tagRequestActions.some((action: any) => action?.action === 'remove_tag' && action?.tag_name === finalTag),
+  );
+  debug.tagApplied = Boolean(
+    tagRes.ok && tagRequestActions.some((action: any) => action?.action === 'add_tag' && action?.tag_name === finalTag),
+  );
+  debug.providerStatus = tagRes.ok ? 'SUCCESS' : 'FAILED';
   debug.ok = Boolean(tagRes.ok || createRes.ok);
   await persistDebug(receiptNumber, debug);
   return { ok: debug.ok, debug };
