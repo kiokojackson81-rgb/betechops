@@ -473,25 +473,48 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   const delayMs =
     process.env.NODE_ENV === 'test' ? 0 : isAdminAlert ? Math.max(baseDelayMs, 1500) : baseDelayMs;
   await sleep(delayMs);
-  debug.steps.tag = debug.steps.tag || {};
-  debug.steps.tag.request = { phone: phoneE164, actions: tagActions };
-  const tagRes = await runRequest(path, { phone: phoneE164, actions: tagActions }, headers);
-  debug.steps.tag = { status: tagRes.status, bodySnippet: (tagRes.text || '').slice(0, 200), ok: tagRes.ok };
-  try {
-    const tagJson = tagRes.json ?? null;
-    debug.steps.tag.response = tagJson;
-  } catch {}
+  const removalActions = tagActions.filter((action) => action?.action === 'remove_tag');
+  const applyActions = tagActions.filter((action) => action?.action !== 'remove_tag');
+  let removeTagRes: Awaited<ReturnType<typeof runRequest>> | null = null;
+  let applyTagRes: Awaited<ReturnType<typeof runRequest>> | null = null;
 
-  const tagRequestActions = Array.isArray(debug.steps.tag?.request?.actions) ? debug.steps.tag.request.actions : [];
+  debug.steps.tag = debug.steps.tag || {};
+
+  if (removalActions.length > 0) {
+    debug.steps.tag.remove = { request: { phone: phoneE164, actions: removalActions } };
+    removeTagRes = await runRequest(path, { phone: phoneE164, actions: removalActions }, headers);
+    debug.steps.tag.remove = {
+      ...debug.steps.tag.remove,
+      status: removeTagRes.status,
+      bodySnippet: (removeTagRes.text || '').slice(0, 200),
+      ok: removeTagRes.ok,
+      response: removeTagRes.json ?? null,
+    };
+    await sleep(delayMs);
+  }
+
+  if (applyActions.length > 0) {
+    debug.steps.tag.apply = { request: { phone: phoneE164, actions: applyActions } };
+    applyTagRes = await runRequest(path, { phone: phoneE164, actions: applyActions }, headers);
+    debug.steps.tag.apply = {
+      ...debug.steps.tag.apply,
+      status: applyTagRes.status,
+      bodySnippet: (applyTagRes.text || '').slice(0, 200),
+      ok: applyTagRes.ok,
+      response: applyTagRes.json ?? null,
+    };
+  }
+
+  const tagRes = applyTagRes ?? removeTagRes;
   debug.contactUpdated = true;
   debug.tagRemoved = Boolean(
-    tagRes.ok && tagRequestActions.some((action: any) => action?.action === 'remove_tag' && action?.tag_name === finalTag),
+    removeTagRes?.ok && removalActions.some((action: any) => action?.tag_name === finalTag),
   );
   debug.tagApplied = Boolean(
-    tagRes.ok && tagRequestActions.some((action: any) => action?.action === 'add_tag' && action?.tag_name === finalTag),
+    applyTagRes?.ok && applyActions.some((action: any) => action?.action === 'add_tag' && action?.tag_name === finalTag),
   );
-  debug.providerStatus = tagRes.ok ? 'SUCCESS' : 'FAILED';
-  debug.ok = Boolean(tagRes.ok || createRes.ok);
+  debug.providerStatus = tagRes?.ok ? 'SUCCESS' : 'FAILED';
+  debug.ok = Boolean(tagRes?.ok || createRes.ok);
   await persistDebug(receiptNumber, debug);
   return { ok: debug.ok, debug };
 }
