@@ -705,9 +705,20 @@ async function processDraft(
           : null,
         tagResult: response.debug?.steps?.tag
           ? {
-              status: response.debug.steps.tag.status ?? null,
-              ok: response.debug.steps.tag.ok ?? null,
-              bodySnippet: response.debug.steps.tag.bodySnippet ?? null,
+              remove: response.debug.steps.tag.remove
+                ? {
+                    status: response.debug.steps.tag.remove.status ?? null,
+                    ok: response.debug.steps.tag.remove.ok ?? null,
+                    bodySnippet: response.debug.steps.tag.remove.bodySnippet ?? null,
+                  }
+                : null,
+              apply: response.debug.steps.tag.apply
+                ? {
+                    status: response.debug.steps.tag.apply.status ?? null,
+                    ok: response.debug.steps.tag.apply.ok ?? null,
+                    bodySnippet: response.debug.steps.tag.apply.bodySnippet ?? null,
+                  }
+                : null,
             }
           : null,
       });
