@@ -579,31 +579,24 @@ async function buildPayrollRowResolved(
   }
 
   if (isTechnicalCategory(attendant.attendantCategory)) {
-    const [earningsSummary, receiptSummary, releasedPosCommission, projectCommission] = await Promise.all([
+    const [earningsSummary, posSummary, releasedPosCommission, projectCommission] = await Promise.all([
       getEarningsSummaryForUser({ userId: attendant.id, asOf: period.start }),
-      computeAdminReceiptSummary({
+      summarizePosReceiptsForPeriod({
         start: period.start,
         end: period.end,
-        scope: "mine",
-        currentUserId: attendant.id,
-        attendantId: attendant.id,
-        salesOnly: true,
+        userId: attendant.id,
+        ownershipMode: "issuerOnly",
+        profitRecognitionMode: "salesDate",
       }),
       getReleasedPosProductCommissionForStaffPeriod(attendant.id, period.start, period.end),
       getTechnicalProjectCommissionSummary(attendant.id, period),
     ]);
 
-    const totalSales = Math.max(Number(receiptSummary.totalSales ?? 0), Number(earningsSummary.totalSales ?? 0));
-    const totalReceipts = Math.max(
-      Number(receiptSummary.receiptsCount ?? 0),
-      Number(earningsSummary.totalReceipts ?? 0),
-    );
-    const totalItems = Math.max(
-      Number(receiptSummary.itemsCount ?? 0),
-      Number(earningsSummary.totalItems ?? 0),
-    );
+    const totalSales = Number(posSummary.totalSales ?? 0);
+    const totalReceipts = Number(posSummary.totalReceipts ?? 0);
+    const totalItems = Number(posSummary.totalItems ?? 0);
     const totalProfit =
-      Math.max(Number(receiptSummary.totalProfit ?? 0), Number(earningsSummary.totalProfit ?? 0)) -
+      Number(posSummary.totalProfit ?? 0) -
       Number(releasedPosCommission ?? 0);
     const salesCommission = Math.round(Math.max(0, totalProfit) * TECHNICAL_POS_PROFIT_COMMISSION_RATE);
     const directCommissionTotal = salesCommission + Number(releasedPosCommission ?? 0);

@@ -4,13 +4,13 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { buildPayrollRow } from "@/lib/adminPayroll";
-import { computeAdminReceiptSummary } from "@/lib/adminReceiptsSummary";
 import { getTechnicalProjectCommissionSummary, TECHNICAL_POS_PROFIT_COMMISSION_RATE } from "@/lib/technicalCompensation";
 import getLandingPage from "@/lib/getLandingPage";
 import { isTechnicalTeamCategory } from "@/lib/technicalTeam";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 import { computeRecognizedReceiptProfit } from "@/lib/recognizedReceiptProfit";
 import { readReceiptProjectFlow } from "@/lib/receiptProjects";
+import { summarizePosReceiptsForPeriod } from "@/lib/posReceiptSummary";
 
 export const dynamic = "force-dynamic";
 
@@ -129,24 +129,18 @@ export default async function TechnicalSalesPage() {
       },
       period,
     ),
-    computeAdminReceiptSummary({
+    summarizePosReceiptsForPeriod({
       start: period.start,
       end: period.end,
-      scope: "mine",
-      currentUserId: viewer.id,
-      attendantId: viewer.id,
-      salesOnly: true,
-      onlyPos: true,
+      userId: viewer.id,
+      ownershipMode: "issuerOnly",
+      profitRecognitionMode: "salesDate",
     }),
     getTechnicalProjectCommissionSummary(viewer.id, period),
     prisma.receipt.findMany({
       where: {
         createdAt: { gte: period.start, lte: period.end },
-        OR: [
-          { issuedById: viewer.id },
-          { order: { attendantId: viewer.id } },
-          { data: { path: ["attendantId"], equals: viewer.id } },
-        ],
+        issuedById: viewer.id,
       },
       orderBy: { createdAt: "desc" },
       take: 40,
@@ -246,7 +240,7 @@ export default async function TechnicalSalesPage() {
         </div>
         <div className="min-w-0 rounded-[24px] border border-white/10 bg-white/5 p-5">
           <div className="text-sm text-slate-400">POS receipts created</div>
-          <div className="mt-2 break-words text-2xl font-semibold leading-tight text-white sm:text-3xl">{summary.receiptsCount}</div>
+          <div className="mt-2 break-words text-2xl font-semibold leading-tight text-white sm:text-3xl">{summary.totalReceipts}</div>
           <div className="mt-1 text-sm text-slate-500">Receipts you have created in this trading period</div>
         </div>
         <div className="min-w-0 rounded-[24px] border border-white/10 bg-white/5 p-5">
