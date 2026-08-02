@@ -405,9 +405,9 @@ export default async function OnlinePerformancePage({
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-400">{operatingCapital?.label ?? "Estimated operating capital (50% of profit)"}</span>
+                      <span className="text-slate-400">{operatingCapital?.label ?? "Weekly operating capital"}</span>
                       <span className="font-semibold text-slate-100">
-                        {currency.format(operatingCapital?.operatingCapital ?? 0)}
+                        {currency.format(operatingCapital?.netPayoutAfterDeduction ?? operatingCapital?.adjustedNetPayout ?? 0)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">

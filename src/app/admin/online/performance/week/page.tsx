@@ -311,7 +311,7 @@ export default async function OnlinePerformanceWeekPage({
             </div>
             <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
               <p className="text-xs uppercase tracking-wide text-slate-400">{operatingCapital.label}</p>
-              <p className="mt-2 text-xl font-semibold text-slate-100">{currency.format(operatingCapital.operatingCapital)}</p>
+              <p className="mt-2 text-xl font-semibold text-slate-100">{currency.format(operatingCapital.netPayoutAfterDeduction)}</p>
             </div>
           </div>
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

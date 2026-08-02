@@ -28,7 +28,7 @@ export type OperatingCapitalSummary = {
   operatingCapital: number;
   netPayoutAfterDeduction: number;
   adjustedNetPayout: number;
-  label: "Estimated operating capital (50% of profit)" | "Final operating capital (50% of profit)";
+  label: "Weekly operating capital";
   statusLabel: "Estimated" | "Final";
   isFinal: boolean;
   canFinalize: boolean;
@@ -242,7 +242,7 @@ export async function getOperatingCapitalSummary(input: {
     operatingCapital: toNumber(operatingCapital),
     netPayoutAfterDeduction: toNumber(adjustedNetPayout),
     adjustedNetPayout: toNumber(adjustedNetPayout),
-    label: isFinal ? "Final operating capital (50% of profit)" : "Estimated operating capital (50% of profit)",
+    label: "Weekly operating capital",
     statusLabel: isFinal ? "Final" : "Estimated",
     isFinal,
     canFinalize: isOperatingCapitalReadyToFinalize(input.completionSummary),
