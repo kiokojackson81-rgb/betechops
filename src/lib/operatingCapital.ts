@@ -7,6 +7,7 @@ import {
   buildOperatingCapitalCompletionSnapshot,
   calculateOperatingCapitalFigures,
   isOperatingCapitalReadyToFinalize,
+  resolveOperatingCapitalInputs,
 } from "@/lib/operatingCapitalMath";
 
 export const OPERATING_CAPITAL_ENTITY = "MarketplaceOperatingCapitalWeek";
@@ -21,11 +22,13 @@ export type OperatingCapitalSummary = {
   periodKey: string;
   accountId: string | null;
   scopeKey: string;
+  grossSalesBeforeDeduction: number;
   profit: number;
   currentNetPayout: number;
   operatingCapital: number;
+  netPayoutAfterDeduction: number;
   adjustedNetPayout: number;
-  label: "Estimated operating capital" | "Final operating capital";
+  label: "Estimated operating capital (50% of profit)" | "Final operating capital (50% of profit)";
   statusLabel: "Estimated" | "Final";
   isFinal: boolean;
   canFinalize: boolean;
@@ -198,11 +201,13 @@ export async function getOperatingCapitalSummary(input: {
     periodKey: input.periodKey,
     accountId: input.accountId ?? null,
     scopeKey,
+    grossSalesBeforeDeduction: toNumber(currentNetPayout),
     profit: toNumber(profit),
     currentNetPayout: toNumber(currentNetPayout),
     operatingCapital: toNumber(operatingCapital),
+    netPayoutAfterDeduction: toNumber(adjustedNetPayout),
     adjustedNetPayout: toNumber(adjustedNetPayout),
-    label: isFinal ? "Final operating capital" : "Estimated operating capital",
+    label: isFinal ? "Final operating capital (50% of profit)" : "Estimated operating capital (50% of profit)",
     statusLabel: isFinal ? "Final" : "Estimated",
     isFinal,
     canFinalize: isOperatingCapitalReadyToFinalize(input.completionSummary),
@@ -210,6 +215,14 @@ export async function getOperatingCapitalSummary(input: {
     finalizedRecordId: finalRecord ? String((finalRecord as any).id) : null,
     finalizedAt: finalRecord && (finalRecord as any).finalizedAt ? new Date((finalRecord as any).finalizedAt).toISOString() : null,
   };
+}
+
+export function resolveOperatingCapitalSummaryInputs(input: {
+  completionSummary?: PricingWeekSummary | null;
+  fallbackProfit?: number | null;
+  fallbackCurrentNetPayout?: number | null;
+}) {
+  return resolveOperatingCapitalInputs(input);
 }
 
 export async function finalizeOperatingCapital(input: {

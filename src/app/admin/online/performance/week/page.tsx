@@ -8,7 +8,7 @@ import { WeeklySaleSource, WeeklySaleStatus } from "@prisma/client";
 import WeekProfitEntriesClient from "@/app/admin/online/performance/_components/WeekProfitEntries.client";
 import { resolveShopIdsForMarketplaceAccount } from "@/lib/marketplaceAccountShopResolve";
 import { getPricingWeekSummary, type PricingWeekAccountStatus } from "@/lib/pricingWeekWhatsapp";
-import { getOperatingCapitalSummary } from "@/lib/operatingCapital";
+import { getOperatingCapitalSummary, resolveOperatingCapitalSummaryInputs } from "@/lib/operatingCapital";
 import OperatingCapitalAdminCard from "@/app/admin/online/performance/_components/OperatingCapitalAdminCard.client";
 
 export const dynamic = "force-dynamic";
@@ -194,13 +194,25 @@ export default async function OnlinePerformanceWeekPage({
   const avgCommission = Number(typedAgg?._avg?.commissionRatePct ?? 0);
   const avgMargin = Number(typedAgg?._avg?.marginPct ?? 0);
   const manualWeeklyTotal = Number(manualWeeklyAgg._sum.amount ?? 0);
-  const netToShow = manualWeeklyTotal !== 0 ? manualWeeklyTotal : totalNet;
+  const { currentNetPayout: grossSalesBeforeDeduction, profit: profitForCapital } = resolveOperatingCapitalSummaryInputs({
+    completionSummary: completion,
+    fallbackCurrentNetPayout: manualWeeklyTotal !== 0 ? manualWeeklyTotal : totalNet,
+    fallbackProfit: totalProfit,
+  });
+  const avgCommissionToShow =
+    typeof completion.avg_commission_pct === "number" && Number.isFinite(completion.avg_commission_pct)
+      ? completion.avg_commission_pct
+      : avgCommission;
+  const profitToShow =
+    typeof completion.net_profit === "number" && Number.isFinite(completion.net_profit)
+      ? completion.net_profit
+      : totalProfit;
   const operatingCapital = await getOperatingCapitalSummary({
     weekStartRaw,
     periodKey: period.key,
     completionSummary: completion,
-    profit: totalProfit,
-    currentNetPayout: netToShow,
+    profit: profitForCapital,
+    currentNetPayout: grossSalesBeforeDeduction,
     accountId: accountId || null,
     actorId,
   });
@@ -284,13 +296,13 @@ export default async function OnlinePerformanceWeekPage({
               <p className="mt-2 text-xl font-semibold text-white">{currency.format(totalRevenue)}</p>
             </div>
             <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
-              <p className="text-xs uppercase tracking-wide text-slate-400">Net payout after deduction</p>
-              <p className="mt-2 text-xl font-semibold text-emerald-300">{currency.format(operatingCapital.adjustedNetPayout)}</p>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Gross sales before deduction</p>
+              <p className="mt-2 text-xl font-semibold text-white">{currency.format(operatingCapital.grossSalesBeforeDeduction)}</p>
             </div>
             <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
               <p className="text-xs uppercase tracking-wide text-slate-400">Profit</p>
-              <p className={`mt-2 text-xl font-semibold ${totalProfit < 0 ? "text-red-300" : "text-emerald-200"}`}>
-                {currency.format(totalProfit)}
+              <p className={`mt-2 text-xl font-semibold ${profitToShow < 0 ? "text-red-300" : "text-emerald-200"}`}>
+                {currency.format(profitToShow)}
               </p>
             </div>
             <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
@@ -304,6 +316,12 @@ export default async function OnlinePerformanceWeekPage({
           </div>
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Net payout after deduction</p>
+              <p className="mt-2 text-xl font-semibold text-emerald-300">
+                {currency.format(operatingCapital.netPayoutAfterDeduction)}
+              </p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
               <p className="text-xs uppercase tracking-wide text-slate-400">Buying total</p>
               <p className="mt-2 text-xl font-semibold text-slate-100">{currency.format(totalBuying)}</p>
             </div>
@@ -313,11 +331,11 @@ export default async function OnlinePerformanceWeekPage({
             </div>
             <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
               <p className="text-xs uppercase tracking-wide text-slate-400">Avg commission %</p>
-              <p className="mt-2 text-xl font-semibold text-slate-100">{avgCommission.toFixed(1)}%</p>
+              <p className="mt-2 text-xl font-semibold text-slate-100">{avgCommissionToShow.toFixed(1)}%</p>
             </div>
             <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
-              <p className="text-xs uppercase tracking-wide text-slate-400">Statement net payout</p>
-              <p className="mt-2 text-xl font-semibold text-slate-100">{currency.format(manualWeeklyTotal)}</p>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Gross sales before deduction (source)</p>
+              <p className="mt-2 text-xl font-semibold text-slate-100">{currency.format(grossSalesBeforeDeduction)}</p>
             </div>
             <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-4">
               <p className="text-xs uppercase tracking-wide text-slate-400">Operating capital status</p>

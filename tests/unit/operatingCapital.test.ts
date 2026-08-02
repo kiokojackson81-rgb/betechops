@@ -89,6 +89,12 @@ describe("operating capital", () => {
     expect(Number(figures.adjustedNetPayout.toString())).toBe(70000);
   });
 
+  it("calculates operating capital as 50 percent of profit for the reported example", () => {
+    const figures = calculateOperatingCapitalFigures({ profit: 172804, currentNetPayout: 998154 });
+    expect(Number(figures.operatingCapital.toString())).toBe(86402);
+    expect(Number(figures.adjustedNetPayout.toString())).toBe(911752);
+  });
+
   it("does not deduct negative operating capital when profit is below zero", () => {
     const figures = calculateOperatingCapitalFigures({ profit: -501, currentNetPayout: 120000 });
     expect(Number(figures.operatingCapital.toString())).toBe(0);

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/api";
 import { getPricingWeekSummary } from "@/lib/pricingWeekWhatsapp";
-import { reopenOperatingCapital } from "@/lib/operatingCapital";
+import { reopenOperatingCapital, resolveOperatingCapitalSummaryInputs } from "@/lib/operatingCapital";
 import { prisma } from "@/lib/prisma";
 import { WeeklySaleStatus } from "@prisma/client";
 import { canonicalNairobiWeekStartUtc, parseDateOnlyUtc } from "@/lib/weekWindow";
@@ -47,8 +47,11 @@ export async function POST(req: NextRequest) {
     where: { weekStart, periodKey, ...(accountId ? { accountId } : {}) },
   });
 
-  const currentNetPayout = Number(weeklyNet._sum.amount ?? 0) || Number(profitAgg?._sum?.netPayout ?? 0);
-  const profit = Number(profitAgg?._sum?.profit ?? 0);
+  const { currentNetPayout, profit } = resolveOperatingCapitalSummaryInputs({
+    completionSummary,
+    fallbackCurrentNetPayout: Number(weeklyNet._sum.amount ?? 0) || Number(profitAgg?._sum?.netPayout ?? 0),
+    fallbackProfit: Number(profitAgg?._sum?.profit ?? 0),
+  });
 
   try {
     const summary = await reopenOperatingCapital({

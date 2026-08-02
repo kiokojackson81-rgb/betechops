@@ -9,7 +9,7 @@ import PricingWeekWhatsappButton from "@/app/admin/online/performance/_component
 import { WeeklySaleStatus } from "@prisma/client";
 import { resolveShopIdsForMarketplaceAccount } from "@/lib/marketplaceAccountShopResolve";
 import { getPricingWeekSummary, PRICING_WEEK_ENTITY, PRICING_WEEK_SUCCESS_ACTION } from "@/lib/pricingWeekWhatsapp";
-import { getOperatingCapitalSummary } from "@/lib/operatingCapital";
+import { getOperatingCapitalSummary, resolveOperatingCapitalSummaryInputs } from "@/lib/operatingCapital";
 
 export const dynamic = "force-dynamic";
 
@@ -187,21 +187,17 @@ export default async function OnlinePerformancePage({
       if (!completion) return [wk.startInput, null] as const;
       const agg = aggMap.get(wk.weekStart.toISOString()) ?? { netPayout: 0, profit: 0, avgCommissionRate: 0 };
       const weeklyNet = weeklySaleMap.get(wk.weekStart.toISOString()) ?? null;
-      const currentNetPayout =
-        typeof completion.total_net_payout === "number" && Number.isFinite(completion.total_net_payout)
-          ? completion.total_net_payout
-          : typeof weeklyNet === "number" && Number.isFinite(weeklyNet) && weeklyNet !== 0
-            ? weeklyNet
-            : agg.netPayout;
-      const profitForCapital =
-        typeof completion.net_profit === "number" && Number.isFinite(completion.net_profit)
-          ? completion.net_profit
-          : agg.profit;
+      const { currentNetPayout, profit } = resolveOperatingCapitalSummaryInputs({
+        completionSummary: completion,
+        fallbackCurrentNetPayout:
+          typeof weeklyNet === "number" && Number.isFinite(weeklyNet) && weeklyNet !== 0 ? weeklyNet : agg.netPayout,
+        fallbackProfit: agg.profit,
+      });
       const summary = await getOperatingCapitalSummary({
         weekStartRaw: wk.startInput,
         periodKey: period.key,
         completionSummary: completion,
-        profit: profitForCapital,
+        profit,
         currentNetPayout,
         accountId: accountId || null,
         actorId,
@@ -327,16 +323,12 @@ export default async function OnlinePerformancePage({
             const weekHref = `/admin/online/performance/week?periodKey=${encodeURIComponent(period.key)}&weekStart=${encodeURIComponent(wk.startInput)}${accountId ? `&accountId=${encodeURIComponent(accountId)}` : ""}#missing-pricing`;
             const completion = completionSummaryMap.get(wk.startInput) ?? null;
             const operatingCapital = operatingCapitalSummaryMap.get(wk.startInput) ?? null;
-            const netToShow =
-              completion && typeof completion.total_net_payout === "number" && Number.isFinite(completion.total_net_payout)
-                ? completion.total_net_payout
-                : typeof weeklyNet === "number" && Number.isFinite(weeklyNet) && weeklyNet !== 0
-                  ? weeklyNet
-                  : agg.netPayout;
-            const profitToShow =
-              completion && typeof completion.net_profit === "number" && Number.isFinite(completion.net_profit)
-                ? completion.net_profit
-                : agg.profit;
+            const { currentNetPayout: netToShow, profit: profitToShow } = resolveOperatingCapitalSummaryInputs({
+              completionSummary: completion,
+              fallbackCurrentNetPayout:
+                typeof weeklyNet === "number" && Number.isFinite(weeklyNet) && weeklyNet !== 0 ? weeklyNet : agg.netPayout,
+              fallbackProfit: agg.profit,
+            });
             const avgCommissionToShow =
               completion && typeof completion.avg_commission_pct === "number" && Number.isFinite(completion.avg_commission_pct)
                 ? completion.avg_commission_pct
@@ -395,9 +387,15 @@ export default async function OnlinePerformancePage({
                 ) : (
                   <div className="mt-4 grid gap-2 text-sm">
                     <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Gross sales before deduction</span>
+                      <span className="font-semibold text-white">
+                        {currency.format(operatingCapital?.grossSalesBeforeDeduction ?? netToShow)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
                       <span className="text-slate-400">Net payout after deduction</span>
                       <span className="font-semibold text-emerald-300">
-                        {currency.format(operatingCapital?.adjustedNetPayout ?? netToShow)}
+                        {currency.format(operatingCapital?.netPayoutAfterDeduction ?? operatingCapital?.adjustedNetPayout ?? netToShow)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -407,7 +405,7 @@ export default async function OnlinePerformancePage({
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-400">{operatingCapital?.label ?? "Estimated operating capital"}</span>
+                      <span className="text-slate-400">{operatingCapital?.label ?? "Estimated operating capital (50% of profit)"}</span>
                       <span className="font-semibold text-slate-100">
                         {currency.format(operatingCapital?.operatingCapital ?? 0)}
                       </span>
@@ -480,8 +478,8 @@ export default async function OnlinePerformancePage({
       <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
         <h2 className="text-lg font-semibold text-white">Notes</h2>
         <ul className="mt-2 space-y-1 text-sm text-slate-400">
-          <li>- Net payout is loaded via weekly statements (CSV) or manual weekly totals.</li>
-          <li>- Operating capital is 50% of profit, rounded to whole Kenya shillings, and deducted from displayed payout.</li>
+          <li>- Gross sales before operating capital deduction are loaded from the weekly pricing summary, with statement totals used as fallback.</li>
+          <li>- Operating Capital = 50% of Profit. Net Payout After Deduction = Gross Sales - Operating Capital.</li>
           <li>- Net payout = item credit + commission + shipping (commission/shipping stored as negative).</li>
           <li>- Profit = net payout - buying price.</li>
           <li>- Accounts submitted includes fully priced accounts plus accounts marked zero.</li>

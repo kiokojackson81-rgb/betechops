@@ -11,6 +11,11 @@ function roundKes(value: Prisma.Decimal | number | string | null | undefined) {
   return decimal(value).toDecimalPlaces(0, MONEY_ROUNDING);
 }
 
+function toFiniteNumber(value: unknown, fallback = 0) {
+  const parsed = Number(value ?? fallback);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 export function buildOperatingCapitalCompletionSnapshot(summary: PricingWeekSummary) {
   const totalAccounts = Number(summary.accounts_total ?? 0);
   const accountsSubmitted = Number(summary.accounts_completed ?? 0);
@@ -53,5 +58,26 @@ export function calculateOperatingCapitalFigures(input: { profit: number; curren
     currentNetPayout,
     operatingCapital,
     adjustedNetPayout,
+  };
+}
+
+export function resolveOperatingCapitalInputs(input: {
+  completionSummary?: PricingWeekSummary | null;
+  fallbackProfit?: number | null;
+  fallbackCurrentNetPayout?: number | null;
+}) {
+  const completionSummary = input.completionSummary ?? null;
+  const currentNetPayout =
+    completionSummary && Number.isFinite(Number(completionSummary.total_net_payout))
+      ? toFiniteNumber(completionSummary.total_net_payout)
+      : toFiniteNumber(input.fallbackCurrentNetPayout);
+  const profit =
+    completionSummary && Number.isFinite(Number(completionSummary.net_profit))
+      ? toFiniteNumber(completionSummary.net_profit)
+      : toFiniteNumber(input.fallbackProfit);
+
+  return {
+    currentNetPayout,
+    profit,
   };
 }
