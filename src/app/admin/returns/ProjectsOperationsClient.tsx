@@ -92,6 +92,13 @@ type ProjectsOperationsClientProps = {
 
 type ProjectStageFilter = "ALL" | "RECEIPT_CREATED" | "PROJECT_IN_PROGRESS" | "COMPLETED_POSTED";
 
+type SummaryCardFilter = {
+  label: string;
+  value: number;
+  accent: string;
+  filter: ProjectStageFilter;
+};
+
 type AssignmentModalState =
   | { type: "staff"; rowId: string }
   | { type: "external"; rowId: string }
@@ -500,6 +507,16 @@ export default function ProjectsOperationsClient({
     [scopedRows],
   );
 
+  const summaryCards = useMemo<SummaryCardFilter[]>(
+    () => [
+      { label: "All Projects", value: summary.total, accent: "text-white", filter: "ALL" },
+      { label: "Pending", value: summary.pending, accent: "text-amber-200", filter: "RECEIPT_CREATED" },
+      { label: "In Progress", value: summary.inProgress, accent: "text-sky-200", filter: "PROJECT_IN_PROGRESS" },
+      { label: "Completed", value: summary.completed, accent: "text-emerald-200", filter: "COMPLETED_POSTED" },
+    ],
+    [summary],
+  );
+
   const setEditorValue = (receiptId: string, patch: Partial<ProjectEditor>) => {
     setEditors((current) => ({
       ...current,
@@ -704,17 +721,24 @@ export default function ProjectsOperationsClient({
         </div>
 
         <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {[
-            { label: "All Projects", value: summary.total, accent: "text-white" },
-            { label: "Pending", value: summary.pending, accent: "text-amber-200" },
-            { label: "In Progress", value: summary.inProgress, accent: "text-sky-200" },
-            { label: "Completed", value: summary.completed, accent: "text-emerald-200" },
-          ].map((card) => (
-            <div key={card.label} className="rounded-[26px] border border-white/8 bg-[#0a1322] px-5 py-4">
-              <div className="text-[11px] uppercase tracking-[0.28em] text-slate-500">{card.label}</div>
-              <div className={`mt-3 text-2xl font-semibold ${card.accent}`}>{card.value}</div>
-            </div>
-          ))}
+          {summaryCards.map((card) => {
+            const isActive = stageFilter === card.filter || (card.filter === "ALL" && stageFilter === "ALL");
+            return (
+              <button
+                key={card.label}
+                type="button"
+                onClick={() => setStageFilter(card.filter)}
+                className={`rounded-[26px] border px-5 py-4 text-left transition ${
+                  isActive
+                    ? "border-cyan-400/45 bg-cyan-500/10 shadow-[0_0_0_1px_rgba(34,211,238,0.12)_inset]"
+                    : "border-white/8 bg-[#0a1322] hover:border-white/15 hover:bg-[#0d1728]"
+                }`}
+              >
+                <div className="text-[11px] uppercase tracking-[0.28em] text-slate-500">{card.label}</div>
+                <div className={`mt-3 text-2xl font-semibold ${card.accent}`}>{card.value}</div>
+              </button>
+            );
+          })}
         </div>
       </section>
 

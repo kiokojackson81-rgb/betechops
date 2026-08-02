@@ -16,6 +16,7 @@ export type ProjectExternalAgentSeed = {
 
 export const DEFAULT_PROJECT_EXTERNAL_AGENTS: ProjectExternalAgentSeed[] = [
   { name: "Benard", whatsappNumber: "+254725305389" },
+  { name: "Jackson", whatsappNumber: "+254705663175" },
   { name: "Samuel", whatsappNumber: "+254113070356" },
 ];
 
@@ -28,7 +29,7 @@ const STAFF_PHONE_OVERRIDES: Array<{
     phone: "+254731601259",
   },
   {
-    match: ["evans"],
+    match: ["kyalo", "evans"],
     phone: "+254114653461",
   },
 ];

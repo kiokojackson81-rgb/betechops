@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { buildStaffAttendantWhere } from "@/lib/staffUsers";
+import { resolveProjectStaffPhone } from "@/lib/projectHandlers";
 
 export async function GET() {
   // Allow public, read-only access to the staff list so the receipts
@@ -55,14 +56,22 @@ export async function GET() {
   }
 
   return NextResponse.json(
-    staff.map((member) => ({
-      id: member.id,
-      name: member.name || member.email || "Unnamed",
-      email: member.email,
-      phone: member.phone ?? null,
-      whatsappNumber: member.whatsappNumber ?? null,
-      attendantCategory: member.attendantCategory,
-      technicalPhoneNumber: member.technicalProfile?.phoneNumber ?? null,
-    }))
+    staff.map((member) => {
+      const resolvedPhone = resolveProjectStaffPhone({
+        name: member.name ?? member.email,
+        whatsappNumber: member.whatsappNumber ?? null,
+        phone: member.phone ?? null,
+        technicalPhoneNumber: member.technicalProfile?.phoneNumber ?? null,
+      });
+      return {
+        id: member.id,
+        name: member.name || member.email || "Unnamed",
+        email: member.email,
+        phone: resolvedPhone ?? member.phone ?? null,
+        whatsappNumber: resolvedPhone ?? member.whatsappNumber ?? null,
+        attendantCategory: member.attendantCategory,
+        technicalPhoneNumber: resolvedPhone ?? member.technicalProfile?.phoneNumber ?? null,
+      };
+    })
   );
 }
