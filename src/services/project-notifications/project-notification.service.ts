@@ -712,7 +712,7 @@ async function processDraft(
                     project_value: formatKenyaNumber(context.projectValue),
                     project_amount_paid: formatKenyaNumber(context.amountPaid),
                     project_balance: formatKenyaNumber(context.balance),
-                    project_installation_address: context.installationAddress || "",
+                    project_installation_address: context.installationAddress || "Not provided",
                     project_receipt_link: context.receiptLink,
                   },
                 })
