@@ -57,6 +57,16 @@ type MarketplaceOverviewRow = {
   orders: number;
 };
 
+type SelectedRangeOperatingCapital = {
+  grossSalesBeforeDeduction: number;
+  profit: number;
+  operatingCapital: number;
+  netPayoutAfterDeduction: number;
+  coveredWeeks: number;
+  readyWeeks: number;
+  allWeeksReady: boolean;
+};
+
 type AccountSubmissionWeekStatus = {
   accountId: string;
   weekStart: string;
@@ -703,6 +713,19 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
       ),
     [marketplaceOverviewRows],
   );
+  const selectedRangeOperatingCapital = useMemo<SelectedRangeOperatingCapital | null>(() => {
+    const raw = weeklyEarnings?.selectedRangeOperatingCapital;
+    if (!raw) return null;
+    return {
+      grossSalesBeforeDeduction: Number(raw.grossSalesBeforeDeduction ?? 0),
+      profit: Number(raw.profit ?? 0),
+      operatingCapital: Number(raw.operatingCapital ?? 0),
+      netPayoutAfterDeduction: Number(raw.netPayoutAfterDeduction ?? 0),
+      coveredWeeks: Number(raw.coveredWeeks ?? 0),
+      readyWeeks: Number(raw.readyWeeks ?? 0),
+      allWeeksReady: Boolean(raw.allWeeksReady),
+    };
+  }, [weeklyEarnings]);
   const platformAggregates = useMemo(() => {
     const rows = marketplaceOverviewRows ?? [];
     const map: Record<string, { key: string; name: string; orders: number; sales: number; commission: number }> = {};
@@ -1112,6 +1135,24 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
                       <p className="text-[11px] uppercase tracking-wide text-slate-400">Total sales (selected range)</p>
                       <p className="text-3xl font-semibold text-white">{formatKES(marketplaceOverviewTotals.sales)}</p>
                       <p className="text-xs text-slate-500">Commission: {formatKES(marketplaceOverviewTotals.commission)}</p>
+                      {selectedRangeOperatingCapital ? (
+                        <div className="mt-3 space-y-1 text-xs">
+                          <p className="text-slate-400">
+                            Weekly operating capital after deduction:{" "}
+                            <span className="font-semibold text-emerald-300">
+                              {formatKES(selectedRangeOperatingCapital.netPayoutAfterDeduction)}
+                            </span>
+                          </p>
+                          <p className="text-slate-500">
+                            Gross sales before deduction {formatKES(selectedRangeOperatingCapital.grossSalesBeforeDeduction)}.
+                            Operating capital (50% of profit) {formatKES(selectedRangeOperatingCapital.operatingCapital)}.
+                          </p>
+                          <p className="text-slate-500">
+                            {selectedRangeOperatingCapital.readyWeeks}/{selectedRangeOperatingCapital.coveredWeeks} selected week
+                            {selectedRangeOperatingCapital.coveredWeeks === 1 ? "" : "s"} ready.
+                          </p>
+                        </div>
+                      ) : null}
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
                       {userId ? (

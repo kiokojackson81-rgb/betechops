@@ -52,6 +52,18 @@ function toNumber(value: Prisma.Decimal) {
   return Number(value.toFixed(0));
 }
 
+function figuresMatchRecord(
+  record: any,
+  figures: ReturnType<typeof calculateOperatingCapitalFigures>,
+) {
+  return (
+    roundKes(record?.profitAmount).equals(figures.profit) &&
+    roundKes(record?.currentNetPayout).equals(figures.currentNetPayout) &&
+    roundKes(record?.operatingCapital).equals(figures.operatingCapital) &&
+    roundKes(record?.adjustedNetPayout).equals(figures.adjustedNetPayout)
+  );
+}
+
 function buildScopeKey(weekStartInput: string, accountId?: string | null) {
   return accountId ? `ACCOUNT:${accountId}:${weekStartInput}` : `ALL:${weekStartInput}`;
 }
@@ -188,11 +200,34 @@ export async function getOperatingCapitalSummary(input: {
     }
   }
 
+  if (
+    existing &&
+    String(existing.status) === "FINAL" &&
+    !figuresMatchRecord(existing, figures) &&
+    input.actorId
+  ) {
+    try {
+      existing = await writeFinalRecord({
+        action: OPERATING_CAPITAL_RECALCULATE_ACTION,
+        actorId: input.actorId,
+        weekStart,
+        weekEnd,
+        weekStartInput: input.weekStartRaw,
+        periodKey: input.periodKey,
+        accountId: input.accountId ?? null,
+        figures,
+      });
+    } catch (err: any) {
+      if (err?.code !== "P2021") throw err;
+    }
+  }
+
   const finalRecord = existing && String(existing.status) === "FINAL" ? existing : null;
-  const profit = finalRecord ? roundKes((finalRecord as any).profitAmount) : figures.profit;
-  const currentNetPayout = finalRecord ? roundKes((finalRecord as any).currentNetPayout) : figures.currentNetPayout;
-  const operatingCapital = finalRecord ? roundKes((finalRecord as any).operatingCapital) : figures.operatingCapital;
-  const adjustedNetPayout = finalRecord ? roundKes((finalRecord as any).adjustedNetPayout) : figures.adjustedNetPayout;
+  const useFinalRecord = finalRecord ? figuresMatchRecord(finalRecord, figures) : false;
+  const profit = useFinalRecord ? roundKes((finalRecord as any).profitAmount) : figures.profit;
+  const currentNetPayout = useFinalRecord ? roundKes((finalRecord as any).currentNetPayout) : figures.currentNetPayout;
+  const operatingCapital = useFinalRecord ? roundKes((finalRecord as any).operatingCapital) : figures.operatingCapital;
+  const adjustedNetPayout = useFinalRecord ? roundKes((finalRecord as any).adjustedNetPayout) : figures.adjustedNetPayout;
   const isFinal = Boolean(finalRecord);
 
   return {

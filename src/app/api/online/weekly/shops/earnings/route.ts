@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { MarketplaceReturnStatus } from "@prisma/client";
 import { computeMarketplaceCommission, resolveDirectCommissionMode } from "@/lib/onlineCommission";
+import { resolveOperatingCapitalSummaryInputs } from "@/lib/operatingCapital";
+import {
+  calculateOperatingCapitalFigures,
+  isOperatingCapitalReadyToFinalize,
+} from "@/lib/operatingCapitalMath";
 import { prisma } from "@/lib/prisma";
 import { requireAttendant } from "@/lib/auth";
 import { getAssignedMarketplaceSalesForPeriod } from "@/lib/onlineOps";
@@ -115,6 +120,9 @@ export async function GET(req: Request) {
     ? marketplaceSalesSummary.weeklyRows.filter((row) => selectedWeekKeys.has(normalizeWeekKey(row.weekStart)))
     : marketplaceSalesSummary.weeklyRows;
   const accountIds = Array.from(new Set(marketplaceSalesSummary.rows.map((row) => String(row.accountId ?? "").trim()).filter(Boolean)));
+  const weeklyWindowStarts = Array.from(
+    new Set(filteredWeeklyRows.map((row) => String(row.weekStart ?? "").trim()).filter(Boolean)),
+  ).map((value) => new Date(value));
   const weekKeysForStatuses = selectedWeekKeys.size
     ? Array.from(selectedWeekKeys)
     : Array.from(new Set(filteredWeeklyRows.map((row) => normalizeWeekKey(row.weekStart)).filter(Boolean)));
@@ -149,6 +157,20 @@ export async function GET(req: Request) {
     return NextResponse.json(composeIdentityResponse(meta, emptyResponse));
   }
 
+  const weeklyProfitAgg = accountIds.length && weeklyWindowStarts.length
+    ? await (prisma as any).marketplaceProfitEntry.groupBy({
+        by: ["weekStart"],
+        where: {
+          accountId: { in: accountIds },
+          weekStart: { in: weeklyWindowStarts },
+        },
+        _sum: {
+          netPayout: true,
+          profit: true,
+        },
+      })
+    : [];
+
   const returnWhere = selectedWeekKeys.size
     ? {
         OR: Array.from(selectedWeekKeys).map((weekKey) => {
@@ -174,6 +196,7 @@ export async function GET(req: Request) {
   });
 
   const weeklyByAccountId = new Map<string, { sales: number; orders: number; weekStarts: Set<string>; weekEnds: Set<string> }>();
+  const weeklySalesByWeekKey = new Map<string, number>();
   for (const row of filteredWeeklyRows) {
     const accountKey = String(row.accountId ?? "").trim();
     if (!accountKey) continue;
@@ -188,7 +211,61 @@ export async function GET(req: Request) {
     if (row.weekStart) current.weekStarts.add(new Date(row.weekStart).toISOString());
     if (row.weekEnd) current.weekEnds.add(new Date(row.weekEnd).toISOString());
     weeklyByAccountId.set(accountKey, current);
+
+    const weekKey = normalizeWeekKey(row.weekStart);
+    weeklySalesByWeekKey.set(weekKey, (weeklySalesByWeekKey.get(weekKey) ?? 0) + Number(row.sales ?? 0));
   }
+
+  const weeklyProfitByWeekKey = new Map(
+    (weeklyProfitAgg as Array<{ weekStart: Date; _sum?: { netPayout?: unknown; profit?: unknown } }>).map((row) => [
+      normalizeWeekKey(row.weekStart?.toISOString?.() ?? row.weekStart),
+      {
+        netPayout: Number(row._sum?.netPayout ?? 0),
+        profit: Number(row._sum?.profit ?? 0),
+      },
+    ]),
+  );
+
+  const selectedRangeOperatingCapitalWeeks = await Promise.all(
+    weekKeysForStatuses.map(async (weekKey) => {
+      const completion = await getPricingWeekSummary(weekKey, { accountIds });
+      const fallbackAgg = weeklyProfitByWeekKey.get(weekKey) ?? { netPayout: 0, profit: 0 };
+      const fallbackCurrentNetPayout = weeklySalesByWeekKey.get(weekKey) ?? fallbackAgg.netPayout;
+      const inputs = resolveOperatingCapitalSummaryInputs({
+        completionSummary: completion,
+        fallbackCurrentNetPayout,
+        fallbackProfit: fallbackAgg.profit,
+      });
+      const figures = calculateOperatingCapitalFigures(inputs);
+      return {
+        weekStart: weekKey,
+        isReady: isOperatingCapitalReadyToFinalize(completion),
+        grossSalesBeforeDeduction: Number(figures.currentNetPayout.toFixed(0)),
+        profit: Number(figures.profit.toFixed(0)),
+        operatingCapital: Number(figures.operatingCapital.toFixed(0)),
+        netPayoutAfterDeduction: Number(figures.adjustedNetPayout.toFixed(0)),
+      };
+    }),
+  );
+  const selectedRangeOperatingCapital = selectedRangeOperatingCapitalWeeks.reduce(
+    (acc, week) => {
+      acc.grossSalesBeforeDeduction += week.grossSalesBeforeDeduction;
+      acc.profit += week.profit;
+      acc.operatingCapital += week.operatingCapital;
+      acc.netPayoutAfterDeduction += week.netPayoutAfterDeduction;
+      acc.coveredWeeks += 1;
+      acc.readyWeeks += week.isReady ? 1 : 0;
+      return acc;
+    },
+    {
+      grossSalesBeforeDeduction: 0,
+      profit: 0,
+      operatingCapital: 0,
+      netPayoutAfterDeduction: 0,
+      coveredWeeks: 0,
+      readyWeeks: 0,
+    },
+  );
 
   const rows = marketplaceSalesSummary.rows
     .map((account) => {
@@ -262,6 +339,13 @@ export async function GET(req: Request) {
       orders: Number(row.orders ?? 0),
     })),
     accountStatuses,
+    selectedRangeOperatingCapital: {
+      ...selectedRangeOperatingCapital,
+      allWeeksReady:
+        selectedRangeOperatingCapital.coveredWeeks > 0 &&
+        selectedRangeOperatingCapital.readyWeeks === selectedRangeOperatingCapital.coveredWeeks,
+      weeks: selectedRangeOperatingCapitalWeeks,
+    },
     useCombinedMarketplaceLadder,
   };
 
