@@ -291,7 +291,29 @@ function createDrafts(context: ProjectNotificationContext): ProjectNotificationD
     }
   }
 
-  if ((context.event === "PROJECT_ASSIGNED" || context.event === "PROJECT_BOOKING_UPDATED") && isBookedContext(context)) {
+  if (context.event === "PROJECT_ASSIGNED") {
+    for (const handler of context.assignedHandlers) {
+      pushDraft(
+        "WHATSAPP",
+        "ASSIGNED_HANDLER",
+        "project_assigned_handler",
+        handler.name,
+        handler.phone,
+        handler.phone ? null : "Missing or invalid assigned handler phone",
+      );
+      drafts[drafts.length - 1]!.idempotencyKey = buildAssignedHandlerIdempotencyKey(
+        context.receiptId,
+        handler.id,
+      );
+      drafts[drafts.length - 1]!.payloadSnapshot = {
+        ...drafts[drafts.length - 1]!.payloadSnapshot,
+        handlerId: handler.id,
+        handlerKind: handler.kind,
+      };
+    }
+  }
+
+  if (context.event === "PROJECT_BOOKING_UPDATED" && isBookedContext(context)) {
     for (const handler of context.assignedHandlers) {
       pushDraft(
         "WHATSAPP",
@@ -934,7 +956,7 @@ export async function publishProjectNotification(
   }
 
   if (
-    (input.event === "PROJECT_BOOKED" || input.event === "PROJECT_BOOKING_UPDATED" || input.event === "PROJECT_ASSIGNED") &&
+    (input.event === "PROJECT_BOOKED" || input.event === "PROJECT_BOOKING_UPDATED") &&
     !isBookedContext(context)
   ) {
     console.warn("[PROJECT_NOTIFY] event skipped because booking data is incomplete", {
