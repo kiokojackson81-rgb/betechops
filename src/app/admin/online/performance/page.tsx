@@ -183,17 +183,25 @@ export default async function OnlinePerformancePage({
   const completionSummaryMap = new Map(completionSummaries.map((summary) => [summary.week_start, summary]));
   const operatingCapitalSummaries = await Promise.all(
     weeks.map(async (wk) => {
+      const completion = completionSummaryMap.get(wk.startInput);
+      if (!completion) return [wk.startInput, null] as const;
       const agg = aggMap.get(wk.weekStart.toISOString()) ?? { netPayout: 0, profit: 0, avgCommissionRate: 0 };
       const weeklyNet = weeklySaleMap.get(wk.weekStart.toISOString()) ?? null;
       const currentNetPayout =
-        typeof weeklyNet === "number" && Number.isFinite(weeklyNet) && weeklyNet !== 0 ? weeklyNet : agg.netPayout;
-      const completion = completionSummaryMap.get(wk.startInput);
-      if (!completion) return [wk.startInput, null] as const;
+        typeof completion.total_net_payout === "number" && Number.isFinite(completion.total_net_payout)
+          ? completion.total_net_payout
+          : typeof weeklyNet === "number" && Number.isFinite(weeklyNet) && weeklyNet !== 0
+            ? weeklyNet
+            : agg.netPayout;
+      const profitForCapital =
+        typeof completion.net_profit === "number" && Number.isFinite(completion.net_profit)
+          ? completion.net_profit
+          : agg.profit;
       const summary = await getOperatingCapitalSummary({
         weekStartRaw: wk.startInput,
         periodKey: period.key,
         completionSummary: completion,
-        profit: agg.profit,
+        profit: profitForCapital,
         currentNetPayout,
         accountId: accountId || null,
         actorId,
@@ -316,11 +324,24 @@ export default async function OnlinePerformancePage({
           {weeks.map((wk) => {
             const agg = aggMap.get(wk.weekStart.toISOString()) ?? { netPayout: 0, profit: 0, avgCommissionRate: 0 };
             const weeklyNet = weeklySaleMap.get(wk.weekStart.toISOString()) ?? null;
-            const netToShow = typeof weeklyNet === "number" && Number.isFinite(weeklyNet) && weeklyNet !== 0 ? weeklyNet : agg.netPayout;
-            const lossCount = lossMap.get(wk.weekStart.toISOString()) ?? 0;
             const weekHref = `/admin/online/performance/week?periodKey=${encodeURIComponent(period.key)}&weekStart=${encodeURIComponent(wk.startInput)}${accountId ? `&accountId=${encodeURIComponent(accountId)}` : ""}#missing-pricing`;
             const completion = completionSummaryMap.get(wk.startInput) ?? null;
             const operatingCapital = operatingCapitalSummaryMap.get(wk.startInput) ?? null;
+            const netToShow =
+              completion && typeof completion.total_net_payout === "number" && Number.isFinite(completion.total_net_payout)
+                ? completion.total_net_payout
+                : typeof weeklyNet === "number" && Number.isFinite(weeklyNet) && weeklyNet !== 0
+                  ? weeklyNet
+                  : agg.netPayout;
+            const profitToShow =
+              completion && typeof completion.net_profit === "number" && Number.isFinite(completion.net_profit)
+                ? completion.net_profit
+                : agg.profit;
+            const avgCommissionToShow =
+              completion && typeof completion.avg_commission_pct === "number" && Number.isFinite(completion.avg_commission_pct)
+                ? completion.avg_commission_pct
+                : agg.avgCommissionRate;
+            const lossCount = completion?.loss_entries ?? (lossMap.get(wk.weekStart.toISOString()) ?? 0);
             const submittedAccounts = completion?.accounts_completed ?? 0;
             const totalAccounts = completion?.accounts_total ?? totalAccountsForCoverage;
             const missingPricingCount = completion?.missing_pricing ?? (missingPricingMap.get(wk.weekStart.toISOString()) ?? 0);
@@ -381,8 +402,8 @@ export default async function OnlinePerformancePage({
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-slate-400">Profit</span>
-                      <span className={`font-semibold ${agg.profit < 0 ? "text-red-300" : "text-emerald-200"}`}>
-                        {currency.format(agg.profit)}
+                      <span className={`font-semibold ${profitToShow < 0 ? "text-red-300" : "text-emerald-200"}`}>
+                        {currency.format(profitToShow)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -403,7 +424,7 @@ export default async function OnlinePerformancePage({
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-slate-400">Avg commission %</span>
-                      <span className="font-semibold text-slate-200">{agg.avgCommissionRate.toFixed(1)}%</span>
+                      <span className="font-semibold text-slate-200">{avgCommissionToShow.toFixed(1)}%</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-slate-400">Accounts submitted</span>
