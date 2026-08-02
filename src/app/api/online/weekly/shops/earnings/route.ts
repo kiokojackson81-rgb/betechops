@@ -157,16 +157,27 @@ export async function GET(req: Request) {
     return NextResponse.json(composeIdentityResponse(meta, emptyResponse));
   }
 
-  const weeklyProfitAgg = accountIds.length && weeklyWindowStarts.length
+  const weeklyProfitAgg = weeklyWindowStarts.length
     ? await (prisma as any).marketplaceProfitEntry.groupBy({
         by: ["weekStart"],
         where: {
-          accountId: { in: accountIds },
           weekStart: { in: weeklyWindowStarts },
         },
         _sum: {
           netPayout: true,
           profit: true,
+        },
+      })
+    : [];
+  const globalWeeklySalesRows = weeklyWindowStarts.length
+    ? await prisma.weeklySale.findMany({
+        where: {
+          weekStart: { in: weeklyWindowStarts },
+          status: { not: "REJECTED" },
+        },
+        select: {
+          weekStart: true,
+          amount: true,
         },
       })
     : [];
@@ -196,7 +207,6 @@ export async function GET(req: Request) {
   });
 
   const weeklyByAccountId = new Map<string, { sales: number; orders: number; weekStarts: Set<string>; weekEnds: Set<string> }>();
-  const weeklySalesByWeekKey = new Map<string, number>();
   for (const row of filteredWeeklyRows) {
     const accountKey = String(row.accountId ?? "").trim();
     if (!accountKey) continue;
@@ -212,8 +222,12 @@ export async function GET(req: Request) {
     if (row.weekEnd) current.weekEnds.add(new Date(row.weekEnd).toISOString());
     weeklyByAccountId.set(accountKey, current);
 
-    const weekKey = normalizeWeekKey(row.weekStart);
-    weeklySalesByWeekKey.set(weekKey, (weeklySalesByWeekKey.get(weekKey) ?? 0) + Number(row.sales ?? 0));
+  }
+
+  const weeklySalesByWeekKey = new Map<string, number>();
+  for (const row of globalWeeklySalesRows) {
+    const weekKey = normalizeWeekKey(row.weekStart?.toISOString?.() ?? row.weekStart);
+    weeklySalesByWeekKey.set(weekKey, (weeklySalesByWeekKey.get(weekKey) ?? 0) + Number(row.amount ?? 0));
   }
 
   const weeklyProfitByWeekKey = new Map(
@@ -228,7 +242,7 @@ export async function GET(req: Request) {
 
   const selectedRangeOperatingCapitalWeeks = await Promise.all(
     weekKeysForStatuses.map(async (weekKey) => {
-      const completion = await getPricingWeekSummary(weekKey, { accountIds });
+      const completion = await getPricingWeekSummary(weekKey);
       const fallbackAgg = weeklyProfitByWeekKey.get(weekKey) ?? { netPayout: 0, profit: 0 };
       const fallbackCurrentNetPayout = weeklySalesByWeekKey.get(weekKey) ?? fallbackAgg.netPayout;
       const inputs = resolveOperatingCapitalSummaryInputs({
