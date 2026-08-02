@@ -5,6 +5,9 @@ import { Prisma } from '@prisma/client';
 const BASE_URL = (process.env.CHATRACE_BASE_URL || '').replace(/\/$/, '');
 const API_TOKEN = process.env.CHATRACE_API_TOKEN;
 const ACCOUNT_ID = process.env.CHATRACE_ACCOUNT_ID;
+const INTERNAL_BASE_URL = (process.env.CHATRACE_INTERNAL_BASE_URL || process.env.CHATRACE_BASE_URL || '').replace(/\/$/, '');
+const INTERNAL_API_TOKEN = process.env.CHATRACE_INTERNAL_API_TOKEN || process.env.CHATRACE_API_TOKEN;
+const INTERNAL_ACCOUNT_ID = process.env.CHATRACE_INTERNAL_ACCOUNT_ID || process.env.CHATRACE_ACCOUNT_ID;
 const CHATRACE_LOOKUP_CACHE_TTL_MS = 15 * 60_000;
 const CHATRACE_LOOKUP_RATE_LIMIT_TTL_MS = 60_000;
 const CHATRACE_LOOKUP_MAX_REQUESTS_PER_MINUTE = 40;
@@ -76,11 +79,23 @@ export type SendReceiptToChatraceInput = {
 };
 
 function checkConfig(accountIdOverride?: string) {
+  const resolved = resolveChatraceRequestConfig(accountIdOverride);
   const missing: string[] = [];
-  if (!BASE_URL) missing.push('CHATRACE_BASE_URL');
-  if (!API_TOKEN) missing.push('CHATRACE_API_TOKEN');
-  if (!(accountIdOverride?.trim() || ACCOUNT_ID)) missing.push('CHATRACE_ACCOUNT_ID');
+  if (!resolved.baseUrl) missing.push('CHATRACE_BASE_URL');
+  if (!resolved.token) missing.push('CHATRACE_API_TOKEN');
+  if (!resolved.accountId) missing.push('CHATRACE_ACCOUNT_ID');
   return missing;
+}
+
+function resolveChatraceRequestConfig(accountIdOverride?: string) {
+  const resolvedAccountId = accountIdOverride?.trim() || ACCOUNT_ID || '';
+  const isInternalAccount = Boolean(resolvedAccountId && INTERNAL_ACCOUNT_ID && resolvedAccountId === INTERNAL_ACCOUNT_ID);
+  return {
+    baseUrl: (isInternalAccount ? INTERNAL_BASE_URL : BASE_URL) || BASE_URL || INTERNAL_BASE_URL || '',
+    token: (isInternalAccount ? INTERNAL_API_TOKEN : API_TOKEN) || API_TOKEN || INTERNAL_API_TOKEN || '',
+    accountId: resolvedAccountId,
+    isInternalAccount,
+  };
 }
 
 function sanitizeChatraceResponse(value: unknown) {
@@ -108,7 +123,8 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     accountId,
     forceTriggerTagReapply,
   } = input;
-  const resolvedAccountId = accountId?.trim() || ACCOUNT_ID || '';
+  const requestConfig = resolveChatraceRequestConfig(accountId);
+  const resolvedAccountId = requestConfig.accountId;
   const customerDisplayName = String(customerName || '').trim() || 'Customer';
   const customerFirstName =
     customerDisplayName
@@ -124,11 +140,12 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     receiptUrlPresent: !!receiptUrlTrimmed,
     receiptUrlLength: receiptUrlTrimmed?.length ?? 0,
     env: {
-      baseUrlPresent: !!BASE_URL,
+      baseUrlPresent: !!requestConfig.baseUrl,
       accountIdPresent: !!resolvedAccountId,
-      tokenPresent: !!API_TOKEN,
-      baseUrl: BASE_URL,
+      tokenPresent: !!requestConfig.token,
+      baseUrl: requestConfig.baseUrl,
       accountId: resolvedAccountId,
+      isInternalAccount: requestConfig.isInternalAccount,
       headerKeys: [],
       skipDefaultTags: Boolean(skipDefaultTags),
     },
@@ -151,7 +168,7 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   }
 
   const headers = {
-    'X-ACCESS-TOKEN': API_TOKEN || '',
+    'X-ACCESS-TOKEN': requestConfig.token || '',
     Accept: 'application/json',
   } as Record<string, string>;
   if (resolvedAccountId) {
@@ -160,7 +177,7 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   const headerKeys = Object.keys(headers);
   debug.env.headerKeys = headerKeys;
 
-  const pathWithBase = (path: string) => `${BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
+  const pathWithBase = (path: string) => `${requestConfig.baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
 
   async function runRequest(path: string, body: unknown, hdrs: Record<string, string> = headers) {
     const url = pathWithBase(path);
@@ -556,10 +573,15 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   let tagVerified = !finalTag;
   let verification: ChatraceLookupResult | null = null;
   if (finalTag && debug.tagApplied) {
-    verification = await lookupChatraceContactByPhoneWithOptions(phoneE164, {
-      accountId: resolvedAccountId,
-      bypassCache: true,
-    });
+    verification =
+      debug.contactId != null
+        ? await lookupChatraceContactById(debug.contactId, {
+            accountId: resolvedAccountId,
+          })
+        : await lookupChatraceContactByPhoneWithOptions(phoneE164, {
+            accountId: resolvedAccountId,
+            bypassCache: true,
+          });
     const normalizedFinalTag = finalTag.trim().toLowerCase();
     tagVerified = Boolean(
       verification.found &&
@@ -567,6 +589,7 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     );
     console.info('[PROJECT_WHATSAPP] operation', {
       accountId: resolvedAccountId,
+      contactId: verification.contactId ?? debug.contactId ?? null,
       recipientPhone: phoneE164,
       operation: 'VERIFY_TAG',
       tagName: finalTag,
@@ -616,21 +639,12 @@ async function persistDebug(receiptNumber: string, debug: any) {
 }
 
 function getChatraceLookupConfig(accountIdOverride?: string): ChatraceLookupConfig {
-  const baseUrl = (
-    process.env.CHATRACE_INTERNAL_BASE_URL ||
-    process.env.CHATRACE_BASE_URL ||
-    "https://api.chatrace.com"
-  ).replace(/\/$/, "");
-  const accountId = accountIdOverride?.trim()
-    || process.env.CHATRACE_INTERNAL_ACCOUNT_ID
-    || process.env.CHATRACE_ACCOUNT_ID
-    || "";
-  const token =
-    process.env.CHATRACE_INTERNAL_API_TOKEN ||
-    process.env.CHATRACE_API_TOKEN ||
-    "";
-
-  return { baseUrl, accountId, token };
+  const resolved = resolveChatraceRequestConfig(accountIdOverride);
+  return {
+    baseUrl: resolved.baseUrl || "https://api.chatrace.com",
+    accountId: resolved.accountId,
+    token: resolved.token,
+  };
 }
 
 function buildChatraceLookupCacheKey(phone: string, accountId = '') {
@@ -980,6 +994,58 @@ function mapChatraceContactToLookup(input: {
     inboxUrl: buildChatraceInboxUrl(input.config.baseUrl, input.config.accountId),
     recentMessages,
   } satisfies ChatraceLookupResult;
+}
+
+export async function lookupChatraceContactById(
+  contactId: string | number | null | undefined,
+  options?: { accountId?: string },
+): Promise<ChatraceLookupResult> {
+  const trimmedId = String(contactId ?? '').trim();
+  const config = getChatraceLookupConfig(options?.accountId);
+  if (!trimmedId || !config.baseUrl || !config.token) {
+    return buildChatraceLookupBaseResult('', { sourceError: true });
+  }
+
+  try {
+    const detailResponse = await runChatraceLookupRequest(`/contacts/${encodeURIComponent(trimmedId)}`, config);
+    if (!detailResponse.ok) {
+      return buildChatraceLookupBaseResult('', { sourceError: true });
+    }
+
+    const detailContact = pickChatraceContact(detailResponse.json);
+    if (!detailContact || typeof detailContact !== 'object') {
+      return buildChatraceLookupBaseResult('', { sourceError: true });
+    }
+
+    const detailRecord = detailContact as Record<string, unknown>;
+    const normalizedPhone = normalizeKenyanPhone(toLookupString(detailRecord.phone));
+    const mapped = mapChatraceContactToLookup({
+      contact: detailRecord,
+      normalizedPhone,
+      config,
+    });
+
+    const [tagsResponse, customFieldsResponse] = await Promise.all([
+      runChatraceLookupRequest(`/contacts/${encodeURIComponent(trimmedId)}/tags`, config),
+      runChatraceLookupRequest(`/contacts/${encodeURIComponent(trimmedId)}/custom_fields`, config),
+    ]);
+
+    if (tagsResponse.ok) {
+      mapped.tags = toTagList(tagsResponse.json);
+    }
+    if (customFieldsResponse.ok) {
+      mapped.customFields = toCustomFieldList(customFieldsResponse.json);
+    }
+
+    return mapped;
+  } catch (error) {
+    console.error("[chatrace.lookup.by_id.failed]", {
+      contactId: trimmedId,
+      accountId: config.accountId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return buildChatraceLookupBaseResult('', { sourceError: true });
+  }
 }
 
 export async function lookupChatraceContactByPhone(rawPhone: string | null | undefined): Promise<ChatraceLookupResult> {

@@ -29,7 +29,13 @@ function getSiteUrl() {
 }
 
 function getProjectAdminWhatsApp() {
-  return normalizeProjectPhone(process.env.PROJECT_ADMIN_WHATSAPP || process.env.ADMIN_NOTIFICATION_WHATSAPP_NUMBERS?.split(/[,\s;]+/g)[0] || "");
+  return normalizeProjectPhone(
+    process.env.PROJECT_ADMIN_WHATSAPP
+      || process.env.CHATRACE_INTERNAL_ADMIN_PHONE
+      || process.env.WHATSAPP_ADMIN_PHONE
+      || process.env.ADMIN_NOTIFICATION_WHATSAPP_NUMBERS?.split(/[,\s;]+/g)[0]
+      || "",
+  );
 }
 
 const CUSTOMER_CHATRACE_ACCOUNT_ID = (process.env.CHATRACE_PROJECT_CUSTOMER_ACCOUNT_ID || "1705099").trim();
