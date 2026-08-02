@@ -3,7 +3,11 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/api";
 import { auth } from "@/lib/auth";
-import { buildProjectHandlerSignature, resolveProjectStaffPhone } from "@/lib/projectHandlers";
+import {
+  buildProjectHandlerSignature,
+  normalizeProjectHandlerPhone,
+  resolveProjectStaffPhone,
+} from "@/lib/projectHandlers";
 import { syncCompletedProjectReceiptToPricing } from "@/lib/projectPricingSync";
 import {
   buildReceiptProjectFlow,
@@ -176,6 +180,13 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
   const staffById = new Map<string, StaffAssignmentUser>(staffMembers.map((entry) => [entry.id, entry] as const));
   const externalById = new Map<string, ExternalAgentRecord>(externalAgents.map((entry) => [entry.id, entry] as const));
 
+  if (nextExternalAgentIds.length > externalAgents.length) {
+    return NextResponse.json(
+      { error: "One or more selected external agents could not be found or are inactive" },
+      { status: 400 },
+    );
+  }
+
   const nextAssignedHandlers: ReceiptProjectHandlerAssignment[] = [
     ...nextHandlerStaffIds.map((staffId) => {
       const user = staffById.get(staffId);
@@ -202,7 +213,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
         staffName: null,
         externalAgentId,
         externalAgentName: agent?.name ?? parsed.data.externalAgentName ?? null,
-        phone: agent?.whatsappNumber ?? parsed.data.externalAgentPhone ?? null,
+        phone: normalizeProjectHandlerPhone(agent?.whatsappNumber ?? parsed.data.externalAgentPhone ?? null),
       } satisfies ReceiptProjectHandlerAssignment;
     }),
   ];
