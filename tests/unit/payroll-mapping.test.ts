@@ -1,4 +1,5 @@
 import { mapPayrollToEarningsSummary, mapPayrollToPayrollRow } from "@/lib/payrollMapping";
+import { buildEarningsCardBreakdown } from "@/lib/earningsCardBreakdown";
 
 describe("payroll mapping helpers", () => {
   test("maps minimal payroll summary to earnings summary", () => {
@@ -42,5 +43,31 @@ describe("payroll mapping helpers", () => {
     expect(row.adjustmentBreakdown.chama).toBe(100);
     expect(row.adjustmentBreakdown.lateness).toBe(50);
     expect(row.bonusTotal).toBe(400); // bonus + commissionTopUp
+  });
+
+  test("preserves technical commission breakdown so payslip can show project commission", () => {
+    const summary = mapPayrollToEarningsSummary(
+      {
+        attendantCategory: "TECHNICAL_TEAM",
+        baseSalary: 61000,
+        commissionDirect: 12000,
+        commissionTotal: 14000,
+        commissionBreakdown: {
+          posProfitShare: 0,
+          posProduct: 0,
+          projectCompleted: 14000,
+        },
+      } as any,
+      0,
+    );
+
+    expect(summary?.commissionBreakdown).toEqual({
+      posProfitShare: 0,
+      posProduct: 0,
+      projectCompleted: 14000,
+    });
+
+    const breakdown = buildEarningsCardBreakdown(summary as any);
+    expect(breakdown.lines.some((line) => line.label === "Project commission" && line.amount === 14000)).toBe(true);
   });
 });

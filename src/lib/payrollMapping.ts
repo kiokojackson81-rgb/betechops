@@ -117,6 +117,7 @@ export function mapPayrollToEarningsSummary(p: PayrollSummary | null, receiptsCo
     netPay,
     ledger: null,
     adjustmentEntries,
+    commissionBreakdown: p.commissionBreakdown ?? null,
   };
 }
 
