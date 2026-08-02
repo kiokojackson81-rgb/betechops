@@ -678,6 +678,7 @@ async function processDraft(
         contactUpdated: Boolean(response.debug?.contactUpdated),
         tagRemoved: Boolean(response.debug?.tagRemoved),
         tagApplied: Boolean(response.debug?.tagApplied),
+        tagVerified: Boolean(response.debug?.tagVerified),
         tagName:
           draft.templateKey === "project_installation_booked_customer"
             ? PROJECT_TRIGGER_TAGS.customerBooked

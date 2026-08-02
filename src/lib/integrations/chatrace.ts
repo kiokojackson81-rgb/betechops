@@ -49,6 +49,12 @@ type ChatraceLookupCacheEntry = {
 
 const chatraceLookupCache = new Map<string, ChatraceLookupCacheEntry>();
 
+type ChatraceLookupConfig = {
+  baseUrl: string;
+  accountId: string;
+  token: string;
+};
+
 export type SendReceiptToChatraceInput = {
   phoneE164: string;
   customerName: string;
@@ -75,6 +81,16 @@ function checkConfig(accountIdOverride?: string) {
   if (!API_TOKEN) missing.push('CHATRACE_API_TOKEN');
   if (!(accountIdOverride?.trim() || ACCOUNT_ID)) missing.push('CHATRACE_ACCOUNT_ID');
   return missing;
+}
+
+function sanitizeChatraceResponse(value: unknown) {
+  if (value == null) return null;
+  if (typeof value === 'string') return value.slice(0, 300);
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    return String(value).slice(0, 300);
+  }
 }
 
 export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): Promise<{ ok: boolean; debug: any }> {
@@ -432,6 +448,14 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     bodyError: createRes.bodyError ?? null,
     ok: createRes.ok,
   };
+  console.info('[PROJECT_WHATSAPP] operation', {
+    accountId: resolvedAccountId,
+    recipientPhone: phoneE164,
+    operation: 'UPDATE_FIELDS',
+    tagName: finalTag || null,
+    httpStatus: createRes.status,
+    sanitizedResponse: sanitizeChatraceResponse(createRes.json ?? createRes.text),
+  });
   if (createRes.bodyError && !debug.error) {
     debug.error = typeof createRes.bodyError === 'string' ? createRes.bodyError : JSON.stringify(createRes.bodyError);
   }
@@ -490,6 +514,14 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
       ok: removeTagRes.ok,
       response: removeTagRes.json ?? null,
     };
+    console.info('[PROJECT_WHATSAPP] operation', {
+      accountId: resolvedAccountId,
+      recipientPhone: phoneE164,
+      operation: 'REMOVE_TAG',
+      tagName: finalTag || null,
+      httpStatus: removeTagRes.status,
+      sanitizedResponse: sanitizeChatraceResponse(removeTagRes.json ?? removeTagRes.text),
+    });
     await sleep(delayMs);
   }
 
@@ -503,6 +535,14 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
       ok: applyTagRes.ok,
       response: applyTagRes.json ?? null,
     };
+    console.info('[PROJECT_WHATSAPP] operation', {
+      accountId: resolvedAccountId,
+      recipientPhone: phoneE164,
+      operation: 'APPLY_TAG',
+      tagName: finalTag || null,
+      httpStatus: applyTagRes.status,
+      sanitizedResponse: sanitizeChatraceResponse(applyTagRes.json ?? applyTagRes.text),
+    });
   }
 
   const tagRes = applyTagRes ?? removeTagRes;
@@ -513,8 +553,48 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
   debug.tagApplied = Boolean(
     applyTagRes?.ok && applyActions.some((action: any) => action?.action === 'add_tag' && action?.tag_name === finalTag),
   );
-  debug.providerStatus = tagRes?.ok ? 'SUCCESS' : 'FAILED';
-  debug.ok = Boolean(tagRes?.ok || createRes.ok);
+  let tagVerified = !finalTag;
+  let verification: ChatraceLookupResult | null = null;
+  if (finalTag && debug.tagApplied) {
+    verification = await lookupChatraceContactByPhoneWithOptions(phoneE164, {
+      accountId: resolvedAccountId,
+      bypassCache: true,
+    });
+    const normalizedFinalTag = finalTag.trim().toLowerCase();
+    tagVerified = Boolean(
+      verification.found &&
+      (verification.tags || []).some((tag) => tag.trim().toLowerCase() === normalizedFinalTag),
+    );
+    console.info('[PROJECT_WHATSAPP] operation', {
+      accountId: resolvedAccountId,
+      recipientPhone: phoneE164,
+      operation: 'VERIFY_TAG',
+      tagName: finalTag,
+      httpStatus: verification.found ? 200 : 404,
+      sanitizedResponse: {
+        found: verification.found,
+        contactId: verification.contactId ?? null,
+        tags: verification.tags ?? [],
+        rateLimited: verification.rateLimited ?? false,
+        sourceError: verification.sourceError ?? false,
+      },
+    });
+  }
+  debug.tagVerified = tagVerified;
+  debug.verification = verification
+    ? {
+        found: verification.found,
+        contactId: verification.contactId ?? null,
+        tags: verification.tags ?? [],
+        rateLimited: verification.rateLimited ?? false,
+        sourceError: verification.sourceError ?? false,
+      }
+    : null;
+  debug.providerStatus = tagRes?.ok && tagVerified ? 'SUCCESS' : 'FAILED';
+  debug.ok = Boolean(createRes.ok && (tagActions.length === 0 || (tagRes?.ok && tagVerified)));
+  if (!debug.ok && !debug.error && finalTag && !tagVerified) {
+    debug.error = `ChatRace tag was not attached: ${finalTag}`;
+  }
   await persistDebug(receiptNumber, debug);
   return { ok: debug.ok, debug };
 }
@@ -535,16 +615,16 @@ async function persistDebug(receiptNumber: string, debug: any) {
   }
 }
 
-function getChatraceLookupConfig() {
+function getChatraceLookupConfig(accountIdOverride?: string): ChatraceLookupConfig {
   const baseUrl = (
     process.env.CHATRACE_INTERNAL_BASE_URL ||
     process.env.CHATRACE_BASE_URL ||
     "https://api.chatrace.com"
   ).replace(/\/$/, "");
-  const accountId =
-    process.env.CHATRACE_INTERNAL_ACCOUNT_ID ||
-    process.env.CHATRACE_ACCOUNT_ID ||
-    "";
+  const accountId = accountIdOverride?.trim()
+    || process.env.CHATRACE_INTERNAL_ACCOUNT_ID
+    || process.env.CHATRACE_ACCOUNT_ID
+    || "";
   const token =
     process.env.CHATRACE_INTERNAL_API_TOKEN ||
     process.env.CHATRACE_API_TOKEN ||
@@ -553,12 +633,12 @@ function getChatraceLookupConfig() {
   return { baseUrl, accountId, token };
 }
 
-function buildChatraceLookupCacheKey(phone: string) {
-  return `lookup:${phone}`;
+function buildChatraceLookupCacheKey(phone: string, accountId = '') {
+  return `lookup:${accountId || 'default'}:${phone}`;
 }
 
-function readChatraceLookupCache(phone: string) {
-  const key = buildChatraceLookupCacheKey(phone);
+function readChatraceLookupCache(phone: string, accountId = '') {
+  const key = buildChatraceLookupCacheKey(phone, accountId);
   const cached = chatraceLookupCache.get(key);
   if (!cached) return null;
   if (cached.expiresAt <= Date.now()) {
@@ -568,11 +648,20 @@ function readChatraceLookupCache(phone: string) {
   return cached.value;
 }
 
-function writeChatraceLookupCache(phone: string, value: ChatraceLookupResult, ttlMs = CHATRACE_LOOKUP_CACHE_TTL_MS) {
-  chatraceLookupCache.set(buildChatraceLookupCacheKey(phone), {
+function writeChatraceLookupCache(
+  phone: string,
+  value: ChatraceLookupResult,
+  ttlMs = CHATRACE_LOOKUP_CACHE_TTL_MS,
+  accountId = '',
+) {
+  chatraceLookupCache.set(buildChatraceLookupCacheKey(phone, accountId), {
     expiresAt: Date.now() + ttlMs,
     value,
   });
+}
+
+function clearChatraceLookupCache(phone: string, accountId = '') {
+  chatraceLookupCache.delete(buildChatraceLookupCacheKey(phone, accountId));
 }
 
 export function buildChatraceLookupBaseResult(
@@ -798,8 +887,7 @@ function buildChatraceInboxUrl(baseUrl: string, accountId: string) {
   }
 }
 
-async function runChatraceLookupRequest(path: string) {
-  const config = getChatraceLookupConfig();
+async function runChatraceLookupRequest(path: string, config: ChatraceLookupConfig) {
   const url = `${config.baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
   const controller = new AbortController();
   const timeoutMs = 8_000;
@@ -895,8 +983,16 @@ function mapChatraceContactToLookup(input: {
 }
 
 export async function lookupChatraceContactByPhone(rawPhone: string | null | undefined): Promise<ChatraceLookupResult> {
+  return lookupChatraceContactByPhoneWithOptions(rawPhone);
+}
+
+export async function lookupChatraceContactByPhoneWithOptions(
+  rawPhone: string | null | undefined,
+  options?: { accountId?: string; bypassCache?: boolean },
+): Promise<ChatraceLookupResult> {
   const normalizedPhone = normalizeKenyanPhone(rawPhone ?? "");
   const baseResult = buildChatraceLookupBaseResult(normalizedPhone);
+  const accountId = options?.accountId?.trim() || '';
 
   if (!normalizedPhone) {
     return baseResult;
@@ -904,23 +1000,28 @@ export async function lookupChatraceContactByPhone(rawPhone: string | null | und
 
   if (chatraceLookupRateLimitedUntil > Date.now()) {
     const result = buildChatraceLookupBaseResult(normalizedPhone, { sourceError: true, rateLimited: true });
-    writeChatraceLookupCache(normalizedPhone, result, chatraceLookupRateLimitedUntil - Date.now());
+    writeChatraceLookupCache(normalizedPhone, result, chatraceLookupRateLimitedUntil - Date.now(), accountId);
     return result;
   }
 
-  const cached = readChatraceLookupCache(normalizedPhone);
+  if (options?.bypassCache) {
+    clearChatraceLookupCache(normalizedPhone, accountId);
+  }
+
+  const cached = options?.bypassCache ? null : readChatraceLookupCache(normalizedPhone, accountId);
   if (cached) {
     return cached;
   }
 
-  const config = getChatraceLookupConfig();
+  const config = getChatraceLookupConfig(accountId);
   if (!config.baseUrl || !config.token) {
     const result = buildChatraceLookupBaseResult(normalizedPhone, { sourceError: true });
-    writeChatraceLookupCache(normalizedPhone, result);
+    writeChatraceLookupCache(normalizedPhone, result, CHATRACE_LOOKUP_CACHE_TTL_MS, accountId);
     return result;
   }
 
-  const inFlight = chatraceLookupInFlight.get(normalizedPhone);
+  const inFlightKey = `${accountId || 'default'}:${normalizedPhone}`;
+  const inFlight = chatraceLookupInFlight.get(inFlightKey);
   if (inFlight) {
     return inFlight;
   }
@@ -945,14 +1046,15 @@ export async function lookupChatraceContactByPhone(rawPhone: string | null | und
           chatraceLookupRateLimitLoggedAt = Date.now();
           console.error("[chatrace.lookup.global_rate_limited]", {
             phone: normalizedPhone,
+            accountId: config.accountId,
             windowRequests: chatraceLookupRequestTimestamps.length,
           });
         }
-        writeChatraceLookupCache(normalizedPhone, result, CHATRACE_LOOKUP_RATE_LIMIT_TTL_MS);
+        writeChatraceLookupCache(normalizedPhone, result, CHATRACE_LOOKUP_RATE_LIMIT_TTL_MS, accountId);
         return result;
       }
       const path = `/contacts/find_by_custom_field?field_id=phone&value=${encodeURIComponent(candidate)}`;
-      const response = await runChatraceLookupRequest(path);
+      const response = await runChatraceLookupRequest(path, config);
       if (!response.ok) {
         if (response.status === 429) {
           const result = buildChatraceLookupBaseResult(normalizedPhone, { sourceError: true, rateLimited: true });
@@ -961,16 +1063,18 @@ export async function lookupChatraceContactByPhone(rawPhone: string | null | und
             chatraceLookupRateLimitLoggedAt = Date.now();
             console.error("[chatrace.lookup.rate_limited]", {
               phone: normalizedPhone,
+              accountId: config.accountId,
               candidate,
               status: response.status,
               bodySnippet: snippet(response.raw, 400),
             });
           }
-          writeChatraceLookupCache(normalizedPhone, result, CHATRACE_LOOKUP_RATE_LIMIT_TTL_MS);
+          writeChatraceLookupCache(normalizedPhone, result, CHATRACE_LOOKUP_RATE_LIMIT_TTL_MS, accountId);
           return result;
         }
         console.error("[chatrace.lookup.find.failed]", {
           phone: normalizedPhone,
+          accountId: config.accountId,
           candidate,
           status: response.status,
           bodySnippet: snippet(response.raw, 400),
@@ -985,13 +1089,13 @@ export async function lookupChatraceContactByPhone(rawPhone: string | null | und
     }
 
     if (!foundContact) {
-      writeChatraceLookupCache(normalizedPhone, baseResult);
+      writeChatraceLookupCache(normalizedPhone, baseResult, CHATRACE_LOOKUP_CACHE_TTL_MS, accountId);
       return baseResult;
     }
 
     const contactId = Number(foundContact.id ?? 0) || null;
     if (contactId) {
-      const detailResponse = await runChatraceLookupRequest(`/contacts/${contactId}`);
+      const detailResponse = await runChatraceLookupRequest(`/contacts/${contactId}`, config);
       if (detailResponse.ok) {
         const detailContact = pickChatraceContact(detailResponse.json);
         if (detailContact && typeof detailContact === "object") {
@@ -1003,6 +1107,7 @@ export async function lookupChatraceContactByPhone(rawPhone: string | null | und
           chatraceLookupRateLimitLoggedAt = Date.now();
           console.error("[chatrace.lookup.contact.rate_limited]", {
             phone: normalizedPhone,
+            accountId: config.accountId,
             contactId,
             status: detailResponse.status,
             bodySnippet: snippet(detailResponse.raw, 400),
@@ -1015,11 +1120,12 @@ export async function lookupChatraceContactByPhone(rawPhone: string | null | und
         });
         result.rateLimited = true;
         result.sourceError = true;
-        writeChatraceLookupCache(normalizedPhone, result, CHATRACE_LOOKUP_RATE_LIMIT_TTL_MS);
+        writeChatraceLookupCache(normalizedPhone, result, CHATRACE_LOOKUP_RATE_LIMIT_TTL_MS, accountId);
         return result;
       } else {
         console.error("[chatrace.lookup.contact.failed]", {
           phone: normalizedPhone,
+          accountId: config.accountId,
           contactId,
           status: detailResponse.status,
           bodySnippet: snippet(detailResponse.raw, 400),
@@ -1032,20 +1138,21 @@ export async function lookupChatraceContactByPhone(rawPhone: string | null | und
       normalizedPhone,
       config,
     });
-    writeChatraceLookupCache(normalizedPhone, result);
+    writeChatraceLookupCache(normalizedPhone, result, CHATRACE_LOOKUP_CACHE_TTL_MS, accountId);
     return result;
   })().catch((error) => {
     console.error("[chatrace.lookup.failed]", {
       phone: normalizedPhone,
+      accountId: config.accountId,
       error: error instanceof Error ? error.message : String(error),
     });
     const result = buildChatraceLookupBaseResult(normalizedPhone, { sourceError: true });
-    writeChatraceLookupCache(normalizedPhone, result);
+    writeChatraceLookupCache(normalizedPhone, result, CHATRACE_LOOKUP_CACHE_TTL_MS, accountId);
     return result;
   }).finally(() => {
-    chatraceLookupInFlight.delete(normalizedPhone);
+    chatraceLookupInFlight.delete(inFlightKey);
   });
 
-  chatraceLookupInFlight.set(normalizedPhone, lookupPromise);
+  chatraceLookupInFlight.set(inFlightKey, lookupPromise);
   return lookupPromise;
 }
