@@ -9,16 +9,51 @@ const createSchema = z.object({
   whatsappNumber: z.string().trim().min(7).max(30),
 });
 
+async function ensureDefaultProjectExternalAgents() {
+  return prisma.$transaction(async (tx) => {
+    for (const entry of DEFAULT_PROJECT_EXTERNAL_AGENTS) {
+      const normalizedPhone = normalizeProjectHandlerPhone(entry.whatsappNumber);
+      if (!normalizedPhone) continue;
+      const existing = await tx.projectExternalAgent.findFirst({
+        where: {
+          OR: [
+            { name: entry.name },
+            { whatsappNumber: normalizedPhone },
+          ],
+        },
+      });
+      if (existing) {
+        await tx.projectExternalAgent.update({
+          where: { id: existing.id },
+          data: {
+            name: entry.name,
+            whatsappNumber: normalizedPhone,
+            isActive: true,
+          },
+        });
+        continue;
+      }
+      await tx.projectExternalAgent.create({
+        data: {
+          name: entry.name,
+          whatsappNumber: normalizedPhone,
+        },
+      });
+    }
+
+    return tx.projectExternalAgent.findMany({
+      where: { isActive: true },
+      orderBy: [{ name: "asc" }],
+    });
+  });
+}
+
 export async function GET() {
   const guard = await requireRole(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
   if (!guard.ok) return guard.res;
 
-  const existing = await prisma.projectExternalAgent.findMany({
-    where: { isActive: true },
-    orderBy: [{ name: "asc" }],
-  });
-
-  return NextResponse.json(existing);
+  const agents = await ensureDefaultProjectExternalAgents();
+  return NextResponse.json(agents);
 }
 
 export async function POST(req: NextRequest) {
@@ -68,31 +103,6 @@ export async function PUT() {
   const guard = await requireRole(["ADMIN", "SUPERVISOR"]);
   if (!guard.ok) return guard.res;
 
-  const seeded = await prisma.$transaction(async (tx) => {
-    const rows: Array<{
-      id: string;
-      name: string;
-      whatsappNumber: string;
-      isActive: boolean;
-      createdAt: Date;
-      updatedAt: Date;
-    }> = [];
-    for (const entry of DEFAULT_PROJECT_EXTERNAL_AGENTS) {
-      const existing = await tx.projectExternalAgent.findFirst({
-        where: { name: entry.name, whatsappNumber: entry.whatsappNumber },
-      });
-      rows.push(
-        existing ??
-          (await tx.projectExternalAgent.create({
-            data: {
-              name: entry.name,
-              whatsappNumber: entry.whatsappNumber,
-            },
-          })),
-      );
-    }
-    return rows;
-  });
-
+  const seeded = await ensureDefaultProjectExternalAgents();
   return NextResponse.json(seeded);
 }
