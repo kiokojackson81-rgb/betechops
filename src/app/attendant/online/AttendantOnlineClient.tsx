@@ -1136,22 +1136,12 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
                       <p className="text-3xl font-semibold text-white">{formatKES(marketplaceOverviewTotals.sales)}</p>
                       <p className="text-xs text-slate-500">Commission: {formatKES(marketplaceOverviewTotals.commission)}</p>
                       {selectedRangeOperatingCapital ? (
-                        <div className="mt-3 space-y-1 text-xs">
+                        <div className="mt-3 text-xs">
                           <p className="text-slate-400">
-                            {selectedRangeOperatingCapital.allWeeksReady
-                              ? "Final operating capital:"
-                              : "Estimated final operating capital:"}{" "}
+                            Weekly operating capital:{" "}
                             <span className="font-semibold text-emerald-300">
                               {formatKES(selectedRangeOperatingCapital.netPayoutAfterDeduction)}
                             </span>
-                          </p>
-                          <p className="text-slate-500">
-                            Gross sales before deduction {formatKES(selectedRangeOperatingCapital.grossSalesBeforeDeduction)}.
-                            Deduction applied (50% of profit) {formatKES(selectedRangeOperatingCapital.operatingCapital)}.
-                          </p>
-                          <p className="text-slate-500">
-                            {selectedRangeOperatingCapital.readyWeeks}/{selectedRangeOperatingCapital.coveredWeeks} selected week
-                            {selectedRangeOperatingCapital.coveredWeeks === 1 ? "" : "s"} ready.
                           </p>
                         </div>
                       ) : null}
