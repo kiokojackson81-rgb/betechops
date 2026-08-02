@@ -1133,6 +1133,8 @@ export async function POST(req: NextRequest) {
     isPodPaymentMethod(payload?.paymentMethod) ||
     normalizeCustomerType(payload?.customerType) === "pod";
   const isProjectReceipt = normalizeCustomerType(payload?.customerType) === "project";
+  const normalizedDeliveryAddress =
+    typeof payload?.deliveryAddress === "string" ? payload.deliveryAddress.trim() : "";
   const requestId = randomUUID();
 
   // use shared parse helpers from src/lib/parseNumber
@@ -1171,6 +1173,13 @@ export async function POST(req: NextRequest) {
   const total = subtotal + taxAmount - discount;
   const deposit = docType === "LAYAWAY" ? parseNumber(payload?.deposit || 0) : 0;
   const balance = docType === "LAYAWAY" ? Math.max(0, total - deposit) : 0;
+
+  if (isProjectReceipt && !normalizedDeliveryAddress) {
+    return NextResponse.json(
+      { ok: false, error: "Project address is required." },
+      { status: 400 },
+    );
+  }
 
   try {
     // allow linking when caller opts-in via ?link=1 or payload.link = true
@@ -1225,7 +1234,7 @@ export async function POST(req: NextRequest) {
             })
           : null;
       const metadataFromPayload =
-        payload?.metadata ?? (payload?.deliveryAddress ? { deliveryAddress: payload.deliveryAddress } : undefined);
+        payload?.metadata ?? (normalizedDeliveryAddress ? { deliveryAddress: normalizedDeliveryAddress } : undefined);
       const receiptMetadata =
         normalizedProjectFlow
           ? {

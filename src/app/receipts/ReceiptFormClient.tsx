@@ -1013,6 +1013,9 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     if (!customerName.trim()) return showToast("Customer name is required", "error");
     if (!customerPhone.trim()) return showToast("Customer phone is required", "error");
     if (!customerType) return showToast("Select a customer type", "error");
+    if (customerType === "project" && !deliveryAddress?.trim()) {
+      return showToast("Project address is required", "error");
+    }
     if (customerType === "delivery" && deliveryStatus === "failed") {
       return showToast("Delivery marked as failed cannot be submitted", "error");
     }
@@ -1698,14 +1701,16 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         </div>
       ) : null}
 
-      {(showAddressInput || customerType === "delivery") && (
+      {(showAddressInput || customerType === "delivery" || customerType === "project") && (
         <div className="mt-3">
-          <label className={labelClass}>Delivery address</label>
+          <label className={labelClass}>
+            {customerType === "project" ? "Project address" : "Delivery address"}
+          </label>
           <div className="mt-1 flex gap-2">
             <input
               value={deliveryAddress ?? ""}
               onChange={(e) => setDeliveryAddress(e.target.value || undefined)}
-              placeholder="Customer delivery address"
+              placeholder={customerType === "project" ? "Project installation address" : "Customer delivery address"}
               className={`${fieldClass} flex-1`}
             />
             <button
