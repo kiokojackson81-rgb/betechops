@@ -496,7 +496,6 @@ export default function ProjectsOperationsClient({
       pending: scopedRows.filter((row) => row.projectStage === "RECEIPT_CREATED" || !row.projectStage).length,
       inProgress: scopedRows.filter((row) => row.projectStage === "PROJECT_IN_PROGRESS").length,
       completed: scopedRows.filter((row) => row.projectStage === "COMPLETED_POSTED").length,
-      revenue: scopedRows.reduce((sum, row) => sum + Number(row.total ?? 0), 0),
     }),
     [scopedRows],
   );
@@ -704,13 +703,12 @@ export default function ProjectsOperationsClient({
           </div>
         </div>
 
-        <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {[
             { label: "All Projects", value: summary.total, accent: "text-white" },
             { label: "Pending", value: summary.pending, accent: "text-amber-200" },
             { label: "In Progress", value: summary.inProgress, accent: "text-sky-200" },
             { label: "Completed", value: summary.completed, accent: "text-emerald-200" },
-            { label: "Total Project Revenue", value: formatCurrency(summary.revenue), accent: "text-cyan-100" },
           ].map((card) => (
             <div key={card.label} className="rounded-[26px] border border-white/8 bg-[#0a1322] px-5 py-4">
               <div className="text-[11px] uppercase tracking-[0.28em] text-slate-500">{card.label}</div>
