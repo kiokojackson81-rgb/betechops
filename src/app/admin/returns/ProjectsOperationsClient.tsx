@@ -493,9 +493,9 @@ export default function ProjectsOperationsClient({
   const summary = useMemo(
     () => ({
       total: scopedRows.length,
-      pending: scopedRows.filter((row) => getDisplayStatus(row).label === "Pending").length,
-      inProgress: scopedRows.filter((row) => getDisplayStatus(row).label === "In Progress").length,
-      completed: scopedRows.filter((row) => getDisplayStatus(row).label === "Completed").length,
+      pending: scopedRows.filter((row) => row.projectStage === "RECEIPT_CREATED" || !row.projectStage).length,
+      inProgress: scopedRows.filter((row) => row.projectStage === "PROJECT_IN_PROGRESS").length,
+      completed: scopedRows.filter((row) => row.projectStage === "COMPLETED_POSTED").length,
       revenue: scopedRows.reduce((sum, row) => sum + Number(row.total ?? 0), 0),
     }),
     [scopedRows],
