@@ -302,23 +302,23 @@ function ModalShell({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-3xl rounded-[28px] border border-white/10 bg-[#07111f] shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
-        <div className="flex items-start justify-between gap-4 border-b border-white/10 px-6 py-5">
+      <div className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-[24px] border border-white/10 bg-[#07111f] shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
+        <div className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4">
           <div>
             <div className="text-[11px] uppercase tracking-[0.32em] text-cyan-300">Project Assignment</div>
-            <h3 className="mt-2 text-2xl font-semibold text-white">{title}</h3>
-            <p className="mt-2 text-sm text-slate-400">{description}</p>
+            <h3 className="mt-2 text-xl font-semibold text-white">{title}</h3>
+            <p className="mt-1 text-sm text-slate-400">{description}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-300 hover:bg-white/10"
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-slate-300 hover:bg-white/10"
           >
             Close
           </button>
         </div>
-        <div className="p-6">{children}</div>
-        {footer ? <div className="border-t border-white/10 px-6 py-5">{footer}</div> : null}
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        {footer ? <div className="border-t border-white/10 bg-[#091321] px-5 py-4">{footer}</div> : null}
       </div>
     </div>
   );
@@ -1277,24 +1277,24 @@ export default function ProjectsOperationsClient({
             </div>
           }
         >
-          <div className="rounded-2xl border border-white/10 bg-[#0b1424] px-4 py-3">
+          <div className="rounded-2xl border border-white/10 bg-[#0b1424] px-4 py-2.5">
             <div className="text-[10px] uppercase tracking-[0.28em] text-slate-500">Search</div>
             <input
               value={assignmentSearch}
               onChange={(event) => setAssignmentSearch(event.target.value)}
               placeholder={assignmentModal.type === "staff" ? "Search technician" : "Search external agent"}
-              className="mt-2 w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
+              className="mt-1.5 w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
             />
           </div>
-          <div className="mt-4 rounded-[24px] border border-white/10 bg-[#0a1322] px-4 py-4">
+          <div className="mt-3 rounded-[20px] border border-white/10 bg-[#0a1322] px-4 py-3">
             <div className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Current Selection</div>
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-2 flex flex-wrap gap-2">
               {assignmentModal.type === "staff"
                 ? modalEditor.handlerStaffIds.length > 0
                   ? modalEditor.handlerStaffIds.map((staffId) => {
                       const member = staff.find((entry) => entry.id === staffId);
                       return (
-                        <span key={staffId} className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-100">
+                        <span key={staffId} className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-100">
                           {member?.name || "Technician"}
                         </span>
                       );
@@ -1304,7 +1304,7 @@ export default function ProjectsOperationsClient({
                   ? modalEditor.externalAgentIds.map((agentId) => {
                       const agent = externalAgents.find((entry) => entry.id === agentId);
                       return (
-                        <span key={agentId} className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200">
+                        <span key={agentId} className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200">
                           {agent?.name || "External agent"}
                         </span>
                       );
@@ -1312,12 +1312,12 @@ export default function ProjectsOperationsClient({
                   : <span className="text-sm text-slate-500">No external agents selected.</span>}
             </div>
           </div>
-          <div className="mt-4 grid max-h-[420px] gap-3 overflow-y-auto pr-1 md:grid-cols-2">
+          <div className="mt-3 grid max-h-[40vh] gap-2 overflow-y-auto pr-1 md:grid-cols-2">
             {assignmentModal.type === "staff"
               ? assignmentOptions.map((option) => {
                   const member = option as StaffOption;
                   return (
-                    <label key={member.id} className="flex items-start gap-3 rounded-[24px] border border-white/10 bg-[#08111d] px-4 py-4 text-sm text-white">
+                    <label key={member.id} className="flex items-start gap-3 rounded-[20px] border border-white/10 bg-[#08111d] px-4 py-3 text-sm text-white">
                       <input
                         type="checkbox"
                         checked={modalEditor.handlerStaffIds.includes(member.id)}
@@ -1330,7 +1330,7 @@ export default function ProjectsOperationsClient({
                       />
                       <span>
                         <span className="block font-semibold">{member.name}</span>
-                        <span className="mt-1 block text-xs text-slate-400">
+                        <span className="mt-0.5 block text-xs text-slate-400">
                           {member.whatsappNumber || member.technicalPhoneNumber || member.phone || "No phone saved"}
                         </span>
                       </span>
@@ -1340,7 +1340,7 @@ export default function ProjectsOperationsClient({
               : assignmentOptions.map((option) => {
                   const agent = option as ExternalAgentOption;
                   return (
-                    <label key={agent.id} className="flex items-start gap-3 rounded-[24px] border border-white/10 bg-[#08111d] px-4 py-4 text-sm text-white">
+                    <label key={agent.id} className="flex items-start gap-3 rounded-[20px] border border-white/10 bg-[#08111d] px-4 py-3 text-sm text-white">
                       <input
                         type="checkbox"
                         checked={modalEditor.externalAgentIds.includes(agent.id)}
@@ -1353,7 +1353,7 @@ export default function ProjectsOperationsClient({
                       />
                       <span>
                         <span className="block font-semibold">{agent.name}</span>
-                        <span className="mt-1 block text-xs text-slate-400">{agent.whatsappNumber}</span>
+                        <span className="mt-0.5 block text-xs text-slate-400">{agent.whatsappNumber}</span>
                       </span>
                     </label>
                   );
