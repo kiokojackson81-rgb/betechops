@@ -8,6 +8,7 @@ import { pushReceiptToChatrace } from "@/lib/integrations/chatrace";
 import { readReceiptProjectFlow } from "@/lib/receiptProjects";
 import { createReviewInvitation } from "@/lib/reviewsReferrals";
 import { getPublicReceiptUrl } from "@/lib/publicReceiptLinks";
+import { resolveProjectStaffPhone } from "@/lib/projectHandlers";
 import {
   formatKenyaDate,
   formatKenyaNumber,
@@ -70,6 +71,10 @@ function buildVersionKey(context: ProjectNotificationContext) {
   ].join("|");
 }
 
+function buildAssignedHandlerIdempotencyKey(receiptId: string, handlerId: string) {
+  return `PROJECT_ASSIGNED:${receiptId}:${handlerId}:WHATSAPP`;
+}
+
 function buildIdempotencyKey(
   event: ProjectNotificationEvent,
   receiptId: string,
@@ -112,25 +117,61 @@ async function loadProjectNotificationContext(
   let assignedHandlerName: string | null = null;
   let assignedHandlerPhone: string | null = null;
   let assignedHandlerId: string | null = null;
+  let assignedHandlers: ProjectNotificationContext["assignedHandlers"] = [];
   let completedByName: string | null = null;
   let completedByRole: string | null = null;
   let updatedByName: string | null = null;
   let bookedByName: string | null = receipt.issuedBy?.name ?? receipt.issuedBy?.email ?? null;
 
-  if (projectFlow.handlerType === "STAFF" && projectFlow.handlerStaffId) {
-    const handler = await prisma.user.findUnique({
-      where: { id: projectFlow.handlerStaffId },
-      select: { name: true, email: true, phone: true, whatsappNumber: true, role: true },
-    });
-    assignedHandlerId = projectFlow.handlerStaffId;
-    assignedHandlerName = handler?.name ?? handler?.email ?? projectFlow.handlerStaffName ?? null;
-    assignedHandlerPhone = normalizeProjectPhone(handler?.whatsappNumber ?? handler?.phone ?? null) || null;
-  } else if (projectFlow.handlerType === "EXTERNAL") {
-    assignedHandlerName = projectFlow.externalAgentName ?? null;
-    assignedHandlerPhone = normalizeProjectPhone(projectFlow.externalAgentPhone ?? null) || null;
-  } else {
-    assignedHandlerName = projectFlow.handlerStaffName ?? null;
-  }
+  const staffAssignmentIds = projectFlow.assignedHandlers
+    .filter((entry) => entry.kind === "STAFF" && entry.staffId)
+    .map((entry) => entry.staffId as string);
+  const staffUsers = staffAssignmentIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: staffAssignmentIds } },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          whatsappNumber: true,
+          technicalProfile: { select: { phoneNumber: true } },
+        },
+      })
+    : [];
+  const staffUserById = new Map(staffUsers.map((entry) => [entry.id, entry]));
+
+  assignedHandlers = projectFlow.assignedHandlers.map((entry, index) => {
+    if (entry.kind === "STAFF") {
+      const user = entry.staffId ? staffUserById.get(entry.staffId) : null;
+      const name = user?.name ?? user?.email ?? entry.staffName ?? `Assigned staff ${index + 1}`;
+      return {
+        id: entry.staffId || `staff:${index}`,
+        name,
+        phone:
+          entry.phone ||
+          resolveProjectStaffPhone({
+            name,
+            whatsappNumber: user?.whatsappNumber ?? null,
+            phone: user?.phone ?? null,
+            technicalPhoneNumber: user?.technicalProfile?.phoneNumber ?? null,
+          }),
+        kind: "STAFF" as const,
+      };
+    }
+
+    return {
+      id: entry.externalAgentId || `external:${index}`,
+      name: entry.externalAgentName || `External agent ${index + 1}`,
+      phone: normalizeProjectPhone(entry.phone) || null,
+      kind: "EXTERNAL" as const,
+    };
+  });
+
+  const primaryAssignedHandler = assignedHandlers[0] ?? null;
+  assignedHandlerId = primaryAssignedHandler?.id ?? null;
+  assignedHandlerName = primaryAssignedHandler?.name ?? null;
+  assignedHandlerPhone = primaryAssignedHandler?.phone ?? null;
 
   if (input.triggeredByUserId) {
     const actor = await prisma.user.findUnique({
@@ -171,6 +212,7 @@ async function loadProjectNotificationContext(
     assignedHandlerName,
     assignedHandlerPhone,
     assignedHandlerId,
+    assignedHandlers,
     bookedByName,
     updatedByName,
     completedByName,
@@ -249,33 +291,25 @@ function createDrafts(context: ProjectNotificationContext): ProjectNotificationD
     }
   }
 
-  if (context.event === "PROJECT_BOOKING_UPDATED" && isBookedContext(context)) {
-    if (
-      context.changedFields.includes("handlerStaffId") ||
-      context.changedFields.includes("handlerStaffName") ||
-      context.changedFields.includes("handlerType") ||
-      context.changedFields.includes("externalAgentPhone") ||
-      context.changedFields.includes("externalAgentName")
-    ) {
-      if (context.assignedHandlerPhone) {
-        const handlerVersion = context.assignedHandlerId || context.assignedHandlerPhone;
-        pushDraft(
-          "WHATSAPP",
-          "ASSIGNED_HANDLER",
-          "project_assigned_handler",
-          context.assignedHandlerName,
-          context.assignedHandlerPhone,
-        );
-        drafts[drafts.length - 1]!.idempotencyKey = buildIdempotencyKey(
-          context.event,
-          context.receiptId,
-          `handler:${handlerVersion}`,
-          "ASSIGNED_HANDLER",
-          "WHATSAPP",
-        );
-      } else {
-        pushDraft("WHATSAPP", "ASSIGNED_HANDLER", "project_assigned_handler", context.assignedHandlerName, null, "Missing assigned handler WhatsApp number");
-      }
+  if ((context.event === "PROJECT_ASSIGNED" || context.event === "PROJECT_BOOKING_UPDATED") && isBookedContext(context)) {
+    for (const handler of context.assignedHandlers) {
+      pushDraft(
+        "WHATSAPP",
+        "ASSIGNED_HANDLER",
+        "project_assigned_handler",
+        handler.name,
+        handler.phone,
+        handler.phone ? null : "Missing or invalid assigned handler phone",
+      );
+      drafts[drafts.length - 1]!.idempotencyKey = buildAssignedHandlerIdempotencyKey(
+        context.receiptId,
+        handler.id,
+      );
+      drafts[drafts.length - 1]!.payloadSnapshot = {
+        ...drafts[drafts.length - 1]!.payloadSnapshot,
+        handlerId: handler.id,
+        handlerKind: handler.kind,
+      };
     }
   }
 
@@ -506,7 +540,13 @@ function buildChannelResultKey(draft: ProjectNotificationDraft) {
   if (draft.recipientType === "CUSTOMER" && draft.channel === "SMS") return "customerSms";
   if (draft.recipientType === "CUSTOMER" && draft.channel === "EMAIL") return "customerEmail";
   if (draft.recipientType === "ADMIN" && draft.channel === "WHATSAPP") return "adminWhatsApp";
-  if (draft.recipientType === "ASSIGNED_HANDLER" && draft.channel === "WHATSAPP") return "assignedHandlerWhatsApp";
+  if (draft.recipientType === "ASSIGNED_HANDLER" && draft.channel === "WHATSAPP") {
+    const suffix =
+      typeof draft.payloadSnapshot.handlerId === "string" && draft.payloadSnapshot.handlerId.trim()
+        ? draft.payloadSnapshot.handlerId.trim()
+        : draft.recipientAddress || "unknown";
+    return `assignedHandlerWhatsApp:${suffix}`;
+  }
   return `${draft.recipientType.toLowerCase()}${draft.channel.toLowerCase()}`;
 }
 
@@ -631,7 +671,7 @@ async function processDraft(
               ? await pushReceiptToChatrace({
                   accountId: INTERNAL_CHATRACE_ACCOUNT_ID,
                   phoneE164: draft.recipientAddress || "",
-                  customerName: context.assignedHandlerName || "Handler",
+                  customerName: draft.recipientName || context.assignedHandlerName || "Handler",
                   receiptNumber: context.projectNumber,
                   amount: formatKenyaNumber(context.projectValue),
                   currency: "KES",
@@ -640,8 +680,9 @@ async function processDraft(
                   tagName: PROJECT_TRIGGER_TAGS.handlerAssigned,
                   skipDefaultTags: true,
                   forceTriggerTagReapply: true,
+                  debugLabel: "PROJECT_HANDLER_WHATSAPP",
                   extraFields: {
-                    project_assigned_handler_name: context.assignedHandlerName || "",
+                    project_assigned_handler_name: draft.recipientName || context.assignedHandlerName || "",
                     customer_name: context.customerName,
                     customer_phone: context.customerPhone || "",
                     project_number: context.projectNumber,
@@ -865,7 +906,7 @@ function formatSettledResult(
   if (settled.status === "fulfilled") return settled.value;
   return {
     key: "unknown",
-    eventType: "PROJECT_BOOKING_UPDATED",
+    eventType: "PROJECT_ASSIGNED",
     channel: "WHATSAPP",
     recipientType: "ADMIN",
     templateKey: "unknown",
@@ -892,7 +933,10 @@ export async function publishProjectNotification(
     };
   }
 
-  if ((input.event === "PROJECT_BOOKED" || input.event === "PROJECT_BOOKING_UPDATED") && !isBookedContext(context)) {
+  if (
+    (input.event === "PROJECT_BOOKED" || input.event === "PROJECT_BOOKING_UPDATED" || input.event === "PROJECT_ASSIGNED") &&
+    !isBookedContext(context)
+  ) {
     console.warn("[PROJECT_NOTIFY] event skipped because booking data is incomplete", {
       receiptId: input.receiptId,
       eventType: input.event,
@@ -908,7 +952,7 @@ export async function publishProjectNotification(
 
   await ensureLogs(context);
   const drafts = createDrafts(context).filter((draft) => {
-    if (draft.eventType === "PROJECT_BOOKING_UPDATED") {
+    if (draft.eventType === "PROJECT_BOOKING_UPDATED" || draft.eventType === "PROJECT_ASSIGNED") {
       return hasProjectAssignmentChange(context.changedFields);
     }
     return true;

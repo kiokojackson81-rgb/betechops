@@ -42,19 +42,16 @@ export async function POST(req: NextRequest, context: ParamsContext) {
     return NextResponse.json({ error: "This receipt is not tagged as a project receipt" }, { status: 400 });
   }
 
-  const normalizedEventType =
-    parsed.data.eventType === "PROJECT_ASSIGNED" ? "PROJECT_BOOKING_UPDATED" : parsed.data.eventType;
-
   const result = await publishProjectNotification({
     receiptId: id,
-    event: normalizedEventType,
+    event: parsed.data.eventType,
     triggeredByUserId: guard.session?.user?.id ?? null,
-    changedFields: normalizedEventType === "PROJECT_BOOKING_UPDATED" ? ["handlerType"] : [],
+    changedFields: parsed.data.eventType === "PROJECT_ASSIGNED" ? ["handlerAssignments"] : [],
   });
 
   return NextResponse.json({
     eventType: parsed.data.eventType,
-    normalizedEventType,
+    normalizedEventType: parsed.data.eventType,
     results: Object.fromEntries(result.results.map((entry) => [entry.key, entry])),
   });
 }

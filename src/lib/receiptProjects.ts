@@ -46,6 +46,15 @@ export const RECEIPT_PROJECT_HANDLER_TYPES = [
 
 export type ReceiptProjectHandlerType = (typeof RECEIPT_PROJECT_HANDLER_TYPES)[number];
 
+export type ReceiptProjectHandlerAssignment = {
+  kind: ReceiptProjectHandlerType;
+  staffId: string | null;
+  staffName: string | null;
+  externalAgentId: string | null;
+  externalAgentName: string | null;
+  phone: string | null;
+};
+
 export type ReceiptProjectFlow = {
   isProject: true;
   stage: ReceiptProjectStage;
@@ -76,8 +85,12 @@ export type ReceiptProjectFlow = {
   handlerType: ReceiptProjectHandlerType | null;
   handlerStaffId: string | null;
   handlerStaffName: string | null;
+  handlerStaffIds: string[];
+  externalAgentId: string | null;
   externalAgentName: string | null;
+  externalAgentIds: string[];
   externalAgentPhone: string | null;
+  assignedHandlers: ReceiptProjectHandlerAssignment[];
   createdAt?: string | null;
   updatedAt?: string | null;
 };
@@ -91,6 +104,21 @@ function hasMeaningfulValue(value: unknown) {
   if (typeof value === "string") return value.trim().length > 0;
   if (typeof value === "number") return Number.isFinite(value);
   return true;
+}
+
+function toTrimmedString(value: unknown) {
+  return String(value || "").trim();
+}
+
+function toStringArray(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(
+      value
+        .map((entry) => toTrimmedString(entry))
+        .filter(Boolean),
+    ),
+  );
 }
 
 export function normalizeReceiptProjectStage(value: unknown): ReceiptProjectStage {
@@ -148,6 +176,70 @@ function normalizeOptionalDate(value: unknown) {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
+function normalizeAssignedHandlers(value: unknown): ReceiptProjectHandlerAssignment[] {
+  if (!Array.isArray(value)) return [];
+  const unique = new Set<string>();
+  const normalized: ReceiptProjectHandlerAssignment[] = [];
+
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    const record = entry as Record<string, unknown>;
+    const kind = normalizeReceiptProjectHandlerType(record.kind);
+    if (!kind) continue;
+    const item = {
+      kind,
+      staffId: kind === "STAFF" ? toTrimmedString(record.staffId) || null : null,
+      staffName: kind === "STAFF" ? toTrimmedString(record.staffName) || null : null,
+      externalAgentId: kind === "EXTERNAL" ? toTrimmedString(record.externalAgentId) || null : null,
+      externalAgentName: kind === "EXTERNAL" ? toTrimmedString(record.externalAgentName) || null : null,
+      phone: toTrimmedString(record.phone) || null,
+    } satisfies ReceiptProjectHandlerAssignment;
+    const key = JSON.stringify(item);
+    if (unique.has(key)) continue;
+    unique.add(key);
+    normalized.push(item);
+  }
+
+  return normalized;
+}
+
+function buildLegacyAssignedHandlers(source: {
+  handlerType: ReceiptProjectHandlerType | null;
+  handlerStaffId: string | null;
+  handlerStaffName: string | null;
+  externalAgentId: string | null;
+  externalAgentName: string | null;
+  externalAgentPhone: string | null;
+}) {
+  if (source.handlerType === "STAFF" && (source.handlerStaffId || source.handlerStaffName)) {
+    return [
+      {
+        kind: "STAFF" as const,
+        staffId: source.handlerStaffId,
+        staffName: source.handlerStaffName,
+        externalAgentId: null,
+        externalAgentName: null,
+        phone: null,
+      },
+    ];
+  }
+
+  if (source.handlerType === "EXTERNAL" && (source.externalAgentId || source.externalAgentName || source.externalAgentPhone)) {
+    return [
+      {
+        kind: "EXTERNAL" as const,
+        staffId: null,
+        staffName: null,
+        externalAgentId: source.externalAgentId,
+        externalAgentName: source.externalAgentName,
+        phone: source.externalAgentPhone,
+      },
+    ];
+  }
+
+  return [];
+}
+
 function looksLikeLegacyProjectFlow(source: Record<string, unknown>) {
   const markerKeys = [
     "stage",
@@ -168,9 +260,13 @@ function looksLikeLegacyProjectFlow(source: Record<string, unknown>) {
     "postedReceiptNumber",
     "handlerType",
     "handlerStaffId",
+    "handlerStaffIds",
     "handlerStaffName",
+    "externalAgentId",
     "externalAgentName",
+    "externalAgentIds",
     "externalAgentPhone",
+    "assignedHandlers",
   ] as const;
 
   return markerKeys.some((key) => hasMeaningfulValue(source[key]));
@@ -199,8 +295,12 @@ export function buildReceiptProjectFlow(input: {
   handlerType?: unknown;
   handlerStaffId?: unknown;
   handlerStaffName?: unknown;
+  handlerStaffIds?: unknown;
+  externalAgentId?: unknown;
   externalAgentName?: unknown;
+  externalAgentIds?: unknown;
   externalAgentPhone?: unknown;
+  assignedHandlers?: unknown;
 }) {
   const existing = input.existing ?? null;
   const projectValue = roundCurrency(Math.max(0, Number(input.projectValue || 0)));
@@ -221,7 +321,12 @@ export function buildReceiptProjectFlow(input: {
   const depositValue =
     paymentTerm === "DEPOSIT_AND_BALANCE"
       ? depositType === "AMOUNT"
-        ? roundCurrency(Math.max(0, Math.min(projectValue, Number.isFinite(normalizedDepositValue) ? normalizedDepositValue : 0)))
+        ? roundCurrency(
+            Math.max(
+              0,
+              Math.min(projectValue, Number.isFinite(normalizedDepositValue) ? normalizedDepositValue : 0),
+            ),
+          )
         : Math.max(0, Math.min(100, Number.isFinite(normalizedDepositValue) ? normalizedDepositValue : 30))
       : paymentTerm === "FULL_BEFORE_INSTALLATION"
         ? projectValue
@@ -271,10 +376,7 @@ export function buildReceiptProjectFlow(input: {
       0,
       Math.min(
         projectValue,
-        Number(
-          input.amountPaidTotal ??
-            (depositPaidAmount + balancePaidAmount),
-        ) || 0,
+        Number(input.amountPaidTotal ?? depositPaidAmount + balancePaidAmount) || 0,
       ),
     ),
   );
@@ -296,25 +398,46 @@ export function buildReceiptProjectFlow(input: {
   const balancePaymentMethod = normalizeReceiptProjectPaymentMethod(
     input.balancePaymentMethod ?? existing?.balancePaymentMethod,
   );
-  const handlerType = normalizeReceiptProjectHandlerType(
+  const requestedHandlerType = normalizeReceiptProjectHandlerType(
     input.handlerType ?? existing?.handlerType,
   );
-  const handlerStaffId =
-    handlerType === "STAFF"
-      ? String(input.handlerStaffId ?? existing?.handlerStaffId ?? "").trim() || null
-      : null;
-  const handlerStaffName =
-    handlerType === "STAFF"
-      ? String(input.handlerStaffName ?? existing?.handlerStaffName ?? "").trim() || null
-      : null;
-  const externalAgentName =
-    handlerType === "EXTERNAL"
-      ? String(input.externalAgentName ?? existing?.externalAgentName ?? "").trim() || null
-      : null;
-  const externalAgentPhone =
-    handlerType === "EXTERNAL"
-      ? String(input.externalAgentPhone ?? existing?.externalAgentPhone ?? "").trim() || null
-      : null;
+
+  const requestedAssignments = normalizeAssignedHandlers(
+    input.assignedHandlers ?? existing?.assignedHandlers,
+  );
+  const legacyHandlerStaffId = toTrimmedString(input.handlerStaffId ?? existing?.handlerStaffId) || null;
+  const legacyHandlerStaffName = toTrimmedString(input.handlerStaffName ?? existing?.handlerStaffName) || null;
+  const legacyExternalAgentId = toTrimmedString(input.externalAgentId ?? existing?.externalAgentId) || null;
+  const legacyExternalAgentName = toTrimmedString(input.externalAgentName ?? existing?.externalAgentName) || null;
+  const legacyExternalAgentPhone = toTrimmedString(input.externalAgentPhone ?? existing?.externalAgentPhone) || null;
+
+  const assignedHandlers =
+    requestedAssignments.length > 0
+      ? requestedAssignments
+      : buildLegacyAssignedHandlers({
+          handlerType: requestedHandlerType,
+          handlerStaffId: legacyHandlerStaffId,
+          handlerStaffName: legacyHandlerStaffName,
+          externalAgentId: legacyExternalAgentId,
+          externalAgentName: legacyExternalAgentName,
+          externalAgentPhone: legacyExternalAgentPhone,
+        });
+
+  const primaryAssignment = assignedHandlers[0] ?? null;
+  const handlerStaffIds = assignedHandlers
+    .filter((entry) => entry.kind === "STAFF" && entry.staffId)
+    .map((entry) => entry.staffId as string);
+  const externalAgentIds = assignedHandlers
+    .filter((entry) => entry.kind === "EXTERNAL" && entry.externalAgentId)
+    .map((entry) => entry.externalAgentId as string);
+  const normalizedHandlerType =
+    assignedHandlers.length === 0
+      ? null
+      : assignedHandlers.every((entry) => entry.kind === "STAFF")
+        ? "STAFF"
+        : assignedHandlers.every((entry) => entry.kind === "EXTERNAL")
+          ? "EXTERNAL"
+          : null;
 
   let paymentStatus: ReceiptProjectPaymentStatus = "UNPAID";
   if (amountPaidTotal >= projectValue && projectValue > 0) {
@@ -336,31 +459,30 @@ export function buildReceiptProjectFlow(input: {
     depositPaidAmount,
     depositPendingAmount,
     depositPaymentMethod,
-    depositReference: String(input.depositReference ?? existing?.depositReference ?? "").trim() || null,
+    depositReference: toTrimmedString(input.depositReference ?? existing?.depositReference) || null,
     balanceExpectedAmount,
     balancePaidAmount,
     balancePendingAmount,
     balancePaymentMethod,
-    balanceReference: String(input.balanceReference ?? existing?.balanceReference ?? "").trim() || null,
+    balanceReference: toTrimmedString(input.balanceReference ?? existing?.balanceReference) || null,
     totalPaidAmount,
     remainingAmount,
     amountPaidTotal,
     balanceAmount,
     scheduledDate: normalizeOptionalDate(input.scheduledDate ?? existing?.scheduledDate),
-    postedReceiptNumber: String(
-      input.postedReceiptNumber ?? existing?.postedReceiptNumber ?? "",
-    ).trim() || null,
-    internalNotes:
-      String(input.internalNotes ?? existing?.internalNotes ?? "").trim() || null,
-    paymentNotes:
-      String(input.paymentNotes ?? existing?.paymentNotes ?? "").trim() || null,
-    handlerType,
-    handlerStaffId,
-    handlerStaffName,
-    externalAgentName,
-    externalAgentPhone,
-    createdAt:
-      String(existing?.createdAt ?? "").trim() || new Date().toISOString(),
+    postedReceiptNumber: toTrimmedString(input.postedReceiptNumber ?? existing?.postedReceiptNumber) || null,
+    internalNotes: toTrimmedString(input.internalNotes ?? existing?.internalNotes) || null,
+    paymentNotes: toTrimmedString(input.paymentNotes ?? existing?.paymentNotes) || null,
+    handlerType: normalizedHandlerType,
+    handlerStaffId: primaryAssignment?.kind === "STAFF" ? primaryAssignment.staffId : null,
+    handlerStaffName: primaryAssignment?.kind === "STAFF" ? primaryAssignment.staffName : null,
+    handlerStaffIds,
+    externalAgentId: primaryAssignment?.kind === "EXTERNAL" ? primaryAssignment.externalAgentId : null,
+    externalAgentName: primaryAssignment?.kind === "EXTERNAL" ? primaryAssignment.externalAgentName : null,
+    externalAgentIds,
+    externalAgentPhone: primaryAssignment?.kind === "EXTERNAL" ? primaryAssignment.phone : null,
+    assignedHandlers,
+    createdAt: toTrimmedString(existing?.createdAt) || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   } satisfies ReceiptProjectFlow;
 }
@@ -382,16 +504,33 @@ export function readReceiptProjectFlow(value: unknown): ReceiptProjectFlow | nul
   const balancePaidAmount = roundCurrency(Math.max(0, Number(source.balancePaidAmount || 0)));
   let balancePendingAmount = roundCurrency(Math.max(0, Number(source.balancePendingAmount || 0)));
   let totalPaidAmount = roundCurrency(Math.max(0, Number(source.totalPaidAmount || source.amountPaidTotal || 0)));
-  let remainingAmount = roundCurrency(Math.max(0, Number(source.remainingAmount || source.balanceAmount || Math.max(0, projectValue - totalPaidAmount))));
+  let remainingAmount = roundCurrency(
+    Math.max(0, Number(source.remainingAmount || source.balanceAmount || Math.max(0, projectValue - totalPaidAmount))),
+  );
   let amountPaidTotal = roundCurrency(Math.max(0, Number(source.amountPaidTotal || totalPaidAmount || 0)));
   let balanceAmount = roundCurrency(Math.max(0, Number(source.balanceAmount || remainingAmount || 0)));
-  const postedReceiptNumber = String(source.postedReceiptNumber || "").trim() || null;
+  const postedReceiptNumber = toTrimmedString(source.postedReceiptNumber) || null;
   const scheduledDate = normalizeOptionalDate(source.scheduledDate);
   const handlerType = normalizeReceiptProjectHandlerType(source.handlerType);
-  const handlerStaffId = String(source.handlerStaffId || "").trim() || null;
-  const handlerStaffName = String(source.handlerStaffName || "").trim() || null;
-  const externalAgentName = String(source.externalAgentName || "").trim() || null;
-  const externalAgentPhone = String(source.externalAgentPhone || "").trim() || null;
+  const handlerStaffId = toTrimmedString(source.handlerStaffId) || null;
+  const handlerStaffName = toTrimmedString(source.handlerStaffName) || null;
+  const handlerStaffIds = toStringArray(source.handlerStaffIds);
+  const externalAgentId = toTrimmedString(source.externalAgentId) || null;
+  const externalAgentName = toTrimmedString(source.externalAgentName) || null;
+  const externalAgentIds = toStringArray(source.externalAgentIds);
+  const externalAgentPhone = toTrimmedString(source.externalAgentPhone) || null;
+  const explicitAssignedHandlers = normalizeAssignedHandlers(source.assignedHandlers);
+  const assignedHandlers =
+    explicitAssignedHandlers.length > 0
+      ? explicitAssignedHandlers
+      : buildLegacyAssignedHandlers({
+          handlerType,
+          handlerStaffId,
+          handlerStaffName,
+          externalAgentId,
+          externalAgentName,
+          externalAgentPhone,
+        });
 
   const hasExplicitStage = RECEIPT_PROJECT_STAGES.includes(
     String(source.stage || "").trim().toUpperCase() as ReceiptProjectStage,
@@ -414,9 +553,13 @@ export function readReceiptProjectFlow(value: unknown): ReceiptProjectFlow | nul
   const looksInProgressLegacy =
     Boolean(scheduledDate) ||
     Boolean(handlerStaffId) ||
+    handlerStaffIds.length > 0 ||
     Boolean(handlerStaffName) ||
+    Boolean(externalAgentId) ||
     Boolean(externalAgentName) ||
+    externalAgentIds.length > 0 ||
     Boolean(externalAgentPhone) ||
+    assignedHandlers.length > 0 ||
     handlerType !== null;
   const stage = hasExplicitStage
     ? normalizeReceiptProjectStage(source.stage)
@@ -441,6 +584,15 @@ export function readReceiptProjectFlow(value: unknown): ReceiptProjectFlow | nul
   const paymentStatus = hasExplicitPaymentStatus
     ? normalizeReceiptProjectPaymentStatus(source.paymentStatus)
     : derivedPaymentStatus;
+  const primaryAssignment = assignedHandlers[0] ?? null;
+  const normalizedHandlerType =
+    assignedHandlers.length === 0
+      ? handlerType
+      : assignedHandlers.every((entry) => entry.kind === "STAFF")
+        ? "STAFF"
+        : assignedHandlers.every((entry) => entry.kind === "EXTERNAL")
+          ? "EXTERNAL"
+          : null;
 
   return {
     isProject: true,
@@ -455,27 +607,41 @@ export function readReceiptProjectFlow(value: unknown): ReceiptProjectFlow | nul
     depositPaidAmount,
     depositPendingAmount,
     depositPaymentMethod: normalizeReceiptProjectPaymentMethod(source.depositPaymentMethod),
-    depositReference: String(source.depositReference || "").trim() || null,
+    depositReference: toTrimmedString(source.depositReference) || null,
     balanceExpectedAmount,
     balancePaidAmount,
     balancePendingAmount,
     balancePaymentMethod: normalizeReceiptProjectPaymentMethod(source.balancePaymentMethod),
-    balanceReference: String(source.balanceReference || "").trim() || null,
+    balanceReference: toTrimmedString(source.balanceReference) || null,
     totalPaidAmount,
     remainingAmount,
     amountPaidTotal,
     balanceAmount,
     scheduledDate,
     postedReceiptNumber,
-    internalNotes: String(source.internalNotes || "").trim() || null,
-    paymentNotes: String(source.paymentNotes || "").trim() || null,
-    handlerType,
-    handlerStaffId,
-    handlerStaffName,
-    externalAgentName,
-    externalAgentPhone,
-    createdAt: String(source.createdAt || "").trim() || null,
-    updatedAt: String(source.updatedAt || "").trim() || null,
+    internalNotes: toTrimmedString(source.internalNotes) || null,
+    paymentNotes: toTrimmedString(source.paymentNotes) || null,
+    handlerType: normalizedHandlerType,
+    handlerStaffId: primaryAssignment?.kind === "STAFF" ? primaryAssignment.staffId : handlerStaffId,
+    handlerStaffName: primaryAssignment?.kind === "STAFF" ? primaryAssignment.staffName : handlerStaffName,
+    handlerStaffIds:
+      handlerStaffIds.length > 0
+        ? handlerStaffIds
+        : assignedHandlers
+            .filter((entry) => entry.kind === "STAFF" && entry.staffId)
+            .map((entry) => entry.staffId as string),
+    externalAgentId: primaryAssignment?.kind === "EXTERNAL" ? primaryAssignment.externalAgentId : externalAgentId,
+    externalAgentName: primaryAssignment?.kind === "EXTERNAL" ? primaryAssignment.externalAgentName : externalAgentName,
+    externalAgentIds:
+      externalAgentIds.length > 0
+        ? externalAgentIds
+        : assignedHandlers
+            .filter((entry) => entry.kind === "EXTERNAL" && entry.externalAgentId)
+            .map((entry) => entry.externalAgentId as string),
+    externalAgentPhone: primaryAssignment?.kind === "EXTERNAL" ? primaryAssignment.phone : externalAgentPhone,
+    assignedHandlers,
+    createdAt: toTrimmedString(source.createdAt) || null,
+    updatedAt: toTrimmedString(source.updatedAt) || null,
   };
 }
 

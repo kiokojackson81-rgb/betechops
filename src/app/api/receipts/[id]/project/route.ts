@@ -2,18 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/api";
+import { auth } from "@/lib/auth";
+import { buildProjectHandlerSignature, resolveProjectStaffPhone } from "@/lib/projectHandlers";
+import { syncCompletedProjectReceiptToPricing } from "@/lib/projectPricingSync";
 import {
   buildReceiptProjectFlow,
   readReceiptProjectFlow,
-  RECEIPT_PROJECT_HANDLER_TYPES,
   RECEIPT_PROJECT_DEPOSIT_TYPES,
+  RECEIPT_PROJECT_HANDLER_TYPES,
   RECEIPT_PROJECT_PAYMENT_METHODS,
   RECEIPT_PROJECT_PAYMENT_TERMS,
   RECEIPT_PROJECT_STAGES,
+  type ReceiptProjectHandlerAssignment,
 } from "@/lib/receiptProjects";
-import { auth } from "@/lib/auth";
 import { isTechnicalTeamCategory } from "@/lib/technicalTeam";
-import { syncCompletedProjectReceiptToPricing } from "@/lib/projectPricingSync";
 import { publishProjectNotification } from "@/services/project-notifications/project-notification.service";
 import {
   hasProjectAssignedHandler,
@@ -42,22 +44,53 @@ const updateSchema = z.object({
   handlerType: z.enum(RECEIPT_PROJECT_HANDLER_TYPES).nullable().optional(),
   handlerStaffId: z.string().trim().nullable().optional(),
   handlerStaffName: z.string().trim().nullable().optional(),
+  handlerStaffIds: z.array(z.string().trim()).optional(),
+  externalAgentId: z.string().trim().nullable().optional(),
   externalAgentName: z.string().trim().nullable().optional(),
+  externalAgentIds: z.array(z.string().trim()).optional(),
   externalAgentPhone: z.string().trim().nullable().optional(),
 });
 
 type ParamsContext = { params: { id: string } } | { params: Promise<{ id: string }> };
+
+type StaffAssignmentUser = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  whatsappNumber: string | null;
+  technicalProfile: { phoneNumber: string | null } | null;
+};
+
+type ExternalAgentRecord = {
+  id: string;
+  name: string;
+  whatsappNumber: string;
+};
 
 async function resolveId(context: ParamsContext) {
   const params = await (context as { params: Promise<{ id: string }> | { id: string } }).params;
   return params.id;
 }
 
+function uniqueStrings(values: Array<string | null | undefined>) {
+  return Array.from(new Set(values.map((value) => String(value || "").trim()).filter(Boolean)));
+}
+
+function buildAssignedHandlerChange(
+  previous: ReceiptProjectHandlerAssignment[] | null | undefined,
+  next: ReceiptProjectHandlerAssignment[] | null | undefined,
+) {
+  const previousSignature = JSON.stringify((previous ?? []).map(buildProjectHandlerSignature).sort());
+  const nextSignature = JSON.stringify((next ?? []).map(buildProjectHandlerSignature).sort());
+  return previousSignature !== nextSignature;
+}
+
 export async function PATCH(req: NextRequest, context: ParamsContext) {
   const guard = await requireRole(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
   if (!guard.ok) return guard.res;
   const session = await auth().catch(() => null);
-  const actor = session?.user as { id?: string | null; role?: string | null; attendantCategory?: string | null } | undefined;
+  const actor = session?.user as { id?: string | null; attendantCategory?: string | null } | undefined;
   const actorId = String(actor?.id || "").trim() || null;
 
   const id = await resolveId(context);
@@ -93,14 +126,86 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
     return NextResponse.json({ error: "This receipt is not tagged as a project receipt" }, { status: 400 });
   }
 
+  const existingAssignedHandlers = existingProjectFlow?.assignedHandlers ?? [];
   if (guard.role === "ATTENDANT") {
-    const assignedToActor = String(existingProjectFlow?.handlerStaffId || "").trim() === actorId;
+    const assignedToActor = existingAssignedHandlers.some(
+      (entry) => entry.kind === "STAFF" && String(entry.staffId || "").trim() === actorId,
+    );
     const createdByActor = String(existing.issuedById || "").trim() === actorId;
     const isTechnicalActor = isTechnicalTeamCategory(actor?.attendantCategory);
     if (!isTechnicalActor || (!assignedToActor && !createdByActor)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
   }
+
+  const nextHandlerStaffIds =
+    parsed.data.handlerStaffIds !== undefined
+      ? uniqueStrings(parsed.data.handlerStaffIds)
+      : parsed.data.handlerStaffId !== undefined
+        ? uniqueStrings([parsed.data.handlerStaffId])
+        : uniqueStrings(existingProjectFlow?.handlerStaffIds ?? existingProjectFlow?.handlerStaffId ? [existingProjectFlow?.handlerStaffId ?? ""] : []);
+  const nextExternalAgentIds =
+    parsed.data.externalAgentIds !== undefined
+      ? uniqueStrings(parsed.data.externalAgentIds)
+      : parsed.data.externalAgentId !== undefined
+        ? uniqueStrings([parsed.data.externalAgentId])
+        : uniqueStrings(existingProjectFlow?.externalAgentIds ?? existingProjectFlow?.externalAgentId ? [existingProjectFlow?.externalAgentId ?? ""] : []);
+
+  const [staffMembers, externalAgents] = await Promise.all([
+    nextHandlerStaffIds.length
+      ? prisma.user.findMany({
+          where: { id: { in: nextHandlerStaffIds } },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            whatsappNumber: true,
+            technicalProfile: { select: { phoneNumber: true } },
+          },
+        })
+      : Promise.resolve([] as StaffAssignmentUser[]),
+    nextExternalAgentIds.length
+      ? prisma.projectExternalAgent.findMany({
+          where: { id: { in: nextExternalAgentIds }, isActive: true },
+          select: { id: true, name: true, whatsappNumber: true },
+        })
+      : Promise.resolve([] as ExternalAgentRecord[]),
+  ]);
+
+  const staffById = new Map<string, StaffAssignmentUser>(staffMembers.map((entry) => [entry.id, entry] as const));
+  const externalById = new Map<string, ExternalAgentRecord>(externalAgents.map((entry) => [entry.id, entry] as const));
+
+  const nextAssignedHandlers: ReceiptProjectHandlerAssignment[] = [
+    ...nextHandlerStaffIds.map((staffId) => {
+      const user = staffById.get(staffId);
+      const name = user?.name ?? user?.email ?? parsed.data.handlerStaffName ?? null;
+      return {
+        kind: "STAFF",
+        staffId,
+        staffName: name,
+        externalAgentId: null,
+        externalAgentName: null,
+        phone: resolveProjectStaffPhone({
+          name,
+          whatsappNumber: user?.whatsappNumber ?? null,
+          phone: user?.phone ?? null,
+          technicalPhoneNumber: user?.technicalProfile?.phoneNumber ?? null,
+        }),
+      } satisfies ReceiptProjectHandlerAssignment;
+    }),
+    ...nextExternalAgentIds.map((externalAgentId) => {
+      const agent = externalById.get(externalAgentId);
+      return {
+        kind: "EXTERNAL",
+        staffId: null,
+        staffName: null,
+        externalAgentId,
+        externalAgentName: agent?.name ?? parsed.data.externalAgentName ?? null,
+        phone: agent?.whatsappNumber ?? parsed.data.externalAgentPhone ?? null,
+      } satisfies ReceiptProjectHandlerAssignment;
+    }),
+  ];
 
   const nextProjectFlow = buildReceiptProjectFlow({
     existing: existingProjectFlow as unknown as Record<string, unknown> | null,
@@ -117,53 +222,23 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
     balancePaidAmount: parsed.data.balancePaidAmount ?? existingProjectFlow?.balancePaidAmount,
     balancePaymentMethod: parsed.data.balancePaymentMethod ?? existingProjectFlow?.balancePaymentMethod,
     balanceReference: parsed.data.balanceReference ?? existingProjectFlow?.balanceReference,
-    scheduledDate:
-      parsed.data.scheduledDate !== undefined ? parsed.data.scheduledDate : existingProjectFlow?.scheduledDate,
+    scheduledDate: parsed.data.scheduledDate !== undefined ? parsed.data.scheduledDate : existingProjectFlow?.scheduledDate,
     postedReceiptNumber: existing.order?.orderNumber ?? existingProjectFlow?.postedReceiptNumber ?? null,
-    internalNotes:
-      parsed.data.internalNotes !== undefined ? parsed.data.internalNotes : existingProjectFlow?.internalNotes,
-    paymentNotes:
-      parsed.data.paymentNotes !== undefined ? parsed.data.paymentNotes : existingProjectFlow?.paymentNotes,
-    handlerType:
-      parsed.data.handlerType !== undefined ? parsed.data.handlerType : existingProjectFlow?.handlerType,
-    handlerStaffId:
-      parsed.data.handlerStaffId !== undefined ? parsed.data.handlerStaffId : existingProjectFlow?.handlerStaffId,
-    handlerStaffName:
-      parsed.data.handlerStaffName !== undefined
-        ? parsed.data.handlerStaffName
-        : existingProjectFlow?.handlerStaffName,
-    externalAgentName:
-      parsed.data.externalAgentName !== undefined
-        ? parsed.data.externalAgentName
-        : existingProjectFlow?.externalAgentName,
-    externalAgentPhone:
-      parsed.data.externalAgentPhone !== undefined
-        ? parsed.data.externalAgentPhone
-        : existingProjectFlow?.externalAgentPhone,
+    internalNotes: parsed.data.internalNotes !== undefined ? parsed.data.internalNotes : existingProjectFlow?.internalNotes,
+    paymentNotes: parsed.data.paymentNotes !== undefined ? parsed.data.paymentNotes : existingProjectFlow?.paymentNotes,
+    assignedHandlers: nextAssignedHandlers,
   });
 
   const changedFields = [
     existingProjectFlow?.scheduledDate !== nextProjectFlow.scheduledDate ? "scheduledDate" : null,
-    existingProjectFlow?.handlerStaffId !== nextProjectFlow.handlerStaffId ? "handlerStaffId" : null,
-    existingProjectFlow?.handlerStaffName !== nextProjectFlow.handlerStaffName ? "handlerStaffName" : null,
     existingProjectFlow?.handlerType !== nextProjectFlow.handlerType ? "handlerType" : null,
-    existingProjectFlow?.externalAgentName !== nextProjectFlow.externalAgentName ? "externalAgentName" : null,
-    existingProjectFlow?.externalAgentPhone !== nextProjectFlow.externalAgentPhone ? "externalAgentPhone" : null,
     existingProjectFlow?.stage !== nextProjectFlow.stage ? "stage" : null,
-  ].filter(Boolean) as Array<
-    | "scheduledDate"
-    | "handlerStaffId"
-    | "handlerStaffName"
-    | "handlerType"
-    | "externalAgentName"
-    | "externalAgentPhone"
-    | "stage"
-  >;
+    buildAssignedHandlerChange(existingAssignedHandlers, nextProjectFlow.assignedHandlers) ? "handlerAssignments" : null,
+  ].filter(Boolean) as Array<"scheduledDate" | "handlerType" | "handlerAssignments" | "stage">;
 
-  const wasBooked = Boolean(existingProjectFlow?.scheduledDate && (existingProjectFlow?.handlerStaffId || existingProjectFlow?.externalAgentPhone || existingProjectFlow?.handlerStaffName));
-  const isBooked = hasProjectBookingDate(nextProjectFlow);
   const wasCompleted = existingProjectFlow?.stage === "COMPLETED_POSTED";
   const isCompleted = nextProjectFlow.stage === "COMPLETED_POSTED";
+  const isBooked = hasProjectBookingDate(nextProjectFlow);
 
   const updated = await prisma.$transaction(async (tx) => {
     const receipt = await tx.receipt.update({
@@ -184,10 +259,7 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
                     : nextProjectFlow.paymentStatus === "PARTIALLY_PAID"
                       ? "PARTIAL"
                       : "UNPAID",
-                status:
-                  nextProjectFlow.stage === "COMPLETED_POSTED"
-                    ? "COMPLETED"
-                    : "PENDING",
+                status: nextProjectFlow.stage === "COMPLETED_POSTED" ? "COMPLETED" : "PENDING",
               },
             }
           : undefined,
@@ -211,25 +283,6 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
     return receipt;
   });
 
-  const previousHandler =
-    existingProjectFlow?.handlerType === "EXTERNAL"
-      ? {
-          name: existingProjectFlow.externalAgentName ?? null,
-          phone: existingProjectFlow.externalAgentPhone ?? null,
-        }
-      : existingProjectFlow?.handlerStaffId
-        ? await prisma.user.findUnique({
-            where: { id: existingProjectFlow.handlerStaffId },
-            select: { name: true, email: true, phone: true, whatsappNumber: true },
-          }).then((user) => ({
-            name: user?.name ?? user?.email ?? existingProjectFlow.handlerStaffName ?? null,
-            phone: user?.whatsappNumber ?? user?.phone ?? null,
-          }))
-        : {
-            name: existingProjectFlow?.handlerStaffName ?? null,
-            phone: null,
-          };
-
   const bookedLog = isBooked
     ? await prisma.projectNotificationLog.findFirst({
         where: {
@@ -252,119 +305,61 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
     changedFields,
   });
 
-  console.info("[PROJECT_NOTIFY] project saved", {
-    receiptId: updated.id,
-    customerType: "project",
-    previousStage: existingProjectFlow?.stage ?? null,
-    currentStage: nextProjectFlow.stage ?? null,
-    previousScheduledDate: existingProjectFlow?.scheduledDate ?? null,
-    currentScheduledDate: nextProjectFlow.scheduledDate ?? null,
-    previousAssignedHandler: hasProjectAssignedHandler(existingProjectFlow),
-    currentAssignedHandler: hasProjectAssignedHandler(nextProjectFlow),
-  });
-
   const notificationResults: Array<unknown> = [];
   if (isCompleted && !wasCompleted) {
-    console.info("[PROJECT_NOTIFY] event selected", {
-      receiptId: updated.id,
-      eventType: "PROJECT_COMPLETED",
-    });
     try {
-      const result = await publishProjectNotification({
-        receiptId: id,
-        event: "PROJECT_COMPLETED",
-        triggeredByUserId: actorId,
-        changedFields,
-        previousHandler,
-      });
-      notificationResults.push(result);
-      console.info("[PROJECT_NOTIFY] service result", {
-        receiptId: updated.id,
-        eventType: "PROJECT_COMPLETED",
-        result,
-      });
+      notificationResults.push(
+        await publishProjectNotification({
+          receiptId: id,
+          event: "PROJECT_COMPLETED",
+          triggeredByUserId: actorId,
+          changedFields,
+        }),
+      );
     } catch (error) {
       console.error("[PROJECT_NOTIFY] service failed", {
         receiptId: updated.id,
         eventType: "PROJECT_COMPLETED",
-        error:
-          error instanceof Error
-            ? { name: error.name, message: error.message, stack: error.stack }
-            : error,
+        error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : error,
       });
     }
   } else {
     if (shouldQueueBooked) {
-      console.info("[PROJECT_NOTIFY] event selected", {
-        receiptId: updated.id,
-        eventType: "PROJECT_BOOKED",
-      });
       try {
-        const result = await publishProjectNotification({
-          receiptId: id,
-          event: "PROJECT_BOOKED",
-          triggeredByUserId: actorId,
-          changedFields,
-          previousHandler,
-        });
-        notificationResults.push(result);
-        console.info("[PROJECT_NOTIFY] service result", {
-          receiptId: updated.id,
-          eventType: "PROJECT_BOOKED",
-          result,
-        });
+        notificationResults.push(
+          await publishProjectNotification({
+            receiptId: id,
+            event: "PROJECT_BOOKED",
+            triggeredByUserId: actorId,
+            changedFields,
+          }),
+        );
       } catch (error) {
         console.error("[PROJECT_NOTIFY] service failed", {
           receiptId: updated.id,
           eventType: "PROJECT_BOOKED",
-          error:
-            error instanceof Error
-              ? { name: error.name, message: error.message, stack: error.stack }
-              : error,
+          error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : error,
         });
       }
     }
 
     if (shouldQueueAssigned) {
-      console.info("[PROJECT_NOTIFY] event selected", {
-        receiptId: updated.id,
-        eventType: "PROJECT_BOOKING_UPDATED",
-      });
       try {
-        const result = await publishProjectNotification({
-          receiptId: id,
-          event: "PROJECT_BOOKING_UPDATED",
-          triggeredByUserId: actorId,
-          changedFields: changedFields.length ? changedFields : ["handlerType"],
-          previousHandler,
-        });
-        notificationResults.push(result);
-        console.info("[PROJECT_NOTIFY] service result", {
-          receiptId: updated.id,
-          eventType: "PROJECT_BOOKING_UPDATED",
-          result,
-        });
+        notificationResults.push(
+          await publishProjectNotification({
+            receiptId: id,
+            event: "PROJECT_ASSIGNED",
+            triggeredByUserId: actorId,
+            changedFields: changedFields.length ? changedFields : ["handlerAssignments"],
+          }),
+        );
       } catch (error) {
         console.error("[PROJECT_NOTIFY] service failed", {
           receiptId: updated.id,
-          eventType: "PROJECT_BOOKING_UPDATED",
-          error:
-            error instanceof Error
-              ? { name: error.name, message: error.message, stack: error.stack }
-              : error,
+          eventType: "PROJECT_ASSIGNED",
+          error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : error,
         });
       }
-    }
-
-    if (!shouldQueueBooked && !shouldQueueAssigned) {
-      console.warn("[PROJECT_NOTIFY] no event selected", {
-        receiptId: updated.id,
-        customerType: "project",
-        previousStage: existingProjectFlow?.stage ?? null,
-        currentStage: nextProjectFlow.stage ?? null,
-        previousScheduledDate: existingProjectFlow?.scheduledDate ?? null,
-        currentScheduledDate: nextProjectFlow.scheduledDate ?? null,
-      });
     }
   }
 

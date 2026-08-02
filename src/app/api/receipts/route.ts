@@ -52,6 +52,34 @@ const normalizePaymentMethod = (value: unknown): "MPESA" | "CASH" | null => {
   return null;
 };
 
+const buildReceiptCustomerLocation = (receipt: any) => {
+  const rawData =
+    receipt?.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
+      ? (receipt.data as Record<string, unknown>)
+      : {};
+  const orderMetadata =
+    receipt?.order?.metadata && typeof receipt.order.metadata === "object" && !Array.isArray(receipt.order.metadata)
+      ? (receipt.order.metadata as Record<string, unknown>)
+      : {};
+
+  const directLocation = [
+    rawData.deliveryAddress,
+    rawData.customerLocation,
+    orderMetadata.deliveryAddress,
+    orderMetadata.customerLocation,
+  ]
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .find(Boolean);
+  if (directLocation) return directLocation;
+
+  const areaLocation = [rawData.town, rawData.county]
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .filter(Boolean)
+    .join(", ");
+
+  return areaLocation || null;
+};
+
 const mapReceiptQuotePaymentTerm = (value: unknown): QuoteProjectPaymentTerm => {
   const candidate = String(value || "").trim().toUpperCase();
   if (candidate === "APPROVED_AFTER_INSTALLATION") return "FULL_AFTER_INSTALLATION";
@@ -496,6 +524,8 @@ export async function GET(req: NextRequest) {
                     orderNumber: true,
                     customerName: true,
                     attendantId: true,
+                    customerPhone: true,
+                    metadata: true,
                     attendant: { select: { id: true, name: true } },
                     status: true,
                     paymentStatus: true,
@@ -704,6 +734,7 @@ export async function GET(req: NextRequest) {
       createdAt: recognitionDate,
       customerName: r.order?.customerName,
       customerPhone: (r.order as any)?.customerPhone ?? null,
+      customerLocation: buildReceiptCustomerLocation(r),
       customerEmail: (r.order as any)?.customerEmail ?? null,
       total,
       buyingTotal: resolvedBuyingTotal > 0 ? resolvedBuyingTotal : null,
@@ -743,7 +774,11 @@ export async function GET(req: NextRequest) {
       projectHandlerType: projectFlowData?.handlerType ?? null,
       projectHandlerStaffId: projectFlowData?.handlerStaffId ?? null,
       projectHandlerStaffName: projectFlowData?.handlerStaffName ?? null,
+      projectHandlerStaffIds: projectFlowData?.handlerStaffIds ?? [],
+      projectAssignedHandlers: projectFlowData?.assignedHandlers ?? [],
+      projectExternalAgentId: projectFlowData?.externalAgentId ?? null,
       projectExternalAgentName: projectFlowData?.externalAgentName ?? null,
+      projectExternalAgentIds: projectFlowData?.externalAgentIds ?? [],
       projectExternalAgentPhone: projectFlowData?.externalAgentPhone ?? null,
     };
   };
@@ -2289,7 +2324,7 @@ export async function POST(req: NextRequest) {
           channelStatus: {},
         };
       }
- 
+
       // Ensure internal admin notification completes within the request lifecycle
       // (important for serverless runtimes).
       await internalPromise;
@@ -2344,3 +2379,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
+

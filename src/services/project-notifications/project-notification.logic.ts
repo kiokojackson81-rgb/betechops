@@ -3,9 +3,20 @@ import type { ProjectNotificationChangedField } from "./project-notification.typ
 export type MinimalProjectFlow = {
   scheduledDate?: string | null;
   handlerStaffId?: string | null;
+  handlerStaffIds?: string[] | null;
   handlerStaffName?: string | null;
   handlerType?: string | null;
+  assignedHandlers?: Array<{
+    kind?: string | null;
+    staffId?: string | null;
+    staffName?: string | null;
+    externalAgentId?: string | null;
+    externalAgentName?: string | null;
+    phone?: string | null;
+  }> | null;
+  externalAgentId?: string | null;
   externalAgentName?: string | null;
+  externalAgentIds?: string[] | null;
   externalAgentPhone?: string | null;
   stage?: string | null;
 };
@@ -17,8 +28,20 @@ export function hasProjectBookingDate(projectFlow: MinimalProjectFlow | null | u
 export function hasProjectAssignedHandler(projectFlow: MinimalProjectFlow | null | undefined) {
   return Boolean(
     String(projectFlow?.handlerStaffId || "").trim() ||
+      (Array.isArray(projectFlow?.handlerStaffIds) && projectFlow!.handlerStaffIds!.some((entry) => String(entry || "").trim())) ||
       String(projectFlow?.handlerStaffName || "").trim() ||
+      (Array.isArray(projectFlow?.assignedHandlers) &&
+        projectFlow!.assignedHandlers!.some(
+          (entry) =>
+            String(entry?.staffId || "").trim() ||
+            String(entry?.staffName || "").trim() ||
+            String(entry?.externalAgentId || "").trim() ||
+            String(entry?.externalAgentName || "").trim() ||
+            String(entry?.phone || "").trim(),
+        )) ||
+      String(projectFlow?.externalAgentId || "").trim() ||
       String(projectFlow?.externalAgentName || "").trim() ||
+      (Array.isArray(projectFlow?.externalAgentIds) && projectFlow!.externalAgentIds!.some((entry) => String(entry || "").trim())) ||
       String(projectFlow?.externalAgentPhone || "").trim(),
   );
 }
@@ -29,6 +52,7 @@ export function hasProjectAssignmentChange(changedFields: ProjectNotificationCha
       field === "handlerStaffId" ||
       field === "handlerStaffName" ||
       field === "handlerType" ||
+      field === "handlerAssignments" ||
       field === "externalAgentName" ||
       field === "externalAgentPhone",
   );

@@ -1509,6 +1509,7 @@ model Receipt {
 
 enum ProjectNotificationEventType {
   PROJECT_BOOKED
+  PROJECT_ASSIGNED
   PROJECT_BOOKING_UPDATED
   PROJECT_COMPLETED
 }
@@ -1558,6 +1559,17 @@ model ProjectNotificationLog {
   @@index([receiptId, createdAt])
   @@index([status, createdAt])
   @@index([eventType, createdAt])
+}
+
+model ProjectExternalAgent {
+  id             String   @id @default(cuid())
+  name           String
+  whatsappNumber String
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([isActive, name])
 }
 
 model WebsiteOrder {

@@ -10,7 +10,10 @@ export async function GET() {
     id: string;
     name: string | null;
     email: string | null;
+    phone?: string | null;
+    whatsappNumber?: string | null;
     attendantCategory?: string | null;
+    technicalProfile?: { phoneNumber: string | null } | null;
   }> = [];
   try {
     staff = await prisma.user.findMany({
@@ -20,7 +23,10 @@ export async function GET() {
         id: true,
         name: true,
         email: true,
+        phone: true,
+        whatsappNumber: true,
         attendantCategory: true,
+        technicalProfile: { select: { phoneNumber: true } },
       },
     });
   } catch (err: unknown) {
@@ -31,7 +37,14 @@ export async function GET() {
       staff = await prisma.user.findMany({
         where: buildStaffAttendantWhere(),
         orderBy: [{ name: "asc" }],
-        select: { id: true, name: true, email: true },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          whatsappNumber: true,
+          technicalProfile: { select: { phoneNumber: true } },
+        },
       });
     } catch (err2: unknown) {
       const msg2 = String(err2);
@@ -46,7 +59,10 @@ export async function GET() {
       id: member.id,
       name: member.name || member.email || "Unnamed",
       email: member.email,
+      phone: member.phone ?? null,
+      whatsappNumber: member.whatsappNumber ?? null,
       attendantCategory: member.attendantCategory,
+      technicalPhoneNumber: member.technicalProfile?.phoneNumber ?? null,
     }))
   );
 }

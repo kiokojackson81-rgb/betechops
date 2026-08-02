@@ -1,5 +1,6 @@
 export type ProjectNotificationEvent =
   | "PROJECT_BOOKED"
+  | "PROJECT_ASSIGNED"
   | "PROJECT_BOOKING_UPDATED"
   | "PROJECT_COMPLETED";
 
@@ -19,6 +20,7 @@ export type ProjectNotificationChangedField =
   | "handlerType"
   | "externalAgentName"
   | "externalAgentPhone"
+  | "handlerAssignments"
   | "deliveryAddress"
   | "stage";
 
@@ -77,6 +79,12 @@ export type ProjectNotificationContext = {
   assignedHandlerName: string | null;
   assignedHandlerPhone: string | null;
   assignedHandlerId: string | null;
+  assignedHandlers: Array<{
+    id: string;
+    name: string;
+    phone: string | null;
+    kind: "STAFF" | "EXTERNAL";
+  }>;
   bookedByName: string | null;
   updatedByName: string | null;
   completedByName: string | null;

@@ -76,6 +76,7 @@ export type SendReceiptToChatraceInput = {
   extraFields?: Record<string, string | number | null | undefined>;
   accountId?: string;
   forceTriggerTagReapply?: boolean;
+  debugLabel?: string;
 };
 
 function checkConfig(accountIdOverride?: string) {
@@ -122,8 +123,10 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     skipDefaultTags,
     accountId,
     forceTriggerTagReapply,
+    debugLabel,
   } = input;
   const requestConfig = resolveChatraceRequestConfig(accountId);
+  const projectLogLabel = debugLabel || "PROJECT_WHATSAPP";
   const resolvedAccountId = requestConfig.accountId;
   const customerDisplayName = String(customerName || '').trim() || 'Customer';
   const customerFirstName =
@@ -465,10 +468,10 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
     bodyError: createRes.bodyError ?? null,
     ok: createRes.ok,
   };
-  console.info('[PROJECT_WHATSAPP] operation', {
+  console.info(`[${projectLogLabel}] UPDATE_FIELDS`, {
     accountId: resolvedAccountId,
     recipientPhone: phoneE164,
-    operation: 'UPDATE_FIELDS',
+    returnedContactId: debug.contactId ?? null,
     tagName: finalTag || null,
     httpStatus: createRes.status,
     sanitizedResponse: sanitizeChatraceResponse(createRes.json ?? createRes.text),
@@ -531,10 +534,10 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
       ok: removeTagRes.ok,
       response: removeTagRes.json ?? null,
     };
-    console.info('[PROJECT_WHATSAPP] operation', {
+    console.info(`[${projectLogLabel}] REMOVE_TAG`, {
       accountId: resolvedAccountId,
       recipientPhone: phoneE164,
-      operation: 'REMOVE_TAG',
+      returnedContactId: debug.contactId ?? null,
       tagName: finalTag || null,
       httpStatus: removeTagRes.status,
       sanitizedResponse: sanitizeChatraceResponse(removeTagRes.json ?? removeTagRes.text),
@@ -552,10 +555,10 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
       ok: applyTagRes.ok,
       response: applyTagRes.json ?? null,
     };
-    console.info('[PROJECT_WHATSAPP] operation', {
+    console.info(`[${projectLogLabel}] APPLY_TAG`, {
       accountId: resolvedAccountId,
       recipientPhone: phoneE164,
-      operation: 'APPLY_TAG',
+      returnedContactId: debug.contactId ?? null,
       tagName: finalTag || null,
       httpStatus: applyTagRes.status,
       sanitizedResponse: sanitizeChatraceResponse(applyTagRes.json ?? applyTagRes.text),
@@ -587,13 +590,13 @@ export async function pushReceiptToChatrace(input: SendReceiptToChatraceInput): 
       verification.found &&
       (verification.tags || []).some((tag) => tag.trim().toLowerCase() === normalizedFinalTag),
     );
-    console.info('[PROJECT_WHATSAPP] operation', {
+    console.info(`[${projectLogLabel}] VERIFY_TAG`, {
       accountId: resolvedAccountId,
       contactId: verification.contactId ?? debug.contactId ?? null,
       recipientPhone: phoneE164,
-      operation: 'VERIFY_TAG',
       tagName: finalTag,
       httpStatus: verification.found ? 200 : 404,
+      tagVerified,
       sanitizedResponse: {
         found: verification.found,
         contactId: verification.contactId ?? null,
