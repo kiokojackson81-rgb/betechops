@@ -699,6 +699,9 @@ export default function ProjectsOperationsClient({
             <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-400">
               Track project receipts, schedule installations, assign internal technicians and external agents, and move each project through the live POS workflow.
             </p>
+            <p className="mt-2 max-w-4xl text-xs leading-5 text-slate-500">
+              The same project can be assigned to both internal staff and external agents at the same time.
+            </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
             <div className="min-w-[260px] rounded-2xl border border-white/10 bg-[#0b1424] px-4 py-3">
@@ -750,6 +753,9 @@ export default function ProjectsOperationsClient({
               <h2 className="mt-2 text-xl font-semibold text-white">Manage project external technicians</h2>
               <p className="mt-2 text-sm text-slate-400">
                 Save, reuse, and delete external agents used for installation assignments and notifications.
+              </p>
+              <p className="mt-2 text-xs text-slate-500">
+                External agents can be added alongside internal technicians on the same project.
               </p>
             </div>
             <button
