@@ -1,3 +1,5 @@
+import { readReceiptProjectFlow } from "@/lib/receiptProjects";
+
 export function buildReceiptSnapshot(receipt: any) {
   const order = receipt.order || {};
   const data = receipt.data;
@@ -50,6 +52,7 @@ export function buildReceiptSnapshot(receipt: any) {
     dataIsObject && dataAny?.projectFlow && typeof dataAny.projectFlow === "object"
       ? (dataAny.projectFlow as Record<string, unknown>)
       : null;
+  const normalizedProjectFlow = readReceiptProjectFlow(projectFlowRaw);
   const metadata =
     dataIsObject && dataAny?.metadata && typeof dataAny.metadata === "object"
       ? (dataAny.metadata as Record<string, unknown>)
@@ -97,35 +100,24 @@ export function buildReceiptSnapshot(receipt: any) {
         : typeof metadata?.quotePaymentMethod === "string"
           ? metadata.quotePaymentMethod
           : null,
-    projectFlow: projectFlowRaw
+    projectFlow: normalizedProjectFlow
       ? {
-          isProject: projectFlowRaw.isProject === true,
-          stage: typeof projectFlowRaw.stage === "string" ? projectFlowRaw.stage : null,
-          paymentTerm:
-            typeof projectFlowRaw.paymentTerm === "string" ? projectFlowRaw.paymentTerm : null,
-          paymentStatus:
-            typeof projectFlowRaw.paymentStatus === "string"
-              ? projectFlowRaw.paymentStatus
-              : null,
-          depositType:
-            typeof projectFlowRaw.depositType === "string" ? projectFlowRaw.depositType : null,
-          depositPercent: Number(projectFlowRaw.depositPercent ?? 0) || 0,
-          depositRequiredAmount: Number(projectFlowRaw.depositRequiredAmount ?? 0) || 0,
-          depositPaidAmount: Number(projectFlowRaw.depositPaidAmount ?? 0) || 0,
-          depositPendingAmount: Number(projectFlowRaw.depositPendingAmount ?? 0) || 0,
-          depositPaymentMethod:
-            typeof projectFlowRaw.depositPaymentMethod === "string"
-              ? projectFlowRaw.depositPaymentMethod
-              : null,
-          balanceExpectedAmount: Number(projectFlowRaw.balanceExpectedAmount ?? 0) || 0,
-          balancePaidAmount: Number(projectFlowRaw.balancePaidAmount ?? 0) || 0,
-          balancePendingAmount: Number(projectFlowRaw.balancePendingAmount ?? 0) || 0,
-          balancePaymentMethod:
-            typeof projectFlowRaw.balancePaymentMethod === "string"
-              ? projectFlowRaw.balancePaymentMethod
-              : null,
-          totalPaidAmount: Number(projectFlowRaw.totalPaidAmount ?? 0) || 0,
-          remainingAmount: Number(projectFlowRaw.remainingAmount ?? 0) || 0,
+          isProject: normalizedProjectFlow.isProject,
+          stage: normalizedProjectFlow.stage,
+          paymentTerm: normalizedProjectFlow.paymentTerm,
+          paymentStatus: normalizedProjectFlow.paymentStatus,
+          depositType: normalizedProjectFlow.depositType,
+          depositPercent: normalizedProjectFlow.depositPercent,
+          depositRequiredAmount: normalizedProjectFlow.depositRequiredAmount,
+          depositPaidAmount: normalizedProjectFlow.depositPaidAmount,
+          depositPendingAmount: normalizedProjectFlow.depositPendingAmount,
+          depositPaymentMethod: normalizedProjectFlow.depositPaymentMethod,
+          balanceExpectedAmount: normalizedProjectFlow.balanceExpectedAmount,
+          balancePaidAmount: normalizedProjectFlow.balancePaidAmount,
+          balancePendingAmount: normalizedProjectFlow.balancePendingAmount,
+          balancePaymentMethod: normalizedProjectFlow.balancePaymentMethod,
+          totalPaidAmount: normalizedProjectFlow.totalPaidAmount,
+          remainingAmount: normalizedProjectFlow.remainingAmount,
         }
       : null,
   };

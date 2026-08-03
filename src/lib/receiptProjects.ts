@@ -569,7 +569,7 @@ export function readReceiptProjectFlow(value: unknown): ReceiptProjectFlow | nul
         ? "PROJECT_IN_PROGRESS"
         : "RECEIPT_CREATED";
 
-  if (!hasExplicitPaymentStatus && stage === "COMPLETED_POSTED") {
+  if (stage === "COMPLETED_POSTED") {
     if (projectValue > 0) {
       totalPaidAmount = projectValue;
       amountPaidTotal = projectValue;
@@ -581,9 +581,12 @@ export function readReceiptProjectFlow(value: unknown): ReceiptProjectFlow | nul
     derivedPaymentStatus = "FULLY_PAID";
   }
 
-  const paymentStatus = hasExplicitPaymentStatus
-    ? normalizeReceiptProjectPaymentStatus(source.paymentStatus)
-    : derivedPaymentStatus;
+  const paymentStatus =
+    stage === "COMPLETED_POSTED"
+      ? "FULLY_PAID"
+      : hasExplicitPaymentStatus
+        ? normalizeReceiptProjectPaymentStatus(source.paymentStatus)
+        : derivedPaymentStatus;
   const primaryAssignment = assignedHandlers[0] ?? null;
   const normalizedHandlerType =
     assignedHandlers.length === 0

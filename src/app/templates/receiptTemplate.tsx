@@ -107,6 +107,29 @@ export default function renderReceiptTemplate(
         return 'Unpaid';
     }
   };
+  const isProjectFullyPaid = String(projectFlow?.paymentStatus || '').trim().toUpperCase() === 'FULLY_PAID';
+  const projectPaymentPlanLabel = (() => {
+    const paymentTerm = String(projectFlow?.paymentTerm || '').trim().toUpperCase();
+    if (isProjectFullyPaid) {
+      switch (paymentTerm) {
+        case 'FULL_BEFORE_INSTALLATION':
+          return 'Paid fully before installation';
+        case 'DEPOSIT_AND_BALANCE':
+          return 'Deposit and balance completed';
+        case 'FULL_AFTER_INSTALLATION':
+          return 'Paid after installation';
+        default:
+          return 'Payment completed';
+      }
+    }
+    return formatProjectPaymentTerm(projectFlow?.paymentTerm);
+  })();
+  const projectBalanceLabel = (() => {
+    const paymentTerm = String(projectFlow?.paymentTerm || '').trim().toUpperCase();
+    if (isProjectFullyPaid) return 'Balance remaining';
+    if (paymentTerm === 'FULL_BEFORE_INSTALLATION') return 'Amount due before installation';
+    return 'Balance after installation';
+  })();
   const fallbackCollectionMethodsHtml = `
     <div class="project-payment-options">
       <div class="project-payment-options__label">Payment options</div>
@@ -176,7 +199,7 @@ export default function renderReceiptTemplate(
         <div class="project-payment-summary__grid">
           <div class="project-payment-summary__item">
             <span>Payment plan</span>
-            <strong>${formatProjectPaymentTerm(projectFlow.paymentTerm)}</strong>
+            <strong>${projectPaymentPlanLabel}</strong>
           </div>
           <div class="project-payment-summary__item">
             <span>Paid so far</span>
@@ -190,16 +213,12 @@ export default function renderReceiptTemplate(
                 <strong>KES ${formatAmount(toNumberOrNull(projectFlow.depositPaidAmount) ?? 0)}</strong>
               </div>
               <div class="project-payment-summary__item">
-                <span>Balance after installation</span>
+                <span>${projectBalanceLabel}</span>
                 <strong>KES ${formatAmount(toNumberOrNull(projectFlow.remainingAmount) ?? 0)}</strong>
               </div>`
               : `
               <div class="project-payment-summary__item">
-                <span>${
-                  String(projectFlow.paymentTerm || '').trim().toUpperCase() === 'FULL_BEFORE_INSTALLATION'
-                    ? 'Amount due before installation'
-                    : 'Balance after installation'
-                }</span>
+                <span>${projectBalanceLabel}</span>
                 <strong>KES ${formatAmount(toNumberOrNull(projectFlow.remainingAmount) ?? 0)}</strong>
               </div>`
           }
