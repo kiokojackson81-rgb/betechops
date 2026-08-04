@@ -680,6 +680,7 @@ async function processDraft(
                 extraFields: {
                   customer_name: context.customerName,
                   customer_phone: context.customerPhone || "",
+                  customer_address: context.installationAddress || "Not provided",
                   project_number: context.projectNumber,
                   project_installation_date: formatKenyaDate(context.installationDate) || "",
                   project_value: formatKenyaNumber(context.projectValue),
