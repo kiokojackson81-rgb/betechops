@@ -1139,6 +1139,138 @@ export default function ProjectsOperationsClient({
                                     </div>
                                     <div className="mt-3 text-xs text-slate-500">{formatPaymentTermLabel(row.projectPaymentTerm)}</div>
                                   </div>
+                                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                                    <label className="block text-sm text-slate-300">
+                                      Payment position
+                                      <select
+                                        value={editor.paymentTerm}
+                                        onChange={(event) =>
+                                          setEditorValue(row.id, {
+                                            paymentTerm: event.target.value as ProjectEditor["paymentTerm"],
+                                          })
+                                        }
+                                        className="mt-2 w-full rounded-2xl border border-white/10 bg-[#08111d] px-4 py-3 text-white outline-none"
+                                      >
+                                        <option value="FULL_BEFORE_INSTALLATION">Pay fully before installation</option>
+                                        <option value="DEPOSIT_AND_BALANCE">Deposit and balance</option>
+                                        <option value="FULL_AFTER_INSTALLATION">Pay fully after installation</option>
+                                      </select>
+                                    </label>
+                                    {editor.paymentTerm === "DEPOSIT_AND_BALANCE" ? (
+                                      <>
+                                        <label className="block text-sm text-slate-300">
+                                          Deposit type
+                                          <select
+                                            value={editor.depositType}
+                                            onChange={(event) =>
+                                              setEditorValue(row.id, {
+                                                depositType: event.target.value as ProjectEditor["depositType"],
+                                                depositValue:
+                                                  event.target.value === "AMOUNT"
+                                                    ? editor.depositType === "AMOUNT"
+                                                      ? editor.depositValue
+                                                      : "5000"
+                                                    : editor.depositType === "PERCENT"
+                                                      ? editor.depositValue
+                                                      : "30",
+                                              })
+                                            }
+                                            className="mt-2 w-full rounded-2xl border border-white/10 bg-[#08111d] px-4 py-3 text-white outline-none"
+                                          >
+                                            <option value="PERCENT">Percentage</option>
+                                            <option value="AMOUNT">Fixed amount</option>
+                                          </select>
+                                        </label>
+                                        <label className="block text-sm text-slate-300">
+                                          {editor.depositType === "AMOUNT" ? "Deposit amount (Ksh)" : "Deposit percentage"}
+                                          <input
+                                            type="number"
+                                            min={0}
+                                            max={editor.depositType === "AMOUNT" ? undefined : 100}
+                                            value={editor.depositValue}
+                                            onChange={(event) => setEditorValue(row.id, { depositValue: event.target.value })}
+                                            className="mt-2 w-full rounded-2xl border border-white/10 bg-[#08111d] px-4 py-3 text-white outline-none"
+                                          />
+                                        </label>
+                                      </>
+                                    ) : null}
+                                    <label className="block text-sm text-slate-300">
+                                      Deposit paid amount
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        value={editor.depositPaidAmount}
+                                        onChange={(event) => setEditorValue(row.id, { depositPaidAmount: event.target.value })}
+                                        className="mt-2 w-full rounded-2xl border border-white/10 bg-[#08111d] px-4 py-3 text-white outline-none"
+                                      />
+                                    </label>
+                                    <label className="block text-sm text-slate-300">
+                                      Deposit payment method
+                                      <select
+                                        value={editor.depositPaymentMethod}
+                                        onChange={(event) =>
+                                          setEditorValue(row.id, {
+                                            depositPaymentMethod: event.target.value as ProjectEditor["depositPaymentMethod"],
+                                          })
+                                        }
+                                        className="mt-2 w-full rounded-2xl border border-white/10 bg-[#08111d] px-4 py-3 text-white outline-none"
+                                      >
+                                        <option value="UNSPECIFIED">Unspecified</option>
+                                        <option value="MPESA">M-Pesa</option>
+                                        <option value="CASH">Cash</option>
+                                        <option value="BANK">Bank</option>
+                                        <option value="MIXED">Mixed</option>
+                                      </select>
+                                    </label>
+                                    <label className="block text-sm text-slate-300 sm:col-span-2">
+                                      Deposit reference
+                                      <input
+                                        type="text"
+                                        value={editor.depositReference}
+                                        onChange={(event) => setEditorValue(row.id, { depositReference: event.target.value })}
+                                        className="mt-2 w-full rounded-2xl border border-white/10 bg-[#08111d] px-4 py-3 text-white outline-none"
+                                        placeholder="Optional deposit reference"
+                                      />
+                                    </label>
+                                    <label className="block text-sm text-slate-300">
+                                      Balance paid amount
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        value={editor.balancePaidAmount}
+                                        onChange={(event) => setEditorValue(row.id, { balancePaidAmount: event.target.value })}
+                                        className="mt-2 w-full rounded-2xl border border-white/10 bg-[#08111d] px-4 py-3 text-white outline-none"
+                                      />
+                                    </label>
+                                    <label className="block text-sm text-slate-300">
+                                      Balance payment method
+                                      <select
+                                        value={editor.balancePaymentMethod}
+                                        onChange={(event) =>
+                                          setEditorValue(row.id, {
+                                            balancePaymentMethod: event.target.value as ProjectEditor["balancePaymentMethod"],
+                                          })
+                                        }
+                                        className="mt-2 w-full rounded-2xl border border-white/10 bg-[#08111d] px-4 py-3 text-white outline-none"
+                                      >
+                                        <option value="UNSPECIFIED">Unspecified</option>
+                                        <option value="MPESA">M-Pesa</option>
+                                        <option value="CASH">Cash</option>
+                                        <option value="BANK">Bank</option>
+                                        <option value="MIXED">Mixed</option>
+                                      </select>
+                                    </label>
+                                    <label className="block text-sm text-slate-300 sm:col-span-2">
+                                      Balance reference
+                                      <input
+                                        type="text"
+                                        value={editor.balanceReference}
+                                        onChange={(event) => setEditorValue(row.id, { balanceReference: event.target.value })}
+                                        className="mt-2 w-full rounded-2xl border border-white/10 bg-[#08111d] px-4 py-3 text-white outline-none"
+                                        placeholder="Optional balance reference"
+                                      />
+                                    </label>
+                                  </div>
                                 </div>
 
                                 <div className="rounded-[28px] border border-white/10 bg-[#0a1322] p-5">
