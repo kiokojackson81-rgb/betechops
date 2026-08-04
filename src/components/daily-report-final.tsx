@@ -438,6 +438,8 @@ export default function DailyReportFinal({
     durationMinutes: 0,
     platforms: "",
   });
+  const [wednesdayFollowUpNotes, setWednesdayFollowUpNotes] = useState("");
+  const [wednesdayEngagementNotes, setWednesdayEngagementNotes] = useState("");
 
   const [thursdayActivities, setThursdayActivities] = useState({
     attendedMeeting: false,
@@ -1022,6 +1024,8 @@ export default function DailyReportFinal({
       oosReview: false,
     });
     setLiveSession({ hosted: 0, viewers: 0, durationMinutes: 0, platforms: "" });
+    setWednesdayFollowUpNotes("");
+    setWednesdayEngagementNotes("");
     setThursdayActivities({ attendedMeeting: false, attendedShoot: false, videosShot: 0 });
     setFridayTasks({ promoVideosPosted: 0, preparedWeekendPromos: false, improvementSummary: "" });
     setSaturdaySummary({ liveSessionNotes: "", weeklySummary: "" });
@@ -1073,6 +1077,10 @@ export default function DailyReportFinal({
     communications,
     marketplace,
     liveSession,
+    wednesdayNotes: {
+      followUpNotes: wednesdayFollowUpNotes,
+      engagementNotes: wednesdayEngagementNotes,
+    },
     thursdayActivities,
     fridayTasks,
     saturdaySummary,
@@ -2100,67 +2108,53 @@ export default function DailyReportFinal({
             </div>
 
             <div className="mt-5 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px] 2xl:grid-cols-[minmax(0,1fr)_430px]">
-              <div className="min-w-0 space-y-5">
-                <section className={cardClasses + " p-5"}>
-                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                    <div>
-                      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Reporting Day</div>
-                      <h3 className="mt-2 text-2xl font-semibold text-white">{checklistTitle}</h3>
-                      <p className="mt-1 max-w-2xl text-sm text-slate-400">
-                        {checklistDescription}
-                      </p>
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[540px]">
-                      <div className="space-y-2">
-                        <label className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Date</label>
-                        {datePicker}
+              {isBrendahDutyProfile ? (
+                <>
+                  <div className="min-w-0 space-y-5">
+                    <section className={cardClasses + " p-5"}>
+                      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Reporting Day</div>
+                          <h3 className="mt-2 text-2xl font-semibold text-white">{checklistTitle}</h3>
+                          <p className="mt-1 max-w-2xl text-sm text-slate-400">
+                            {checklistDescription}
+                          </p>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[540px]">
+                          <div className="space-y-2">
+                            <label className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Date</label>
+                            {datePicker}
+                          </div>
+                          <div className="space-y-2">
+                            <label className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Day of week</label>
+                            {dayOfWeekSelect}
+                          </div>
+                        </div>
                       </div>
-                      <div className="space-y-2">
-                        <label className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Day of week</label>
-                        {dayOfWeekSelect}
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setQuickDate("today")}
+                          className="rounded-full border border-white/10 bg-slate-950/40 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-white/30 hover:bg-white/[0.05]"
+                        >
+                          Today
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setQuickDate("yesterday")}
+                          className="rounded-full border border-white/10 bg-slate-950/40 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-white/30 hover:bg-white/[0.05]"
+                        >
+                          Yesterday
+                        </button>
                       </div>
-                    </div>
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setQuickDate("today")}
-                      className="rounded-full border border-white/10 bg-slate-950/40 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-white/30 hover:bg-white/[0.05]"
-                    >
-                      Today
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setQuickDate("yesterday")}
-                      className="rounded-full border border-white/10 bg-slate-950/40 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-white/30 hover:bg-white/[0.05]"
-                    >
-                      Yesterday
-                    </button>
-                    <div className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-xs font-semibold text-emerald-100">
-                      Auto-loaded from selected day
-                    </div>
-                  </div>
-                </section>
+                    </section>
 
-                <section className={cardClasses + " p-5"}>
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Day Checklist</div>
-                      <h3 className="mt-2 text-2xl font-semibold text-white">{checklistTitle}</h3>
-                    </div>
-                    <div className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-xs font-semibold text-emerald-100">
-                      {checklistBadge}
-                    </div>
-                  </div>
-                  <div className="mt-5">
                     <DaySpecificBlocks
                       selectedDay={dayOfWeek}
                       walkInsPurchased={Number(walkinsPurchased || 0)}
                       onWalkInsPurchasedChange={(val) => {
                         setWalkinsPurchased(val);
-                        if (isBrendahDutyProfile) {
-                          setWalkinsServed(val);
-                        }
+                        setWalkinsServed(val);
                       }}
                       neatness={shopNeatness}
                       onNeatnessChange={setShopNeatness}
@@ -2180,53 +2174,190 @@ export default function DailyReportFinal({
                       onMarketplaceChange={setMarketplace}
                       liveSession={liveSession}
                       onLiveSessionChange={setLiveSession}
+                      wednesdayFollowUpNotes={wednesdayFollowUpNotes}
+                      onWednesdayFollowUpNotesChange={setWednesdayFollowUpNotes}
+                      wednesdayEngagementNotes={wednesdayEngagementNotes}
+                      onWednesdayEngagementNotesChange={setWednesdayEngagementNotes}
                       thursdayActivities={thursdayActivities}
                       onThursdayActivitiesChange={setThursdayActivities}
                       fridayTasks={fridayTasks}
                       onFridayTasksChange={setFridayTasks}
                       saturdaySummary={saturdaySummary}
                       onSaturdaySummaryChange={setSaturdaySummary}
-                      isBrendahDutyProfile={isBrendahDutyProfile}
+                      isBrendahDutyProfile
                     />
+
+                    <div className="flex flex-wrap items-center justify-end gap-3 rounded-[24px] border border-white/10 bg-slate-950/70 p-4">
+                      <button
+                        type="button"
+                        onClick={handleResetDay}
+                        className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 transition hover:border-white/30 hover:bg-white/5"
+                      >
+                        Reset day
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSubmit}
+                        disabled={isSubmitting}
+                        className="rounded-xl bg-emerald-500 px-6 py-2 text-sm font-semibold text-black transition hover:brightness-95 disabled:opacity-60"
+                      >
+                        {isSubmitting ? "Submitting..." : "Submit report"}
+                      </button>
+                    </div>
                   </div>
-                </section>
 
-                <div className="flex flex-wrap items-center justify-end gap-3 rounded-[24px] border border-white/10 bg-slate-950/70 p-4">
-                  <button
-                    type="button"
-                    onClick={handleResetDay}
-                    className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 transition hover:border-white/30 hover:bg-white/5"
-                  >
-                    Reset
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSubmit}
-                    disabled={isSubmitting}
-                    className="rounded-xl bg-emerald-500 px-6 py-2 text-sm font-semibold text-black transition hover:brightness-95 disabled:opacity-60"
-                  >
-                    {isSubmitting ? "Submitting..." : "Submit report"}
-                  </button>
-                </div>
-              </div>
+                  <aside className="space-y-5 lg:sticky lg:top-6">
+                    <QuickStats
+                      receipts={displayedReceipts}
+                      salesKes={displayedSalesKes}
+                      newProducts={displayedNewProducts}
+                      editedProducts={displayedEditedProducts}
+                      copiedProducts={displayedCopiedProducts}
+                      commissionKes={commissionForPeriod}
+                      periodLabel={selectedPeriodLabel}
+                    />
 
-              <aside className="space-y-5 lg:sticky lg:top-6">
-                <QuickStats
-                  receipts={displayedReceipts}
-                  salesKes={displayedSalesKes}
-                  newProducts={displayedNewProducts}
-                  editedProducts={displayedEditedProducts}
-                  copiedProducts={displayedCopiedProducts}
-                  commissionKes={commissionForPeriod}
-                  periodLabel={selectedPeriodLabel}
-                />
+                    <BrendahLegacyEarningsSummaryCard
+                      summary={earningsSummary ?? publicFallbackSummary}
+                      downloadHref={payslipHref}
+                    />
+                  </aside>
+                </>
+              ) : (
+                <>
+                  <div className="min-w-0 space-y-5">
+                    <section className={cardClasses + " p-5"}>
+                      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Reporting Day</div>
+                          <h3 className="mt-2 text-2xl font-semibold text-white">{checklistTitle}</h3>
+                          <p className="mt-1 max-w-2xl text-sm text-slate-400">
+                            {checklistDescription}
+                          </p>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[540px]">
+                          <div className="space-y-2">
+                            <label className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Date</label>
+                            {datePicker}
+                          </div>
+                          <div className="space-y-2">
+                            <label className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Day of week</label>
+                            {dayOfWeekSelect}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setQuickDate("today")}
+                          className="rounded-full border border-white/10 bg-slate-950/40 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-white/30 hover:bg-white/[0.05]"
+                        >
+                          Today
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setQuickDate("yesterday")}
+                          className="rounded-full border border-white/10 bg-slate-950/40 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-white/30 hover:bg-white/[0.05]"
+                        >
+                          Yesterday
+                        </button>
+                        <div className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-xs font-semibold text-emerald-100">
+                          Auto-loaded from selected day
+                        </div>
+                      </div>
+                    </section>
 
-                <EarningsCard
-                  summary={earningsSummary ?? publicFallbackSummary}
-                  lockKey="dailyreport:earnings"
-                  downloadHref={payslipHref}
-                />
-              </aside>
+                    <section className={cardClasses + " p-5"}>
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Day Checklist</div>
+                          <h3 className="mt-2 text-2xl font-semibold text-white">{checklistTitle}</h3>
+                        </div>
+                        <div className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-xs font-semibold text-emerald-100">
+                          {checklistBadge}
+                        </div>
+                      </div>
+                      <div className="mt-5">
+                        <DaySpecificBlocks
+                          selectedDay={dayOfWeek}
+                          walkInsPurchased={Number(walkinsPurchased || 0)}
+                          onWalkInsPurchasedChange={(val) => {
+                            setWalkinsPurchased(val);
+                            if (isBrendahDutyProfile) {
+                              setWalkinsServed(val);
+                            }
+                          }}
+                          neatness={shopNeatness}
+                          onNeatnessChange={setShopNeatness}
+                          productTasks={{
+                            uploaded: productsUploaded,
+                            edited: productsEdited,
+                            copied: productsCopied,
+                          }}
+                          onProductTasksChange={(next) => {
+                            setProductsUploaded(next.uploaded);
+                            setProductsEdited(next.edited);
+                            setProductsCopied(next.copied);
+                          }}
+                          communications={communications}
+                          onCommunicationsChange={setCommunications}
+                          marketplace={marketplace}
+                          onMarketplaceChange={setMarketplace}
+                          liveSession={liveSession}
+                          onLiveSessionChange={setLiveSession}
+                          wednesdayFollowUpNotes={wednesdayFollowUpNotes}
+                          onWednesdayFollowUpNotesChange={setWednesdayFollowUpNotes}
+                          wednesdayEngagementNotes={wednesdayEngagementNotes}
+                          onWednesdayEngagementNotesChange={setWednesdayEngagementNotes}
+                          thursdayActivities={thursdayActivities}
+                          onThursdayActivitiesChange={setThursdayActivities}
+                          fridayTasks={fridayTasks}
+                          onFridayTasksChange={setFridayTasks}
+                          saturdaySummary={saturdaySummary}
+                          onSaturdaySummaryChange={setSaturdaySummary}
+                          isBrendahDutyProfile={isBrendahDutyProfile}
+                        />
+                      </div>
+                    </section>
+
+                    <div className="flex flex-wrap items-center justify-end gap-3 rounded-[24px] border border-white/10 bg-slate-950/70 p-4">
+                      <button
+                        type="button"
+                        onClick={handleResetDay}
+                        className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-200 transition hover:border-white/30 hover:bg-white/5"
+                      >
+                        Reset
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSubmit}
+                        disabled={isSubmitting}
+                        className="rounded-xl bg-emerald-500 px-6 py-2 text-sm font-semibold text-black transition hover:brightness-95 disabled:opacity-60"
+                      >
+                        {isSubmitting ? "Submitting..." : "Submit report"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <aside className="space-y-5 lg:sticky lg:top-6">
+                    <QuickStats
+                      receipts={displayedReceipts}
+                      salesKes={displayedSalesKes}
+                      newProducts={displayedNewProducts}
+                      editedProducts={displayedEditedProducts}
+                      copiedProducts={displayedCopiedProducts}
+                      commissionKes={commissionForPeriod}
+                      periodLabel={selectedPeriodLabel}
+                    />
+
+                    <EarningsCard
+                      summary={earningsSummary ?? publicFallbackSummary}
+                      lockKey="dailyreport:earnings"
+                      downloadHref={payslipHref}
+                    />
+                  </aside>
+                </>
+              )}
             </div>
           </section>
         </section>
@@ -2253,6 +2384,10 @@ function DaySpecificBlocks(props: DaySpecificBlocksProps) {
     onMarketplaceChange,
     liveSession,
     onLiveSessionChange,
+    wednesdayFollowUpNotes,
+    onWednesdayFollowUpNotesChange,
+    wednesdayEngagementNotes,
+    onWednesdayEngagementNotesChange,
     thursdayActivities,
     onThursdayActivitiesChange,
     fridayTasks,
@@ -2262,8 +2397,10 @@ function DaySpecificBlocks(props: DaySpecificBlocksProps) {
     isBrendahDutyProfile,
   } = props;
 
-  const showNeatness = ["Monday", "Thursday", "Friday", "Saturday"].includes(selectedDay);
-  const showWalkInsCard = !isBrendahDutyProfile || selectedDay !== "Tuesday";
+  const showNeatness = isBrendahDutyProfile
+    ? true
+    : ["Monday", "Thursday", "Friday", "Saturday"].includes(selectedDay);
+  const showWalkInsCard = isBrendahDutyProfile ? true : !isBrendahDutyProfile || selectedDay !== "Tuesday";
 
   return (
     <div className="space-y-6">
@@ -2274,6 +2411,7 @@ function DaySpecificBlocks(props: DaySpecificBlocksProps) {
           neatness={neatness}
           onNeatnessChange={onNeatnessChange}
           showNeatness={showNeatness}
+          isBrendahDutyProfile={isBrendahDutyProfile}
         />
       ) : null}
       <ProductStockCard
@@ -2286,8 +2424,8 @@ function DaySpecificBlocks(props: DaySpecificBlocksProps) {
       {selectedDay === "Wednesday" && (
         <>
           <LiveSessionCoreCard value={liveSession} onChange={onLiveSessionChange} />
-          <WednesdayFollowUpCard />
-          <WednesdayEngagementCard />
+          <WednesdayFollowUpCard value={wednesdayFollowUpNotes} onChange={onWednesdayFollowUpNotesChange} />
+          <WednesdayEngagementCard value={wednesdayEngagementNotes} onChange={onWednesdayEngagementNotesChange} />
         </>
       )}
       {selectedDay === "Thursday" && (
@@ -2312,6 +2450,7 @@ function WalkInsNeatnessCard(props: {
   neatness: { cleaned: boolean; neat: boolean; labeled: boolean };
   onNeatnessChange: (next: { cleaned: boolean; neat: boolean; labeled: boolean }) => void;
   showNeatness: boolean;
+  isBrendahDutyProfile?: boolean;
 }) {
   const {
     valueWalkInsPurchased,
@@ -2319,6 +2458,7 @@ function WalkInsNeatnessCard(props: {
     neatness,
     onNeatnessChange,
     showNeatness,
+    isBrendahDutyProfile,
   } = props;
 
   return (
@@ -2352,7 +2492,7 @@ function WalkInsNeatnessCard(props: {
                 onChange={(next) => onNeatnessChange({ ...neatness, cleaned: next })}
               />
               <PillCheckbox
-                label="Shop arranged"
+                label={isBrendahDutyProfile ? "Shop neatness" : "Shop arranged"}
                 checked={neatness.neat}
                 onChange={(next) => onNeatnessChange({ ...neatness, neat: next })}
               />
@@ -2536,26 +2676,28 @@ function LiveSessionCoreCard(props: {
   );
 }
 
-function WednesdayFollowUpCard() {
+function WednesdayFollowUpCard(props: { value: string; onChange: (next: string) => void }) {
+  const { value, onChange } = props;
   return (
     <section className={cardClasses + " p-6 space-y-3"}>
       <h2 className="text-lg font-semibold">Live session follow-ups</h2>
       <p className="text-sm text-slate-400">
         Conduct timely follow-ups on leads generated from the live session.
       </p>
-      <textarea rows={3} className={textareaClasses} placeholder="Notes on follow-ups, customers contacted, next actions…" />
+      <textarea rows={3} className={textareaClasses} value={value} onChange={(e) => onChange(e.target.value)} placeholder="Notes on follow-ups, customers contacted, next actions…" />
     </section>
   );
 }
 
-function WednesdayEngagementCard() {
+function WednesdayEngagementCard(props: { value: string; onChange: (next: string) => void }) {
+  const { value, onChange } = props;
   return (
     <section className={cardClasses + " p-6 space-y-3"}>
       <h2 className="text-lg font-semibold">Content engagement tracking</h2>
       <p className="text-sm text-slate-400">
         Track engagement data to identify top-performing content (views, comments, saves, shares).
       </p>
-      <textarea rows={3} className={textareaClasses} placeholder="Top-performing posts, engagement numbers, lessons learnt…" />
+      <textarea rows={3} className={textareaClasses} value={value} onChange={(e) => onChange(e.target.value)} placeholder="Top-performing posts, engagement numbers, lessons learnt…" />
     </section>
   );
 }
@@ -2817,6 +2959,77 @@ function QuickStats({
   );
 }
 
+function BrendahLegacyEarningsSummaryCard(props: {
+  summary: EarningsSummary;
+  downloadHref?: string;
+}) {
+  const { summary, downloadHref } = props;
+  const { locked, toggle } = useCardLock("dailyreport:earnings");
+
+  return (
+    <section className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] px-6 py-6 shadow-[0_24px_70px_rgba(0,0,0,0.28)] md:px-8 md:py-7">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Earnings Summary</div>
+          <p className="mt-2 text-sm text-slate-400">{summary.periodLabel}</p>
+        </div>
+        <LockButton locked={locked} onToggle={toggle} />
+      </div>
+
+      <div className="mt-5 rounded-[22px] border border-emerald-400/30 bg-slate-950/50 px-5 py-4">
+        <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Net Pay</div>
+        <div className="mt-2 text-4xl font-semibold text-emerald-300">
+          <SensitiveValue
+            value={summary.netPay ?? 0}
+            format={(value) => formatKES(Number(value))}
+            storageKey="dailyreport:earnings:netpay"
+            forceHidden={locked}
+            forceVisible={!locked}
+          />
+        </div>
+      </div>
+
+      <div className="mt-5 space-y-4 text-sm">
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-slate-400">Base salary</span>
+          <span className="font-medium text-slate-100">
+            <SensitiveValue
+              value={summary.baseSalary ?? 0}
+              format={(value) => formatKES(Number(value))}
+              storageKey="dailyreport:earnings:baseSalary"
+              forceHidden={locked}
+              forceVisible={!locked}
+            />
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-slate-400">Marketing commission</span>
+          <span className="font-medium text-slate-100">
+            <SensitiveValue
+              value={summary.salesCommission ?? 0}
+              format={(value) => formatKES(Number(value))}
+              storageKey="dailyreport:earnings:marketingCommission"
+              forceHidden={locked}
+              forceVisible={!locked}
+            />
+          </span>
+        </div>
+      </div>
+
+      {downloadHref ? (
+        <a
+          href={downloadHref}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-6 inline-flex rounded-full border border-white/10 bg-slate-950/40 px-5 py-3 text-sm font-semibold text-slate-100 transition hover:border-white/25 hover:bg-white/[0.05]"
+        >
+          Download payslip
+        </a>
+      ) : null}
+    </section>
+  );
+}
+
 function PillCheckbox(props: { label: string; checked: boolean; onChange: (next: boolean) => void }) {
   const { label, checked, onChange } = props;
   return (
@@ -2893,6 +3106,10 @@ type DaySpecificBlocksProps = {
   onMarketplaceChange: (val: MarketplaceState) => void;
   liveSession: LiveSessionState;
   onLiveSessionChange: (val: LiveSessionState) => void;
+  wednesdayFollowUpNotes: string;
+  onWednesdayFollowUpNotesChange: (val: string) => void;
+  wednesdayEngagementNotes: string;
+  onWednesdayEngagementNotesChange: (val: string) => void;
   thursdayActivities: ThursdayActivitiesState;
   onThursdayActivitiesChange: (val: ThursdayActivitiesState) => void;
   fridayTasks: FridayTasksState;
