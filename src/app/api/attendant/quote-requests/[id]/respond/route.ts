@@ -162,7 +162,6 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         name: guard.name,
         email: guard.email,
       },
-      applyChatraceTag: true,
     }).catch(() => undefined);
   } else if (["APPROVED", "CONVERTED", "CLOSED"].includes(updated.status)) {
     await cancelQuotationFollowUps(updated.id, {

@@ -193,7 +193,6 @@ export async function POST(request: NextRequest) {
         name: guard.name,
         email: guard.email,
       },
-      applyChatraceTag: true,
     }).catch(() => undefined);
 
     return NextResponse.json({ ok: true, request: created, pdfUrl, notifications });

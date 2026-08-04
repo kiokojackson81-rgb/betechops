@@ -222,7 +222,6 @@ export async function POST(request: NextRequest) {
         name: owner.name,
         email: owner.email,
       },
-      applyChatraceTag: true,
     }).catch(() => undefined);
 
     return NextResponse.json({ ok: true, request: created, pdfUrl, notifications });
