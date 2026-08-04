@@ -131,6 +131,8 @@ type VoiceDeskSummary = {
   followUpCount: number;
 };
 
+type DutyProfile = "BRENDAH_DAILY_DUTIES" | "DEFAULT_MARKETING_DUTIES";
+
 type SalesActionCardItem = {
   title: string;
   count: number;
@@ -483,6 +485,7 @@ export default function DailyReportFinal({
   const [impersonationReady, setImpersonationReady] = useState(false);
   const [, setHasAuthoritativeCommission] = useState(false);
   const [downloadingPerformance, setDownloadingPerformance] = useState(false);
+  const [dutyProfile, setDutyProfile] = useState<DutyProfile>("DEFAULT_MARKETING_DUTIES");
   const sessionResponse = useSession();
   const session = sessionResponse?.data;
   const attendantId =
@@ -569,6 +572,38 @@ export default function DailyReportFinal({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!impersonationReady) return;
+    let cancelled = false;
+
+    const loadDutyProfile = async () => {
+      try {
+        const query = impersonateId ? `?impersonateId=${encodeURIComponent(impersonateId)}` : "";
+        const response = await fetch(`/api/attendants/me${query}`, {
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || cancelled) return;
+        const nextProfile = payload?.flags?.dutyProfile;
+        setDutyProfile(
+          nextProfile === "BRENDAH_DAILY_DUTIES"
+            ? "BRENDAH_DAILY_DUTIES"
+            : "DEFAULT_MARKETING_DUTIES",
+        );
+      } catch {
+        if (!cancelled) {
+          setDutyProfile("DEFAULT_MARKETING_DUTIES");
+        }
+      }
+    };
+
+    void loadDutyProfile();
+    return () => {
+      cancelled = true;
+    };
+  }, [impersonateId, impersonationReady]);
 
   const fetchSavedReceiptsSummary = useCallback(
     async (signal?: AbortSignal) => {
@@ -886,6 +921,23 @@ export default function DailyReportFinal({
     (session?.user as { name?: string }).name?.trim()
       ? (session?.user as { name?: string }).name!.trim()
       : "Marketing staff";
+  const isBrendahDutyProfile = dutyProfile === "BRENDAH_DAILY_DUTIES";
+  const dashboardEyebrow = isBrendahDutyProfile ? "Brendah Daily Duties" : "Marketing Ops";
+  const dashboardTitle = isBrendahDutyProfile ? "Brendah Daily Dashboard" : "Marketing Daily Dashboard";
+  const dashboardDescription = isBrendahDutyProfile
+    ? "Walk-in customers served, product uploads, product edits, copied products, customer communication, receipts, and daily reporting in one place."
+    : "Daily checklist, product uploads, customer communication, marketplace review, receipts, and performance tracking in one place.";
+  const reportingSectionTitle = isBrendahDutyProfile
+    ? "Brendah daily duties, quick stats, and earnings tools"
+    : "Daily reporting, quick stats, and earnings tools";
+  const reportingSectionDescription = isBrendahDutyProfile
+    ? "Record walk-in customers, new products, edited products, copied products, and complete the shared daily duties without mixing Jeniffer duties."
+    : "Complete the daily checklist, review your period stats, and download payroll documents from one integrated section.";
+  const checklistTitle = isBrendahDutyProfile ? `${dayOfWeek} duties` : `${dayOfWeek} checklist`;
+  const checklistDescription = isBrendahDutyProfile
+    ? "Choose the date, confirm the auto-loaded day, then complete Brendah's duties for walk-ins, product work, and shared customer follow-up."
+    : "Choose the date, confirm the auto-loaded day, then complete the checklist on the left.";
+  const checklistBadge = isBrendahDutyProfile ? "Brendah daily duties" : "Marketing checklist";
   const downloadPerformanceReceiptPdf = useCallback(() => {
     const periodKey = selectedPeriodKey || currentPeriod.key;
     const params = new URLSearchParams({ periodKey });
@@ -1730,14 +1782,14 @@ export default function DailyReportFinal({
             <div className="grid gap-6 xl:grid-cols-[minmax(420px,0.85fr)_minmax(520px,1fr)] xl:items-start">
               <div className="space-y-4">
                 <div className="inline-flex items-center rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
-                  Marketing Ops
+                  {dashboardEyebrow}
                 </div>
                 <div>
                   <h1 className="max-w-xl text-3xl font-semibold leading-tight text-white sm:text-4xl xl:whitespace-nowrap">
-                    Marketing Daily Dashboard
+                    {dashboardTitle}
                   </h1>
                   <p className="mt-3 max-w-xl text-sm leading-6 text-slate-300">
-                    Daily checklist, product uploads, customer communication, marketplace review, receipts, and performance tracking in one place.
+                    {dashboardDescription}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -2025,9 +2077,9 @@ export default function DailyReportFinal({
           <section className={sectionPanelClasses}>
             <div className="mb-5">
               <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Staff Report & Payroll</div>
-              <h2 className="mt-2 text-2xl font-semibold text-white">Daily reporting, quick stats, and earnings tools</h2>
+              <h2 className="mt-2 text-2xl font-semibold text-white">{reportingSectionTitle}</h2>
               <p className="mt-1 text-sm text-slate-400">
-                Complete the daily checklist, review your period stats, and download payroll documents from one integrated section.
+                {reportingSectionDescription}
               </p>
             </div>
 
@@ -2058,9 +2110,9 @@ export default function DailyReportFinal({
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                     <div>
                       <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Reporting Day</div>
-                      <h3 className="mt-2 text-2xl font-semibold text-white">{dayOfWeek} checklist</h3>
+                      <h3 className="mt-2 text-2xl font-semibold text-white">{checklistTitle}</h3>
                       <p className="mt-1 max-w-2xl text-sm text-slate-400">
-                        Choose the date, confirm the auto-loaded day, then complete the checklist on the left.
+                        {checklistDescription}
                       </p>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[540px]">
@@ -2099,17 +2151,19 @@ export default function DailyReportFinal({
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Day Checklist</div>
-                      <h3 className="mt-2 text-2xl font-semibold text-white">{dayOfWeek}</h3>
+                      <h3 className="mt-2 text-2xl font-semibold text-white">{checklistTitle}</h3>
                     </div>
                     <div className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-xs font-semibold text-emerald-100">
-                      Marketing checklist
+                      {checklistBadge}
                     </div>
                   </div>
                   <div className="mt-5">
                     <DaySpecificBlocks
                       selectedDay={dayOfWeek}
-                      walkIns={Number(walkinsServed || 0)}
-                      onWalkInsChange={(val) => setWalkinsServed(val)}
+                      walkInsServed={Number(walkinsServed || 0)}
+                      onWalkInsServedChange={(val) => setWalkinsServed(val)}
+                      walkInsPurchased={Number(walkinsPurchased || 0)}
+                      onWalkInsPurchasedChange={(val) => setWalkinsPurchased(val)}
                       neatness={shopNeatness}
                       onNeatnessChange={setShopNeatness}
                       productTasks={{
@@ -2134,6 +2188,7 @@ export default function DailyReportFinal({
                       onFridayTasksChange={setFridayTasks}
                       saturdaySummary={saturdaySummary}
                       onSaturdaySummaryChange={setSaturdaySummary}
+                      isBrendahDutyProfile={isBrendahDutyProfile}
                     />
                   </div>
                 </section>
@@ -2188,8 +2243,10 @@ export default function DailyReportFinal({
 function DaySpecificBlocks(props: DaySpecificBlocksProps) {
   const {
     selectedDay,
-    walkIns,
-    onWalkInsChange,
+    walkInsServed,
+    onWalkInsServedChange,
+    walkInsPurchased,
+    onWalkInsPurchasedChange,
     neatness,
     onNeatnessChange,
     productTasks,
@@ -2206,6 +2263,7 @@ function DaySpecificBlocks(props: DaySpecificBlocksProps) {
     onFridayTasksChange,
     saturdaySummary,
     onSaturdaySummaryChange,
+    isBrendahDutyProfile,
   } = props;
 
   const showNeatness = ["Monday", "Thursday", "Friday", "Saturday"].includes(selectedDay);
@@ -2213,13 +2271,20 @@ function DaySpecificBlocks(props: DaySpecificBlocksProps) {
   return (
     <div className="space-y-6">
       <WalkInsNeatnessCard
-        valueWalkIns={walkIns}
-        onWalkInsChange={onWalkInsChange}
+        valueWalkInsServed={walkInsServed}
+        onWalkInsServedChange={onWalkInsServedChange}
+        valueWalkInsPurchased={walkInsPurchased}
+        onWalkInsPurchasedChange={onWalkInsPurchasedChange}
         neatness={neatness}
         onNeatnessChange={onNeatnessChange}
         showNeatness={showNeatness}
+        isBrendahDutyProfile={isBrendahDutyProfile}
       />
-      <ProductStockCard productTasks={productTasks} onChange={onProductTasksChange} />
+      <ProductStockCard
+        productTasks={productTasks}
+        onChange={onProductTasksChange}
+        isBrendahDutyProfile={isBrendahDutyProfile}
+      />
       <CustomerCommunicationsCard value={communications} onChange={onCommunicationsChange} />
       <MarketplaceReviewCard value={marketplace} onChange={onMarketplaceChange} />
       {selectedDay === "Tuesday" && <TuesdayPromoCard value={productTasks} onChange={onProductTasksChange} />}
@@ -2247,35 +2312,61 @@ function DaySpecificBlocks(props: DaySpecificBlocksProps) {
 }
 
 function WalkInsNeatnessCard(props: {
-  valueWalkIns: number;
-  onWalkInsChange: (val: number) => void;
+  valueWalkInsServed: number;
+  onWalkInsServedChange: (val: number) => void;
+  valueWalkInsPurchased: number;
+  onWalkInsPurchasedChange: (val: number) => void;
   neatness: { cleaned: boolean; neat: boolean; labeled: boolean };
   onNeatnessChange: (next: { cleaned: boolean; neat: boolean; labeled: boolean }) => void;
   showNeatness: boolean;
+  isBrendahDutyProfile: boolean;
 }) {
-  const { valueWalkIns, onWalkInsChange, neatness, onNeatnessChange, showNeatness } = props;
+  const {
+    valueWalkInsServed,
+    onWalkInsServedChange,
+    valueWalkInsPurchased,
+    onWalkInsPurchasedChange,
+    neatness,
+    onNeatnessChange,
+    showNeatness,
+    isBrendahDutyProfile,
+  } = props;
 
   return (
     <section className={cardClasses + " p-6 space-y-4"}>
       <div>
         <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Shop & Walk-ins</div>
-        <h2 className="mt-2 text-lg font-semibold text-white">Store floor and customer traffic</h2>
+        <h2 className="mt-2 text-lg font-semibold text-white">
+          {isBrendahDutyProfile ? "Walk-in customers and store floor" : "Store floor and customer traffic"}
+        </h2>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="text-xs uppercase tracking-wide text-slate-400">
-            Walk-ins who purchased
+            Walk-in customers served
           </label>
           <input
             type="number"
             min={0}
             className={inputClasses}
-            value={valueWalkIns}
-            onChange={(e) => onWalkInsChange(Number(e.target.value) || 0)}
+            value={valueWalkInsServed}
+            onChange={(e) => onWalkInsServedChange(Number(e.target.value) || 0)}
+          />
+        </div>
+        <div>
+          <label className="text-xs uppercase tracking-wide text-slate-400">
+            Walk-in customers who purchased
+          </label>
+          <input
+            type="number"
+            min={0}
+            className={inputClasses}
+            value={valueWalkInsPurchased}
+            onChange={(e) => onWalkInsPurchasedChange(Number(e.target.value) || 0)}
           />
         </div>
         {showNeatness && (
-          <div className="space-y-3">
+          <div className="space-y-3 sm:col-span-2">
             <label className="text-xs uppercase tracking-wide text-slate-400">
               Shop condition
             </label>
@@ -2306,18 +2397,35 @@ function WalkInsNeatnessCard(props: {
 function ProductStockCard(props: {
   productTasks: { uploaded: number | ""; edited: number | ""; copied: number | "" };
   onChange: (val: { uploaded: number | ""; edited: number | ""; copied: number | "" }) => void;
+  isBrendahDutyProfile: boolean;
 }) {
-  const { productTasks, onChange } = props;
+  const { productTasks, onChange, isBrendahDutyProfile } = props;
   return (
     <section className={cardClasses + " p-6 space-y-4"}>
       <div>
-        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Product & Stock</div>
-        <h2 className="mt-2 text-lg font-semibold text-white">Uploads, edits, and catalogue upkeep</h2>
+        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+          {isBrendahDutyProfile ? "Brendah Product Duties" : "Product & Stock"}
+        </div>
+        <h2 className="mt-2 text-lg font-semibold text-white">
+          {isBrendahDutyProfile ? "New products, edits, and copied products" : "Uploads, edits, and catalogue upkeep"}
+        </h2>
       </div>
       <div className="space-y-3">
-        <NumberRow label="Products uploaded" value={productTasks.uploaded} onChange={(v) => onChange({ ...productTasks, uploaded: v })} />
-        <NumberRow label="Products edited" value={productTasks.edited} onChange={(v) => onChange({ ...productTasks, edited: v })} />
-        <NumberRow label="Products copied" value={productTasks.copied} onChange={(v) => onChange({ ...productTasks, copied: v })} />
+        <NumberRow
+          label={isBrendahDutyProfile ? "New products uploaded" : "Products uploaded"}
+          value={productTasks.uploaded}
+          onChange={(v) => onChange({ ...productTasks, uploaded: v })}
+        />
+        <NumberRow
+          label={isBrendahDutyProfile ? "Existing products edited" : "Products edited"}
+          value={productTasks.edited}
+          onChange={(v) => onChange({ ...productTasks, edited: v })}
+        />
+        <NumberRow
+          label={isBrendahDutyProfile ? "Product copies uploaded" : "Products copied"}
+          value={productTasks.copied}
+          onChange={(v) => onChange({ ...productTasks, copied: v })}
+        />
       </div>
     </section>
   );
@@ -2815,8 +2923,10 @@ type SaturdaySummaryState = {
 
 type DaySpecificBlocksProps = {
   selectedDay: string;
-  walkIns: number;
-  onWalkInsChange: (val: number) => void;
+  walkInsServed: number;
+  onWalkInsServedChange: (val: number) => void;
+  walkInsPurchased: number;
+  onWalkInsPurchasedChange: (val: number) => void;
   neatness: { cleaned: boolean; neat: boolean; labeled: boolean };
   onNeatnessChange: (val: { cleaned: boolean; neat: boolean; labeled: boolean }) => void;
   productTasks: { uploaded: number | ""; edited: number | ""; copied: number | "" };
@@ -2833,6 +2943,7 @@ type DaySpecificBlocksProps = {
   onFridayTasksChange: (val: FridayTasksState) => void;
   saturdaySummary: SaturdaySummaryState;
   onSaturdaySummaryChange: (val: SaturdaySummaryState) => void;
+  isBrendahDutyProfile: boolean;
 };
   
 const normalizeNumber = (value: number | "" | undefined) => {

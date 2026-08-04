@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { composeIdentityResponse, resolveTargetUserId } from "@/lib/resolveTargetUser";
 import type { Role } from "@prisma/client";
+import { isBrendahEmail } from "@/lib/api";
 
 export async function GET(req: Request) {
   const identity = await resolveTargetUserId(req, { allowedImpersonationRoles: ["ADMIN" as Role] });
@@ -31,11 +32,18 @@ export async function GET(req: Request) {
   const impersonated = Boolean(identity.impersonateId && identity.resolvedUserId === identity.impersonateId);
   const email = typeof rest.email === "string" ? rest.email.toLowerCase() : "";
   const supervisorPerformanceTools = email === "benjamin@betech.co.ke";
+  const brendahDailyDuties = isBrendahEmail(email);
+  const jenifferSpecialProgress = email === "jeniffer@betech.co.ke";
   const payload = {
     user: { ...rest, categories: categoryAssignments.map((c) => c.category) },
     impersonated,
     impersonatedBy: impersonated ? identity.actorRole ?? null : null,
-    flags: { supervisorPerformanceTools },
+    flags: {
+      supervisorPerformanceTools,
+      brendahDailyDuties,
+      jenifferSpecialProgress,
+      dutyProfile: brendahDailyDuties ? "BRENDAH_DAILY_DUTIES" : "DEFAULT_MARKETING_DUTIES",
+    },
   };
 
   return NextResponse.json(composeIdentityResponse(meta, payload));
