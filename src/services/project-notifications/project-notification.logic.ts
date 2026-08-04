@@ -66,8 +66,8 @@ export function shouldSendProjectBooked(args: {
   const wasPreviouslyBooked = hasProjectBookingDate(args.previousProjectFlow);
   const isNowBooked = hasProjectBookingDate(args.nextProjectFlow);
   if (!isNowBooked) return false;
-  if (!wasPreviouslyBooked) return true;
-  return !args.hasSuccessfulBookedLog;
+  if (wasPreviouslyBooked) return false;
+  return true;
 }
 
 export function shouldSendProjectAssigned(args: {

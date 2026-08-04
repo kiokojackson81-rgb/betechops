@@ -16,14 +16,24 @@ describe("project notification logic", () => {
     ).toBe(true);
   });
 
-  test("existing booking without sent log can still trigger booked notification", () => {
+  test("existing booking does not retrigger booked notification during later updates", () => {
     expect(
       shouldSendProjectBooked({
         previousProjectFlow: { scheduledDate: "2026-08-02" },
         nextProjectFlow: { scheduledDate: "2026-08-02" },
         hasSuccessfulBookedLog: false,
       }),
-    ).toBe(true);
+    ).toBe(false);
+  });
+
+  test("assignment update on an already booked project does not retrigger booked notification", () => {
+    expect(
+      shouldSendProjectBooked({
+        previousProjectFlow: { scheduledDate: "2026-08-02" },
+        nextProjectFlow: { scheduledDate: "2026-08-02", handlerStaffId: "u1" },
+        hasSuccessfulBookedLog: false,
+      }),
+    ).toBe(false);
   });
 
   test("booking does not trigger without scheduled date", () => {
