@@ -39,6 +39,38 @@ type MarketingDailyFormState = {
   fields: Record<string, boolean | number | string | null>;
 };
 
+const BRENDAH_EMAIL = "brendah@betech.co.ke";
+
+const brendahLegacyFieldTypes = {
+  walkInsPurchased: "numeric",
+  productsUploaded: "numeric",
+  productsEdited: "numeric",
+  productsCopied: "numeric",
+  repliedFbComments: "yesno",
+  repliedFbDms: "yesno",
+  repliedIgComments: "yesno",
+  repliedIgDms: "yesno",
+  clearedFbInbox: "yesno",
+  clearedIgInbox: "yesno",
+  stockChecked: "yesno",
+  pricingConfirmed: "yesno",
+  competitorsReviewed: "yesno",
+  outOfStockReview: "yesno",
+  promoVideosPosted: "numeric",
+  productDemoVideosRecorded: "numeric",
+  wednesdayFollowUpNotes: "text",
+  wednesdayEngagementNotes: "text",
+  fridayPrepareWeekendPromos: "yesno",
+  fridayPostEngagingVideos: "numeric",
+  fridayImprovementSuggestions: "text",
+  saturdayLiveSessionNotes: "text",
+  weeklyPerformanceLiveHighlights: "text",
+  weeklyPerformanceSummaryNotes: "text",
+} as const satisfies Record<string, "yesno" | "numeric" | "text">;
+
+const brendahLegacyFieldEntries = Object.entries(brendahLegacyFieldTypes);
+const brendahLegacyFieldKeys = brendahLegacyFieldEntries.map(([key]) => key);
+
 
 
 type ReceiptItem = { id: string; productName: string; buyingPrice: number | "" };
@@ -107,6 +139,9 @@ const defaultFormState = (): MarketingDailyFormState => {
   const dynamic: Record<string, boolean | number | string | null> = {};
   marketingFieldKeys.forEach((key) => {
     const type = marketingFieldTypes[key];
+    dynamic[key] = type === "yesno" ? false : "";
+  });
+  brendahLegacyFieldEntries.forEach(([key, type]) => {
     dynamic[key] = type === "yesno" ? false : "";
   });
   return {
@@ -357,6 +392,97 @@ function EarningsCard({ summary, downloadHref }: EarningsCardProps) {
           Download payslip
         </Link>
       </div>
+      ) : null}
+    </Card>
+  );
+}
+
+function BrendahQuickStatsCard(props: {
+  periodLabel: string;
+  receipts: number;
+  salesKes: number;
+  newProducts: number;
+  editedProducts: number;
+  copiedProducts: number;
+  commissionKes: number;
+}) {
+  const { periodLabel, receipts, salesKes, newProducts, editedProducts, copiedProducts, commissionKes } = props;
+  const { locked, toggle } = useCardLock("marketing:quickstats");
+  const mask = (value: React.ReactNode) => (locked ? "..." : value);
+
+  return (
+    <Card className="border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl font-semibold">Quick stats</h2>
+          <LockButton locked={locked} onToggle={toggle} />
+        </div>
+        <p className="text-xs text-slate-400 text-right">{periodLabel}</p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        {[
+          { label: "Receipts", value: receipts },
+          { label: "Sales (KES)", value: salesKes.toLocaleString() },
+          { label: "New products", value: newProducts },
+          { label: "Edited products", value: editedProducts },
+          { label: "Copied products", value: copiedProducts },
+          { label: "Commission (KES)", value: commissionKes.toLocaleString() },
+        ].map((item) => (
+          <div key={item.label} className="rounded-2xl bg-slate-950/60 px-4 py-3">
+            <p className="text-xs uppercase tracking-wide text-slate-400">{item.label}</p>
+            <p className="mt-1 text-2xl font-semibold text-emerald-400">{mask(item.value)}</p>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function BrendahLegacyEarningsCard(props: { summary: EarningsSummary | null; downloadHref?: string }) {
+  const { summary, downloadHref } = props;
+  const { locked, toggle } = useCardLock("marketing:earnings");
+  if (!summary) return null;
+  const mask = (v: React.ReactNode) => (locked ? "..." : v);
+  const netPay = Number(summary.netPay ?? 0);
+  const baseSalary = Number(summary.baseSalary ?? 0);
+  const marketingCommission = Number((summary as any).salesCommission ?? (summary as any).commission ?? 0);
+
+  return (
+    <Card className="border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <div>
+          <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Earnings Summary</div>
+          <p className="mt-2 text-sm text-slate-400">{summary.periodLabel}</p>
+        </div>
+        <LockButton locked={locked} onToggle={toggle} />
+      </div>
+
+      <div className="rounded-2xl border border-emerald-500/30 bg-slate-950/60 p-4">
+        <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Net Pay</div>
+        <div className="mt-2 text-3xl font-semibold text-emerald-400">{mask(formatKES(netPay))}</div>
+      </div>
+
+      <div className="mt-4 space-y-3 text-sm">
+        <div className="flex items-center justify-between rounded-xl bg-slate-950/60 px-3 py-2">
+          <span className="text-slate-300">Base salary</span>
+          <span className="font-semibold text-slate-100">{mask(formatKES(baseSalary))}</span>
+        </div>
+        <div className="flex items-center justify-between rounded-xl bg-slate-950/60 px-3 py-2">
+          <span className="text-slate-300">Marketing commission</span>
+          <span className="font-semibold text-slate-100">{mask(formatKES(marketingCommission))}</span>
+        </div>
+      </div>
+
+      {downloadHref ? (
+        <div className="mt-4">
+          <Link
+            href={downloadHref}
+            className="inline-flex rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/10"
+          >
+            Download payslip
+          </Link>
+        </div>
       ) : null}
     </Card>
   );
@@ -1183,6 +1309,7 @@ export default function MarketingTrackerLegacySections() {
         const role = user.role as string | undefined;
         const category = user.attendantCategory as string | undefined;
         if (role === "ADMIN") return;
+        if (user.email?.toLowerCase?.() === BRENDAH_EMAIL) return;
         if (category !== "DIRECT_SALES_OPS") {
           const dest = getLandingPage(category ?? null, role);
           router.replace(dest);
@@ -1492,6 +1619,7 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
       : combinedVisibleReceiptsRaw;
   const serverPeriodReceiptRows = (serverPeriodSummary?.aggregates as any)?.totalReceiptRows ?? 0;
   const combinedPeriodReceiptRows = serverPeriodReceiptRows + totalReceiptRows;
+  const isBrendahLegacyProfile = currentUserEmail === BRENDAH_EMAIL;
 
   const commissionSummary = useMemo(
     () => getCommissionSummaryForSales(combinedPeriodSales),
@@ -1555,20 +1683,22 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
       });
     });
 
-    (config.textFields || []).forEach((f) => {
-      const raw = form.fields[f.key];
-      if (!raw || String(raw).trim() === "") errors.push(`${f.key}: required`);
-    });
-    (config.numericFields || []).forEach((f) => {
-      const raw = form.fields[f.key];
-      if (
-        raw === "" ||
-        raw === null ||
-        raw === undefined ||
-        Number.isNaN(Number(raw))
-      )
-        errors.push(`${f.key}: required numeric`);
-    });
+    if (!isBrendahLegacyProfile) {
+      (config.textFields || []).forEach((f) => {
+        const raw = form.fields[f.key];
+        if (!raw || String(raw).trim() === "") errors.push(`${f.key}: required`);
+      });
+      (config.numericFields || []).forEach((f) => {
+        const raw = form.fields[f.key];
+        if (
+          raw === "" ||
+          raw === null ||
+          raw === undefined ||
+          Number.isNaN(Number(raw))
+        )
+          errors.push(`${f.key}: required numeric`);
+      });
+    }
 
     if (errors.length > 0) {
       showToast(errors.slice(0, 5).join("; "), "error");
@@ -1586,6 +1716,14 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
         else if (type === "numeric") numeric[key] = Number(raw || 0);
         else text[key] = typeof raw === "string" ? raw : "";
       });
+      if (isBrendahLegacyProfile) {
+        brendahLegacyFieldEntries.forEach(([key, type]) => {
+          const raw = form.fields[key];
+          if (type === "yesno") yesNo[key] = Boolean(raw);
+          else if (type === "numeric") numeric[key] = Number(raw || 0);
+          else text[key] = typeof raw === "string" ? raw : "";
+        });
+      }
 
       const payload = {
         date: form.date,
@@ -1667,6 +1805,325 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
       );
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const renderLegacyBooleanButton = (key: string, label: string) => (
+    <button
+      type="button"
+      key={key}
+      onClick={() => updateField(key, !Boolean(form.fields[key]))}
+      className={pillClass(Boolean(form.fields[key]))}
+    >
+      {label}
+    </button>
+  );
+
+  const renderLegacyNumberField = (key: string, label: string) => (
+    <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_160px] md:items-center" key={key}>
+      <label className="text-base text-slate-100">{label}</label>
+      <Input
+        type="number"
+        min={0}
+        value={String(form.fields[key] ?? "")}
+        onChange={(e) => updateField(key, e.target.value)}
+        className="w-full rounded-3xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-right text-slate-100"
+      />
+    </div>
+  );
+
+  const renderLegacyTextarea = (key: string, label: string, placeholder: string) => (
+    <div className="space-y-3" key={key}>
+      <label className="text-xs uppercase tracking-[0.2em] text-slate-400">{label}</label>
+      <Textarea
+        value={String(form.fields[key] ?? "")}
+        onChange={(e) => updateField(key, e.target.value)}
+        placeholder={placeholder}
+        rows={4}
+        className="w-full rounded-3xl border border-slate-800 bg-slate-950/80 px-4 py-4 text-slate-100"
+      />
+    </div>
+  );
+
+  const renderBrendahLegacyChecklist = () => {
+    switch (form.dayOfWeek) {
+      case "Monday":
+        return (
+          <div className="space-y-6">
+            <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
+              <h2 className="text-2xl font-semibold text-slate-100">Walk-ins & shop neatness</h2>
+              <div className="mt-6 space-y-6">
+                {renderLegacyNumberField("walkInsPurchased", "Walk-ins who purchased")}
+                <div className="space-y-3">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Shop condition</p>
+                  <div className="flex flex-wrap gap-3">
+                    {renderLegacyBooleanButton("shopCleaned", "Shop cleaned")}
+                    {renderLegacyBooleanButton("shopWellArranged", "Shop neatness")}
+                    {renderLegacyBooleanButton("displayWellLabeled", "Display labeled")}
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
+              <h2 className="text-2xl font-semibold text-slate-100">Product & stock management</h2>
+              <div className="mt-6 space-y-6">
+                {renderLegacyNumberField("productsUploaded", "Products uploaded")}
+                {renderLegacyNumberField("productsEdited", "Products edited")}
+                {renderLegacyNumberField("productsCopied", "Products copied")}
+              </div>
+            </Card>
+
+            <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
+              <h2 className="text-2xl font-semibold text-slate-100">Customer & communications</h2>
+              <div className="mt-6 flex flex-wrap gap-3">
+                {renderLegacyBooleanButton("repliedFbComments", "Replied to FB comments")}
+                {renderLegacyBooleanButton("repliedFbDms", "Replied to FB DMs")}
+                {renderLegacyBooleanButton("repliedIgComments", "Replied to IG comments")}
+                {renderLegacyBooleanButton("repliedIgDms", "Replied to IG DMs")}
+                {renderLegacyBooleanButton("clearedFbInbox", "Cleared FB inbox")}
+                {renderLegacyBooleanButton("clearedIgInbox", "Cleared IG inbox")}
+              </div>
+            </Card>
+
+            <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
+              <h2 className="text-2xl font-semibold text-slate-100">Marketplace review</h2>
+              <div className="mt-6 flex flex-wrap gap-3">
+                {renderLegacyBooleanButton("stockChecked", "Stock checked")}
+                {renderLegacyBooleanButton("pricingConfirmed", "Pricing confirmed")}
+                {renderLegacyBooleanButton("competitorsReviewed", "Competitors reviewed")}
+                {renderLegacyBooleanButton("outOfStockReview", "Out of stock review")}
+              </div>
+            </Card>
+          </div>
+        );
+      case "Tuesday":
+        return (
+          <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
+            <h2 className="text-2xl font-semibold text-slate-100">Tuesday – promo content</h2>
+            <p className="mt-3 text-slate-400">
+              Post product highlights or promotional videos and record at least one demo video for future content scheduling.
+            </p>
+            <div className="mt-6 space-y-6">
+              {renderLegacyNumberField("promoVideosPosted", "Promo videos / highlights posted")}
+              {renderLegacyNumberField("productDemoVideosRecorded", "Product demo videos recorded")}
+            </div>
+          </Card>
+        );
+      case "Wednesday":
+        return (
+          <div className="space-y-6">
+            <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
+              <h2 className="text-2xl font-semibold text-slate-100">Live session follow-ups</h2>
+              <p className="mt-3 text-slate-400">Conduct timely follow-ups on leads generated from the live session.</p>
+              <div className="mt-6">
+                {renderLegacyTextarea(
+                  "wednesdayFollowUpNotes",
+                  "Notes on follow-ups, customers contacted, next actions",
+                  "Notes on follow-ups, customers contacted, next actions...",
+                )}
+              </div>
+            </Card>
+            <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
+              <h2 className="text-2xl font-semibold text-slate-100">Content engagement tracking</h2>
+              <p className="mt-3 text-slate-400">
+                Track engagement data to identify top-performing content, views, comments, saves, and shares.
+              </p>
+              <div className="mt-6">
+                {renderLegacyTextarea(
+                  "wednesdayEngagementNotes",
+                  "Top-performing posts, engagement numbers, lessons learnt",
+                  "Top-performing posts, engagement numbers, lessons learnt...",
+                )}
+              </div>
+            </Card>
+          </div>
+        );
+      case "Thursday":
+        return (
+          <div className="space-y-6">
+            <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
+              <h2 className="text-2xl font-semibold text-slate-100">Walk-ins & shop neatness</h2>
+              <div className="mt-6 space-y-6">
+                {renderLegacyNumberField("walkInsPurchased", "Walk-ins who purchased")}
+                <div className="space-y-3">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Shop condition</p>
+                  <div className="flex flex-wrap gap-3">
+                    {renderLegacyBooleanButton("shopCleaned", "Shop cleaned")}
+                    {renderLegacyBooleanButton("shopWellArranged", "Shop neatness")}
+                    {renderLegacyBooleanButton("displayWellLabeled", "Display labeled")}
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
+              <h2 className="text-2xl font-semibold text-slate-100">Product & stock management</h2>
+              <div className="mt-6 space-y-6">
+                {renderLegacyNumberField("productsUploaded", "Products uploaded")}
+                {renderLegacyNumberField("productsEdited", "Products edited")}
+                {renderLegacyNumberField("productsCopied", "Products copied")}
+              </div>
+            </Card>
+
+            <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
+              <h2 className="text-2xl font-semibold text-slate-100">Customer & communications</h2>
+              <div className="mt-6 flex flex-wrap gap-3">
+                {renderLegacyBooleanButton("repliedFbComments", "Replied to FB comments")}
+                {renderLegacyBooleanButton("repliedFbDms", "Replied to FB DMs")}
+                {renderLegacyBooleanButton("repliedIgComments", "Replied to IG comments")}
+                {renderLegacyBooleanButton("repliedIgDms", "Replied to IG DMs")}
+                {renderLegacyBooleanButton("clearedFbInbox", "Cleared FB inbox")}
+                {renderLegacyBooleanButton("clearedIgInbox", "Cleared IG inbox")}
+              </div>
+            </Card>
+
+            <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
+              <h2 className="text-2xl font-semibold text-slate-100">Marketplace review</h2>
+              <div className="mt-6 flex flex-wrap gap-3">
+                {renderLegacyBooleanButton("stockChecked", "Stock checked")}
+                {renderLegacyBooleanButton("pricingConfirmed", "Pricing confirmed")}
+                {renderLegacyBooleanButton("competitorsReviewed", "Competitors reviewed")}
+                {renderLegacyBooleanButton("outOfStockReview", "Out of stock review")}
+              </div>
+            </Card>
+
+            <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
+              <h2 className="text-2xl font-semibold text-slate-100">Weekly marketing activities (Thursday)</h2>
+              <div className="mt-6 space-y-6">
+                <div className="space-y-3">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Weekly meeting</p>
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWeeklyMeetingAttended(true);
+                        updateField("weeklyMeetingAttended", true);
+                      }}
+                      className={pillClass(weeklyMeetingAttended)}
+                    >
+                      Attended weekly marketing meeting
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWeeklyMeetingAttended(false);
+                        updateField("weeklyMeetingAttended", false);
+                      }}
+                      className={pillClass(!weeklyMeetingAttended)}
+                    >
+                      Did not attend
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Video shoot</p>
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWeeklyVideoShootParticipated(true);
+                        updateField("weeklyVideoShootParticipated", true);
+                      }}
+                      className={pillClass(weeklyVideoShootParticipated)}
+                    >
+                      Participated in weekly video shoot
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWeeklyVideoShootParticipated(false);
+                        updateField("weeklyVideoShootParticipated", false);
+                      }}
+                      className={pillClass(!weeklyVideoShootParticipated)}
+                    >
+                      Did not participate
+                    </button>
+                  </div>
+                </div>
+
+                {renderLegacyNumberField("weeklyVideoCount", "Number of videos participated in (shooting)")}
+              </div>
+            </Card>
+          </div>
+        );
+      case "Friday":
+        return (
+          <div className="space-y-6">
+            <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
+              <h2 className="text-2xl font-semibold text-slate-100">Marketplace review</h2>
+              <div className="mt-6 flex flex-wrap gap-3">
+                {renderLegacyBooleanButton("stockChecked", "Stock checked")}
+                {renderLegacyBooleanButton("pricingConfirmed", "Pricing confirmed")}
+                {renderLegacyBooleanButton("competitorsReviewed", "Competitors reviewed")}
+                {renderLegacyBooleanButton("outOfStockReview", "Out of stock review")}
+              </div>
+            </Card>
+
+            <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
+              <h2 className="text-2xl font-semibold text-slate-100">Friday – weekend prep & improvements</h2>
+              <div className="mt-6 space-y-6">
+                {renderLegacyNumberField("fridayPostEngagingVideos", "Post engaging product videos or testimonials")}
+                <div className="space-y-3">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Weekend promotions</p>
+                  <div className="flex flex-wrap gap-3">
+                    {renderLegacyBooleanButton("fridayPrepareWeekendPromos", "Prepare weekend promotions or schedule future posts")}
+                  </div>
+                </div>
+                {renderLegacyTextarea(
+                  "fridayImprovementSuggestions",
+                  "Final improvement suggestions for the week (based on competitor activities)",
+                  "Improvements, competitor moves, ideas for next week...",
+                )}
+              </div>
+            </Card>
+          </div>
+        );
+      case "Saturday":
+        return (
+          <div className="space-y-6">
+            <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
+              <h2 className="text-2xl font-semibold text-slate-100">Live session</h2>
+              <div className="mt-6 grid gap-6">
+                {renderLegacyNumberField("liveSessionsCount", "Live sessions hosted")}
+                {renderLegacyNumberField("liveSessionsEstimatedViewers", "Viewers (estimated)")}
+                {renderLegacyNumberField("liveSessionDurationMinutes", "Duration (minutes)")}
+                {renderLegacyTextarea(
+                  "liveSessionPlatform",
+                  "Platform used (TikTok / IG / FB / YT)",
+                  "Platform used (TikTok / IG / FB / YT)",
+                )}
+              </div>
+            </Card>
+
+            <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
+              <h2 className="text-2xl font-semibold text-slate-100">Weekly performance summary</h2>
+              <p className="mt-3 text-slate-400">
+                Submit weekly performance summary including performance suggestions, improvement ideas, complaints or any issues that need management attention.
+              </p>
+              <div className="mt-6 space-y-6">
+                {renderLegacyTextarea(
+                  "weeklyPerformanceLiveHighlights",
+                  "Live session highlights / key learnings",
+                  "Live session highlights / key learnings",
+                )}
+                {renderLegacyTextarea(
+                  "weeklyPerformanceSummaryNotes",
+                  "Weekly performance summary & issues needing management attention",
+                  "Weekly performance summary & issues needing management attention",
+                )}
+              </div>
+            </Card>
+          </div>
+        );
+      default:
+        return (
+          <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
+            <h2 className="text-2xl font-semibold text-slate-100">{form.dayOfWeek} checklist</h2>
+            <p className="mt-3 text-slate-400">This day is using the standard marketing checklist.</p>
+          </Card>
+        );
     }
   };
 
@@ -1775,7 +2232,9 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
                     {config.day} checklist
                   </h2>
                   <p className="text-sm text-slate-400">
-                    Choose the date, confirm the auto-loaded day, then complete the checklist on the left.
+                    {isBrendahLegacyProfile
+                      ? "Pick the reporting date, confirm the day, then complete the daily checklist on the left."
+                      : "Choose the date, confirm the auto-loaded day, then complete the checklist on the left."}
                   </p>
                 </div>
 
@@ -1814,206 +2273,230 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
               </div>
             </Card>
 
-            <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Day checklist</p>
-                  <h2 className="text-xl font-semibold">{config.day}</h2>
-                </div>
-                <div className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-200">
-                  Auto-loaded from selected day
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                {groupedYesNo.map(([section, fields]) => (
-                  <div key={section} className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-slate-200">{section}</h3>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {fields.map((f) => (
-                        <button
-                          type="button"
-                          key={f.key}
-                          onClick={() =>
-                            updateField(f.key, !Boolean(form.fields[f.key]))
-                          }
-                          className={pillClass(Boolean(form.fields[f.key]))}
-                        >
-                          {f.label}
-                        </button>
-                      ))}
-                    </div>
+            {isBrendahLegacyProfile ? (
+              renderBrendahLegacyChecklist()
+            ) : (
+              <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-400">Day checklist</p>
+                    <h2 className="text-xl font-semibold">{config.day}</h2>
                   </div>
-                ))}
+                  <div className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-200">
+                    Auto-loaded from selected day
+                  </div>
+                </div>
 
-                {form.dayOfWeek === "Thursday" && (
-                  <section className="mt-6 rounded-xl border border-red-500/30 p-4">
-                    <h3 className="mb-3 text-sm font-semibold">
-                      Weekly Marketing Activities (Thursday)
-                    </h3>
+                <div className="space-y-6">
+                  {groupedYesNo.map(([section, fields]) => (
+                    <div key={section} className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-semibold text-slate-200">{section}</h3>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {fields.map((f) => (
+                          <button
+                            type="button"
+                            key={f.key}
+                            onClick={() =>
+                              updateField(f.key, !Boolean(form.fields[f.key]))
+                            }
+                            className={pillClass(Boolean(form.fields[f.key]))}
+                          >
+                            {f.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
 
+                  {form.dayOfWeek === "Thursday" && (
+                    <section className="mt-6 rounded-xl border border-red-500/30 p-4">
+                      <h3 className="mb-3 text-sm font-semibold">
+                        Weekly Marketing Activities (Thursday)
+                      </h3>
+
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-full">
+                            <label className="text-xs uppercase tracking-wide text-slate-400">
+                              Weekly meeting
+                            </label>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setWeeklyMeetingAttended(true);
+                                  updateField("weeklyMeetingAttended", true);
+                                }}
+                                className={pillClass(weeklyMeetingAttended)}
+                              >
+                                Attended weekly marketing meeting
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setWeeklyMeetingAttended(false);
+                                  updateField("weeklyMeetingAttended", false);
+                                }}
+                                className={pillClass(!weeklyMeetingAttended)}
+                              >
+                                Did not attend
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <div className="w-full">
+                            <label className="text-xs uppercase tracking-wide text-slate-400">
+                              Video shoot
+                            </label>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setWeeklyVideoShootParticipated(true);
+                                  updateField("weeklyVideoShootParticipated", true);
+                                }}
+                                className={pillClass(weeklyVideoShootParticipated)}
+                              >
+                                Participated in weekly video shoot
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setWeeklyVideoShootParticipated(false);
+                                  updateField("weeklyVideoShootParticipated", false);
+                                }}
+                                className={pillClass(!weeklyVideoShootParticipated)}
+                              >
+                                Did not participate
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <div className="w-full">
+                            <label className="text-xs uppercase tracking-wide text-slate-400">
+                              Number of videos participated in (shooting)
+                            </label>
+                            <div className="mt-2">
+                              <Input
+                                type="number"
+                                min={0}
+                                value={String(weeklyVideoCount)}
+                                onChange={(e) => {
+                                  const v =
+                                    e.target.value === ""
+                                      ? ""
+                                      : Math.max(0, Number(e.target.value));
+                                  setWeeklyVideoCount(
+                                    v === "" ? "" : Number(v),
+                                  );
+                                  updateField(
+                                    "weeklyVideoCount",
+                                    v === "" ? "" : Number(v),
+                                  );
+                                }}
+                                className="w-28 rounded-full border border-slate-800 bg-slate-950/80 px-3 py-2 text-center text-slate-100"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+                  )}
+
+                  {(config.numericFields || []).length > 0 && (
                     <div className="space-y-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-full">
-                          <label className="text-xs uppercase tracking-wide text-slate-400">
-                            Weekly meeting
-                          </label>
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setWeeklyMeetingAttended(true);
-                                updateField("weeklyMeetingAttended", true);
-                              }}
-                              className={pillClass(weeklyMeetingAttended)}
-                            >
-                              Attended weekly marketing meeting
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setWeeklyMeetingAttended(false);
-                                updateField("weeklyMeetingAttended", false);
-                              }}
-                              className={pillClass(!weeklyMeetingAttended)}
-                            >
-                              Did not attend
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                        <div className="w-full">
-                          <label className="text-xs uppercase tracking-wide text-slate-400">
-                            Video shoot
-                          </label>
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setWeeklyVideoShootParticipated(true);
-                                updateField("weeklyVideoShootParticipated", true);
-                              }}
-                              className={pillClass(weeklyVideoShootParticipated)}
-                            >
-                              Participated in weekly video shoot
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setWeeklyVideoShootParticipated(false);
-                                updateField("weeklyVideoShootParticipated", false);
-                              }}
-                              className={pillClass(!weeklyVideoShootParticipated)}
-                            >
-                              Did not participate
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                        <div className="w-full">
-                          <label className="text-xs uppercase tracking-wide text-slate-400">
-                            Number of videos participated in (shooting)
-                          </label>
-                          <div className="mt-2">
+                      <h3 className="text-sm font-semibold text-slate-200">
+                        Numeric checks
+                      </h3>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {(config.numericFields || []).map((f) => (
+                          <div key={f.key} className="space-y-2">
+                            <label className="text-xs uppercase tracking-wide text-slate-400">
+                              {f.label}
+                            </label>
                             <Input
                               type="number"
-                              min={0}
-                              value={String(weeklyVideoCount)}
-                              onChange={(e) => {
-                                const v =
-                                  e.target.value === ""
-                                    ? ""
-                                    : Math.max(0, Number(e.target.value));
-                                setWeeklyVideoCount(
-                                  v === "" ? "" : Number(v),
-                                );
-                                updateField(
-                                  "weeklyVideoCount",
-                                  v === "" ? "" : Number(v),
-                                );
-                              }}
-                              className="w-28 rounded-full border border-slate-800 bg-slate-950/80 px-3 py-2 text-center text-slate-100"
+                              min={f.min}
+                              value={String(form.fields[f.key] ?? "")}
+                              onChange={(e) => updateField(f.key, e.target.value)}
+                              className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
                             />
                           </div>
-                        </div>
+                        ))}
                       </div>
                     </div>
-                  </section>
-                )}
+                  )}
 
-                {(config.numericFields || []).length > 0 && (
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-semibold text-slate-200">
-                      Numeric checks
-                    </h3>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      {(config.numericFields || []).map((f) => (
-                        <div key={f.key} className="space-y-2">
-                          <label className="text-xs uppercase tracking-wide text-slate-400">
-                            {f.label}
-                          </label>
-                          <Input
-                            type="number"
-                            min={f.min}
-                            value={String(form.fields[f.key] ?? "")}
-                            onChange={(e) => updateField(f.key, e.target.value)}
-                            className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
-                          />
-                        </div>
-                      ))}
+                  {(config.textFields || []).length > 0 && (
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-semibold text-slate-200">Notes</h3>
+                      <div className="grid gap-3">
+                        {(config.textFields || []).map((f) => (
+                          <div key={f.key} className="space-y-2">
+                            <label className="text-xs uppercase tracking-wide text-slate-400">
+                              {f.label}
+                            </label>
+                            <Textarea
+                              value={String(form.fields[f.key] ?? "")}
+                              onChange={(e) => updateField(f.key, e.target.value)}
+                              placeholder={f.placeholder}
+                              rows={3}
+                              className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
+                            />
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
-
-                {(config.textFields || []).length > 0 && (
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-semibold text-slate-200">Notes</h3>
-                    <div className="grid gap-3">
-                      {(config.textFields || []).map((f) => (
-                        <div key={f.key} className="space-y-2">
-                          <label className="text-xs uppercase tracking-wide text-slate-400">
-                            {f.label}
-                          </label>
-                          <Textarea
-                            value={String(form.fields[f.key] ?? "")}
-                            onChange={(e) => updateField(f.key, e.target.value)}
-                            placeholder={f.placeholder}
-                            rows={3}
-                            className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-slate-100"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </Card>
+                  )}
+                </div>
+              </Card>
+            )}
           </div>
 
           <aside className="space-y-6 lg:sticky lg:top-6">
-            <StatsCard
-              periodLabel={periodLabel}
-              receipts={displayedVisibleReceipts}
-              receiptRows={combinedPeriodReceiptRows}
-              visibleSalesKes={displayedVisibleSalesKes}
-              recognizedSalesKes={displayedRecognizedSalesKes}
-              recognizedReceipts={displayedRecognizedReceipts}
-              items={displayedItems}
-              commissionKes={commissionKes}
-              commissionBreakdown={serverCommissionBreakdown}
-              currentSalesForTier={combinedPeriodSales}
-              nextTarget={nextTarget}
-            />
-            <EarningsCard
-              summary={earningsSummary}
-              downloadHref={`/api/attendant/payslip?periodKey=${encodeURIComponent(selectedPeriod.key)}`}
-            />
+            {isBrendahLegacyProfile ? (
+              <>
+                <BrendahQuickStatsCard
+                  periodLabel={periodLabel}
+                  receipts={displayedRecognizedReceipts}
+                  salesKes={displayedRecognizedSalesKes}
+                  newProducts={Number((earningsSummary as any)?.totalNewProducts ?? 0)}
+                  editedProducts={Number((earningsSummary as any)?.totalEditedProducts ?? 0)}
+                  copiedProducts={Number((earningsSummary as any)?.totalCopiedProducts ?? 0)}
+                  commissionKes={commissionKes}
+                />
+                <BrendahLegacyEarningsCard
+                  summary={earningsSummary}
+                  downloadHref={`/api/attendant/payslip?periodKey=${encodeURIComponent(selectedPeriod.key)}`}
+                />
+              </>
+            ) : (
+              <>
+                <StatsCard
+                  periodLabel={periodLabel}
+                  receipts={displayedVisibleReceipts}
+                  receiptRows={combinedPeriodReceiptRows}
+                  visibleSalesKes={displayedVisibleSalesKes}
+                  recognizedSalesKes={displayedRecognizedSalesKes}
+                  recognizedReceipts={displayedRecognizedReceipts}
+                  items={displayedItems}
+                  commissionKes={commissionKes}
+                  commissionBreakdown={serverCommissionBreakdown}
+                  currentSalesForTier={combinedPeriodSales}
+                  nextTarget={nextTarget}
+                />
+                <EarningsCard
+                  summary={earningsSummary}
+                  downloadHref={`/api/attendant/payslip?periodKey=${encodeURIComponent(selectedPeriod.key)}`}
+                />
+              </>
+            )}
             
           </aside>
         </div>
@@ -2025,7 +2508,7 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
             onClick={() => setForm(defaultFormState())}
             className="px-5"
           >
-            Reset
+            {isBrendahLegacyProfile ? "Reset day" : "Reset"}
           </Button>
           <Button
             type="submit"

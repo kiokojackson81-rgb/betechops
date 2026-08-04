@@ -7,6 +7,38 @@ import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import { buildDuplicateMessage, canonicalReceiptNumber, findReceiptOwner } from "@/lib/receiptGuard";
 import { z } from "zod";
 
+const BRENDAH_EMAIL = "brendah@betech.co.ke";
+const BRENDAH_EXTRA_YESNO_KEYS = [
+  "repliedFbComments",
+  "repliedFbDms",
+  "repliedIgComments",
+  "repliedIgDms",
+  "clearedFbInbox",
+  "clearedIgInbox",
+  "stockChecked",
+  "pricingConfirmed",
+  "competitorsReviewed",
+  "outOfStockReview",
+  "fridayPrepareWeekendPromos",
+];
+const BRENDAH_EXTRA_NUMERIC_KEYS = [
+  "walkInsPurchased",
+  "productsUploaded",
+  "productsEdited",
+  "productsCopied",
+  "promoVideosPosted",
+  "productDemoVideosRecorded",
+  "fridayPostEngagingVideos",
+];
+const BRENDAH_EXTRA_TEXT_KEYS = [
+  "wednesdayFollowUpNotes",
+  "wednesdayEngagementNotes",
+  "fridayImprovementSuggestions",
+  "saturdayLiveSessionNotes",
+  "weeklyPerformanceLiveHighlights",
+  "weeklyPerformanceSummaryNotes",
+];
+
 const ReceiptItemSchema = z.object({
   id: z.string().optional(),
   productName: z.string().min(1),
@@ -97,10 +129,13 @@ export async function POST(req: Request) {
     }
     const actorUser = await prisma.user.findUnique({
       where: { id: actorId },
-      select: { id: true, role: true, attendantCategory: true },
+      select: { id: true, role: true, attendantCategory: true, email: true },
     });
     if (!actorUser) return NextResponse.json({ error: "Actor not found" }, { status: 404 });
-    const isAllowed = actorUser.role === "ADMIN" || actorUser.attendantCategory === "DIRECT_SALES_OPS";
+    const isAllowed =
+      actorUser.role === "ADMIN" ||
+      actorUser.attendantCategory === "DIRECT_SALES_OPS" ||
+      String(actorUser.email ?? "").toLowerCase() === BRENDAH_EMAIL;
     if (!isAllowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   } catch (e) {
     return NextResponse.json({ error: "Failed to verify actor" }, { status: 500 });
@@ -139,6 +174,15 @@ export async function POST(req: Request) {
     if (type === "yesno") yesNoValues[key] = Boolean(raw?.[key]);
     if (type === "numeric") numericValues[key] = toNumber(raw?.[key]);
     if (type === "text") textValues[key] = typeof raw?.[key] === "string" ? raw[key] : "";
+  });
+  BRENDAH_EXTRA_YESNO_KEYS.forEach((key) => {
+    yesNoValues[key] = Boolean(yesNo?.[key]);
+  });
+  BRENDAH_EXTRA_NUMERIC_KEYS.forEach((key) => {
+    numericValues[key] = toNumber(numeric?.[key]);
+  });
+  BRENDAH_EXTRA_TEXT_KEYS.forEach((key) => {
+    textValues[key] = typeof text?.[key] === "string" ? text[key] : "";
   });
 
   // Accept convenience top-level weekly fields and normalize them.
