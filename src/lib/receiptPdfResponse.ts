@@ -2,11 +2,38 @@ import { prisma } from "@/lib/prisma";
 import { buildReceiptSnapshot } from "@/app/receipts/buildSnapshot";
 import renderReceiptHtml from "@/lib/receipts/renderReceiptHtml";
 import { launchChromiumBrowser } from "@/lib/pdf/chromium";
+import { readReceiptProjectFlow } from "@/lib/receiptProjects";
 
 export async function buildReceiptPdfResponse(receiptId: string, opts?: { asDownload?: boolean; allowCached?: boolean; fileNamePrefix?: string }) {
   const asDownload = Boolean(opts?.asDownload);
   const allowCached = Boolean(opts?.allowCached);
   const fileNamePrefix = opts?.fileNamePrefix || "receipt";
+  const receiptFreshness = await prisma.receipt.findUnique({
+    where: { id: receiptId },
+    select: {
+      id: true,
+      createdAt: true,
+      generatedAt: true,
+      data: true,
+    },
+  });
+
+  if (!receiptFreshness) {
+    return new Response(JSON.stringify({ error: "Receipt not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  const receiptData =
+    receiptFreshness.data && typeof receiptFreshness.data === "object" && !Array.isArray(receiptFreshness.data)
+      ? (receiptFreshness.data as Record<string, unknown>)
+      : {};
+  const projectFlow = readReceiptProjectFlow(receiptData.projectFlow);
+  const freshnessDate =
+    (projectFlow?.updatedAt ? new Date(projectFlow.updatedAt) : null) ??
+    receiptFreshness.generatedAt ??
+    receiptFreshness.createdAt;
+  const freshnessTime = Number.isNaN(freshnessDate.getTime()) ? receiptFreshness.createdAt.getTime() : freshnessDate.getTime();
 
   const files = !allowCached
     ? []
@@ -23,7 +50,11 @@ export async function buildReceiptPdfResponse(receiptId: string, opts?: { asDown
     return looksFull && !looksCustomer;
   };
 
-  const file = files.find(isFullCandidate) ?? files[0] ?? null;
+  const freshFiles = files.filter((entry) => {
+    if (!(entry.uploadedAt instanceof Date)) return false;
+    return entry.uploadedAt.getTime() >= freshnessTime;
+  });
+  const file = freshFiles.find(isFullCandidate) ?? freshFiles[0] ?? null;
   if (file?.url) {
     const upstream = await fetch(file.url, { redirect: "follow" });
     if (upstream.ok && upstream.body) {
@@ -79,4 +110,3 @@ export async function buildReceiptPdfResponse(receiptId: string, opts?: { asDown
     await browser.close().catch(() => undefined);
   }
 }
-
