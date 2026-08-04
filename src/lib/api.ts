@@ -36,6 +36,26 @@ export function isBrendahEmail(email: unknown) {
   return String(email ?? "").trim().toLowerCase() === "brendah@betech.co.ke";
 }
 
+export function hasBrendahDutyProfile(input: {
+  email?: unknown;
+  name?: unknown;
+  attendantCategory?: unknown;
+  categories?: unknown;
+}) {
+  const email = String(input.email ?? "").trim().toLowerCase();
+  if (email === "brendah@betech.co.ke") return true;
+
+  const name = String(input.name ?? "").trim().toLowerCase();
+  const attendantCategory = String(input.attendantCategory ?? "").trim().toUpperCase();
+  const categories = Array.isArray(input.categories)
+    ? input.categories.map((value) => String(value ?? "").trim().toUpperCase())
+    : [];
+  const isMarketingProfile =
+    attendantCategory === "MARKETING_OPS" || categories.includes("MARKETING_OPS");
+
+  return isMarketingProfile && name.includes("brendah");
+}
+
 export async function requireRole(min: Role | Role[]) {
   const session = await auth();
   const role = (session?.user as unknown as { role?: Role })?.role;
