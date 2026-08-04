@@ -121,7 +121,12 @@ async function loadProjectNotificationContext(
   let completedByName: string | null = null;
   let completedByRole: string | null = null;
   let updatedByName: string | null = null;
-  let bookedByName: string | null = receipt.issuedBy?.name ?? receipt.issuedBy?.email ?? null;
+  let bookedByName: string | null =
+    snapshot.attendantName ||
+    receipt.order?.attendant?.name ||
+    receipt.issuedBy?.name ||
+    receipt.issuedBy?.email ||
+    null;
 
   const staffAssignmentIds = projectFlow.assignedHandlers
     .filter((entry) => entry.kind === "STAFF" && entry.staffId)
