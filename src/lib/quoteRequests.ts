@@ -3,7 +3,6 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { isTechnicalTeamCategory } from "@/lib/technicalTeam";
 import {
   getQuoteRequestStatusAliases,
   normalizeQuoteRequestStatus,
@@ -1164,7 +1163,6 @@ function canUseQuotationDesk(input: {
   role?: string | null;
 }) {
   if (input.role === "ADMIN" || input.role === "SUPERVISOR") return true;
-  if (isTechnicalTeamCategory(input.attendantCategory)) return true;
   return isQuoteRequestsStaffEmail(input.email);
 }
 
@@ -1222,24 +1220,17 @@ export async function requireQuoteRequestsStaffActor(options?: { impersonateId?:
 export async function getOrderedQuoteStaffUsers() {
   const staffUsers = await prisma.user.findMany({
     where: {
-      OR: [
-        { email: { in: [...QUOTE_REQUEST_STAFF_EMAILS] } },
-        { attendantCategory: "TECHNICAL_TEAM" },
-      ],
+      email: { in: [...QUOTE_REQUEST_STAFF_EMAILS] },
       isActive: true,
     },
-    orderBy: [{ attendantCategory: "asc" }, { name: "asc" }],
+    orderBy: [{ name: "asc" }],
     select: { id: true, name: true, email: true },
   });
 
   const preferredUsers = QUOTE_REQUEST_STAFF_EMAILS.map((value) =>
     staffUsers.find((user) => normalizeEmail(user.email) === value),
   ).filter((user): user is { id: string; name: string | null; email: string | null } => Boolean(user?.id));
-
-  const preferredIds = new Set(preferredUsers.map((user) => user.id));
-  const technicalUsers = staffUsers.filter((user) => !preferredIds.has(user.id));
-
-  return [...preferredUsers, ...technicalUsers];
+  return preferredUsers;
 }
 
 export async function getQuoteStaffUserById(userId: string | null | undefined) {
