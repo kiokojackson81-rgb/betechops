@@ -154,37 +154,52 @@ export default function HomePageClient() {
         </header>
 
         <main className="flex-1 pt-5 sm:pt-6">
-          <section className="rounded-[34px] border border-white/10 bg-[linear-gradient(180deg,rgba(5,8,17,0.9),rgba(6,9,18,0.82))] px-5 py-8 shadow-[0_28px_90px_rgba(0,0,0,0.35)] backdrop-blur sm:px-8 sm:py-10 lg:px-10 lg:py-12">
-            <div className="mx-auto flex max-w-[900px] flex-col items-center text-center">
-              <div className="w-[180px] sm:w-[220px] lg:w-[290px]">
-                <Image
-                  src="/agents/betech-logo-crop.png"
-                  alt="Betech Solar Solutions logo"
-                  width={580}
-                  height={400}
-                  priority
-                  className="h-auto w-full object-contain drop-shadow-[0_14px_42px_rgba(0,0,0,0.35)]"
+          <section className="overflow-hidden rounded-[34px] border border-white/10 bg-[linear-gradient(180deg,rgba(5,8,17,0.9),rgba(6,9,18,0.82))] shadow-[0_28px_90px_rgba(0,0,0,0.35)] backdrop-blur">
+            <div className="relative px-5 py-8 sm:px-8 sm:py-10 lg:px-10 lg:py-12">
+              <div className="pointer-events-none absolute inset-0">
+                <div
+                  className="absolute inset-x-0 inset-y-0 bg-cover bg-center bg-no-repeat opacity-70 sm:opacity-78"
+                  style={{ backgroundImage: "url('/homepage/hero-solar-sunset.png')", backgroundPosition: "center 36%" }}
                 />
+                <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,6,14,0.28)_0%,rgba(4,7,19,0.52)_24%,rgba(4,7,19,0.84)_58%,#040713_100%)]" />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_12%,rgba(124,58,237,0.28),transparent_34%),radial-gradient(circle_at_18%_55%,rgba(249,115,22,0.22),transparent_28%),radial-gradient(circle_at_85%_24%,rgba(14,165,233,0.16),transparent_30%)]" />
+                <div className="absolute inset-0 shadow-[inset_0_0_180px_rgba(2,4,10,0.72)]" />
               </div>
 
-              <h1 className="mt-5 text-[3.4rem] font-semibold leading-none tracking-tight sm:text-[4.7rem] lg:text-[6rem]">
-                <span className="text-white">Betech</span>
-                <span className="bg-[linear-gradient(135deg,#8b5cf6,#a855f7,#d8b4fe)] bg-clip-text text-transparent">Ops</span>
-              </h1>
-              <div className="mt-4 text-[12px] uppercase tracking-[0.34em] text-slate-300 sm:text-[15px]">
-                Betech Solar Digital Access Portal
-              </div>
-              <div className="mt-5 h-[2px] w-28 rounded-full bg-[linear-gradient(90deg,transparent,#8b5cf6,transparent)]" />
-              <p className="mt-6 max-w-[620px] text-lg leading-8 text-slate-200 sm:text-[1.8rem] sm:leading-[1.9] lg:text-[2rem] lg:leading-[1.8]">
-                Access Betech Solar services and operations from one secure place.
-              </p>
-              <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-violet-400/25 bg-violet-500/8 px-4 py-2 text-sm font-medium text-violet-100 shadow-[0_0_24px_rgba(168,85,247,0.14)] sm:text-base">
-                <ShieldCheck className="h-4 w-4 shrink-0" />
-                <span>Secure. Reliable. Always Protected.</span>
+              <div className="relative mx-auto flex min-h-[430px] max-w-[900px] flex-col items-center justify-center text-center sm:min-h-[520px] lg:min-h-[620px]">
+                <div className="w-[180px] sm:w-[220px] lg:w-[290px]">
+                  <Image
+                    src="/agents/betech-logo-crop.png"
+                    alt="Betech Solar Solutions logo"
+                    width={580}
+                    height={400}
+                    priority
+                    className="h-auto w-full object-contain drop-shadow-[0_14px_42px_rgba(0,0,0,0.45)]"
+                  />
+                </div>
+
+                <h1 className="mt-5 text-[3.4rem] font-semibold leading-none tracking-tight sm:text-[4.7rem] lg:text-[6rem]">
+                  <span className="text-white">Betech</span>
+                  <span className="bg-[linear-gradient(135deg,#8b5cf6,#a855f7,#d8b4fe)] bg-clip-text text-transparent">Ops</span>
+                </h1>
+                <div className="mt-4 text-[12px] uppercase tracking-[0.34em] text-slate-200 sm:text-[15px]">
+                  Betech Solar Digital Access Portal
+                </div>
+                <div className="mt-5 h-[2px] w-28 rounded-full bg-[linear-gradient(90deg,transparent,#8b5cf6,transparent)]" />
+                <p className="mt-6 max-w-[620px] text-lg leading-8 text-slate-100 sm:text-[1.8rem] sm:leading-[1.9] lg:text-[2rem] lg:leading-[1.8]">
+                  Access Betech Solar services and operations from one secure place.
+                </p>
+                <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-violet-400/25 bg-violet-500/10 px-4 py-2 text-sm font-medium text-violet-50 shadow-[0_0_24px_rgba(168,85,247,0.14)] sm:text-base">
+                  <ShieldCheck className="h-4 w-4 shrink-0" />
+                  <span>Secure. Reliable. Always Protected.</span>
+                </div>
               </div>
             </div>
 
-            <div className="mt-8 grid gap-4 lg:mt-10 lg:grid-cols-3">
+            <div className="relative bg-[linear-gradient(180deg,#050915_0%,rgba(6,10,20,0.98)_100%)] px-5 pb-6 pt-2 sm:px-8 sm:pb-8 lg:px-10 lg:pb-10">
+              <div className="absolute inset-x-0 top-0 h-24 bg-[linear-gradient(180deg,rgba(4,7,19,0),#050915)]" />
+
+              <div className="relative grid gap-4 lg:grid-cols-3">
               {ACCESS_CARDS.map((card) => {
                 const Icon = card.icon;
                 return (
@@ -223,27 +238,28 @@ export default function HomePageClient() {
               })}
             </div>
 
-            <section className="mt-6 rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(8,12,23,0.92),rgba(8,12,23,0.75))] px-4 py-5 sm:px-6">
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                {SUPPORTING_BLOCKS.map((block, index) => {
-                  const Icon = block.icon;
-                  return (
-                    <div
-                      key={block.title}
-                      className={`flex items-start gap-4 ${index < SUPPORTING_BLOCKS.length - 1 ? "xl:border-r xl:border-white/10 xl:pr-5" : ""}`}
-                    >
-                      <div className="inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-violet-400/30 bg-violet-500/10 text-violet-100 shadow-[0_0_22px_rgba(168,85,247,0.15)]">
-                        <Icon className="h-6 w-6" />
+              <section className="relative mt-6 rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(8,12,23,0.92),rgba(8,12,23,0.75))] px-4 py-5 sm:px-6">
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  {SUPPORTING_BLOCKS.map((block, index) => {
+                    const Icon = block.icon;
+                    return (
+                      <div
+                        key={block.title}
+                        className={`flex items-start gap-4 ${index < SUPPORTING_BLOCKS.length - 1 ? "xl:border-r xl:border-white/10 xl:pr-5" : ""}`}
+                      >
+                        <div className="inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-violet-400/30 bg-violet-500/10 text-violet-100 shadow-[0_0_22px_rgba(168,85,247,0.15)]">
+                          <Icon className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <div className="text-lg font-semibold text-white">{block.title}</div>
+                          <p className="mt-1 text-sm leading-7 text-slate-300">{block.description}</p>
+                        </div>
                       </div>
-                      <div>
-                        <div className="text-lg font-semibold text-white">{block.title}</div>
-                        <p className="mt-1 text-sm leading-7 text-slate-300">{block.description}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
+                    );
+                  })}
+                </div>
+              </section>
+            </div>
           </section>
         </main>
 
