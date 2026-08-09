@@ -350,6 +350,7 @@ export default function ProjectsOperationsClient({
   const [newAgentName, setNewAgentName] = useState("");
   const [newAgentPhone, setNewAgentPhone] = useState("");
   const [agentSaving, setAgentSaving] = useState(false);
+  const [sendingReceiptId, setSendingReceiptId] = useState<string | null>(null);
   const [expandedRowIds, setExpandedRowIds] = useState<string[]>([]);
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [assignmentModal, setAssignmentModal] = useState<AssignmentModalState>(null);
@@ -668,6 +669,44 @@ export default function ProjectsOperationsClient({
     await saveProject(assignmentModal.rowId);
     setAssignmentModal(null);
     setAssignmentSearch("");
+  };
+
+  const resendProjectReceipt = async (row: ProjectRow) => {
+    const eventType = row.projectStage === "COMPLETED_POSTED" ? "PROJECT_COMPLETED" : "PROJECT_BOOKED";
+    setSendingReceiptId(row.id);
+    try {
+      const res = await fetch(`/api/receipts/${row.id}/project/notifications/retry`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ eventType }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload?.error || "Failed to resend project receipt");
+      }
+
+      const results = Object.values(payload?.results ?? {}) as Array<{ channel?: string; status?: string }>;
+      const sentCount = results.filter((entry) => String(entry.status || "").toUpperCase() === "SENT").length;
+      const skippedCount = results.filter((entry) => String(entry.status || "").toUpperCase() === "SKIPPED").length;
+      const failedCount = results.filter((entry) => String(entry.status || "").toUpperCase() === "FAILED").length;
+      const statusParts = [
+        sentCount ? `${sentCount} sent` : null,
+        skippedCount ? `${skippedCount} skipped` : null,
+        failedCount ? `${failedCount} failed` : null,
+      ].filter(Boolean);
+
+      showToast(
+        statusParts.length > 0
+          ? `Project receipt resend finished: ${statusParts.join(", ")}`
+          : "Project receipt resend completed",
+        failedCount > 0 ? "error" : "success",
+      );
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Failed to resend project receipt", "error");
+    } finally {
+      setSendingReceiptId(null);
+    }
   };
 
   const modalRow = assignmentModal ? rows.find((row) => row.id === assignmentModal.rowId) ?? null : null;
@@ -1074,6 +1113,14 @@ export default function ProjectsOperationsClient({
                                     >
                                       Preview Receipt
                                     </Link>
+                                    <button
+                                      type="button"
+                                      onClick={() => void resendProjectReceipt(row)}
+                                      disabled={sendingReceiptId === row.id}
+                                      className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                                    >
+                                      {sendingReceiptId === row.id ? "Sending..." : "Send Receipt"}
+                                    </button>
                                     <button
                                       type="button"
                                       onClick={() => setAssignmentModal({ type: "staff", rowId: row.id })}
