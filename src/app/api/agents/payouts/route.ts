@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAgentSession } from "@/lib/agents/auth";
 import { prisma } from "@/lib/prisma";
+import { notifyAgentPayoutRequested } from "@/services/agent-notifications/agent-notification.service";
 
 function isAgentSalesSchemaError(error: unknown) {
   if (!error || typeof error !== "object") return false;
@@ -132,6 +133,13 @@ export async function POST(req: NextRequest) {
   } catch {
     // enterprise tables may not exist until the manual SQL patch is applied
   }
+
+  void notifyAgentPayoutRequested(payout.id).catch((error) => {
+    console.error("[agent notify] failed to send payout requested notification", {
+      payoutId: payout.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
 
   return NextResponse.json({ ok: true, payout });
 }

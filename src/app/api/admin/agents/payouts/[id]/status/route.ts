@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminSession } from "@/lib/agents/auth";
 import { prisma } from "@/lib/prisma";
+import { notifyAgentPayoutStatusChanged } from "@/services/agent-notifications/agent-notification.service";
 
 const allowedStatuses = new Set(["pending", "approved", "paid", "rejected", "held"]);
 const amountsMatch = (a: number, b: number) => Math.abs(a - b) <= 0.0001;
@@ -33,7 +34,7 @@ export async function PATCH(
 
   const existingPayout = await prisma.agentPayout.findUnique({
     where: { id },
-    select: { id: true, agentId: true, amount: true },
+    select: { id: true, agentId: true, amount: true, status: true, reference: true },
   });
 
   if (!existingPayout) {
@@ -132,6 +133,19 @@ export async function PATCH(
     });
   } catch {
     // enterprise tables may not exist until the manual SQL patch is applied
+  }
+
+  if (String(existingPayout.status || "").toLowerCase() !== status) {
+    void notifyAgentPayoutStatusChanged(payout.id, status, {
+      reason,
+      reference: reference ?? payout.reference ?? null,
+    }).catch((error) => {
+      console.error("[agent notify] failed to send payout status notification", {
+        payoutId: payout.id,
+        status,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
   }
 
   return NextResponse.json({ ok: true, payout });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAgentSession } from "@/lib/agents/auth";
 import { createAgentSale, getAgentSales } from "@/lib/agents/sales";
+import { notifyAgentSaleSubmitted } from "@/services/agent-notifications/agent-notification.service";
 
 function ensureApprovedAgent(agentStatus: string | null) {
   return String(agentStatus || "").toLowerCase() === "approved";
@@ -31,6 +32,12 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const sale = await createAgentSale(agentSession.userId, body);
+    void notifyAgentSaleSubmitted(sale.id).catch((error) => {
+      console.error("[agent notify] failed to send sale submitted notification", {
+        saleId: sale.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
     return NextResponse.json({
       ok: true,
       sale,

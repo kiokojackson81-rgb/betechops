@@ -7,6 +7,7 @@ import { generateUniqueReferralCode } from "@/lib/agents/service";
 import { prisma } from "@/lib/prisma";
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { createDirectVerifiedAuthToken } from "@/lib/phoneOtpAuth";
+import { notifyAgentRegistrationPending } from "@/services/agent-notifications/agent-notification.service";
 
 export const dynamic = "force-dynamic";
 
@@ -111,6 +112,7 @@ export async function POST(req: NextRequest) {
 
     updated = (await findSafeCustomerProfileByUserId(resolvedUserId)) || updated;
 
+    let createdAgentProfile = false;
     if (accountMode === "agent") {
       const { firstName, lastName } = splitNameParts(name);
       const existingAgentProfile = await prisma.agentProfile.findUnique({
@@ -157,12 +159,22 @@ export async function POST(req: NextRequest) {
             },
           });
         });
+        createdAgentProfile = true;
       }
     }
 
     const referralCode = req.cookies.get(REFERRAL_COOKIE_NAME)?.value || "";
     if (referralCode) {
       await applyReferralAttributionToUser(resolvedUserId, referralCode);
+    }
+
+    if (createdAgentProfile) {
+      void notifyAgentRegistrationPending(resolvedUserId).catch((error) => {
+        console.error("[agent notify] failed to send registration notification", {
+          userId: resolvedUserId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
     }
 
     return NextResponse.json({
