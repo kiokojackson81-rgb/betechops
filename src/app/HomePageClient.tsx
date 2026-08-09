@@ -166,19 +166,8 @@ export default function HomePageClient() {
                 <div className="absolute inset-0 shadow-[inset_0_0_180px_rgba(2,4,10,0.72)]" />
               </div>
 
-              <div className="relative mx-auto flex min-h-[430px] max-w-[900px] flex-col items-center justify-center text-center sm:min-h-[520px] lg:min-h-[620px]">
-                <div className="w-[180px] sm:w-[220px] lg:w-[290px]">
-                  <Image
-                    src="/agents/betech-logo-crop.png"
-                    alt="Betech Solar Solutions logo"
-                    width={580}
-                    height={400}
-                    priority
-                    className="h-auto w-full object-contain drop-shadow-[0_14px_42px_rgba(0,0,0,0.45)]"
-                  />
-                </div>
-
-                <h1 className="mt-5 text-[3.4rem] font-semibold leading-none tracking-tight sm:text-[4.7rem] lg:text-[6rem]">
+              <div className="relative mx-auto flex min-h-[340px] max-w-[900px] flex-col items-center justify-center text-center sm:min-h-[400px] lg:min-h-[470px]">
+                <h1 className="text-[3.4rem] font-semibold leading-none tracking-tight sm:text-[4.7rem] lg:text-[6rem]">
                   <span className="text-white">Betech</span>
                   <span className="bg-[linear-gradient(135deg,#8b5cf6,#a855f7,#d8b4fe)] bg-clip-text text-transparent">Ops</span>
                 </h1>
