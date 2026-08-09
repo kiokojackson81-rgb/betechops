@@ -1024,7 +1024,6 @@ export default function ProjectsOperationsClient({
                                   <div className="text-[11px] uppercase tracking-[0.32em] text-slate-500">Project Summary</div>
                                   <div className="mt-4 grid gap-3 md:grid-cols-2">
                                     {[
-                                      ["Receipt number", row.orderRef || "Not available"],
                                       ["Project name", row.customerName || "Not available"],
                                       ["Customer name", row.customerName || "Not available"],
                                       ["Customer phone", row.customerPhone || "Not available"],
@@ -1038,6 +1037,21 @@ export default function ProjectsOperationsClient({
                                         <div className="mt-2 text-sm font-medium text-white">{value}</div>
                                       </div>
                                     ))}
+                                    <div className="rounded-2xl border border-white/8 bg-[#08111d] px-4 py-3">
+                                      <div className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Receipt number</div>
+                                      {row.orderRef ? (
+                                        <Link
+                                          href={`/receipts/print/${encodeURIComponent(row.id)}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="mt-2 inline-flex text-sm font-medium text-cyan-300 underline-offset-4 hover:text-cyan-200 hover:underline"
+                                        >
+                                          {row.orderRef}
+                                        </Link>
+                                      ) : (
+                                        <div className="mt-2 text-sm font-medium text-white">Not available</div>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
 
