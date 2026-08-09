@@ -12,8 +12,8 @@ export async function generateMetadata(): Promise<Metadata> {
 
   if (isOpsHost(host)) {
     return {
-      title: "BetechOps Operations",
-      description: "Real-time operations dashboards, support portals, and workflows for the BetechOps team.",
+      title: "BetechOps Digital Access Portal",
+      description: "Access Betech Solar customer, agent, and staff services from one secure portal.",
     };
   }
 
