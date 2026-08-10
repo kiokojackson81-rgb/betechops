@@ -1593,6 +1593,7 @@ export default function QuotationRequestsDeskClient({
   const [bulkSaving, setBulkSaving] = useState(false);
   const [bulkStatus, setBulkStatus] = useState<QuoteRequestStatus | "">("");
   const [bulkAssigneeId, setBulkAssigneeId] = useState<string>("");
+  const createPanelRef = useRef<HTMLDivElement | null>(null);
   const templateUploadInputRef = useRef<HTMLInputElement | null>(null);
   const createItemRefs = useRef<Array<HTMLDivElement | null>>([]);
   const responseItemRefs = useRef<Array<HTMLDivElement | null>>([]);
@@ -2459,6 +2460,9 @@ export default function QuotationRequestsDeskClient({
     setCreateItemAccordion(nextDraft.quoteItems.length ? nextDraft.quoteItems.map(() => true) : [true]);
     setCreateCatalogQuery("");
     setCreateCatalogResults([]);
+    requestAnimationFrame(() => {
+      createPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
     setMessage(
       `Copied quotation ${request.quoteRef}. Update customer details, quantities, pricing, then save the new quotation.`,
     );
@@ -3581,6 +3585,7 @@ export default function QuotationRequestsDeskClient({
 
         {showCreatePanel ? (
           <div
+            ref={createPanelRef}
             className={`rounded-[28px] border border-emerald-500/20 bg-slate-950/60 ${
               compactMode ? "p-3 sm:p-4" : "mt-5 p-4 sm:p-5"
             }`}
