@@ -855,6 +855,15 @@ function buildCreateDraftFromExistingQuotation(request: SerializedQuoteRequest):
   };
 }
 
+function getQuotationTopicLabel(request: SerializedQuoteRequest) {
+  return (
+    request.quoteTitle?.trim() ||
+    request.preferredProducts?.trim() ||
+    request.templateName?.trim() ||
+    ""
+  );
+}
+
 function dedupeItemNames(items: Array<{ itemName: string }>) {
   return Array.from(
     new Set(
@@ -2466,6 +2475,55 @@ export default function QuotationRequestsDeskClient({
     setMessage(
       `Copied quotation ${request.quoteRef}. Update customer details, quantities, pricing, then save the new quotation.`,
     );
+  }
+
+  async function handleSaveRequestAsTemplate(request: SerializedQuoteRequest) {
+    try {
+      setTemplateSaving(true);
+      setMessage(null);
+      const draft = buildCreateDraftFromExistingQuotation(request);
+      const quoteItems = buildSanitizedQuoteItems(draft.quoteItems, {
+        deliveryMode: draft.deliveryMode,
+        installationMode: draft.installationMode,
+        deliveryFee: draft.deliveryFee,
+        installationFee: draft.installationFee,
+      });
+      if (!quoteItems.length) {
+        throw new Error("Add at least one quotation item before saving a template.");
+      }
+
+      const templateName =
+        draft.quoteTitle.trim() ||
+        request.quoteTitle?.trim() ||
+        generateQuoteTitleFromItems(draft.quoteItems, draft.projectType);
+
+      const payload = {
+        ...buildTemplatePayloadFromDraft({
+          ...draft,
+          quoteTitle: templateName,
+          templateOwnerId: request.assignedAttendant?.id || draft.templateOwnerId,
+        }),
+        templateName,
+        items: quoteItems,
+      };
+
+      const response = await fetch(buildApiUrl(templateApiPath, apiQueryParams), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Failed to save quotation template.");
+      }
+
+      await refreshTemplates();
+      setMessage(`Template ${data.template?.templateName || templateName} saved successfully.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Failed to save quotation template.");
+    } finally {
+      setTemplateSaving(false);
+    }
   }
 
   function openTemplateBuilder() {
@@ -4564,9 +4622,9 @@ export default function QuotationRequestsDeskClient({
                                 {request.assignedAttendant?.name || request.assignedAttendant?.email}
                               </span>
                             ) : null}
-                            {request.templateName ? (
+                            {getQuotationTopicLabel(request) ? (
                               <span className="rounded-full border border-white/15 bg-white/[0.03] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-200">
-                                {request.templateName}
+                                {getQuotationTopicLabel(request)}
                               </span>
                             ) : null}
                           </div>
@@ -4628,6 +4686,15 @@ export default function QuotationRequestsDeskClient({
                             >
                               <FilePenLine className="h-4 w-4" />
                               Copy quotation
+                            </button>
+                            <button
+                              type="button"
+                              disabled={templateSaving}
+                              onClick={() => void handleSaveRequestAsTemplate(request)}
+                              className="inline-flex items-center gap-2 rounded-lg border border-violet-400/20 bg-violet-400/10 px-3 py-2 text-sm font-medium text-violet-100 transition hover:border-violet-300/30 hover:bg-violet-400/15 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <LayoutTemplate className="h-4 w-4" />
+                              {templateSaving ? "Saving template..." : "Save as template"}
                             </button>
                           </div>
                           {!canOpenReceiptDraft ? (
