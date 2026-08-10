@@ -16,7 +16,7 @@ import {
 export const dynamic = "force-dynamic";
 
 const bodySchema = z.object({
-  mode: z.enum(["receipt", "quotation"]).optional(),
+  mode: z.enum(["receipt", "quotation", "project"]).optional(),
 });
 
 function encodePrefill(value: unknown) {
@@ -25,13 +25,28 @@ function encodePrefill(value: unknown) {
 
 function buildQuoteReceiptPrefill(
   request: NonNullable<Awaited<ReturnType<typeof getAssignedQuoteRequestById>>>,
-  mode: "receipt" | "quotation",
+  mode: "receipt" | "quotation" | "project",
 ) {
   const proposal = parseStoredQuoteProposal(request.quotationData);
   const paymentMethod =
     proposal.paymentMethod === "MPESA_PAYBILL"
       ? "MPESA"
       : undefined;
+  const totalAmount = Number(proposal.total ?? 0);
+  const deliveryAddress =
+    request.customerLocation || [request.specificLocation, request.town, request.county].filter(Boolean).join(", ");
+  const projectPaymentTerm =
+    proposal.paymentTerms === "APPROVED_AFTER_INSTALLATION"
+      ? "PAY_AFTER_INSTALLATION"
+      : proposal.paymentTerms === "DEPOSIT_AND_BALANCE"
+        ? "DEPOSIT_AND_BALANCE"
+        : "FULL_PAYMENT";
+  const depositAmount =
+    proposal.paymentTerms === "DEPOSIT_AND_BALANCE" && typeof proposal.depositAmount === "number"
+      ? Math.max(0, proposal.depositAmount)
+      : 0;
+  const depositPercent =
+    totalAmount > 0 && depositAmount > 0 ? Math.max(0, Math.min(100, Math.round((depositAmount / totalAmount) * 100))) : 30;
   const noteLines = [
     `Quotation reference: ${request.quoteRef}`,
     request.quoteTitle ? `Quotation title: ${request.quoteTitle}` : "",
@@ -52,9 +67,8 @@ function buildQuoteReceiptPrefill(
     customerName: request.customerName,
     customerPhone: request.customerPhone,
     customerEmail: request.customerEmail || "",
-    deliveryAddress:
-      request.customerLocation || [request.specificLocation, request.town, request.county].filter(Boolean).join(", "),
-    customerType: "walk-in",
+    deliveryAddress,
+    customerType: mode === "project" ? "project" : "walk-in",
     paymentMethod,
     notes: noteLines.join("\n"),
     metadata: {
@@ -68,6 +82,28 @@ function buildQuoteReceiptPrefill(
       quoteTotalAmount: proposal.total ?? 0,
       quoteDepositAmount: proposal.depositAmount ?? null,
     },
+    projectFlow:
+      mode === "project"
+        ? {
+            isProject: true,
+            stage: "RECEIPT_CREATED",
+            paymentTerm: projectPaymentTerm,
+            depositType: "PERCENT",
+            depositValue: depositPercent,
+            depositPercent,
+            depositPaidAmount: 0,
+            depositPaymentMethod: "UNSPECIFIED",
+            depositReference: "",
+            balancePaidAmount: 0,
+            balancePaymentMethod: "UNSPECIFIED",
+            balanceReference: "",
+            totalPaidAmount: 0,
+            scheduledDate: null,
+            postedReceiptNumber: request.quoteRef,
+            internalNotes: noteLines.join("\n"),
+            paymentNotes: proposal.paymentTerms ? `Prefilled from quotation payment terms: ${getQuotePaymentTermsLabel(proposal.paymentTerms)}` : "",
+          }
+        : undefined,
     items: proposal.items.map((item) => ({
       title: item.itemName,
       quantity: item.quantity,
@@ -111,15 +147,23 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   const prefill = buildQuoteReceiptPrefill(quoteRequest, mode);
   const url = `/receipts?prefill=${encodeURIComponent(encodePrefill(prefill))}`;
 
+  const isQuotationDraft = mode === "quotation";
+  const isProjectDraft = mode === "project";
+
   await recordQuotationEvent({
     quoteRequestId: quoteRequest.id,
-    eventType: mode === "quotation" ? "QUOTATION_DRAFT_OPENED" : "RECEIPT_DRAFT_OPENED",
-    eventLabel: mode === "quotation" ? "Opened quotation print draft" : "Opened receipt conversion draft",
-    eventDetail: `Prepared ${mode === "quotation" ? "quotation" : "receipt"} draft in receipts desk.`,
+    eventType: isQuotationDraft ? "QUOTATION_DRAFT_OPENED" : isProjectDraft ? "PROJECT_DRAFT_OPENED" : "RECEIPT_DRAFT_OPENED",
+    eventLabel: isQuotationDraft
+      ? "Opened quotation print draft"
+      : isProjectDraft
+        ? "Opened project workflow draft"
+        : "Opened receipt conversion draft",
+    eventDetail: `Prepared ${isQuotationDraft ? "quotation" : isProjectDraft ? "project" : "receipt"} draft in receipts desk.`,
     actorUserId: guard.userId,
     actorName: guard.name,
     metadata: {
-      targetDocType: mode === "quotation" ? "QUOTATION" : "RECEIPT",
+      targetDocType: isQuotationDraft ? "QUOTATION" : "RECEIPT",
+      customerType: prefill.customerType,
     },
   }).catch(() => undefined);
 

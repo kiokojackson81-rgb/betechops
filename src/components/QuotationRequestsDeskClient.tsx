@@ -3045,7 +3045,7 @@ export default function QuotationRequestsDeskClient({
 
   async function handleOpenReceiptDraft(
     request: SerializedQuoteRequest,
-    mode: "receipt" | "quotation",
+    mode: "receipt" | "quotation" | "project",
   ) {
     setDraftOpening(`${request.id}:${mode}`);
     setMessage(null);
@@ -4681,6 +4681,15 @@ export default function QuotationRequestsDeskClient({
                             </button>
                             <button
                               type="button"
+                              disabled={!canOpenReceiptDraft || draftOpening === `${request.id}:project`}
+                              onClick={() => void handleOpenReceiptDraft(request, "project")}
+                              className="inline-flex items-center gap-2 rounded-lg border border-fuchsia-400/20 bg-fuchsia-400/10 px-3 py-2 text-sm font-medium text-fuchsia-100 transition hover:border-fuchsia-300/30 hover:bg-fuchsia-400/15 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {draftOpening === `${request.id}:project` ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                              Convert to project workflow
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => handleCopyQuotation(request)}
                               className="inline-flex items-center gap-2 rounded-lg border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-300/30 hover:bg-cyan-400/15"
                             >
@@ -5402,6 +5411,15 @@ export default function QuotationRequestsDeskClient({
                               <div className="mt-3 flex flex-wrap gap-3">
                                 <button
                                   type="button"
+                                  onClick={() => void handleOpenReceiptDraft(request, "project")}
+                                  disabled={!canOpenReceiptDraft || draftOpening === `${request.id}:project`}
+                                  className="inline-flex items-center gap-2 rounded-full border border-fuchsia-400/30 bg-fuchsia-400/10 px-5 py-2 text-sm font-semibold text-fuchsia-100 transition hover:border-fuchsia-300/40 hover:bg-fuchsia-400/20 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  {draftOpening === `${request.id}:project` ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                                  Open full project setup
+                                </button>
+                                <button
+                                  type="button"
                                   onClick={() => void createProjectWorkflow(request)}
                                   disabled={projectSavingId === request.id}
                                   className="inline-flex items-center gap-2 rounded-full bg-cyan-400 px-5 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:opacity-60"
@@ -5586,6 +5604,15 @@ export default function QuotationRequestsDeskClient({
                               </div>
 
                               <div className="flex flex-wrap gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => void handleOpenReceiptDraft(request, "project")}
+                                  disabled={!canOpenReceiptDraft || draftOpening === `${request.id}:project`}
+                                  className="inline-flex items-center gap-2 rounded-full border border-fuchsia-400/30 bg-fuchsia-400/10 px-5 py-2 text-sm font-semibold text-fuchsia-100 transition hover:border-fuchsia-300/40 hover:bg-fuchsia-400/20 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  {draftOpening === `${request.id}:project` ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                                  Open full project setup
+                                </button>
                                 <button
                                   type="button"
                                   onClick={() => void saveProjectWorkflow(request)}
