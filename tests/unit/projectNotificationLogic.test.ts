@@ -1,6 +1,7 @@
 import {
   hasProjectAssignedHandler,
   hasProjectBookingDate,
+  resolveProjectNotificationEvents,
   shouldSendProjectAssigned,
   shouldSendProjectBooked,
 } from "@/services/project-notifications/project-notification.logic";
@@ -80,5 +81,27 @@ describe("project notification logic", () => {
     expect(hasProjectBookingDate({ scheduledDate: "2026-08-02" })).toBe(true);
     expect(hasProjectAssignedHandler({ handlerStaffName: "Tech One" })).toBe(true);
     expect(hasProjectAssignedHandler({})).toBe(false);
+  });
+
+  test("completed save can still send booked and assigned before completed", () => {
+    expect(
+      resolveProjectNotificationEvents({
+        shouldQueueBooked: true,
+        shouldQueueAssigned: true,
+        wasCompleted: false,
+        isCompleted: true,
+      }),
+    ).toEqual(["PROJECT_BOOKED", "PROJECT_ASSIGNED", "PROJECT_COMPLETED"]);
+  });
+
+  test("already-completed project does not resend completion", () => {
+    expect(
+      resolveProjectNotificationEvents({
+        shouldQueueBooked: false,
+        shouldQueueAssigned: true,
+        wasCompleted: true,
+        isCompleted: true,
+      }),
+    ).toEqual(["PROJECT_ASSIGNED"]);
   });
 });

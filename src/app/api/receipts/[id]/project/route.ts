@@ -24,6 +24,7 @@ import { publishProjectNotification } from "@/services/project-notifications/pro
 import {
   hasProjectAssignedHandler,
   hasProjectBookingDate,
+  resolveProjectNotificationEvents,
   shouldSendProjectAssigned,
   shouldSendProjectBooked,
 } from "@/services/project-notifications/project-notification.logic";
@@ -315,62 +316,33 @@ export async function PATCH(req: NextRequest, context: ParamsContext) {
     nextProjectFlow,
     changedFields,
   });
+  const queuedEvents = resolveProjectNotificationEvents({
+    shouldQueueBooked,
+    shouldQueueAssigned,
+    wasCompleted,
+    isCompleted,
+  });
 
   const notificationResults: Array<unknown> = [];
-  if (isCompleted && !wasCompleted) {
+  for (const event of queuedEvents) {
     try {
       notificationResults.push(
         await publishProjectNotification({
           receiptId: id,
-          event: "PROJECT_COMPLETED",
+          event,
           triggeredByUserId: actorId,
-          changedFields,
+          changedFields:
+            event === "PROJECT_ASSIGNED" && changedFields.length === 0
+              ? ["handlerAssignments"]
+              : changedFields,
         }),
       );
     } catch (error) {
       console.error("[PROJECT_NOTIFY] service failed", {
         receiptId: updated.id,
-        eventType: "PROJECT_COMPLETED",
+        eventType: event,
         error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : error,
       });
-    }
-  } else {
-    if (shouldQueueBooked) {
-      try {
-        notificationResults.push(
-          await publishProjectNotification({
-            receiptId: id,
-            event: "PROJECT_BOOKED",
-            triggeredByUserId: actorId,
-            changedFields,
-          }),
-        );
-      } catch (error) {
-        console.error("[PROJECT_NOTIFY] service failed", {
-          receiptId: updated.id,
-          eventType: "PROJECT_BOOKED",
-          error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : error,
-        });
-      }
-    }
-
-    if (shouldQueueAssigned) {
-      try {
-        notificationResults.push(
-          await publishProjectNotification({
-            receiptId: id,
-            event: "PROJECT_ASSIGNED",
-            triggeredByUserId: actorId,
-            changedFields: changedFields.length ? changedFields : ["handlerAssignments"],
-          }),
-        );
-      } catch (error) {
-        console.error("[PROJECT_NOTIFY] service failed", {
-          receiptId: updated.id,
-          eventType: "PROJECT_ASSIGNED",
-          error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : error,
-        });
-      }
     }
   }
 

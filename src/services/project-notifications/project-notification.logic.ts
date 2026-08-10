@@ -81,3 +81,26 @@ export function shouldSendProjectAssigned(args: {
   if (!hadHandlerBefore) return true;
   return hasProjectAssignmentChange(args.changedFields);
 }
+
+export function resolveProjectNotificationEvents(args: {
+  shouldQueueBooked: boolean;
+  shouldQueueAssigned: boolean;
+  wasCompleted: boolean;
+  isCompleted: boolean;
+}) {
+  const events: Array<"PROJECT_BOOKED" | "PROJECT_ASSIGNED" | "PROJECT_COMPLETED"> = [];
+
+  if (args.shouldQueueBooked) {
+    events.push("PROJECT_BOOKED");
+  }
+
+  if (args.shouldQueueAssigned) {
+    events.push("PROJECT_ASSIGNED");
+  }
+
+  if (args.isCompleted && !args.wasCompleted) {
+    events.push("PROJECT_COMPLETED");
+  }
+
+  return events;
+}
