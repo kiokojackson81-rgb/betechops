@@ -6,9 +6,19 @@ function bookingSummary(context: ProjectNotificationContext) {
     projectValue: formatKenyaCurrency(context.projectValue),
     amountPaid: formatKenyaCurrency(context.amountPaid),
     balance: formatKenyaCurrency(context.balance),
+    depositPaid: formatKenyaCurrency(context.depositPaid),
+    depositRequired: formatKenyaCurrency(context.depositRequired),
+    balanceAfterInstallation: formatKenyaCurrency(context.balanceAfterInstallation),
     installationDate: formatKenyaDate(context.installationDate) ?? "To be confirmed",
     completionDate: formatKenyaDate(context.completionDate) ?? "Today",
   };
+}
+
+function projectPaymentPosition(context: ProjectNotificationContext) {
+  if (context.paymentTerm === "DEPOSIT_AND_BALANCE") return "Deposit and balance";
+  if (context.paymentTerm === "FULL_AFTER_INSTALLATION") return "Pay after installation";
+  if (context.paymentTerm === "FULL_BEFORE_INSTALLATION") return "Full payment";
+  return "Project payment";
 }
 
 export function buildProjectBookingCustomerWhatsApp(context: ProjectNotificationContext) {
@@ -234,6 +244,54 @@ export function buildProjectCompletedCustomerEmail(context: ProjectNotificationC
       <p>Please find your receipt attached. You can also view or download it using the link below:</p>
       <p><a href="${context.receiptLink}">${context.receiptLink}</a></p>
       <p>Thank you for choosing Betech Solar Solutions. We appreciate the opportunity to serve you and remain available for after-sales support.</p>
+    `,
+  };
+}
+
+export function buildProjectAssignedCustomerSms(context: ProjectNotificationContext) {
+  const summary = bookingSummary(context);
+  const technicianName = context.assignedHandlerName ?? "Technician";
+  const technicianPhone = context.assignedHandlerPhone ?? "Not available";
+
+  if (context.paymentTerm === "DEPOSIT_AND_BALANCE") {
+    return `Hello ${context.customerName}, your Betech Solar project ${context.projectNumber} has been assigned to Technician ${technicianName} (${technicianPhone}). Deposit paid: ${summary.depositPaid}. Balance after installation: ${summary.balanceAfterInstallation}. Installation: ${summary.installationDate}. View your project receipt and payment options: ${context.receiptLink}. - Betech Solar Solutions`;
+  }
+
+  if (context.paymentTerm === "FULL_AFTER_INSTALLATION") {
+    return `Hello ${context.customerName}, your Betech Solar project ${context.projectNumber} has been assigned to Technician ${technicianName} (${technicianPhone}). Amount paid: ${summary.amountPaid}. Balance after installation: ${summary.balanceAfterInstallation}. Installation: ${summary.installationDate}. View your project receipt and payment options: ${context.receiptLink}. - Betech Solar Solutions`;
+  }
+
+  return `Hello ${context.customerName}, your Betech Solar project ${context.projectNumber} has been assigned to Technician ${technicianName} (${technicianPhone}). Amount paid: ${summary.amountPaid}. Balance: ${summary.balance}. Installation: ${summary.installationDate}. View your project receipt and payment options: ${context.receiptLink}. - Betech Solar Solutions`;
+}
+
+export function buildProjectAssignedCustomerEmail(context: ProjectNotificationContext) {
+  const summary = bookingSummary(context);
+  const technicianName = context.assignedHandlerName ?? "Technician";
+  const technicianPhone = context.assignedHandlerPhone ?? "Not available";
+
+  return {
+    subject: `Project Assignment and Payment Details - ${context.projectNumber}`,
+    title: "Project assignment and payment details",
+    intro: `Hello ${context.customerName},`,
+    bodyHtml: `
+      <p>Your Betech Solar project has been assigned to the following technician:</p>
+      <p><strong>Technician:</strong> ${technicianName}<br />
+      <strong>Phone Number:</strong> ${technicianPhone}</p>
+      <p><strong>Project Number:</strong> ${context.projectNumber}<br />
+      <strong>Installation Date:</strong> ${summary.installationDate}<br />
+      <strong>Project Address:</strong> ${context.installationAddress ?? "Not provided"}<br />
+      <strong>Project Value:</strong> ${summary.projectValue}</p>
+      <p><strong>Payment Position:</strong> ${projectPaymentPosition(context)}<br />
+      <strong>Amount Paid:</strong> ${summary.amountPaid}<br />
+      <strong>Balance Remaining:</strong> ${summary.balance}<br />
+      <strong>Deposit Paid:</strong> ${summary.depositPaid}<br />
+      <strong>Required Deposit:</strong> ${summary.depositRequired}<br />
+      <strong>Payment Status:</strong> ${context.paymentStatus ?? "Pending"}</p>
+      <p>Your project receipt contains the approved payment options, including M-Pesa and bank transfer details.</p>
+      <p>View your receipt and payment details here:</p>
+      <p><a href="${context.receiptLink}">${context.receiptLink}</a></p>
+      <p>The assigned technician may contact you before installation to confirm timing and any site preparation required.</p>
+      <p>Thank you for choosing Betech Solar Solutions.</p>
     `,
   };
 }

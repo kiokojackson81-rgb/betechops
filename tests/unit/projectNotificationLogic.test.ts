@@ -56,6 +56,26 @@ describe("project notification logic", () => {
     ).toBe(true);
   });
 
+  test("same technician saved again does not retrigger assignment notifications", () => {
+    expect(
+      shouldSendProjectAssigned({
+        previousProjectFlow: { scheduledDate: "2026-08-02", handlerStaffId: "u1" },
+        nextProjectFlow: { scheduledDate: "2026-08-02", handlerStaffId: "u1" },
+        changedFields: [],
+      }),
+    ).toBe(false);
+  });
+
+  test("technician reassignment triggers assignment notifications", () => {
+    expect(
+      shouldSendProjectAssigned({
+        previousProjectFlow: { scheduledDate: "2026-08-02", handlerStaffId: "u1" },
+        nextProjectFlow: { scheduledDate: "2026-08-02", handlerStaffId: "u2" },
+        changedFields: ["handlerAssignments"],
+      }),
+    ).toBe(true);
+  });
+
   test("helper detects booking and assignment states", () => {
     expect(hasProjectBookingDate({ scheduledDate: "2026-08-02" })).toBe(true);
     expect(hasProjectAssignedHandler({ handlerStaffName: "Tech One" })).toBe(true);

@@ -73,6 +73,11 @@ export type ProjectNotificationContext = {
   projectValue: number;
   amountPaid: number;
   balance: number;
+  paymentTerm: string | null;
+  paymentStatus: string | null;
+  depositRequired: number;
+  depositPaid: number;
+  balanceAfterInstallation: number;
   receiptLink: string;
   receiptPdfLink: string;
   reviewLink: string | null;

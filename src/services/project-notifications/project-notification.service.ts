@@ -16,6 +16,10 @@ import {
   normalizeProjectPhone,
 } from "./project-notification.formatters";
 import { hasProjectAssignmentChange, hasProjectBookingDate } from "./project-notification.logic";
+import {
+  buildProjectAssignedCustomerEmail,
+  buildProjectAssignedCustomerSms,
+} from "./project-notification.templates";
 import type {
   ProjectNotificationContext,
   ProjectNotificationDraft,
@@ -47,6 +51,7 @@ const PROJECT_TRIGGER_TAGS = {
   customerCompleted: "project_completed_customer",
   adminBooked: "project_installation_booked_admin",
   handlerAssigned: "project_assigned_handler",
+  customerTechnicianAssigned: "project_technician_assigned_customer_sent",
 } as const;
 
 function getProjectNumber(receipt: {
@@ -191,6 +196,14 @@ async function loadProjectNotificationContext(
   const projectValue = Number(receipt.order?.totalAmount ?? projectFlow.projectValue ?? 0) || 0;
   const amountPaid = Number(projectFlow.totalPaidAmount ?? receipt.order?.paidAmount ?? 0) || 0;
   const balance = Number(projectFlow.remainingAmount ?? Math.max(0, projectValue - amountPaid)) || 0;
+  const paymentTerm = projectFlow.paymentTerm ?? null;
+  const paymentStatus = projectFlow.paymentStatus ?? null;
+  const depositRequired = Number(projectFlow.depositRequiredAmount ?? 0) || 0;
+  const depositPaid = Number(projectFlow.depositPaidAmount ?? 0) || 0;
+  const balanceAfterInstallation =
+    paymentTerm === "FULL_AFTER_INSTALLATION" || paymentTerm === "DEPOSIT_AND_BALANCE"
+      ? balance
+      : balance;
   const receiptLink = await getPublicReceiptUrl(receipt.id);
   const reviewLink = input.event === "PROJECT_COMPLETED" ? await ensureProjectReviewLink(receipt.id) : null;
 
@@ -211,6 +224,11 @@ async function loadProjectNotificationContext(
     projectValue,
     amountPaid,
     balance,
+    paymentTerm,
+    paymentStatus,
+    depositRequired,
+    depositPaid,
+    balanceAfterInstallation,
     receiptLink,
     receiptPdfLink: `${getSiteUrl().replace(/\/$/, "")}/api/receipts/${receipt.id}/pdf?download=1`,
     reviewLink,
@@ -297,6 +315,61 @@ function createDrafts(context: ProjectNotificationContext): ProjectNotificationD
   }
 
   if (context.event === "PROJECT_ASSIGNED") {
+    if (context.customerPhone) {
+      pushDraft(
+        "WHATSAPP",
+        "CUSTOMER",
+        "project_technician_assigned_customer",
+        context.customerName,
+        context.customerPhone,
+        null,
+      );
+      pushDraft(
+        "SMS",
+        "CUSTOMER",
+        "project_technician_assigned_customer_sms",
+        context.customerName,
+        context.customerPhone,
+        null,
+      );
+    } else {
+      pushDraft(
+        "WHATSAPP",
+        "CUSTOMER",
+        "project_technician_assigned_customer",
+        context.customerName,
+        null,
+        "Missing customer phone number",
+      );
+      pushDraft(
+        "SMS",
+        "CUSTOMER",
+        "project_technician_assigned_customer_sms",
+        context.customerName,
+        null,
+        "Missing customer phone number",
+      );
+    }
+
+    if (isValidEmailAddress(context.customerEmail)) {
+      pushDraft(
+        "EMAIL",
+        "CUSTOMER",
+        "project_technician_assigned_customer_email",
+        context.customerName,
+        context.customerEmail,
+      );
+    } else {
+      pushDraft(
+        "EMAIL",
+        "CUSTOMER",
+        "project_technician_assigned_customer_email",
+        context.customerName,
+        context.customerEmail,
+        "Missing or invalid customer email",
+      );
+    }
+
     for (const handler of context.assignedHandlers) {
       pushDraft(
         "WHATSAPP",
@@ -581,12 +654,13 @@ function getExpectedProjectFlow(templateKey: string) {
   if (templateKey === "project_installation_booked_customer") return "Project Installation Booked - Customer";
   if (templateKey === "project_completed_customer") return "project_completed_customer";
   if (templateKey === "project_installation_booked_admin") return "Project Installation Booked - Admin";
+  if (templateKey === "project_technician_assigned_customer") return "Project Technician Assigned - Customer";
   if (templateKey === "project_assigned_handler") return "project_assigned_handler";
   return templateKey;
 }
 
 function getProjectWhatsAppAccountId(templateKey: string) {
-  return templateKey === "project_installation_booked_customer" || templateKey === "project_completed_customer"
+  return templateKey === "project_installation_booked_customer" || templateKey === "project_completed_customer" || templateKey === "project_technician_assigned_customer"
     ? CUSTOMER_CHATRACE_ACCOUNT_ID
     : INTERNAL_CHATRACE_ACCOUNT_ID;
 }
@@ -669,6 +743,33 @@ async function processDraft(
                 project_receipt_link: context.receiptLink,
               },
             })
+          : draft.templateKey === "project_technician_assigned_customer"
+            ? await pushReceiptToChatrace({
+                accountId: CUSTOMER_CHATRACE_ACCOUNT_ID,
+                phoneE164: draft.recipientAddress || "",
+                customerName: context.customerName,
+                receiptNumber: context.projectNumber,
+                amount: formatKenyaNumber(context.projectValue),
+                currency: "KES",
+                receiptLink: context.receiptLink,
+                receiptId: context.receiptId,
+                tagName: PROJECT_TRIGGER_TAGS.customerTechnicianAssigned,
+                skipDefaultTags: true,
+                forceTriggerTagReapply: true,
+                debugLabel: "PROJECT_TECHNICIAN_CUSTOMER_WHATSAPP",
+                extraFields: {
+                  customer_name: context.customerName,
+                  project_assigned_handler_name: context.assignedHandlerName || "Technician",
+                  project_assigned_handler_phone: context.assignedHandlerPhone || "Not available",
+                  project_number: context.projectNumber,
+                  project_installation_date: formatKenyaDate(context.installationDate) || "",
+                  project_installation_address: context.installationAddress || "Not provided",
+                  project_value: formatKenyaNumber(context.projectValue),
+                  project_deposit_paid: formatKenyaNumber(context.depositPaid),
+                  project_balance: formatKenyaNumber(context.balanceAfterInstallation),
+                  project_receipt_link: context.receiptLink,
+                },
+              })
           : draft.templateKey === "project_installation_booked_admin"
             ? await pushReceiptToChatrace({
                 accountId: INTERNAL_CHATRACE_ACCOUNT_ID,
@@ -757,6 +858,8 @@ async function processDraft(
         tagName:
           draft.templateKey === "project_installation_booked_customer"
             ? PROJECT_TRIGGER_TAGS.customerBooked
+            : draft.templateKey === "project_technician_assigned_customer"
+              ? PROJECT_TRIGGER_TAGS.customerTechnicianAssigned
             : draft.templateKey === "project_installation_booked_admin"
               ? PROJECT_TRIGGER_TAGS.adminBooked
               : draft.templateKey === "project_assigned_handler"
@@ -806,6 +909,8 @@ async function processDraft(
         triggerTag:
           draft.templateKey === "project_installation_booked_customer"
             ? PROJECT_TRIGGER_TAGS.customerBooked
+            : draft.templateKey === "project_technician_assigned_customer"
+              ? PROJECT_TRIGGER_TAGS.customerTechnicianAssigned
             : draft.templateKey === "project_installation_booked_admin"
               ? PROJECT_TRIGGER_TAGS.adminBooked
               : draft.templateKey === "project_assigned_handler"
@@ -818,6 +923,8 @@ async function processDraft(
       const body =
         draft.templateKey === "project_booking_customer_sms"
           ? `Hi ${context.customerName}. Your installation has been booked. Project No: ${context.projectNumber}. Installation Date: ${formatKenyaDate(context.installationDate) || ""}. Paid: KSh ${formatKenyaNumber(context.amountPaid)}. Balance: KSh ${formatKenyaNumber(context.balance)}. Receipt: ${context.receiptLink}. - Betech Solar Solutions`
+          : draft.templateKey === "project_technician_assigned_customer_sms"
+            ? buildProjectAssignedCustomerSms(context)
           : `Hi ${context.customerName}. Project No. ${context.projectNumber} has been completed successfully. Total Paid: KSh ${formatKenyaNumber(context.amountPaid)}. Balance: KSh ${formatKenyaNumber(context.balance)}. Receipt: ${context.receiptLink}. Thank you for choosing Betech Solar Solutions.`;
       const response = (await sendTransactionalSms(draft.recipientAddress || "", body)) as {
         SMSMessageData?: { Recipients?: Array<{ messageId?: string }> };
@@ -835,6 +942,8 @@ async function processDraft(
       const attachmentName =
         draft.templateKey === "project_booking_customer_email"
           ? `Betech-${context.projectNumber}-Receipt.pdf`
+          : draft.templateKey === "project_technician_assigned_customer_email"
+            ? `Betech-${context.projectNumber}-Project-Receipt.pdf`
           : `Betech-${context.projectNumber}-Final-Receipt.pdf`;
       const attachment = await buildReceiptAttachment(context.receiptId, attachmentName);
       console.info("[PROJECT_NOTIFY] email eligibility", {
@@ -844,33 +953,40 @@ async function processDraft(
         receiptPdfAvailable: Boolean(attachment),
         publicReceiptLinkAvailable: Boolean(context.receiptLink),
       });
-      const response = await sendGeneralCustomerNotificationEmail({
-        to: draft.recipientAddress || "",
-        subject:
-          draft.templateKey === "project_booking_customer_email"
-            ? `Installation Booking Confirmation - Project No. ${context.projectNumber}`
-            : `Project Completion - ${context.projectNumber}`,
-        title:
-          draft.templateKey === "project_booking_customer_email"
-            ? "Installation booking confirmation"
-            : "Project completion",
-        intro: `Dear ${context.customerName},`,
-        bodyHtml:
-          draft.templateKey === "project_booking_customer_email"
-            ? `<p>We are pleased to confirm that your installation has been successfully booked.</p>
+      const emailTemplate =
+        draft.templateKey === "project_booking_customer_email"
+          ? {
+              subject: `Installation Booking Confirmation - Project No. ${context.projectNumber}`,
+              title: "Installation booking confirmation",
+              intro: `Dear ${context.customerName},`,
+              bodyHtml: `<p>We are pleased to confirm that your installation has been successfully booked.</p>
                <p><strong>Project Number:</strong> ${context.projectNumber}<br />
                <strong>Installation Date:</strong> ${formatKenyaDate(context.installationDate) || ""}<br />
                <strong>Amount Paid So Far:</strong> KSh ${formatKenyaNumber(context.amountPaid)}<br />
                <strong>Outstanding Balance:</strong> KSh ${formatKenyaNumber(context.balance)}</p>
                <p>Please find your project receipt attached. You can also view or download it using the link below:</p>
-               <p><a href="${context.receiptLink}">${context.receiptLink}</a></p>`
-            : `<p>We are pleased to confirm that your installation under Project No. ${context.projectNumber} has been successfully completed.</p>
+               <p><a href="${context.receiptLink}">${context.receiptLink}</a></p>`,
+            }
+          : draft.templateKey === "project_technician_assigned_customer_email"
+            ? buildProjectAssignedCustomerEmail(context)
+            : {
+                subject: `Project Completion - ${context.projectNumber}`,
+                title: "Project completion",
+                intro: `Dear ${context.customerName},`,
+                bodyHtml: `<p>We are pleased to confirm that your installation under Project No. ${context.projectNumber} has been successfully completed.</p>
                <p><strong>Project Value:</strong> KSh ${formatKenyaNumber(context.projectValue)}<br />
                <strong>Total Paid:</strong> KSh ${formatKenyaNumber(context.amountPaid)}<br />
                <strong>Outstanding Balance:</strong> KSh ${formatKenyaNumber(context.balance)}</p>
                <p>Please find your receipt attached. You can also view or download it using the link below:</p>
                <p><a href="${context.receiptLink}">${context.receiptLink}</a></p>
                ${context.reviewLink ? `<p>Share your review here: <a href="${context.reviewLink}">${context.reviewLink}</a></p>` : ""}`,
+              };
+      const response = await sendGeneralCustomerNotificationEmail({
+        to: draft.recipientAddress || "",
+        subject: emailTemplate.subject,
+        title: emailTemplate.title,
+        intro: emailTemplate.intro,
+        bodyHtml: emailTemplate.bodyHtml,
         ctaLabel: "View receipt",
         ctaUrl: context.receiptLink,
         outro: "Kind regards,\nBetech Solar Solutions",
