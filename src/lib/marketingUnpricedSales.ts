@@ -20,6 +20,7 @@ export type UnpricedSale = {
   sellingPrice: number;
   paymentMethod: "MPESA" | "CASH" | null;
   receiptNumber: string;
+  receiptId?: string | null;
   attendantName: string;
   attendantEmail: string | null;
   receiptTotal?: number;
@@ -130,26 +131,11 @@ export async function getUnpricedDailySalesForRange({
     }),
   ]);
 
-  const marketingSales: UnpricedSale[] = dailyReportSales.map((sale) => ({
-    id: sale.id,
-    source: "daily-sale",
-    saleDate: (sale.dailyReport?.date ?? sale.createdAt).toISOString(),
-    day: sale.dailyReport?.day ?? null,
-    productName: sale.productName,
-    sellingPrice: Number(sale.price),
-    paymentMethod: (sale.paymentMethod as "MPESA" | "CASH" | null) ?? null,
-    receiptNumber: sale.receiptNumber ?? "",
-    attendantName: sale.dailyReport?.submittedBy ?? sale.dailyReport?.user?.name ?? "Unknown",
-    attendantEmail: sale.dailyReport?.user?.email ?? null,
-    receiptTotal: Number(sale.price),
-    itemsPending: 1,
-    itemsTotal: 1,
-  }));
-
   const receiptNumberCandidates = Array.from(
     new Set(
-      supportReceipts.flatMap((receipt) => {
-        const raw = typeof receipt.receiptNumber === "string" ? receipt.receiptNumber.trim() : "";
+      [...dailyReportSales.map((sale) => sale.receiptNumber ?? ""), ...supportReceipts.map((receipt) => receipt.receiptNumber ?? "")]
+        .flatMap((value) => {
+        const raw = typeof value === "string" ? value.trim() : "";
         const canonical = canonicalReceiptNumber(raw) ?? "";
         return [raw, canonical].filter((value): value is string => Boolean(value));
       }),
@@ -189,6 +175,7 @@ export async function getUnpricedDailySalesForRange({
             ],
           },
           select: {
+            id: true,
             receiptNumber: true,
             data: true,
             order: { select: { orderNumber: true } },
@@ -198,6 +185,7 @@ export async function getUnpricedDailySalesForRange({
 
   const orderItemsByReceiptNumber = new Map<string, LinkedReceiptContext>();
   const payloadItemsByReceiptNumber = new Map<string, LinkedReceiptPayloadItem[]>();
+  const receiptIdByReceiptNumber = new Map<string, string>();
 
   const registerPayloadItems = (
     key: string | null | undefined,
@@ -214,7 +202,22 @@ export async function getUnpricedDailySalesForRange({
     }
   };
 
+  const registerReceiptId = (key: string | null | undefined, receiptId: string | null | undefined) => {
+    const normalizedKey = String(key ?? "").trim();
+    const normalizedReceiptId = String(receiptId ?? "").trim();
+    if (!normalizedKey || !normalizedReceiptId) return;
+    const canonical = canonicalReceiptNumber(normalizedKey) ?? "";
+    if (!receiptIdByReceiptNumber.has(normalizedKey)) {
+      receiptIdByReceiptNumber.set(normalizedKey, normalizedReceiptId);
+    }
+    if (canonical && !receiptIdByReceiptNumber.has(canonical)) {
+      receiptIdByReceiptNumber.set(canonical, normalizedReceiptId);
+    }
+  };
+
   for (const receipt of linkedReceipts) {
+    registerReceiptId(receipt.receiptNumber, receipt.id);
+    registerReceiptId(receipt.order?.orderNumber, receipt.id);
     const projectFlow = readReceiptProjectFlow(
       receipt?.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
         ? (receipt.data as Record<string, unknown>).projectFlow
@@ -272,6 +275,30 @@ export async function getUnpricedDailySalesForRange({
     if (raw) orderItemsByReceiptNumber.set(raw, context);
     if (canonical) orderItemsByReceiptNumber.set(canonical, context);
   }
+
+  const marketingSales: UnpricedSale[] = dailyReportSales.map((sale) => {
+    const rawReceiptNumber = sale.receiptNumber ?? "";
+    const canonicalReceipt = canonicalReceiptNumber(rawReceiptNumber) ?? "";
+    return {
+      id: sale.id,
+      source: "daily-sale",
+      saleDate: (sale.dailyReport?.date ?? sale.createdAt).toISOString(),
+      day: sale.dailyReport?.day ?? null,
+      productName: sale.productName,
+      sellingPrice: Number(sale.price),
+      paymentMethod: (sale.paymentMethod as "MPESA" | "CASH" | null) ?? null,
+      receiptNumber: rawReceiptNumber,
+      receiptId:
+        receiptIdByReceiptNumber.get(rawReceiptNumber.trim()) ??
+        receiptIdByReceiptNumber.get(canonicalReceipt) ??
+        null,
+      attendantName: sale.dailyReport?.submittedBy ?? sale.dailyReport?.user?.name ?? "Unknown",
+      attendantEmail: sale.dailyReport?.user?.email ?? null,
+      receiptTotal: Number(sale.price),
+      itemsPending: 1,
+      itemsTotal: 1,
+    };
+  });
 
   const supportSales: UnpricedSale[] = supportReceipts
     .map((receipt) => {
@@ -354,6 +381,7 @@ export async function getUnpricedDailySalesForRange({
         sellingPrice: Number(receipt.sellingTotal ?? 0),
         paymentMethod: (receipt.paymentMethod as "MPESA" | "CASH" | null) ?? null,
         receiptNumber,
+        receiptId: linkedReceipt?.id ?? null,
         attendantName: entry?.submittedBy?.name ?? "Support attendant",
         attendantEmail: entry?.submittedBy?.email ?? null,
         receiptTotal: Number(receipt.sellingTotal ?? 0),

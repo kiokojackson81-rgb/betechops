@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Card from "@/app/_components/Card";
 import Input from "@/app/_components/Input";
 import Button from "@/app/_components/Button";
+import Link from "next/link";
 import { showToast } from "@/lib/ui/toast";
 import type { UnpricedSale } from "@/lib/marketingUnpricedSales";
 import {
@@ -524,6 +525,16 @@ export default function AdminPricingPanel() {
                   <tr key={key} className="border-t border-slate-800 bg-slate-950/30">
                     <td className="px-3 py-3 align-top">
                       <div className="font-semibold text-white">{sale.productName}</div>
+                      {sale.receiptId ? (
+                        <Link
+                          href={`/receipts/print/${encodeURIComponent(sale.receiptId)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-1 inline-flex text-xs font-medium text-cyan-300 underline underline-offset-4 transition hover:text-cyan-200"
+                        >
+                          Open receipt
+                        </Link>
+                      ) : null}
                       <div className="text-xs text-slate-400">{sourceLabels[sale.source]}</div>
                       {sale.day ? (
                         <div className="text-xs text-slate-500">Day: {sale.day}</div>
