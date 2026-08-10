@@ -790,6 +790,71 @@ function buildCreateDraftFromRequest(request: SerializedQuoteRequest): CreateQuo
   };
 }
 
+function buildCreateDraftFromExistingQuotation(request: SerializedQuoteRequest): CreateQuotationDraft {
+  const projectType = request.projectType || "SOLAR_HOME_SYSTEM";
+  const defaults = createDefaultQuotationDraft();
+  const storedProposal = parseStoredQuoteProposal(request.quotationData);
+  const feeState = splitQuoteItemsAndFees(storedProposal.items);
+  const proposalDefaults = applyProposalDefaults(projectType, {
+    projectOverview: storedProposal.proposalSections.projectOverview || undefined,
+    whatPriceIncludes: storedProposal.proposalSections.whatPriceIncludes || undefined,
+    whatItCanPower: storedProposal.proposalSections.whatItCanPower || undefined,
+    deliveryTimeline: storedProposal.proposalSections.deliveryTimeline || undefined,
+    installationTimeline: storedProposal.proposalSections.installationTimeline || undefined,
+    afterSalesSupport: storedProposal.proposalSections.afterSalesSupport || undefined,
+    importantNotes: storedProposal.proposalSections.importantNotes || undefined,
+    scopeExclusions: storedProposal.proposalSections.scopeExclusions || undefined,
+    similarProjects: storedProposal.proposalSections.similarProjects || undefined,
+    termsAndConditions: storedProposal.proposalSections.termsAndConditions || undefined,
+    preparedByDetails: storedProposal.proposalSections.preparedByDetails || undefined,
+    companyLegalDetails: storedProposal.proposalSections.companyLegalDetails || undefined,
+    projectReferenceLinks: storedProposal.proposalSections.projectReferenceLinks || undefined,
+    visibility: storedProposal.proposalVisibility,
+  });
+
+  return {
+    ...defaults,
+    projectType,
+    preferredContactMethod: request.preferredContactMethod || defaults.preferredContactMethod,
+    bestTimeToContact: request.bestTimeToContact || defaults.bestTimeToContact,
+    urgency: request.urgency || defaults.urgency,
+    installationStatus: request.installationStatus || defaults.installationStatus,
+    preferredProducts:
+      request.preferredProducts || summarizeSelectedProducts(feeState.quoteItems),
+    notes: request.notes || "",
+    quoteTitle: request.quoteTitle || `${request.quoteRef} Copy`,
+    quoteMessage: request.quoteMessage || request.loadDescription || request.notes || "",
+    templateId: request.templateId || "",
+    quoteItems: feeState.quoteItems,
+    discountAmount:
+      typeof storedProposal.discountAmount === "number" && storedProposal.discountAmount > 0
+        ? String(storedProposal.discountAmount)
+        : "",
+    warrantyMode: storedProposal.warrantyMode || defaults.warrantyMode,
+    fullSystemWarranty: storedProposal.fullSystemWarranty || "",
+    customWarranty: storedProposal.customWarranty || "",
+    warrantyGeneralNotes:
+      storedProposal.warrantyGeneralNotes || defaults.warrantyGeneralNotes,
+    aiWarrantySummary: storedProposal.aiWarrantySummary || "",
+    ...proposalDefaults,
+    paymentMethod: storedProposal.paymentMethod || "",
+    paymentTerms: storedProposal.paymentTerms || defaults.paymentTerms,
+    deliveryMode: storedProposal.deliveryMode || feeState.deliveryMode,
+    installationMode: storedProposal.installationMode || feeState.installationMode,
+    deliveryFee: feeState.deliveryFee,
+    installationFee: feeState.installationFee,
+    depositAmount:
+      typeof storedProposal.depositAmount === "number" ? String(storedProposal.depositAmount) : "",
+    balanceAmount:
+      typeof storedProposal.balanceAmount === "number" ? String(storedProposal.balanceAmount) : "",
+    followUpNotes:
+      typeof request.responseMetadata?.followUpNotes === "string"
+        ? request.responseMetadata.followUpNotes
+        : "",
+    assignedAttendantId: request.assignedAttendant?.id || "",
+  };
+}
+
 function dedupeItemNames(items: Array<{ itemName: string }>) {
   return Array.from(
     new Set(
@@ -1598,6 +1663,7 @@ export default function QuotationRequestsDeskClient({
         }
         if (!query.trim()) return true;
         const value = query.trim().toLowerCase();
+        const storedProposal = parseStoredQuoteProposal(request.quotationData);
         return [
           request.quoteRef,
           request.customerName,
@@ -1606,6 +1672,11 @@ export default function QuotationRequestsDeskClient({
           request.customerLocation || "",
           request.town || "",
           request.county || "",
+          request.quoteTitle || "",
+          request.templateName || "",
+          request.preferredProducts || "",
+          request.quoteMessage || "",
+          ...storedProposal.items.flatMap((item) => [item.itemName, item.description || ""]),
         ].some((entry) => entry.toLowerCase().includes(value));
       }).sort(
         (left, right) =>
@@ -2375,6 +2446,24 @@ export default function QuotationRequestsDeskClient({
     }
   }
 
+  function handleCopyQuotation(request: SerializedQuoteRequest) {
+    const nextDraft = buildCreateDraftFromExistingQuotation(request);
+    setShowCreatePanel(true);
+    setShowTemplatesPanel(false);
+    setShowCreateMoreOptions(false);
+    setEditingTemplateId(null);
+    setTemplateBuilderMode(false);
+    setTemplatePasteText("");
+    setCreateMode("manual");
+    setCreateDraft(nextDraft);
+    setCreateItemAccordion(nextDraft.quoteItems.length ? nextDraft.quoteItems.map(() => true) : [true]);
+    setCreateCatalogQuery("");
+    setCreateCatalogResults([]);
+    setMessage(
+      `Copied quotation ${request.quoteRef}. Update customer details, quantities, pricing, then save the new quotation.`,
+    );
+  }
+
   function openTemplateBuilder() {
     const nextDraft = createDefaultQuotationDraft();
     setShowCreatePanel(true);
@@ -2946,7 +3035,7 @@ export default function QuotationRequestsDeskClient({
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search customer, phone, quote ref..."
+              placeholder="Search customer, phone, quote title, battery, product..."
               className="min-w-[260px] rounded-full border border-white/10 bg-slate-950/70 px-4 py-2 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
             />
             <button
@@ -4387,6 +4476,14 @@ export default function QuotationRequestsDeskClient({
                             {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                             {expanded ? "Close" : "View quotation"}
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyQuotation(request)}
+                            className="inline-flex items-center gap-2 rounded-full border border-cyan-400/25 bg-cyan-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-300/40 hover:bg-cyan-400/15"
+                          >
+                            <FilePenLine className="h-4 w-4" />
+                            Copy quotation
+                          </button>
                           {allowDelete ? (
                             <button
                               type="button"
@@ -4518,6 +4615,14 @@ export default function QuotationRequestsDeskClient({
                             >
                               {draftOpening === `${request.id}:receipt` ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                               Convert to receipt
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyQuotation(request)}
+                              className="inline-flex items-center gap-2 rounded-lg border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-300/30 hover:bg-cyan-400/15"
+                            >
+                              <FilePenLine className="h-4 w-4" />
+                              Copy quotation
                             </button>
                           </div>
                           {!canOpenReceiptDraft ? (
