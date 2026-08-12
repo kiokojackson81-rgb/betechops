@@ -1,3 +1,40 @@
+import * as QRCode from "qrcode";
+import { TERMS_URL } from "@/lib/publicLinks";
+
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function createQrSvgMarkup(text: string, size = 152) {
+  const qr = QRCode.create(text, { errorCorrectionLevel: "M" });
+  const cells = qr.modules.size;
+  const margin = 2;
+  const cellSize = Math.max(2, Math.floor(size / (cells + margin * 2)));
+  const dimension = (cells + margin * 2) * cellSize;
+  const rects: string[] = [];
+
+  for (let row = 0; row < cells; row += 1) {
+    for (let col = 0; col < cells; col += 1) {
+      if (!qr.modules.get(row, col)) continue;
+      rects.push(
+        `<rect x="${(col + margin) * cellSize}" y="${(row + margin) * cellSize}" width="${cellSize}" height="${cellSize}" fill="#111111" />`
+      );
+    }
+  }
+
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${dimension}" height="${dimension}" viewBox="0 0 ${dimension} ${dimension}" role="img" aria-label="QR code linking to the Betech Solar terms and conditions page">
+      <rect width="${dimension}" height="${dimension}" fill="#ffffff" />
+      ${rects.join("")}
+    </svg>
+  `;
+}
+
 export default function renderReceiptTemplate(
   snapshot: any,
   opts: { hideStamp?: boolean; hideItemWarrantySummary?: boolean } = {}
@@ -61,6 +98,15 @@ export default function renderReceiptTemplate(
   const phoneNumber = snapshot.phone || snapshot.customerPhone || order?.customerPhone || '';
   const allowMarketingFooter = (items.length || 0) <= 5;
   const isCompactReceipt = (items.length || 0) <= 5 && !notes && !itemWarrantyEntries;
+  const receiptNumber = order.orderNumber || snapshot.serial || snapshot.serialNumber || "";
+  const receiptDateText = new Date(snapshot.generatedAt || Date.now()).toLocaleString();
+  const companyWebsite = "www.betech.co.ke";
+  const companyWebsiteUrl = "https://www.betech.co.ke";
+  const companyEmail = "info@betech.co.ke";
+  const companyPhonePrimary = "0722 151 083";
+  const companyPhoneSecondary = "0703 241 917";
+  const companyLocation = "Pramukh Plaza, 3rd Floor, Shop No. 3";
+  const termsQrSvg = createQrSvgMarkup(TERMS_URL);
 
   const toNumberOrNull = (value: unknown): number | null => {
     if (value === null || value === undefined) return null;
@@ -188,6 +234,12 @@ export default function renderReceiptTemplate(
     toNumberOrNull(snapshot.balance),
     totalValue
   );
+  const projectWarrantyBadge = escapeHtml(
+    items.find((it: any) => it?.warranty && String(it.warranty).trim())?.warranty ||
+      snapshot.warrantyText ||
+      "5 Years"
+  );
+  const projectPaymentStatusLabel = formatProjectPaymentStatus(projectFlow?.paymentStatus);
   const projectPaymentSummaryHtml =
     projectFlow?.isProject
       ? `
@@ -226,6 +278,679 @@ export default function renderReceiptTemplate(
         ${fallbackCollectionMethodsHtml}
       </div>`
       : '';
+  const projectPaymentCardsHtml =
+    projectFlow?.isProject
+      ? `
+      <section class="project-summary-card">
+        <div class="project-summary-card__header">
+          <div class="project-summary-card__title">PROJECT PAYMENT SUMMARY</div>
+          <div class="project-summary-card__badge">${escapeHtml(projectPaymentStatusLabel)}</div>
+        </div>
+        <div class="project-summary-card__grid">
+          <div class="project-summary-card__item">
+            <span>Payment plan</span>
+            <strong>${escapeHtml(projectPaymentPlanLabel)}</strong>
+          </div>
+          <div class="project-summary-card__item">
+            <span>Paid so far</span>
+            <strong>KES ${formatAmount(toNumberOrNull(projectFlow.totalPaidAmount) ?? 0)}</strong>
+          </div>
+          ${
+            String(projectFlow.paymentTerm || "").trim().toUpperCase() === "DEPOSIT_AND_BALANCE"
+              ? `
+              <div class="project-summary-card__item">
+                <span>Deposit paid</span>
+                <strong>KES ${formatAmount(toNumberOrNull(projectFlow.depositPaidAmount) ?? 0)}</strong>
+              </div>
+              <div class="project-summary-card__item">
+                <span>${escapeHtml(projectBalanceLabel)}</span>
+                <strong>KES ${formatAmount(toNumberOrNull(projectFlow.remainingAmount) ?? 0)}</strong>
+              </div>
+            `
+              : `
+              <div class="project-summary-card__item project-summary-card__item--wide">
+                <span>${escapeHtml(projectBalanceLabel)}</span>
+                <strong>KES ${formatAmount(toNumberOrNull(projectFlow.remainingAmount) ?? 0)}</strong>
+              </div>
+            `
+          }
+        </div>
+      </section>
+      `
+      : "";
+
+  const projectPaymentOptionsHtml =
+    projectFlow?.isProject
+      ? `
+      <section class="project-payment-bank-panel">
+        <div class="project-payment-bank-panel__title">PAYMENT OPTIONS</div>
+        <div class="project-payment-bank-grid">
+          <div class="project-payment-bank-card">
+            <div class="project-payment-bank-card__brand project-payment-bank-card__brand--mpesa">M-PESA</div>
+            <div class="project-payment-bank-card__name">Paybill</div>
+            <div class="project-payment-bank-card__line"><span>Paybill Number:</span> 516600</div>
+            <div class="project-payment-bank-card__line"><span>Account Number:</span> 0710098001</div>
+          </div>
+          <div class="project-payment-bank-card">
+            <div class="project-payment-bank-card__brand project-payment-bank-card__brand--absa">absa</div>
+            <div class="project-payment-bank-card__name">ABSA Bank</div>
+            <div class="project-payment-bank-card__line"><span>Bank:</span> Absa Bank Kenya</div>
+            <div class="project-payment-bank-card__line"><span>Account Name:</span> Betech Solar Solution</div>
+            <div class="project-payment-bank-card__line"><span>Account Number:</span> 2047639940</div>
+          </div>
+          <div class="project-payment-bank-card">
+            <div class="project-payment-bank-card__brand project-payment-bank-card__brand--equity">EQUITY</div>
+            <div class="project-payment-bank-card__name">Equity Bank</div>
+            <div class="project-payment-bank-card__line"><span>Bank:</span> Equity Bank</div>
+            <div class="project-payment-bank-card__line"><span>Account Name:</span> Betech Technologies Limited</div>
+            <div class="project-payment-bank-card__line"><span>Branch:</span> Moi Avenue</div>
+            <div class="project-payment-bank-card__line"><span>Account Number:</span> 0470265072030</div>
+          </div>
+        </div>
+      </section>
+      `
+      : "";
+
+  const projectTermsPanelHtml =
+    projectFlow?.isProject
+      ? `
+      <section class="project-terms-panel">
+        <div class="project-terms-panel__heading">SOLAR INSTALLATION<br/>TERMS &amp; CONDITIONS</div>
+        <p class="project-terms-panel__notice">By proceeding with payment, delivery, or installation of a solar system by Betech Solar Solutions, you confirm that you have had access to and agree to our Solar Installation, Performance, Warranty &amp; After-Sales Terms &amp; Conditions.</p>
+        <div class="project-terms-panel__label">View full Terms:</div>
+        <a class="project-terms-panel__link" href="${TERMS_URL}" target="_blank" rel="noopener noreferrer" aria-label="Open full Betech Solar terms and conditions">
+          betech.co.ke/p/terms
+        </a>
+        <div class="project-terms-panel__qrbox">
+          <div class="project-terms-panel__qr">${termsQrSvg}</div>
+          <div class="project-terms-panel__qrcaption">Scan to read the full Terms &amp; Conditions</div>
+        </div>
+        <p class="project-terms-panel__summary">These Terms cover installation scope, system performance expectations, battery backup, solar generation, workmanship support, manufacturer warranties, after-sales procedures, internal electrical wiring responsibilities, system upgrades, and other applicable installation conditions.</p>
+      </section>
+      `
+      : "";
+
+  const projectItemsHtml = items
+    .map((it: any, index: number) => {
+      const qty = Number.isFinite(Number(it.quantity)) ? Number(it.quantity) : 1;
+      const unit = Number.isFinite(Number(it.unitPrice ?? it.sellingPrice)) ? Number(it.unitPrice ?? it.sellingPrice) : 0;
+      const lineTotal = qty * unit;
+      const title = escapeHtml(it.title || it.productName || "Item");
+      return `
+        <section class="project-item-block${index ? " project-item-block--spaced" : ""}">
+          <div class="project-item-block__label">ITEM NAME</div>
+          <div class="project-item-block__title">${title}</div>
+          <div class="project-item-block__warranty">Warranty: ${projectWarrantyBadge}</div>
+          <table class="project-line-table">
+            <thead>
+              <tr>
+                <th>QUANTITY</th>
+                <th class="right">UNIT PRICE</th>
+                <th class="right">TOTAL</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>${qty}</td>
+                <td class="right">${formatAmount(unit)}</td>
+                <td class="right project-line-table__strong">${formatAmount(lineTotal)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+      `;
+    })
+    .join("");
+
+  const projectFooterHtml = `
+    <section class="project-bottom-notice">
+      <div class="project-bottom-notice__left">
+        <div class="project-bottom-notice__row">You were served by ${escapeHtml(attendant || "____")}.</div>
+        <div class="project-bottom-notice__row">Goods once sold cannot be refunded.</div>
+      </div>
+      <div class="project-bottom-notice__right">
+        <div>By proceeding with installation, you agree to our Solar Installation Terms &amp; Conditions:</div>
+        <a href="${TERMS_URL}" target="_blank" rel="noopener noreferrer">betech.co.ke/p/terms</a>
+      </div>
+    </section>
+  `;
+
+  if (projectFlow?.isProject) {
+    return `
+    <!doctype html>
+    <html>
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width,initial-scale=1" />
+      <title>${siteTitle} Project Receipt ${receiptNumber}</title>
+      <style>
+        :root { --brandColor: ${brandColor}; }
+        @page { size: A4 portrait; margin: 7mm; }
+        html, body {
+          margin: 0;
+          padding: 0;
+          background: #f4f4f5;
+          color: #111827;
+          font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+        }
+        body { padding: 10px; }
+        .project-page {
+          width: min(100%, 192mm);
+          margin: 0 auto;
+          background: #ffffff;
+          border: 1px solid #d9dde3;
+          border-radius: 18px;
+          box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+          padding: 12mm 10mm 9mm;
+          box-sizing: border-box;
+        }
+        .project-header {
+          border-bottom: 2px solid ${brandColor};
+          padding-bottom: 10px;
+          margin-bottom: 12px;
+        }
+        .project-header__top {
+          display: grid;
+          grid-template-columns: auto 1fr;
+          gap: 14px;
+          align-items: start;
+        }
+        .project-header__logo {
+          width: 118px;
+          max-width: 100%;
+          object-fit: contain;
+        }
+        .project-header__brand {
+          text-align: center;
+        }
+        .project-header__brand h1 {
+          margin: 0;
+          font-size: 28px;
+          line-height: 1.05;
+          font-weight: 900;
+          color: ${brandColor};
+          letter-spacing: 0.02em;
+        }
+        .project-header__brand p {
+          margin: 4px 0 0;
+          font-size: 13px;
+          color: #1f2937;
+        }
+        .project-header__contact {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px 16px;
+          margin-top: 10px;
+          font-size: 12px;
+          color: #1f2937;
+        }
+        .project-header__contact strong {
+          color: ${brandColor};
+          margin-right: 6px;
+        }
+        .project-info-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 12px;
+          margin-bottom: 12px;
+        }
+        .project-info-card {
+          border: 1px solid #d6dbe2;
+          border-radius: 14px;
+          background: #fff;
+          padding: 12px 14px;
+          font-size: 13px;
+          line-height: 1.65;
+        }
+        .project-info-card__row strong {
+          font-size: 13px;
+          color: #111827;
+          margin-right: 6px;
+        }
+        .project-item-block__label {
+          font-size: 12px;
+          font-weight: 900;
+          color: ${brandColor};
+          margin-bottom: 6px;
+        }
+        .project-item-block__title {
+          font-size: 13px;
+          line-height: 1.55;
+          font-weight: 700;
+          color: #111827;
+        }
+        .project-item-block__warranty {
+          display: inline-block;
+          margin-top: 8px;
+          padding: 5px 10px;
+          border: 1px solid #bfd0ea;
+          border-radius: 10px;
+          background: #f4f8ff;
+          color: #1d4f91;
+          font-size: 12px;
+          font-weight: 700;
+        }
+        .project-line-table,
+        .project-total-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-top: 12px;
+          font-size: 13px;
+        }
+        .project-line-table th,
+        .project-line-table td,
+        .project-total-table td {
+          padding: 10px 8px;
+          border-bottom: 1px solid #e4e7eb;
+        }
+        .project-line-table th {
+          color: ${brandColor};
+          font-size: 12px;
+          font-weight: 900;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+        }
+        .right { text-align: right; }
+        .project-line-table__strong {
+          font-weight: 900;
+          font-size: 14px;
+          color: #111827;
+        }
+        .project-total-table {
+          width: 44%;
+          margin-left: auto;
+          margin-top: 2px;
+        }
+        .project-total-table__grand td {
+          font-size: 16px;
+          font-weight: 900;
+          color: ${brandColor};
+        }
+        .project-panels-grid {
+          display: grid;
+          grid-template-columns: 1.18fr 0.92fr;
+          gap: 14px;
+          margin-top: 16px;
+          align-items: start;
+        }
+        .project-summary-card {
+          border: 1px solid #d8e3f2;
+          border-radius: 14px;
+          background: #f6fbff;
+          padding: 12px;
+        }
+        .project-summary-card__header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin-bottom: 12px;
+        }
+        .project-summary-card__title {
+          font-size: 12px;
+          font-weight: 900;
+          color: ${brandColor};
+        }
+        .project-summary-card__badge {
+          border: 1px solid rgba(122, 32, 32, 0.18);
+          border-radius: 10px;
+          padding: 5px 10px;
+          background: #fff5f5;
+          color: ${brandColor};
+          font-size: 11px;
+          font-weight: 800;
+        }
+        .project-summary-card__grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
+        }
+        .project-summary-card__item {
+          border: 1px solid #d5dce5;
+          border-radius: 10px;
+          background: #fff;
+          padding: 10px;
+        }
+        .project-summary-card__item--wide {
+          grid-column: 1 / -1;
+        }
+        .project-summary-card__item span {
+          display: block;
+          font-size: 11px;
+          color: #475569;
+          margin-bottom: 4px;
+        }
+        .project-summary-card__item strong {
+          display: block;
+          font-size: 13px;
+          color: #111827;
+        }
+        .project-payment-bank-panel {
+          margin-top: 12px;
+        }
+        .project-payment-bank-panel__title {
+          margin-bottom: 10px;
+          color: #1d4f91;
+          font-size: 12px;
+          font-weight: 900;
+        }
+        .project-payment-bank-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 10px;
+        }
+        .project-payment-bank-card {
+          border: 1px solid #d5dce5;
+          border-radius: 10px;
+          background: #fff;
+          padding: 10px;
+        }
+        .project-payment-bank-card__brand {
+          font-size: 12px;
+          font-weight: 900;
+          margin-bottom: 4px;
+        }
+        .project-payment-bank-card__brand--mpesa { color: #2f9d46; }
+        .project-payment-bank-card__brand--absa { color: #dc2626; text-transform: lowercase; }
+        .project-payment-bank-card__brand--equity { color: #7c2d12; }
+        .project-payment-bank-card__name {
+          font-size: 12px;
+          font-weight: 800;
+          color: ${brandColor};
+          margin-bottom: 10px;
+        }
+        .project-payment-bank-card__line {
+          font-size: 11px;
+          line-height: 1.5;
+          color: #111827;
+          margin-top: 5px;
+        }
+        .project-payment-bank-card__line span {
+          font-weight: 700;
+        }
+        .project-terms-panel {
+          border: 1px solid #f2c58f;
+          border-radius: 14px;
+          background: #fff9ef;
+          padding: 12px;
+        }
+        .project-terms-panel__heading {
+          font-size: 14px;
+          line-height: 1.2;
+          font-weight: 900;
+          color: ${brandColor};
+          margin-bottom: 10px;
+        }
+        .project-terms-panel__notice {
+          margin: 0 0 10px;
+          font-size: 12px;
+          line-height: 1.5;
+        }
+        .project-terms-panel__label {
+          font-size: 12px;
+          font-weight: 800;
+          color: #111827;
+          margin-bottom: 6px;
+        }
+        .project-terms-panel__link {
+          display: inline-block;
+          margin-bottom: 12px;
+          border-radius: 10px;
+          background: ${brandColor};
+          color: #ffffff;
+          text-decoration: none;
+          font-size: 14px;
+          font-weight: 900;
+          padding: 10px 12px;
+        }
+        .project-terms-panel__qrbox {
+          display: grid;
+          grid-template-columns: auto 1fr;
+          gap: 12px;
+          align-items: center;
+          border: 1px dashed #d97706;
+          border-radius: 12px;
+          background: #fff;
+          padding: 10px;
+          margin-bottom: 10px;
+        }
+        .project-terms-panel__qr svg {
+          display: block;
+          width: 132px;
+          height: 132px;
+        }
+        .project-terms-panel__qrcaption {
+          font-size: 12px;
+          line-height: 1.45;
+          color: #111827;
+        }
+        .project-terms-panel__summary {
+          margin: 0;
+          font-size: 11.5px;
+          line-height: 1.45;
+          color: #1f2937;
+        }
+        .project-bottom-notice {
+          display: grid;
+          grid-template-columns: 1fr 1.1fr;
+          gap: 14px;
+          margin-top: 12px;
+          border: 1px dashed #d26b6b;
+          border-radius: 12px;
+          padding: 12px 14px;
+          font-size: 12px;
+          line-height: 1.55;
+        }
+        .project-bottom-notice__row + .project-bottom-notice__row {
+          margin-top: 6px;
+        }
+        .project-bottom-notice__right a {
+          display: inline-block;
+          margin-top: 4px;
+          color: ${brandColor};
+          font-weight: 900;
+          text-decoration: none;
+        }
+        .project-social-footer {
+          margin-top: 12px;
+          border: 1px solid #d8dce2;
+          border-radius: 14px;
+          padding: 12px 14px;
+        }
+        .project-social-footer__title {
+          text-align: center;
+          font-size: 12px;
+          font-weight: 900;
+          color: ${brandColor};
+        }
+        .project-social-footer__subtitle {
+          text-align: center;
+          font-size: 11px;
+          color: #374151;
+          margin: 5px 0 10px;
+        }
+        .project-social-footer__grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 10px;
+        }
+        .project-social-footer__item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 11px;
+        }
+        .project-social-footer__icon {
+          width: 32px;
+          height: 32px;
+          border-radius: 999px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          color: #fff;
+          font-size: 12px;
+          font-weight: 900;
+        }
+        .project-social-footer__icon--facebook { background: #1877f2; }
+        .project-social-footer__icon--instagram { background: linear-gradient(135deg, #f58529, #dd2a7b, #8134af); }
+        .project-social-footer__icon--tiktok { background: #111827; }
+        .project-social-footer__thanks {
+          text-align: center;
+          margin-top: 12px;
+          font-size: 14px;
+          font-weight: 900;
+          color: ${brandColor};
+        }
+        .project-social-footer__hash {
+          text-align: center;
+          font-size: 12px;
+          margin-top: 2px;
+        }
+        .project-social-footer__hash a {
+          color: #1d4ed8;
+          font-weight: 900;
+          text-decoration: none;
+        }
+        @media (max-width: 900px) {
+          .project-info-grid,
+          .project-panels-grid,
+          .project-bottom-notice,
+          .project-social-footer__grid,
+          .project-header__contact,
+          .project-payment-bank-grid,
+          .project-terms-panel__qrbox {
+            grid-template-columns: 1fr;
+          }
+          .project-total-table {
+            width: 100%;
+          }
+          .project-header__top {
+            grid-template-columns: 1fr;
+          }
+          .project-header__brand {
+            text-align: left;
+          }
+          .project-page {
+            padding: 10mm 8mm;
+          }
+        }
+        @media print {
+          html, body {
+            background: #ffffff;
+            padding: 0;
+            margin: 0;
+          }
+          body { font-size: 12px; }
+          .project-page {
+            width: auto;
+            margin: 0;
+            border: none;
+            border-radius: 0;
+            box-shadow: none;
+            padding: 0;
+          }
+          .project-page, .project-info-card, .project-summary-card, .project-terms-panel, .project-payment-bank-card, .project-bottom-notice, .project-social-footer, .project-item-block {
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+          * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="project-page">
+        <section class="project-header">
+          <div class="project-header__top">
+            <img class="project-header__logo" src="${escapeHtml(logoUrl)}" alt="Betech Solar Solutions logo" />
+            <div class="project-header__brand">
+              <h1>${escapeHtml(siteTitle)}</h1>
+              <p>Dealers in: Solar Solutions, Solar Products, e.t.c</p>
+              <div class="project-header__contact">
+                <div><strong>Tel:</strong>${companyPhonePrimary} / ${companyPhoneSecondary}</div>
+                <div><strong>Location:</strong>${companyLocation}</div>
+                <div><strong>Email:</strong>${companyEmail}</div>
+                <div><strong>Website:</strong>${companyWebsite}</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="project-info-grid">
+          <div class="project-info-card">
+            <div class="project-info-card__row"><strong>Date:</strong> ${escapeHtml(receiptDateText)}</div>
+            <div class="project-info-card__row"><strong>M/S:</strong> ${escapeHtml(snapshot.customerName || order?.customerName || "")}</div>
+            <div class="project-info-card__row"><strong>Phone:</strong> ${escapeHtml(phoneNumber || "-")}</div>
+            <div class="project-info-card__row"><strong>Email:</strong> ${escapeHtml(customerEmail || "-")}</div>
+          </div>
+          <div class="project-info-card">
+            <div class="project-info-card__row"><strong>Receipt No.</strong> ${escapeHtml(receiptNumber)}</div>
+            <div class="project-info-card__row" style="margin-top: 10px;"><strong>Address:</strong> ${escapeHtml(deliveryAddress || "-")}</div>
+          </div>
+        </section>
+
+        ${projectItemsHtml}
+
+        <table class="project-total-table">
+          <tr>
+            <td></td>
+            <td class="right">Subtotal:</td>
+            <td class="right">${formatAmount(subtotalValue)}</td>
+          </tr>
+          ${
+            snapshot.showDiscount
+              ? `<tr><td></td><td class="right">Discount:</td><td class="right">${formatAmount(toNumberOrNull(snapshot.discount) ?? toNumberOrNull(totals.discount))}</td></tr>`
+              : ""
+          }
+          <tr class="project-total-table__grand">
+            <td></td>
+            <td class="right">Total:</td>
+            <td class="right">${formatAmount(totalValue)}</td>
+          </tr>
+        </table>
+
+        <section class="project-panels-grid">
+          <div>
+            ${projectPaymentCardsHtml}
+            ${projectPaymentOptionsHtml}
+          </div>
+          <div>
+            ${projectTermsPanelHtml}
+          </div>
+        </section>
+
+        ${projectFooterHtml}
+
+        ${
+          allowMarketingFooter
+            ? `
+            <section class="project-social-footer">
+              <div class="project-social-footer__title">CONNECT WITH US</div>
+              <div class="project-social-footer__subtitle">Follow &amp; see our latest solar projects:</div>
+              <div class="project-social-footer__grid">
+                <div class="project-social-footer__item">
+                  <span class="project-social-footer__icon project-social-footer__icon--facebook">f</span>
+                  <div><strong>Facebook:</strong><br/>Betech Solar Solutions Kenya</div>
+                </div>
+                <div class="project-social-footer__item">
+                  <span class="project-social-footer__icon project-social-footer__icon--instagram">ig</span>
+                  <div><strong>Instagram:</strong><br/>@betechsolarsolutionskenya</div>
+                </div>
+                <div class="project-social-footer__item">
+                  <span class="project-social-footer__icon project-social-footer__icon--tiktok">tt</span>
+                  <div><strong>TikTok:</strong><br/>@betechsolarsolutionske</div>
+                </div>
+              </div>
+              <div class="project-social-footer__thanks">Thank you for choosing Betech Solar Solutions.</div>
+              <div class="project-social-footer__hash">View our recent installations: <a href="https://www.tiktok.com/tag/betechprojects" target="_blank" rel="noopener noreferrer">#BetechProjects</a></div>
+            </section>
+          `
+            : ""
+        }
+      </div>
+    </body>
+    </html>
+    `;
+  }
 
   const itemsHtml = items
     .map((it: any, index: number) => {
