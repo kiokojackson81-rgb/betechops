@@ -297,11 +297,17 @@ export async function generateReceiptPdf(
   try {
     browser = await launchChromiumBrowser();
     const page = await browser.newPage();
+    const isProjectReceipt = Boolean(receiptSnapshot?.projectFlow?.isProject);
+    await page.setViewport(
+      isProjectReceipt
+        ? { width: 1240, height: 1748, deviceScaleFactor: 2 }
+        : { width: 940, height: 1400, deviceScaleFactor: 1.5 }
+    );
     await page.emulateMediaType('print');
     await page.setContent(html, { waitUntil: 'networkidle0' });
     const pdf = await page.pdf({
       preferCSSPageSize: true,
-      format: 'A5',
+      format: isProjectReceipt ? 'A5' : 'A5',
       printBackground: true,
       margin: {
         top: '0',

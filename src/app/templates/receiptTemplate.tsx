@@ -435,7 +435,7 @@ export default function renderReceiptTemplate(
       <title>${siteTitle} Project Receipt ${receiptNumber}</title>
       <style>
         :root { --brandColor: ${brandColor}; }
-        @page { size: A5 portrait; margin: 4mm; }
+        @page { size: A5 portrait; margin: 5mm; }
         html, body {
           margin: 0;
           padding: 0;
@@ -446,6 +446,7 @@ export default function renderReceiptTemplate(
         body { padding: 0; }
         .project-page {
           width: 140mm;
+          max-width: none;
           margin: 0 auto;
           background: #ffffff;
           border: 1px solid #d9dde3;
@@ -809,16 +810,95 @@ export default function renderReceiptTemplate(
             padding: 0;
             margin: 0;
           }
-          body { font-size: 11px; }
+          body {
+            font-size: 11px;
+            min-height: auto;
+            height: auto;
+          }
           .project-page {
-            width: auto;
+            width: 100%;
+            max-width: none;
             margin: 0;
             border: none;
             border-radius: 0;
             box-shadow: none;
             padding: 0;
           }
-          .project-page, .project-info-card, .project-summary-card, .project-terms-panel, .project-payment-bank-card, .project-bottom-notice, .project-social-footer, .project-item-block {
+          .project-info-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 6px;
+          }
+          .project-panels-grid {
+            grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr) !important;
+            gap: 7px;
+            align-items: start;
+          }
+          .project-summary-card__grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          }
+          .project-payment-bank-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+            gap: 5px;
+          }
+          .project-terms-panel__qrbox {
+            grid-template-columns: auto 1fr !important;
+            gap: 6px;
+          }
+          .project-bottom-notice {
+            grid-template-columns: 1fr 1.05fr !important;
+            gap: 7px;
+          }
+          .project-social-footer__grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+            gap: 5px;
+          }
+          .project-total-table {
+            width: 48%;
+          }
+          .project-header img {
+            max-height: 28mm;
+          }
+          .project-info-card,
+          .project-summary-card,
+          .project-terms-panel,
+          .project-payment-bank-card,
+          .project-bottom-notice,
+          .project-social-footer {
+            padding-top: 7px;
+            padding-bottom: 7px;
+          }
+          .project-summary-card {
+            padding: 8px;
+          }
+          .project-terms-panel {
+            padding: 7px;
+          }
+          .project-terms-panel__notice,
+          .project-terms-panel__summary,
+          .project-payment-bank-card__line,
+          .project-social-footer__item,
+          .project-bottom-notice {
+            line-height: 1.22;
+          }
+          .project-terms-panel__notice,
+          .project-terms-panel__summary,
+          .project-payment-bank-card__line {
+            font-size: 8.7px;
+          }
+          .project-terms-panel__qr svg {
+            width: 78px;
+            height: 78px;
+          }
+          .project-page,
+          .project-info-card,
+          .project-summary-card,
+          .project-terms-panel,
+          .project-payment-bank-card,
+          .project-bottom-notice,
+          .project-social-footer,
+          .project-item-block,
+          .project-payment-bank-panel,
+          .project-panels-grid {
             page-break-inside: avoid;
             break-inside: avoid;
           }
