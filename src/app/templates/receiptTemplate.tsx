@@ -486,7 +486,10 @@ export default function renderReceiptTemplate(
           grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 7px;
           margin-bottom: 7px;
+          width: 100%;
+          max-width: 100%;
         }
+        .project-info-grid > * { min-width: 0; }
         .project-info-card {
           border: 1px solid #d6dbe2;
           border-radius: 10px;
@@ -590,7 +593,10 @@ export default function renderReceiptTemplate(
           gap: 8px;
           margin-top: 8px;
           align-items: start;
+          width: 100%;
+          max-width: 100%;
         }
+        .project-panels-grid > * { min-width: 0; }
         .project-summary-card {
           border: 1px solid #d8e3f2;
           border-radius: 10px;
@@ -661,7 +667,10 @@ export default function renderReceiptTemplate(
           grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 6px;
           align-items: stretch;
+          width: 100%;
+          max-width: 100%;
         }
+        .project-payment-bank-grid > * { min-width: 0; }
         .project-payment-bank-card {
           border: 1px solid #d5dce5;
           border-radius: 8px;
@@ -774,6 +783,7 @@ export default function renderReceiptTemplate(
           line-height: 1.35;
           min-width: 0;
         }
+        .project-bottom-notice > * { min-width: 0; }
         .project-bottom-notice__row + .project-bottom-notice__row {
           margin-top: 3px;
         }
@@ -809,7 +819,10 @@ export default function renderReceiptTemplate(
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 6px;
+          width: 100%;
+          max-width: 100%;
         }
+        .project-social-footer__grid > * { min-width: 0; }
         .project-social-footer__item {
           display: flex;
           align-items: center;
@@ -879,9 +892,9 @@ export default function renderReceiptTemplate(
             height: auto;
           }
           .project-page {
-            width: 100%;
+            width: 138mm;
             max-width: 138mm;
-            margin: 0;
+            margin: 0 auto;
             border: none;
             border-radius: 0;
             box-shadow: none;
@@ -889,8 +902,9 @@ export default function renderReceiptTemplate(
             overflow: hidden;
           }
           .project-receipt-inner {
-            max-width: 136mm;
-            margin: 0 auto;
+            width: 100%;
+            max-width: none;
+            margin: 0;
           }
           .project-info-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
