@@ -13,6 +13,7 @@ import {
   ShieldUser,
   UserRound,
 } from "lucide-react";
+import { TERMS_URL } from "@/lib/publicLinks";
 
 const ACCESS_CARDS = [
   {
@@ -274,9 +275,9 @@ export default function HomePageClient() {
                 Privacy Policy
               </Link>
               <span className="hidden text-white/25 sm:inline">|</span>
-              <Link href="/terms" className="transition hover:text-white">
-                Terms of Service
-              </Link>
+              <a href={TERMS_URL} className="transition hover:text-white">
+                Terms & Conditions
+              </a>
               <span className="hidden text-white/25 sm:inline">|</span>
               <Link href="/help" className="transition hover:text-white">
                 Help
