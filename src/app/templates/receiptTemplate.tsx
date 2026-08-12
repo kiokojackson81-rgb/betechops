@@ -436,6 +436,7 @@ export default function renderReceiptTemplate(
       <style>
         :root { --brandColor: ${brandColor}; }
         @page { size: A5 portrait; margin: 5mm; }
+        *, *::before, *::after { box-sizing: border-box; }
         html, body {
           margin: 0;
           padding: 0;
@@ -454,6 +455,7 @@ export default function renderReceiptTemplate(
           box-shadow: none;
           padding: 3mm 3.5mm 4mm;
           box-sizing: border-box;
+          overflow: hidden;
         }
         .project-header {
           padding-bottom: 4px;
@@ -481,6 +483,9 @@ export default function renderReceiptTemplate(
           padding: 9px 10px;
           font-size: 11px;
           line-height: 1.45;
+          min-width: 0;
+          overflow-wrap: anywhere;
+          word-break: break-word;
         }
         .project-info-card__row strong {
           font-size: 11px;
@@ -498,6 +503,8 @@ export default function renderReceiptTemplate(
           line-height: 1.4;
           font-weight: 700;
           color: #111827;
+          overflow-wrap: anywhere;
+          word-break: break-word;
         }
         .project-item-block__warranty {
           display: inline-block;
@@ -558,6 +565,7 @@ export default function renderReceiptTemplate(
           border-radius: 10px;
           background: #f6fbff;
           padding: 9px;
+          min-width: 0;
         }
         .project-summary-card__header {
           display: flex;
@@ -590,6 +598,7 @@ export default function renderReceiptTemplate(
           border-radius: 8px;
           background: #fff;
           padding: 8px;
+          min-width: 0;
         }
         .project-summary-card__item--wide {
           grid-column: 1 / -1;
@@ -604,6 +613,8 @@ export default function renderReceiptTemplate(
           display: block;
           font-size: 11px;
           color: #111827;
+          overflow-wrap: anywhere;
+          word-break: break-word;
         }
         .project-payment-bank-panel {
           margin-top: 8px;
@@ -624,6 +635,8 @@ export default function renderReceiptTemplate(
           border-radius: 8px;
           background: #fff;
           padding: 8px;
+          min-width: 0;
+          overflow: hidden;
         }
         .project-payment-bank-card__brand {
           margin-bottom: 6px;
@@ -639,6 +652,8 @@ export default function renderReceiptTemplate(
           line-height: 1.35;
           color: #111827;
           margin-top: 3px;
+          overflow-wrap: anywhere;
+          word-break: break-word;
         }
         .project-payment-bank-card__line span {
           font-weight: 700;
@@ -648,6 +663,8 @@ export default function renderReceiptTemplate(
           border-radius: 10px;
           background: #fff9ef;
           padding: 8px;
+          min-width: 0;
+          overflow: hidden;
         }
         .project-terms-panel__heading {
           font-size: 11px;
@@ -677,7 +694,9 @@ export default function renderReceiptTemplate(
           font-size: 10px;
           font-weight: 900;
           padding: 6px 8px;
+          max-width: 100%;
           word-break: break-word;
+          overflow-wrap: anywhere;
         }
         .project-terms-panel__qrbox {
           display: grid;
@@ -699,12 +718,16 @@ export default function renderReceiptTemplate(
           font-size: 9.5px;
           line-height: 1.3;
           color: #111827;
+          overflow-wrap: anywhere;
+          word-break: break-word;
         }
         .project-terms-panel__summary {
           margin: 0;
           font-size: 8.8px;
           line-height: 1.3;
           color: #1f2937;
+          overflow-wrap: anywhere;
+          word-break: break-word;
         }
         .project-bottom-notice {
           display: grid;
@@ -716,6 +739,7 @@ export default function renderReceiptTemplate(
           padding: 8px 10px;
           font-size: 9.5px;
           line-height: 1.35;
+          min-width: 0;
         }
         .project-bottom-notice__row + .project-bottom-notice__row {
           margin-top: 3px;
@@ -726,12 +750,15 @@ export default function renderReceiptTemplate(
           color: ${brandColor};
           font-weight: 900;
           text-decoration: none;
+          overflow-wrap: anywhere;
+          word-break: break-word;
         }
         .project-social-footer {
           margin-top: 7px;
           border: 1px solid #d8dce2;
           border-radius: 10px;
           padding: 8px 10px;
+          min-width: 0;
         }
         .project-social-footer__title {
           text-align: center;
@@ -806,57 +833,110 @@ export default function renderReceiptTemplate(
         }
         @media print {
           html, body {
+            width: 100%;
             background: #ffffff;
             padding: 0;
             margin: 0;
+            overflow-x: hidden;
           }
           body {
-            font-size: 11px;
+            font-size: 9px;
+            line-height: 1.15;
             min-height: auto;
             height: auto;
           }
           .project-page {
             width: 100%;
-            max-width: none;
+            max-width: 138mm;
             margin: 0;
             border: none;
             border-radius: 0;
             box-shadow: none;
             padding: 0;
+            overflow: hidden;
           }
           .project-info-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-            gap: 6px;
+            gap: 3mm;
+            margin-bottom: 2.5mm;
           }
           .project-panels-grid {
             grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr) !important;
-            gap: 7px;
+            gap: 2.5mm;
             align-items: start;
+            margin-top: 2mm;
           }
           .project-summary-card__grid {
             grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 1.5mm;
           }
           .project-payment-bank-grid {
             grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-            gap: 5px;
+            gap: 1.5mm;
           }
           .project-terms-panel__qrbox {
-            grid-template-columns: auto 1fr !important;
-            gap: 6px;
+            grid-template-columns: 24mm minmax(0, 1fr) !important;
+            gap: 2mm;
           }
           .project-bottom-notice {
-            grid-template-columns: 1fr 1.05fr !important;
-            gap: 7px;
+            grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr) !important;
+            gap: 2mm;
+            margin-top: 2mm;
           }
           .project-social-footer__grid {
             grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-            gap: 5px;
+            gap: 2mm;
           }
           .project-total-table {
             width: 48%;
+            margin-top: 0.5mm;
           }
           .project-header img {
             max-height: 28mm;
+          }
+          .project-header {
+            margin-bottom: 2mm;
+            padding-bottom: 0;
+          }
+          .project-info-card {
+            padding: 2.2mm 2.4mm;
+            font-size: 7.3pt;
+            line-height: 1.16;
+          }
+          .project-info-card__row strong {
+            font-size: 7.3pt;
+          }
+          .project-item-block__label {
+            margin-bottom: 1mm;
+            font-size: 7pt;
+          }
+          .project-item-block__title {
+            font-size: 7.4pt;
+            line-height: 1.18;
+          }
+          .project-item-block__warranty {
+            margin-top: 1.4mm;
+            padding: 1mm 1.8mm;
+            font-size: 6.6pt;
+          }
+          .project-line-table,
+          .project-total-table {
+            margin-top: 1.5mm;
+            font-size: 7pt;
+          }
+          .project-line-table th,
+          .project-line-table td,
+          .project-total-table td {
+            padding: 1.4mm 1mm;
+          }
+          .project-line-table th {
+            font-size: 7pt;
+          }
+          .project-line-table__strong {
+            font-size: 7.2pt;
+          }
+          .project-total-table__grand td {
+            font-size: 8.6pt;
           }
           .project-info-card,
           .project-summary-card,
@@ -864,30 +944,113 @@ export default function renderReceiptTemplate(
           .project-payment-bank-card,
           .project-bottom-notice,
           .project-social-footer {
-            padding-top: 7px;
-            padding-bottom: 7px;
+            padding-top: 2mm;
+            padding-bottom: 2mm;
           }
           .project-summary-card {
-            padding: 8px;
+            padding: 2mm;
+          }
+          .project-summary-card__header { margin-bottom: 1.6mm; }
+          .project-summary-card__title { font-size: 7.2pt; }
+          .project-summary-card__badge {
+            padding: 0.8mm 1.6mm;
+            font-size: 6.6pt;
+          }
+          .project-summary-card__item { padding: 1.6mm; }
+          .project-summary-card__item span {
+            font-size: 6.3pt;
+            margin-bottom: 0.6mm;
+          }
+          .project-summary-card__item strong { font-size: 7pt; }
+          .project-payment-bank-panel { margin-top: 2mm; }
+          .project-payment-bank-panel__title {
+            margin-bottom: 1.2mm;
+            font-size: 7.1pt;
+          }
+          .project-payment-bank-card {
+            padding: 1.6mm;
+            border-radius: 6px;
+          }
+          .project-payment-bank-card__brand { margin-bottom: 1.2mm; }
+          .project-payment-bank-card__name {
+            font-size: 6.6pt;
+            margin-bottom: 1.2mm;
+          }
+          .project-payment-bank-card__line {
+            font-size: 6.1pt;
+            line-height: 1.18;
+            margin-top: 0.5mm;
           }
           .project-terms-panel {
-            padding: 7px;
+            padding: 1.8mm;
+          }
+          .project-terms-panel__heading {
+            font-size: 7.1pt;
+            margin-bottom: 1.2mm;
           }
           .project-terms-panel__notice,
           .project-terms-panel__summary,
           .project-payment-bank-card__line,
           .project-social-footer__item,
           .project-bottom-notice {
-            line-height: 1.22;
+            line-height: 1.15;
           }
           .project-terms-panel__notice,
           .project-terms-panel__summary,
           .project-payment-bank-card__line {
-            font-size: 8.7px;
+            font-size: 6.1pt;
+          }
+          .project-terms-panel__label {
+            font-size: 6.6pt;
+            margin-bottom: 0.8mm;
+          }
+          .project-terms-panel__link {
+            margin-bottom: 1.3mm;
+            padding: 1.2mm 1.8mm;
+            font-size: 6.4pt;
           }
           .project-terms-panel__qr svg {
-            width: 78px;
-            height: 78px;
+            width: 24mm;
+            height: 24mm;
+          }
+          .project-terms-panel__qrcaption {
+            font-size: 6.1pt;
+            line-height: 1.15;
+          }
+          .project-bottom-notice {
+            padding: 1.8mm 2mm;
+            font-size: 6.1pt;
+          }
+          .project-bottom-notice__row + .project-bottom-notice__row { margin-top: 0.6mm; }
+          .project-bottom-notice__right a {
+            margin-top: 0.4mm;
+            font-size: 6.1pt;
+          }
+          .project-social-footer {
+            margin-top: 2mm;
+            padding: 1.6mm 2mm;
+          }
+          .project-social-footer__title { font-size: 6.8pt; }
+          .project-social-footer__subtitle {
+            font-size: 5.8pt;
+            margin: 0.6mm 0 1.4mm;
+          }
+          .project-social-footer__item {
+            font-size: 5.7pt;
+            gap: 1.5mm;
+          }
+          .project-social-footer__icon {
+            width: 5.5mm;
+            height: 5.5mm;
+            font-size: 5pt;
+          }
+          .project-social-footer__thanks {
+            margin-top: 1.4mm;
+            font-size: 7pt;
+          }
+          .project-social-footer__hash {
+            margin-top: 0.4mm;
+            font-size: 5.8pt;
           }
           .project-page,
           .project-info-card,

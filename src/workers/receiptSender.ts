@@ -310,10 +310,10 @@ export async function generateReceiptPdf(
       format: isProjectReceipt ? 'A5' : 'A5',
       printBackground: true,
       margin: {
-        top: '0',
-        right: '0',
-        bottom: '0',
-        left: '0',
+        top: '0mm',
+        right: '0mm',
+        bottom: '0mm',
+        left: '0mm',
       },
     });
     return pdf;
