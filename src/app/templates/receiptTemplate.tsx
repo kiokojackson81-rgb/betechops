@@ -1,5 +1,5 @@
 import * as QRCode from "qrcode";
-import { TERMS_URL } from "@/lib/publicLinks";
+import { TERMS_DISPLAY_URL, TERMS_URL } from "@/lib/publicLinks";
 
 function escapeHtml(value: unknown) {
   return String(value ?? "")
@@ -106,7 +106,17 @@ export default function renderReceiptTemplate(
   const companyPhonePrimary = "0722 151 083";
   const companyPhoneSecondary = "0703 241 917";
   const companyLocation = "Pramukh Plaza, 3rd Floor, Shop No. 3";
-  const termsQrSvg = createQrSvgMarkup(TERMS_URL);
+  const termsQrSvg = createQrSvgMarkup(TERMS_URL, 104);
+  const projectHeaderImg = letterheadUrl || "/letterhead.jpg";
+  const paymentIconBadge = (label: string, variant: "mpesa" | "absa" | "equity") => {
+    const variantMap = {
+      mpesa: { bg: "#ecfdf3", fg: "#138f47", border: "#a7f3d0" },
+      absa: { bg: "#fff1f2", fg: "#c2132f", border: "#fecdd3" },
+      equity: { bg: "#fff7ed", fg: "#b45309", border: "#fed7aa" },
+    } as const;
+    const style = variantMap[variant];
+    return `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:58px;height:28px;padding:0 10px;border-radius:999px;border:1px solid ${style.border};background:${style.bg};color:${style.fg};font-size:11px;font-weight:900;letter-spacing:0.04em;">${label}</span>`;
+  };
 
   const toNumberOrNull = (value: unknown): number | null => {
     if (value === null || value === undefined) return null;
@@ -326,20 +336,20 @@ export default function renderReceiptTemplate(
         <div class="project-payment-bank-panel__title">PAYMENT OPTIONS</div>
         <div class="project-payment-bank-grid">
           <div class="project-payment-bank-card">
-            <div class="project-payment-bank-card__brand project-payment-bank-card__brand--mpesa">M-PESA</div>
+            <div class="project-payment-bank-card__brand">${paymentIconBadge("M-PESA", "mpesa")}</div>
             <div class="project-payment-bank-card__name">Paybill</div>
             <div class="project-payment-bank-card__line"><span>Paybill Number:</span> 516600</div>
             <div class="project-payment-bank-card__line"><span>Account Number:</span> 0710098001</div>
           </div>
           <div class="project-payment-bank-card">
-            <div class="project-payment-bank-card__brand project-payment-bank-card__brand--absa">absa</div>
+            <div class="project-payment-bank-card__brand">${paymentIconBadge("ABSA", "absa")}</div>
             <div class="project-payment-bank-card__name">ABSA Bank</div>
             <div class="project-payment-bank-card__line"><span>Bank:</span> Absa Bank Kenya</div>
             <div class="project-payment-bank-card__line"><span>Account Name:</span> Betech Solar Solution</div>
             <div class="project-payment-bank-card__line"><span>Account Number:</span> 2047639940</div>
           </div>
           <div class="project-payment-bank-card">
-            <div class="project-payment-bank-card__brand project-payment-bank-card__brand--equity">EQUITY</div>
+            <div class="project-payment-bank-card__brand">${paymentIconBadge("EQUITY", "equity")}</div>
             <div class="project-payment-bank-card__name">Equity Bank</div>
             <div class="project-payment-bank-card__line"><span>Bank:</span> Equity Bank</div>
             <div class="project-payment-bank-card__line"><span>Account Name:</span> Betech Technologies Limited</div>
@@ -359,7 +369,7 @@ export default function renderReceiptTemplate(
         <p class="project-terms-panel__notice">By proceeding with payment, delivery, or installation of a solar system by Betech Solar Solutions, you confirm that you have had access to and agree to our Solar Installation, Performance, Warranty &amp; After-Sales Terms &amp; Conditions.</p>
         <div class="project-terms-panel__label">View full Terms:</div>
         <a class="project-terms-panel__link" href="${TERMS_URL}" target="_blank" rel="noopener noreferrer" aria-label="Open full Betech Solar terms and conditions">
-          betech.co.ke/p/terms
+          ${TERMS_DISPLAY_URL}
         </a>
         <div class="project-terms-panel__qrbox">
           <div class="project-terms-panel__qr">${termsQrSvg}</div>
@@ -410,7 +420,7 @@ export default function renderReceiptTemplate(
       </div>
       <div class="project-bottom-notice__right">
         <div>By proceeding with installation, you agree to our Solar Installation Terms &amp; Conditions:</div>
-        <a href="${TERMS_URL}" target="_blank" rel="noopener noreferrer">betech.co.ke/p/terms</a>
+        <a href="${TERMS_URL}" target="_blank" rel="noopener noreferrer">${TERMS_DISPLAY_URL}</a>
       </div>
     </section>
   `;
@@ -425,127 +435,96 @@ export default function renderReceiptTemplate(
       <title>${siteTitle} Project Receipt ${receiptNumber}</title>
       <style>
         :root { --brandColor: ${brandColor}; }
-        @page { size: A4 portrait; margin: 7mm; }
+        @page { size: A5 portrait; margin: 4mm; }
         html, body {
           margin: 0;
           padding: 0;
-          background: #f4f4f5;
+          background: #ffffff;
           color: #111827;
           font-family: "Segoe UI", Arial, Helvetica, sans-serif;
         }
-        body { padding: 10px; }
+        body { padding: 0; }
         .project-page {
-          width: min(100%, 192mm);
+          width: 140mm;
           margin: 0 auto;
           background: #ffffff;
           border: 1px solid #d9dde3;
-          border-radius: 18px;
-          box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
-          padding: 12mm 10mm 9mm;
+          border-radius: 10px;
+          box-shadow: none;
+          padding: 3mm 3.5mm 4mm;
           box-sizing: border-box;
         }
         .project-header {
-          border-bottom: 2px solid ${brandColor};
-          padding-bottom: 10px;
-          margin-bottom: 12px;
+          padding-bottom: 4px;
+          margin-bottom: 6px;
+          border-bottom: none;
         }
-        .project-header__top {
-          display: grid;
-          grid-template-columns: auto 1fr;
-          gap: 14px;
-          align-items: start;
-        }
-        .project-header__logo {
-          width: 118px;
-          max-width: 100%;
+        .project-header img {
+          display: block;
+          width: 100%;
+          max-height: 30mm;
           object-fit: contain;
-        }
-        .project-header__brand {
-          text-align: center;
-        }
-        .project-header__brand h1 {
+          object-position: top center;
           margin: 0;
-          font-size: 28px;
-          line-height: 1.05;
-          font-weight: 900;
-          color: ${brandColor};
-          letter-spacing: 0.02em;
-        }
-        .project-header__brand p {
-          margin: 4px 0 0;
-          font-size: 13px;
-          color: #1f2937;
-        }
-        .project-header__contact {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 8px 16px;
-          margin-top: 10px;
-          font-size: 12px;
-          color: #1f2937;
-        }
-        .project-header__contact strong {
-          color: ${brandColor};
-          margin-right: 6px;
         }
         .project-info-grid {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 12px;
-          margin-bottom: 12px;
+          gap: 7px;
+          margin-bottom: 7px;
         }
         .project-info-card {
           border: 1px solid #d6dbe2;
-          border-radius: 14px;
+          border-radius: 10px;
           background: #fff;
-          padding: 12px 14px;
-          font-size: 13px;
-          line-height: 1.65;
+          padding: 9px 10px;
+          font-size: 11px;
+          line-height: 1.45;
         }
         .project-info-card__row strong {
-          font-size: 13px;
+          font-size: 11px;
           color: #111827;
-          margin-right: 6px;
+          margin-right: 4px;
         }
         .project-item-block__label {
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 900;
           color: ${brandColor};
-          margin-bottom: 6px;
+          margin-bottom: 4px;
         }
         .project-item-block__title {
-          font-size: 13px;
-          line-height: 1.55;
+          font-size: 11px;
+          line-height: 1.4;
           font-weight: 700;
           color: #111827;
         }
         .project-item-block__warranty {
           display: inline-block;
-          margin-top: 8px;
-          padding: 5px 10px;
+          margin-top: 6px;
+          padding: 4px 8px;
           border: 1px solid #bfd0ea;
-          border-radius: 10px;
+          border-radius: 8px;
           background: #f4f8ff;
           color: #1d4f91;
-          font-size: 12px;
+          font-size: 10px;
           font-weight: 700;
         }
         .project-line-table,
         .project-total-table {
           width: 100%;
           border-collapse: collapse;
-          margin-top: 12px;
-          font-size: 13px;
+          margin-top: 8px;
+          font-size: 11px;
         }
         .project-line-table th,
         .project-line-table td,
         .project-total-table td {
-          padding: 10px 8px;
+          padding: 6px 5px;
           border-bottom: 1px solid #e4e7eb;
         }
         .project-line-table th {
           color: ${brandColor};
-          font-size: 12px;
+          font-size: 10px;
           font-weight: 900;
           text-transform: uppercase;
           letter-spacing: 0.04em;
@@ -553,242 +532,238 @@ export default function renderReceiptTemplate(
         .right { text-align: right; }
         .project-line-table__strong {
           font-weight: 900;
-          font-size: 14px;
+          font-size: 11px;
           color: #111827;
         }
         .project-total-table {
-          width: 44%;
+          width: 49%;
           margin-left: auto;
-          margin-top: 2px;
+          margin-top: 0;
         }
         .project-total-table__grand td {
-          font-size: 16px;
+          font-size: 13px;
           font-weight: 900;
           color: ${brandColor};
         }
         .project-panels-grid {
           display: grid;
-          grid-template-columns: 1.18fr 0.92fr;
-          gap: 14px;
-          margin-top: 16px;
+          grid-template-columns: 1fr 0.8fr;
+          gap: 8px;
+          margin-top: 8px;
           align-items: start;
         }
         .project-summary-card {
           border: 1px solid #d8e3f2;
-          border-radius: 14px;
+          border-radius: 10px;
           background: #f6fbff;
-          padding: 12px;
+          padding: 9px;
         }
         .project-summary-card__header {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 12px;
-          margin-bottom: 12px;
+          gap: 8px;
+          margin-bottom: 8px;
         }
         .project-summary-card__title {
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 900;
           color: ${brandColor};
         }
         .project-summary-card__badge {
           border: 1px solid rgba(122, 32, 32, 0.18);
-          border-radius: 10px;
-          padding: 5px 10px;
+          border-radius: 8px;
+          padding: 4px 8px;
           background: #fff5f5;
           color: ${brandColor};
-          font-size: 11px;
+          font-size: 10px;
           font-weight: 800;
         }
         .project-summary-card__grid {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 8px;
+          gap: 6px;
         }
         .project-summary-card__item {
           border: 1px solid #d5dce5;
-          border-radius: 10px;
+          border-radius: 8px;
           background: #fff;
-          padding: 10px;
+          padding: 8px;
         }
         .project-summary-card__item--wide {
           grid-column: 1 / -1;
         }
         .project-summary-card__item span {
           display: block;
-          font-size: 11px;
+          font-size: 10px;
           color: #475569;
-          margin-bottom: 4px;
+          margin-bottom: 3px;
         }
         .project-summary-card__item strong {
           display: block;
-          font-size: 13px;
+          font-size: 11px;
           color: #111827;
         }
         .project-payment-bank-panel {
-          margin-top: 12px;
+          margin-top: 8px;
         }
         .project-payment-bank-panel__title {
-          margin-bottom: 10px;
+          margin-bottom: 6px;
           color: #1d4f91;
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 900;
         }
         .project-payment-bank-grid {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 10px;
+          gap: 6px;
         }
         .project-payment-bank-card {
           border: 1px solid #d5dce5;
-          border-radius: 10px;
+          border-radius: 8px;
           background: #fff;
-          padding: 10px;
+          padding: 8px;
         }
         .project-payment-bank-card__brand {
-          font-size: 12px;
-          font-weight: 900;
-          margin-bottom: 4px;
+          margin-bottom: 6px;
         }
-        .project-payment-bank-card__brand--mpesa { color: #2f9d46; }
-        .project-payment-bank-card__brand--absa { color: #dc2626; text-transform: lowercase; }
-        .project-payment-bank-card__brand--equity { color: #7c2d12; }
         .project-payment-bank-card__name {
-          font-size: 12px;
+          font-size: 10px;
           font-weight: 800;
           color: ${brandColor};
-          margin-bottom: 10px;
+          margin-bottom: 6px;
         }
         .project-payment-bank-card__line {
-          font-size: 11px;
-          line-height: 1.5;
+          font-size: 9px;
+          line-height: 1.35;
           color: #111827;
-          margin-top: 5px;
+          margin-top: 3px;
         }
         .project-payment-bank-card__line span {
           font-weight: 700;
         }
         .project-terms-panel {
           border: 1px solid #f2c58f;
-          border-radius: 14px;
+          border-radius: 10px;
           background: #fff9ef;
-          padding: 12px;
+          padding: 8px;
         }
         .project-terms-panel__heading {
-          font-size: 14px;
+          font-size: 11px;
           line-height: 1.2;
           font-weight: 900;
           color: ${brandColor};
-          margin-bottom: 10px;
+          margin-bottom: 6px;
         }
         .project-terms-panel__notice {
-          margin: 0 0 10px;
-          font-size: 12px;
-          line-height: 1.5;
+          margin: 0 0 6px;
+          font-size: 9.5px;
+          line-height: 1.35;
         }
         .project-terms-panel__label {
-          font-size: 12px;
+          font-size: 10px;
           font-weight: 800;
           color: #111827;
-          margin-bottom: 6px;
+          margin-bottom: 4px;
         }
         .project-terms-panel__link {
           display: inline-block;
-          margin-bottom: 12px;
-          border-radius: 10px;
+          margin-bottom: 6px;
+          border-radius: 8px;
           background: ${brandColor};
           color: #ffffff;
           text-decoration: none;
-          font-size: 14px;
+          font-size: 10px;
           font-weight: 900;
-          padding: 10px 12px;
+          padding: 6px 8px;
+          word-break: break-word;
         }
         .project-terms-panel__qrbox {
           display: grid;
           grid-template-columns: auto 1fr;
-          gap: 12px;
+          gap: 8px;
           align-items: center;
           border: 1px dashed #d97706;
-          border-radius: 12px;
+          border-radius: 10px;
           background: #fff;
-          padding: 10px;
-          margin-bottom: 10px;
+          padding: 6px;
+          margin-bottom: 6px;
         }
         .project-terms-panel__qr svg {
           display: block;
-          width: 132px;
-          height: 132px;
+          width: 82px;
+          height: 82px;
         }
         .project-terms-panel__qrcaption {
-          font-size: 12px;
-          line-height: 1.45;
+          font-size: 9.5px;
+          line-height: 1.3;
           color: #111827;
         }
         .project-terms-panel__summary {
           margin: 0;
-          font-size: 11.5px;
-          line-height: 1.45;
+          font-size: 8.8px;
+          line-height: 1.3;
           color: #1f2937;
         }
         .project-bottom-notice {
           display: grid;
           grid-template-columns: 1fr 1.1fr;
-          gap: 14px;
-          margin-top: 12px;
+          gap: 8px;
+          margin-top: 7px;
           border: 1px dashed #d26b6b;
-          border-radius: 12px;
-          padding: 12px 14px;
-          font-size: 12px;
-          line-height: 1.55;
+          border-radius: 10px;
+          padding: 8px 10px;
+          font-size: 9.5px;
+          line-height: 1.35;
         }
         .project-bottom-notice__row + .project-bottom-notice__row {
-          margin-top: 6px;
+          margin-top: 3px;
         }
         .project-bottom-notice__right a {
           display: inline-block;
-          margin-top: 4px;
+          margin-top: 3px;
           color: ${brandColor};
           font-weight: 900;
           text-decoration: none;
         }
         .project-social-footer {
-          margin-top: 12px;
+          margin-top: 7px;
           border: 1px solid #d8dce2;
-          border-radius: 14px;
-          padding: 12px 14px;
+          border-radius: 10px;
+          padding: 8px 10px;
         }
         .project-social-footer__title {
           text-align: center;
-          font-size: 12px;
+          font-size: 10px;
           font-weight: 900;
           color: ${brandColor};
         }
         .project-social-footer__subtitle {
           text-align: center;
-          font-size: 11px;
+          font-size: 9px;
           color: #374151;
-          margin: 5px 0 10px;
+          margin: 3px 0 6px;
         }
         .project-social-footer__grid {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 10px;
+          gap: 6px;
         }
         .project-social-footer__item {
           display: flex;
           align-items: center;
-          gap: 8px;
-          font-size: 11px;
+          gap: 6px;
+          font-size: 8.7px;
         }
         .project-social-footer__icon {
-          width: 32px;
-          height: 32px;
+          width: 24px;
+          height: 24px;
           border-radius: 999px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
           color: #fff;
-          font-size: 12px;
+          font-size: 9px;
           font-weight: 900;
         }
         .project-social-footer__icon--facebook { background: #1877f2; }
@@ -796,15 +771,15 @@ export default function renderReceiptTemplate(
         .project-social-footer__icon--tiktok { background: #111827; }
         .project-social-footer__thanks {
           text-align: center;
-          margin-top: 12px;
-          font-size: 14px;
+          margin-top: 7px;
+          font-size: 11px;
           font-weight: 900;
           color: ${brandColor};
         }
         .project-social-footer__hash {
           text-align: center;
-          font-size: 12px;
-          margin-top: 2px;
+          font-size: 9px;
+          margin-top: 1px;
         }
         .project-social-footer__hash a {
           color: #1d4ed8;
@@ -816,7 +791,6 @@ export default function renderReceiptTemplate(
           .project-panels-grid,
           .project-bottom-notice,
           .project-social-footer__grid,
-          .project-header__contact,
           .project-payment-bank-grid,
           .project-terms-panel__qrbox {
             grid-template-columns: 1fr;
@@ -824,14 +798,9 @@ export default function renderReceiptTemplate(
           .project-total-table {
             width: 100%;
           }
-          .project-header__top {
-            grid-template-columns: 1fr;
-          }
-          .project-header__brand {
-            text-align: left;
-          }
           .project-page {
-            padding: 10mm 8mm;
+            width: auto;
+            padding: 3mm;
           }
         }
         @media print {
@@ -840,7 +809,7 @@ export default function renderReceiptTemplate(
             padding: 0;
             margin: 0;
           }
-          body { font-size: 12px; }
+          body { font-size: 11px; }
           .project-page {
             width: auto;
             margin: 0;
@@ -860,19 +829,7 @@ export default function renderReceiptTemplate(
     <body>
       <div class="project-page">
         <section class="project-header">
-          <div class="project-header__top">
-            <img class="project-header__logo" src="${escapeHtml(logoUrl)}" alt="Betech Solar Solutions logo" />
-            <div class="project-header__brand">
-              <h1>${escapeHtml(siteTitle)}</h1>
-              <p>Dealers in: Solar Solutions, Solar Products, e.t.c</p>
-              <div class="project-header__contact">
-                <div><strong>Tel:</strong>${companyPhonePrimary} / ${companyPhoneSecondary}</div>
-                <div><strong>Location:</strong>${companyLocation}</div>
-                <div><strong>Email:</strong>${companyEmail}</div>
-                <div><strong>Website:</strong>${companyWebsite}</div>
-              </div>
-            </div>
-          </div>
+          <img src="${escapeHtml(projectHeaderImg)}" alt="Betech Solar Solutions letterhead" />
         </section>
 
         <section class="project-info-grid">
