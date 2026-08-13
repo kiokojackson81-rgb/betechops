@@ -207,6 +207,37 @@ export default function PublicTermsPage() {
                     </div>
                   ) : null}
 
+                  {section.subsections?.length ? (
+                    <div className="mt-6 space-y-8">
+                      {section.subsections.map((subsection) => (
+                        <div key={`${section.number}-${subsection.title}`} className="space-y-4">
+                          <h3 className="text-lg font-semibold tracking-tight text-white sm:text-[1.2rem]">
+                            {subsection.title}
+                          </h3>
+                          {subsection.paragraphs?.length ? (
+                            <div className="space-y-4 text-[15px] leading-8 text-slate-200 sm:text-base">
+                              {subsection.paragraphs.map((paragraph) => (
+                                <p key={paragraph}>{paragraph}</p>
+                              ))}
+                            </div>
+                          ) : null}
+                          {subsection.bullets?.length ? (
+                            <ul className="grid gap-3 sm:grid-cols-2">
+                              {subsection.bullets.map((bullet) => (
+                                <li
+                                  key={bullet}
+                                  className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3 text-[15px] leading-7 text-slate-200 sm:text-base"
+                                >
+                                  {bullet}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
                   {section.steps?.length ? (
                     <ol className="mt-6 list-decimal space-y-3 pl-5 text-[15px] leading-8 text-slate-200 sm:text-base">
                       {section.steps.map((step) => (
