@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/nextAuth";
+import { isBenjaminSupervisorEmail } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { recomputeSupportCommissionLedger } from "@/lib/supportCommission";
@@ -100,8 +101,10 @@ export async function POST(req: Request) {
 
   const role = (session.user as { role?: string }).role;
   const email = (session.user as { email?: string }).email?.toLowerCase();
+  const isBenjamin = isBenjaminSupervisorEmail(email);
   const allowPricing =
     role === "ADMIN" ||
+    isBenjamin ||
     email === SPECIAL_EMAIL ||
     email === process.env.SUPPORT_PRICING_EMAIL?.toLowerCase();
 

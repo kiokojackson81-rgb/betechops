@@ -19,6 +19,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { buildEarningsCardBreakdown } from "@/lib/earningsCardBreakdown";
+import BenjaminPosPricingPanel from "./BenjaminPosPricingPanel";
 
 type TradingWeekChip = { key: string; label: string; start: Date; end: Date };
 
@@ -292,6 +293,7 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
   const [impersonated, setImpersonated] = useState<boolean>(false);
   const [impersonatedBy, setImpersonatedBy] = useState<string | null>(null);
   const [impersonateId, setImpersonateId] = useState<string | null>(null);
+  const [showBenjaminPosPricing, setShowBenjaminPosPricing] = useState(false);
 
   const appendImpersonateParam = useCallback(
     (params: URLSearchParams) => {
@@ -1064,6 +1066,17 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
                 >
                   Manual weekly
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setShowBenjaminPosPricing((prev) => !prev)}
+                  className={`rounded-full border px-3 py-1 transition ${
+                    showBenjaminPosPricing
+                      ? "border-cyan-400/50 bg-cyan-400/10 text-cyan-200"
+                      : "border-transparent hover:border-slate-500"
+                  }`}
+                >
+                  POS Pricing
+                </button>
               </>
             ) : null}
             <Link
@@ -1108,6 +1121,14 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
             </div>
           </div>
         </div>
+
+        {isBenjaminSupervisor && showBenjaminPosPricing ? (
+          <BenjaminPosPricingPanel
+            onQueueEmpty={() => {
+              setShowBenjaminPosPricing(false);
+            }}
+          />
+        ) : null}
 
         {/* Payroll earnings period banner removed */}
 
