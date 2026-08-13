@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { getPeriodKeyVariants } from "@/lib/payrollPeriodKey";
 import { ensurePayrollAdjustmentStorage } from "@/lib/payrollAdjustmentStorage";
+import { notifyPayrollAdjustmentApplied } from "@/services/payroll-notifications/payroll-notification.service";
 
 export const dynamic = "force-dynamic";
 
@@ -106,7 +107,26 @@ export async function POST(req: Request, ctx: any) {
         createdById: (auth.session?.user as any)?.id ?? "",
       },
     });
-    return NextResponse.json({ created });
+
+    let notification: any = null;
+    try {
+      notification = await notifyPayrollAdjustmentApplied({
+        attendantId,
+        periodKey,
+        periodLabel: periodLabel ?? periodKey,
+        adjustmentType: adjustmentType as any,
+        adjustmentKind: kind as any,
+        amount: Math.trunc(Math.max(0, amount)),
+        label: String(label || ""),
+      });
+    } catch (notificationError) {
+      notification = {
+        status: "failed",
+        detail: notificationError instanceof Error ? notificationError.message : String(notificationError),
+      };
+    }
+
+    return NextResponse.json({ created, notification });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Failed to create adjustment";
     return NextResponse.json({ error: msg }, { status: 500 });
