@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { FileText, Globe, Headphones, Link2 } from "lucide-react";
+import { FileText, Globe, MessageCircle } from "lucide-react";
 import PrintTermsButton from "@/app/p/terms/PrintTermsButton";
 import {
   PUBLIC_TERMS_SECTIONS,
@@ -11,7 +11,7 @@ import {
   TERMS_TITLE,
   TERMS_VERSION,
 } from "@/lib/publicTerms";
-import { TERMS_PATH, TERMS_URL } from "@/lib/publicLinks";
+import { TERMS_URL } from "@/lib/publicLinks";
 
 export const metadata: Metadata = {
   title: {
@@ -120,11 +120,13 @@ export default function PublicTermsPage() {
                   <span>Main Website</span>
                 </a>
                 <a
-                  href="mailto:info@betech.co.ke?subject=Betech%20Solar%20Terms%20Question"
+                  href="https://wa.me/254722151083"
+                  target="_blank"
+                  rel="noreferrer"
                   className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-slate-200 transition hover:border-white/20 hover:bg-white/[0.06]"
                 >
-                  <Headphones className="h-4 w-4" />
-                  <span>Ask a Question</span>
+                  <MessageCircle className="h-4 w-4" />
+                  <span>WhatsApp</span>
                 </a>
                 <PrintTermsButton />
               </div>
@@ -161,10 +163,6 @@ export default function PublicTermsPage() {
 
             <div className="space-y-6">
               <section className="terms-print-card rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(5,8,17,0.96),rgba(6,9,18,0.92))] p-6 shadow-[0_22px_70px_rgba(0,0,0,0.32)] sm:p-8">
-                <div className="inline-flex items-center gap-2 rounded-full border border-violet-400/25 bg-violet-500/10 px-4 py-2 text-sm font-semibold text-violet-100">
-                  <Link2 className="h-4 w-4" />
-                  <span>Route: {TERMS_PATH}</span>
-                </div>
                 <div className="mt-5 rounded-[24px] border border-amber-400/25 bg-amber-400/8 p-4 text-sm leading-7 text-amber-50 sm:text-base">
                   {TERMS_SHORT_NOTICE}
                 </div>
@@ -196,18 +194,9 @@ export default function PublicTermsPage() {
                   id={`section-${section.number}`}
                   className="terms-print-card scroll-mt-6 rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(5,8,17,0.96),rgba(6,9,18,0.92))] p-6 shadow-[0_22px_70px_rgba(0,0,0,0.32)] sm:p-8"
                 >
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <div className="text-[11px] uppercase tracking-[0.34em] text-cyan-300">Section {section.number}</div>
-                      <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-[1.9rem]">{section.title}</h2>
-                    </div>
-                    <a
-                      href={`#section-${section.number}`}
-                      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-white/20 hover:text-white print:hidden"
-                    >
-                      <Link2 className="h-3.5 w-3.5" />
-                      <span>Copy anchor</span>
-                    </a>
+                  <div>
+                    <div className="text-[11px] uppercase tracking-[0.34em] text-cyan-300">Section {section.number}</div>
+                    <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-[1.9rem]">{section.title}</h2>
                   </div>
 
                   {section.paragraphs?.length ? (
@@ -253,6 +242,7 @@ export default function PublicTermsPage() {
                   >
                     Copy reusable link
                   </a>
+                  <PrintTermsButton label="Download PDF" />
                   <Link
                     href="/"
                     className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-slate-200 transition hover:bg-white/10"
