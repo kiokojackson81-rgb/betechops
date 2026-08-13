@@ -74,7 +74,7 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     number: 3,
     title: "Betech After-Sales Support",
     paragraphs: [
-      "Depending on system size, package and installation type, Betech may provide approximately 6 months to 1 year of complimentary workmanship / after-sales support.",
+      "Depending on the system size, package and installation type, Betech may provide a complimentary workmanship / after-sales support period, typically ranging from 6 months to 1 year. The applicable support period may depend on the specific transaction or installation scope.",
       "This complimentary workmanship support is separate from the manufacturer’s product warranty.",
       "Complimentary support may cover confirmed installation-related issues once the actual cause has been established.",
       "Complimentary support does not automatically mean that every electrical problem becomes Betech’s responsibility, that immediate or same-day technician dispatch will occur, that internal house wiring repairs are free, that product replacement is automatic, that upgrades are free, that transport is always free, or that a refund automatically applies.",
@@ -108,7 +108,7 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     number: 5,
     title: "Chargeable Site Visits",
     paragraphs: [
-      "If a technician visits and determines that Betech’s installation is operating correctly and the problem relates to something outside Betech workmanship, charges may apply.",
+      "Where a site visit is arranged under the above support process, and the technician determines that Betech’s installation is operating correctly and that the reported problem relates to something outside Betech’s workmanship or original installation scope, reasonable charges may apply.",
       "Where practical, significant chargeable work should be communicated before it is undertaken.",
     ],
     bullets: [
@@ -261,7 +261,7 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     title: "Battery Backup Expectations",
     paragraphs: [
       "There is no guaranteed fixed backup duration simply based on battery size because backup depends heavily on the electrical load.",
-      "If approximately 10kWh of usable energy is available, then at 1kW average load the theoretical runtime is approximately 10 hours, at 2kW it is approximately 5 hours, and at 4kW it is approximately 2.5 hours.",
+      "For illustration only, if approximately 10kWh of usable energy were available, a constant 1kW load would mathematically correspond to approximately 10 hours, a 2kW load to approximately 5 hours, and a 4kW load to approximately 2.5 hours before accounting for system losses, reserve limits and changing operating conditions.",
       "Actual runtime may be lower due to inverter losses, battery operating limits, changing loads, temperature, battery state of charge and manufacturer settings.",
       "Betech cannot promise fixed backup hours unless the electrical load is also defined.",
     ],
@@ -441,6 +441,7 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
       "Where an appropriate existing site earthing system exists, Betech may connect the solar installation to it.",
       "If suitable earthing does not exist, Betech may advise the customer to arrange proper earthing through a qualified electrician.",
       "Betech may provide additional earthing as separate chargeable work where agreed.",
+      "Proper earthing forms an important part of electrical safety but does not, by itself, guarantee protection against lightning or extreme electrical events.",
     ],
   },
   {
@@ -557,7 +558,7 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     title: "Customer Electrician Removing Product",
     paragraphs: [
       "After Betech’s complimentary support period, Betech may advise the customer to use their own qualified electrician to safely remove suspected faulty equipment.",
-      "The item may then be delivered to Betech’s designated shop or service point, or taken to or referred to an authorized manufacturer or distributor service centre.",
+      "The item may then be delivered to Betech’s designated shop or service point, or referred or delivered to an authorized manufacturer or distributor service centre.",
     ],
   },
   {
@@ -696,8 +697,8 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     number: 54,
     title: "Complaint Management",
     paragraphs: [
-      "Betech follows a practical complaint-management path focused on evidence, technical review and remedy based on the actual cause.",
-      "The normal path is: customer complaint, then evidence and readings, then technical review, then remote or video assistance, then customer electrician if internal issue is suspected, then Betech technician where necessary, then diagnosis, then the appropriate remedy.",
+      "Complaints involving technical or system-performance concerns will generally follow the technical support process described in Section 4. Betech’s complaint-management approach focuses on obtaining relevant evidence, identifying the actual cause and determining the appropriate remedy.",
+      "The appropriate outcome will then depend on the findings from that process and the actual cause identified.",
     ],
   },
   {
@@ -765,7 +766,7 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     number: 60,
     title: "Final System Specification",
     paragraphs: [
-      "Where available, final system specification may be determined from the invoice, receipt, quotation, WhatsApp agreement, written order, payment description, delivered equipment and installed equipment.",
+      "For the purpose of determining the final agreed transaction and system specification, the applicable system may be identified from the invoice, receipt, quotation, WhatsApp agreement, written order, payment description, delivered equipment and installed equipment.",
       "A formal quotation is not required in every case.",
     ],
   },

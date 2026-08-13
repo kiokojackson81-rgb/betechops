@@ -95,10 +95,16 @@ export default function PublicTermsPage() {
                   <h1 className="mt-3 max-w-4xl text-2xl font-semibold tracking-tight text-white sm:text-3xl lg:text-[2.35rem]">
                     {TERMS_TITLE}
                   </h1>
-                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-300">
-                    <span>Effective Date: {TERMS_EFFECTIVE_DATE}</span>
-                    <span>Version: {TERMS_VERSION}</span>
-                    <span>Last updated: {TERMS_EFFECTIVE_DATE}</span>
+                  <div className="mt-3 flex flex-col gap-1 text-sm text-slate-300 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4 sm:gap-y-2">
+                    <span>
+                      <span className="font-semibold text-slate-100">Effective Date:</span> {TERMS_EFFECTIVE_DATE}
+                    </span>
+                    <span>
+                      <span className="font-semibold text-slate-100">Version:</span> {TERMS_VERSION}
+                    </span>
+                    <span>
+                      <span className="font-semibold text-slate-100">Last Updated:</span> {TERMS_EFFECTIVE_DATE}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -238,7 +244,7 @@ export default function PublicTermsPage() {
               <section className="terms-print-card rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(5,8,17,0.96),rgba(6,9,18,0.92))] p-6 shadow-[0_22px_70px_rgba(0,0,0,0.32)] sm:p-8">
                 <div className="text-[11px] uppercase tracking-[0.34em] text-cyan-300">Final Notice</div>
                 <div className="mt-4 rounded-[24px] border border-white/10 bg-white/[0.02] p-4 text-[15px] leading-8 text-slate-200 sm:text-base">
-                  These Terms are intended to give customers confidence, explain how Betech installs and supports solar systems, and clarify how technical, capacity, warranty and after-sales matters are handled. Nothing on this page is intended to exclude any rights or remedies that cannot legally be excluded under applicable Kenyan law.
+                  These Terms are intended to provide customers with clear information about Betech’s installation standards, system-performance expectations, technical support, warranty procedures and customer responsibilities. They should be read together with the customer’s applicable invoice, receipt, quotation or other transaction records. Nothing in these Terms excludes or restricts any right or remedy that cannot lawfully be excluded under applicable Kenyan law.
                 </div>
                 <div className="mt-6 flex flex-wrap gap-3 print:hidden">
                   <a
