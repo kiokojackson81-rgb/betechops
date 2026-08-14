@@ -130,6 +130,7 @@ type SearchSelectorProps = {
 type DetailsTab = "OVERVIEW" | "PAYMENTS" | "FOLLOW_UPS" | "TIMELINE";
 type ActionModal = "PAYMENT" | "ASSIGN" | "FOLLOW_UP" | "PROMISE" | "RELEASE" | null;
 type QuickFilter = "ALL" | "ACTIVE" | "DUE_TODAY" | "DUE_WEEK" | "OVERDUE" | "FULLY_PAID" | "CANCELLED";
+type InstallmentFrequency = "WEEKLY" | "MONTHLY";
 
 const STATUSES = [
   "ALL",
@@ -191,6 +192,23 @@ function formatDateTime(value: string | null | undefined) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function toDateInputValue(value: Date) {
+  const year = value.getFullYear();
+  const month = `${value.getMonth() + 1}`.padStart(2, "0");
+  const day = `${value.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function addInstallmentPeriods(count: number, frequency: InstallmentFrequency) {
+  const next = new Date();
+  if (frequency === "WEEKLY") {
+    next.setDate(next.getDate() + count * 7);
+    return next;
+  }
+  next.setMonth(next.getMonth() + count);
+  return next;
 }
 
 function titleCase(value: string) {
@@ -319,18 +337,21 @@ export default function LipaPolePoleAdminClient({
   const pageSize = 10;
   const hasHydratedRef = useRef(false);
 
-  const [customer, setCustomer] = useState<SearchOption | null>(null);
   const [product, setProduct] = useState<SearchOption | null>(null);
   const [salesperson, setSalesperson] = useState<SearchOption | null>(null);
   const [assignedAgent, setAssignedAgent] = useState<SearchOption | null>(null);
   const [assignAgent, setAssignAgent] = useState<SearchOption | null>(null);
 
   const [createForm, setCreateForm] = useState({
+    customerName: "",
+    customerPhone: "",
+    customerEmail: "",
     quantity: "1",
     agreedUnitPrice: "",
     agreedTotal: "",
-    expectedCompletionDate: "",
-    paymentMode: "FLEXIBLE",
+    installmentFrequency: "MONTHLY" as InstallmentFrequency,
+    installmentCount: "3",
+    paymentMode: "SCHEDULED",
     reservationMode: "SOFT_RESERVE",
     source: "",
     notes: "",
@@ -454,14 +475,6 @@ export default function LipaPolePoleAdminClient({
     }
   }
 
-  async function searchCustomers(query: string) {
-    const data = await readJson<Array<{ id: string; name?: string | null; email?: string | null; phone?: string | null }>>(
-      `/api/admin/customers/search?q=${encodeURIComponent(query)}`,
-      { headers: {} },
-    );
-    return data.map((item) => toSearchOption(item, "Customer"));
-  }
-
   async function searchUsers(query: string) {
     const data = await readJson<Array<{ id: string; name?: string | null; email?: string | null }>>(
       `/api/users/search?q=${encodeURIComponent(query)}`,
@@ -480,8 +493,12 @@ export default function LipaPolePoleAdminClient({
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!customer) {
-      setBanner({ tone: "error", text: "Select a customer before creating an account." });
+    if (!createForm.customerName.trim()) {
+      setBanner({ tone: "error", text: "Customer name is required." });
+      return;
+    }
+    if (!createForm.customerPhone.trim()) {
+      setBanner({ tone: "error", text: "Customer phone is required." });
       return;
     }
     if (!createForm.agreedUnitPrice.trim()) {
@@ -492,14 +509,20 @@ export default function LipaPolePoleAdminClient({
     setIsSubmittingCreate(true);
     setBanner(null);
     try {
+      const installmentCount = Math.max(1, Number(createForm.installmentCount || "1"));
+      const derivedCompletionDate = toDateInputValue(addInstallmentPeriods(installmentCount, createForm.installmentFrequency));
       const payload = {
-        customerId: customer.id,
+        customer: {
+          name: createForm.customerName.trim(),
+          phone: createForm.customerPhone.trim(),
+          email: createForm.customerEmail.trim() || null,
+        },
         productId: product?.id ?? null,
         quantity: Number(createForm.quantity || "1"),
         agreedUnitPrice: createForm.agreedUnitPrice,
         agreedTotal: createForm.agreedTotal.trim() ? createForm.agreedTotal : null,
-        expectedCompletionDate: createForm.expectedCompletionDate || null,
-        paymentMode: createForm.paymentMode,
+        expectedCompletionDate: derivedCompletionDate,
+        paymentMode: installmentCount > 0 ? "SCHEDULED" : createForm.paymentMode,
         reservationMode: createForm.reservationMode,
         salespersonId: salesperson?.id ?? null,
         source: createForm.source.trim() || null,
@@ -526,16 +549,19 @@ export default function LipaPolePoleAdminClient({
       await refreshList(data.account.id);
       setBanner({ tone: "success", text: "Lipa Pole Pole account created." });
       setShowCreateModal(false);
-      setCustomer(null);
       setProduct(null);
       setSalesperson(null);
       setAssignedAgent(null);
       setCreateForm({
+        customerName: "",
+        customerPhone: "",
+        customerEmail: "",
         quantity: "1",
         agreedUnitPrice: "",
         agreedTotal: "",
-        expectedCompletionDate: "",
-        paymentMode: "FLEXIBLE",
+        installmentFrequency: "MONTHLY",
+        installmentCount: "3",
+        paymentMode: "SCHEDULED",
         reservationMode: "SOFT_RESERVE",
         source: "",
         notes: "",
@@ -833,6 +859,15 @@ export default function LipaPolePoleAdminClient({
   const safePage = Math.min(page, totalPages);
   const paginatedItems = filteredItems.slice((safePage - 1) * pageSize, safePage * pageSize);
   const activeDetail = expandedLppId && detail?.account.id === expandedLppId ? detail : null;
+  const createQuantity = Math.max(1, Number(createForm.quantity || "1"));
+  const createUnitPrice = Math.max(0, Number(createForm.agreedUnitPrice || 0));
+  const createBaseTotal = createQuantity * createUnitPrice;
+  const createAgreedTotal = Math.max(0, Number(createForm.agreedTotal || createBaseTotal || 0));
+  const createDeposit = Math.max(0, Number(createForm.initialPaymentAmount || 0));
+  const createBalance = Math.max(0, createAgreedTotal - createDeposit);
+  const createInstallmentCount = Math.max(1, Number(createForm.installmentCount || "1"));
+  const createInstallmentAmount = createInstallmentCount > 0 ? createBalance / createInstallmentCount : createBalance;
+  const createExpectedCompletionDate = addInstallmentPeriods(createInstallmentCount, createForm.installmentFrequency);
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(29,78,216,0.18),transparent_28%),radial-gradient(circle_at_top_right,rgba(15,23,42,0.7),transparent_36%),linear-gradient(180deg,#08111f_0%,#050b16_100%)] px-4 py-5 text-slate-100 lg:px-6 xl:px-8">
@@ -1169,16 +1204,39 @@ export default function LipaPolePoleAdminClient({
       </div>
 
       {showCreateModal ? (
-        <ModalShell title="Create New Lipa Pole Pole" subtitle="Open a new LPP account and optionally capture the first deposit." onClose={() => setShowCreateModal(false)}>
+        <ModalShell title="Create New Lipa Pole Pole" subtitle="Capture customer details, product, deposit, and installment plan in one simple flow." onClose={() => setShowCreateModal(false)}>
           <form className="space-y-4" onSubmit={handleCreate}>
+            <div className="grid gap-4 rounded-[24px] border border-white/10 bg-slate-950/40 p-4 lg:grid-cols-3">
+              <MetricTile label="Agreed total" value={formatKes(createAgreedTotal)} />
+              <MetricTile label="Deposit paid" value={formatKes(createDeposit)} tone="text-emerald-300" />
+              <MetricTile label="Pending balance" value={formatKes(createBalance)} tone="text-amber-300" />
+              <MetricTile label={`${titleCase(createForm.installmentFrequency)} installment`} value={formatKes(createInstallmentAmount)} className="lg:col-span-1" />
+              <MetricTile label="Installments" value={String(createInstallmentCount)} className="lg:col-span-1" />
+              <MetricTile label="Expected completion" value={formatDate(toDateInputValue(createExpectedCompletionDate))} className="lg:col-span-1" />
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-3">
+              <Field label="Customer name">
+                <input className={inputClass} value={createForm.customerName} onChange={(event) => setCreateForm((current) => ({ ...current, customerName: event.target.value }))} placeholder="John Kamau" />
+              </Field>
+              <Field label="Phone number">
+                <input className={inputClass} value={createForm.customerPhone} onChange={(event) => setCreateForm((current) => ({ ...current, customerPhone: event.target.value }))} placeholder="0701 123 321" />
+              </Field>
+              <Field label="Email">
+                <input type="email" className={inputClass} value={createForm.customerEmail} onChange={(event) => setCreateForm((current) => ({ ...current, customerEmail: event.target.value }))} placeholder="customer@example.com" />
+              </Field>
+            </div>
+
             <div className="grid gap-4 lg:grid-cols-2">
-              <SearchSelector label="Customer" placeholder="Search customer by name, phone, or email" value={customer} onChange={setCustomer} search={searchCustomers} />
               <SearchSelector label="Product" placeholder="Search POS product" value={product} onChange={setProduct} search={searchProducts} />
               <SearchSelector label="Salesperson" placeholder="Search salesperson" value={salesperson} onChange={setSalesperson} search={searchUsers} />
               <SearchSelector label="Assigned agent" placeholder="Search assigned agent" value={assignedAgent} onChange={setAssignedAgent} search={searchUsers} />
+              <Field label="Source">
+                <input className={inputClass} value={createForm.source} onChange={(event) => setCreateForm((current) => ({ ...current, source: event.target.value }))} placeholder="Walk-in, referral, call center..." />
+              </Field>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <Field label="Quantity">
                 <input className={inputClass} value={createForm.quantity} onChange={(event) => setCreateForm((current) => ({ ...current, quantity: event.target.value }))} />
               </Field>
@@ -1188,13 +1246,25 @@ export default function LipaPolePoleAdminClient({
               <Field label="Agreed total override">
                 <input className={inputClass} value={createForm.agreedTotal} onChange={(event) => setCreateForm((current) => ({ ...current, agreedTotal: event.target.value }))} placeholder="Optional" />
               </Field>
+              <Field label="Deposit paid">
+                <input className={inputClass} value={createForm.initialPaymentAmount} onChange={(event) => setCreateForm((current) => ({ ...current, initialPaymentAmount: event.target.value }))} placeholder="5000" />
+              </Field>
+              <Field label="Installment frequency">
+                <select className={inputClass} value={createForm.installmentFrequency} onChange={(event) => setCreateForm((current) => ({ ...current, installmentFrequency: event.target.value as InstallmentFrequency }))}>
+                  <option value="WEEKLY">Weekly</option>
+                  <option value="MONTHLY">Monthly</option>
+                </select>
+              </Field>
+              <Field label="Number of installments">
+                <input className={inputClass} value={createForm.installmentCount} onChange={(event) => setCreateForm((current) => ({ ...current, installmentCount: event.target.value }))} placeholder="3" />
+              </Field>
               <Field label="Expected completion">
-                <input type="date" className={inputClass} value={createForm.expectedCompletionDate} onChange={(event) => setCreateForm((current) => ({ ...current, expectedCompletionDate: event.target.value }))} />
+                <input className={`${inputClass} cursor-not-allowed text-slate-400`} value={toDateInputValue(createExpectedCompletionDate)} readOnly />
               </Field>
               <Field label="Payment mode">
                 <select className={inputClass} value={createForm.paymentMode} onChange={(event) => setCreateForm((current) => ({ ...current, paymentMode: event.target.value }))}>
-                  <option value="FLEXIBLE">Flexible</option>
                   <option value="SCHEDULED">Scheduled</option>
+                  <option value="FLEXIBLE">Flexible</option>
                 </select>
               </Field>
               <Field label="Reservation mode">
@@ -1207,20 +1277,35 @@ export default function LipaPolePoleAdminClient({
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2">
-              <Field label="Source">
-                <input className={inputClass} value={createForm.source} onChange={(event) => setCreateForm((current) => ({ ...current, source: event.target.value }))} placeholder="Walk-in, referral, call center..." />
-              </Field>
               <Field label="Notes">
                 <textarea className={textareaClass} value={createForm.notes} onChange={(event) => setCreateForm((current) => ({ ...current, notes: event.target.value }))} />
               </Field>
+              <div className="rounded-[24px] border border-white/10 bg-slate-950/45 p-4 text-sm text-slate-300">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Installment plan preview</div>
+                <div className="mt-4 grid gap-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-slate-500">Agreed total</span>
+                    <span className="font-semibold text-white">{formatKes(createAgreedTotal)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-slate-500">Deposit paid</span>
+                    <span className="font-semibold text-emerald-300">{formatKes(createDeposit)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-slate-500">Pending balance</span>
+                    <span className="font-semibold text-amber-300">{formatKes(createBalance)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-slate-500">{titleCase(createForm.installmentFrequency)} installment amount</span>
+                    <span className="font-semibold text-white">{formatKes(createInstallmentAmount)}</span>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="rounded-[24px] border border-white/10 bg-slate-950/45 p-4">
-              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Initial payment</div>
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Deposit payment details</div>
               <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <Field label="Amount">
-                  <input className={inputClass} value={createForm.initialPaymentAmount} onChange={(event) => setCreateForm((current) => ({ ...current, initialPaymentAmount: event.target.value }))} placeholder="Optional" />
-                </Field>
                 <Field label="Method">
                   <select className={inputClass} value={createForm.initialPaymentMethod} onChange={(event) => setCreateForm((current) => ({ ...current, initialPaymentMethod: event.target.value }))}>
                     <option value="MPESA">M-Pesa</option>
@@ -1829,9 +1914,9 @@ function SummaryValue({ label, value }: { label: string; value: string }) {
   );
 }
 
-function MetricTile({ label, value, tone }: { label: string; value: string; tone?: string }) {
+function MetricTile({ label, value, tone, className = "" }: { label: string; value: string; tone?: string; className?: string }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-3">
+    <div className={`rounded-2xl border border-white/10 bg-slate-900/60 p-3 ${className}`.trim()}>
       <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</div>
       <div className={`mt-2 text-lg font-semibold ${tone || "text-white"}`}>{value}</div>
     </div>
