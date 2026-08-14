@@ -117,6 +117,7 @@ type SearchOption = {
   id: string;
   label: string;
   hint?: string | null;
+  amount?: number | null;
 };
 
 type SearchSelectorProps = {
@@ -288,13 +289,14 @@ async function readJson<T>(input: RequestInfo, init?: RequestInit) {
 }
 
 function toSearchOption(
-  item: { id: string; name?: string | null; email?: string | null; phone?: string | null; sku?: string | null },
+  item: { id: string; name?: string | null; email?: string | null; phone?: string | null; sku?: string | null; sellingPrice?: number | null },
   fallback: string,
 ): SearchOption {
   return {
     id: item.id,
     label: item.name || item.email || fallback,
     hint: item.phone || item.email || item.sku || null,
+    amount: typeof item.sellingPrice === "number" ? item.sellingPrice : null,
   };
 }
 
@@ -328,6 +330,7 @@ export default function LipaPolePoleAdminClient({
   const [isSubmittingFollowUp, setIsSubmittingFollowUp] = useState(false);
   const [isSubmittingPromise, setIsSubmittingPromise] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showCreateMoreDetails, setShowCreateMoreDetails] = useState(false);
   const [actionModal, setActionModal] = useState<ActionModal>(null);
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("ALL");
   const [agentFilter, setAgentFilter] = useState("ALL");
@@ -346,11 +349,16 @@ export default function LipaPolePoleAdminClient({
     customerName: "",
     customerPhone: "",
     customerEmail: "",
+    county: "",
+    town: "",
+    estateLandmark: "",
+    locationNotes: "",
     quantity: "1",
     agreedUnitPrice: "",
     agreedTotal: "",
     installmentFrequency: "MONTHLY" as InstallmentFrequency,
     installmentCount: "3",
+    expectedCompletionDateOverride: "",
     paymentMode: "SCHEDULED",
     reservationMode: "SOFT_RESERVE",
     source: "",
@@ -484,11 +492,22 @@ export default function LipaPolePoleAdminClient({
   }
 
   async function searchProducts(query: string) {
-    const data = await readJson<{ items: Array<{ id: string; name?: string | null; sku?: string | null }> }>(
+    const data = await readJson<{ items: Array<{ id: string; name?: string | null; sku?: string | null; sellingPrice?: number | null }> }>(
       `/api/attendant/pos-products?q=${encodeURIComponent(query)}&limit=20`,
       { headers: {} },
     );
     return (data.items || []).map((item) => toSearchOption(item, "Product"));
+  }
+
+  function handleProductChange(option: SearchOption | null) {
+    setProduct(option);
+    if (!option) return;
+    if (typeof option.amount === "number" && option.amount > 0) {
+      setCreateForm((current) => ({
+        ...current,
+        agreedUnitPrice: String(Number(option.amount)),
+      }));
+    }
   }
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
@@ -501,43 +520,79 @@ export default function LipaPolePoleAdminClient({
       setBanner({ tone: "error", text: "Customer phone is required." });
       return;
     }
+    if (!product?.id) {
+      setBanner({ tone: "error", text: "Select a product." });
+      return;
+    }
     if (!createForm.agreedUnitPrice.trim()) {
       setBanner({ tone: "error", text: "Agreed unit price is required." });
+      return;
+    }
+    if (createQuantity < 1) {
+      setBanner({ tone: "error", text: "Quantity must be at least 1." });
+      return;
+    }
+    if (createUnitPrice <= 0) {
+      setBanner({ tone: "error", text: "Agreed unit price must be greater than zero." });
+      return;
+    }
+    if (createInstallmentCount < 1) {
+      setBanner({ tone: "error", text: "Installments must be at least 1." });
+      return;
+    }
+    if (createDeposit < 0) {
+      setBanner({ tone: "error", text: "Deposit cannot be negative." });
+      return;
+    }
+    if (createDeposit > createAgreedTotal) {
+      setBanner({ tone: "error", text: `Deposit cannot exceed ${formatKes(createAgreedTotal)}.` });
       return;
     }
 
     setIsSubmittingCreate(true);
     setBanner(null);
     try {
-      const installmentCount = Math.max(1, Number(createForm.installmentCount || "1"));
-      const derivedCompletionDate = toDateInputValue(addInstallmentPeriods(installmentCount, createForm.installmentFrequency));
+      const derivedCompletionDate = createForm.expectedCompletionDateOverride || toDateInputValue(createExpectedCompletionDate);
       const payload = {
         customer: {
           name: createForm.customerName.trim(),
           phone: createForm.customerPhone.trim(),
           email: createForm.customerEmail.trim() || null,
+          county: createForm.county.trim() || null,
+          town: createForm.town.trim() || null,
+          estateLandmark: createForm.estateLandmark.trim() || null,
+          locationNotes: createForm.locationNotes.trim() || null,
         },
         productId: product?.id ?? null,
-        quantity: Number(createForm.quantity || "1"),
+        quantity: createQuantity,
         agreedUnitPrice: createForm.agreedUnitPrice,
         agreedTotal: createForm.agreedTotal.trim() ? createForm.agreedTotal : null,
         expectedCompletionDate: derivedCompletionDate,
-        paymentMode: installmentCount > 0 ? "SCHEDULED" : createForm.paymentMode,
+        paymentMode: createForm.paymentMode,
         reservationMode: createForm.reservationMode,
         salespersonId: salesperson?.id ?? null,
         source: createForm.source.trim() || null,
         notes: createForm.notes.trim() || null,
+        installmentPlan: createBalance > 0
+          ? {
+              frequency: createForm.installmentFrequency,
+              count: createInstallmentCount,
+            }
+          : null,
         assignment: assignedAgent
           ? {
               assignedToId: assignedAgent.id,
               method: "MANUAL",
             }
           : null,
-        initialPayment: createForm.initialPaymentAmount.trim()
+        initialPayment: createDeposit > 0
           ? {
-              amount: createForm.initialPaymentAmount,
+              amount: createDeposit,
               method: createForm.initialPaymentMethod,
-              reference: createForm.initialPaymentReference.trim() || null,
+              reference:
+                createForm.initialPaymentMethod === "CASH"
+                  ? null
+                  : createForm.initialPaymentReference.trim() || null,
               notes: createForm.initialPaymentNotes.trim() || null,
             }
           : null,
@@ -549,6 +604,7 @@ export default function LipaPolePoleAdminClient({
       await refreshList(data.account.id);
       setBanner({ tone: "success", text: "Lipa Pole Pole account created." });
       setShowCreateModal(false);
+      setShowCreateMoreDetails(false);
       setProduct(null);
       setSalesperson(null);
       setAssignedAgent(null);
@@ -556,11 +612,16 @@ export default function LipaPolePoleAdminClient({
         customerName: "",
         customerPhone: "",
         customerEmail: "",
+        county: "",
+        town: "",
+        estateLandmark: "",
+        locationNotes: "",
         quantity: "1",
         agreedUnitPrice: "",
         agreedTotal: "",
         installmentFrequency: "MONTHLY",
         installmentCount: "3",
+        expectedCompletionDateOverride: "",
         paymentMode: "SCHEDULED",
         reservationMode: "SOFT_RESERVE",
         source: "",
@@ -1206,122 +1267,188 @@ export default function LipaPolePoleAdminClient({
       {showCreateModal ? (
         <ModalShell title="Create New Lipa Pole Pole" subtitle="Capture customer details, product, deposit, and installment plan in one simple flow." onClose={() => setShowCreateModal(false)}>
           <form className="space-y-4" onSubmit={handleCreate}>
-            <div className="grid gap-4 rounded-[24px] border border-white/10 bg-slate-950/40 p-4 lg:grid-cols-3">
-              <MetricTile label="Agreed total" value={formatKes(createAgreedTotal)} />
-              <MetricTile label="Deposit paid" value={formatKes(createDeposit)} tone="text-emerald-300" />
-              <MetricTile label="Pending balance" value={formatKes(createBalance)} tone="text-amber-300" />
-              <MetricTile label={`${titleCase(createForm.installmentFrequency)} installment`} value={formatKes(createInstallmentAmount)} className="lg:col-span-1" />
-              <MetricTile label="Installments" value={String(createInstallmentCount)} className="lg:col-span-1" />
-              <MetricTile label="Expected completion" value={formatDate(toDateInputValue(createExpectedCompletionDate))} className="lg:col-span-1" />
-            </div>
-
-            <div className="grid gap-4 lg:grid-cols-3">
-              <Field label="Customer name">
-                <input className={inputClass} value={createForm.customerName} onChange={(event) => setCreateForm((current) => ({ ...current, customerName: event.target.value }))} placeholder="John Kamau" />
-              </Field>
-              <Field label="Phone number">
-                <input className={inputClass} value={createForm.customerPhone} onChange={(event) => setCreateForm((current) => ({ ...current, customerPhone: event.target.value }))} placeholder="0701 123 321" />
-              </Field>
-              <Field label="Email">
-                <input type="email" className={inputClass} value={createForm.customerEmail} onChange={(event) => setCreateForm((current) => ({ ...current, customerEmail: event.target.value }))} placeholder="customer@example.com" />
-              </Field>
-            </div>
-
-            <div className="grid gap-4 lg:grid-cols-2">
-              <SearchSelector label="Product" placeholder="Search POS product" value={product} onChange={setProduct} search={searchProducts} />
-              <SearchSelector label="Salesperson" placeholder="Search salesperson" value={salesperson} onChange={setSalesperson} search={searchUsers} />
-              <SearchSelector label="Assigned agent" placeholder="Search assigned agent" value={assignedAgent} onChange={setAssignedAgent} search={searchUsers} />
-              <Field label="Source">
-                <input className={inputClass} value={createForm.source} onChange={(event) => setCreateForm((current) => ({ ...current, source: event.target.value }))} placeholder="Walk-in, referral, call center..." />
-              </Field>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <Field label="Quantity">
-                <input className={inputClass} value={createForm.quantity} onChange={(event) => setCreateForm((current) => ({ ...current, quantity: event.target.value }))} />
-              </Field>
-              <Field label="Agreed unit price">
-                <input className={inputClass} value={createForm.agreedUnitPrice} onChange={(event) => setCreateForm((current) => ({ ...current, agreedUnitPrice: event.target.value }))} placeholder="15000" />
-              </Field>
-              <Field label="Agreed total override">
-                <input className={inputClass} value={createForm.agreedTotal} onChange={(event) => setCreateForm((current) => ({ ...current, agreedTotal: event.target.value }))} placeholder="Optional" />
-              </Field>
-              <Field label="Deposit paid">
-                <input className={inputClass} value={createForm.initialPaymentAmount} onChange={(event) => setCreateForm((current) => ({ ...current, initialPaymentAmount: event.target.value }))} placeholder="5000" />
-              </Field>
-              <Field label="Installment frequency">
-                <select className={inputClass} value={createForm.installmentFrequency} onChange={(event) => setCreateForm((current) => ({ ...current, installmentFrequency: event.target.value as InstallmentFrequency }))}>
-                  <option value="WEEKLY">Weekly</option>
-                  <option value="MONTHLY">Monthly</option>
-                </select>
-              </Field>
-              <Field label="Number of installments">
-                <input className={inputClass} value={createForm.installmentCount} onChange={(event) => setCreateForm((current) => ({ ...current, installmentCount: event.target.value }))} placeholder="3" />
-              </Field>
-              <Field label="Expected completion">
-                <input className={`${inputClass} cursor-not-allowed text-slate-400`} value={toDateInputValue(createExpectedCompletionDate)} readOnly />
-              </Field>
-              <Field label="Payment mode">
-                <select className={inputClass} value={createForm.paymentMode} onChange={(event) => setCreateForm((current) => ({ ...current, paymentMode: event.target.value }))}>
-                  <option value="SCHEDULED">Scheduled</option>
-                  <option value="FLEXIBLE">Flexible</option>
-                </select>
-              </Field>
-              <Field label="Reservation mode">
-                <select className={inputClass} value={createForm.reservationMode} onChange={(event) => setCreateForm((current) => ({ ...current, reservationMode: event.target.value }))}>
-                  <option value="NONE">None</option>
-                  <option value="SOFT_RESERVE">Soft reserve</option>
-                  <option value="HARD_RESERVE">Hard reserve</option>
-                </select>
-              </Field>
-            </div>
-
-            <div className="grid gap-4 lg:grid-cols-2">
-              <Field label="Notes">
-                <textarea className={textareaClass} value={createForm.notes} onChange={(event) => setCreateForm((current) => ({ ...current, notes: event.target.value }))} />
-              </Field>
-              <div className="rounded-[24px] border border-white/10 bg-slate-950/45 p-4 text-sm text-slate-300">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Installment plan preview</div>
-                <div className="mt-4 grid gap-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-slate-500">Agreed total</span>
-                    <span className="font-semibold text-white">{formatKes(createAgreedTotal)}</span>
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.9fr)]">
+              <div className="space-y-4">
+                <section className="rounded-[24px] border border-white/10 bg-slate-950/40 p-4">
+                  <div className="mb-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Customer details</div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field label="Customer name">
+                      <input className={inputClass} value={createForm.customerName} onChange={(event) => setCreateForm((current) => ({ ...current, customerName: event.target.value }))} placeholder="John Kamau" />
+                    </Field>
+                    <Field label="Phone number">
+                      <input className={inputClass} value={createForm.customerPhone} onChange={(event) => setCreateForm((current) => ({ ...current, customerPhone: event.target.value }))} placeholder="0701 123 321" />
+                    </Field>
+                    <Field label="Email">
+                      <input type="email" className={inputClass} value={createForm.customerEmail} onChange={(event) => setCreateForm((current) => ({ ...current, customerEmail: event.target.value }))} placeholder="customer@example.com" />
+                    </Field>
                   </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-slate-500">Deposit paid</span>
-                    <span className="font-semibold text-emerald-300">{formatKes(createDeposit)}</span>
+                </section>
+
+                <section className="rounded-[24px] border border-white/10 bg-slate-950/40 p-4">
+                  <div className="mb-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Product and pricing</div>
+                  <div className="space-y-4">
+                    <SearchSelector label="Product" placeholder="Search POS product" value={product} onChange={handleProductChange} search={searchProducts} />
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <StepperInput
+                        label="Quantity"
+                        value={createForm.quantity}
+                        onChange={(value) => setCreateForm((current) => ({ ...current, quantity: value }))}
+                        min={1}
+                      />
+                      <Field label="Agreed unit price">
+                        <input className={inputClass} value={createForm.agreedUnitPrice} onChange={(event) => setCreateForm((current) => ({ ...current, agreedUnitPrice: event.target.value }))} placeholder="15000" />
+                      </Field>
+                      <Field label="Agreed total override">
+                        <input className={inputClass} value={createForm.agreedTotal} onChange={(event) => setCreateForm((current) => ({ ...current, agreedTotal: event.target.value }))} placeholder="Optional override" />
+                      </Field>
+                      <Field label="Deposit paid">
+                        <input className={inputClass} value={createForm.initialPaymentAmount} onChange={(event) => setCreateForm((current) => ({ ...current, initialPaymentAmount: event.target.value }))} placeholder="0" />
+                      </Field>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-slate-500">Pending balance</span>
-                    <span className="font-semibold text-amber-300">{formatKes(createBalance)}</span>
+                </section>
+
+                <section className="rounded-[24px] border border-white/10 bg-slate-950/40 p-4">
+                  <div className="mb-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Payment plan</div>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Payment frequency</div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {(["WEEKLY", "MONTHLY"] as InstallmentFrequency[]).map((frequency) => (
+                          <button
+                            key={frequency}
+                            type="button"
+                            onClick={() => setCreateForm((current) => ({ ...current, installmentFrequency: frequency }))}
+                            className={`rounded-2xl border px-4 py-3 text-left transition ${
+                              createForm.installmentFrequency === frequency
+                                ? "border-blue-400/30 bg-blue-500/15 text-blue-100"
+                                : "border-white/10 bg-slate-950/50 text-slate-300 hover:border-white/20 hover:text-white"
+                            }`}
+                          >
+                            <div className="text-sm font-semibold">{titleCase(frequency)}</div>
+                            <div className="mt-1 text-xs text-slate-400">{frequency === "WEEKLY" ? "Shorter payment cycle" : "Standard monthly collection"}</div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <StepperInput
+                        label="Future installments"
+                        value={createForm.installmentCount}
+                        onChange={(value) => setCreateForm((current) => ({ ...current, installmentCount: value }))}
+                        min={1}
+                      />
+                      <Field label="Expected completion">
+                        <input
+                          className={`${inputClass} cursor-not-allowed text-slate-400`}
+                          value={toDateInputValue(createExpectedCompletionDate)}
+                          readOnly
+                        />
+                      </Field>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-slate-500">{titleCase(createForm.installmentFrequency)} installment amount</span>
-                    <span className="font-semibold text-white">{formatKes(createInstallmentAmount)}</span>
-                  </div>
+                </section>
+
+                {createDeposit > 0 ? (
+                  <section className="rounded-[24px] border border-white/10 bg-slate-950/40 p-4">
+                    <div className="mb-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Deposit payment details</div>
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                      <Field label="Method">
+                        <select className={inputClass} value={createForm.initialPaymentMethod} onChange={(event) => setCreateForm((current) => ({ ...current, initialPaymentMethod: event.target.value }))}>
+                          <option value="MPESA">M-Pesa</option>
+                          <option value="CASH">Cash</option>
+                          <option value="BANK">Bank</option>
+                          <option value="CARD">Card</option>
+                          <option value="OTHER">Other</option>
+                        </select>
+                      </Field>
+                      {createForm.initialPaymentMethod !== "CASH" ? (
+                        <Field label="Reference">
+                          <input className={inputClass} value={createForm.initialPaymentReference} onChange={(event) => setCreateForm((current) => ({ ...current, initialPaymentReference: event.target.value }))} placeholder="MPESA / bank reference" />
+                        </Field>
+                      ) : null}
+                      <Field label="Payment notes">
+                        <input className={inputClass} value={createForm.initialPaymentNotes} onChange={(event) => setCreateForm((current) => ({ ...current, initialPaymentNotes: event.target.value }))} placeholder="Optional note" />
+                      </Field>
+                    </div>
+                  </section>
+                ) : null}
+
+                <section className="rounded-[24px] border border-white/10 bg-slate-950/40 p-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateMoreDetails((current) => !current)}
+                    className="flex w-full items-center justify-between gap-3 text-left"
+                  >
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">More details</div>
+                      <div className="mt-1 text-sm text-slate-400">Optional operational fields, overrides, and delivery notes.</div>
+                    </div>
+                    <ChevronDown className={`h-4 w-4 text-slate-400 transition ${showCreateMoreDetails ? "rotate-180" : ""}`} />
+                  </button>
+
+                  {showCreateMoreDetails ? (
+                    <div className="mt-4 space-y-4 border-t border-white/10 pt-4">
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <SearchSelector label="Salesperson" placeholder="Search salesperson" value={salesperson} onChange={setSalesperson} search={searchUsers} />
+                        <SearchSelector label="Assigned agent" placeholder="Search assigned agent" value={assignedAgent} onChange={setAssignedAgent} search={searchUsers} />
+                        <Field label="Source">
+                          <input className={inputClass} value={createForm.source} onChange={(event) => setCreateForm((current) => ({ ...current, source: event.target.value }))} placeholder="Walk-in, referral, call center..." />
+                        </Field>
+                        <Field label="Expected completion override">
+                          <input type="date" className={inputClass} value={createForm.expectedCompletionDateOverride} onChange={(event) => setCreateForm((current) => ({ ...current, expectedCompletionDateOverride: event.target.value }))} />
+                        </Field>
+                        <Field label="Payment mode">
+                          <select className={inputClass} value={createForm.paymentMode} onChange={(event) => setCreateForm((current) => ({ ...current, paymentMode: event.target.value }))}>
+                            <option value="SCHEDULED">Scheduled</option>
+                            <option value="FLEXIBLE">Flexible</option>
+                          </select>
+                        </Field>
+                        <Field label="Reservation mode">
+                          <select className={inputClass} value={createForm.reservationMode} onChange={(event) => setCreateForm((current) => ({ ...current, reservationMode: event.target.value }))}>
+                            <option value="NONE">None</option>
+                            <option value="SOFT_RESERVE">Soft reserve</option>
+                            <option value="HARD_RESERVE">Hard reserve</option>
+                          </select>
+                        </Field>
+                        <Field label="County">
+                          <input className={inputClass} value={createForm.county} onChange={(event) => setCreateForm((current) => ({ ...current, county: event.target.value }))} placeholder="Nairobi" />
+                        </Field>
+                        <Field label="Town">
+                          <input className={inputClass} value={createForm.town} onChange={(event) => setCreateForm((current) => ({ ...current, town: event.target.value }))} placeholder="Ruiru" />
+                        </Field>
+                        <Field label="Estate / landmark">
+                          <input className={inputClass} value={createForm.estateLandmark} onChange={(event) => setCreateForm((current) => ({ ...current, estateLandmark: event.target.value }))} placeholder="Stage 2, near shell" />
+                        </Field>
+                        <Field label="Location notes">
+                          <input className={inputClass} value={createForm.locationNotes} onChange={(event) => setCreateForm((current) => ({ ...current, locationNotes: event.target.value }))} placeholder="Gate color, delivery notes..." />
+                        </Field>
+                      </div>
+                      <Field label="Notes">
+                        <textarea className={textareaClass} value={createForm.notes} onChange={(event) => setCreateForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Optional internal notes" />
+                      </Field>
+                    </div>
+                  ) : null}
+                </section>
+              </div>
+
+              <aside className="rounded-[24px] border border-white/10 bg-slate-950/45 p-4 text-sm text-slate-300 xl:sticky xl:top-0 xl:self-start">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Payment plan summary</div>
+                <div className="mt-4 space-y-3">
+                  <PlanRow label="Product" value={product?.label || "Select product"} />
+                  <PlanRow label="Quantity" value={String(createQuantity)} />
+                  <PlanRow label="Unit price" value={formatKes(createUnitPrice)} />
+                  <PlanRow label="Agreed total" value={formatKes(createAgreedTotal)} emphasis="text-white" />
+                  <PlanRow label="Deposit paid" value={formatKes(createDeposit)} emphasis="text-emerald-300" />
+                  <PlanRow label="Pending balance" value={formatKes(createBalance)} emphasis="text-amber-300" />
+                  <PlanRow
+                    label={`${titleCase(createForm.installmentFrequency)} installments`}
+                    value={createBalance > 0 ? `${createInstallmentCount} x ${formatKes(createInstallmentAmount)}` : "No balance remaining"}
+                  />
+                  <PlanRow label="Expected completion" value={formatDate(createForm.expectedCompletionDateOverride || toDateInputValue(createExpectedCompletionDate))} />
                 </div>
-              </div>
-            </div>
-
-            <div className="rounded-[24px] border border-white/10 bg-slate-950/45 p-4">
-              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Deposit payment details</div>
-              <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <Field label="Method">
-                  <select className={inputClass} value={createForm.initialPaymentMethod} onChange={(event) => setCreateForm((current) => ({ ...current, initialPaymentMethod: event.target.value }))}>
-                    <option value="MPESA">M-Pesa</option>
-                    <option value="CASH">Cash</option>
-                    <option value="BANK">Bank</option>
-                    <option value="CARD">Card</option>
-                    <option value="OTHER">Other</option>
-                  </select>
-                </Field>
-                <Field label="Reference">
-                  <input className={inputClass} value={createForm.initialPaymentReference} onChange={(event) => setCreateForm((current) => ({ ...current, initialPaymentReference: event.target.value }))} />
-                </Field>
-                <Field label="Payment notes">
-                  <input className={inputClass} value={createForm.initialPaymentNotes} onChange={(event) => setCreateForm((current) => ({ ...current, initialPaymentNotes: event.target.value }))} />
-                </Field>
-              </div>
+              </aside>
             </div>
 
             <div className="flex flex-wrap gap-3">
@@ -1980,6 +2107,56 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{label}</span>
       {children}
     </label>
+  );
+}
+
+function StepperInput({
+  label,
+  value,
+  onChange,
+  min = 0,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  min?: number;
+}) {
+  const currentValue = Number(value || String(min));
+
+  return (
+    <Field label={label}>
+      <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-2">
+        <button
+          type="button"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-slate-200 transition hover:border-white/20 hover:text-white"
+          onClick={() => onChange(String(Math.max(min, currentValue - 1)))}
+        >
+          <Minus className="h-4 w-4" />
+        </button>
+        <input
+          className="w-full bg-transparent text-center text-sm text-white outline-none"
+          inputMode="numeric"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <button
+          type="button"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-slate-200 transition hover:border-white/20 hover:text-white"
+          onClick={() => onChange(String(Math.max(min, currentValue + 1)))}
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
+    </Field>
+  );
+}
+
+function PlanRow({ label, value, emphasis }: { label: string; value: string; emphasis?: string }) {
+  return (
+    <div className="flex items-start justify-between gap-4 rounded-2xl border border-white/8 bg-slate-950/35 px-4 py-3">
+      <span className="text-slate-500">{label}</span>
+      <span className={`text-right font-semibold ${emphasis || "text-slate-100"}`}>{value}</span>
+    </div>
   );
 }
 

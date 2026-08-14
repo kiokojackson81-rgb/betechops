@@ -31,6 +31,10 @@ const createLppSchema = z.object({
   salespersonId: z.string().trim().min(1).optional().nullable(),
   source: z.string().trim().min(1).max(120).optional().nullable(),
   notes: z.string().trim().max(4000).optional().nullable(),
+  installmentPlan: z.object({
+    frequency: z.enum(["WEEKLY", "MONTHLY"]),
+    count: z.coerce.number().int().min(1).max(60),
+  }).optional().nullable(),
   initialPayment: z.object({
     amount: z.union([z.coerce.number().positive(), z.string().trim().min(1)]),
     method: z.enum(["MPESA", "CASH", "BANK", "CARD", "OTHER"]),

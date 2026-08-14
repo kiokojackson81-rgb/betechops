@@ -246,6 +246,10 @@ export type CreateLppInput = {
   source?: string | null;
   notes?: string | null;
   createdById?: string | null;
+  installmentPlan?: {
+    frequency: "WEEKLY" | "MONTHLY";
+    count: number;
+  } | null;
   initialPayment?: {
     amount: number | string | Prisma.Decimal;
     method: LipaPolePolePaymentMethod;
@@ -369,6 +373,53 @@ function trimToNull(value: string | null | undefined) {
 function toMoney(value: number | string | Prisma.Decimal) {
   if (value instanceof Prisma.Decimal) return value;
   return new Prisma.Decimal(value);
+}
+
+function splitInstallmentAmounts(total: Prisma.Decimal, count: number) {
+  const safeCount = Math.max(1, Math.trunc(count));
+  const totalCents = Math.round(Number(total) * 100);
+  const baseCents = Math.floor(totalCents / safeCount);
+  const remainder = totalCents - baseCents * safeCount;
+  return Array.from({ length: safeCount }, (_, index) => {
+    const cents = baseCents + (index === safeCount - 1 ? remainder : 0);
+    return new Prisma.Decimal(cents).div(100);
+  });
+}
+
+function addInstallmentDueDate(base: Date, index: number, frequency: "WEEKLY" | "MONTHLY") {
+  const dueDate = new Date(base);
+  if (frequency === "WEEKLY") {
+    dueDate.setDate(dueDate.getDate() + (index + 1) * 7);
+    return dueDate;
+  }
+  dueDate.setMonth(dueDate.getMonth() + index + 1);
+  return dueDate;
+}
+
+async function replaceLppInstallments(
+  tx: Prisma.TransactionClient,
+  input: {
+    lipaPolePoleId: string;
+    total: Prisma.Decimal;
+    createdAt: Date;
+    frequency: "WEEKLY" | "MONTHLY";
+    count: number;
+  },
+) {
+  await tx.lipaPolePoleInstallment.deleteMany({
+    where: { lipaPolePoleId: input.lipaPolePoleId },
+  });
+
+  const amounts = splitInstallmentAmounts(input.total, input.count);
+  if (!amounts.length || amounts.every((amount) => amount.lte(0))) return;
+
+  await tx.lipaPolePoleInstallment.createMany({
+    data: amounts.map((amount, index) => ({
+      lipaPolePoleId: input.lipaPolePoleId,
+      dueDate: addInstallmentDueDate(input.createdAt, index, input.frequency),
+      expectedAmount: amount,
+    })),
+  });
 }
 
 function mapAgent(row: RawUserRow): LppCustomerServiceAgent {
@@ -815,6 +866,8 @@ export async function createLipaPolePole(
     const reference = await nextLppReference(tx, now);
     const id = randomUUID();
     const publicToken = randomUUID();
+    const initialPaymentAmount = input.initialPayment ? toMoney(input.initialPayment.amount) : new Prisma.Decimal(0);
+    const remainingBalance = Prisma.Decimal.max(new Prisma.Decimal(0), agreedTotal.sub(initialPaymentAmount));
 
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "LipaPolePole" (
@@ -899,6 +952,16 @@ export async function createLipaPolePole(
       },
       tx,
     );
+
+    if (input.installmentPlan && remainingBalance.gt(0)) {
+      await replaceLppInstallments(tx, {
+        lipaPolePoleId: id,
+        total: remainingBalance,
+        createdAt: now,
+        frequency: input.installmentPlan.frequency,
+        count: input.installmentPlan.count,
+      });
+    }
 
     const finalRow = await getLppById(tx, id);
     if (!finalRow) throw new Error("LPP_NOT_FOUND_AFTER_CREATE");
