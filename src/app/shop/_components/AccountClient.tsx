@@ -29,6 +29,7 @@ import {
   getQuotePaymentTermsLabel,
   parseStoredQuoteProposal,
 } from "@/lib/quoteProposal";
+import type { SerializedLppAccount } from "@/lib/lipaPolePoleService";
 
 type AccountClientProps = {
   initialProfile: {
@@ -63,6 +64,7 @@ type AccountClientProps = {
   }>;
   recentQuotes: SerializedQuoteRequest[];
   recentSiteVisits: SerializedSiteVisit[];
+  recentLppAccounts: SerializedLppAccount[];
 };
 
 function buildFormProfile(
@@ -113,7 +115,13 @@ function formatSiteVisitOutcome(value?: string | null) {
   return value.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-export default function AccountClient({ initialProfile, recentOrders, recentQuotes, recentSiteVisits }: AccountClientProps) {
+export default function AccountClient({
+  initialProfile,
+  recentOrders,
+  recentQuotes,
+  recentSiteVisits,
+  recentLppAccounts,
+}: AccountClientProps) {
   const [localOrders, setLocalOrders] = useState<MockOrderRecord[]>([]);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -583,6 +591,65 @@ export default function AccountClient({ initialProfile, recentOrders, recentQuot
                   })
                 ) : (
                   <div className="text-sm text-slate-500">No recent quote requests saved yet.</div>
+                )}
+              </div>
+            </section>
+
+            <section id="lipa-pole-pole" className={`${shopStyles.lightCard} scroll-mt-28 p-5`}>
+              <div className="flex items-center justify-between gap-3">
+                <div className={shopStyles.sectionEyebrow}>Lipa Pole Pole</div>
+                <Link href="/shop" className={shopStyles.secondaryButton}>
+                  Start another
+                </Link>
+              </div>
+              <div className="mt-4 space-y-3">
+                {recentLppAccounts.length ? (
+                  recentLppAccounts.slice(0, 3).map((account) => (
+                    <div key={account.id} className="rounded-[18px] border border-[#7a0000]/10 bg-[#fcfaf7] p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-black text-slate-950">{account.reference}</div>
+                          <div className="mt-1 text-xs text-slate-500">
+                            {account.productName || "Reserved product"} • {formatDate(account.createdAt)}
+                          </div>
+                        </div>
+                        <div className="rounded-full bg-[#fff3d8] px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-[#7a0000]">
+                          {formatOrderStatus(account.status)}
+                        </div>
+                      </div>
+                      <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
+                        <div><span className="font-bold text-slate-950">Total:</span> {formatCurrency(account.agreedTotal)}</div>
+                        <div><span className="font-bold text-slate-950">Paid:</span> {formatCurrency(account.totalPaid)}</div>
+                        <div><span className="font-bold text-slate-950">Balance:</span> {formatCurrency(account.balance)}</div>
+                        <div><span className="font-bold text-slate-950">Due:</span> {account.expectedCompletionDate ? formatDate(account.expectedCompletionDate) : "Not set"}</div>
+                      </div>
+                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#ecdcc5]">
+                        <div
+                          className="h-full rounded-full bg-[linear-gradient(90deg,#7a0000_0%,#d97706_100%)]"
+                          style={{ width: `${Math.max(2, Math.min(100, account.percentagePaid || 0))}%` }}
+                        />
+                      </div>
+                      <div className="mt-1 text-xs font-semibold text-slate-600">
+                        {account.percentagePaid.toFixed(2)}% paid
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <Link
+                          href={`/shop/account/lipa-pole-pole/${encodeURIComponent(account.id)}`}
+                          className={`${shopStyles.secondaryButton} whitespace-nowrap`}
+                        >
+                          Open account
+                        </Link>
+                        <Link
+                          href={`/shop/account/lipa-pole-pole/${encodeURIComponent(account.id)}/statement`}
+                          className={`${shopStyles.secondaryButton} whitespace-nowrap`}
+                        >
+                          Print statement
+                        </Link>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-sm text-slate-500">No Lipa Pole Pole accounts are linked to this customer yet.</div>
                 )}
               </div>
             </section>

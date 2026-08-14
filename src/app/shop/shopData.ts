@@ -53,6 +53,11 @@ export type ShopProduct = {
   commissionEnabled?: boolean;
   commissionAmount?: number | null;
   commissionRequiresApproval?: boolean;
+  lipaPolePoleEnabled?: boolean;
+  lipaPolePoleMinDeposit?: number | null;
+  lipaPolePoleMaxDays?: number | null;
+  lipaPolePoleDefaultDays?: number | null;
+  lipaPolePoleTerms?: string | null;
 };
 
 export type ShopProductSection = {

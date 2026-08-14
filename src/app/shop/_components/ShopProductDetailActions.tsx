@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { MessageCircle } from "lucide-react";
 import AddToCartButton from "@/app/shop/_components/AddToCartButton";
+import ShopLipaPolePoleStarter from "@/app/shop/_components/ShopLipaPolePoleStarter";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import { formatCurrency } from "@/app/shop/_components/shopStyles";
 import type { ShopProduct } from "@/app/shop/shopData";
@@ -10,9 +11,24 @@ import { getShopRequestQuoteHref } from "@/app/shop/storefrontPaths";
 
 type ShopProductDetailActionsProps = {
   product: ShopProduct;
+  customer: {
+    isAuthenticated: boolean;
+    name: string;
+    phone: string;
+    email: string;
+    county: string;
+    town: string;
+    estateLandmark: string;
+    locationNotes: string;
+  };
+  loginHref: string;
 };
 
-export default function ShopProductDetailActions({ product }: ShopProductDetailActionsProps) {
+export default function ShopProductDetailActions({
+  product,
+  customer,
+  loginHref,
+}: ShopProductDetailActionsProps) {
   const whatsappHref = `https://wa.me/254722151083?text=${encodeURIComponent(
     `Hello Betech Solar, I want to order ${product.name} at ${formatCurrency(product.price)}.`,
   )}`;
@@ -43,6 +59,7 @@ export default function ShopProductDetailActions({ product }: ShopProductDetailA
           Request Quote
         </Link>
       </div>
+      <ShopLipaPolePoleStarter product={product} customer={customer} loginHref={loginHref} />
     </div>
   );
 }

@@ -16,6 +16,7 @@ import {
   backfillQuoteRequestsForCustomerAccount,
   listCustomerQuoteRequests,
 } from "@/lib/quoteRequests";
+import { listSerializedLppAccounts } from "@/lib/lipaPolePoleService";
 import { listCustomerSiteVisits } from "@/lib/siteVisits";
 import { buildCustomerAccountIdentity, listCustomerAccountOrders } from "@/lib/shopCustomerOrders";
 
@@ -83,6 +84,10 @@ export default async function ShopAccountPage() {
     normalizedEmails: identity.normalizedEmails,
     take: 6,
   });
+  const recentLppAccounts = await listSerializedLppAccounts({
+    customerId: user.id,
+    take: 6,
+  });
 
   const account = dbUser || {
     id: user.id,
@@ -127,6 +132,7 @@ export default async function ShopAccountPage() {
             }))}
             recentQuotes={recentQuotes}
             recentSiteVisits={recentSiteVisits}
+            recentLppAccounts={recentLppAccounts}
           />
           <div className="mt-4">
             <ShopSupportStrip />

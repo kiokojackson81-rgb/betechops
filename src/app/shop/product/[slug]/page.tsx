@@ -21,6 +21,8 @@ import { shopNavLinks, type ShopProduct } from "@/app/shop/shopData";
 import { getProductAvailabilityBadge, getProductAvailabilityMessage, getProductCheckoutAvailabilityMessage } from "@/app/shop/shopAvailability";
 import { getShopCategoryHref, SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
 import { getPublishedProductReviews } from "@/lib/reviewsReferrals";
+import { auth } from "@/lib/auth";
+import { findSafeCustomerProfileByUserId } from "@/lib/customerProfile";
 
 function normalizeProductText(value: string) {
   return value
@@ -185,6 +187,9 @@ export default async function ShopProductDetailPage({
       reviews: [],
     })),
   ]);
+  const session = await auth();
+  const sessionUser = session?.user as { id?: string | null; name?: string | null; email?: string | null; phone?: string | null } | undefined;
+  const viewerProfile = sessionUser?.id ? await findSafeCustomerProfileByUserId(sessionUser.id) : null;
   const relatedProducts = products.filter((item) => item.category === product.category && item.id !== product.id).slice(0, 4);
   const stockLabelMap = {
     in_stock: "In stock",
@@ -202,6 +207,7 @@ export default async function ShopProductDetailPage({
   const detailBullets = buildDetailBullets({ ...product, fullDescription: undefined });
   const tiktokEmbedUrl = getTikTokEmbedUrl(product.tiktokVideoUrl);
   const referralCode = String(resolvedSearchParams.ref || "").trim().toUpperCase();
+  const loginHref = `/login/phone?callbackUrl=${encodeURIComponent(`/shop/product/${product.slug}`)}`;
   const supportItems = [
     {
       icon: <Truck className="h-4 w-4" />,
@@ -321,7 +327,20 @@ export default async function ShopProductDetailPage({
                     <div className="rounded-[22px] border border-[#7a0000]/8 bg-[#fcfaf7] px-4 py-3 text-sm leading-6 text-slate-700">
                       {availabilityMessage}
                     </div>
-                    <ShopProductDetailActions product={product} />
+                    <ShopProductDetailActions
+                      product={product}
+                      customer={{
+                        isAuthenticated: Boolean(sessionUser?.id),
+                        name: viewerProfile?.name || sessionUser?.name || "",
+                        phone: viewerProfile?.phone || sessionUser?.phone || "",
+                        email: viewerProfile?.email || sessionUser?.email || "",
+                        county: viewerProfile?.county || "",
+                        town: viewerProfile?.town || "",
+                        estateLandmark: viewerProfile?.estateLandmark || "",
+                        locationNotes: viewerProfile?.locationNotes || "",
+                      }}
+                      loginHref={loginHref}
+                    />
                   </div>
 
                   <div className="rounded-[24px] border border-[#7a0000]/8 bg-white p-4 sm:rounded-[28px] sm:p-5">

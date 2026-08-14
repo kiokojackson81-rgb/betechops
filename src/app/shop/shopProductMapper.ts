@@ -1,4 +1,5 @@
 import { unstable_cache } from "next/cache";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getProductTableCapabilities } from "@/lib/productTableCapabilities";
 import type { ShopProduct, ShopProductVisualType } from "@/app/shop/shopData";
@@ -55,6 +56,11 @@ type OpsCatalogueProduct = {
   commissionEnabled?: boolean | null;
   commissionAmount?: number | null;
   commissionRequiresApproval?: boolean | null;
+  lipaPolePoleEnabled?: boolean | null;
+  lipaPolePoleMinDeposit?: Prisma.Decimal | number | null;
+  lipaPolePoleMaxDays?: number | null;
+  lipaPolePoleDefaultDays?: number | null;
+  lipaPolePoleTerms?: string | null;
 };
 
 type ShopCategoryDefinition = {
@@ -239,6 +245,11 @@ async function queryOpsCatalogueProducts(whereClause = "", params: unknown[] = [
         ${available.has("commissionEnabled") ? `COALESCE("commissionEnabled", false)` : `NULL::boolean`} AS "commissionEnabled",
         ${available.has("commissionAmount") ? `"commissionAmount"` : `NULL::numeric`} AS "commissionAmount",
         ${available.has("commissionRequiresApproval") ? `COALESCE("commissionRequiresApproval", false)` : `NULL::boolean`} AS "commissionRequiresApproval"
+        ${available.has("lipaPolePoleEnabled") ? `, COALESCE("lipaPolePoleEnabled", false)` : `, NULL::boolean`} AS "lipaPolePoleEnabled",
+        ${available.has("lipaPolePoleMinDeposit") ? `"lipaPolePoleMinDeposit"` : `NULL::numeric`} AS "lipaPolePoleMinDeposit",
+        ${available.has("lipaPolePoleMaxDays") ? `"lipaPolePoleMaxDays"` : `NULL::int`} AS "lipaPolePoleMaxDays",
+        ${available.has("lipaPolePoleDefaultDays") ? `"lipaPolePoleDefaultDays"` : `NULL::int`} AS "lipaPolePoleDefaultDays",
+        ${available.has("lipaPolePoleTerms") ? `"lipaPolePoleTerms"` : `NULL::text`} AS "lipaPolePoleTerms"
       FROM "Product"
       WHERE COALESCE("isActive", true) = true
       ${whereClause}
@@ -290,6 +301,11 @@ async function queryOpsCatalogueProducts(whereClause = "", params: unknown[] = [
         ${available.has("commissionEnabled") ? `COALESCE("commissionEnabled", false)` : `NULL::boolean`} AS "commissionEnabled",
         ${available.has("commissionAmount") ? `"commissionAmount"` : `NULL::numeric`} AS "commissionAmount",
         ${available.has("commissionRequiresApproval") ? `COALESCE("commissionRequiresApproval", false)` : `NULL::boolean`} AS "commissionRequiresApproval"
+        ${available.has("lipaPolePoleEnabled") ? `, COALESCE("lipaPolePoleEnabled", false)` : `, NULL::boolean`} AS "lipaPolePoleEnabled",
+        ${available.has("lipaPolePoleMinDeposit") ? `"lipaPolePoleMinDeposit"` : `NULL::numeric`} AS "lipaPolePoleMinDeposit",
+        ${available.has("lipaPolePoleMaxDays") ? `"lipaPolePoleMaxDays"` : `NULL::int`} AS "lipaPolePoleMaxDays",
+        ${available.has("lipaPolePoleDefaultDays") ? `"lipaPolePoleDefaultDays"` : `NULL::int`} AS "lipaPolePoleDefaultDays",
+        ${available.has("lipaPolePoleTerms") ? `"lipaPolePoleTerms"` : `NULL::text`} AS "lipaPolePoleTerms"
       FROM "Product"
       WHERE COALESCE("active", true) = true
       ${whereClause}
@@ -654,6 +670,14 @@ function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview 
         commissionEnabled: Boolean(product.commissionEnabled),
         commissionAmount: product.commissionAmount == null ? null : Number(product.commissionAmount),
         commissionRequiresApproval: Boolean(product.commissionRequiresApproval),
+        lipaPolePoleEnabled: Boolean(product.lipaPolePoleEnabled),
+        lipaPolePoleMinDeposit:
+          product.lipaPolePoleMinDeposit == null ? null : Number(product.lipaPolePoleMinDeposit),
+        lipaPolePoleMaxDays:
+          product.lipaPolePoleMaxDays == null ? null : Number(product.lipaPolePoleMaxDays),
+        lipaPolePoleDefaultDays:
+          product.lipaPolePoleDefaultDays == null ? null : Number(product.lipaPolePoleDefaultDays),
+        lipaPolePoleTerms: normalizeOptionalText(product.lipaPolePoleTerms),
       }
     : null;
 

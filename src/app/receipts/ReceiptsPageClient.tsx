@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from "react";
 import ReceiptFormClient from "./ReceiptFormClient";
 import DailyReportReceiptsPanel from "@/components/daily-report-receipts";
 import QuotationRequestsDeskClient from "@/components/QuotationRequestsDeskClient";
+import LipaPolePoleAdminClient from "@/app/admin/lipa-pole-pole/LipaPolePoleAdminClient";
 import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 
@@ -27,6 +28,102 @@ type PublicStaffOption = {
   name: string | null;
   email: string | null;
   attendantCategory?: string | null;
+};
+
+type LppListItem = {
+  id: string;
+  reference: string;
+  customerId: string;
+  customerName: string | null;
+  customerPhone: string | null;
+  customerEmail: string | null;
+  productId: string | null;
+  productName: string | null;
+  assignedToId: string | null;
+  assignedToName: string | null;
+  agreedTotal: number;
+  totalPaid: number;
+  balance: number;
+  percentagePaid: number;
+  status: string;
+  expectedCompletionDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+  convertedAt: string | null;
+  convertedReceiptId: string | null;
+  convertedProjectId: string | null;
+  fulfilledAt: string | null;
+  fulfilledById: string | null;
+  fulfilledByName: string | null;
+  fulfillmentMethod: string | null;
+};
+
+type LppDetail = {
+  account: LppListItem;
+  payments: Array<{
+    id: string;
+    amount: number;
+    method: string;
+    reference: string | null;
+    status: string;
+    receivedById: string | null;
+    receivedAt: string;
+    notes: string | null;
+    reversedAt: string | null;
+    reversalReason: string | null;
+    createdAt: string;
+  }>;
+  events: Array<{
+    id: string;
+    eventType: string;
+    actorId: string | null;
+    metadata: unknown;
+    createdAt: string;
+  }>;
+  reminders: Array<{
+    id: string;
+    reminderType: string;
+    scheduledFor: string;
+    sentAt: string | null;
+    channel: string;
+    status: string;
+    providerMessageId: string | null;
+    idempotencyKey: string;
+    payloadSnapshot: unknown;
+    createdAt: string;
+  }>;
+  followUps: Array<{
+    id: string;
+    assignedToId: string | null;
+    assignedToName: string | null;
+    outcome: string | null;
+    taskType: string;
+    taskDate: string | null;
+    notes: string | null;
+    createdById: string | null;
+    createdByName: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  promises: Array<{
+    id: string;
+    promiseAmount: number;
+    promiseDate: string;
+    status: string;
+    notes: string | null;
+    createdById: string | null;
+    createdByName: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  summary: {
+    agreedTotal: number;
+    totalPaid: number;
+    balance: number;
+    percentagePaid: number;
+    isFullyPaid: boolean;
+  };
 };
 
 export default function ReceiptsPageClient({
@@ -63,9 +160,12 @@ export default function ReceiptsPageClient({
     count: 0,
     totalSales: 0,
   });
-  const [createDocumentType, setCreateDocumentType] = useState<"RECEIPT" | "QUOTATION">("RECEIPT");
+  const [createDocumentType, setCreateDocumentType] = useState<"RECEIPT" | "QUOTATION" | "LPP">("RECEIPT");
   const [quotationStaffOptions, setQuotationStaffOptions] = useState<PublicStaffOption[]>([]);
   const [quotationStaffLoading, setQuotationStaffLoading] = useState(false);
+  const [lppItems, setLppItems] = useState<LppListItem[]>([]);
+  const [lppDetail, setLppDetail] = useState<LppDetail | null>(null);
+  const [lppLoading, setLppLoading] = useState(false);
 
   const listRef = useRef<HTMLDivElement | null>(null);
   const formRef = useRef<HTMLDivElement | null>(null);
@@ -158,6 +258,35 @@ export default function ReceiptsPageClient({
       cancelled = true;
     };
   }, [createDocumentType, quotationStaffOptions.length, view]);
+
+  useEffect(() => {
+    if (view !== "create" || createDocumentType !== "LPP" || lppItems.length || lppLoading) return;
+    let cancelled = false;
+    setLppLoading(true);
+    fetch("/api/lipa-pole-pole?limit=100", { cache: "no-store" })
+      .then((response) => response.json().catch(() => ({ items: [] })))
+      .then((data) => {
+        if (cancelled) return;
+        const items = Array.isArray(data?.items) ? data.items : [];
+        setLppItems(items);
+        if (items[0]?.id) {
+          return fetch(`/api/lipa-pole-pole/${encodeURIComponent(items[0].id)}`, { cache: "no-store" })
+            .then((response) => response.json().catch(() => null))
+            .then((detail) => {
+              if (!cancelled && detail?.account) {
+                setLppDetail(detail);
+              }
+            });
+        }
+        return undefined;
+      })
+      .finally(() => {
+        if (!cancelled) setLppLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [createDocumentType, lppItems.length, lppLoading, view]);
 
   // On mount, detect attendantId in the URL and open list view filtered to that attendant
   useEffect(() => {
@@ -374,6 +503,7 @@ export default function ReceiptsPageClient({
               {([
                 ["RECEIPT", "Receipt / POD flow"],
                 ["QUOTATION", "Quotation flow"],
+                ["LPP", "Lipa Pole Pole"],
               ] as const).map(([type, label]) => (
                 <button
                   key={type}
@@ -413,6 +543,20 @@ export default function ReceiptsPageClient({
                   assigneeOptions={quotationStaffOptions}
                   assigneeLabel="Assign quotation to staff"
                   requireAssigneeSelection
+                />
+              </div>
+            ) : createDocumentType === "LPP" ? (
+              <div className="space-y-3">
+                {lppLoading && !lppItems.length ? (
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-300">
+                    Loading Lipa Pole Pole workspace...
+                  </div>
+                ) : null}
+                <LipaPolePoleAdminClient
+                  initialItems={lppItems}
+                  initialDetail={lppDetail}
+                  initialQ=""
+                  initialStatus="ALL"
                 />
               </div>
             ) : (

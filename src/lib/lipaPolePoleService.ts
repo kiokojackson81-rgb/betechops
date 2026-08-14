@@ -146,6 +146,7 @@ export type SerializedLppAccount = {
   customerId: string;
   customerName: string | null;
   customerPhone: string | null;
+  customerEmail: string | null;
   productId: string | null;
   productName: string | null;
   assignedToId: string | null;
@@ -1571,6 +1572,7 @@ export async function getSerializedLppAccountDetail(lipaPolePoleId: string, db: 
   const rows = await db.$queryRaw<Array<{
     customerName: string | null;
     customerPhone: string | null;
+    customerEmail: string | null;
     productName: string | null;
     assignedToName: string | null;
     fulfilledByName: string | null;
@@ -1578,6 +1580,7 @@ export async function getSerializedLppAccountDetail(lipaPolePoleId: string, db: 
     SELECT
       c."name" AS "customerName",
       c."phone" AS "customerPhone",
+      c."email" AS "customerEmail",
       p."name" AS "productName",
       a."name" AS "assignedToName",
       f."name" AS "fulfilledByName"
@@ -1589,7 +1592,14 @@ export async function getSerializedLppAccountDetail(lipaPolePoleId: string, db: 
     WHERE lpp."id" = ${lipaPolePoleId}
     LIMIT 1
   `);
-  const meta = rows[0] ?? { customerName: null, customerPhone: null, productName: null, assignedToName: null, fulfilledByName: null };
+  const meta = rows[0] ?? {
+    customerName: null,
+    customerPhone: null,
+    customerEmail: null,
+    productName: null,
+    assignedToName: null,
+    fulfilledByName: null,
+  };
   const events = await getLppEvents(db, lipaPolePoleId);
   const reminders = await getLppReminders(db, lipaPolePoleId);
   const followUps = await getLppFollowUps(db, lipaPolePoleId);
@@ -1601,6 +1611,7 @@ export async function getSerializedLppAccountDetail(lipaPolePoleId: string, db: 
     customerId: lpp.customerId,
     customerName: meta.customerName,
     customerPhone: meta.customerPhone,
+    customerEmail: meta.customerEmail,
     productId: lpp.productId,
     productName: meta.productName,
     assignedToId: lpp.assignedToId,
@@ -1645,6 +1656,7 @@ export async function listSerializedLppAccounts(
     q?: string;
     status?: string | null;
     assignedToId?: string | null;
+    customerId?: string | null;
     take?: number;
   },
   db: DbClient = prisma,
@@ -1652,11 +1664,13 @@ export async function listSerializedLppAccounts(
   const q = trimToNull(input?.q ?? null);
   const status = trimToNull(input?.status ?? null);
   const assignedToId = trimToNull(input?.assignedToId ?? null);
+  const customerId = trimToNull(input?.customerId ?? null);
   const take = Math.min(200, Math.max(1, Number(input?.take ?? 100)));
 
   const rows = await db.$queryRaw<Array<RawLppRow & {
     customerName: string | null;
     customerPhone: string | null;
+    customerEmail: string | null;
     productName: string | null;
     assignedToName: string | null;
   }>>(Prisma.sql`
@@ -1664,6 +1678,7 @@ export async function listSerializedLppAccounts(
       lpp.*,
       c."name" AS "customerName",
       c."phone" AS "customerPhone",
+      c."email" AS "customerEmail",
       p."name" AS "productName",
       a."name" AS "assignedToName"
     FROM "LipaPolePole" lpp
@@ -1673,6 +1688,7 @@ export async function listSerializedLppAccounts(
     WHERE 1 = 1
       ${status ? Prisma.sql`AND lpp."status"::text = ${status}` : Prisma.empty}
       ${assignedToId ? Prisma.sql`AND lpp."assignedToId" = ${assignedToId}` : Prisma.empty}
+      ${customerId ? Prisma.sql`AND lpp."customerId" = ${customerId}` : Prisma.empty}
       ${
         q
           ? Prisma.sql`AND (
@@ -1710,6 +1726,7 @@ export async function listSerializedLppAccounts(
       customerId: row.customerId,
       customerName: row.customerName,
       customerPhone: row.customerPhone,
+      customerEmail: row.customerEmail,
       productId: row.productId,
       productName: row.productName,
       assignedToId: row.assignedToId,
