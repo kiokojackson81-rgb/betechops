@@ -24,15 +24,27 @@ type LppListItem = {
   customerId: string;
   customerName: string | null;
   customerPhone: string | null;
+  customerEmail: string | null;
+  customerCounty: string | null;
+  customerTown: string | null;
+  customerEstateLandmark: string | null;
+  customerLocationNotes: string | null;
   productId: string | null;
   productName: string | null;
+  quantity: number;
+  agreedUnitPrice: number;
   assignedToId: string | null;
   assignedToName: string | null;
+  salespersonId: string | null;
+  salespersonName: string | null;
   agreedTotal: number;
   totalPaid: number;
   balance: number;
   percentagePaid: number;
   status: string;
+  paymentMode: string;
+  reservationMode: string;
+  source: string | null;
   expectedCompletionDate: string | null;
   createdAt: string;
   updatedAt: string;
@@ -48,6 +60,14 @@ type LppListItem = {
 
 type LppDetail = {
   account: LppListItem;
+  installments: Array<{
+    id: string;
+    dueDate: string;
+    expectedAmount: number;
+    notes: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
   payments: Array<{
     id: string;
     amount: number;
@@ -111,6 +131,12 @@ type LppDetail = {
     percentagePaid: number;
     isFullyPaid: boolean;
   };
+};
+
+type StaffOption = {
+  id: string;
+  name: string;
+  email?: string | null;
 };
 
 type SearchOption = {
@@ -214,6 +240,32 @@ function addInstallmentPeriods(count: number, frequency: InstallmentFrequency) {
 
 function titleCase(value: string) {
   return value.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function getBookingReceiptHref(id: string, autoPrint = false) {
+  return `/admin/lipa-pole-pole/${encodeURIComponent(id)}/booking-receipt${autoPrint ? "?autoPrint=1" : ""}`;
+}
+
+function inferInstallmentFrequency(
+  installments: Array<{ dueDate: string }>,
+  createdAt: string,
+): InstallmentFrequency | null {
+  if (!installments.length) return null;
+  const created = new Date(createdAt);
+  const firstDue = new Date(installments[0].dueDate);
+  if (Number.isNaN(created.getTime()) || Number.isNaN(firstDue.getTime())) return null;
+  const days = Math.round((firstDue.getTime() - created.getTime()) / 86400000);
+  return days <= 10 ? "WEEKLY" : "MONTHLY";
+}
+
+function getInitialSuccessfulPayment(
+  payments: Array<{ status: string; amount: number; method: string; reference: string | null; receivedAt: string }>,
+) {
+  return payments.find((payment) => payment.status === "SUCCESS") ?? null;
+}
+
+function describeLocation(account: LppListItem) {
+  return [account.customerTown, account.customerEstateLandmark, account.customerCounty].filter(Boolean).join(", ") || "Not captured";
 }
 
 function progressTone(value: number) {
@@ -340,10 +392,18 @@ export default function LipaPolePoleAdminClient({
   const pageSize = 10;
   const hasHydratedRef = useRef(false);
 
+  const [staffMembers, setStaffMembers] = useState<StaffOption[]>([]);
+  const [defaultStaffId, setDefaultStaffId] = useState<string | null>(null);
   const [product, setProduct] = useState<SearchOption | null>(null);
-  const [salesperson, setSalesperson] = useState<SearchOption | null>(null);
-  const [assignedAgent, setAssignedAgent] = useState<SearchOption | null>(null);
+  const [staffId, setStaffId] = useState<string>("");
   const [assignAgent, setAssignAgent] = useState<SearchOption | null>(null);
+  const [createSuccess, setCreateSuccess] = useState<{
+    accountId: string;
+    reference: string;
+    customerName: string;
+    deposit: number;
+    balance: number;
+  } | null>(null);
 
   const [createForm, setCreateForm] = useState({
     customerName: "",
@@ -355,13 +415,8 @@ export default function LipaPolePoleAdminClient({
     locationNotes: "",
     quantity: "1",
     agreedUnitPrice: "",
-    agreedTotal: "",
     installmentFrequency: "MONTHLY" as InstallmentFrequency,
     installmentCount: "3",
-    expectedCompletionDateOverride: "",
-    paymentMode: "SCHEDULED",
-    reservationMode: "SOFT_RESERVE",
-    source: "",
     notes: "",
     initialPaymentAmount: "",
     initialPaymentMethod: "MPESA",
@@ -395,6 +450,64 @@ export default function LipaPolePoleAdminClient({
   useEffect(() => {
     setItems(initialItems);
   }, [initialItems]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/session", {
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        const json = await res.json().catch(() => null);
+        const sessionUserId =
+          typeof json?.user?.id === "string" && json.user.id.trim()
+            ? json.user.id.trim()
+            : null;
+        if (!cancelled) setDefaultStaffId(sessionUserId);
+      } catch {
+        if (!cancelled) setDefaultStaffId(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/receipts/staff", { cache: "no-store" });
+        const json = await res.json().catch(() => null);
+        const rows = Array.isArray(json)
+          ? json
+          : Array.isArray((json as { users?: unknown[] } | null)?.users)
+            ? (json as { users?: unknown[] }).users ?? []
+            : [];
+        if (cancelled) return;
+        const mapped = rows
+          .filter((row): row is { id: string; name?: string | null; email?: string | null } => Boolean(row && typeof row === "object" && "id" in row && typeof (row as { id?: unknown }).id === "string"))
+          .map((row) => ({
+            id: row.id,
+            name: row.name || row.email || row.id,
+            email: row.email ?? null,
+          }));
+        setStaffMembers(mapped);
+      } catch {
+        if (!cancelled) setStaffMembers([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!defaultStaffId || staffId || staffMembers.length === 0) return;
+    const matched = staffMembers.find((member) => member.id === defaultStaffId);
+    if (matched) setStaffId(matched.id);
+  }, [defaultStaffId, staffId, staffMembers]);
 
   useEffect(() => {
     setDetail(initialDetail);
@@ -470,6 +583,7 @@ export default function LipaPolePoleAdminClient({
       const data = await readJson<{ ok: true } & LppDetail>(`/api/lipa-pole-pole/${id}`);
       setDetail({
         account: data.account,
+        installments: data.installments,
         payments: data.payments,
         events: data.events,
         reminders: data.reminders,
@@ -524,8 +638,12 @@ export default function LipaPolePoleAdminClient({
       setBanner({ tone: "error", text: "Select a product." });
       return;
     }
+    if (!staffId) {
+      setBanner({ tone: "error", text: "Select staff." });
+      return;
+    }
     if (!createForm.agreedUnitPrice.trim()) {
-      setBanner({ tone: "error", text: "Agreed unit price is required." });
+      setBanner({ tone: "error", text: "Unit price is required." });
       return;
     }
     if (createQuantity < 1) {
@@ -533,7 +651,7 @@ export default function LipaPolePoleAdminClient({
       return;
     }
     if (createUnitPrice <= 0) {
-      setBanner({ tone: "error", text: "Agreed unit price must be greater than zero." });
+      setBanner({ tone: "error", text: "Unit price must be greater than zero." });
       return;
     }
     if (createInstallmentCount < 1) {
@@ -552,7 +670,6 @@ export default function LipaPolePoleAdminClient({
     setIsSubmittingCreate(true);
     setBanner(null);
     try {
-      const derivedCompletionDate = createForm.expectedCompletionDateOverride || toDateInputValue(createExpectedCompletionDate);
       const payload = {
         customer: {
           name: createForm.customerName.trim(),
@@ -566,23 +683,14 @@ export default function LipaPolePoleAdminClient({
         productId: product?.id ?? null,
         quantity: createQuantity,
         agreedUnitPrice: createForm.agreedUnitPrice,
-        agreedTotal: createForm.agreedTotal.trim() ? createForm.agreedTotal : null,
-        expectedCompletionDate: derivedCompletionDate,
-        paymentMode: createForm.paymentMode,
-        reservationMode: createForm.reservationMode,
-        salespersonId: salesperson?.id ?? null,
-        source: createForm.source.trim() || null,
+        agreedTotal: createAgreedTotal,
+        expectedCompletionDate: toDateInputValue(createExpectedCompletionDate),
+        salespersonId: staffId,
         notes: createForm.notes.trim() || null,
         installmentPlan: createBalance > 0
           ? {
               frequency: createForm.installmentFrequency,
               count: createInstallmentCount,
-            }
-          : null,
-        assignment: assignedAgent
-          ? {
-              assignedToId: assignedAgent.id,
-              method: "MANUAL",
             }
           : null,
         initialPayment: createDeposit > 0
@@ -597,17 +705,23 @@ export default function LipaPolePoleAdminClient({
             }
           : null,
       };
-      const data = await readJson<{ ok: true; account: { id: string } }>("/api/lipa-pole-pole", {
+      const data = await readJson<{ ok: true; account: LppListItem }>("/api/lipa-pole-pole", {
         method: "POST",
         body: JSON.stringify(payload),
       });
       await refreshList(data.account.id);
       setBanner({ tone: "success", text: "Lipa Pole Pole account created." });
       setShowCreateModal(false);
+      setCreateSuccess({
+        accountId: data.account.id,
+        reference: data.account.reference,
+        customerName: data.account.customerName || createForm.customerName.trim(),
+        deposit: createDeposit,
+        balance: data.account.balance,
+      });
       setShowCreateMoreDetails(false);
       setProduct(null);
-      setSalesperson(null);
-      setAssignedAgent(null);
+      setStaffId(defaultStaffId ?? "");
       setCreateForm({
         customerName: "",
         customerPhone: "",
@@ -618,13 +732,8 @@ export default function LipaPolePoleAdminClient({
         locationNotes: "",
         quantity: "1",
         agreedUnitPrice: "",
-        agreedTotal: "",
         installmentFrequency: "MONTHLY",
         installmentCount: "3",
-        expectedCompletionDateOverride: "",
-        paymentMode: "SCHEDULED",
-        reservationMode: "SOFT_RESERVE",
-        source: "",
         notes: "",
         initialPaymentAmount: "",
         initialPaymentMethod: "MPESA",
@@ -922,13 +1031,13 @@ export default function LipaPolePoleAdminClient({
   const activeDetail = expandedLppId && detail?.account.id === expandedLppId ? detail : null;
   const createQuantity = Math.max(1, Number(createForm.quantity || "1"));
   const createUnitPrice = Math.max(0, Number(createForm.agreedUnitPrice || 0));
-  const createBaseTotal = createQuantity * createUnitPrice;
-  const createAgreedTotal = Math.max(0, Number(createForm.agreedTotal || createBaseTotal || 0));
+  const createAgreedTotal = createQuantity * createUnitPrice;
   const createDeposit = Math.max(0, Number(createForm.initialPaymentAmount || 0));
   const createBalance = Math.max(0, createAgreedTotal - createDeposit);
   const createInstallmentCount = Math.max(1, Number(createForm.installmentCount || "1"));
   const createInstallmentAmount = createInstallmentCount > 0 ? createBalance / createInstallmentCount : createBalance;
   const createExpectedCompletionDate = addInstallmentPeriods(createInstallmentCount, createForm.installmentFrequency);
+  const selectedStaff = staffMembers.find((member) => member.id === staffId) ?? null;
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(29,78,216,0.18),transparent_28%),radial-gradient(circle_at_top_right,rgba(15,23,42,0.7),transparent_36%),linear-gradient(180deg,#08111f_0%,#050b16_100%)] px-4 py-5 text-slate-100 lg:px-6 xl:px-8">
@@ -1161,7 +1270,7 @@ export default function LipaPolePoleAdminClient({
                           <td className="border-t border-white/6 px-4 py-4 align-top text-slate-300">{item.reference}</td>
                           <td className="border-t border-white/6 px-4 py-4 align-top">
                             <div className="text-white">{item.productName || "No product"}</div>
-                            <div className="mt-1 text-xs text-slate-500">Qty 1</div>
+                            <div className="mt-1 text-xs text-slate-500">Qty {item.quantity}</div>
                           </td>
                           <td className="border-t border-white/6 px-4 py-4 align-top text-slate-200">{formatKes(item.agreedTotal)}</td>
                           <td className="border-t border-white/6 px-4 py-4 align-top text-emerald-300">{formatKes(item.totalPaid)}</td>
@@ -1295,17 +1404,33 @@ export default function LipaPolePoleAdminClient({
                         onChange={(value) => setCreateForm((current) => ({ ...current, quantity: value }))}
                         min={1}
                       />
-                      <Field label="Agreed unit price">
+                      <Field label="Unit price">
                         <input className={inputClass} value={createForm.agreedUnitPrice} onChange={(event) => setCreateForm((current) => ({ ...current, agreedUnitPrice: event.target.value }))} placeholder="15000" />
-                      </Field>
-                      <Field label="Agreed total override">
-                        <input className={inputClass} value={createForm.agreedTotal} onChange={(event) => setCreateForm((current) => ({ ...current, agreedTotal: event.target.value }))} placeholder="Optional override" />
                       </Field>
                       <Field label="Deposit paid">
                         <input className={inputClass} value={createForm.initialPaymentAmount} onChange={(event) => setCreateForm((current) => ({ ...current, initialPaymentAmount: event.target.value }))} placeholder="0" />
                       </Field>
                     </div>
                   </div>
+                </section>
+
+                <section className="rounded-[24px] border border-white/10 bg-slate-950/40 p-4">
+                  <div className="mb-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Staff</div>
+                  <Field label="Staff">
+                    <select
+                      value={staffId}
+                      onChange={(event) => setStaffId(event.target.value)}
+                      className={`${inputClass} appearance-none`}
+                      required
+                    >
+                      <option value="">Select staff</option>
+                      {staffMembers.map((member) => (
+                        <option key={member.id} value={member.id}>
+                          {member.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
                 </section>
 
                 <section className="rounded-[24px] border border-white/10 bg-slate-950/40 p-4">
@@ -1391,27 +1516,6 @@ export default function LipaPolePoleAdminClient({
                   {showCreateMoreDetails ? (
                     <div className="mt-4 space-y-4 border-t border-white/10 pt-4">
                       <div className="grid gap-4 md:grid-cols-2">
-                        <SearchSelector label="Salesperson" placeholder="Search salesperson" value={salesperson} onChange={setSalesperson} search={searchUsers} />
-                        <SearchSelector label="Assigned agent" placeholder="Search assigned agent" value={assignedAgent} onChange={setAssignedAgent} search={searchUsers} />
-                        <Field label="Source">
-                          <input className={inputClass} value={createForm.source} onChange={(event) => setCreateForm((current) => ({ ...current, source: event.target.value }))} placeholder="Walk-in, referral, call center..." />
-                        </Field>
-                        <Field label="Expected completion override">
-                          <input type="date" className={inputClass} value={createForm.expectedCompletionDateOverride} onChange={(event) => setCreateForm((current) => ({ ...current, expectedCompletionDateOverride: event.target.value }))} />
-                        </Field>
-                        <Field label="Payment mode">
-                          <select className={inputClass} value={createForm.paymentMode} onChange={(event) => setCreateForm((current) => ({ ...current, paymentMode: event.target.value }))}>
-                            <option value="SCHEDULED">Scheduled</option>
-                            <option value="FLEXIBLE">Flexible</option>
-                          </select>
-                        </Field>
-                        <Field label="Reservation mode">
-                          <select className={inputClass} value={createForm.reservationMode} onChange={(event) => setCreateForm((current) => ({ ...current, reservationMode: event.target.value }))}>
-                            <option value="NONE">None</option>
-                            <option value="SOFT_RESERVE">Soft reserve</option>
-                            <option value="HARD_RESERVE">Hard reserve</option>
-                          </select>
-                        </Field>
                         <Field label="County">
                           <input className={inputClass} value={createForm.county} onChange={(event) => setCreateForm((current) => ({ ...current, county: event.target.value }))} placeholder="Nairobi" />
                         </Field>
@@ -1437,16 +1541,17 @@ export default function LipaPolePoleAdminClient({
                 <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Payment plan summary</div>
                 <div className="mt-4 space-y-3">
                   <PlanRow label="Product" value={product?.label || "Select product"} />
+                  <PlanRow label="Staff" value={selectedStaff?.name || "Select staff"} />
                   <PlanRow label="Quantity" value={String(createQuantity)} />
                   <PlanRow label="Unit price" value={formatKes(createUnitPrice)} />
                   <PlanRow label="Agreed total" value={formatKes(createAgreedTotal)} emphasis="text-white" />
                   <PlanRow label="Deposit paid" value={formatKes(createDeposit)} emphasis="text-emerald-300" />
                   <PlanRow label="Pending balance" value={formatKes(createBalance)} emphasis="text-amber-300" />
                   <PlanRow
-                    label={`${titleCase(createForm.installmentFrequency)} installments`}
-                    value={createBalance > 0 ? `${createInstallmentCount} x ${formatKes(createInstallmentAmount)}` : "No balance remaining"}
+                    label={`${createInstallmentCount} ${titleCase(createForm.installmentFrequency)} installments`}
+                    value={createBalance > 0 ? `${formatKes(createInstallmentAmount)} each` : "No balance remaining"}
                   />
-                  <PlanRow label="Expected completion" value={formatDate(createForm.expectedCompletionDateOverride || toDateInputValue(createExpectedCompletionDate))} />
+                  <PlanRow label="Expected completion" value={formatDate(toDateInputValue(createExpectedCompletionDate))} />
                 </div>
               </aside>
             </div>
@@ -1460,6 +1565,33 @@ export default function LipaPolePoleAdminClient({
               </button>
             </div>
           </form>
+        </ModalShell>
+      ) : null}
+
+      {createSuccess ? (
+        <ModalShell
+          title="Lipa Pole Pole account created successfully."
+          subtitle={`${createSuccess.reference} · ${createSuccess.customerName}`}
+          onClose={() => setCreateSuccess(null)}
+        >
+          <div className="space-y-4">
+            <div className="rounded-[24px] border border-emerald-500/20 bg-emerald-500/10 p-5 text-sm text-emerald-50">
+              <div className="grid gap-4 md:grid-cols-2">
+                <InfoPair label="LPP #" value={createSuccess.reference} />
+                <InfoPair label="Customer" value={createSuccess.customerName} />
+                <InfoPair label="Deposit" value={formatKes(createSuccess.deposit)} />
+                <InfoPair label="Balance" value={formatKes(createSuccess.balance)} tone="text-amber-200" />
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Link href={getBookingReceiptHref(createSuccess.accountId, true)} target="_blank" rel="noreferrer" className={primaryButtonClass}>
+                Print Booking Receipt
+              </Link>
+              <button type="button" className={secondaryButtonClass} onClick={() => setCreateSuccess(null)}>
+                Done
+              </button>
+            </div>
+          </div>
         </ModalShell>
       ) : null}
 
@@ -1637,6 +1769,10 @@ function ExpandedRowDetails({
 }) {
   const account = detail.account;
   const due = describeDueDate(account.expectedCompletionDate);
+  const installmentFrequency = inferInstallmentFrequency(detail.installments, account.createdAt);
+  const initialPayment = getInitialSuccessfulPayment(detail.payments);
+  const currentPaidDiffersFromDeposit =
+    initialPayment && Math.round(detail.summary.totalPaid * 100) !== Math.round(initialPayment.amount * 100);
 
   return (
     <div className="overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(9,16,28,0.94),rgba(7,12,22,0.98))]">
@@ -1645,7 +1781,7 @@ function ExpandedRowDetails({
           <SummaryValue label={account.reference} value={account.customerName || "Unknown customer"} />
           <div className="text-sm text-slate-400">{account.customerPhone || "No phone"}</div>
           <div className="mt-4 text-white">{account.productName || "No product selected"}</div>
-          <div className="mt-1 text-sm text-slate-500">Qty 1</div>
+          <div className="mt-1 text-sm text-slate-500">Qty {account.quantity}</div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <InfoPair label="Created" value={formatDate(account.createdAt)} />
             <InfoPair label="Expected Completion" value={formatDate(account.expectedCompletionDate)} />
@@ -1673,9 +1809,9 @@ function ExpandedRowDetails({
         <SummaryCard title="Ownership">
           <div className="grid gap-3 sm:grid-cols-2">
             <InfoPair label="Customer Service" value={account.assignedToName || "Unassigned"} />
-            <InfoPair label="Salesperson" value="Not captured" />
-            <InfoPair label="Payment Mode" value="Flexible" />
-            <InfoPair label="Source" value="Not captured" />
+            <InfoPair label="Staff" value={account.salespersonName || "Not captured"} />
+            <InfoPair label="Payment Mode" value={titleCase(account.paymentMode)} />
+            <InfoPair label="Source" value={account.source || "Not captured"} />
             <InfoPair label="Status" value={titleCase(account.status)} />
             <InfoPair label="Due" value={due.label} tone={due.tone} />
           </div>
@@ -1705,27 +1841,47 @@ function ExpandedRowDetails({
                 <div className="space-y-3">
                   <InfoPair label="Name" value={account.customerName || "Unknown customer"} />
                   <InfoPair label="Phone" value={account.customerPhone || "No phone"} />
-                  <InfoPair label="Location" value="Kenya" />
+                  <InfoPair label="Email" value={account.customerEmail || "Not captured"} />
+                  <InfoPair label="Location" value={describeLocation(account)} />
                 </div>
               </DetailBlock>
               <DetailBlock title="Agreement" className="xl:col-span-2">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <InfoPair label="Product" value={account.productName || "No product selected"} />
-                  <InfoPair label="Quantity" value="1" />
-                  <InfoPair label="Agreed Price" value={formatKes(detail.summary.agreedTotal)} />
+                  <InfoPair label="Quantity" value={String(account.quantity)} />
+                  <InfoPair label="Unit price" value={formatKes(account.agreedUnitPrice)} />
+                  <InfoPair label="Agreed total" value={formatKes(detail.summary.agreedTotal)} />
                   <InfoPair label="Completion Date" value={formatDate(account.expectedCompletionDate)} />
-                  <InfoPair label="Reservation Mode" value="Not captured" />
-                  <InfoPair label="Payment Mode" value="Flexible" />
+                  <InfoPair label="Payment frequency" value={installmentFrequency ? titleCase(installmentFrequency) : "Not captured"} />
+                  <InfoPair label="Future installments" value={String(detail.installments.length)} />
                 </div>
               </DetailBlock>
               <DetailBlock title="Ownership" className="xl:col-span-1">
                 <div className="space-y-3">
                   <InfoPair label="Customer Service" value={account.assignedToName || "Unassigned"} />
-                  <InfoPair label="Salesperson" value="Not captured" />
-                  <InfoPair label="Source" value="Not captured" />
+                  <InfoPair label="Staff" value={account.salespersonName || "Not captured"} />
+                  <InfoPair label="Source" value={account.source || "Not captured"} />
+                  <InfoPair label="Reservation mode" value={titleCase(account.reservationMode)} />
                 </div>
               </DetailBlock>
             </div>
+
+            <DetailBlock title="Payment Schedule">
+              {detail.installments.length === 0 ? (
+                <EmptyBlock text="No future installment schedule saved yet." />
+              ) : (
+                <div className="space-y-3">
+                  {detail.installments.map((installment, index) => (
+                    <div key={installment.id} className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-3 text-sm">
+                      <div className="text-slate-300">
+                        {index + 1}. {formatDate(installment.dueDate)}
+                      </div>
+                      <div className="font-semibold text-white">{formatKes(installment.expectedAmount)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </DetailBlock>
 
             <DetailBlock title="Next Action">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
@@ -1813,8 +1969,14 @@ function ExpandedRowDetails({
             )}
             <div className="mt-5 flex flex-col gap-4 rounded-2xl border border-white/10 bg-slate-950/45 p-4 md:flex-row md:items-center md:justify-between">
               <div className="grid gap-2 text-sm text-slate-300">
+                {initialPayment ? (
+                  <div className="flex items-center gap-3">
+                    <span className="text-slate-500">Initial Deposit</span>
+                    <span className="font-semibold text-white">{formatKes(initialPayment.amount)}</span>
+                  </div>
+                ) : null}
                 <div className="flex items-center gap-3">
-                  <span className="text-slate-500">Total Paid</span>
+                  <span className="text-slate-500">{currentPaidDiffersFromDeposit ? "Current Total Paid" : "Total Paid"}</span>
                   <span className="font-semibold text-white">{formatKes(detail.summary.totalPaid)}</span>
                 </div>
                 <div className="flex items-center gap-3">
@@ -1891,6 +2053,9 @@ function ExpandedRowDetails({
         ) : null}
 
         <div className="flex flex-wrap gap-3 border-t border-white/10 pt-4">
+          <Link href={getBookingReceiptHref(account.id, true)} target="_blank" rel="noreferrer" className={secondaryButtonClass}>
+            Print Booking Receipt
+          </Link>
           {detail.summary.balance > 0 ? (
             <>
               <button type="button" className={primaryButtonClass} onClick={() => onOpenAction("PAYMENT")}>

@@ -37,15 +37,26 @@ type LppListItem = {
   customerName: string | null;
   customerPhone: string | null;
   customerEmail: string | null;
+  customerCounty: string | null;
+  customerTown: string | null;
+  customerEstateLandmark: string | null;
+  customerLocationNotes: string | null;
   productId: string | null;
   productName: string | null;
+  quantity: number;
+  agreedUnitPrice: number;
   assignedToId: string | null;
   assignedToName: string | null;
+  salespersonId: string | null;
+  salespersonName: string | null;
   agreedTotal: number;
   totalPaid: number;
   balance: number;
   percentagePaid: number;
   status: string;
+  paymentMode: string;
+  reservationMode: string;
+  source: string | null;
   expectedCompletionDate: string | null;
   createdAt: string;
   updatedAt: string;
@@ -61,6 +72,14 @@ type LppListItem = {
 
 type LppDetail = {
   account: LppListItem;
+  installments: Array<{
+    id: string;
+    dueDate: string;
+    expectedAmount: number;
+    notes: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
   payments: Array<{
     id: string;
     amount: number;

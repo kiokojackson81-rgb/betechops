@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getActorId, noStoreJson, requireRole } from "@/lib/api";
 import { updateSafeCustomerProfile } from "@/lib/customerProfile";
-import { createLipaPolePole, getLppAccountSummary, listSerializedLppAccounts } from "@/lib/lipaPolePoleService";
+import { createLipaPolePole, getSerializedLppAccountDetail, listSerializedLppAccounts } from "@/lib/lipaPolePoleService";
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 
@@ -196,8 +196,8 @@ export async function POST(req: Request) {
         : null,
     });
 
-    const summary = await getLppAccountSummary(created.id);
-    return noStoreJson({ ok: true, account: summary.lpp, payments: summary.payments, summary: summary.summary }, { status: 201 });
+    const detail = await getSerializedLppAccountDetail(created.id);
+    return noStoreJson({ ok: true, ...detail }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create LPP account";
     return noStoreJson({ error: message }, { status: mapErrorStatus(message) });

@@ -132,6 +132,16 @@ type RawLppPromiseRow = {
   updatedAt: Date;
 };
 
+type RawLppInstallmentRow = {
+  id: string;
+  lipaPolePoleId: string;
+  dueDate: Date;
+  expectedAmount: Prisma.Decimal;
+  notes: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export type LppCustomerServiceAgent = {
   id: string;
   email: string | null;
@@ -147,15 +157,26 @@ export type SerializedLppAccount = {
   customerName: string | null;
   customerPhone: string | null;
   customerEmail: string | null;
+  customerCounty: string | null;
+  customerTown: string | null;
+  customerEstateLandmark: string | null;
+  customerLocationNotes: string | null;
   productId: string | null;
   productName: string | null;
+  quantity: number;
+  agreedUnitPrice: number;
   assignedToId: string | null;
   assignedToName: string | null;
+  salespersonId: string | null;
+  salespersonName: string | null;
   agreedTotal: number;
   totalPaid: number;
   balance: number;
   percentagePaid: number;
   status: string;
+  paymentMode: string;
+  reservationMode: string;
+  source: string | null;
   expectedCompletionDate: string | null;
   createdAt: string;
   updatedAt: string;
@@ -226,6 +247,15 @@ export type SerializedLppPromise = {
   notes: string | null;
   createdById: string | null;
   createdByName: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SerializedLppInstallment = {
+  id: string;
+  dueDate: string;
+  expectedAmount: number;
+  notes: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -587,6 +617,15 @@ async function getLppPromises(db: DbClient, lipaPolePoleId: string) {
     LEFT JOIN "User" c ON c."id" = p."createdById"
     WHERE p."lipaPolePoleId" = ${lipaPolePoleId}
     ORDER BY p."promiseDate" DESC, p."createdAt" DESC
+  `);
+}
+
+async function getLppInstallments(db: DbClient, lipaPolePoleId: string) {
+  return db.$queryRaw<RawLppInstallmentRow[]>(Prisma.sql`
+    SELECT *
+    FROM "LipaPolePoleInstallment"
+    WHERE "lipaPolePoleId" = ${lipaPolePoleId}
+    ORDER BY "dueDate" ASC, "createdAt" ASC
   `);
 }
 
@@ -1630,27 +1669,49 @@ function serializeLppPromise(row: RawLppPromiseRow): SerializedLppPromise {
   };
 }
 
+function serializeLppInstallment(row: RawLppInstallmentRow): SerializedLppInstallment {
+  return {
+    id: row.id,
+    dueDate: row.dueDate.toISOString(),
+    expectedAmount: Number(row.expectedAmount ?? 0),
+    notes: row.notes ?? null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
 export async function getSerializedLppAccountDetail(lipaPolePoleId: string, db: DbClient = prisma) {
   const { lpp, payments, summary } = await getLppAccountSummary(lipaPolePoleId, db);
   const rows = await db.$queryRaw<Array<{
     customerName: string | null;
     customerPhone: string | null;
     customerEmail: string | null;
+    customerCounty: string | null;
+    customerTown: string | null;
+    customerEstateLandmark: string | null;
+    customerLocationNotes: string | null;
     productName: string | null;
     assignedToName: string | null;
+    salespersonName: string | null;
     fulfilledByName: string | null;
   }>>(Prisma.sql`
     SELECT
       c."name" AS "customerName",
       c."phone" AS "customerPhone",
       c."email" AS "customerEmail",
+      c."county" AS "customerCounty",
+      c."town" AS "customerTown",
+      c."estateLandmark" AS "customerEstateLandmark",
+      c."locationNotes" AS "customerLocationNotes",
       p."name" AS "productName",
       a."name" AS "assignedToName",
+      s."name" AS "salespersonName",
       f."name" AS "fulfilledByName"
     FROM "LipaPolePole" lpp
     LEFT JOIN "User" c ON c."id" = lpp."customerId"
     LEFT JOIN "Product" p ON p."id" = lpp."productId"
     LEFT JOIN "User" a ON a."id" = lpp."assignedToId"
+    LEFT JOIN "User" s ON s."id" = lpp."salespersonId"
     LEFT JOIN "User" f ON f."id" = lpp."fulfilledById"
     WHERE lpp."id" = ${lipaPolePoleId}
     LIMIT 1
@@ -1659,14 +1720,20 @@ export async function getSerializedLppAccountDetail(lipaPolePoleId: string, db: 
     customerName: null,
     customerPhone: null,
     customerEmail: null,
+    customerCounty: null,
+    customerTown: null,
+    customerEstateLandmark: null,
+    customerLocationNotes: null,
     productName: null,
     assignedToName: null,
+    salespersonName: null,
     fulfilledByName: null,
   };
   const events = await getLppEvents(db, lipaPolePoleId);
   const reminders = await getLppReminders(db, lipaPolePoleId);
   const followUps = await getLppFollowUps(db, lipaPolePoleId);
   const promises = await getLppPromises(db, lipaPolePoleId);
+  const installments = await getLppInstallments(db, lipaPolePoleId);
 
   const account: SerializedLppAccount = {
     id: lpp.id,
@@ -1675,15 +1742,26 @@ export async function getSerializedLppAccountDetail(lipaPolePoleId: string, db: 
     customerName: meta.customerName,
     customerPhone: meta.customerPhone,
     customerEmail: meta.customerEmail,
+    customerCounty: meta.customerCounty,
+    customerTown: meta.customerTown,
+    customerEstateLandmark: meta.customerEstateLandmark,
+    customerLocationNotes: meta.customerLocationNotes,
     productId: lpp.productId,
     productName: meta.productName,
+    quantity: Number(lpp.quantity ?? 1),
+    agreedUnitPrice: Number(lpp.agreedUnitPrice ?? 0),
     assignedToId: lpp.assignedToId,
     assignedToName: meta.assignedToName,
+    salespersonId: lpp.salespersonId ?? null,
+    salespersonName: meta.salespersonName,
     agreedTotal: Number(lpp.agreedTotal ?? 0),
     totalPaid: Number(summary.totalPaid ?? 0),
     balance: Number(summary.balance ?? 0),
     percentagePaid: Number(summary.percentagePaid ?? 0),
     status: lpp.status,
+    paymentMode: lpp.paymentMode,
+    reservationMode: lpp.reservationMode,
+    source: lpp.source ?? null,
     expectedCompletionDate: lpp.expectedCompletionDate ? lpp.expectedCompletionDate.toISOString() : null,
     createdAt: lpp.createdAt.toISOString(),
     updatedAt: lpp.updatedAt.toISOString(),
@@ -1704,6 +1782,7 @@ export async function getSerializedLppAccountDetail(lipaPolePoleId: string, db: 
     reminders: reminders.map(serializeLppReminder),
     followUps: followUps.map(serializeLppFollowUp),
     promises: promises.map(serializeLppPromise),
+    installments: installments.map(serializeLppInstallment),
     summary: {
       agreedTotal: Number(summary.agreedTotal ?? 0),
       totalPaid: Number(summary.totalPaid ?? 0),
@@ -1736,6 +1815,7 @@ export async function listSerializedLppAccounts(
     customerEmail: string | null;
     productName: string | null;
     assignedToName: string | null;
+    salespersonName: string | null;
   }>>(Prisma.sql`
     SELECT
       lpp.*,
@@ -1743,11 +1823,13 @@ export async function listSerializedLppAccounts(
       c."phone" AS "customerPhone",
       c."email" AS "customerEmail",
       p."name" AS "productName",
-      a."name" AS "assignedToName"
+      a."name" AS "assignedToName",
+      s."name" AS "salespersonName"
     FROM "LipaPolePole" lpp
     LEFT JOIN "User" c ON c."id" = lpp."customerId"
     LEFT JOIN "Product" p ON p."id" = lpp."productId"
     LEFT JOIN "User" a ON a."id" = lpp."assignedToId"
+    LEFT JOIN "User" s ON s."id" = lpp."salespersonId"
     WHERE 1 = 1
       ${status ? Prisma.sql`AND lpp."status"::text = ${status}` : Prisma.empty}
       ${assignedToId ? Prisma.sql`AND lpp."assignedToId" = ${assignedToId}` : Prisma.empty}
@@ -1790,15 +1872,26 @@ export async function listSerializedLppAccounts(
       customerName: row.customerName,
       customerPhone: row.customerPhone,
       customerEmail: row.customerEmail,
+      customerCounty: null,
+      customerTown: null,
+      customerEstateLandmark: null,
+      customerLocationNotes: null,
       productId: row.productId,
       productName: row.productName,
+      quantity: Number(row.quantity ?? 1),
+      agreedUnitPrice: Number(row.agreedUnitPrice ?? 0),
       assignedToId: row.assignedToId,
       assignedToName: row.assignedToName,
+      salespersonId: row.salespersonId ?? null,
+      salespersonName: row.salespersonName,
       agreedTotal,
       totalPaid,
       balance,
       percentagePaid,
       status: row.status,
+      paymentMode: row.paymentMode,
+      reservationMode: row.reservationMode,
+      source: row.source ?? null,
       expectedCompletionDate: row.expectedCompletionDate ? row.expectedCompletionDate.toISOString() : null,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),

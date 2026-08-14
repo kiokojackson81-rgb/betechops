@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { buildStaffAttendantWhere } from "@/lib/staffUsers";
+import { buildStaffAttendantWhere, STAFF_ATTENDANT_ROLES } from "@/lib/staffUsers";
 import { resolveProjectStaffPhone } from "@/lib/projectHandlers";
 
 export async function GET() {
@@ -36,7 +36,10 @@ export async function GET() {
     // Fall back to a simpler query (avoid attendantCategory ordering/selection)
     try {
       staff = await prisma.user.findMany({
-        where: buildStaffAttendantWhere(),
+        where: {
+          role: { in: STAFF_ATTENDANT_ROLES },
+          isActive: true,
+        },
         orderBy: [{ name: "asc" }],
         select: {
           id: true,
