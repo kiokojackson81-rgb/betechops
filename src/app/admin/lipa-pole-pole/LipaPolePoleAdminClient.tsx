@@ -2,15 +2,13 @@
 
 import Link from "next/link";
 import {
-  Bell,
   Calendar,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock3,
-  Package2,
-  Phone,
+  Minus,
   Plus,
   RefreshCcw,
   Search,
@@ -18,7 +16,7 @@ import {
   Wallet,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
 
 type LppListItem = {
   id: string;
@@ -129,8 +127,8 @@ type SearchSelectorProps = {
   search: (query: string) => Promise<SearchOption[]>;
 };
 
-type DrawerTab = "OVERVIEW" | "PAYMENTS" | "FOLLOW_UPS" | "TIMELINE";
-type ActionPanel = "PAYMENT" | "ASSIGN" | "FOLLOW_UP" | "PROMISE" | "RELEASE" | null;
+type DetailsTab = "OVERVIEW" | "PAYMENTS" | "FOLLOW_UPS" | "TIMELINE";
+type ActionModal = "PAYMENT" | "ASSIGN" | "FOLLOW_UP" | "PROMISE" | "RELEASE" | null;
 type QuickFilter = "ALL" | "ACTIVE" | "DUE_TODAY" | "DUE_WEEK" | "OVERDUE" | "FULLY_PAID" | "CANCELLED";
 
 const STATUSES = [
@@ -145,7 +143,7 @@ const STATUSES = [
   "CLOSED",
 ] as const;
 
-const DRAWER_TABS: Array<{ id: DrawerTab; label: string }> = [
+const TAB_ITEMS: Array<{ id: DetailsTab; label: string }> = [
   { id: "OVERVIEW", label: "Overview" },
   { id: "PAYMENTS", label: "Payments" },
   { id: "FOLLOW_UPS", label: "Follow-ups" },
@@ -296,9 +294,12 @@ export default function LipaPolePoleAdminClient({
   const [items, setItems] = useState(initialItems);
   const [detail, setDetail] = useState<LppDetail | null>(initialDetail);
   const [selectedId, setSelectedId] = useState(initialDetail?.account.id ?? initialItems[0]?.id ?? "");
+  const [expandedLppId, setExpandedLppId] = useState(initialDetail?.account.id ?? "");
+  const [activeTab, setActiveTab] = useState<DetailsTab>("OVERVIEW");
   const [q, setQ] = useState(initialQ);
   const [status, setStatus] = useState(initialStatus);
   const [banner, setBanner] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const [loadingDetailId, setLoadingDetailId] = useState("");
   const [, startTransition] = useTransition();
   const [isSubmittingCreate, setIsSubmittingCreate] = useState(false);
   const [isSubmittingAssign, setIsSubmittingAssign] = useState(false);
@@ -308,14 +309,8 @@ export default function LipaPolePoleAdminClient({
   const [isReleasing, setIsReleasing] = useState(false);
   const [isSubmittingFollowUp, setIsSubmittingFollowUp] = useState(false);
   const [isSubmittingPromise, setIsSubmittingPromise] = useState(false);
-  const [customer, setCustomer] = useState<SearchOption | null>(null);
-  const [product, setProduct] = useState<SearchOption | null>(null);
-  const [salesperson, setSalesperson] = useState<SearchOption | null>(null);
-  const [assignedAgent, setAssignedAgent] = useState<SearchOption | null>(null);
-  const [assignAgent, setAssignAgent] = useState<SearchOption | null>(null);
-  const [drawerTab, setDrawerTab] = useState<DrawerTab>("OVERVIEW");
-  const [actionPanel, setActionPanel] = useState<ActionPanel>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [actionModal, setActionModal] = useState<ActionModal>(null);
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("ALL");
   const [agentFilter, setAgentFilter] = useState("ALL");
   const [productFilter, setProductFilter] = useState("ALL");
@@ -323,6 +318,13 @@ export default function LipaPolePoleAdminClient({
   const [page, setPage] = useState(1);
   const pageSize = 10;
   const hasHydratedRef = useRef(false);
+
+  const [customer, setCustomer] = useState<SearchOption | null>(null);
+  const [product, setProduct] = useState<SearchOption | null>(null);
+  const [salesperson, setSalesperson] = useState<SearchOption | null>(null);
+  const [assignedAgent, setAssignedAgent] = useState<SearchOption | null>(null);
+  const [assignAgent, setAssignAgent] = useState<SearchOption | null>(null);
+
   const [createForm, setCreateForm] = useState({
     quantity: "1",
     agreedUnitPrice: "",
@@ -367,7 +369,9 @@ export default function LipaPolePoleAdminClient({
 
   useEffect(() => {
     setDetail(initialDetail);
-    setSelectedId(initialDetail?.account.id ?? initialItems[0]?.id ?? "");
+    const nextId = initialDetail?.account.id ?? initialItems[0]?.id ?? "";
+    setSelectedId(nextId);
+    setExpandedLppId(initialDetail?.account.id ?? "");
   }, [initialDetail, initialItems]);
 
   useEffect(() => {
@@ -381,12 +385,12 @@ export default function LipaPolePoleAdminClient({
     else params.delete("q");
     if (status !== "ALL") params.set("status", status);
     else params.delete("status");
-    if (selectedId) params.set("id", selectedId);
+    if (expandedLppId) params.set("id", expandedLppId);
     else params.delete("id");
     const next = params.toString();
     const href = next ? `${window.location.pathname}?${next}` : window.location.pathname;
     window.history.replaceState({}, "", href);
-  }, [q, status, selectedId]);
+  }, [expandedLppId, q, status]);
 
   // The backend query is intentionally driven by debounced `q` and `status`.
   useEffect(() => {
@@ -423,24 +427,31 @@ export default function LipaPolePoleAdminClient({
     const targetId = nextItems.some((item) => item.id === fallbackId) ? fallbackId : nextItems[0]?.id || "";
     if (targetId) {
       await loadDetail(targetId);
+      setExpandedLppId(targetId);
     } else {
       setDetail(null);
       setSelectedId("");
+      setExpandedLppId("");
     }
   }
 
   async function loadDetail(id: string) {
-    const data = await readJson<{ ok: true } & LppDetail>(`/api/lipa-pole-pole/${id}`);
-    setDetail({
-      account: data.account,
-      payments: data.payments,
-      events: data.events,
-      reminders: data.reminders,
-      followUps: data.followUps,
-      promises: data.promises,
-      summary: data.summary,
-    });
-    setSelectedId(id);
+    setLoadingDetailId(id);
+    try {
+      const data = await readJson<{ ok: true } & LppDetail>(`/api/lipa-pole-pole/${id}`);
+      setDetail({
+        account: data.account,
+        payments: data.payments,
+        events: data.events,
+        reminders: data.reminders,
+        followUps: data.followUps,
+        promises: data.promises,
+        summary: data.summary,
+      });
+      setSelectedId(id);
+    } finally {
+      setLoadingDetailId("");
+    }
   }
 
   async function searchCustomers(query: string) {
@@ -555,7 +566,7 @@ export default function LipaPolePoleAdminClient({
       });
       await refreshList(selectedId);
       setBanner({ tone: "success", text: assignAgent ? "Account reassigned." : "Account assigned using round robin." });
-      setActionPanel(null);
+      setActionModal(null);
     } catch (error) {
       showError(error);
     } finally {
@@ -591,8 +602,8 @@ export default function LipaPolePoleAdminClient({
         reference: "",
         notes: "",
       });
-      setActionPanel(null);
-      setDrawerTab("PAYMENTS");
+      setActionModal(null);
+      setActiveTab("PAYMENTS");
     } catch (error) {
       showError(error);
     } finally {
@@ -675,7 +686,7 @@ export default function LipaPolePoleAdminClient({
       });
       await refreshList(selectedId);
       setBanner({ tone: "success", text: "Product release recorded." });
-      setActionPanel(null);
+      setActionModal(null);
     } catch (error) {
       showError(error);
     } finally {
@@ -711,8 +722,8 @@ export default function LipaPolePoleAdminClient({
         outcome: "",
         notes: "",
       });
-      setActionPanel(null);
-      setDrawerTab("FOLLOW_UPS");
+      setActionModal(null);
+      setActiveTab("FOLLOW_UPS");
     } catch (error) {
       showError(error);
     } finally {
@@ -746,13 +757,26 @@ export default function LipaPolePoleAdminClient({
         promiseDate: "",
         notes: "",
       });
-      setActionPanel(null);
-      setDrawerTab("FOLLOW_UPS");
+      setActionModal(null);
+      setActiveTab("FOLLOW_UPS");
     } catch (error) {
       showError(error);
     } finally {
       setIsSubmittingPromise(false);
     }
+  }
+
+  async function toggleExpandedRow(id: string) {
+    if (expandedLppId === id) {
+      setExpandedLppId("");
+      setSelectedId("");
+      return;
+    }
+
+    setBanner(null);
+    setActiveTab("OVERVIEW");
+    setExpandedLppId(id);
+    await loadDetail(id).catch(showError);
   }
 
   const agentOptions = useMemo(
@@ -808,716 +832,340 @@ export default function LipaPolePoleAdminClient({
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize));
   const safePage = Math.min(page, totalPages);
   const paginatedItems = filteredItems.slice((safePage - 1) * pageSize, safePage * pageSize);
-  const detailAccount = detail?.account ?? null;
-  const activeDetail = detailAccount && detail ? detail : null;
-  const selectedVisible = filteredItems.find((item) => item.id === selectedId) ?? detailAccount;
+  const activeDetail = expandedLppId && detail?.account.id === expandedLppId ? detail : null;
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(29,78,216,0.18),transparent_28%),radial-gradient(circle_at_top_right,rgba(15,23,42,0.7),transparent_36%),linear-gradient(180deg,#08111f_0%,#050b16_100%)] px-4 py-5 text-slate-100 lg:px-6 xl:px-8">
       <div className="mx-auto max-w-[1750px]">
         {banner ? <Banner tone={banner.tone} text={banner.text} /> : null}
 
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_390px]">
-          <section className="space-y-4">
-            <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.9),rgba(7,14,26,0.94))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                <div>
-                  <h1 className="text-3xl font-semibold tracking-tight text-white">Lipa Pole Pole</h1>
-                  <p className="mt-1 text-sm text-slate-400">Manage lay-by accounts, collections and completion</p>
+        <section className="space-y-4">
+          <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.9),rgba(7,14,26,0.94))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div>
+                <h1 className="text-3xl font-semibold tracking-tight text-white">Lipa Pole Pole</h1>
+                <p className="mt-1 text-sm text-slate-400">Manage lay-by accounts, collections and completion</p>
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="flex min-w-[280px] items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/55 px-4 py-3">
+                  <Search className="h-4 w-4 text-slate-500" />
+                  <input
+                    value={q}
+                    onChange={(event) => setQ(event.target.value)}
+                    placeholder="Search accounts, customers, LPP #, phone..."
+                    className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
+                  />
+                  <span className="hidden rounded-lg border border-white/10 px-2 py-1 text-[10px] font-semibold text-slate-500 md:inline-flex">
+                    Ctrl + K
+                  </span>
                 </div>
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <div className="flex min-w-[280px] items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/55 px-4 py-3">
-                    <Search className="h-4 w-4 text-slate-500" />
-                    <input
-                      value={q}
-                      onChange={(event) => setQ(event.target.value)}
-                      placeholder="Search accounts, customers, LPP #, phone..."
-                      className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
-                    />
-                    <span className="hidden rounded-lg border border-white/10 px-2 py-1 text-[10px] font-semibold text-slate-500 md:inline-flex">
-                      Ctrl + K
-                    </span>
-                  </div>
-                  <button type="button" className={primaryButtonClass} onClick={() => setShowCreateModal(true)}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    New Lipa Pole Pole
-                  </button>
+                <button type="button" className={primaryButtonClass} onClick={() => setShowCreateModal(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Lipa Pole Pole
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <KpiCard
+              icon={<Wallet className="h-4 w-4" />}
+              iconTone="bg-blue-500/15 text-blue-300"
+              label="Active Accounts"
+              value={String(activeCount)}
+              sub="Current active collections"
+              change="Live"
+              onClick={() => setQuickFilter("ACTIVE")}
+              active={quickFilter === "ACTIVE"}
+            />
+            <KpiCard
+              icon={<TrendingUp className="h-4 w-4" />}
+              iconTone="bg-emerald-500/15 text-emerald-300"
+              label="Outstanding Balance"
+              value={formatCompactKes(outstandingBalance)}
+              sub="Across current results"
+              change="Receivable"
+              onClick={() => setQuickFilter("ALL")}
+              active={quickFilter === "ALL"}
+            />
+            <KpiCard
+              icon={<Calendar className="h-4 w-4" />}
+              iconTone="bg-amber-500/15 text-amber-300"
+              label="Due This Week"
+              value={String(dueThisWeekCount)}
+              sub="Upcoming completions"
+              change="7 days"
+              onClick={() => setQuickFilter("DUE_WEEK")}
+              active={quickFilter === "DUE_WEEK"}
+            />
+            <KpiCard
+              icon={<Clock3 className="h-4 w-4" />}
+              iconTone="bg-rose-500/15 text-rose-300"
+              label="Overdue Accounts"
+              value={String(overdueCount)}
+              sub="Need follow-up now"
+              change="Priority"
+              onClick={() => setQuickFilter("OVERDUE")}
+              active={quickFilter === "OVERDUE"}
+            />
+            <KpiCard
+              icon={<CheckCircle2 className="h-4 w-4" />}
+              iconTone="bg-emerald-500/15 text-emerald-300"
+              label="Completed This Month"
+              value={String(completedThisMonthCount)}
+              sub="Closed or fulfilled"
+              change="This month"
+              onClick={() => setQuickFilter("FULLY_PAID")}
+              active={quickFilter === "FULLY_PAID"}
+            />
+          </div>
+
+          <section className="overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.84),rgba(8,15,28,0.92))] shadow-[0_24px_60px_rgba(0,0,0,0.32)]">
+            <div className="border-b border-white/10 p-4">
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+                <div className="flex flex-1 items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3">
+                  <Search className="h-4 w-4 text-slate-500" />
+                  <input
+                    value={q}
+                    onChange={(event) => setQ(event.target.value)}
+                    placeholder="Search by name, phone, LPP #, product, reference..."
+                    className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
+                  />
                 </div>
+                <FilterSelect value={status} onChange={setStatus}>
+                  {STATUSES.map((item) => (
+                    <option key={item} value={item}>
+                      {item === "ALL" ? "All Statuses" : titleCase(item)}
+                    </option>
+                  ))}
+                </FilterSelect>
+                <FilterSelect value={agentFilter} onChange={setAgentFilter}>
+                  {agentOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option === "ALL" ? "All Agents" : option}
+                    </option>
+                  ))}
+                </FilterSelect>
+                <FilterSelect value={productFilter} onChange={setProductFilter}>
+                  {productOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option === "ALL" ? "All Products" : option}
+                    </option>
+                  ))}
+                </FilterSelect>
+                <FilterSelect value={dueFilter} onChange={setDueFilter}>
+                  <option value="ALL">Due Date</option>
+                  <option value="TODAY">Due Today</option>
+                  <option value="THIS_WEEK">Due This Week</option>
+                  <option value="OVERDUE">Overdue</option>
+                  <option value="NO_DATE">No Due Date</option>
+                </FilterSelect>
+                <button
+                  type="button"
+                  className={secondaryButtonClass}
+                  onClick={() => {
+                    setQuickFilter("ALL");
+                    setStatus("ALL");
+                    setAgentFilter("ALL");
+                    setProductFilter("ALL");
+                    setDueFilter("ALL");
+                  }}
+                >
+                  <RefreshCcw className="mr-2 h-4 w-4" />
+                  Filters
+                </button>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <QuickFilterChip label="All" count={items.length} active={quickFilter === "ALL"} onClick={() => setQuickFilter("ALL")} />
+                <QuickFilterChip label="Active" count={activeCount} active={quickFilter === "ACTIVE"} onClick={() => setQuickFilter("ACTIVE")} />
+                <QuickFilterChip
+                  label="Due Today"
+                  count={items.filter((item) => Number(item.balance) > 0 && isDueToday(item.expectedCompletionDate)).length}
+                  active={quickFilter === "DUE_TODAY"}
+                  onClick={() => setQuickFilter("DUE_TODAY")}
+                />
+                <QuickFilterChip label="Due This Week" count={dueThisWeekCount} active={quickFilter === "DUE_WEEK"} onClick={() => setQuickFilter("DUE_WEEK")} />
+                <QuickFilterChip label="Overdue" count={overdueCount} active={quickFilter === "OVERDUE"} onClick={() => setQuickFilter("OVERDUE")} />
+                <QuickFilterChip
+                  label="Fully Paid"
+                  count={items.filter((item) => Number(item.balance) === 0).length}
+                  active={quickFilter === "FULLY_PAID"}
+                  onClick={() => setQuickFilter("FULLY_PAID")}
+                />
+                <QuickFilterChip
+                  label="Cancelled"
+                  count={items.filter((item) => item.status === "CANCELLED").length}
+                  active={quickFilter === "CANCELLED"}
+                  onClick={() => setQuickFilter("CANCELLED")}
+                />
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-              <KpiCard
-                icon={<Wallet className="h-4 w-4" />}
-                iconTone="bg-blue-500/15 text-blue-300"
-                label="Active Accounts"
-                value={String(activeCount)}
-                sub="Current active collections"
-                change="Live"
-                onClick={() => setQuickFilter("ACTIVE")}
-                active={quickFilter === "ACTIVE"}
-              />
-              <KpiCard
-                icon={<TrendingUp className="h-4 w-4" />}
-                iconTone="bg-emerald-500/15 text-emerald-300"
-                label="Outstanding Balance"
-                value={formatCompactKes(outstandingBalance)}
-                sub="Across current results"
-                change="Receivable"
-                onClick={() => setQuickFilter("ALL")}
-                active={quickFilter === "ALL"}
-              />
-              <KpiCard
-                icon={<Calendar className="h-4 w-4" />}
-                iconTone="bg-amber-500/15 text-amber-300"
-                label="Due This Week"
-                value={String(dueThisWeekCount)}
-                sub="Upcoming completions"
-                change="7 days"
-                onClick={() => setQuickFilter("DUE_WEEK")}
-                active={quickFilter === "DUE_WEEK"}
-              />
-              <KpiCard
-                icon={<Clock3 className="h-4 w-4" />}
-                iconTone="bg-rose-500/15 text-rose-300"
-                label="Overdue Accounts"
-                value={String(overdueCount)}
-                sub="Need follow-up now"
-                change="Priority"
-                onClick={() => setQuickFilter("OVERDUE")}
-                active={quickFilter === "OVERDUE"}
-              />
-              <KpiCard
-                icon={<CheckCircle2 className="h-4 w-4" />}
-                iconTone="bg-emerald-500/15 text-emerald-300"
-                label="Completed This Month"
-                value={String(completedThisMonthCount)}
-                sub="Closed or fulfilled"
-                change="This month"
-                onClick={() => setQuickFilter("FULLY_PAID")}
-                active={quickFilter === "FULLY_PAID"}
-              />
-            </div>
-
-            <section className="overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.84),rgba(8,15,28,0.92))] shadow-[0_24px_60px_rgba(0,0,0,0.32)]">
-              <div className="border-b border-white/10 p-4">
-                <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-                  <div className="flex flex-1 items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3">
-                    <Search className="h-4 w-4 text-slate-500" />
-                    <input
-                      value={q}
-                      onChange={(event) => setQ(event.target.value)}
-                      placeholder="Search by name, phone, LPP #, product, reference..."
-                      className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
-                    />
-                  </div>
-                  <FilterSelect value={status} onChange={setStatus}>
-                    {STATUSES.map((item) => (
-                      <option key={item} value={item}>
-                        {item === "ALL" ? "All Statuses" : titleCase(item)}
-                      </option>
-                    ))}
-                  </FilterSelect>
-                  <FilterSelect value={agentFilter} onChange={setAgentFilter}>
-                    {agentOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {option === "ALL" ? "All Agents" : option}
-                      </option>
-                    ))}
-                  </FilterSelect>
-                  <FilterSelect value={productFilter} onChange={setProductFilter}>
-                    {productOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {option === "ALL" ? "All Products" : option}
-                      </option>
-                    ))}
-                  </FilterSelect>
-                  <FilterSelect value={dueFilter} onChange={setDueFilter}>
-                    <option value="ALL">Due Date</option>
-                    <option value="TODAY">Due Today</option>
-                    <option value="THIS_WEEK">Due This Week</option>
-                    <option value="OVERDUE">Overdue</option>
-                    <option value="NO_DATE">No Due Date</option>
-                  </FilterSelect>
-                  <button
-                    type="button"
-                    className={secondaryButtonClass}
-                    onClick={() => {
-                      setQuickFilter("ALL");
-                      setStatus("ALL");
-                      setAgentFilter("ALL");
-                      setProductFilter("ALL");
-                      setDueFilter("ALL");
-                    }}
-                  >
-                    <RefreshCcw className="mr-2 h-4 w-4" />
-                    Filters
-                  </button>
-                </div>
-
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <QuickFilterChip label="All" count={items.length} active={quickFilter === "ALL"} onClick={() => setQuickFilter("ALL")} />
-                  <QuickFilterChip label="Active" count={activeCount} active={quickFilter === "ACTIVE"} onClick={() => setQuickFilter("ACTIVE")} />
-                  <QuickFilterChip
-                    label="Due Today"
-                    count={items.filter((item) => Number(item.balance) > 0 && isDueToday(item.expectedCompletionDate)).length}
-                    active={quickFilter === "DUE_TODAY"}
-                    onClick={() => setQuickFilter("DUE_TODAY")}
-                  />
-                  <QuickFilterChip label="Due This Week" count={dueThisWeekCount} active={quickFilter === "DUE_WEEK"} onClick={() => setQuickFilter("DUE_WEEK")} />
-                  <QuickFilterChip label="Overdue" count={overdueCount} active={quickFilter === "OVERDUE"} onClick={() => setQuickFilter("OVERDUE")} />
-                  <QuickFilterChip
-                    label="Fully Paid"
-                    count={items.filter((item) => Number(item.balance) === 0).length}
-                    active={quickFilter === "FULLY_PAID"}
-                    onClick={() => setQuickFilter("FULLY_PAID")}
-                  />
-                  <QuickFilterChip
-                    label="Cancelled"
-                    count={items.filter((item) => item.status === "CANCELLED").length}
-                    active={quickFilter === "CANCELLED"}
-                    onClick={() => setQuickFilter("CANCELLED")}
-                  />
-                </div>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead className="border-b border-white/10 bg-slate-950/50 text-left text-[11px] uppercase tracking-[0.18em] text-slate-500">
+            <div className="overflow-x-auto">
+              <table className="min-w-full border-separate border-spacing-0 text-sm">
+                <thead className="bg-slate-950/50 text-left text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                  <tr>
+                    <th className="px-4 py-4">Select</th>
+                    <th className="px-4 py-4">Open</th>
+                    <th className="px-4 py-4">Customer</th>
+                    <th className="px-4 py-4">LPP #</th>
+                    <th className="px-4 py-4">Product</th>
+                    <th className="px-4 py-4">Total</th>
+                    <th className="px-4 py-4">Paid</th>
+                    <th className="px-4 py-4">Balance</th>
+                    <th className="px-4 py-4">Progress</th>
+                    <th className="px-4 py-4">Due Date</th>
+                    <th className="px-4 py-4">Agent</th>
+                    <th className="px-4 py-4">Status</th>
+                    <th className="px-4 py-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedItems.length === 0 ? (
                     <tr>
-                      <th className="px-4 py-4">Customer</th>
-                      <th className="px-4 py-4">LPP #</th>
-                      <th className="px-4 py-4">Product</th>
-                      <th className="px-4 py-4">Total Amount</th>
-                      <th className="px-4 py-4">Paid</th>
-                      <th className="px-4 py-4">Balance</th>
-                      <th className="px-4 py-4">Progress</th>
-                      <th className="px-4 py-4">Due Date</th>
-                      <th className="px-4 py-4">Agent</th>
-                      <th className="px-4 py-4">Status</th>
-                      <th className="px-4 py-4 text-right">Actions</th>
+                      <td colSpan={13} className="px-4 py-16 text-center text-sm text-slate-500">
+                        No Lipa Pole Pole accounts found for the current filters.
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {paginatedItems.length === 0 ? (
-                      <tr>
-                        <td colSpan={11} className="px-4 py-16 text-center text-sm text-slate-500">
-                          No Lipa Pole Pole accounts found for the current filters.
-                        </td>
-                      </tr>
-                    ) : null}
-                    {paginatedItems.map((item) => {
-                      const due = describeDueDate(item.expectedCompletionDate);
-                      return (
-                        <tr
-                          key={item.id}
-                          className={`border-b border-white/6 transition hover:bg-white/[0.03] ${selectedVisible?.id === item.id ? "bg-blue-500/7" : ""}`}
-                        >
-                          <td className="px-4 py-4">
+                  ) : null}
+                  {paginatedItems.map((item) => {
+                    const isExpanded = expandedLppId === item.id;
+                    const rowDetail = isExpanded ? activeDetail : null;
+                    const due = describeDueDate(item.expectedCompletionDate);
+                    const rowId = `lpp-details-${item.id}`;
+                    return (
+                      <Fragment key={item.id}>
+                        <tr className={`border-t border-white/6 transition hover:bg-white/[0.03] ${isExpanded ? "bg-blue-500/[0.06]" : ""}`}>
+                          <td className="border-t border-white/6 px-4 py-4 align-top">
+                            <input
+                              type="checkbox"
+                              aria-label={`Select ${item.reference}`}
+                              className="h-4 w-4 rounded border-white/20 bg-slate-950/70 text-blue-500"
+                            />
+                          </td>
+                          <td className="border-t border-white/6 px-4 py-4 align-top">
                             <button
                               type="button"
-                              className="text-left"
+                              aria-expanded={isExpanded}
+                              aria-controls={rowId}
+                              aria-label={`${isExpanded ? "Close" : "Open"} details for ${item.reference}`}
                               onClick={() => {
-                                setDrawerTab("OVERVIEW");
-                                setActionPanel(null);
-                                setBanner(null);
-                                startTransition(() => {
-                                  void loadDetail(item.id).catch(showError);
-                                });
+                                void toggleExpandedRow(item.id);
                               }}
+                              className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-slate-950/70 text-slate-100 transition hover:border-white/20 hover:text-white"
                             >
-                              <div className="font-medium text-white">{item.customerName || "Unknown customer"}</div>
-                              <div className="mt-1 text-xs text-slate-500">{item.customerPhone || "No phone"}</div>
+                              {isExpanded ? <Minus className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
                             </button>
                           </td>
-                          <td className="px-4 py-4 text-slate-300">{item.reference}</td>
-                          <td className="px-4 py-4">
-                            <div className="text-white">{item.productName || "No product"}</div>
+                          <td className="border-t border-white/6 px-4 py-4 align-top">
+                            <div className="font-medium text-white">{item.customerName || "Unknown customer"}</div>
+                            <div className="mt-1 text-xs text-slate-500">{item.customerPhone || "No phone"}</div>
                           </td>
-                          <td className="px-4 py-4 text-slate-200">{formatKes(item.agreedTotal)}</td>
-                          <td className="px-4 py-4 text-emerald-300">{formatKes(item.totalPaid)}</td>
-                          <td className="px-4 py-4 font-medium text-amber-300">{formatKes(item.balance)}</td>
-                          <td className="px-4 py-4">
+                          <td className="border-t border-white/6 px-4 py-4 align-top text-slate-300">{item.reference}</td>
+                          <td className="border-t border-white/6 px-4 py-4 align-top">
+                            <div className="text-white">{item.productName || "No product"}</div>
+                            <div className="mt-1 text-xs text-slate-500">Qty 1</div>
+                          </td>
+                          <td className="border-t border-white/6 px-4 py-4 align-top text-slate-200">{formatKes(item.agreedTotal)}</td>
+                          <td className="border-t border-white/6 px-4 py-4 align-top text-emerald-300">{formatKes(item.totalPaid)}</td>
+                          <td className="border-t border-white/6 px-4 py-4 align-top font-medium text-amber-300">{formatKes(item.balance)}</td>
+                          <td className="border-t border-white/6 px-4 py-4 align-top">
                             <div className="w-[110px]">
-                              <div className="mb-1 flex items-center justify-between text-xs text-slate-400">
-                                <span>{Math.round(item.percentagePaid)}%</span>
-                              </div>
+                              <div className="mb-1 text-xs text-slate-400">{Math.round(item.percentagePaid)}%</div>
                               <div className="h-2 overflow-hidden rounded-full bg-white/10">
                                 <div className={`h-full ${progressTone(item.percentagePaid)}`} style={{ width: `${Math.max(0, Math.min(100, item.percentagePaid))}%` }} />
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 py-4">
+                          <td className="border-t border-white/6 px-4 py-4 align-top">
                             <div className="text-white">{formatDate(item.expectedCompletionDate)}</div>
                             <div className={`mt-1 text-xs ${due.tone}`}>{due.label}</div>
                           </td>
-                          <td className="px-4 py-4 text-slate-300">{item.assignedToName || "Unassigned"}</td>
-                          <td className="px-4 py-4">
+                          <td className="border-t border-white/6 px-4 py-4 align-top text-slate-300">{item.assignedToName || "Unassigned"}</td>
+                          <td className="border-t border-white/6 px-4 py-4 align-top">
                             <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(item.status)}`}>
                               {titleCase(item.status)}
                             </span>
                           </td>
-                          <td className="px-4 py-4 text-right">
+                          <td className="border-t border-white/6 px-4 py-4 align-top text-right">
                             <button
                               type="button"
                               className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-white/20 hover:text-white"
                               onClick={() => {
-                                setDrawerTab("OVERVIEW");
-                                setActionPanel(null);
-                                startTransition(() => {
-                                  void loadDetail(item.id).catch(showError);
-                                });
+                                setExpandedLppId(item.id);
+                                setSelectedId(item.id);
+                                setActionModal("PAYMENT");
+                                setActiveTab("PAYMENTS");
+                                if (detail?.account.id !== item.id) {
+                                  startTransition(() => {
+                                    void loadDetail(item.id).catch(showError);
+                                  });
+                                }
                               }}
                             >
-                              Open
+                              Record
                             </button>
                           </td>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                        {isExpanded ? (
+                          <tr id={rowId}>
+                            <td colSpan={13} className="border-t border-white/6 px-4 pb-5">
+                              {!rowDetail || loadingDetailId === item.id ? (
+                                <div className="rounded-[24px] border border-white/10 bg-slate-950/40 px-5 py-8 text-sm text-slate-400">
+                                  Loading account details...
+                                </div>
+                              ) : (
+                                <ExpandedRowDetails
+                                  detail={rowDetail}
+                                  activeTab={activeTab}
+                                  onTabChange={setActiveTab}
+                                  onOpenAction={setActionModal}
+                                  onConvertToPos={() => void handleConvertToPos()}
+                                  onConvertToProject={() => void handleConvertToProject()}
+                                  onReversePayment={handleReversePayment}
+                                  isConvertingPos={isConvertingPos}
+                                  isConvertingProject={isConvertingProject}
+                                />
+                              )}
+                            </td>
+                          </tr>
+                        ) : null}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
 
-              <div className="flex flex-col gap-4 border-t border-white/10 px-4 py-4 md:flex-row md:items-center md:justify-between">
-                <div className="text-sm text-slate-400">
-                  Showing {filteredItems.length === 0 ? 0 : (safePage - 1) * pageSize + 1} to {Math.min(safePage * pageSize, filteredItems.length)} of {filteredItems.length} accounts
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-slate-300">Show {pageSize}</div>
-                  <button
-                    type="button"
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-slate-950/50 text-slate-300 transition hover:border-white/20 hover:text-white disabled:opacity-40"
-                    onClick={() => setPage((current) => Math.max(1, current - 1))}
-                    disabled={safePage <= 1}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </button>
-                  <div className="rounded-xl border border-blue-400/30 bg-blue-500/15 px-4 py-2 text-sm font-semibold text-blue-100">{safePage}</div>
-                  <div className="rounded-xl border border-white/10 bg-slate-950/50 px-4 py-2 text-sm text-slate-300">{totalPages}</div>
-                  <button
-                    type="button"
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-slate-950/50 text-slate-300 transition hover:border-white/20 hover:text-white disabled:opacity-40"
-                    onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-                    disabled={safePage >= totalPages}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
-                </div>
+            <div className="flex flex-col gap-4 border-t border-white/10 px-4 py-4 md:flex-row md:items-center md:justify-between">
+              <div className="text-sm text-slate-400">
+                Showing {filteredItems.length === 0 ? 0 : (safePage - 1) * pageSize + 1} to {Math.min(safePage * pageSize, filteredItems.length)} of {filteredItems.length} accounts
               </div>
-            </section>
+              <div className="flex items-center gap-2">
+                <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-slate-300">Show {pageSize}</div>
+                <button
+                  type="button"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-slate-950/50 text-slate-300 transition hover:border-white/20 hover:text-white disabled:opacity-40"
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  disabled={safePage <= 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <div className="rounded-xl border border-blue-400/30 bg-blue-500/15 px-4 py-2 text-sm font-semibold text-blue-100">{safePage}</div>
+                <div className="rounded-xl border border-white/10 bg-slate-950/50 px-4 py-2 text-sm text-slate-300">{totalPages}</div>
+                <button
+                  type="button"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-slate-950/50 text-slate-300 transition hover:border-white/20 hover:text-white disabled:opacity-40"
+                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                  disabled={safePage >= totalPages}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
           </section>
-
-          <aside className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.96),rgba(7,14,26,0.98))] shadow-[0_24px_60px_rgba(0,0,0,0.35)]">
-            {!detailAccount || !activeDetail ? (
-              <div className="flex min-h-[680px] items-center justify-center p-8 text-center text-sm text-slate-500">
-                Select an account to view payment history, follow-ups, and completion actions.
-              </div>
-            ) : (
-              <div className="flex h-full flex-col">
-                <div className="border-b border-white/10 p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-semibold text-white">{detailAccount.reference}</div>
-                      <div className="mt-3 flex items-center gap-3">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-500/20 text-lg font-semibold text-blue-200">
-                          {(detailAccount.customerName || "C").charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <div className="text-2xl font-semibold text-white">{detailAccount.customerName || "Unknown customer"}</div>
-                          <div className="mt-1 text-sm text-slate-400">{detailAccount.customerPhone || "No phone"}</div>
-                          <div className="mt-1 text-xs text-slate-500">Nairobi, Kenya</div>
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-slate-950/60 text-slate-400 transition hover:border-white/20 hover:text-white"
-                      onClick={() => {
-                        setDetail(null);
-                        setSelectedId("");
-                      }}
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-
-                  <div className="mt-4 flex items-center justify-between gap-3">
-                    <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(detailAccount.status)}`}>
-                      {titleCase(detailAccount.status)}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <IconButton icon={<Phone className="h-4 w-4" />} />
-                      <IconButton icon={<Bell className="h-4 w-4" />} />
-                    </div>
-                  </div>
-
-                  <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/45 p-4">
-                    <div className="grid grid-cols-3 gap-3">
-                      <DrawerMetric label="Total Amount" value={formatKes(activeDetail.summary.agreedTotal)} />
-                      <DrawerMetric label="Paid Amount" value={formatKes(activeDetail.summary.totalPaid)} />
-                      <DrawerMetric label="Balance" value={formatKes(activeDetail.summary.balance)} emphasis="text-amber-300" />
-                    </div>
-                    <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4">
-                      <div>
-                        <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">Progress</div>
-                        <div className="h-2 overflow-hidden rounded-full bg-white/10">
-                          <div className={`h-full ${progressTone(activeDetail.summary.percentagePaid)}`} style={{ width: `${Math.max(0, Math.min(100, activeDetail.summary.percentagePaid))}%` }} />
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm font-semibold text-white">{Math.round(activeDetail.summary.percentagePaid)}%</div>
-                        <div className="text-xs text-slate-500">{formatDate(detailAccount.expectedCompletionDate)}</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-5 flex gap-2 border-b border-white/10 pb-1">
-                    {DRAWER_TABS.map((tab) => (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        className={`border-b-2 px-1 pb-3 text-sm font-medium transition ${
-                          drawerTab === tab.id ? "border-blue-400 text-blue-200" : "border-transparent text-slate-400 hover:text-white"
-                        }`}
-                        onClick={() => setDrawerTab(tab.id)}
-                      >
-                        {tab.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex-1 space-y-4 overflow-y-auto p-5">
-                  {drawerTab === "OVERVIEW" ? (
-                    <>
-                      <DetailBlock title="Product">
-                        <div className="flex items-start justify-between gap-4">
-                          <div>
-                            <div className="text-xl text-white">{detailAccount.productName || "No product selected"}</div>
-                            <div className="mt-2 text-sm text-slate-400">Quantity: 1</div>
-                          </div>
-                          <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-slate-950/50 text-slate-400">
-                            <Package2 className="h-7 w-7" />
-                          </div>
-                        </div>
-                      </DetailBlock>
-
-                      <DetailBlock title="Account Info">
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <InfoPair label="Created Date" value={formatDate(detailAccount.createdAt)} />
-                          <InfoPair label="Assigned Agent" value={detailAccount.assignedToName || "Unassigned"} />
-                          <InfoPair label="Expected Completion" value={formatDate(detailAccount.expectedCompletionDate)} />
-                          <InfoPair label="Salesperson" value={salesperson?.label || "Not captured"} />
-                          <InfoPair label="Payment Mode" value="Flexible" />
-                          <InfoPair label="Source" value="Walk-in" />
-                        </div>
-                      </DetailBlock>
-
-                      <DetailBlock title="Next Action">
-                        <div className="rounded-2xl border border-white/10 bg-slate-950/55 p-4">
-                          <div className="text-xl font-semibold text-white">
-                            {activeDetail.summary.balance > 0 ? (isDueToday(detailAccount.expectedCompletionDate) ? "Payment due today" : "Continue collection") : "Ready for completion"}
-                          </div>
-                          <div className="mt-2 text-sm text-slate-400">
-                            {activeDetail.summary.balance > 0 ? `${formatKes(activeDetail.summary.balance)} outstanding` : "No outstanding balance remaining on this account."}
-                          </div>
-                          <div className="mt-4 flex gap-3">
-                            <button type="button" className={primaryButtonClass} onClick={() => setActionPanel("PAYMENT")}>
-                              Record Payment
-                            </button>
-                            <button type="button" className={secondaryButtonClass} onClick={() => setActionPanel("FOLLOW_UP")}>
-                              More Actions
-                              <ChevronDown className="ml-2 h-4 w-4" />
-                            </button>
-                          </div>
-                        </div>
-                      </DetailBlock>
-
-                      {activeDetail.summary.isFullyPaid && !detailAccount.convertedReceiptId && !detailAccount.convertedProjectId ? (
-                        <DetailBlock title="Completion">
-                          <div className="space-y-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-                            <div className="text-sm font-semibold text-emerald-100">Fully paid and awaiting conversion</div>
-                            <div className="text-sm text-emerald-200/80">Choose whether this account should enter the normal POS engine or the project workflow.</div>
-                            <div className="flex flex-wrap gap-3">
-                              <button type="button" className={primaryButtonClass} onClick={() => void handleConvertToPos()} disabled={isConvertingPos || isConvertingProject}>
-                                {isConvertingPos ? "Converting..." : "Complete Through POS"}
-                              </button>
-                              <button type="button" className={secondaryButtonClass} onClick={() => void handleConvertToProject()} disabled={isConvertingPos || isConvertingProject}>
-                                {isConvertingProject ? "Converting..." : "Complete As Project"}
-                              </button>
-                            </div>
-                          </div>
-                        </DetailBlock>
-                      ) : null}
-
-                      {detailAccount.convertedReceiptId ? (
-                        <DetailBlock title="POS Conversion">
-                          <Link href={`/receipts/${detailAccount.convertedReceiptId}`} className="inline-flex text-sm font-semibold text-blue-200 underline underline-offset-4">
-                            View Final Receipt
-                          </Link>
-                        </DetailBlock>
-                      ) : null}
-
-                      {detailAccount.convertedProjectId ? (
-                        <DetailBlock title="Project Conversion">
-                          <Link href={`/admin/quotation-center/${detailAccount.convertedProjectId}`} className="inline-flex text-sm font-semibold text-blue-200 underline underline-offset-4">
-                            Open Project Workflow
-                          </Link>
-                        </DetailBlock>
-                      ) : null}
-                    </>
-                  ) : null}
-
-                  {drawerTab === "PAYMENTS" ? (
-                    <div className="space-y-3">
-                      {activeDetail.payments.length === 0 ? <EmptyBlock text="No payments recorded yet." /> : null}
-                      {activeDetail.payments.map((payment) => (
-                        <div key={payment.id} className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <div className="text-lg font-semibold text-white">{formatKes(payment.amount)}</div>
-                              <div className="mt-1 text-xs text-slate-400">
-                                {payment.method} · {formatDateTime(payment.receivedAt)}
-                                {payment.reference ? ` · Ref ${payment.reference}` : ""}
-                              </div>
-                            </div>
-                            <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(payment.status)}`}>
-                              {titleCase(payment.status)}
-                            </span>
-                          </div>
-                          {payment.notes ? <div className="mt-3 text-sm text-slate-300">{payment.notes}</div> : null}
-                          {payment.status === "SUCCESS" ? (
-                            <button type="button" className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-rose-200 transition hover:text-rose-100" onClick={() => void handleReversePayment(payment.id)}>
-                              Reverse payment
-                            </button>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  {drawerTab === "FOLLOW_UPS" ? (
-                    <div className="space-y-4">
-                      <DetailBlock title="Follow-ups">
-                        <div className="space-y-3">
-                          {activeDetail.followUps.length === 0 ? <EmptyBlock text="No follow-up tasks yet." /> : null}
-                          {activeDetail.followUps.map((item) => (
-                            <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
-                              <div className="text-sm font-semibold text-white">{titleCase(item.taskType)}</div>
-                              <div className="mt-1 text-xs text-slate-400">
-                                {formatDate(item.taskDate || item.createdAt)} · {item.assignedToName || "Unassigned"}
-                              </div>
-                              {item.outcome ? <div className="mt-2 text-xs font-semibold uppercase tracking-[0.18em] text-blue-200">{item.outcome}</div> : null}
-                              {item.notes ? <div className="mt-2 text-sm text-slate-300">{item.notes}</div> : null}
-                            </div>
-                          ))}
-                        </div>
-                      </DetailBlock>
-                      <DetailBlock title="Promises To Pay">
-                        <div className="space-y-3">
-                          {activeDetail.promises.length === 0 ? <EmptyBlock text="No promises recorded yet." /> : null}
-                          {activeDetail.promises.map((item) => (
-                            <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
-                              <div className="text-sm font-semibold text-white">{formatKes(item.promiseAmount)}</div>
-                              <div className="mt-1 text-xs text-slate-400">
-                                {formatDate(item.promiseDate)} · {titleCase(item.status)}
-                              </div>
-                              {item.notes ? <div className="mt-2 text-sm text-slate-300">{item.notes}</div> : null}
-                            </div>
-                          ))}
-                        </div>
-                      </DetailBlock>
-                    </div>
-                  ) : null}
-
-                  {drawerTab === "TIMELINE" ? (
-                    <div className="space-y-4">
-                      <DetailBlock title="Recent Activity">
-                        <div className="space-y-3">
-                          {activeDetail.events.length === 0 ? <EmptyBlock text="No events recorded yet." /> : null}
-                          {activeDetail.events.map((event) => (
-                            <div key={event.id} className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
-                              <div className="text-sm font-semibold text-white">{titleCase(event.eventType)}</div>
-                              <div className="mt-1 text-xs text-slate-400">{formatDateTime(event.createdAt)}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </DetailBlock>
-                      <DetailBlock title="Reminders">
-                        <div className="space-y-3">
-                          {activeDetail.reminders.length === 0 ? <EmptyBlock text="No reminders generated yet." /> : null}
-                          {activeDetail.reminders.map((item) => (
-                            <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
-                              <div className="text-sm font-semibold text-white">{titleCase(item.reminderType)}</div>
-                              <div className="mt-1 text-xs text-slate-400">
-                                {formatDateTime(item.scheduledFor)} · {titleCase(item.status)}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </DetailBlock>
-                    </div>
-                  ) : null}
-
-                  {actionPanel ? (
-                    <DetailBlock title={actionPanel === "PAYMENT" ? "Record Payment" : actionPanel === "ASSIGN" ? "Assign Account" : actionPanel === "FOLLOW_UP" ? "Follow-Up Task" : actionPanel === "PROMISE" ? "Promise To Pay" : "Release Product"}>
-                      {actionPanel === "PAYMENT" ? (
-                        <form className="space-y-4" onSubmit={handlePayment}>
-                          <Field label="Amount">
-                            <input className={inputClass} value={paymentForm.amount} onChange={(event) => setPaymentForm((current) => ({ ...current, amount: event.target.value }))} placeholder="5000" />
-                          </Field>
-                          <Field label="Method">
-                            <select className={inputClass} value={paymentForm.method} onChange={(event) => setPaymentForm((current) => ({ ...current, method: event.target.value }))}>
-                              <option value="MPESA">M-Pesa</option>
-                              <option value="CASH">Cash</option>
-                              <option value="BANK">Bank</option>
-                              <option value="CARD">Card</option>
-                              <option value="OTHER">Other</option>
-                            </select>
-                          </Field>
-                          <Field label="Reference">
-                            <input className={inputClass} value={paymentForm.reference} onChange={(event) => setPaymentForm((current) => ({ ...current, reference: event.target.value }))} />
-                          </Field>
-                          <Field label="Notes">
-                            <textarea className={textareaClass} value={paymentForm.notes} onChange={(event) => setPaymentForm((current) => ({ ...current, notes: event.target.value }))} />
-                          </Field>
-                          <div className="flex gap-3">
-                            <button type="submit" className={primaryButtonClass} disabled={!selectedId || isSubmittingPayment}>
-                              {isSubmittingPayment ? "Saving..." : "Record payment"}
-                            </button>
-                            <button type="button" className={secondaryButtonClass} onClick={() => setActionPanel(null)}>
-                              Cancel
-                            </button>
-                          </div>
-                        </form>
-                      ) : null}
-
-                      {actionPanel === "ASSIGN" ? (
-                        <form className="space-y-4" onSubmit={handleAssign}>
-                          <SearchSelector label="Assigned agent" placeholder="Search customer service user" value={assignAgent} onChange={setAssignAgent} search={searchUsers} />
-                          <div className="flex gap-3">
-                            <button type="submit" className={primaryButtonClass} disabled={!selectedId || isSubmittingAssign}>
-                              {isSubmittingAssign ? "Saving..." : assignAgent ? "Assign selected agent" : "Run round robin"}
-                            </button>
-                            <button type="button" className={secondaryButtonClass} onClick={() => setActionPanel(null)}>
-                              Cancel
-                            </button>
-                          </div>
-                        </form>
-                      ) : null}
-
-                      {actionPanel === "FOLLOW_UP" ? (
-                        <form className="space-y-4" onSubmit={handleCreateFollowUp}>
-                          <Field label="Task type">
-                            <select className={inputClass} value={followUpForm.taskType} onChange={(event) => setFollowUpForm((current) => ({ ...current, taskType: event.target.value }))}>
-                              <option value="FOLLOW_UP_TODAY">Follow up today</option>
-                              <option value="PAYMENT_OVERDUE">Payment overdue</option>
-                              <option value="CUSTOMER_PROMISED_PAYMENT">Customer promised payment</option>
-                              <option value="NO_ANSWER">No answer</option>
-                              <option value="WHATSAPP_SENT">WhatsApp sent</option>
-                              <option value="CUSTOMER_REQUESTED_EXTENSION">Customer requested extension</option>
-                            </select>
-                          </Field>
-                          <Field label="Task date">
-                            <input type="date" className={inputClass} value={followUpForm.taskDate} onChange={(event) => setFollowUpForm((current) => ({ ...current, taskDate: event.target.value }))} />
-                          </Field>
-                          <Field label="Outcome">
-                            <input className={inputClass} value={followUpForm.outcome} onChange={(event) => setFollowUpForm((current) => ({ ...current, outcome: event.target.value }))} placeholder="Called, no answer, customer promised..." />
-                          </Field>
-                          <Field label="Notes">
-                            <textarea className={textareaClass} value={followUpForm.notes} onChange={(event) => setFollowUpForm((current) => ({ ...current, notes: event.target.value }))} />
-                          </Field>
-                          <div className="flex gap-3">
-                            <button type="submit" className={primaryButtonClass} disabled={!selectedId || isSubmittingFollowUp}>
-                              {isSubmittingFollowUp ? "Saving..." : "Record Follow-Up"}
-                            </button>
-                            <button type="button" className={secondaryButtonClass} onClick={() => setActionPanel(null)}>
-                              Cancel
-                            </button>
-                          </div>
-                        </form>
-                      ) : null}
-
-                      {actionPanel === "PROMISE" ? (
-                        <form className="space-y-4" onSubmit={handleCreatePromise}>
-                          <Field label="Promise amount">
-                            <input className={inputClass} value={promiseForm.promiseAmount} onChange={(event) => setPromiseForm((current) => ({ ...current, promiseAmount: event.target.value }))} placeholder="30000" />
-                          </Field>
-                          <Field label="Promise date">
-                            <input type="date" className={inputClass} value={promiseForm.promiseDate} onChange={(event) => setPromiseForm((current) => ({ ...current, promiseDate: event.target.value }))} />
-                          </Field>
-                          <Field label="Notes">
-                            <textarea className={textareaClass} value={promiseForm.notes} onChange={(event) => setPromiseForm((current) => ({ ...current, notes: event.target.value }))} />
-                          </Field>
-                          <div className="flex gap-3">
-                            <button type="submit" className={primaryButtonClass} disabled={!selectedId || isSubmittingPromise}>
-                              {isSubmittingPromise ? "Saving..." : "Record Promise"}
-                            </button>
-                            <button type="button" className={secondaryButtonClass} onClick={() => setActionPanel(null)}>
-                              Cancel
-                            </button>
-                          </div>
-                        </form>
-                      ) : null}
-
-                      {actionPanel === "RELEASE" ? (
-                        <form className="space-y-4" onSubmit={handleRelease}>
-                          <Field label="Fulfillment method">
-                            <select className={inputClass} value={releaseForm.fulfillmentMethod} onChange={(event) => setReleaseForm((current) => ({ ...current, fulfillmentMethod: event.target.value }))}>
-                              <option value="Customer Collection">Customer Collection</option>
-                              <option value="Delivery">Delivery</option>
-                              <option value="Installation">Installation</option>
-                              <option value="Courier">Courier</option>
-                              <option value="Other">Other</option>
-                            </select>
-                          </Field>
-                          <Field label="Collector / receiver">
-                            <input className={inputClass} value={releaseForm.collectorName} onChange={(event) => setReleaseForm((current) => ({ ...current, collectorName: event.target.value }))} placeholder="Customer or authorized receiver" />
-                          </Field>
-                          <Field label="ID / reference">
-                            <input className={inputClass} value={releaseForm.collectorReference} onChange={(event) => setReleaseForm((current) => ({ ...current, collectorReference: event.target.value }))} placeholder="National ID, phone, delivery ref..." />
-                          </Field>
-                          <Field label="Release notes">
-                            <textarea className={textareaClass} value={releaseForm.notes} onChange={(event) => setReleaseForm((current) => ({ ...current, notes: event.target.value }))} />
-                          </Field>
-                          <div className="flex gap-3">
-                            <button type="submit" className={primaryButtonClass} disabled={isReleasing}>
-                              {isReleasing ? "Saving..." : "Release Product"}
-                            </button>
-                            <button type="button" className={secondaryButtonClass} onClick={() => setActionPanel(null)}>
-                              Cancel
-                            </button>
-                          </div>
-                        </form>
-                      ) : null}
-                    </DetailBlock>
-                  ) : null}
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 border-t border-white/10 p-5">
-                  <button type="button" className={secondaryButtonClass} onClick={() => setActionPanel("ASSIGN")}>
-                    Assign
-                  </button>
-                  <button type="button" className={primaryButtonClass} onClick={() => setActionPanel("PAYMENT")}>
-                    Record Payment
-                  </button>
-                  <button type="button" className={secondaryButtonClass} onClick={() => setActionPanel("FOLLOW_UP")}>
-                    Follow-up
-                  </button>
-                  <button type="button" className={secondaryButtonClass} onClick={() => setActionPanel("PROMISE")}>
-                    Promise
-                  </button>
-                  {(detailAccount.convertedReceiptId || detailAccount.convertedProjectId) && !detailAccount.fulfilledAt ? (
-                    <button type="button" className="col-span-2 inline-flex items-center justify-center rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15" onClick={() => setActionPanel("RELEASE")}>
-                      Release Product
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            )}
-          </aside>
-        </div>
+        </section>
       </div>
 
       {showCreateModal ? (
@@ -1602,7 +1250,483 @@ export default function LipaPolePoleAdminClient({
           </form>
         </ModalShell>
       ) : null}
+
+      {actionModal && activeDetail ? (
+        <ModalShell
+          title={
+            actionModal === "PAYMENT"
+              ? "Record Payment"
+              : actionModal === "ASSIGN"
+                ? "Assign / Reassign Account"
+                : actionModal === "FOLLOW_UP"
+                  ? "Record Follow-Up"
+                  : actionModal === "PROMISE"
+                    ? "Record Promise To Pay"
+                    : "Release Product"
+          }
+          subtitle={`${activeDetail.account.reference} · ${activeDetail.account.customerName || "Unknown customer"}`}
+          onClose={() => setActionModal(null)}
+        >
+          {actionModal === "PAYMENT" ? (
+            <form className="space-y-4" onSubmit={handlePayment}>
+              <Field label="Amount">
+                <input className={inputClass} value={paymentForm.amount} onChange={(event) => setPaymentForm((current) => ({ ...current, amount: event.target.value }))} placeholder="5000" />
+              </Field>
+              <Field label="Method">
+                <select className={inputClass} value={paymentForm.method} onChange={(event) => setPaymentForm((current) => ({ ...current, method: event.target.value }))}>
+                  <option value="MPESA">M-Pesa</option>
+                  <option value="CASH">Cash</option>
+                  <option value="BANK">Bank</option>
+                  <option value="CARD">Card</option>
+                  <option value="OTHER">Other</option>
+                </select>
+              </Field>
+              <Field label="Reference">
+                <input className={inputClass} value={paymentForm.reference} onChange={(event) => setPaymentForm((current) => ({ ...current, reference: event.target.value }))} />
+              </Field>
+              <Field label="Notes">
+                <textarea className={textareaClass} value={paymentForm.notes} onChange={(event) => setPaymentForm((current) => ({ ...current, notes: event.target.value }))} />
+              </Field>
+              <div className="flex gap-3">
+                <button type="submit" className={primaryButtonClass} disabled={isSubmittingPayment}>
+                  {isSubmittingPayment ? "Saving..." : "Record payment"}
+                </button>
+                <button type="button" className={secondaryButtonClass} onClick={() => setActionModal(null)}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : null}
+
+          {actionModal === "ASSIGN" ? (
+            <form className="space-y-4" onSubmit={handleAssign}>
+              <SearchSelector label="Assigned agent" placeholder="Search customer service user" value={assignAgent} onChange={setAssignAgent} search={searchUsers} />
+              <div className="flex gap-3">
+                <button type="submit" className={primaryButtonClass} disabled={isSubmittingAssign}>
+                  {isSubmittingAssign ? "Saving..." : assignAgent ? "Assign selected agent" : "Run round robin"}
+                </button>
+                <button type="button" className={secondaryButtonClass} onClick={() => setActionModal(null)}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : null}
+
+          {actionModal === "FOLLOW_UP" ? (
+            <form className="space-y-4" onSubmit={handleCreateFollowUp}>
+              <Field label="Task type">
+                <select className={inputClass} value={followUpForm.taskType} onChange={(event) => setFollowUpForm((current) => ({ ...current, taskType: event.target.value }))}>
+                  <option value="FOLLOW_UP_TODAY">Follow up today</option>
+                  <option value="PAYMENT_OVERDUE">Payment overdue</option>
+                  <option value="CUSTOMER_PROMISED_PAYMENT">Customer promised payment</option>
+                  <option value="NO_ANSWER">No answer</option>
+                  <option value="WHATSAPP_SENT">WhatsApp sent</option>
+                  <option value="CUSTOMER_REQUESTED_EXTENSION">Customer requested extension</option>
+                </select>
+              </Field>
+              <Field label="Task date">
+                <input type="date" className={inputClass} value={followUpForm.taskDate} onChange={(event) => setFollowUpForm((current) => ({ ...current, taskDate: event.target.value }))} />
+              </Field>
+              <Field label="Outcome">
+                <input className={inputClass} value={followUpForm.outcome} onChange={(event) => setFollowUpForm((current) => ({ ...current, outcome: event.target.value }))} placeholder="Called, no answer, customer promised..." />
+              </Field>
+              <Field label="Notes">
+                <textarea className={textareaClass} value={followUpForm.notes} onChange={(event) => setFollowUpForm((current) => ({ ...current, notes: event.target.value }))} />
+              </Field>
+              <div className="flex gap-3">
+                <button type="submit" className={primaryButtonClass} disabled={isSubmittingFollowUp}>
+                  {isSubmittingFollowUp ? "Saving..." : "Record Follow-Up"}
+                </button>
+                <button type="button" className={secondaryButtonClass} onClick={() => setActionModal(null)}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : null}
+
+          {actionModal === "PROMISE" ? (
+            <form className="space-y-4" onSubmit={handleCreatePromise}>
+              <Field label="Promise amount">
+                <input className={inputClass} value={promiseForm.promiseAmount} onChange={(event) => setPromiseForm((current) => ({ ...current, promiseAmount: event.target.value }))} placeholder="30000" />
+              </Field>
+              <Field label="Promise date">
+                <input type="date" className={inputClass} value={promiseForm.promiseDate} onChange={(event) => setPromiseForm((current) => ({ ...current, promiseDate: event.target.value }))} />
+              </Field>
+              <Field label="Notes">
+                <textarea className={textareaClass} value={promiseForm.notes} onChange={(event) => setPromiseForm((current) => ({ ...current, notes: event.target.value }))} />
+              </Field>
+              <div className="flex gap-3">
+                <button type="submit" className={primaryButtonClass} disabled={isSubmittingPromise}>
+                  {isSubmittingPromise ? "Saving..." : "Record Promise"}
+                </button>
+                <button type="button" className={secondaryButtonClass} onClick={() => setActionModal(null)}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : null}
+
+          {actionModal === "RELEASE" ? (
+            <form className="space-y-4" onSubmit={handleRelease}>
+              <Field label="Fulfillment method">
+                <select className={inputClass} value={releaseForm.fulfillmentMethod} onChange={(event) => setReleaseForm((current) => ({ ...current, fulfillmentMethod: event.target.value }))}>
+                  <option value="Customer Collection">Customer Collection</option>
+                  <option value="Delivery">Delivery</option>
+                  <option value="Installation">Installation</option>
+                  <option value="Courier">Courier</option>
+                  <option value="Other">Other</option>
+                </select>
+              </Field>
+              <Field label="Collector / receiver">
+                <input className={inputClass} value={releaseForm.collectorName} onChange={(event) => setReleaseForm((current) => ({ ...current, collectorName: event.target.value }))} placeholder="Customer or authorized receiver" />
+              </Field>
+              <Field label="ID / reference">
+                <input className={inputClass} value={releaseForm.collectorReference} onChange={(event) => setReleaseForm((current) => ({ ...current, collectorReference: event.target.value }))} placeholder="National ID, phone, delivery ref..." />
+              </Field>
+              <Field label="Release notes">
+                <textarea className={textareaClass} value={releaseForm.notes} onChange={(event) => setReleaseForm((current) => ({ ...current, notes: event.target.value }))} />
+              </Field>
+              <div className="flex gap-3">
+                <button type="submit" className={primaryButtonClass} disabled={isReleasing}>
+                  {isReleasing ? "Saving..." : "Release Product"}
+                </button>
+                <button type="button" className={secondaryButtonClass} onClick={() => setActionModal(null)}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : null}
+        </ModalShell>
+      ) : null}
     </main>
+  );
+}
+
+function ExpandedRowDetails({
+  detail,
+  activeTab,
+  onTabChange,
+  onOpenAction,
+  onConvertToPos,
+  onConvertToProject,
+  onReversePayment,
+  isConvertingPos,
+  isConvertingProject,
+}: {
+  detail: LppDetail;
+  activeTab: DetailsTab;
+  onTabChange: (tab: DetailsTab) => void;
+  onOpenAction: (action: ActionModal) => void;
+  onConvertToPos: () => void;
+  onConvertToProject: () => void;
+  onReversePayment: (paymentId: string) => void;
+  isConvertingPos: boolean;
+  isConvertingProject: boolean;
+}) {
+  const account = detail.account;
+  const due = describeDueDate(account.expectedCompletionDate);
+
+  return (
+    <div className="overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(9,16,28,0.94),rgba(7,12,22,0.98))]">
+      <div className="grid gap-4 border-b border-white/10 p-5 xl:grid-cols-3">
+        <SummaryCard title="Account Summary">
+          <SummaryValue label={account.reference} value={account.customerName || "Unknown customer"} />
+          <div className="text-sm text-slate-400">{account.customerPhone || "No phone"}</div>
+          <div className="mt-4 text-white">{account.productName || "No product selected"}</div>
+          <div className="mt-1 text-sm text-slate-500">Qty 1</div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <InfoPair label="Created" value={formatDate(account.createdAt)} />
+            <InfoPair label="Expected Completion" value={formatDate(account.expectedCompletionDate)} />
+          </div>
+        </SummaryCard>
+
+        <SummaryCard title="Payment Overview">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <MetricTile label="Agreed Total" value={formatKes(detail.summary.agreedTotal)} />
+            <MetricTile label="Paid" value={formatKes(detail.summary.totalPaid)} tone="text-emerald-300" />
+            <MetricTile label="Balance" value={formatKes(detail.summary.balance)} tone="text-amber-300" />
+            <MetricTile label="Progress" value={`${Math.round(detail.summary.percentagePaid)}%`} />
+          </div>
+          <div className="mt-4">
+            <div className="mb-2 flex items-center justify-between text-xs uppercase tracking-[0.18em] text-slate-500">
+              <span>Progress</span>
+              <span>{Math.round(detail.summary.percentagePaid)}%</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-white/10">
+              <div className={`h-full ${progressTone(detail.summary.percentagePaid)}`} style={{ width: `${Math.max(0, Math.min(100, detail.summary.percentagePaid))}%` }} />
+            </div>
+          </div>
+        </SummaryCard>
+
+        <SummaryCard title="Ownership">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <InfoPair label="Customer Service" value={account.assignedToName || "Unassigned"} />
+            <InfoPair label="Salesperson" value="Not captured" />
+            <InfoPair label="Payment Mode" value="Flexible" />
+            <InfoPair label="Source" value="Not captured" />
+            <InfoPair label="Status" value={titleCase(account.status)} />
+            <InfoPair label="Due" value={due.label} tone={due.tone} />
+          </div>
+        </SummaryCard>
+      </div>
+
+      <div className="flex flex-wrap gap-2 border-b border-white/10 px-5 pt-4">
+        {TAB_ITEMS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            className={`border-b-2 px-1 pb-3 text-sm font-medium transition ${
+              activeTab === tab.id ? "border-blue-400 text-blue-200" : "border-transparent text-slate-400 hover:text-white"
+            }`}
+            onClick={() => onTabChange(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="space-y-4 p-5">
+        {activeTab === "OVERVIEW" ? (
+          <>
+            <div className="grid gap-4 xl:grid-cols-4">
+              <DetailBlock title="Customer" className="xl:col-span-1">
+                <div className="space-y-3">
+                  <InfoPair label="Name" value={account.customerName || "Unknown customer"} />
+                  <InfoPair label="Phone" value={account.customerPhone || "No phone"} />
+                  <InfoPair label="Location" value="Kenya" />
+                </div>
+              </DetailBlock>
+              <DetailBlock title="Agreement" className="xl:col-span-2">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <InfoPair label="Product" value={account.productName || "No product selected"} />
+                  <InfoPair label="Quantity" value="1" />
+                  <InfoPair label="Agreed Price" value={formatKes(detail.summary.agreedTotal)} />
+                  <InfoPair label="Completion Date" value={formatDate(account.expectedCompletionDate)} />
+                  <InfoPair label="Reservation Mode" value="Not captured" />
+                  <InfoPair label="Payment Mode" value="Flexible" />
+                </div>
+              </DetailBlock>
+              <DetailBlock title="Ownership" className="xl:col-span-1">
+                <div className="space-y-3">
+                  <InfoPair label="Customer Service" value={account.assignedToName || "Unassigned"} />
+                  <InfoPair label="Salesperson" value="Not captured" />
+                  <InfoPair label="Source" value="Not captured" />
+                </div>
+              </DetailBlock>
+            </div>
+
+            <DetailBlock title="Next Action">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                <div>
+                  <div className="text-xl font-semibold text-white">
+                    {detail.summary.balance > 0 ? (isDueToday(account.expectedCompletionDate) ? "Payment due today" : "Continue collection") : "Fully paid"}
+                  </div>
+                  <div className="mt-2 text-sm text-slate-400">
+                    {detail.summary.balance > 0 ? `Outstanding ${formatKes(detail.summary.balance)}` : "This account is ready for conversion."}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  {detail.summary.balance > 0 ? (
+                    <>
+                      <button type="button" className={primaryButtonClass} onClick={() => onOpenAction("PAYMENT")}>
+                        Record Payment
+                      </button>
+                      <button type="button" className={secondaryButtonClass} onClick={() => onOpenAction("FOLLOW_UP")}>
+                        Follow Up
+                      </button>
+                      <button type="button" className={secondaryButtonClass} onClick={() => onOpenAction("ASSIGN")}>
+                        More Actions
+                        <ChevronDown className="ml-2 h-4 w-4" />
+                      </button>
+                    </>
+                  ) : !account.convertedReceiptId && !account.convertedProjectId ? (
+                    <>
+                      <button type="button" className={primaryButtonClass} onClick={onConvertToPos} disabled={isConvertingPos || isConvertingProject}>
+                        {isConvertingPos ? "Converting..." : "Send to POS"}
+                      </button>
+                      <button type="button" className={secondaryButtonClass} onClick={onConvertToProject} disabled={isConvertingPos || isConvertingProject}>
+                        {isConvertingProject ? "Converting..." : "Create Project"}
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+            </DetailBlock>
+          </>
+        ) : null}
+
+        {activeTab === "PAYMENTS" ? (
+          <DetailBlock title="Payment History">
+            {detail.payments.length === 0 ? (
+              <EmptyBlock text="No payments recorded yet." />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="text-left text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                    <tr>
+                      <th className="pb-3">Date</th>
+                      <th className="pb-3">Amount</th>
+                      <th className="pb-3">Method</th>
+                      <th className="pb-3">Reference</th>
+                      <th className="pb-3">Status</th>
+                      <th className="pb-3 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detail.payments.map((payment) => (
+                      <tr key={payment.id} className="border-t border-white/6 text-slate-200">
+                        <td className="py-3">{formatDateTime(payment.receivedAt)}</td>
+                        <td className="py-3 font-semibold text-white">{formatKes(payment.amount)}</td>
+                        <td className="py-3">{payment.method}</td>
+                        <td className="py-3">{payment.reference || "-"}</td>
+                        <td className="py-3">
+                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(payment.status)}`}>
+                            {titleCase(payment.status)}
+                          </span>
+                        </td>
+                        <td className="py-3 text-right">
+                          {payment.status === "SUCCESS" ? (
+                            <button type="button" className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-200 transition hover:text-rose-100" onClick={() => void onReversePayment(payment.id)}>
+                              Reverse
+                            </button>
+                          ) : (
+                            <span className="text-slate-500">-</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <div className="mt-5 flex flex-col gap-4 rounded-2xl border border-white/10 bg-slate-950/45 p-4 md:flex-row md:items-center md:justify-between">
+              <div className="grid gap-2 text-sm text-slate-300">
+                <div className="flex items-center gap-3">
+                  <span className="text-slate-500">Total Paid</span>
+                  <span className="font-semibold text-white">{formatKes(detail.summary.totalPaid)}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-slate-500">Remaining</span>
+                  <span className="font-semibold text-amber-300">{formatKes(detail.summary.balance)}</span>
+                </div>
+              </div>
+              <button type="button" className={primaryButtonClass} onClick={() => onOpenAction("PAYMENT")}>
+                + Record Payment
+              </button>
+            </div>
+          </DetailBlock>
+        ) : null}
+
+        {activeTab === "FOLLOW_UPS" ? (
+          <div className="grid gap-4 xl:grid-cols-2">
+            <DetailBlock title="Follow-Ups">
+              <div className="space-y-3">
+                {detail.followUps.length === 0 ? <EmptyBlock text="No follow-up tasks yet." /> : null}
+                {detail.followUps.map((item) => (
+                  <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
+                    <div className="text-sm font-semibold text-white">{formatDateTime(item.taskDate || item.createdAt)}</div>
+                    <div className="mt-1 text-xs text-slate-400">{item.assignedToName || item.createdByName || "Unassigned"}</div>
+                    {item.outcome ? <div className="mt-3 text-sm text-white">{item.outcome}</div> : null}
+                    {item.notes ? <div className="mt-2 text-sm text-slate-300">{item.notes}</div> : null}
+                  </div>
+                ))}
+              </div>
+            </DetailBlock>
+            <DetailBlock title="Promises To Pay">
+              <div className="space-y-3">
+                {detail.promises.length === 0 ? <EmptyBlock text="No promises recorded yet." /> : null}
+                {detail.promises.map((item) => (
+                  <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
+                    <div className="text-sm font-semibold text-white">{formatKes(item.promiseAmount)}</div>
+                    <div className="mt-1 text-xs text-slate-400">
+                      {formatDate(item.promiseDate)} · {titleCase(item.status)}
+                    </div>
+                    {item.notes ? <div className="mt-2 text-sm text-slate-300">{item.notes}</div> : null}
+                  </div>
+                ))}
+              </div>
+            </DetailBlock>
+            <div className="xl:col-span-2 flex flex-wrap gap-3">
+              <button type="button" className={primaryButtonClass} onClick={() => onOpenAction("FOLLOW_UP")}>
+                + Follow Up
+              </button>
+              <button type="button" className={secondaryButtonClass} onClick={() => onOpenAction("PROMISE")}>
+                + Promise To Pay
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {activeTab === "TIMELINE" ? (
+          <DetailBlock title="Audit Timeline">
+            <div className="space-y-3">
+              {detail.events.length === 0 && detail.reminders.length === 0 ? <EmptyBlock text="No timeline entries recorded yet." /> : null}
+              {detail.events.map((event) => (
+                <div key={event.id} className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
+                  <div className="text-sm font-semibold text-white">{formatDateTime(event.createdAt)}</div>
+                  <div className="mt-2 text-sm text-slate-200">{titleCase(event.eventType)}</div>
+                </div>
+              ))}
+              {detail.reminders.map((item) => (
+                <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
+                  <div className="text-sm font-semibold text-white">{formatDateTime(item.scheduledFor)}</div>
+                  <div className="mt-2 text-sm text-slate-200">{titleCase(item.reminderType)}</div>
+                  <div className="mt-1 text-xs text-slate-400">{titleCase(item.status)}</div>
+                </div>
+              ))}
+            </div>
+          </DetailBlock>
+        ) : null}
+
+        <div className="flex flex-wrap gap-3 border-t border-white/10 pt-4">
+          {detail.summary.balance > 0 ? (
+            <>
+              <button type="button" className={primaryButtonClass} onClick={() => onOpenAction("PAYMENT")}>
+                Record Payment
+              </button>
+              <button type="button" className={secondaryButtonClass} onClick={() => onOpenAction("FOLLOW_UP")}>
+                Follow Up
+              </button>
+              <button type="button" className={secondaryButtonClass} onClick={() => onOpenAction("PROMISE")}>
+                Promise To Pay
+              </button>
+              <button type="button" className={secondaryButtonClass} onClick={() => onOpenAction("ASSIGN")}>
+                Assign / Reassign
+              </button>
+            </>
+          ) : null}
+
+          {detail.summary.isFullyPaid && !account.convertedReceiptId && !account.convertedProjectId ? (
+            <>
+              <button type="button" className={primaryButtonClass} onClick={onConvertToPos} disabled={isConvertingPos || isConvertingProject}>
+                {isConvertingPos ? "Converting..." : "Send to POS"}
+              </button>
+              <button type="button" className={secondaryButtonClass} onClick={onConvertToProject} disabled={isConvertingPos || isConvertingProject}>
+                {isConvertingProject ? "Converting..." : "Create Project"}
+              </button>
+            </>
+          ) : null}
+
+          {account.convertedReceiptId ? (
+            <Link href={`/receipts/${account.convertedReceiptId}`} className={secondaryButtonClass}>
+              View Receipt
+            </Link>
+          ) : null}
+
+          {account.convertedProjectId ? (
+            <Link href={`/admin/quotation-center/${account.convertedProjectId}`} className={secondaryButtonClass}>
+              Open Project
+            </Link>
+          ) : null}
+
+          {(account.convertedReceiptId || account.convertedProjectId) && !account.fulfilledAt ? (
+            <button type="button" className="inline-flex items-center justify-center rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15" onClick={() => onOpenAction("RELEASE")}>
+              Release Product
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1687,39 +1811,53 @@ function FilterSelect({
   );
 }
 
-function DrawerMetric({ label, value, emphasis }: { label: string; value: string; emphasis?: string }) {
+function SummaryCard({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div>
-      <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</div>
-      <div className={`mt-2 text-xl font-semibold ${emphasis || "text-white"}`}>{value}</div>
+    <div className="rounded-[22px] border border-white/10 bg-slate-950/45 p-4">
+      <div className="mb-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">{title}</div>
+      {children}
     </div>
   );
 }
 
-function DetailBlock({ title, children }: { title: string; children: ReactNode }) {
+function SummaryValue({ label, value }: { label: string; value: string }) {
   return (
-    <section className="rounded-[24px] border border-white/10 bg-slate-950/35 p-4">
+    <div>
+      <div className="text-xs uppercase tracking-[0.18em] text-blue-300">{label}</div>
+      <div className="mt-2 text-2xl font-semibold text-white">{value}</div>
+    </div>
+  );
+}
+
+function MetricTile({ label, value, tone }: { label: string; value: string; tone?: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-3">
+      <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</div>
+      <div className={`mt-2 text-lg font-semibold ${tone || "text-white"}`}>{value}</div>
+    </div>
+  );
+}
+
+function DetailBlock({ title, children, className = "" }: { title: string; children: ReactNode; className?: string }) {
+  return (
+    <section className={`rounded-[24px] border border-white/10 bg-slate-950/35 p-4 ${className}`.trim()}>
       <div className="mb-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">{title}</div>
       {children}
     </section>
   );
 }
 
-function InfoPair({ label, value }: { label: string; value: string }) {
+function InfoPair({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
     <div>
       <div className="text-xs text-slate-500">{label}</div>
-      <div className="mt-1 text-white">{value}</div>
+      <div className={`mt-1 ${tone || "text-white"}`}>{value}</div>
     </div>
   );
 }
 
 function EmptyBlock({ text }: { text: string }) {
   return <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/35 px-4 py-6 text-sm text-slate-500">{text}</div>;
-}
-
-function IconButton({ icon }: { icon: ReactNode }) {
-  return <button type="button" className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-slate-950/60 text-slate-400 transition hover:border-white/20 hover:text-white">{icon}</button>;
 }
 
 function ModalShell({
