@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
@@ -68,9 +68,27 @@ model User {
   marketplaceReturnsAttended           MarketplaceReturn[]             @relation("MarketplaceReturn_attendant")
   marketplaceReturnsProcessed          MarketplaceReturn[]             @relation("MarketplaceReturn_processedBy")
   marketplaceReturnAttachmentsUploaded MarketplaceReturnAttachment[]   @relation("MarketplaceReturnAttachment_uploadedBy")
+  lipaPolePoleAccounts                 LipaPolePole[]                  @relation("LipaPolePoleCustomer")
+  assignedLipaPolePoleAccounts         LipaPolePole[]                  @relation("LipaPolePoleAssignedTo")
+  salesLipaPolePoleAccounts            LipaPolePole[]                  @relation("LipaPolePoleSalesperson")
+  createdLipaPolePoleAccounts          LipaPolePole[]                  @relation("LipaPolePoleCreatedBy")
+  convertedLipaPolePoleAccounts        LipaPolePole[]                  @relation("LipaPolePoleConvertedBy")
+  fulfilledLipaPolePoleAccounts        LipaPolePole[]                  @relation("LipaPolePoleFulfilledBy")
+  lipaPolePolePaymentsReceived         LipaPolePolePayment[]           @relation("LipaPolePolePaymentReceivedBy")
+  lipaPolePolePaymentsReversed         LipaPolePolePayment[]           @relation("LipaPolePolePaymentReversedBy")
+  lipaPolePoleAssignmentsMade          LipaPolePoleAssignment[]        @relation("LipaPolePoleAssignmentAssignedBy")
+  lipaPolePoleAssignmentsReceived      LipaPolePoleAssignment[]        @relation("LipaPolePoleAssignmentAssignedTo")
+  lipaPolePoleFollowUps                LipaPolePoleFollowUp[]          @relation("LipaPolePoleFollowUpCreatedBy")
+  assignedLipaPolePoleFollowUps        LipaPolePoleFollowUp[]          @relation("LipaPolePoleFollowUpAssignedTo")
+  lipaPolePolePromisesCreated          LipaPolePolePromise[]           @relation("LipaPolePolePromiseCreatedBy")
+  lipaPolePoleAdjustmentsCreated       LipaPolePoleAdjustment[]        @relation("LipaPolePoleAdjustmentCreatedBy")
+  lipaPolePoleAdjustmentsApproved      LipaPolePoleAdjustment[]        @relation("LipaPolePoleAdjustmentApprovedBy")
+  lipaPolePoleRefundsCreated           LipaPolePoleRefund[]            @relation("LipaPolePoleRefundCreatedBy")
+  lipaPolePoleRefundsApproved          LipaPolePoleRefund[]            @relation("LipaPolePoleRefundApprovedBy")
+  lipaPolePoleEvents                   LipaPolePoleEvent[]             @relation("LipaPolePoleEventActor")
   orders                               Order[]
   issuedReceipts                       Receipt[]                       @relation("issuedBy")
-  confirmedWebsiteOrders              WebsiteOrder[]                  @relation("websiteOrderConfirmedBy")
+  confirmedWebsiteOrders               WebsiteOrder[]                  @relation("websiteOrderConfirmedBy")
   returnsApproved                      ReturnCase[]                    @relation("ReturnApprovedBy")
   returnsCreated                       ReturnCase[]                    @relation("ReturnCreatedBy")
   evidenceTaken                        ReturnEvidence[]                @relation("EvidenceTaker")
@@ -114,13 +132,13 @@ model User {
   assignedVoiceCallFeedback            VoiceCallFeedback[]             @relation("VoiceCallFeedbackAgent")
   assignedVoiceCallbackRequests        VoiceCallbackRequest[]          @relation("VoiceCallbackRequestAgent")
   technicalProfile                     TechnicalProfile?
-  employeeDocuments                    EmployeeDocument[]             @relation("EmployeeDocumentOwner")
-  uploadedEmployeeDocuments            EmployeeDocument[]             @relation("EmployeeDocumentUploader")
+  employeeDocuments                    EmployeeDocument[]              @relation("EmployeeDocumentOwner")
+  uploadedEmployeeDocuments            EmployeeDocument[]              @relation("EmployeeDocumentUploader")
 }
 
 model TechnicalProfile {
-  id                    String   @id @default(cuid())
-  userId                String   @unique
+  id                    String    @id @default(cuid())
+  userId                String    @unique
   teamRole              String?
   positionTitle         String?
   employeeNumber        String?
@@ -129,11 +147,11 @@ model TechnicalProfile {
   epraLicenseClass      String?
   drivingLicenseDetails String?
   employmentDate        DateTime?
-  activeAccount         Boolean  @default(true)
+  activeAccount         Boolean   @default(true)
   permissionScope       String?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model EmployeeDocument {
@@ -1012,14 +1030,14 @@ model ShopApiConfig {
 }
 
 model Product {
-  id                         String      @id @default(cuid())
-  sku                        String      @unique
+  id                         String             @id @default(cuid())
+  sku                        String             @unique
   name                       String
   category                   String
   sellingPrice               Float
   lastBuyingPrice            Float?
   defaultWarranty            String?
-  showInShop                 Boolean     @default(false)
+  showInShop                 Boolean            @default(false)
   shopCategory               String?
   shopSubcategory            String?
   shopShortDescription       String?
@@ -1038,20 +1056,26 @@ model Product {
   galleryImageUrls           Json?
   brandImageUrl              String?
   tiktokVideoUrl             String?
-  ecommerceVisible           Boolean     @default(false)
-  isFeatured                 Boolean     @default(false)
-  status                     String      @default("ACTIVE")
-  availabilityType           String      @default("SHOP")
-  pickupDelayDays            Int         @default(0)
-  variableCost               Boolean     @default(false)
-  commissionEnabled          Boolean     @default(false)
-  commissionAmount           Decimal?    @db.Decimal(12, 2)
-  commissionRequiresApproval Boolean     @default(false)
-  minStockLevel              Int         @default(5)
-  stockQuantity              Int         @default(0)
-  isActive                   Boolean     @default(true)
-  createdAt                  DateTime    @default(now())
-  updatedAt                  DateTime    @updatedAt
+  ecommerceVisible           Boolean            @default(false)
+  isFeatured                 Boolean            @default(false)
+  status                     String             @default("ACTIVE")
+  availabilityType           String             @default("SHOP")
+  pickupDelayDays            Int                @default(0)
+  variableCost               Boolean            @default(false)
+  commissionEnabled          Boolean            @default(false)
+  commissionAmount           Decimal?           @db.Decimal(12, 2)
+  commissionRequiresApproval Boolean            @default(false)
+  lipaPolePoleEnabled        Boolean            @default(false)
+  lipaPolePoleMinDeposit     Decimal?           @db.Decimal(12, 2)
+  lipaPolePoleMaxDays        Int?
+  lipaPolePoleDefaultDays    Int?
+  lipaPolePoleTerms          String?
+  minStockLevel              Int                @default(5)
+  stockQuantity              Int                @default(0)
+  isActive                   Boolean            @default(true)
+  createdAt                  DateTime           @default(now())
+  updatedAt                  DateTime           @updatedAt
+  lipaPolePoleAccounts       LipaPolePole[]
   orders                     OrderItem[]
   websiteOrderItems          WebsiteOrderItem[]
 }
@@ -1483,28 +1507,29 @@ model CommissionRecord {
 }
 
 model Receipt {
-  id                  String        @id @default(cuid())
-  orderId             String        @unique
-  receiptNumber       String?       @unique @map("receipt_number")
-  docType             DocType
-  generatedAt         DateTime      @default(now())
-  issuedById          String?
-  taxRate             Decimal?      @db.Decimal(6, 2)
-  discount            Decimal?      @db.Decimal(12, 2)
-  showTax             Boolean       @default(false)
-  showDiscount        Boolean       @default(false)
-  paymentDetailsShown Boolean       @default(false)
-  notes               String?
-  warrantyText        String?
-  totals              Json?
-  data                Json?
-  createdAt           DateTime      @default(now())
-  agentSales          AgentSale[]
-  issuedBy            User?         @relation("issuedBy", fields: [issuedById], references: [id])
-  order               Order         @relation(fields: [orderId], references: [id])
-  files               ReceiptFile[]
-  projectNotifications ProjectNotificationLog[]
-  websiteOrders       WebsiteOrder[]
+  id                            String                   @id @default(cuid())
+  orderId                       String                   @unique
+  receiptNumber                 String?                  @unique @map("receipt_number")
+  docType                       DocType
+  generatedAt                   DateTime                 @default(now())
+  issuedById                    String?
+  taxRate                       Decimal?                 @db.Decimal(6, 2)
+  discount                      Decimal?                 @db.Decimal(12, 2)
+  showTax                       Boolean                  @default(false)
+  showDiscount                  Boolean                  @default(false)
+  paymentDetailsShown           Boolean                  @default(false)
+  notes                         String?
+  warrantyText                  String?
+  totals                        Json?
+  data                          Json?
+  createdAt                     DateTime                 @default(now())
+  agentSales                    AgentSale[]
+  convertedLipaPolePoleAccounts LipaPolePole[]
+  issuedBy                      User?                    @relation("issuedBy", fields: [issuedById], references: [id])
+  order                         Order                    @relation(fields: [orderId], references: [id])
+  files                         ReceiptFile[]
+  projectNotifications          ProjectNotificationLog[]
+  websiteOrders                 WebsiteOrder[]
 }
 
 enum ProjectNotificationEventType {
@@ -1537,24 +1562,24 @@ enum ProjectNotificationStatus {
 }
 
 model ProjectNotificationLog {
-  id               String                           @id @default(cuid())
-  receiptId        String
-  eventType        ProjectNotificationEventType
-  channel          ProjectNotificationChannel
-  recipientType    ProjectNotificationRecipientType
-  recipientName    String?
-  recipientAddress String?
-  templateKey      String
-  idempotencyKey   String                           @unique
-  status           ProjectNotificationStatus        @default(PENDING)
+  id                String                           @id @default(cuid())
+  receiptId         String
+  eventType         ProjectNotificationEventType
+  channel           ProjectNotificationChannel
+  recipientType     ProjectNotificationRecipientType
+  recipientName     String?
+  recipientAddress  String?
+  templateKey       String
+  idempotencyKey    String                           @unique
+  status            ProjectNotificationStatus        @default(PENDING)
   providerMessageId String?
-  attemptCount     Int                              @default(0)
-  errorMessage     String?
-  payloadSnapshot  Json?
-  createdAt        DateTime                         @default(now())
-  sentAt           DateTime?
-  failedAt         DateTime?
-  receipt          Receipt                          @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  attemptCount      Int                              @default(0)
+  errorMessage      String?
+  payloadSnapshot   Json?
+  createdAt         DateTime                         @default(now())
+  sentAt            DateTime?
+  failedAt          DateTime?
+  receipt           Receipt                          @relation(fields: [receiptId], references: [id], onDelete: Cascade)
 
   @@index([receiptId, createdAt])
   @@index([status, createdAt])
@@ -1573,35 +1598,35 @@ model ProjectExternalAgent {
 }
 
 model WebsiteOrder {
-  id               String             @id @default(cuid())
-  orderRef         String             @unique
-  customerUserId   String?
-  referredByAgentId String?
+  id                  String             @id @default(cuid())
+  orderRef            String             @unique
+  customerUserId      String?
+  referredByAgentId   String?
   attributionCodeUsed String?
-  customerName     String
-  customerPhone    String
-  customerLocation String
-  customerEmail    String?
-  deliveryMethod   String
-  paymentMethod    String
-  orderType        WebsiteOrderType
-  status           WebsiteOrderStatus @default(PENDING)
-  subtotal         Decimal            @db.Decimal(12, 2)
-  deliveryFee      Decimal?           @db.Decimal(12, 2)
-  total            Decimal            @db.Decimal(12, 2)
-  notes            String?
-  source           String             @default("WEBSITE")
-  receiptId        String?            @unique
-  confirmedAt      DateTime?
-  confirmedById    String?
-  cancelledAt      DateTime?
-  metadata         Json?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
-  confirmedBy      User?              @relation("websiteOrderConfirmedBy", fields: [confirmedById], references: [id])
-  customerUser     User?              @relation("customerWebsiteOrders", fields: [customerUserId], references: [id], onDelete: SetNull)
-  receipt          Receipt?           @relation(fields: [receiptId], references: [id], onDelete: SetNull)
-  items            WebsiteOrderItem[]
+  customerName        String
+  customerPhone       String
+  customerLocation    String
+  customerEmail       String?
+  deliveryMethod      String
+  paymentMethod       String
+  orderType           WebsiteOrderType
+  status              WebsiteOrderStatus @default(PENDING)
+  subtotal            Decimal            @db.Decimal(12, 2)
+  deliveryFee         Decimal?           @db.Decimal(12, 2)
+  total               Decimal            @db.Decimal(12, 2)
+  notes               String?
+  source              String             @default("WEBSITE")
+  receiptId           String?            @unique
+  confirmedAt         DateTime?
+  confirmedById       String?
+  cancelledAt         DateTime?
+  metadata            Json?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  confirmedBy         User?              @relation("websiteOrderConfirmedBy", fields: [confirmedById], references: [id])
+  customerUser        User?              @relation("customerWebsiteOrders", fields: [customerUserId], references: [id], onDelete: SetNull)
+  receipt             Receipt?           @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+  items               WebsiteOrderItem[]
 
   @@index([status, createdAt])
   @@index([orderType, createdAt])
@@ -1643,37 +1668,37 @@ model ReceiptFile {
 }
 
 model VoiceCall {
-  id                String    @id @default(cuid())
-  sessionId         String    @unique
-  direction         String
-  callerNumber      String
-  destinationNumber String?
-  isActive          Boolean   @default(true)
-  status            String    @default("queued")
-  routedTo          String?
-  routeType         String?
-  assignedToId      String?
-  customerId        String?
-  startedAt         DateTime?
-  endedAt           DateTime?
-  durationInSeconds Int?
-  currencyCode      String?
-  amount            Decimal?  @db.Decimal(12, 2)
-  recordingUrl      String?
-  menuOption        String?
-  notes             String?
-  rawPayloadJson    Json?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  assignedTo        User?     @relation("VoiceCallAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
-  customer          User?     @relation("VoiceCallCustomer", fields: [customerId], references: [id], onDelete: SetNull)
-  events            VoiceEvent[]
-  callNotes         VoiceCallNote[]
-  followUps         VoiceFollowUp[]
-  feedbackSessions  VoiceCallFeedback[]
-  callbackRequests  VoiceCallbackRequest[]
-  smsNotifications  VoiceSmsNotificationLog[]
-  presenceAssignments VoiceAgentPresence[] @relation("VoicePresenceCurrentCall")
+  id                  String                    @id @default(cuid())
+  sessionId           String                    @unique
+  direction           String
+  callerNumber        String
+  destinationNumber   String?
+  isActive            Boolean                   @default(true)
+  status              String                    @default("queued")
+  routedTo            String?
+  routeType           String?
+  assignedToId        String?
+  customerId          String?
+  startedAt           DateTime?
+  endedAt             DateTime?
+  durationInSeconds   Int?
+  currencyCode        String?
+  amount              Decimal?                  @db.Decimal(12, 2)
+  recordingUrl        String?
+  menuOption          String?
+  notes               String?
+  rawPayloadJson      Json?
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+  assignedTo          User?                     @relation("VoiceCallAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  customer            User?                     @relation("VoiceCallCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  events              VoiceEvent[]
+  callNotes           VoiceCallNote[]
+  followUps           VoiceFollowUp[]
+  feedbackSessions    VoiceCallFeedback[]
+  callbackRequests    VoiceCallbackRequest[]
+  smsNotifications    VoiceSmsNotificationLog[]
+  presenceAssignments VoiceAgentPresence[]      @relation("VoicePresenceCurrentCall")
 
   @@index([status, createdAt])
   @@index([isActive, createdAt])
@@ -1682,12 +1707,12 @@ model VoiceCall {
 }
 
 model VoiceEvent {
-  id          String    @id @default(cuid())
+  id          String     @id @default(cuid())
   voiceCallId String?
   sessionId   String
   eventType   String
   payloadJson Json?
-  createdAt   DateTime  @default(now())
+  createdAt   DateTime   @default(now())
   voiceCall   VoiceCall? @relation(fields: [voiceCallId], references: [id], onDelete: SetNull)
 
   @@index([sessionId, createdAt])
@@ -1695,18 +1720,18 @@ model VoiceEvent {
 }
 
 model VoiceLead {
-  id           String    @id @default(cuid())
+  id           String          @id @default(cuid())
   phone        String
   name         String?
   source       String
-  status       String    @default("open")
+  status       String          @default("open")
   assignedToId String?
   customerId   String?
   lastCallAt   DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  assignedTo   User?     @relation("VoiceLeadAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
-  customer     User?     @relation("VoiceLeadCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  assignedTo   User?           @relation("VoiceLeadAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  customer     User?           @relation("VoiceLeadCustomer", fields: [customerId], references: [id], onDelete: SetNull)
   followUps    VoiceFollowUp[]
 
   @@index([phone, createdAt])
@@ -1715,17 +1740,17 @@ model VoiceLead {
 }
 
 model VoiceAgentPresence {
-  id            String    @id @default(cuid())
-  userId        String    @unique
-  status        String    @default("OFFLINE")
-  lastSeenAt    DateTime  @default(now())
-  currentCallId String?
+  id                   String     @id @default(cuid())
+  userId               String     @unique
+  status               String     @default("OFFLINE")
+  lastSeenAt           DateTime   @default(now())
+  currentCallId        String?
   dismissedPopupCallId String?
-  dismissedPopupAt DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  user          User      @relation("VoicePresenceUser", fields: [userId], references: [id], onDelete: Cascade)
-  currentCall   VoiceCall? @relation("VoicePresenceCurrentCall", fields: [currentCallId], references: [id], onDelete: SetNull)
+  dismissedPopupAt     DateTime?
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+  user                 User       @relation("VoicePresenceUser", fields: [userId], references: [id], onDelete: Cascade)
+  currentCall          VoiceCall? @relation("VoicePresenceCurrentCall", fields: [currentCallId], references: [id], onDelete: SetNull)
 
   @@index([status, updatedAt])
   @@index([currentCallId])
@@ -1733,13 +1758,13 @@ model VoiceAgentPresence {
 }
 
 model VoiceAgentRoutingPreference {
-  id                  String   @id @default(cuid())
-  userId              String   @unique
-  routingEnabled      Boolean  @default(true)
-  allowAfterHoursCalls Boolean @default(false)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  user                User     @relation("VoiceRoutingPreferenceUser", fields: [userId], references: [id], onDelete: Cascade)
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  routingEnabled       Boolean  @default(true)
+  allowAfterHoursCalls Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  user                 User     @relation("VoiceRoutingPreferenceUser", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([routingEnabled, allowAfterHoursCalls])
 }
@@ -1757,16 +1782,16 @@ model VoiceRoutingConfig {
 }
 
 model VoiceCallNote {
-  id         String    @id @default(cuid())
+  id          String    @id @default(cuid())
   voiceCallId String
-  customerId String?
-  authorId   String
-  note       String
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  voiceCall  VoiceCall @relation(fields: [voiceCallId], references: [id], onDelete: Cascade)
-  customer   User?     @relation("VoiceCallNoteCustomer", fields: [customerId], references: [id], onDelete: SetNull)
-  author     User      @relation("VoiceCallNoteAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  customerId  String?
+  authorId    String
+  note        String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  voiceCall   VoiceCall @relation(fields: [voiceCallId], references: [id], onDelete: Cascade)
+  customer    User?     @relation("VoiceCallNoteCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  author      User      @relation("VoiceCallNoteAuthor", fields: [authorId], references: [id], onDelete: Cascade)
 
   @@index([voiceCallId, createdAt])
   @@index([customerId, createdAt])
@@ -1800,7 +1825,7 @@ model VoiceFollowUp {
 }
 
 model CallFeedback {
-  id                String   @id @default(cuid())
+  id                String    @id @default(cuid())
   phone             String?
   callId            String?
   rating            Int
@@ -1809,14 +1834,14 @@ model CallFeedback {
   questionsAnswered String
   recommend         String
   comments          String?
-  wantsContact      Boolean  @default(false)
+  wantsContact      Boolean   @default(false)
   name              String?
   email             String?
-  reviewed          Boolean  @default(false)
+  reviewed          Boolean   @default(false)
   reviewedAt        DateTime?
   reviewedBy        String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   @@index([phone])
   @@index([callId])
@@ -1825,10 +1850,10 @@ model CallFeedback {
 }
 
 model CallFeedbackSmsLog {
-  id        String   @id @default(cuid())
-  phone     String
-  callId    String?
-  sentAt    DateTime @default(now())
+  id     String   @id @default(cuid())
+  phone  String
+  callId String?
+  sentAt DateTime @default(now())
 
   @@index([phone])
   @@index([sentAt])
@@ -1865,31 +1890,31 @@ model VoiceSmsNotificationLog {
   updatedAt             DateTime                   @updatedAt
   voiceCall             VoiceCall?                 @relation(fields: [voiceCallId], references: [id], onDelete: SetNull)
 
+  @@unique([voiceCallId, notificationType])
   @@index([normalizedPhoneNumber, notificationType, dayKey])
   @@index([voiceCallId, notificationType])
   @@index([status, createdAt])
-  @@unique([voiceCallId, notificationType])
 }
 
 model VoiceCallFeedback {
-  id                String   @id @default(cuid())
-  token             String   @unique
+  id                String     @id @default(cuid())
+  token             String     @unique
   phoneNumber       String
   normalizedPhone   String
   voiceCallId       String?
   agentId           String?
   callStartedAt     DateTime?
   callEndedAt       DateTime?
-  smsSent           Boolean  @default(false)
+  smsSent           Boolean    @default(false)
   smsSentAt         DateTime?
-  openedCount       Int      @default(0)
+  openedCount       Int        @default(0)
   openedAt          DateTime?
   lastOpenedAt      DateTime?
-  submitted         Boolean  @default(false)
+  submitted         Boolean    @default(false)
   submittedAt       DateTime?
   expiresAt         DateTime
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
   rating            Int?
   serviceType       String?
   staffHelpful      String?
@@ -1898,11 +1923,11 @@ model VoiceCallFeedback {
   comment           String?
   customerName      String?
   customerEmail     String?
-  wantsContact      Boolean  @default(false)
-  followUpCreated   Boolean  @default(false)
+  wantsContact      Boolean    @default(false)
+  followUpCreated   Boolean    @default(false)
   followUpTaskId    String?
   voiceCall         VoiceCall? @relation(fields: [voiceCallId], references: [id], onDelete: SetNull)
-  agent            User?      @relation("VoiceCallFeedbackAgent", fields: [agentId], references: [id], onDelete: SetNull)
+  agent             User?      @relation("VoiceCallFeedbackAgent", fields: [agentId], references: [id], onDelete: SetNull)
 
   @@index([phoneNumber])
   @@index([normalizedPhone])
@@ -1913,25 +1938,25 @@ model VoiceCallFeedback {
 }
 
 model VoiceCallbackRequest {
-  id              String   @id @default(cuid())
-  token           String   @unique
+  id              String     @id @default(cuid())
+  token           String     @unique
   phoneNumber     String
   normalizedPhone String
   voiceCallId     String?
   agentId         String?
   callStartedAt   DateTime?
   callEndedAt     DateTime?
-  smsSent         Boolean  @default(false)
+  smsSent         Boolean    @default(false)
   smsSentAt       DateTime?
-  openedCount     Int      @default(0)
+  openedCount     Int        @default(0)
   openedAt        DateTime?
   lastOpenedAt    DateTime?
   requestedAt     DateTime?
   expiresAt       DateTime
-  followUpCreated Boolean  @default(false)
+  followUpCreated Boolean    @default(false)
   followUpTaskId  String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
   voiceCall       VoiceCall? @relation(fields: [voiceCallId], references: [id], onDelete: SetNull)
   agent           User?      @relation("VoiceCallbackRequestAgent", fields: [agentId], references: [id], onDelete: SetNull)
 
@@ -1949,6 +1974,216 @@ model Branding {
   logoUrl       String?  @db.Text
   brandColor    String?  @db.Text
   updatedAt     DateTime @updatedAt
+}
+
+model LipaPolePole {
+  id                     String                      @id @default(cuid())
+  reference              String                      @unique
+  customerId             String
+  productId              String?
+  publicToken            String                      @unique
+  quantity               Int                         @default(1)
+  agreedUnitPrice        Decimal                     @db.Decimal(14, 2)
+  agreedTotal            Decimal                     @db.Decimal(14, 2)
+  currency               String                      @default("KES")
+  status                 LipaPolePoleStatus          @default(DRAFT)
+  paymentMode            LipaPolePolePaymentMode     @default(FLEXIBLE)
+  reservationMode        LipaPolePoleReservationMode @default(SOFT_RESERVE)
+  expectedCompletionDate DateTime?
+  assignedToId           String?
+  salespersonId          String?
+  source                 String?
+  notes                  String?
+  completedAt            DateTime?
+  convertedAt            DateTime?
+  convertedById          String?
+  convertedReceiptId     String?                     @unique
+  convertedProjectId     String?                     @unique
+  fulfilledAt            DateTime?
+  fulfilledById          String?
+  fulfillmentMethod      String?
+  createdById            String?
+  createdAt              DateTime                    @default(now())
+  updatedAt              DateTime                    @updatedAt
+  customer               User                        @relation("LipaPolePoleCustomer", fields: [customerId], references: [id])
+  product                Product?                    @relation(fields: [productId], references: [id])
+  assignedTo             User?                       @relation("LipaPolePoleAssignedTo", fields: [assignedToId], references: [id])
+  salesperson            User?                       @relation("LipaPolePoleSalesperson", fields: [salespersonId], references: [id])
+  convertedBy            User?                       @relation("LipaPolePoleConvertedBy", fields: [convertedById], references: [id])
+  convertedReceipt       Receipt?                    @relation(fields: [convertedReceiptId], references: [id])
+  fulfilledBy            User?                       @relation("LipaPolePoleFulfilledBy", fields: [fulfilledById], references: [id])
+  createdBy              User?                       @relation("LipaPolePoleCreatedBy", fields: [createdById], references: [id])
+  assignments            LipaPolePoleAssignment[]
+  events                 LipaPolePoleEvent[]
+  followUps              LipaPolePoleFollowUp[]
+  installments           LipaPolePoleInstallment[]
+  payments               LipaPolePolePayment[]
+  promises               LipaPolePolePromise[]
+  reminders              LipaPolePoleReminder[]
+  adjustments            LipaPolePoleAdjustment[]
+  refunds                LipaPolePoleRefund[]
+
+  @@index([customerId, createdAt])
+  @@index([productId, createdAt])
+  @@index([status, expectedCompletionDate])
+  @@index([assignedToId, status, expectedCompletionDate])
+  @@index([source, createdAt])
+}
+
+model LipaPolePolePayment {
+  id             String                    @id @default(cuid())
+  lipaPolePoleId String
+  amount         Decimal                   @db.Decimal(14, 2)
+  method         LipaPolePolePaymentMethod
+  reference      String?
+  status         LipaPolePolePaymentStatus @default(PENDING)
+  receivedById   String?
+  receivedAt     DateTime                  @default(now())
+  notes          String?
+  reversedAt     DateTime?
+  reversedById   String?
+  reversalReason String?
+  createdAt      DateTime                  @default(now())
+  lipaPolePole   LipaPolePole              @relation(fields: [lipaPolePoleId], references: [id], onDelete: Cascade)
+  receivedBy     User?                     @relation("LipaPolePolePaymentReceivedBy", fields: [receivedById], references: [id])
+  reversedBy     User?                     @relation("LipaPolePolePaymentReversedBy", fields: [reversedById], references: [id])
+
+  @@unique([lipaPolePoleId, reference])
+  @@unique([reference])
+  @@index([status, receivedAt])
+  @@index([receivedById, receivedAt])
+  @@index([reference])
+}
+
+model LipaPolePoleInstallment {
+  id             String       @id @default(cuid())
+  lipaPolePoleId String
+  dueDate        DateTime
+  expectedAmount Decimal      @db.Decimal(14, 2)
+  notes          String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  lipaPolePole   LipaPolePole @relation(fields: [lipaPolePoleId], references: [id], onDelete: Cascade)
+
+  @@index([lipaPolePoleId, dueDate])
+}
+
+model LipaPolePoleAssignment {
+  id               String       @id @default(cuid())
+  lipaPolePoleId   String
+  assignedToId     String
+  assignedAt       DateTime     @default(now())
+  assignedById     String?
+  assignmentMethod String?
+  notes            String?
+  lipaPolePole     LipaPolePole @relation(fields: [lipaPolePoleId], references: [id], onDelete: Cascade)
+  assignedTo       User         @relation("LipaPolePoleAssignmentAssignedTo", fields: [assignedToId], references: [id])
+  assignedBy       User?        @relation("LipaPolePoleAssignmentAssignedBy", fields: [assignedById], references: [id])
+
+  @@index([lipaPolePoleId, assignedAt])
+  @@index([assignedToId, assignedAt])
+}
+
+model LipaPolePoleReminder {
+  id                String       @id @default(cuid())
+  lipaPolePoleId    String
+  reminderType      String
+  scheduledFor      DateTime
+  sentAt            DateTime?
+  channel           String
+  status            String       @default("PENDING")
+  providerMessageId String?
+  idempotencyKey    String       @unique
+  payloadSnapshot   Json?
+  createdAt         DateTime     @default(now())
+  lipaPolePole      LipaPolePole @relation(fields: [lipaPolePoleId], references: [id], onDelete: Cascade)
+
+  @@index([lipaPolePoleId, scheduledFor])
+  @@index([status, scheduledFor])
+}
+
+model LipaPolePoleFollowUp {
+  id             String       @id @default(cuid())
+  lipaPolePoleId String
+  assignedToId   String?
+  outcome        String?
+  taskType       String
+  taskDate       DateTime?
+  notes          String?
+  createdById    String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  lipaPolePole   LipaPolePole @relation(fields: [lipaPolePoleId], references: [id], onDelete: Cascade)
+  assignedTo     User?        @relation("LipaPolePoleFollowUpAssignedTo", fields: [assignedToId], references: [id])
+  createdBy      User?        @relation("LipaPolePoleFollowUpCreatedBy", fields: [createdById], references: [id])
+
+  @@index([lipaPolePoleId, createdAt])
+  @@index([assignedToId, taskDate])
+}
+
+model LipaPolePolePromise {
+  id             String       @id @default(cuid())
+  lipaPolePoleId String
+  promiseAmount  Decimal      @db.Decimal(14, 2)
+  promiseDate    DateTime
+  status         String       @default("ACTIVE")
+  notes          String?
+  createdById    String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  lipaPolePole   LipaPolePole @relation(fields: [lipaPolePoleId], references: [id], onDelete: Cascade)
+  createdBy      User?        @relation("LipaPolePolePromiseCreatedBy", fields: [createdById], references: [id])
+
+  @@index([lipaPolePoleId, promiseDate])
+  @@index([status, promiseDate])
+}
+
+model LipaPolePoleAdjustment {
+  id             String       @id @default(cuid())
+  lipaPolePoleId String
+  adjustmentType String
+  oldValue       Json?
+  newValue       Json?
+  reason         String
+  approvedById   String?
+  createdById    String?
+  createdAt      DateTime     @default(now())
+  lipaPolePole   LipaPolePole @relation(fields: [lipaPolePoleId], references: [id], onDelete: Cascade)
+  approvedBy     User?        @relation("LipaPolePoleAdjustmentApprovedBy", fields: [approvedById], references: [id])
+  createdBy      User?        @relation("LipaPolePoleAdjustmentCreatedBy", fields: [createdById], references: [id])
+
+  @@index([lipaPolePoleId, createdAt])
+}
+
+model LipaPolePoleRefund {
+  id              String       @id @default(cuid())
+  lipaPolePoleId  String
+  amount          Decimal      @db.Decimal(14, 2)
+  refundMethod    String?
+  refundReference String?
+  reason          String
+  approvedById    String?
+  createdById     String?
+  createdAt       DateTime     @default(now())
+  lipaPolePole    LipaPolePole @relation(fields: [lipaPolePoleId], references: [id], onDelete: Cascade)
+  approvedBy      User?        @relation("LipaPolePoleRefundApprovedBy", fields: [approvedById], references: [id])
+  createdBy       User?        @relation("LipaPolePoleRefundCreatedBy", fields: [createdById], references: [id])
+
+  @@index([lipaPolePoleId, createdAt])
+}
+
+model LipaPolePoleEvent {
+  id             String       @id @default(cuid())
+  lipaPolePoleId String
+  eventType      String
+  actorId        String?
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+  lipaPolePole   LipaPolePole @relation(fields: [lipaPolePoleId], references: [id], onDelete: Cascade)
+  actor          User?        @relation("LipaPolePoleEventActor", fields: [actorId], references: [id])
+
+  @@index([lipaPolePoleId, createdAt])
+  @@index([eventType, createdAt])
 }
 
 model LayawayPlan {
@@ -2040,23 +2275,23 @@ model MarketplacePayoutWeek {
 }
 
 model MarketplaceOperatingCapitalWeek {
-  id                String             @id @default(cuid())
-  scopeKey          String             @unique
+  id                String              @id @default(cuid())
+  scopeKey          String              @unique
   accountId         String?
-  weekStart         DateTime           @db.Timestamptz(0)
-  weekEnd           DateTime           @db.Timestamptz(3)
+  weekStart         DateTime            @db.Timestamptz(0)
+  weekEnd           DateTime            @db.Timestamptz(3)
   periodKey         String
-  profitAmount      Decimal            @db.Decimal(14, 2)
-  currentNetPayout  Decimal            @db.Decimal(14, 2)
-  operatingCapital  Decimal            @db.Decimal(14, 2)
-  adjustedNetPayout Decimal            @db.Decimal(14, 2)
-  status            String             @default("FINAL")
+  profitAmount      Decimal             @db.Decimal(14, 2)
+  currentNetPayout  Decimal             @db.Decimal(14, 2)
+  operatingCapital  Decimal             @db.Decimal(14, 2)
+  adjustedNetPayout Decimal             @db.Decimal(14, 2)
+  status            String              @default("FINAL")
   finalizedAt       DateTime?
   finalizedById     String?
   reopenedAt        DateTime?
   reopenedById      String?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
   account           MarketplaceAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
 
   @@index([weekStart, status])
@@ -2471,6 +2706,47 @@ enum PriceSource {
 enum PaymentMethod {
   CASH
   MPESA
+}
+
+enum LipaPolePoleStatus {
+  DRAFT
+  ACTIVE
+  DUE_SOON
+  OVERDUE
+  ON_HOLD
+  COMPLETED
+  AWAITING_CONVERSION
+  CONVERTED_TO_POS
+  CONVERTED_TO_PROJECT
+  CANCELLED
+  REFUNDED
+  CLOSED
+}
+
+enum LipaPolePolePaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REVERSED
+}
+
+enum LipaPolePolePaymentMode {
+  FLEXIBLE
+  SCHEDULED
+}
+
+enum LipaPolePoleReservationMode {
+  NONE
+  SOFT_RESERVE
+  HARD_RESERVE
+}
+
+enum LipaPolePolePaymentMethod {
+  MPESA
+  CASH
+  BANK
+  CARD
+  OTHER
 }
 
 enum WebsiteOrderStatus {

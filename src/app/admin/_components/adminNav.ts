@@ -49,6 +49,7 @@ export const NAV: AdminNavItem[] = [
       { href: "/admin/marketing-report?impersonateId=cmimxqf9t0003v5mcjdq8x61p", label: "SalesOps" },
       { href: "/admin/reviews-referrals", label: "Customer Reviews", countKey: "customerReviews" },
       { href: "/admin/returns", label: "Projects", countKey: "projects" },
+      { href: "/admin/lipa-pole-pole", label: "Lipa Pole Pole" },
       { href: "/admin/receipts/missing-buying", label: "Pending Pricing", countKey: "pendingPricing" },
       { href: "/admin/receipts?tab=website-orders", label: "Website Orders", countKey: "websiteOrders" },
       { href: "/admin/quotation-center", label: "Quotation Center", countKey: "quotationCenter" },
