@@ -282,10 +282,44 @@ export default async function LppBookingReceiptPage({
             border: 0;
             box-shadow: none;
           }
+          .lpp-meta {
+            grid-template-columns: 1fr;
+            gap: 4px;
+            margin: 4px 0 6px;
+          }
+          .lpp-meta-card {
+            padding: 6px 8px;
+            line-height: 1.4;
+          }
+          .lpp-meta-card--right { text-align: left; }
+          .lpp-section {
+            margin-top: 6px;
+            padding: 6px;
+            break-inside: auto;
+          }
+          .lpp-plan-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 4px;
+          }
+          .lpp-plan-item { padding: 5px; }
+          .lpp-schedule {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 2px 8px;
+            margin-top: 3px;
+          }
+          .lpp-schedule-row { padding: 2px 0; }
+          .lpp-booking-notice {
+            margin-top: 6px;
+            padding: 5px 7px;
+          }
+          .lpp-footer {
+            margin-top: 6px;
+            padding-top: 5px;
+          }
           .lpp-letterhead, .lpp-meta, .lpp-items, .lpp-totals, .lpp-footer { break-inside: avoid; }
           * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
-        @media (max-width: 620px) {
+        @media screen and (max-width: 620px) {
           .lpp-booking-sheet { width: 100%; min-height: 0; }
           .lpp-meta, .lpp-plan-grid, .lpp-schedule { grid-template-columns: 1fr; }
           .lpp-meta-card--right { text-align: left; }
