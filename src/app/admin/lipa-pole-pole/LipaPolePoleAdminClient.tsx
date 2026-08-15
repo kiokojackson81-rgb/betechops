@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import PosProductSelectorModal, { type PosCatalogProduct } from "@/components/receipts/PosProductSelectorModal";
 import {
   Calendar,
   CheckCircle2,
@@ -391,10 +392,12 @@ export default function LipaPolePoleAdminClient({
   const [page, setPage] = useState(1);
   const pageSize = 10;
   const hasHydratedRef = useRef(false);
+  const createSubmissionLockRef = useRef(false);
 
   const [staffMembers, setStaffMembers] = useState<StaffOption[]>([]);
   const [defaultStaffId, setDefaultStaffId] = useState<string | null>(null);
-  const [product, setProduct] = useState<SearchOption | null>(null);
+  const [product, setProduct] = useState<PosCatalogProduct | null>(null);
+  const [productSelectorOpen, setProductSelectorOpen] = useState(false);
   const [staffId, setStaffId] = useState<string>("");
   const [assignAgent, setAssignAgent] = useState<SearchOption | null>(null);
   const [createSuccess, setCreateSuccess] = useState<{
@@ -403,6 +406,7 @@ export default function LipaPolePoleAdminClient({
     customerName: string;
     deposit: number;
     balance: number;
+    printFailed: boolean;
   } | null>(null);
 
   const [createForm, setCreateForm] = useState({
@@ -605,68 +609,88 @@ export default function LipaPolePoleAdminClient({
     return data.map((item) => toSearchOption(item, "User"));
   }
 
-  async function searchProducts(query: string) {
-    const data = await readJson<{ items: Array<{ id: string; name?: string | null; sku?: string | null; sellingPrice?: number | null }> }>(
-      `/api/attendant/pos-products?q=${encodeURIComponent(query)}&limit=20`,
-      { headers: {} },
-    );
-    return (data.items || []).map((item) => toSearchOption(item, "Product"));
-  }
-
-  function handleProductChange(option: SearchOption | null) {
+  function handleProductChange(option: PosCatalogProduct | null) {
     setProduct(option);
-    if (!option) return;
-    if (typeof option.amount === "number" && option.amount > 0) {
+    if (!option) {
+      setCreateForm((current) => ({ ...current, agreedUnitPrice: "", quantity: "1" }));
+      return;
+    }
+    if (Number(option.sellingPrice) > 0) {
       setCreateForm((current) => ({
         ...current,
-        agreedUnitPrice: String(Number(option.amount)),
+        agreedUnitPrice: String(Number(option.sellingPrice)),
       }));
     }
   }
 
-  async function handleCreate(event: FormEvent<HTMLFormElement>) {
+  function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!createForm.customerName.trim()) {
-      setBanner({ tone: "error", text: "Customer name is required." });
-      return;
+    void createAccount(null, false);
+  }
+
+  function handleCreateAndPrint() {
+    if (createSubmissionLockRef.current || isSubmittingCreate) return;
+    const printWindow = window.open("about:blank", "_blank");
+    if (printWindow) {
+      printWindow.document.title = "Creating Lipa Pole Pole booking...";
+      printWindow.document.body.textContent = "Creating booking receipt...";
     }
-    if (!createForm.customerPhone.trim()) {
-      setBanner({ tone: "error", text: "Customer phone is required." });
-      return;
-    }
-    if (!product?.id) {
-      setBanner({ tone: "error", text: "Select a product." });
-      return;
-    }
-    if (!staffId) {
-      setBanner({ tone: "error", text: "Select staff." });
-      return;
-    }
-    if (!createForm.agreedUnitPrice.trim()) {
-      setBanner({ tone: "error", text: "Unit price is required." });
-      return;
-    }
-    if (createQuantity < 1) {
-      setBanner({ tone: "error", text: "Quantity must be at least 1." });
-      return;
-    }
-    if (createUnitPrice <= 0) {
-      setBanner({ tone: "error", text: "Unit price must be greater than zero." });
-      return;
-    }
-    if (createInstallmentCount < 1) {
-      setBanner({ tone: "error", text: "Installments must be at least 1." });
-      return;
-    }
-    if (createDeposit < 0) {
-      setBanner({ tone: "error", text: "Deposit cannot be negative." });
-      return;
-    }
-    if (createDeposit > createAgreedTotal) {
-      setBanner({ tone: "error", text: `Deposit cannot exceed ${formatKes(createAgreedTotal)}.` });
+    void createAccount(printWindow, true);
+  }
+
+  async function createAccount(printWindow: Window | null, shouldPrint: boolean) {
+    if (createSubmissionLockRef.current) {
+      printWindow?.close();
       return;
     }
 
+    const failValidation = (text: string) => {
+      setBanner({ tone: "error" as const, text });
+      printWindow?.close();
+    };
+
+    if (!createForm.customerName.trim()) {
+      failValidation("Customer name is required.");
+      return;
+    }
+    if (!createForm.customerPhone.trim()) {
+      failValidation("Customer phone is required.");
+      return;
+    }
+    if (!product?.id) {
+      failValidation("Select a product.");
+      return;
+    }
+    if (!staffId) {
+      failValidation("Select staff.");
+      return;
+    }
+    if (!createForm.agreedUnitPrice.trim()) {
+      failValidation("Unit price is required.");
+      return;
+    }
+    if (createQuantity < 1) {
+      failValidation("Quantity must be at least 1.");
+      return;
+    }
+    if (createUnitPrice <= 0) {
+      failValidation("Unit price must be greater than zero.");
+      return;
+    }
+    if (createInstallmentCount < 1) {
+      failValidation("Installments must be at least 1.");
+      return;
+    }
+    if (createDeposit < 0) {
+      failValidation("Deposit cannot be negative.");
+      return;
+    }
+    if (createDeposit > createAgreedTotal) {
+      failValidation(`Deposit cannot exceed ${formatKes(createAgreedTotal)}.`);
+      return;
+    }
+
+    createSubmissionLockRef.current = true;
     setIsSubmittingCreate(true);
     setBanner(null);
     try {
@@ -709,8 +733,33 @@ export default function LipaPolePoleAdminClient({
         method: "POST",
         body: JSON.stringify(payload),
       });
-      await refreshList(data.account.id);
-      setBanner({ tone: "success", text: "Lipa Pole Pole account created." });
+      let printFailed = false;
+      if (shouldPrint) {
+        if (printWindow) {
+          try {
+            printWindow.location.replace(getBookingReceiptHref(data.account.id, true));
+          } catch {
+            printFailed = true;
+            printWindow.close();
+          }
+        } else {
+          printFailed = true;
+        }
+      }
+      let refreshFailed = false;
+      try {
+        await refreshList(data.account.id);
+      } catch {
+        refreshFailed = true;
+      }
+      setBanner({
+        tone: printFailed || refreshFailed ? "error" : "success",
+        text: printFailed
+          ? "Lipa Pole Pole account created successfully, but the booking receipt could not be opened for printing."
+          : refreshFailed
+            ? "Lipa Pole Pole account created successfully, but the dashboard could not refresh. Reload to see the new account."
+            : "Lipa Pole Pole account created.",
+      });
       setShowCreateModal(false);
       setCreateSuccess({
         accountId: data.account.id,
@@ -718,6 +767,7 @@ export default function LipaPolePoleAdminClient({
         customerName: data.account.customerName || createForm.customerName.trim(),
         deposit: createDeposit,
         balance: data.account.balance,
+        printFailed,
       });
       setShowCreateMoreDetails(false);
       setProduct(null);
@@ -741,8 +791,10 @@ export default function LipaPolePoleAdminClient({
         initialPaymentNotes: "",
       });
     } catch (error) {
+      printWindow?.close();
       showError(error);
     } finally {
+      createSubmissionLockRef.current = false;
       setIsSubmittingCreate(false);
     }
   }
@@ -1394,24 +1446,64 @@ export default function LipaPolePoleAdminClient({
                 </section>
 
                 <section className="rounded-[24px] border border-white/10 bg-slate-950/40 p-4">
-                  <div className="mb-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Product and pricing</div>
-                  <div className="space-y-4">
-                    <SearchSelector label="Product" placeholder="Search POS product" value={product} onChange={handleProductChange} search={searchProducts} />
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <StepperInput
-                        label="Quantity"
-                        value={createForm.quantity}
-                        onChange={(value) => setCreateForm((current) => ({ ...current, quantity: value }))}
-                        min={1}
-                      />
-                      <Field label="Unit price">
-                        <input className={inputClass} value={createForm.agreedUnitPrice} onChange={(event) => setCreateForm((current) => ({ ...current, agreedUnitPrice: event.target.value }))} placeholder="15000" />
-                      </Field>
-                      <Field label="Deposit paid">
-                        <input className={inputClass} value={createForm.initialPaymentAmount} onChange={(event) => setCreateForm((current) => ({ ...current, initialPaymentAmount: event.target.value }))} placeholder="0" />
-                      </Field>
+                  <div className="mb-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Product</div>
+                  {product ? (
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/55 p-4">
+                      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_180px_190px_auto] lg:items-end">
+                        <div className="min-w-0 self-start">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Item description</div>
+                          <div className="mt-2 break-words text-sm font-semibold leading-6 text-white">{product.name}</div>
+                          {product.sku ? <div className="mt-1 break-all text-xs text-slate-500">SKU: {product.sku}</div> : null}
+                        </div>
+                        <StepperInput
+                          label="Quantity"
+                          value={createForm.quantity}
+                          onChange={(value) => setCreateForm((current) => ({ ...current, quantity: value }))}
+                          min={1}
+                        />
+                        <Field label="Unit price">
+                          <input
+                            className={inputClass}
+                            inputMode="decimal"
+                            value={createForm.agreedUnitPrice}
+                            onChange={(event) => setCreateForm((current) => ({ ...current, agreedUnitPrice: event.target.value }))}
+                            placeholder="55000"
+                          />
+                        </Field>
+                        <button
+                          type="button"
+                          className="rounded-2xl border border-rose-500/25 px-4 py-3 text-sm font-semibold text-rose-300 transition hover:bg-rose-500/10"
+                          onClick={() => handleProductChange(null)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <div className="mt-4 flex items-center justify-between gap-4 border-t border-white/10 pt-4 text-sm">
+                        <span className="text-slate-400">Agreed total</span>
+                        <span className="font-semibold text-white">{formatKes(createAgreedTotal)}</span>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="rounded-xl border border-sky-400/60 px-4 py-2 text-sm font-semibold text-sky-200 transition hover:bg-sky-500/10"
+                      onClick={() => setProductSelectorOpen(true)}
+                    >
+                      + Select product
+                    </button>
+                  )}
+                </section>
+
+                <section className="rounded-[24px] border border-white/10 bg-slate-950/40 p-4">
+                  <Field label="Deposit paid">
+                    <input
+                      className={inputClass}
+                      inputMode="decimal"
+                      value={createForm.initialPaymentAmount}
+                      onChange={(event) => setCreateForm((current) => ({ ...current, initialPaymentAmount: event.target.value }))}
+                      placeholder="0"
+                    />
+                  </Field>
                 </section>
 
                 <section className="rounded-[24px] border border-white/10 bg-slate-950/40 p-4">
@@ -1540,7 +1632,7 @@ export default function LipaPolePoleAdminClient({
               <aside className="rounded-[24px] border border-white/10 bg-slate-950/45 p-4 text-sm text-slate-300 xl:sticky xl:top-0 xl:self-start">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Payment plan summary</div>
                 <div className="mt-4 space-y-3">
-                  <PlanRow label="Product" value={product?.label || "Select product"} />
+                  <PlanRow label="Product" value={product?.name || "Select product"} />
                   <PlanRow label="Staff" value={selectedStaff?.name || "Select staff"} />
                   <PlanRow label="Quantity" value={String(createQuantity)} />
                   <PlanRow label="Unit price" value={formatKes(createUnitPrice)} />
@@ -1556,17 +1648,31 @@ export default function LipaPolePoleAdminClient({
               </aside>
             </div>
 
-            <div className="flex flex-wrap gap-3">
+            <div className="sticky bottom-0 z-10 -mx-6 mt-6 flex flex-wrap justify-end gap-3 border-t border-white/10 bg-slate-950/95 px-6 py-4 backdrop-blur">
+              <button type="button" className={secondaryButtonClass} onClick={() => setShowCreateModal(false)} disabled={isSubmittingCreate}>
+                Cancel
+              </button>
               <button type="submit" className={primaryButtonClass} disabled={isSubmittingCreate}>
                 {isSubmittingCreate ? "Creating..." : "Create account"}
               </button>
-              <button type="button" className={secondaryButtonClass} onClick={() => setShowCreateModal(false)}>
-                Cancel
+              <button
+                type="button"
+                className="inline-flex w-full items-center justify-center rounded-2xl border border-blue-400/50 bg-blue-500/10 px-4 py-3 text-sm font-semibold text-blue-100 transition hover:bg-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                onClick={handleCreateAndPrint}
+                disabled={isSubmittingCreate}
+              >
+                {isSubmittingCreate ? "Creating..." : "Create & Print Booking Receipt"}
               </button>
             </div>
           </form>
         </ModalShell>
       ) : null}
+
+      <PosProductSelectorModal
+        open={productSelectorOpen}
+        onClose={() => setProductSelectorOpen(false)}
+        onSelect={handleProductChange}
+      />
 
       {createSuccess ? (
         <ModalShell
@@ -1575,6 +1681,11 @@ export default function LipaPolePoleAdminClient({
           onClose={() => setCreateSuccess(null)}
         >
           <div className="space-y-4">
+            {createSuccess.printFailed ? (
+              <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                The account was saved, but the booking receipt could not be opened. Use Print Booking Receipt below to retry.
+              </div>
+            ) : null}
             <div className="rounded-[24px] border border-emerald-500/20 bg-emerald-500/10 p-5 text-sm text-emerald-50">
               <div className="grid gap-4 md:grid-cols-2">
                 <InfoPair label="LPP #" value={createSuccess.reference} />
@@ -2250,8 +2361,8 @@ function ModalShell({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/80 px-4 py-8 backdrop-blur-sm">
-      <div className="w-full max-w-6xl rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(7,14,26,1))] shadow-[0_30px_90px_rgba(0,0,0,0.5)]">
-        <div className="flex items-start justify-between gap-4 border-b border-white/10 p-6">
+      <div className="flex max-h-[calc(100vh-64px)] w-full max-w-6xl flex-col rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(7,14,26,1))] shadow-[0_30px_90px_rgba(0,0,0,0.5)]">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-white/10 p-6">
           <div>
             <h2 className="text-2xl font-semibold text-white">{title}</h2>
             <p className="mt-1 text-sm text-slate-400">{subtitle}</p>
@@ -2260,7 +2371,7 @@ function ModalShell({
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="max-h-[calc(100vh-140px)] overflow-y-auto p-6">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-6">{children}</div>
       </div>
     </div>
   );

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import MarkdownRendererClient, { RichFormattingToggle } from "@/components/MarkdownRendererClient";
-import { findSimilarProducts, getProductSimilarityScore } from "@/lib/posProductSimilarity";
+import { findSimilarProducts } from "@/lib/posProductSimilarity";
 import {
   buildReceiptProjectFlow,
   readReceiptProjectFlow,
@@ -12,6 +12,7 @@ import {
 } from "@/lib/receiptProjects";
 import { showToast } from "@/lib/ui/toast";
 import { generateReceiptSerial } from "@/lib/receipts/serial";
+import PosProductSelectorModal, { type PosCatalogProduct } from "@/components/receipts/PosProductSelectorModal";
 import ReceiptDuplicateModal from "./_components/ReceiptDuplicateModal";
 
 type ItemRow = {
@@ -29,22 +30,6 @@ type ItemRow = {
   commissionEnabled?: boolean;
   commissionAmount?: number;
   commissionRequiresApproval?: boolean;
-};
-
-type CatalogProduct = {
-  id: string;
-  name: string;
-  sku: string;
-  category?: string | null;
-  sellingPrice: number;
-  lastBuyingPrice?: number | null;
-  variableCost?: boolean;
-  defaultWarranty?: string | null;
-  isActive?: boolean;
-  commissionEnabled?: boolean;
-  commissionAmount?: number | string | null;
-  commissionRequiresApproval?: boolean;
-  soldCount?: number;
 };
 
 const warrantyOptions = ["1 Year", "2 Years", "3 Years", "5 Years", "6 Years", "10 Years"];
@@ -182,10 +167,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
   const [cashPaid, setCashPaid] = useState<number | "">(0);
   const [mpesaPaid, setMpesaPaid] = useState<number | "">(0);
   const [catalogOpen, setCatalogOpen] = useState(false);
-  const [catalogQuery, setCatalogQuery] = useState("");
-    const [catalogLoading, setCatalogLoading] = useState(false);
-    const [catalogResults, setCatalogResults] = useState<CatalogProduct[]>([]);
-    const [duplicateCatalogPool, setDuplicateCatalogPool] = useState<CatalogProduct[]>([]);
+    const [duplicateCatalogPool, setDuplicateCatalogPool] = useState<PosCatalogProduct[]>([]);
     const [websiteOrderId, setWebsiteOrderId] = useState<string | null>(null);
     const [websiteOrderRef, setWebsiteOrderRef] = useState<string | null>(null);
     const [prefillMetadata, setPrefillMetadata] = useState<Record<string, unknown> | null>(null);
@@ -472,27 +454,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       },
     ]);
 
-  const searchCatalog = async (query: string) => {
-    setCatalogLoading(true);
-    try {
-      const params = new URLSearchParams({
-        activeOnly: "1",
-        limit: "20",
-      });
-      if (query.trim()) params.set("search", query.trim());
-      const response = await fetch(`/api/products?${params.toString()}`, { cache: "no-store" });
-      if (!response.ok) throw new Error("Failed to load catalog");
-      const data = await response.json().catch(() => []);
-      setCatalogResults(Array.isArray(data) ? data : []);
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "Failed to load catalog", "error");
-      setCatalogResults([]);
-    } finally {
-      setCatalogLoading(false);
-    }
-  };
-
-  const buildCatalogRow = (product: CatalogProduct): ItemRow => {
+  const buildCatalogRow = (product: PosCatalogProduct): ItemRow => {
     const defaultWarranty = typeof product.defaultWarranty === "string" ? product.defaultWarranty.trim() : "";
     return {
       ...newItem(),
@@ -512,7 +474,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     };
   };
 
-  const applyCatalogProductToRow = (rowId: string, product: CatalogProduct) => {
+  const applyCatalogProductToRow = (rowId: string, product: PosCatalogProduct) => {
     const nextRow = buildCatalogRow(product);
     setItems((current) => current.map((row) => (row.id === rowId ? { ...row, ...nextRow, id: row.id } : row)));
     if (nextRow.warranty) {
@@ -520,7 +482,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     }
   };
 
-  const addCatalogProduct = (product: CatalogProduct) => {
+  const addCatalogProduct = (product: PosCatalogProduct) => {
     const nextRow = buildCatalogRow(product);
 
     setItems((current) => {
@@ -535,7 +497,6 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       setShowWarranty(true);
     }
     setCatalogOpen(false);
-    setCatalogQuery("");
   };
 
   const aiDescription = async (row: ItemRow) => {
@@ -613,20 +574,6 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
 
   const normalizedTaxRate = Number.isFinite(taxRate) ? taxRate : 0;
   const normalizedDiscount = Number.isFinite(discount) ? discount : 0;
-  const rankedCatalogResults = useMemo(() => {
-    if (!catalogQuery.trim()) return catalogResults;
-
-    return [...catalogResults].sort((left, right) => {
-      const rightScore = getProductSimilarityScore(catalogQuery, right.name);
-      const leftScore = getProductSimilarityScore(catalogQuery, left.name);
-      return (
-        rightScore - leftScore ||
-        Number(right.soldCount ?? 0) - Number(left.soldCount ?? 0) ||
-        left.name.localeCompare(right.name)
-      );
-    });
-  }, [catalogQuery, catalogResults]);
-
   const toNumber = (value: number | "") => (typeof value === "number" ? value : 0);
 
   const subtotal = useMemo(() => items.reduce((acc, it) => acc + (Number(it.unitPrice || 0) * Number(it.quantity || 1)), 0), [items]);
@@ -693,14 +640,6 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
       setMpesaPaid(Math.max(0, total - cash));
     }
   }, [total, cashPaid, mpesaPaid]);
-
-  useEffect(() => {
-    if (!catalogOpen) return;
-    const handle = setTimeout(() => {
-      void searchCatalog(catalogQuery);
-    }, 250);
-    return () => clearTimeout(handle);
-  }, [catalogOpen, catalogQuery]);
 
   const buildDraft = (resolvedPaymentMethod: "MPESA" | "CASH") => ({
     items,
@@ -1000,8 +939,6 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
     setSerial(generateReceiptSerial());
     setDocType("RECEIPT");
     setCatalogOpen(false);
-    setCatalogQuery("");
-    setCatalogResults([]);
     setStaffId(defaultStaffId);
   };
 
@@ -1471,10 +1408,7 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
           <button
             type="button"
             className="rounded-xl border border-sky-400/60 px-4 py-2 text-sm font-semibold text-sky-200 hover:bg-sky-500/10"
-            onClick={() => {
-              setCatalogOpen(true);
-              void searchCatalog(catalogQuery);
-            }}
+            onClick={() => setCatalogOpen(true)}
           >
             + Select product
           </button>
@@ -1625,81 +1559,11 @@ export default function ReceiptFormClient({ onCreated, showHero = true }: Receip
         )}
       </section>
 
-      {catalogOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4">
-          <div className="w-full max-w-3xl rounded-3xl border border-white/10 bg-slate-900 p-5 shadow-2xl shadow-black/60">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs uppercase tracking-[0.25em] text-slate-400">POS Catalog</p>
-                <h2 className="text-xl font-semibold text-white">Select product</h2>
-                <p className="text-sm text-slate-400">
-                  Pick an admin-managed product to attach it to this receipt. Similar catalog products are ranked first so you can reuse existing items before adding new ones.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-200 hover:bg-white/5"
-                onClick={() => setCatalogOpen(false)}
-              >
-                Close
-              </button>
-            </div>
-
-            <div className="mt-4">
-              <input
-                value={catalogQuery}
-                onChange={(e) => setCatalogQuery(e.target.value)}
-                placeholder="Search by product name, SKU, or category"
-                className={fieldClass}
-              />
-            </div>
-
-            <div className="mt-4 max-h-[420px] space-y-2 overflow-y-auto pr-1">
-              {catalogLoading ? (
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-6 text-sm text-slate-300">
-                  Loading products...
-                </div>
-              ) : rankedCatalogResults.length ? (
-                rankedCatalogResults.map((product) => {
-                  const similarityScore = catalogQuery.trim()
-                    ? getProductSimilarityScore(catalogQuery, product.name)
-                    : 0;
-
-                  return (
-                    <button
-                      key={product.id}
-                      type="button"
-                      className="flex w-full items-start justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-left hover:border-emerald-500/40 hover:bg-slate-950"
-                      onClick={() => addCatalogProduct(product)}
-                    >
-                      <div className="space-y-1">
-                        <div className="font-semibold text-white">{product.name}</div>
-                        <div className="text-xs uppercase tracking-wide text-slate-400">
-                          {product.sku}
-                          {product.category ? ` · ${product.category}` : ""}
-                        </div>
-                        <div className="text-xs text-slate-400">
-                          Selling: KES {Number(product.sellingPrice || 0).toLocaleString()}
-                          {product.variableCost ? " · Priced later" : ""}
-                        </div>
-                      </div>
-                      {similarityScore >= 0.5 ? (
-                        <div className="rounded-full border border-amber-400/30 px-2 py-1 text-xs font-semibold text-amber-100">
-                          {Math.round(similarityScore * 100)}% similar
-                        </div>
-                      ) : null}
-                    </button>
-                  );
-                })
-              ) : (
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-6 text-sm text-slate-300">
-                  No products found.
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <PosProductSelectorModal
+        open={catalogOpen}
+        onClose={() => setCatalogOpen(false)}
+        onSelect={addCatalogProduct}
+      />
 
       {(showAddressInput || customerType === "delivery" || customerType === "project") && (
         <div className="mt-3">

@@ -68,6 +68,7 @@ export default async function LppBookingReceiptPage({
   const { account, payments, installments, summary } = detail;
   const firstSuccessfulPayment = payments.find((payment) => payment.status === "SUCCESS") ?? null;
   const paymentFrequency = inferInstallmentFrequency(installments, account.createdAt);
+  const installmentAmount = installments[0]?.expectedAmount ?? 0;
   const location = [account.customerTown, account.customerEstateLandmark, account.customerCounty].filter(Boolean).join(", ");
 
   return (
@@ -150,9 +151,15 @@ export default async function LppBookingReceiptPage({
               <span className="font-semibold">{paymentFrequency ? titleCase(paymentFrequency) : "Not captured"}</span>
             </div>
             <div className="flex items-center justify-between gap-4">
-              <span>Remaining Installments</span>
+              <span>Future Installments</span>
               <span className="font-semibold">{installments.length}</span>
             </div>
+            {installmentAmount > 0 ? (
+              <div className="flex items-center justify-between gap-4">
+                <span>Installment Amount</span>
+                <span className="font-semibold">{formatKes(installmentAmount)}</span>
+              </div>
+            ) : null}
             <div className="flex items-center justify-between gap-4">
               <span>Expected Completion</span>
               <span className="font-semibold">{formatDate(account.expectedCompletionDate)}</span>
@@ -197,7 +204,10 @@ export default async function LppBookingReceiptPage({
           </div>
           <div className="mt-6 text-center text-sm text-slate-600">
             <div>Thank you for choosing {branding.siteTitle}.</div>
-            <div className="mt-1">This receipt confirms your Lipa Pole Pole booking and payment received.</div>
+            <div className="mt-1">This is a Lipa Pole Pole booking receipt and does not confirm product release.</div>
+            <div className="mt-1 font-semibold text-slate-800">
+              Product collection or release is available after the Lipa Pole Pole balance has been paid in full.
+            </div>
           </div>
         </section>
       </div>
