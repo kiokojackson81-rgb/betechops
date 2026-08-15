@@ -308,14 +308,14 @@ export default async function LppBookingReceiptPage({
 
         <section className="lpp-meta">
           <div className="lpp-meta-card">
+            <div><strong>Date:</strong> {formatDate(account.createdAt)}</div>
             <div><strong>M/S:</strong> {account.customerName || "Unknown customer"}</div>
             <div><strong>Phone:</strong> {account.customerPhone || "-"}</div>
             <div><strong>Email:</strong> {account.customerEmail || "-"}</div>
-            <div><strong>Address:</strong> {location || "-"}</div>
           </div>
           <div className="lpp-meta-card lpp-meta-card--right">
             <div><strong>Booking No.</strong> {account.reference}</div>
-            <div><strong>Date:</strong> {formatDate(account.createdAt)}</div>
+            <div><strong>Address:</strong> {location || "-"}</div>
             <div><strong>Payment:</strong> {paymentMethod}</div>
             {firstSuccessfulPayment?.reference ? <div><strong>Reference:</strong> {firstSuccessfulPayment.reference}</div> : null}
           </div>
