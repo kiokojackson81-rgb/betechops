@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Wallet } from "lucide-react";
 import { formatCurrency } from "@/app/shop/_components/shopStyles";
+import { LIPA_POLE_POLE_TERMS_PATH } from "@/lib/lipaPolePoleTerms";
 
 type ShopLipaPolePoleStarterProps = {
   product: {
@@ -48,6 +49,7 @@ export default function ShopLipaPolePoleStarter({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successHref, setSuccessHref] = useState<string | null>(null);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [form, setForm] = useState({
     customerName: customer.name,
     customerPhone: customer.phone,
@@ -315,6 +317,26 @@ export default function ShopLipaPolePoleStarter({
                   className={`${inputClass} min-h-[92px] py-3`}
                   placeholder="Any product preferences, delivery planning details, or follow-up notes."
                 />
+              </label>
+              <label className="sm:col-span-2 flex cursor-pointer items-start gap-3 rounded-[18px] border border-[#7a0000]/10 bg-[#fffaf4] px-4 py-4 text-sm leading-6 text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={termsAccepted}
+                  onChange={(event) => setTermsAccepted(event.target.checked)}
+                  className="mt-1 h-4 w-4 shrink-0 accent-[#7a0000]"
+                  required
+                />
+                <span>
+                  I have read and agree to the Betech Solar Solutions{" "}
+                  <Link
+                    href={LIPA_POLE_POLE_TERMS_PATH}
+                    target="_blank"
+                    className="font-black text-[#7a0000] underline decoration-[#7a0000]/30 underline-offset-4"
+                  >
+                    Lipa Pole Pole Terms &amp; Conditions
+                  </Link>
+                  . I understand that the product is released only after full payment is confirmed.
+                </span>
               </label>
               <div className="sm:col-span-2 flex flex-wrap gap-3 pt-2">
                 <button
