@@ -1,5 +1,10 @@
+import * as QRCode from "qrcode";
 import { getSerializedLppAccountDetail } from "@/lib/lipaPolePoleService";
 import { getBranding } from "@/lib/branding";
+import {
+  LIPA_POLE_POLE_TERMS_DISPLAY_URL,
+  LIPA_POLE_POLE_TERMS_URL,
+} from "@/lib/lipaPolePoleTerms";
 import BookingReceiptAutoPrint from "./BookingReceiptAutoPrint";
 import BookingReceiptPrintControls from "./BookingReceiptPrintControls";
 
@@ -72,6 +77,12 @@ export default async function LppBookingReceiptPage({
   const location = [account.customerTown, account.customerEstateLandmark, account.customerCounty].filter(Boolean).join(", ");
   const letterheadUrl = branding.letterheadUrl || "/letterhead.jpg";
   const paymentMethod = firstSuccessfulPayment ? titleCase(firstSuccessfulPayment.method) : "Not captured";
+  const termsQrDataUrl = await QRCode.toDataURL(LIPA_POLE_POLE_TERMS_URL, {
+    width: 128,
+    margin: 1,
+    errorCorrectionLevel: "M",
+    color: { dark: "#111827", light: "#ffffff" },
+  });
 
   return (
     <div className="min-h-screen bg-slate-200 pb-10 text-slate-900">
@@ -264,6 +275,37 @@ export default async function LppBookingReceiptPage({
           line-height: 1.45;
           break-inside: avoid;
         }
+        .lpp-footer-grid {
+          display: grid;
+          grid-template-columns: auto minmax(0, 1fr);
+          align-items: center;
+          gap: 9px;
+          text-align: left;
+        }
+        .lpp-terms-qr {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .lpp-terms-qr img {
+          display: block;
+          width: 17mm;
+          height: 17mm;
+          border: 1px solid #e5e7eb;
+          border-radius: 4px;
+        }
+        .lpp-terms-qr-copy {
+          max-width: 30mm;
+          font-size: 8px;
+          line-height: 1.3;
+          color: #475569;
+        }
+        .lpp-terms-qr-copy strong {
+          display: block;
+          color: ${branding.brandColor};
+          font-size: 8.5px;
+        }
+        .lpp-footer-details { text-align: center; }
         .lpp-stamp-line {
           display: inline-block;
           width: 42mm;
@@ -316,6 +358,8 @@ export default async function LppBookingReceiptPage({
             margin-top: 6px;
             padding-top: 5px;
           }
+          .lpp-footer-grid { gap: 6px; }
+          .lpp-terms-qr img { width: 15mm; height: 15mm; }
           .lpp-letterhead, .lpp-meta, .lpp-items, .lpp-totals, .lpp-footer { break-inside: avoid; }
           * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
@@ -416,8 +460,20 @@ export default async function LppBookingReceiptPage({
         </aside>
 
         <footer className="lpp-footer">
-          <div>Thank you for choosing {branding.siteTitle}. You were served by <strong>{account.salespersonName || "Not captured"}</strong>.</div>
-          <div style={{ marginTop: 10 }}>Official Stamp:<span className="lpp-stamp-line" /></div>
+          <div className="lpp-footer-grid">
+            <div className="lpp-terms-qr">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={termsQrDataUrl} alt="QR code for the Lipa Pole Pole terms and conditions" />
+              <div className="lpp-terms-qr-copy">
+                <strong>Scan for full terms</strong>
+                {LIPA_POLE_POLE_TERMS_DISPLAY_URL}
+              </div>
+            </div>
+            <div className="lpp-footer-details">
+              <div>Thank you for choosing {branding.siteTitle}. You were served by <strong>{account.salespersonName || "Not captured"}</strong>.</div>
+              <div style={{ marginTop: 7 }}>Official Stamp:<span className="lpp-stamp-line" /></div>
+            </div>
+          </div>
         </footer>
       </main>
     </div>
