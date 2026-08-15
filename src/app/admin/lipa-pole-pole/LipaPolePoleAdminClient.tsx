@@ -239,6 +239,19 @@ function addInstallmentPeriods(count: number, frequency: InstallmentFrequency) {
   return next;
 }
 
+function buildInstallmentPreview(total: number, count: number, frequency: InstallmentFrequency) {
+  const safeCount = Math.min(60, Math.max(1, Math.trunc(count)));
+  const totalCents = Math.round(Math.max(0, total) * 100);
+  const baseCents = Math.floor(totalCents / safeCount);
+  const remainder = totalCents - baseCents * safeCount;
+
+  return Array.from({ length: safeCount }, (_, index) => ({
+    number: index + 1,
+    dueDate: addInstallmentPeriods(index + 1, frequency),
+    amount: (baseCents + (index === safeCount - 1 ? remainder : 0)) / 100,
+  }));
+}
+
 function titleCase(value: string) {
   return value.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
 }
@@ -358,11 +371,15 @@ export default function LipaPolePoleAdminClient({
   initialDetail,
   initialQ,
   initialStatus,
+  embeddedCreateMode = false,
+  onCancelInlineCreate,
 }: {
   initialItems: LppListItem[];
   initialDetail: LppDetail | null;
   initialQ: string;
   initialStatus: string;
+  embeddedCreateMode?: boolean;
+  onCancelInlineCreate?: () => void;
 }) {
   const [items, setItems] = useState(initialItems);
   const [detail, setDetail] = useState<LppDetail | null>(initialDetail);
@@ -382,8 +399,9 @@ export default function LipaPolePoleAdminClient({
   const [isReleasing, setIsReleasing] = useState(false);
   const [isSubmittingFollowUp, setIsSubmittingFollowUp] = useState(false);
   const [isSubmittingPromise, setIsSubmittingPromise] = useState(false);
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(embeddedCreateMode);
   const [showCreateMoreDetails, setShowCreateMoreDetails] = useState(false);
+  const [showCreateSchedule, setShowCreateSchedule] = useState(false);
   const [actionModal, setActionModal] = useState<ActionModal>(null);
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("ALL");
   const [agentFilter, setAgentFilter] = useState("ALL");
@@ -525,6 +543,7 @@ export default function LipaPolePoleAdminClient({
   }, [q, status, quickFilter, agentFilter, productFilter, dueFilter]);
 
   useEffect(() => {
+    if (embeddedCreateMode) return;
     const params = new URLSearchParams(window.location.search);
     const trimmedQ = q.trim();
     if (trimmedQ) params.set("q", trimmedQ);
@@ -536,10 +555,11 @@ export default function LipaPolePoleAdminClient({
     const next = params.toString();
     const href = next ? `${window.location.pathname}?${next}` : window.location.pathname;
     window.history.replaceState({}, "", href);
-  }, [expandedLppId, q, status]);
+  }, [embeddedCreateMode, expandedLppId, q, status]);
 
   // The backend query is intentionally driven by debounced `q` and `status`.
   useEffect(() => {
+    if (embeddedCreateMode) return;
     if (!hasHydratedRef.current) {
       hasHydratedRef.current = true;
       return;
@@ -552,7 +572,7 @@ export default function LipaPolePoleAdminClient({
     }, 300);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, status]);
+  }, [embeddedCreateMode, q, status]);
 
   function showError(error: unknown) {
     setBanner({
@@ -628,6 +648,14 @@ export default function LipaPolePoleAdminClient({
     void createAccount(null, false);
   }
 
+  function closeCreateFlow() {
+    if (embeddedCreateMode) {
+      onCancelInlineCreate?.();
+      return;
+    }
+    setShowCreateModal(false);
+  }
+
   function handleCreateAndPrint() {
     if (createSubmissionLockRef.current || isSubmittingCreate) return;
     const printWindow = window.open("about:blank", "_blank");
@@ -679,6 +707,10 @@ export default function LipaPolePoleAdminClient({
     }
     if (createInstallmentCount < 1) {
       failValidation("Installments must be at least 1.");
+      return;
+    }
+    if (createInstallmentCount > 60) {
+      failValidation("Installments cannot exceed 60.");
       return;
     }
     if (createDeposit < 0) {
@@ -760,7 +792,7 @@ export default function LipaPolePoleAdminClient({
             ? "Lipa Pole Pole account created successfully, but the dashboard could not refresh. Reload to see the new account."
             : "Lipa Pole Pole account created.",
       });
-      setShowCreateModal(false);
+      setShowCreateModal(embeddedCreateMode);
       setCreateSuccess({
         accountId: data.account.id,
         reference: data.account.reference,
@@ -1089,12 +1121,20 @@ export default function LipaPolePoleAdminClient({
   const createInstallmentCount = Math.max(1, Number(createForm.installmentCount || "1"));
   const createInstallmentAmount = createInstallmentCount > 0 ? createBalance / createInstallmentCount : createBalance;
   const createExpectedCompletionDate = addInstallmentPeriods(createInstallmentCount, createForm.installmentFrequency);
+  const createInstallmentSchedule = buildInstallmentPreview(createBalance, createInstallmentCount, createForm.installmentFrequency);
   const selectedStaff = staffMembers.find((member) => member.id === staffId) ?? null;
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(29,78,216,0.18),transparent_28%),radial-gradient(circle_at_top_right,rgba(15,23,42,0.7),transparent_36%),linear-gradient(180deg,#08111f_0%,#050b16_100%)] px-4 py-5 text-slate-100 lg:px-6 xl:px-8">
+    <main
+      className={
+        embeddedCreateMode
+          ? "text-slate-100"
+          : "min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(29,78,216,0.18),transparent_28%),radial-gradient(circle_at_top_right,rgba(15,23,42,0.7),transparent_36%),linear-gradient(180deg,#08111f_0%,#050b16_100%)] px-4 py-5 text-slate-100 lg:px-6 xl:px-8"
+      }
+    >
+      {banner ? <Banner tone={banner.tone} text={banner.text} /> : null}
+      {!embeddedCreateMode ? (
       <div className="mx-auto max-w-[1750px]">
-        {banner ? <Banner tone={banner.tone} text={banner.text} /> : null}
 
         <section className="space-y-4">
           <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.9),rgba(7,14,26,0.94))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
@@ -1424,12 +1464,37 @@ export default function LipaPolePoleAdminClient({
           </section>
         </section>
       </div>
+      ) : null}
 
       {showCreateModal ? (
-        <ModalShell title="Create New Lipa Pole Pole" subtitle="Capture customer details, product, deposit, and installment plan in one simple flow." onClose={() => setShowCreateModal(false)}>
+        <ModalShell
+          title="Create New Lipa Pole Pole"
+          subtitle="Use the normal POS flow, then add the deposit and installment plan."
+          onClose={closeCreateFlow}
+          inline={embeddedCreateMode}
+        >
           <form className="space-y-4" onSubmit={handleCreate}>
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.9fr)]">
               <div className="space-y-4">
+                <section className="rounded-[24px] border border-white/10 bg-slate-950/40 p-4">
+                  <div className="mb-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Staff</div>
+                  <Field label="Staff">
+                    <select
+                      value={staffId}
+                      onChange={(event) => setStaffId(event.target.value)}
+                      className={`${inputClass} appearance-none`}
+                      required
+                    >
+                      <option value="">Select staff</option>
+                      {staffMembers.map((member) => (
+                        <option key={member.id} value={member.id}>
+                          {member.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </section>
+
                 <section className="rounded-[24px] border border-white/10 bg-slate-950/40 p-4">
                   <div className="mb-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Customer details</div>
                   <div className="grid gap-4 md:grid-cols-2">
@@ -1507,25 +1572,6 @@ export default function LipaPolePoleAdminClient({
                 </section>
 
                 <section className="rounded-[24px] border border-white/10 bg-slate-950/40 p-4">
-                  <div className="mb-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Staff</div>
-                  <Field label="Staff">
-                    <select
-                      value={staffId}
-                      onChange={(event) => setStaffId(event.target.value)}
-                      className={`${inputClass} appearance-none`}
-                      required
-                    >
-                      <option value="">Select staff</option>
-                      {staffMembers.map((member) => (
-                        <option key={member.id} value={member.id}>
-                          {member.name}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                </section>
-
-                <section className="rounded-[24px] border border-white/10 bg-slate-950/40 p-4">
                   <div className="mb-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Payment plan</div>
                   <div className="space-y-4">
                     <div className="space-y-2">
@@ -1551,7 +1597,7 @@ export default function LipaPolePoleAdminClient({
 
                     <div className="grid gap-4 md:grid-cols-2">
                       <StepperInput
-                        label="Future installments"
+                        label={`Number of ${createForm.installmentFrequency === "WEEKLY" ? "weekly" : "monthly"} payments`}
                         value={createForm.installmentCount}
                         onChange={(value) => setCreateForm((current) => ({ ...current, installmentCount: value }))}
                         min={1}
@@ -1563,6 +1609,33 @@ export default function LipaPolePoleAdminClient({
                           readOnly
                         />
                       </Field>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/45">
+                      <button
+                        type="button"
+                        onClick={() => setShowCreateSchedule((current) => !current)}
+                        className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left"
+                        aria-expanded={showCreateSchedule}
+                      >
+                        <div>
+                          <div className="text-sm font-semibold text-slate-100">Payment schedule</div>
+                          <div className="mt-1 text-xs text-slate-500">
+                            {createInstallmentCount} {createForm.installmentFrequency.toLowerCase()} payments from {formatKes(createInstallmentAmount)}
+                          </div>
+                        </div>
+                        <ChevronDown className={`h-4 w-4 text-slate-400 transition ${showCreateSchedule ? "rotate-180" : ""}`} />
+                      </button>
+                      {showCreateSchedule ? (
+                        <div className="max-h-64 space-y-2 overflow-y-auto border-t border-white/10 p-3">
+                          {createInstallmentSchedule.map((installment) => (
+                            <div key={installment.number} className="flex items-center justify-between gap-4 rounded-xl bg-white/[0.03] px-3 py-2 text-sm">
+                              <span className="text-slate-400">{installment.number}. {formatDate(toDateInputValue(installment.dueDate))}</span>
+                              <span className="font-semibold text-slate-100">{formatKes(installment.amount)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </section>
@@ -1649,7 +1722,7 @@ export default function LipaPolePoleAdminClient({
             </div>
 
             <div className="sticky bottom-0 z-10 -mx-6 mt-6 flex flex-wrap justify-end gap-3 border-t border-white/10 bg-slate-950/95 px-6 py-4 backdrop-blur">
-              <button type="button" className={secondaryButtonClass} onClick={() => setShowCreateModal(false)} disabled={isSubmittingCreate}>
+              <button type="button" className={secondaryButtonClass} onClick={closeCreateFlow} disabled={isSubmittingCreate}>
                 Cancel
               </button>
               <button type="submit" className={primaryButtonClass} disabled={isSubmittingCreate}>
@@ -2353,12 +2426,34 @@ function ModalShell({
   subtitle,
   children,
   onClose,
+  inline = false,
 }: {
   title: string;
   subtitle: string;
   children: ReactNode;
   onClose: () => void;
+  inline?: boolean;
 }) {
+  if (inline) {
+    return (
+      <section className="overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/35 shadow-[0_20px_55px_rgba(0,0,0,0.24)]">
+        <div className="border-b border-white/10 px-5 py-5 sm:px-6">
+          <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300">Lipa Pole Pole</div>
+              <h2 className="mt-2 text-2xl font-semibold text-white">{title}</h2>
+              <p className="mt-1 text-sm text-slate-400">{subtitle}</p>
+            </div>
+            <button type="button" className={`${secondaryButtonClass} w-full sm:w-auto`} onClick={onClose}>
+              Back to receipt
+            </button>
+          </div>
+        </div>
+        <div className="p-5 sm:p-6">{children}</div>
+      </section>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/80 px-4 py-8 backdrop-blur-sm">
       <div className="flex max-h-[calc(100vh-64px)] w-full max-w-6xl flex-col rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(7,14,26,1))] shadow-[0_30px_90px_rgba(0,0,0,0.5)]">
