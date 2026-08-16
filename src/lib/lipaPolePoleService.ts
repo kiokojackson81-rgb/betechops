@@ -74,6 +74,21 @@ type RawLppPaymentRow = {
   createdAt: Date;
 };
 
+type RawLppItemRow = {
+  id: string;
+  lipaPolePoleId: string;
+  productId: string | null;
+  description: string;
+  quantity: number;
+  unitPrice: Prisma.Decimal;
+  total: Prisma.Decimal;
+  serial: string | null;
+  warranty: string | null;
+  position: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 type RawLppEventRow = {
   id: string;
   lipaPolePoleId: string;
@@ -209,6 +224,18 @@ export type SerializedLppPayment = {
   createdAt: string;
 };
 
+export type SerializedLppItem = {
+  id: string;
+  productId: string | null;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+  serial: string | null;
+  warranty: string | null;
+  position: number;
+};
+
 export type SerializedLppEvent = {
   id: string;
   eventType: string;
@@ -273,6 +300,14 @@ export type CreateLppInput = {
   customProductName?: string | null;
   itemSerial?: string | null;
   itemWarranty?: string | null;
+  items?: Array<{
+    productId?: string | null;
+    description: string;
+    quantity?: number;
+    unitPrice: number | string | Prisma.Decimal;
+    serial?: string | null;
+    warranty?: string | null;
+  }>;
   quantity?: number;
   agreedUnitPrice: number | string | Prisma.Decimal;
   agreedTotal?: number | string | Prisma.Decimal | null;
@@ -564,6 +599,15 @@ async function getLppPayments(db: DbClient, lipaPolePoleId: string) {
     FROM "LipaPolePolePayment"
     WHERE "lipaPolePoleId" = ${lipaPolePoleId}
     ORDER BY "receivedAt" ASC, "createdAt" ASC
+  `);
+}
+
+async function getLppItems(db: DbClient, lipaPolePoleId: string) {
+  return db.$queryRaw<RawLppItemRow[]>(Prisma.sql`
+    SELECT *
+    FROM "LipaPolePoleItem"
+    WHERE "lipaPolePoleId" = ${lipaPolePoleId}
+    ORDER BY "position" ASC, "createdAt" ASC
   `);
 }
 
@@ -900,18 +944,41 @@ export async function createLipaPolePole(
   input: CreateLppInput,
   db: DbClient = prisma,
 ) {
-  const quantity = Math.max(1, Math.trunc(Number(input.quantity ?? 1)));
-  const agreedUnitPrice = toMoney(input.agreedUnitPrice);
-  const agreedTotal =
-    input.agreedTotal != null
-      ? toMoney(input.agreedTotal)
-      : agreedUnitPrice.mul(quantity);
+  const normalizedItems = (input.items?.length
+    ? input.items
+    : [{
+        productId: input.productId,
+        description: input.customProductName ?? "",
+        quantity: input.quantity,
+        unitPrice: input.agreedUnitPrice,
+        serial: input.itemSerial,
+        warranty: input.itemWarranty,
+      }]
+  ).map((item) => {
+    const quantity = Math.max(1, Math.trunc(Number(item.quantity ?? 1)));
+    const unitPrice = toMoney(item.unitPrice);
+    const description = trimToNull(item.description);
+    if (!description || unitPrice.lte(0)) throw new Error("INVALID_PRODUCT");
+    return {
+      productId: trimToNull(item.productId ?? null),
+      description,
+      quantity,
+      unitPrice,
+      total: unitPrice.mul(quantity),
+      serial: trimToNull(item.serial ?? null),
+      warranty: trimToNull(item.warranty ?? null),
+    };
+  });
+  if (!normalizedItems.length) throw new Error("INVALID_PRODUCT");
+  const firstItem = normalizedItems[0];
+  const quantity = firstItem.quantity;
+  const agreedUnitPrice = firstItem.unitPrice;
+  const agreedTotal = normalizedItems.reduce((total, item) => total.add(item.total), new Prisma.Decimal(0));
   if (agreedTotal.lte(0)) throw new Error("INVALID_AGREED_TOTAL");
-  const productId = trimToNull(input.productId ?? null);
-  const customProductName = trimToNull(input.customProductName ?? null);
-  const itemSerial = trimToNull(input.itemSerial ?? null);
-  const itemWarranty = trimToNull(input.itemWarranty ?? null);
-  if (!productId && !customProductName) throw new Error("INVALID_PRODUCT");
+  const productId = firstItem.productId;
+  const customProductName = firstItem.description;
+  const itemSerial = firstItem.serial;
+  const itemWarranty = firstItem.warranty;
 
   return withLppTransaction(db, async (tx) => {
     const now = new Date();
@@ -952,6 +1019,18 @@ export async function createLipaPolePole(
       )
     `);
 
+    for (const [position, item] of normalizedItems.entries()) {
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO "LipaPolePoleItem" (
+          "id", "lipaPolePoleId", "productId", "description", "quantity", "unitPrice", "total",
+          "serial", "warranty", "position", "createdAt", "updatedAt"
+        ) VALUES (
+          ${randomUUID()}, ${id}, ${item.productId}, ${item.description}, ${item.quantity}, ${item.unitPrice}, ${item.total},
+          ${item.serial}, ${item.warranty}, ${position}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        )
+      `);
+    }
+
     await writeLppEvent(tx, {
       lipaPolePoleId: id,
       eventType: "LPP_CREATED",
@@ -963,6 +1042,7 @@ export async function createLipaPolePole(
         customProductName,
         itemSerial,
         itemWarranty,
+        itemCount: normalizedItems.length,
         agreedTotal: agreedTotal.toString(),
       },
     });
@@ -978,6 +1058,15 @@ export async function createLipaPolePole(
         customProductName,
         itemSerial,
         itemWarranty,
+        items: normalizedItems.map((item) => ({
+          productId: item.productId,
+          description: item.description,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice.toString(),
+          total: item.total.toString(),
+          serial: item.serial,
+          warranty: item.warranty,
+        })),
         quantity,
         agreedUnitPrice: agreedUnitPrice.toString(),
         agreedTotal: agreedTotal.toString(),
@@ -1613,11 +1702,26 @@ export async function getLppAccountSummary(lipaPolePoleId: string, db: DbClient 
   const lpp = await getLppById(db, lipaPolePoleId);
   if (!lpp) throw new Error("LPP_NOT_FOUND");
   const payments = await getLppPayments(db, lipaPolePoleId);
+  const items = await getLppItems(db, lipaPolePoleId);
   const summary = computeLppFinancialSummary({
     agreedTotal: lpp.agreedTotal,
     payments,
   });
-  return { lpp, payments, summary };
+  return { lpp, payments, items, summary };
+}
+
+function serializeLppItem(row: RawLppItemRow): SerializedLppItem {
+  return {
+    id: row.id,
+    productId: row.productId ?? null,
+    description: row.description,
+    quantity: Number(row.quantity ?? 1),
+    unitPrice: Number(row.unitPrice ?? 0),
+    total: Number(row.total ?? 0),
+    serial: row.serial ?? null,
+    warranty: row.warranty ?? null,
+    position: Number(row.position ?? 0),
+  };
 }
 
 function serializeLppPayment(row: RawLppPaymentRow): SerializedLppPayment {
@@ -1703,7 +1807,7 @@ function serializeLppInstallment(row: RawLppInstallmentRow): SerializedLppInstal
 }
 
 export async function getSerializedLppAccountDetail(lipaPolePoleId: string, db: DbClient = prisma) {
-  const { lpp, payments, summary } = await getLppAccountSummary(lipaPolePoleId, db);
+  const { lpp, payments, items, summary } = await getLppAccountSummary(lipaPolePoleId, db);
   const rows = await db.$queryRaw<Array<{
     customerName: string | null;
     customerPhone: string | null;
@@ -1801,6 +1905,7 @@ export async function getSerializedLppAccountDetail(lipaPolePoleId: string, db: 
 
   return {
     account,
+    items: items.map(serializeLppItem),
     payments: payments.map(serializeLppPayment),
     events: events.map(serializeLppEvent),
     reminders: reminders.map(serializeLppReminder),

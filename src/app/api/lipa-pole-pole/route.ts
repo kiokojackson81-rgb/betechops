@@ -24,6 +24,14 @@ const createLppSchema = z.object({
   customProductName: z.string().trim().min(1).max(1000).optional().nullable(),
   itemSerial: z.string().trim().max(255).optional().nullable(),
   itemWarranty: z.string().trim().max(255).optional().nullable(),
+  items: z.array(z.object({
+    productId: z.string().trim().min(1).optional().nullable(),
+    description: z.string().trim().min(1).max(1000),
+    quantity: z.coerce.number().int().min(1),
+    unitPrice: z.union([z.coerce.number().positive(), z.string().trim().min(1)]),
+    serial: z.string().trim().max(255).optional().nullable(),
+    warranty: z.string().trim().max(255).optional().nullable(),
+  })).min(1).max(50).optional(),
   quantity: z.coerce.number().int().min(1).optional(),
   agreedUnitPrice: z.union([z.coerce.number().positive(), z.string().trim().min(1)]),
   agreedTotal: z.union([z.coerce.number().positive(), z.string().trim().min(1)]).optional().nullable(),
@@ -61,7 +69,7 @@ const createLppSchema = z.object({
       message: "Provide a customer ID or customer details.",
     });
   }
-  if (!value.productId && !value.customProductName) {
+  if (!value.items?.length && !value.productId && !value.customProductName) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["customProductName"],

@@ -51,6 +51,7 @@ export async function POST(_req: Request, context: ParamsContext) {
 
     const workflow = await ensureLppProjectWorkflow({
       lpp: summary.lpp,
+      items: summary.items,
       totalPaid: Number(summary.summary.totalPaid ?? 0),
       actorId,
       actorName,
@@ -77,6 +78,7 @@ export async function POST(_req: Request, context: ParamsContext) {
 
 async function ensureLppProjectWorkflow(input: {
   lpp: Awaited<ReturnType<typeof getLppAccountSummary>>["lpp"];
+  items: Awaited<ReturnType<typeof getLppAccountSummary>>["items"];
   totalPaid: number;
   actorId: string | null;
   actorName: string;
@@ -101,13 +103,6 @@ async function ensureLppProjectWorkflow(input: {
         select: { id: true, email: true, name: true },
       })
     : null;
-  const product = input.lpp.productId
-    ? await prisma.product.findUnique({
-        where: { id: input.lpp.productId },
-        select: { name: true },
-      })
-    : null;
-
   const quoteRef = `LPP-PROJECT-${input.lpp.reference}`;
   const existing = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
     SELECT "id"
@@ -120,15 +115,13 @@ async function ensureLppProjectWorkflow(input: {
   if (!quoteRequestId) {
     const id = randomUUID();
     const quotationData = {
-      items: [
-        {
-          itemName: input.lpp.customProductName || product?.name || `LPP ${input.lpp.reference}`,
-          quantity: Number(input.lpp.quantity ?? 1),
-          unitPrice: Number(input.lpp.agreedUnitPrice ?? 0),
-          serial: input.lpp.itemSerial ?? null,
-          warranty: input.lpp.itemWarranty ?? null,
-        },
-      ],
+      items: input.items.map((item) => ({
+        itemName: item.description,
+        quantity: Number(item.quantity ?? 1),
+        unitPrice: Number(item.unitPrice ?? 0),
+        serial: item.serial ?? null,
+        warranty: item.warranty ?? null,
+      })),
       subtotal: Number(input.lpp.agreedTotal ?? 0),
       total: Number(input.lpp.agreedTotal ?? 0),
       paymentMethod: "BANK_TRANSFER",
@@ -185,7 +178,7 @@ async function ensureLppProjectWorkflow(input: {
         ${customer?.town ?? null},
         ${customer?.estateLandmark ?? null},
         ${"OTHER"},
-        ${product?.name ?? `LPP ${input.lpp.reference}`},
+        ${input.items.map((item) => item.description).join(", ") || `LPP ${input.lpp.reference}`},
         ${input.lpp.notes ?? null},
         ${"APPROVED"},
         ${"MANUAL"},

@@ -54,6 +54,17 @@ type LppListItem = {
 
 type LppDetail = {
   account: LppListItem;
+  items: Array<{
+    id: string;
+    productId: string | null;
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+    serial: string | null;
+    warranty: string | null;
+    position: number;
+  }>;
   installments: Array<{
     id: string;
     dueDate: string;

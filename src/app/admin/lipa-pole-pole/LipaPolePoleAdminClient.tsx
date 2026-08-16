@@ -64,6 +64,17 @@ type LppListItem = {
 
 type LppDetail = {
   account: LppListItem;
+  items: Array<{
+    id: string;
+    productId: string | null;
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+    serial: string | null;
+    warranty: string | null;
+    position: number;
+  }>;
   installments: Array<{
     id: string;
     dueDate: string;
@@ -138,6 +149,28 @@ type LppDetail = {
 };
 
 const warrantyOptions = ["1 Year", "2 Years", "3 Years", "5 Years", "6 Years", "10 Years"];
+
+type CreateLppItem = {
+  id: string;
+  product: PosCatalogProduct | null;
+  description: string;
+  quantity: string;
+  unitPrice: string;
+  serial: string;
+  warranty: string;
+};
+
+function newCreateLppItem(product: PosCatalogProduct | null = null): CreateLppItem {
+  return {
+    id: Math.random().toString(36).slice(2),
+    product,
+    description: product?.name ?? "",
+    quantity: "1",
+    unitPrice: product && Number(product.sellingPrice) > 0 ? String(Number(product.sellingPrice)) : "",
+    serial: "",
+    warranty: typeof product?.defaultWarranty === "string" ? product.defaultWarranty.trim() : "",
+  };
+}
 
 type StaffOption = {
   id: string;
@@ -419,9 +452,9 @@ export default function LipaPolePoleAdminClient({
 
   const [staffMembers, setStaffMembers] = useState<StaffOption[]>([]);
   const [defaultStaffId, setDefaultStaffId] = useState<string | null>(null);
-  const [product, setProduct] = useState<PosCatalogProduct | null>(null);
-  const [productEntryOpen, setProductEntryOpen] = useState(false);
+  const [createItems, setCreateItems] = useState<CreateLppItem[]>([]);
   const [productSelectorOpen, setProductSelectorOpen] = useState(false);
+  const [productSelectorTargetId, setProductSelectorTargetId] = useState<string | null>(null);
   const [catalogProducts, setCatalogProducts] = useState<PosCatalogProduct[]>([]);
   const [showItemSerial, setShowItemSerial] = useState(false);
   const [showItemWarranty, setShowItemWarranty] = useState(false);
@@ -444,11 +477,6 @@ export default function LipaPolePoleAdminClient({
     town: "",
     estateLandmark: "",
     locationNotes: "",
-    productDescription: "",
-    itemSerial: "",
-    itemWarranty: "",
-    quantity: "1",
-    agreedUnitPrice: "",
     installmentFrequency: "MONTHLY" as InstallmentFrequency,
     installmentCount: "3",
     notes: "",
@@ -634,6 +662,7 @@ export default function LipaPolePoleAdminClient({
       const data = await readJson<{ ok: true } & LppDetail>(`/api/lipa-pole-pole/${id}`);
       setDetail({
         account: data.account,
+        items: data.items,
         installments: data.installments,
         payments: data.payments,
         events: data.events,
@@ -656,42 +685,27 @@ export default function LipaPolePoleAdminClient({
     return data.map((item) => toSearchOption(item, "User"));
   }
 
-  function handleProductChange(option: PosCatalogProduct | null) {
-    setProduct(option);
-    if (!option) {
-      setProductEntryOpen(false);
-      setCreateForm((current) => ({
-        ...current,
-        productDescription: "",
-        itemSerial: "",
-        itemWarranty: "",
-        agreedUnitPrice: "",
-        quantity: "1",
-      }));
-      return;
-    }
-    setProductEntryOpen(true);
-    const defaultWarranty = typeof option.defaultWarranty === "string" ? option.defaultWarranty.trim() : "";
-    if (defaultWarranty) setShowItemWarranty(true);
-    setCreateForm((current) => ({
-      ...current,
-      productDescription: option.name,
-      itemWarranty: defaultWarranty,
-      agreedUnitPrice: Number(option.sellingPrice) > 0 ? String(Number(option.sellingPrice)) : current.agreedUnitPrice,
-    }));
+  function updateCreateItem(id: string, updates: Partial<CreateLppItem>) {
+    setCreateItems((current) => current.map((item) => item.id === id ? { ...item, ...updates } : item));
+  }
+
+  function handleProductChange(option: PosCatalogProduct) {
+    const nextItem = newCreateLppItem(option);
+    if (nextItem.warranty) setShowItemWarranty(true);
+    setCreateItems((current) => productSelectorTargetId
+      ? current.map((item) => item.id === productSelectorTargetId ? { ...nextItem, id: item.id } : item)
+      : [...current, nextItem]);
+    setProductSelectorTargetId(null);
+  }
+
+  function applyCatalogToCreateItem(id: string, product: PosCatalogProduct) {
+    const nextItem = newCreateLppItem(product);
+    if (nextItem.warranty) setShowItemWarranty(true);
+    setCreateItems((current) => current.map((item) => item.id === id ? { ...nextItem, id } : item));
   }
 
   function handleAddManualProduct() {
-    setProduct(null);
-    setProductEntryOpen(true);
-    setCreateForm((current) => ({
-      ...current,
-      productDescription: "",
-      itemSerial: "",
-      itemWarranty: "",
-      quantity: "1",
-      agreedUnitPrice: "",
-    }));
+    setCreateItems((current) => [...current, newCreateLppItem()]);
   }
 
   function handleCreate(event: FormEvent<HTMLFormElement>) {
@@ -736,24 +750,19 @@ export default function LipaPolePoleAdminClient({
       failValidation("Customer phone is required.");
       return;
     }
-    if (!createForm.productDescription.trim()) {
-      failValidation("Select a product or enter an item description.");
+    if (!createItems.length) {
+      failValidation("Add at least one product.");
       return;
     }
     if (!staffId) {
       failValidation("Select staff.");
       return;
     }
-    if (!createForm.agreedUnitPrice.trim()) {
-      failValidation("Unit price is required.");
-      return;
-    }
-    if (createQuantity < 1) {
-      failValidation("Quantity must be at least 1.");
-      return;
-    }
-    if (createUnitPrice <= 0) {
-      failValidation("Unit price must be greater than zero.");
+    const invalidItemIndex = createItems.findIndex((item) =>
+      !item.description.trim() || Number(item.quantity) < 1 || Number(item.unitPrice) <= 0,
+    );
+    if (invalidItemIndex >= 0) {
+      failValidation(`Complete the description, quantity, and unit price for item ${invalidItemIndex + 1}.`);
       return;
     }
     if (createInstallmentCount < 1) {
@@ -787,13 +796,21 @@ export default function LipaPolePoleAdminClient({
           estateLandmark: createForm.estateLandmark.trim() || null,
           locationNotes: createForm.locationNotes.trim() || null,
         },
-        productId: product?.id ?? null,
-        customProductName: createForm.productDescription.trim(),
-        itemSerial: showItemSerial ? createForm.itemSerial.trim() || null : null,
-        itemWarranty: showItemWarranty ? createForm.itemWarranty.trim() || null : null,
-        quantity: createQuantity,
-        agreedUnitPrice: createForm.agreedUnitPrice,
+        productId: createItems[0].product?.id ?? null,
+        customProductName: createItems[0].description.trim(),
+        itemSerial: showItemSerial ? createItems[0].serial.trim() || null : null,
+        itemWarranty: showItemWarranty ? createItems[0].warranty.trim() || null : null,
+        quantity: Number(createItems[0].quantity),
+        agreedUnitPrice: createItems[0].unitPrice,
         agreedTotal: createAgreedTotal,
+        items: createItems.map((item) => ({
+          productId: item.product?.id ?? null,
+          description: item.description.trim(),
+          quantity: Number(item.quantity),
+          unitPrice: item.unitPrice,
+          serial: showItemSerial ? item.serial.trim() || null : null,
+          warranty: showItemWarranty ? item.warranty.trim() || null : null,
+        })),
         expectedCompletionDate: toDateInputValue(createExpectedCompletionDate),
         salespersonId: staffId,
         notes: createForm.notes.trim() || null,
@@ -856,8 +873,7 @@ export default function LipaPolePoleAdminClient({
         printFailed,
       });
       setShowCreateMoreDetails(false);
-      setProduct(null);
-      setProductEntryOpen(false);
+      setCreateItems([]);
       setShowItemSerial(false);
       setShowItemWarranty(false);
       setStaffId(defaultStaffId ?? "");
@@ -869,11 +885,6 @@ export default function LipaPolePoleAdminClient({
         town: "",
         estateLandmark: "",
         locationNotes: "",
-        productDescription: "",
-        itemSerial: "",
-        itemWarranty: "",
-        quantity: "1",
-        agreedUnitPrice: "",
         installmentFrequency: "MONTHLY",
         installmentCount: "3",
         notes: "",
@@ -1173,19 +1184,23 @@ export default function LipaPolePoleAdminClient({
   const safePage = Math.min(page, totalPages);
   const paginatedItems = filteredItems.slice((safePage - 1) * pageSize, safePage * pageSize);
   const activeDetail = expandedLppId && detail?.account.id === expandedLppId ? detail : null;
-  const createQuantity = Math.max(1, Number(createForm.quantity || "1"));
-  const createUnitPrice = Math.max(0, Number(createForm.agreedUnitPrice || 0));
-  const createAgreedTotal = createQuantity * createUnitPrice;
+  const createAgreedTotal = createItems.reduce(
+    (total, item) => total + Math.max(1, Number(item.quantity || 1)) * Math.max(0, Number(item.unitPrice || 0)),
+    0,
+  );
   const createDeposit = Math.max(0, Number(createForm.initialPaymentAmount || 0));
   const createBalance = Math.max(0, createAgreedTotal - createDeposit);
   const createInstallmentCount = Math.max(1, Number(createForm.installmentCount || "1"));
   const createInstallmentAmount = createInstallmentCount > 0 ? createBalance / createInstallmentCount : createBalance;
   const createExpectedCompletionDate = addInstallmentPeriods(createInstallmentCount, createForm.installmentFrequency);
   const createInstallmentSchedule = buildInstallmentPreview(createBalance, createInstallmentCount, createForm.installmentFrequency);
-  const deferredProductDescription = useDeferredValue(createForm.productDescription);
-  const suggestedProducts = useMemo(
-    () => product ? [] : findSimilarProducts(deferredProductDescription, catalogProducts, 0.5, 3),
-    [catalogProducts, deferredProductDescription, product],
+  const deferredCreateItems = useDeferredValue(createItems);
+  const suggestedProductsByItem = useMemo(
+    () => new Map(deferredCreateItems.map((item) => [
+      item.id,
+      item.product ? [] : findSimilarProducts(item.description, catalogProducts, 0.5, 3),
+    ])),
+    [catalogProducts, deferredCreateItems],
   );
   const selectedStaff = staffMembers.find((member) => member.id === staffId) ?? null;
 
@@ -1576,142 +1591,77 @@ export default function LipaPolePoleAdminClient({
                 </section>
 
                 <section className="rounded-[24px] border border-white/10 bg-slate-950/40 p-4">
-                  <div className="mb-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Product</div>
-                  {productEntryOpen ? (
-                    <div className="rounded-2xl border border-white/10 bg-slate-950/55 p-4">
-                      <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-3">
-                        <label className="inline-flex items-center gap-2 text-sm text-slate-200">
-                          <input
-                            type="checkbox"
-                            checked={showItemSerial}
-                            onChange={(event) => setShowItemSerial(event.target.checked)}
-                            className="h-4 w-4 rounded border-slate-600 bg-slate-950 accent-blue-500"
-                          />
-                          Add serial / IMEI (optional)
-                        </label>
-                        <label className="inline-flex items-center gap-2 text-sm text-slate-200">
-                          <input
-                            type="checkbox"
-                            checked={showItemWarranty}
-                            onChange={(event) => setShowItemWarranty(event.target.checked)}
-                            className="h-4 w-4 rounded border-slate-600 bg-slate-950 accent-blue-500"
-                          />
-                          Capture warranty per item
-                        </label>
-                      </div>
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Products</div>
+                      <div className="mt-1 text-sm text-slate-400">Add every product included in this Lipa Pole Pole account.</div>
+                    </div>
+                    <div className="flex flex-wrap gap-4">
+                      <label className="inline-flex items-center gap-2 text-sm text-slate-200">
+                        <input type="checkbox" checked={showItemSerial} onChange={(event) => setShowItemSerial(event.target.checked)} className="h-4 w-4 accent-blue-500" />
+                        Add serial / IMEI
+                      </label>
+                      <label className="inline-flex items-center gap-2 text-sm text-slate-200">
+                        <input type="checkbox" checked={showItemWarranty} onChange={(event) => setShowItemWarranty(event.target.checked)} className="h-4 w-4 accent-blue-500" />
+                        Warranty per item
+                      </label>
+                    </div>
+                  </div>
 
-                      <div className="min-w-0">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Item description</div>
-                        <textarea
-                          className={`${textareaClass} mt-2 min-h-[112px] w-full resize-y`}
-                          value={createForm.productDescription}
-                          onChange={(event) => {
-                            const productDescription = event.target.value;
-                            setCreateForm((current) => ({ ...current, productDescription }));
-                            if (product && productDescription.trim() !== product.name.trim()) setProduct(null);
-                          }}
-                          placeholder="Type an item description to see matching POS products"
-                          maxLength={1000}
-                          rows={4}
-                        />
-                        {product ? (
-                          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-wide text-slate-400">
-                            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-emerald-200">Catalog</span>
-                            {product.sku ? <span className="break-all">SKU: {product.sku}</span> : null}
+                  <div className="mt-4 space-y-4">
+                    {createItems.map((item, index) => {
+                      const suggestedProducts = suggestedProductsByItem.get(item.id) ?? [];
+                      return (
+                        <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/55 p-4">
+                          <div className="mb-3 flex items-center justify-between gap-3">
+                            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-300">Item {index + 1}</div>
+                            <button type="button" className="text-sm font-semibold text-rose-300 hover:text-rose-200" onClick={() => setCreateItems((current) => current.filter((entry) => entry.id !== item.id))}>Remove</button>
                           </div>
-                        ) : (
-                          <div className="mt-2 text-xs text-slate-500">Manual item. Select a suggested catalogue product when available.</div>
-                        )}
-                        {suggestedProducts.length ? (
-                          <div className="mt-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3">
-                            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200">Possible existing products</div>
-                            <div className="mt-2 space-y-2">
+                          <textarea
+                            className={`${textareaClass} min-h-[112px] w-full resize-y`}
+                            value={item.description}
+                            onChange={(event) => updateCreateItem(item.id, {
+                              description: event.target.value,
+                              product: item.product && event.target.value.trim() === item.product.name.trim() ? item.product : null,
+                            })}
+                            placeholder="Type an item description to see matching POS products"
+                            maxLength={1000}
+                            rows={4}
+                          />
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                            {item.product ? <><span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-emerald-200">Catalog</span><span>SKU: {item.product.sku}</span></> : <span>Manual item</span>}
+                            <button type="button" className="text-sky-300 hover:text-sky-200" onClick={() => { setProductSelectorTargetId(item.id); setProductSelectorOpen(true); }}>Select catalogue product</button>
+                          </div>
+                          {suggestedProducts.length ? (
+                            <div className="mt-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3">
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200">Possible existing products</div>
                               {suggestedProducts.map(({ item: match, score }) => (
-                                <div key={match.id} className="flex flex-wrap items-start justify-between gap-3 rounded-xl bg-slate-950/35 px-3 py-2">
-                                  <div className="min-w-0">
-                                    <div className="break-words text-sm font-medium text-white">{match.name}</div>
-                                    <div className="break-all text-xs text-slate-300">
-                                      {match.sku} · Selling KES {Number(match.sellingPrice || 0).toLocaleString()}
-                                    </div>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    className="shrink-0 rounded-full border border-amber-400/30 px-3 py-1 text-xs font-semibold text-amber-100 hover:bg-amber-400/10"
-                                    onClick={() => handleProductChange(match)}
-                                  >
-                                    Use this · {Math.round(score * 100)}%
-                                  </button>
+                                <div key={match.id} className="mt-2 flex flex-wrap items-start justify-between gap-3 rounded-xl bg-slate-950/35 px-3 py-2">
+                                  <div><div className="text-sm font-medium text-white">{match.name}</div><div className="text-xs text-slate-300">{match.sku} · KES {Number(match.sellingPrice || 0).toLocaleString()}</div></div>
+                                  <button type="button" className="rounded-full border border-amber-400/30 px-3 py-1 text-xs font-semibold text-amber-100" onClick={() => applyCatalogToCreateItem(item.id, match)}>Use this · {Math.round(score * 100)}%</button>
                                 </div>
                               ))}
                             </div>
+                          ) : null}
+                          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                            <StepperInput label="Quantity" value={item.quantity} onChange={(value) => updateCreateItem(item.id, { quantity: value })} min={1} />
+                            <Field label="Unit price"><input className={inputClass} inputMode="decimal" value={item.unitPrice} onChange={(event) => updateCreateItem(item.id, { unitPrice: event.target.value })} placeholder="55000" /></Field>
+                            {showItemSerial ? <Field label="Serial / IMEI (optional)"><input className={inputClass} value={item.serial} onChange={(event) => updateCreateItem(item.id, { serial: event.target.value })} maxLength={255} /></Field> : null}
+                            {showItemWarranty ? (
+                              <Field label="Item warranty"><select className={inputClass} value={item.warranty} onChange={(event) => updateCreateItem(item.id, { warranty: event.target.value })}><option value="">No warranty</option>{item.warranty && !warrantyOptions.includes(item.warranty) ? <option value={item.warranty}>{item.warranty}</option> : null}{warrantyOptions.map((warranty) => <option key={warranty} value={warranty}>{warranty}</option>)}</select></Field>
+                            ) : null}
                           </div>
-                        ) : null}
-                      </div>
-
-                      <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-[180px_minmax(190px,1fr)_auto] xl:items-end">
-                        <StepperInput
-                          label="Quantity"
-                          value={createForm.quantity}
-                          onChange={(value) => setCreateForm((current) => ({ ...current, quantity: value }))}
-                          min={1}
-                        />
-                        <Field label="Unit price">
-                          <input
-                            className={inputClass}
-                            inputMode="decimal"
-                            value={createForm.agreedUnitPrice}
-                            onChange={(event) => setCreateForm((current) => ({ ...current, agreedUnitPrice: event.target.value }))}
-                            placeholder="55000"
-                          />
-                        </Field>
-                        <button
-                          type="button"
-                          className="rounded-2xl border border-rose-500/25 px-4 py-3 text-sm font-semibold text-rose-300 transition hover:bg-rose-500/10 sm:col-span-2 xl:col-span-1"
-                          onClick={() => handleProductChange(null)}
-                        >
-                          Remove
-                        </button>
-                      </div>
-                      {showItemSerial || showItemWarranty ? (
-                        <div className="mt-4 grid gap-4 md:grid-cols-2">
-                          {showItemSerial ? (
-                            <Field label="Serial / IMEI (optional)">
-                              <input
-                                className={inputClass}
-                                value={createForm.itemSerial}
-                                onChange={(event) => setCreateForm((current) => ({ ...current, itemSerial: event.target.value }))}
-                                placeholder="Enter serial or IMEI"
-                                maxLength={255}
-                              />
-                            </Field>
-                          ) : null}
-                          {showItemWarranty ? (
-                            <Field label="Item warranty">
-                              <select
-                                className={inputClass}
-                                value={createForm.itemWarranty}
-                                onChange={(event) => setCreateForm((current) => ({ ...current, itemWarranty: event.target.value }))}
-                              >
-                                <option value="">No warranty</option>
-                                {createForm.itemWarranty && !warrantyOptions.includes(createForm.itemWarranty) ? (
-                                  <option value={createForm.itemWarranty}>{createForm.itemWarranty}</option>
-                                ) : null}
-                                {warrantyOptions.map((warranty) => <option key={warranty} value={warranty}>{warranty}</option>)}
-                              </select>
-                            </Field>
-                          ) : null}
+                          <div className="mt-4 flex justify-between border-t border-white/10 pt-4 text-sm"><span className="text-slate-400">Item total</span><span className="font-semibold text-white">{formatKes(Math.max(1, Number(item.quantity || 1)) * Math.max(0, Number(item.unitPrice || 0)))}</span></div>
                         </div>
-                      ) : null}
-                      <div className="mt-4 flex items-center justify-between gap-4 border-t border-white/10 pt-4 text-sm">
-                        <span className="text-slate-400">Agreed total</span>
-                        <span className="font-semibold text-white">{formatKes(createAgreedTotal)}</span>
-                      </div>
-                    </div>
-                  ) : (
+                      );
+                    })}
+                  </div>
+
+                  {!createItems.length ? (
                     <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/30 px-4 py-5 text-sm text-slate-500">
-                      Add a manual item or select one from the POS catalogue.
+                      No products added yet. Add a manual item or select one from the POS catalogue.
                     </div>
-                  )}
+                  ) : null}
                   <div className="mt-4 flex flex-wrap gap-3">
                     <button
                       type="button"
@@ -1723,11 +1673,12 @@ export default function LipaPolePoleAdminClient({
                     <button
                       type="button"
                       className="rounded-xl border border-sky-400/60 px-4 py-2 text-sm font-semibold text-sky-200 transition hover:bg-sky-500/10"
-                      onClick={() => setProductSelectorOpen(true)}
+                      onClick={() => { setProductSelectorTargetId(null); setProductSelectorOpen(true); }}
                     >
                       + Select product
                     </button>
                   </div>
+                  {createItems.length ? <div className="mt-4 flex justify-between border-t border-white/10 pt-4"><span className="text-slate-300">Agreed total</span><span className="text-lg font-semibold text-white">{formatKes(createAgreedTotal)}</span></div> : null}
                 </section>
 
                 <section className="rounded-[24px] border border-white/10 bg-slate-950/40 p-4">
@@ -1876,10 +1827,8 @@ export default function LipaPolePoleAdminClient({
               <aside className="rounded-[24px] border border-white/10 bg-slate-950/45 p-4 text-sm text-slate-300 xl:sticky xl:top-0 xl:self-start">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Payment plan summary</div>
                 <div className="mt-4 space-y-3">
-                  <PlanRow label="Product" value={createForm.productDescription.trim() || "Add or select product"} />
+                  <PlanRow label="Products" value={createItems.length ? `${createItems.length} item${createItems.length === 1 ? "" : "s"}` : "Add products"} />
                   <PlanRow label="Staff" value={selectedStaff?.name || "Select staff"} />
-                  <PlanRow label="Quantity" value={String(createQuantity)} />
-                  <PlanRow label="Unit price" value={formatKes(createUnitPrice)} />
                   <PlanRow label="Agreed total" value={formatKes(createAgreedTotal)} emphasis="text-white" />
                   <PlanRow label="Deposit paid" value={formatKes(createDeposit)} emphasis="text-emerald-300" />
                   <PlanRow label="Pending balance" value={formatKes(createBalance)} emphasis="text-amber-300" />
@@ -1914,7 +1863,10 @@ export default function LipaPolePoleAdminClient({
 
       <PosProductSelectorModal
         open={productSelectorOpen}
-        onClose={() => setProductSelectorOpen(false)}
+        onClose={() => {
+          setProductSelectorOpen(false);
+          setProductSelectorTargetId(null);
+        }}
         onSelect={handleProductChange}
       />
 
@@ -2135,8 +2087,8 @@ function ExpandedRowDetails({
         <SummaryCard title="Account Summary">
           <SummaryValue label={account.reference} value={account.customerName || "Unknown customer"} />
           <div className="text-sm text-slate-400">{account.customerPhone || "No phone"}</div>
-          <div className="mt-4 text-white">{account.productName || "No product selected"}</div>
-          <div className="mt-1 text-sm text-slate-500">Qty {account.quantity}</div>
+          <div className="mt-4 text-white">{detail.items[0]?.description || account.productName || "No product selected"}</div>
+          <div className="mt-1 text-sm text-slate-500">{detail.items.length} product line{detail.items.length === 1 ? "" : "s"}</div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <InfoPair label="Created" value={formatDate(account.createdAt)} />
             <InfoPair label="Expected Completion" value={formatDate(account.expectedCompletionDate)} />
@@ -2201,12 +2153,20 @@ function ExpandedRowDetails({
                 </div>
               </DetailBlock>
               <DetailBlock title="Agreement" className="xl:col-span-2">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <InfoPair label="Product" value={account.productName || "No product selected"} />
-                  {account.itemSerial ? <InfoPair label="Serial / IMEI" value={account.itemSerial} /> : null}
-                  {account.itemWarranty ? <InfoPair label="Warranty" value={account.itemWarranty} /> : null}
-                  <InfoPair label="Quantity" value={String(account.quantity)} />
-                  <InfoPair label="Unit price" value={formatKes(account.agreedUnitPrice)} />
+                <div className="space-y-3">
+                  {detail.items.map((item, index) => (
+                    <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-3">
+                      <div className="font-medium text-white">{index + 1}. {item.description}</div>
+                      <div className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
+                        <InfoPair label="Quantity" value={String(item.quantity)} />
+                        <InfoPair label="Unit price" value={formatKes(item.unitPrice)} />
+                        {item.serial ? <InfoPair label="Serial / IMEI" value={item.serial} /> : null}
+                        {item.warranty ? <InfoPair label="Warranty" value={item.warranty} /> : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <InfoPair label="Agreed total" value={formatKes(detail.summary.agreedTotal)} />
                   <InfoPair label="Completion Date" value={formatDate(account.expectedCompletionDate)} />
                   <InfoPair label="Payment frequency" value={installmentFrequency ? titleCase(installmentFrequency) : "Not captured"} />

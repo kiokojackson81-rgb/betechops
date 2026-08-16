@@ -21,6 +21,15 @@ type LppDetail = {
     convertedReceiptId: string | null;
     convertedProjectId: string | null;
   };
+  items: Array<{
+    id: string;
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+    serial: string | null;
+    warranty: string | null;
+  }>;
   payments: Array<{
     id: string;
     amount: number;
@@ -157,6 +166,18 @@ export default function LppAccountDetailClient({ initialDetail }: { initialDetai
             className="h-full rounded-full bg-[linear-gradient(90deg,#7a0000_0%,#d97706_100%)]"
             style={{ width: `${Math.max(2, Math.min(100, detail.summary.percentagePaid || 0))}%` }}
           />
+        </div>
+
+        <div className="mt-5 rounded-[20px] border border-[#7a0000]/10 bg-[#fcfaf7] p-4">
+          <div className="text-xs font-black uppercase tracking-[0.14em] text-[#7a0000]">Products</div>
+          <div className="mt-3 space-y-3">
+            {detail.items.map((item) => (
+              <div key={item.id} className="flex flex-wrap items-start justify-between gap-3 border-b border-[#7a0000]/10 pb-3 last:border-0 last:pb-0">
+                <div><div className="font-bold text-slate-950">{item.description}</div><div className="text-sm text-slate-600">Qty {item.quantity}{item.serial ? ` · Serial ${item.serial}` : ""}{item.warranty ? ` · ${item.warranty} warranty` : ""}</div></div>
+                <div className="font-black text-slate-950">{formatCurrency(item.total)}</div>
+              </div>
+            ))}
+          </div>
         </div>
         <div className="mt-2 text-sm font-semibold text-slate-600">
           {detail.summary.percentagePaid.toFixed(2)}% paid

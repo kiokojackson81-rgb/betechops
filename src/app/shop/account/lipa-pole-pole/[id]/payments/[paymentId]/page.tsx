@@ -70,7 +70,7 @@ export default async function ShopLppAcknowledgementPage({
 
         <div className="mt-6 rounded-2xl border p-5">
           <div className="grid gap-2 text-sm">
-            <div><span className="font-bold">Product:</span> {detail.account.productName || "Reserved product"}</div>
+            <div><span className="font-bold">Products:</span> {detail.items.map((item) => `${item.quantity} × ${item.description}`).join(", ")}</div>
             <div><span className="font-bold">Agreed Price:</span> {formatCurrency(detail.summary.agreedTotal)}</div>
             <div><span className="font-bold">Previous Paid:</span> {formatCurrency(previousPaid)}</div>
             <div><span className="font-bold">Payment Received:</span> {formatCurrency(payment.amount)}</div>

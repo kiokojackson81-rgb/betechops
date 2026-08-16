@@ -83,7 +83,7 @@ export default async function LppBookingReceiptPage({
     return <div className="p-6 text-sm text-slate-600">Booking receipt not found.</div>;
   }
 
-  const { account, payments, installments, summary } = detail;
+  const { account, items, payments, installments, summary } = detail;
   const successfulPayments = payments
     .filter((payment) => payment.status === "SUCCESS")
     .toSorted((left, right) => new Date(left.receivedAt).getTime() - new Date(right.receivedAt).getTime());
@@ -484,26 +484,26 @@ export default async function LppBookingReceiptPage({
 
         <table className="lpp-items">
           <thead>
-            <tr className="lpp-product-row">
-              <td colSpan={3}>
-                <div className="lpp-product-label">Item Name</div>
-                <div className="lpp-product-name">{account.productName || "No product selected"}</div>
-                {account.itemSerial ? <div><strong>Serial / IMEI:</strong> {account.itemSerial}</div> : null}
-                {account.itemWarranty ? <div><strong>Warranty:</strong> {account.itemWarranty}</div> : null}
-              </td>
-            </tr>
             <tr>
-              <th style={{ width: "20%" }}>Quantity</th>
+              <th>Item Name</th>
+              <th style={{ width: "13%" }}>Qty</th>
               <th className="lpp-right">Unit Price</th>
               <th className="lpp-right">Total</th>
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td>{account.quantity}</td>
-              <td className="lpp-right">{formatKes(account.agreedUnitPrice).replace("KES ", "")}</td>
-              <td className="lpp-right"><strong>{formatKes(summary.agreedTotal).replace("KES ", "")}</strong></td>
-            </tr>
+            {items.map((item) => (
+              <tr key={item.id}>
+                <td>
+                  <div className="lpp-product-name">{item.description}</div>
+                  {item.serial ? <div><strong>Serial / IMEI:</strong> {item.serial}</div> : null}
+                  {item.warranty ? <div><strong>Warranty:</strong> {item.warranty}</div> : null}
+                </td>
+                <td>{item.quantity}</td>
+                <td className="lpp-right">{formatKes(item.unitPrice).replace("KES ", "")}</td>
+                <td className="lpp-right"><strong>{formatKes(item.total).replace("KES ", "")}</strong></td>
+              </tr>
+            ))}
           </tbody>
         </table>
 

@@ -62,8 +62,8 @@ export default async function ShopLppStatementPage({
             <div className="text-sm">{detail.account.customerEmail || ""}</div>
           </div>
           <div className="rounded-2xl border p-4">
-            <div className="text-sm font-bold">Product</div>
-            <div className="mt-2 text-sm">{detail.account.productName || "Reserved product"}</div>
+            <div className="text-sm font-bold">Products</div>
+            <div className="mt-2 space-y-1 text-sm">{detail.items.map((item) => <div key={item.id}>{item.quantity} × {item.description}</div>)}</div>
             <div className="text-sm">Due date: {formatDate(detail.account.expectedCompletionDate)}</div>
             <div className="text-sm">Status: {detail.account.status.replace(/_/g, " ")}</div>
           </div>

@@ -71,18 +71,16 @@ export async function POST(req: Request, context: ParamsContext) {
       issuedById: actorId ?? undefined,
       notes: `Converted from Lipa Pole Pole ${summary.lpp.reference}`,
       paymentDetailsShown: true,
-      items: [
-        {
-          productId: summary.lpp.productId ?? undefined,
-          title: summary.lpp.customProductName || (summary.lpp.productId ? undefined : `LPP ${summary.lpp.reference}`),
-          product: summary.lpp.customProductName || (summary.lpp.productId ? undefined : `LPP ${summary.lpp.reference}`),
-          quantity: Number(summary.lpp.quantity ?? 1),
-          unitPrice: Number(summary.lpp.agreedUnitPrice ?? 0),
-          sellingPrice: Number(summary.lpp.agreedUnitPrice ?? 0),
-          serial: summary.lpp.itemSerial ?? null,
-          warranty: summary.lpp.itemWarranty ?? null,
-        },
-      ],
+      items: summary.items.map((item) => ({
+        productId: item.productId ?? undefined,
+        title: item.description,
+        product: item.description,
+        quantity: Number(item.quantity ?? 1),
+        unitPrice: Number(item.unitPrice ?? 0),
+        sellingPrice: Number(item.unitPrice ?? 0),
+        serial: item.serial ?? null,
+        warranty: item.warranty ?? null,
+      })),
       metadata: {
         source: "LIPA_POLE_POLE",
         lppId: summary.lpp.id,

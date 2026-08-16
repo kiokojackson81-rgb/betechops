@@ -2019,6 +2019,7 @@ model LipaPolePole {
   assignments            LipaPolePoleAssignment[]
   events                 LipaPolePoleEvent[]
   followUps              LipaPolePoleFollowUp[]
+  items                   LipaPolePoleItem[]
   installments           LipaPolePoleInstallment[]
   payments               LipaPolePolePayment[]
   promises               LipaPolePolePromise[]
@@ -2031,6 +2032,25 @@ model LipaPolePole {
   @@index([status, expectedCompletionDate])
   @@index([assignedToId, status, expectedCompletionDate])
   @@index([source, createdAt])
+}
+
+model LipaPolePoleItem {
+  id             String        @id @default(cuid())
+  lipaPolePoleId String
+  productId      String?
+  description    String
+  quantity       Int           @default(1)
+  unitPrice      Decimal       @db.Decimal(14, 2)
+  total          Decimal       @db.Decimal(14, 2)
+  serial         String?
+  warranty       String?
+  position       Int           @default(0)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  lipaPolePole   LipaPolePole  @relation(fields: [lipaPolePoleId], references: [id], onDelete: Cascade)
+
+  @@index([lipaPolePoleId, position])
+  @@index([productId])
 }
 
 model LipaPolePolePayment {
