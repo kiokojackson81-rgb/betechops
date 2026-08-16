@@ -21,7 +21,8 @@ const createShopLppSchema = z.object({
   town: z.string().trim().max(120).optional().or(z.literal("")).nullable(),
   estateLandmark: z.string().trim().max(255).optional().or(z.literal("")).nullable(),
   locationNotes: z.string().trim().max(1000).optional().or(z.literal("")).nullable(),
-  expectedCompletionDate: z.string().trim().optional().nullable(),
+  paymentFrequency: z.enum(["WEEKLY", "MONTHLY"]),
+  installmentCount: z.coerce.number().int().min(1).max(52),
   initialPaymentAmount: z.coerce.number().positive(),
   initialPaymentMethod: z.enum(["MPESA", "CASH", "BANK", "CARD", "OTHER"]).default("MPESA"),
   initialPaymentReference: z.string().trim().max(255).optional().or(z.literal("")).nullable(),
@@ -41,13 +42,11 @@ function addDays(base: Date, days: number) {
   return next;
 }
 
-function parseDueDate(input: string | null | undefined, defaultDays: number) {
-  if (!input) return addDays(new Date(), defaultDays);
-  const parsed = new Date(input);
-  if (Number.isNaN(parsed.getTime())) {
-    throw new Error("INVALID_DATE");
-  }
-  return parsed;
+function calculateDueDate(frequency: "WEEKLY" | "MONTHLY", count: number) {
+  const dueDate = new Date();
+  if (frequency === "WEEKLY") return addDays(dueDate, count * 7);
+  dueDate.setMonth(dueDate.getMonth() + count);
+  return dueDate;
 }
 
 function diffDays(from: Date, to: Date) {
@@ -149,8 +148,7 @@ export async function POST(request: Request) {
     return noStoreJson({ error: "Lipa Pole Pole is not enabled for this product." }, { status: 409 });
   }
 
-  const defaultDays = Math.max(1, Number(productConfig.lipaPolePoleDefaultDays || 30));
-  const dueDate = parseDueDate(payload.expectedCompletionDate, defaultDays);
+  const dueDate = calculateDueDate(payload.paymentFrequency, payload.installmentCount);
   const maxDays = Number(productConfig.lipaPolePoleMaxDays || 0);
   if (maxDays > 0 && diffDays(new Date(), dueDate) > maxDays) {
     return noStoreJson(
@@ -192,13 +190,17 @@ export async function POST(request: Request) {
       agreedUnitPrice: productConfig.sellingPrice,
       currency: "KES",
       expectedCompletionDate: dueDate,
-      paymentMode: "FLEXIBLE",
+      paymentMode: "SCHEDULED",
       reservationMode: "SOFT_RESERVE",
       source: "SHOP_SELF_SERVICE",
       notes: normalizeOptional(payload.notes) || productConfig.lipaPolePoleTerms || null,
       termsAcceptedAt: new Date(),
       termsVersion: LIPA_POLE_POLE_TERMS_VERSION,
       createdById: user.id,
+      installmentPlan: {
+        frequency: payload.paymentFrequency,
+        count: payload.installmentCount,
+      },
       assignment: {
         assignedById: user.id,
       },
