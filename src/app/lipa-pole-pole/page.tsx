@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, BadgeCheck, PackageCheck, Search, WalletCards } from "lucide-react";
+import { ArrowRight, BadgeCheck, PackageCheck, ScrollText, Search, WalletCards } from "lucide-react";
 import ProductSection from "@/app/shop/_components/ProductSection";
 import ShopFooter from "@/app/shop/_components/ShopFooter";
 import ShopHeader from "@/app/shop/_components/ShopHeader";
@@ -9,6 +9,7 @@ import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { getShopProducts } from "@/app/shop/shopApi";
 import { shopNavLinks } from "@/app/shop/shopData";
 import { SHOP_ACCOUNT_HREF } from "@/app/shop/storefrontPaths";
+import { LIPA_POLE_POLE_TERMS_PATH } from "@/lib/lipaPolePoleTerms";
 
 export const metadata: Metadata = {
   title: "Lipa Pole Pole | Betech Solar Solutions",
@@ -52,6 +53,9 @@ export default async function LipaPolePolePage({ searchParams }: LipaPolePolePag
                     </a>
                     <Link href={SHOP_ACCOUNT_HREF} prefetch={false} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-5 py-3 text-sm font-bold text-white transition hover:bg-white/16">
                       <WalletCards className="h-4 w-4" /> View My Lipa Pole Pole
+                    </Link>
+                    <Link href={LIPA_POLE_POLE_TERMS_PATH} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#ffd761]/45 bg-[#ffd761]/10 px-5 py-3 text-sm font-bold text-[#ffe58f] transition hover:border-[#ffd761]/70 hover:bg-[#ffd761]/16">
+                      <ScrollText className="h-4 w-4" /> See Terms &amp; Conditions
                     </Link>
                   </div>
                 </div>
@@ -119,7 +123,7 @@ export default async function LipaPolePolePage({ searchParams }: LipaPolePolePag
                 <div className={shopStyles.sectionEyebrow}>Before you start</div>
                 <h2 className="mt-3 text-xl font-black text-slate-950">Know how reservation, verification, collection, cancellation, and refunds work.</h2>
               </div>
-              <Link href="/p/lipa-pole-pole-terms" className={shopStyles.secondaryButton}>Read Terms &amp; Conditions</Link>
+              <Link href={LIPA_POLE_POLE_TERMS_PATH} className={shopStyles.secondaryButton}>Read Terms &amp; Conditions</Link>
             </div>
           </div>
         </section>
