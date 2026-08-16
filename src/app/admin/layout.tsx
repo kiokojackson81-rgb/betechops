@@ -1,6 +1,5 @@
 // src/app/admin/layout.tsx
 import React from "react";
-import Link from "next/link";
 import AdminNavContainer from "./_components/AdminNavContainer";
 import AdminHeaderShell from "./_components/AdminHeaderShell";
 import AdminTips from "./_components/AdminTips";
@@ -14,7 +13,7 @@ export const dynamic = "force-dynamic";
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
     <VoiceSoftphoneShell>
-      <div className="min-h-screen bg-[var(--bg,#0f131b)] text-slate-100">
+      <div className="min-h-screen bg-[var(--bg,#0f131b)] text-slate-100 print:min-h-0 print:bg-white">
         {/* Admin nav in normal document flow */}
         <AdminHeaderShell>
           <div className="border-b border-white/10 bg-[var(--panel,#121723)]">
@@ -23,9 +22,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </AdminHeaderShell>
 
         {/* Page body */}
-        <div className="page-shell relative z-0 py-6 space-y-6">
-          <main role="main" className="space-y-8">{children}</main>
-          <AdminTips />
+        <div className="page-shell relative z-0 space-y-6 py-6 print:m-0 print:w-full print:max-w-none print:space-y-0 print:p-0">
+          <main role="main" className="space-y-8 print:space-y-0">{children}</main>
+          <div className="no-print">
+            <AdminTips />
+          </div>
         </div>
       </div>
     </VoiceSoftphoneShell>

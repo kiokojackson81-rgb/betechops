@@ -11,5 +11,5 @@ export default function AdminHeaderShell({ children }: { children: React.ReactNo
     return null;
   }
 
-  return <div className="relative z-[320] pointer-events-auto">{children}</div>;
+  return <div className="no-print relative z-[320] pointer-events-auto">{children}</div>;
 }
