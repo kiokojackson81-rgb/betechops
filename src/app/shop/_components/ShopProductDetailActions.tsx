@@ -22,12 +22,14 @@ type ShopProductDetailActionsProps = {
     locationNotes: string;
   };
   loginHref: string;
+  openLipaPolePole?: boolean;
 };
 
 export default function ShopProductDetailActions({
   product,
   customer,
   loginHref,
+  openLipaPolePole = false,
 }: ShopProductDetailActionsProps) {
   const whatsappHref = `https://wa.me/254722151083?text=${encodeURIComponent(
     `Hello Betech Solar, I want to order ${product.name} at ${formatCurrency(product.price)}.`,
@@ -59,7 +61,7 @@ export default function ShopProductDetailActions({
           Request Quote
         </Link>
       </div>
-      <ShopLipaPolePoleStarter product={product} customer={customer} loginHref={loginHref} />
+      <ShopLipaPolePoleStarter product={product} customer={customer} loginHref={loginHref} autoOpen={openLipaPolePole} />
     </div>
   );
 }

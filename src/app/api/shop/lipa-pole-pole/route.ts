@@ -146,9 +146,7 @@ export async function POST(request: Request) {
   if (payload.initialPaymentAmount > agreedTotal) {
     return noStoreJson({ error: "Initial payment cannot exceed the agreed product price." }, { status: 400 });
   }
-  if (payload.initialPaymentMethod !== "CASH" && !normalizeOptional(payload.initialPaymentReference)) {
-    return noStoreJson({ error: "Enter the payment transaction reference." }, { status: 400 });
-  }
+  const initialPaymentReference = normalizeOptional(payload.initialPaymentReference);
 
   await updateSafeCustomerProfile(user.id, {
     name: payload.customerName,
@@ -165,6 +163,7 @@ export async function POST(request: Request) {
     const created = await createLipaPolePole({
       customerId: user.id,
       productId: product.id,
+      customProductName: productConfig.name,
       quantity: payload.quantity,
       agreedUnitPrice: productConfig.sellingPrice,
       currency: "KES",
@@ -179,14 +178,16 @@ export async function POST(request: Request) {
       assignment: {
         assignedById: user.id,
       },
-      initialPayment: {
-        amount: payload.initialPaymentAmount,
-        method: payload.initialPaymentMethod,
-        reference: normalizeOptional(payload.initialPaymentReference),
-        notes: normalizeOptional(payload.initialPaymentNotes) || "Customer portal deposit.",
-        receivedById: null,
-        status: "PENDING",
-      },
+      initialPayment: initialPaymentReference
+        ? {
+            amount: payload.initialPaymentAmount,
+            method: payload.initialPaymentMethod,
+            reference: initialPaymentReference,
+            notes: normalizeOptional(payload.initialPaymentNotes) || "Customer portal deposit.",
+            receivedById: null,
+            status: "PENDING",
+          }
+        : null,
     });
 
     return noStoreJson({ ok: true, id: created.id, reference: created.reference }, { status: 201 });

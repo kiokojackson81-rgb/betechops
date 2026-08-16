@@ -3,13 +3,18 @@
 import { Suspense, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Headphones, Menu, ShoppingCart, User2, X } from "lucide-react";
+import { Headphones, Menu, ShoppingCart, User2, WalletCards, X } from "lucide-react";
 import ShopPreviewBanner from "@/app/shop/_components/ShopPreviewBanner";
 import ShopSearchBar from "@/app/shop/_components/ShopSearchBar";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import { getShopCartCount, useShopCartItems } from "@/app/shop/cartStore";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
-import { SHOP_ACCOUNT_HREF, SHOP_CART_HREF, SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
+import {
+  SHOP_ACCOUNT_HREF,
+  SHOP_CART_HREF,
+  SHOP_HOME_HREF,
+  SHOP_LIPA_POLE_POLE_HREF,
+} from "@/app/shop/storefrontPaths";
 
 type ShopHeaderProps = {
   navLinks: { label: string; href: string }[];
@@ -115,6 +120,14 @@ export default function ShopHeader({ navLinks }: ShopHeaderProps) {
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
+            <Link
+              href={SHOP_LIPA_POLE_POLE_HREF}
+              className="inline-flex items-center gap-2 rounded-2xl border border-amber-300/70 bg-amber-50 px-3 py-2.5 text-sm font-bold text-amber-950 shadow-[0_10px_20px_rgba(180,83,9,0.10)] xl:px-3.5"
+            >
+              <WalletCards className="h-4 w-4" />
+              <span className="hidden xl:inline">Lipa Pole Pole</span>
+              <span className="xl:hidden">LPP</span>
+            </Link>
             <TrackedWhatsAppLink
               href="https://wa.me/254722151083?text=Hello%20Betech%20Solar%2C%20I%20need%20help%20choosing%20the%20right%20solar%20products."
               className="inline-flex items-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#11b86a_0%,#0f9d58_55%,#0b7c44_100%)] px-3 py-2.5 text-sm font-semibold text-white shadow-[0_14px_24px_rgba(15,157,88,0.22)] xl:px-3.5"

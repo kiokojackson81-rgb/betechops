@@ -21,6 +21,11 @@ export function getShopProductHref(slug: string, opsProductId?: string | null) {
   return `${href}?opsProductId=${encodeURIComponent(normalizedOpsProductId)}`;
 }
 
+export function getShopLipaPolePoleProductHref(slug: string, opsProductId?: string | null) {
+  const href = getShopProductHref(slug, opsProductId);
+  return `${href}${href.includes("?") ? "&" : "?"}lpp=1`;
+}
+
 export function getShopRequestQuoteHref(product?: string) {
   if (!product) return SHOP_REQUEST_QUOTE_HREF;
   return `${SHOP_REQUEST_QUOTE_HREF}?product=${encodeURIComponent(product)}`;

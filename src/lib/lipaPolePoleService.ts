@@ -556,7 +556,7 @@ export function pickNextRoundRobinAgent(
 
 async function withLppTransaction<T>(db: DbClient, run: (tx: Prisma.TransactionClient) => Promise<T>) {
   if ("$transaction" in db && typeof db.$transaction === "function") {
-    return db.$transaction(async (tx) => run(tx));
+    return db.$transaction(async (tx) => run(tx), { timeout: 15_000 });
   }
   return run(db as Prisma.TransactionClient);
 }

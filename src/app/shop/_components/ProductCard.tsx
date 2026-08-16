@@ -2,14 +2,14 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { MessageCircle } from "lucide-react";
+import { MessageCircle, WalletCards } from "lucide-react";
 import type { ShopProduct } from "@/app/shop/shopData";
 import AddToCartButton from "@/app/shop/_components/AddToCartButton";
 import ShopProductVisual from "@/app/shop/_components/ShopProductVisual";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import { formatCurrency } from "@/app/shop/_components/shopStyles";
 import { getProductAvailabilityBadge } from "@/app/shop/shopAvailability";
-import { getShopProductHref } from "@/app/shop/storefrontPaths";
+import { getShopLipaPolePoleProductHref, getShopProductHref } from "@/app/shop/storefrontPaths";
 
 const WHATSAPP_PHONE = "254722151083";
 
@@ -97,6 +97,15 @@ export default function ProductCard({ product }: ProductCardProps) {
             <MessageCircle className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Order via WhatsApp</span>
           </TrackedWhatsAppLink>
+          {product.lipaPolePoleEnabled && product.opsProductId ? (
+            <Link
+              href={getShopLipaPolePoleProductHref(product.slug, product.opsProductId)}
+              className="col-span-2 inline-flex min-h-[2.7rem] w-full items-center justify-center gap-1.5 rounded-[14px] border border-[#7a0000]/18 bg-[#fff3d8] px-2 py-2 text-center text-[10px] font-black uppercase tracking-[0.06em] text-[#7a0000] transition hover:border-[#7a0000]/35 hover:bg-[#ffe9b5] sm:col-span-1 sm:rounded-[16px] sm:text-[11px]"
+            >
+              <WalletCards className="h-3.5 w-3.5 shrink-0" />
+              Lipa Pole Pole
+            </Link>
+          ) : null}
         </div>
       </div>
     </article>

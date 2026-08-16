@@ -172,7 +172,7 @@ export default async function ShopProductDetailPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams?: Promise<{ opsProductId?: string; ref?: string }> | { opsProductId?: string; ref?: string };
+  searchParams?: Promise<{ opsProductId?: string; ref?: string; lpp?: string }> | { opsProductId?: string; ref?: string; lpp?: string };
 }) {
   const { slug } = await params;
   const resolvedSearchParams = await Promise.resolve(searchParams ?? {});
@@ -207,7 +207,11 @@ export default async function ShopProductDetailPage({
   const detailBullets = buildDetailBullets({ ...product, fullDescription: undefined });
   const tiktokEmbedUrl = getTikTokEmbedUrl(product.tiktokVideoUrl);
   const referralCode = String(resolvedSearchParams.ref || "").trim().toUpperCase();
-  const loginHref = `/login/phone?callbackUrl=${encodeURIComponent(`/shop/product/${product.slug}`)}`;
+  const lppReturnHref = `/${product.slug}?${new URLSearchParams({
+    ...(product.opsProductId ? { opsProductId: product.opsProductId } : {}),
+    lpp: "1",
+  }).toString()}`;
+  const loginHref = `/login/phone?callbackUrl=${encodeURIComponent(lppReturnHref)}`;
   const supportItems = [
     {
       icon: <Truck className="h-4 w-4" />,
@@ -329,6 +333,7 @@ export default async function ShopProductDetailPage({
                     </div>
                     <ShopProductDetailActions
                       product={product}
+                      openLipaPolePole={resolvedSearchParams.lpp === "1"}
                       customer={{
                         isAuthenticated: Boolean(sessionUser?.id),
                         name: viewerProfile?.name || sessionUser?.name || "",
