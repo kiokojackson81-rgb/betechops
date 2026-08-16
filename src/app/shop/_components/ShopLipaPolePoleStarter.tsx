@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { signIn } from "next-auth/react";
 import { CheckCircle2, WalletCards, X } from "lucide-react";
 import { formatCurrency } from "@/app/shop/_components/shopStyles";
 import {
@@ -40,7 +41,7 @@ type ShopLipaPolePoleStarterProps = {
   autoOpen?: boolean;
 };
 
-type BookingStep = "setup" | "payment" | "success";
+type BookingStep = "setup" | "otp" | "payment" | "success";
 type PaymentFrequency = "WEEKLY" | "MONTHLY";
 
 type BookingForm = {
@@ -102,6 +103,8 @@ export default function ShopLipaPolePoleStarter({
   const [step, setStep] = useState<BookingStep>("setup");
   const [form, setForm] = useState<BookingForm>(initialForm);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [otpPhone, setOtpPhone] = useState("");
   const [transactionCode, setTransactionCode] = useState("");
   const [plan, setPlan] = useState<{ id: string; reference: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -164,55 +167,129 @@ export default function ShopLipaPolePoleStarter({
   function openFlow() {
     setStep("setup");
     setError(null);
+    setOtpCode("");
+    setOtpPhone("");
+    setPlan(null);
+    setTransactionCode("");
     setOpen(true);
   }
 
-  function saveDraftAndAuthenticate() {
+  function saveDraft() {
     window.sessionStorage.setItem(
       draftKey(product.opsProductId as string),
       JSON.stringify({ form, termsAccepted }),
     );
-    window.location.href = loginHref;
+  }
+
+  async function createBooking() {
+    const response = await fetch("/api/shop/lipa-pole-pole", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        opsProductId: product.opsProductId,
+        quantity,
+        customerName: form.customerName,
+        customerPhone: form.customerPhone,
+        customerEmail: form.customerEmail,
+        county: form.county,
+        town: form.town,
+        estateLandmark: form.estateLandmark,
+        locationNotes: form.locationNotes,
+        paymentFrequency: form.paymentFrequency,
+        installmentCount,
+        initialPaymentAmount: initialPayment,
+        initialPaymentMethod: "MPESA",
+        initialPaymentReference: "",
+        termsAccepted,
+      }),
+    });
+    const data = (await response.json().catch(() => ({}))) as { error?: string; id?: string; reference?: string };
+    if (!response.ok || !data.id) throw new Error(typeof data.error === "string" ? data.error : "Unable to start Lipa Pole Pole.");
+    setPlan({ id: data.id, reference: data.reference || "Lipa Pole Pole" });
+    window.sessionStorage.removeItem(draftKey(product.opsProductId!));
+    setStep("payment");
+  }
+
+  async function sendLppOtp() {
+    const response = await fetch("/api/auth/send-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifierType: "phone", identifier: form.customerPhone }),
+    });
+    const data = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string; phone?: string; identifier?: string };
+    if (!response.ok || !data.ok) throw new Error(data.error || "Unable to send OTP.");
+    setOtpPhone(data.phone || data.identifier || form.customerPhone);
+    setOtpCode("");
+    setStep("otp");
+  }
+
+  async function waitForCustomerSession() {
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      const response = await fetch("/api/auth/session", { cache: "no-store" });
+      const session = await response.json().catch(() => null) as { user?: { id?: string } } | null;
+      if (session?.user?.id) return;
+      await new Promise((resolve) => window.setTimeout(resolve, 250));
+    }
+    throw new Error("Your OTP was verified, but the session is still starting. Please try again.");
   }
 
   async function startBooking(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
-    if (!customer.isAuthenticated) {
-      saveDraftAndAuthenticate();
-      return;
-    }
-
     setSubmitting(true);
     try {
-      const response = await fetch("/api/shop/lipa-pole-pole", {
+      if (!customer.isAuthenticated) {
+        saveDraft();
+        await sendLppOtp();
+      } else {
+        await createBooking();
+      }
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Unable to start Lipa Pole Pole.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function verifyLppOtp(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/auth/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          opsProductId: product.opsProductId,
-          quantity,
-          customerName: form.customerName,
-          customerPhone: form.customerPhone,
-          customerEmail: form.customerEmail,
-          county: form.county,
-          town: form.town,
-          estateLandmark: form.estateLandmark,
-          locationNotes: form.locationNotes,
-          paymentFrequency: form.paymentFrequency,
-          installmentCount,
-          initialPaymentAmount: initialPayment,
-          initialPaymentMethod: "MPESA",
-          initialPaymentReference: "",
-          termsAccepted,
+          identifierType: "phone",
+          identifier: otpPhone || form.customerPhone,
+          code: otpCode,
+          callbackUrl: "/account",
         }),
       });
-      const data = (await response.json().catch(() => ({}))) as { error?: string; id?: string; reference?: string };
-      if (!response.ok || !data.id) throw new Error(data.error || "Unable to start Lipa Pole Pole.");
-      setPlan({ id: data.id, reference: data.reference || "Lipa Pole Pole" });
-      window.sessionStorage.removeItem(draftKey(product.opsProductId!));
-      setStep("payment");
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Unable to start Lipa Pole Pole.");
+      const data = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string; verificationToken?: string };
+      if (!response.ok || !data.ok || !data.verificationToken) throw new Error(data.error || "OTP verification failed.");
+      const result = await signIn("phone-otp", {
+        redirect: false,
+        verificationToken: data.verificationToken,
+        callbackUrl: "/account",
+      });
+      if (!result?.ok) throw new Error(result?.error || "Unable to sign in.");
+      await waitForCustomerSession();
+      await createBooking();
+    } catch (verifyError) {
+      setError(verifyError instanceof Error ? verifyError.message : "Invalid OTP.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function resendLppOtp() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      await sendLppOtp();
+    } catch (sendError) {
+      setError(sendError instanceof Error ? sendError.message : "Unable to resend OTP.");
     } finally {
       setSubmitting(false);
     }
@@ -236,7 +313,7 @@ export default function ShopLipaPolePoleStarter({
       });
       const data = (await response.json().catch(() => ({}))) as { error?: string };
       if (!response.ok) throw new Error(data.error || "Unable to submit payment.");
-      setStep("success");
+      window.location.assign(`/shop/account/lipa-pole-pole/${encodeURIComponent(plan.id)}`);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Unable to submit payment.");
     } finally {
@@ -346,6 +423,42 @@ export default function ShopLipaPolePoleStarter({
                       </label>
                       {error ? <div className="mt-4 rounded-[16px] border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</div> : null}
                       <button type="submit" disabled={submitting} className="mt-5 inline-flex min-h-14 w-full items-center justify-center rounded-[18px] bg-[#7a0000] px-5 py-3 text-sm font-black uppercase tracking-[0.06em] text-white shadow-[0_18px_34px_rgba(122,0,0,0.22)] disabled:opacity-50">{submitting ? "Starting..." : customer.isAuthenticated ? "Start Lipa Pole Pole" : "Continue with OTP"}</button>
+                    </form>
+                  ) : null}
+
+                  {step === "otp" ? (
+                    <form onSubmit={verifyLppOtp} className="mx-auto max-w-xl py-4 sm:py-10">
+                      <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#f29b0b]">OTP sent</div>
+                      <h3 id="lpp-dialog-title" className="mt-2 text-3xl font-black tracking-tight text-slate-950">Verify your phone number</h3>
+                      <p className="mt-3 text-sm leading-6 text-slate-600">
+                        Enter the 6-digit code sent to <strong className="text-slate-950">{otpPhone || form.customerPhone}</strong>. After verification, your booking will be created and you can pay the deposit.
+                      </p>
+
+                      <label className="mt-7 grid gap-2 text-sm font-bold text-slate-700">
+                        6-digit OTP code
+                        <input
+                          value={otpCode}
+                          onChange={(event) => setOtpCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                          className={`${inputClass} text-center text-2xl font-black tracking-[0.35em]`}
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          minLength={6}
+                          maxLength={6}
+                          autoFocus
+                          required
+                        />
+                      </label>
+
+                      {error ? <div className="mt-4 rounded-[16px] border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</div> : null}
+                      <button type="submit" disabled={submitting || otpCode.length !== 6} className="mt-5 inline-flex min-h-14 w-full items-center justify-center rounded-[18px] bg-[#7a0000] px-5 py-3 text-sm font-black uppercase tracking-[0.06em] text-white shadow-[0_18px_34px_rgba(122,0,0,0.22)] disabled:opacity-50">
+                        {submitting ? "Verifying..." : "Verify & Continue to Payment"}
+                      </button>
+
+                      <div className="mt-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-3 text-sm font-bold">
+                        <button type="button" onClick={resendLppOtp} disabled={submitting} className="text-[#7a0000] underline underline-offset-4 disabled:opacity-50">Resend code</button>
+                        <button type="button" onClick={() => { setStep("setup"); setError(null); setOtpCode(""); }} disabled={submitting} className="text-slate-600 underline underline-offset-4 disabled:opacity-50">Change phone number</button>
+                        <Link href={loginHref} className="text-slate-600 underline underline-offset-4">Use full sign-in page</Link>
+                      </div>
                     </form>
                   ) : null}
 
