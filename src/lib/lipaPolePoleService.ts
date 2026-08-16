@@ -29,6 +29,7 @@ type RawLppRow = {
   reference: string;
   customerId: string;
   productId: string | null;
+  customProductName: string | null;
   publicToken: string;
   quantity: number;
   agreedUnitPrice: Prisma.Decimal;
@@ -265,6 +266,7 @@ export type LppAssignmentMethod = "ROUND_ROBIN" | "MANUAL";
 export type CreateLppInput = {
   customerId: string;
   productId?: string | null;
+  customProductName?: string | null;
   quantity?: number;
   agreedUnitPrice: number | string | Prisma.Decimal;
   agreedTotal?: number | string | Prisma.Decimal | null;
@@ -638,7 +640,7 @@ async function getLppReminderDispatchContext(db: DbClient, lipaPolePoleId: strin
       c."name" AS "customerName",
       c."phone" AS "customerPhone",
       c."email" AS "customerEmail",
-      p."name" AS "productName"
+      COALESCE(NULLIF(lpp."customProductName", ''), p."name") AS "productName"
     FROM "LipaPolePole" lpp
     LEFT JOIN "User" c ON c."id" = lpp."customerId"
     LEFT JOIN "Product" p ON p."id" = lpp."productId"
@@ -899,6 +901,9 @@ export async function createLipaPolePole(
       ? toMoney(input.agreedTotal)
       : agreedUnitPrice.mul(quantity);
   if (agreedTotal.lte(0)) throw new Error("INVALID_AGREED_TOTAL");
+  const productId = trimToNull(input.productId ?? null);
+  const customProductName = trimToNull(input.customProductName ?? null);
+  if (!productId && !customProductName) throw new Error("INVALID_PRODUCT");
 
   return withLppTransaction(db, async (tx) => {
     const now = new Date();
@@ -910,14 +915,15 @@ export async function createLipaPolePole(
 
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "LipaPolePole" (
-        "id", "reference", "customerId", "productId", "publicToken", "quantity", "agreedUnitPrice", "agreedTotal",
+        "id", "reference", "customerId", "productId", "customProductName", "publicToken", "quantity", "agreedUnitPrice", "agreedTotal",
         "currency", "status", "paymentMode", "reservationMode", "expectedCompletionDate", "salespersonId",
         "source", "notes", "createdById", "createdAt", "updatedAt"
       ) VALUES (
         ${id},
         ${reference},
         ${input.customerId},
-        ${trimToNull(input.productId ?? null)},
+        ${productId},
+        ${customProductName},
         ${publicToken},
         ${quantity},
         ${agreedUnitPrice},
@@ -943,7 +949,8 @@ export async function createLipaPolePole(
       metadata: {
         reference,
         customerId: input.customerId,
-        productId: trimToNull(input.productId ?? null),
+        productId,
+        customProductName,
         agreedTotal: agreedTotal.toString(),
       },
     });
@@ -955,7 +962,8 @@ export async function createLipaPolePole(
       after: {
         reference,
         customerId: input.customerId,
-        productId: trimToNull(input.productId ?? null),
+        productId,
+        customProductName,
         quantity,
         agreedUnitPrice: agreedUnitPrice.toString(),
         agreedTotal: agreedTotal.toString(),
@@ -1703,7 +1711,7 @@ export async function getSerializedLppAccountDetail(lipaPolePoleId: string, db: 
       c."town" AS "customerTown",
       c."estateLandmark" AS "customerEstateLandmark",
       c."locationNotes" AS "customerLocationNotes",
-      p."name" AS "productName",
+      COALESCE(NULLIF(lpp."customProductName", ''), p."name") AS "productName",
       a."name" AS "assignedToName",
       s."name" AS "salespersonName",
       f."name" AS "fulfilledByName"
@@ -1822,7 +1830,7 @@ export async function listSerializedLppAccounts(
       c."name" AS "customerName",
       c."phone" AS "customerPhone",
       c."email" AS "customerEmail",
-      p."name" AS "productName",
+      COALESCE(NULLIF(lpp."customProductName", ''), p."name") AS "productName",
       a."name" AS "assignedToName",
       s."name" AS "salespersonName"
     FROM "LipaPolePole" lpp
@@ -1840,7 +1848,7 @@ export async function listSerializedLppAccounts(
               lpp."reference" ILIKE ${`%${q}%`}
               OR COALESCE(c."name", '') ILIKE ${`%${q}%`}
               OR COALESCE(c."phone", '') ILIKE ${`%${q}%`}
-              OR COALESCE(p."name", '') ILIKE ${`%${q}%`}
+              OR COALESCE(NULLIF(lpp."customProductName", ''), p."name", '') ILIKE ${`%${q}%`}
             )`
           : Prisma.empty
       }

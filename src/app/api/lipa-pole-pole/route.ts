@@ -21,6 +21,7 @@ const createLppSchema = z.object({
   customerId: z.string().trim().min(1).optional().nullable(),
   customer: customerDetailsSchema.optional().nullable(),
   productId: z.string().trim().min(1).optional().nullable(),
+  customProductName: z.string().trim().min(1).max(1000).optional().nullable(),
   quantity: z.coerce.number().int().min(1).optional(),
   agreedUnitPrice: z.union([z.coerce.number().positive(), z.string().trim().min(1)]),
   agreedTotal: z.union([z.coerce.number().positive(), z.string().trim().min(1)]).optional().nullable(),
@@ -56,6 +57,13 @@ const createLppSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ["customer"],
       message: "Provide a customer ID or customer details.",
+    });
+  }
+  if (!value.productId && !value.customProductName) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["customProductName"],
+      message: "Select a product or enter an item description.",
     });
   }
 });
@@ -153,7 +161,7 @@ async function resolveCustomerId(
 }
 
 function mapErrorStatus(message: string) {
-  if (message === "INVALID_AGREED_TOTAL" || message === "INVALID_DATE") return 400;
+  if (message === "INVALID_AGREED_TOTAL" || message === "INVALID_DATE" || message === "INVALID_PRODUCT") return 400;
   if (message === "NO_ELIGIBLE_CUSTOMER_SERVICE_AGENT") return 409;
   if (message === "Customer details are required." || message === "Enter a valid Kenyan phone number." || message === "Could not create or resolve customer.") return 400;
   return 500;

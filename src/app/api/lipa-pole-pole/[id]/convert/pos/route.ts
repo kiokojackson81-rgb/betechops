@@ -74,8 +74,8 @@ export async function POST(req: Request, context: ParamsContext) {
       items: [
         {
           productId: summary.lpp.productId ?? undefined,
-          title: summary.lpp.productId ? undefined : `LPP ${summary.lpp.reference}`,
-          product: summary.lpp.productId ? undefined : `LPP ${summary.lpp.reference}`,
+          title: summary.lpp.customProductName || (summary.lpp.productId ? undefined : `LPP ${summary.lpp.reference}`),
+          product: summary.lpp.customProductName || (summary.lpp.productId ? undefined : `LPP ${summary.lpp.reference}`),
           quantity: Number(summary.lpp.quantity ?? 1),
           unitPrice: Number(summary.lpp.agreedUnitPrice ?? 0),
           sellingPrice: Number(summary.lpp.agreedUnitPrice ?? 0),

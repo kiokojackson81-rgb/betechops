@@ -122,7 +122,7 @@ async function ensureLppProjectWorkflow(input: {
     const quotationData = {
       items: [
         {
-          itemName: product?.name || `LPP ${input.lpp.reference}`,
+          itemName: input.lpp.customProductName || product?.name || `LPP ${input.lpp.reference}`,
           quantity: Number(input.lpp.quantity ?? 1),
           unitPrice: Number(input.lpp.agreedUnitPrice ?? 0),
         },

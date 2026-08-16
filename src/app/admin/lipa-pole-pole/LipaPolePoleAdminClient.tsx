@@ -415,6 +415,7 @@ export default function LipaPolePoleAdminClient({
   const [staffMembers, setStaffMembers] = useState<StaffOption[]>([]);
   const [defaultStaffId, setDefaultStaffId] = useState<string | null>(null);
   const [product, setProduct] = useState<PosCatalogProduct | null>(null);
+  const [productEntryOpen, setProductEntryOpen] = useState(false);
   const [productSelectorOpen, setProductSelectorOpen] = useState(false);
   const [staffId, setStaffId] = useState<string>("");
   const [assignAgent, setAssignAgent] = useState<SearchOption | null>(null);
@@ -435,6 +436,7 @@ export default function LipaPolePoleAdminClient({
     town: "",
     estateLandmark: "",
     locationNotes: "",
+    productDescription: "",
     quantity: "1",
     agreedUnitPrice: "",
     installmentFrequency: "MONTHLY" as InstallmentFrequency,
@@ -632,15 +634,32 @@ export default function LipaPolePoleAdminClient({
   function handleProductChange(option: PosCatalogProduct | null) {
     setProduct(option);
     if (!option) {
-      setCreateForm((current) => ({ ...current, agreedUnitPrice: "", quantity: "1" }));
-      return;
-    }
-    if (Number(option.sellingPrice) > 0) {
+      setProductEntryOpen(false);
       setCreateForm((current) => ({
         ...current,
-        agreedUnitPrice: String(Number(option.sellingPrice)),
+        productDescription: "",
+        agreedUnitPrice: "",
+        quantity: "1",
       }));
+      return;
     }
+    setProductEntryOpen(true);
+    setCreateForm((current) => ({
+      ...current,
+      productDescription: option.name,
+      agreedUnitPrice: Number(option.sellingPrice) > 0 ? String(Number(option.sellingPrice)) : current.agreedUnitPrice,
+    }));
+  }
+
+  function handleAddManualProduct() {
+    setProduct(null);
+    setProductEntryOpen(true);
+    setCreateForm((current) => ({
+      ...current,
+      productDescription: "",
+      quantity: "1",
+      agreedUnitPrice: "",
+    }));
   }
 
   function handleCreate(event: FormEvent<HTMLFormElement>) {
@@ -685,8 +704,8 @@ export default function LipaPolePoleAdminClient({
       failValidation("Customer phone is required.");
       return;
     }
-    if (!product?.id) {
-      failValidation("Select a product.");
+    if (!createForm.productDescription.trim()) {
+      failValidation("Select a product or enter an item description.");
       return;
     }
     if (!staffId) {
@@ -737,6 +756,7 @@ export default function LipaPolePoleAdminClient({
           locationNotes: createForm.locationNotes.trim() || null,
         },
         productId: product?.id ?? null,
+        customProductName: createForm.productDescription.trim(),
         quantity: createQuantity,
         agreedUnitPrice: createForm.agreedUnitPrice,
         agreedTotal: createAgreedTotal,
@@ -803,6 +823,7 @@ export default function LipaPolePoleAdminClient({
       });
       setShowCreateMoreDetails(false);
       setProduct(null);
+      setProductEntryOpen(false);
       setStaffId(defaultStaffId ?? "");
       setCreateForm({
         customerName: "",
@@ -812,6 +833,7 @@ export default function LipaPolePoleAdminClient({
         town: "",
         estateLandmark: "",
         locationNotes: "",
+        productDescription: "",
         quantity: "1",
         agreedUnitPrice: "",
         installmentFrequency: "MONTHLY",
@@ -1512,13 +1534,26 @@ export default function LipaPolePoleAdminClient({
 
                 <section className="rounded-[24px] border border-white/10 bg-slate-950/40 p-4">
                   <div className="mb-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Product</div>
-                  {product ? (
+                  {productEntryOpen ? (
                     <div className="rounded-2xl border border-white/10 bg-slate-950/55 p-4">
                       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_180px_190px_auto] lg:items-end">
                         <div className="min-w-0 self-start">
                           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Item description</div>
-                          <div className="mt-2 break-words text-sm font-semibold leading-6 text-white">{product.name}</div>
-                          {product.sku ? <div className="mt-1 break-all text-xs text-slate-500">SKU: {product.sku}</div> : null}
+                          <textarea
+                            className={`${textareaClass} mt-2 min-h-[88px]`}
+                            value={createForm.productDescription}
+                            onChange={(event) => setCreateForm((current) => ({ ...current, productDescription: event.target.value }))}
+                            placeholder="Item description"
+                            maxLength={1000}
+                          />
+                          {product ? (
+                            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-wide text-slate-400">
+                              <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-emerald-200">Catalog</span>
+                              {product.sku ? <span className="break-all">SKU: {product.sku}</span> : null}
+                            </div>
+                          ) : (
+                            <div className="mt-2 text-xs text-slate-500">Manual item</div>
+                          )}
                         </div>
                         <StepperInput
                           label="Quantity"
@@ -1549,6 +1584,18 @@ export default function LipaPolePoleAdminClient({
                       </div>
                     </div>
                   ) : (
+                    <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/30 px-4 py-5 text-sm text-slate-500">
+                      Add a manual item or select one from the POS catalogue.
+                    </div>
+                  )}
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:brightness-95"
+                      onClick={handleAddManualProduct}
+                    >
+                      + Add item
+                    </button>
                     <button
                       type="button"
                       className="rounded-xl border border-sky-400/60 px-4 py-2 text-sm font-semibold text-sky-200 transition hover:bg-sky-500/10"
@@ -1556,7 +1603,7 @@ export default function LipaPolePoleAdminClient({
                     >
                       + Select product
                     </button>
-                  )}
+                  </div>
                 </section>
 
                 <section className="rounded-[24px] border border-white/10 bg-slate-950/40 p-4">
@@ -1705,7 +1752,7 @@ export default function LipaPolePoleAdminClient({
               <aside className="rounded-[24px] border border-white/10 bg-slate-950/45 p-4 text-sm text-slate-300 xl:sticky xl:top-0 xl:self-start">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Payment plan summary</div>
                 <div className="mt-4 space-y-3">
-                  <PlanRow label="Product" value={product?.name || "Select product"} />
+                  <PlanRow label="Product" value={createForm.productDescription.trim() || "Add or select product"} />
                   <PlanRow label="Staff" value={selectedStaff?.name || "Select staff"} />
                   <PlanRow label="Quantity" value={String(createQuantity)} />
                   <PlanRow label="Unit price" value={formatKes(createUnitPrice)} />
