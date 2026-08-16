@@ -22,6 +22,8 @@ const createLppSchema = z.object({
   customer: customerDetailsSchema.optional().nullable(),
   productId: z.string().trim().min(1).optional().nullable(),
   customProductName: z.string().trim().min(1).max(1000).optional().nullable(),
+  itemSerial: z.string().trim().max(255).optional().nullable(),
+  itemWarranty: z.string().trim().max(255).optional().nullable(),
   quantity: z.coerce.number().int().min(1).optional(),
   agreedUnitPrice: z.union([z.coerce.number().positive(), z.string().trim().min(1)]),
   agreedTotal: z.union([z.coerce.number().positive(), z.string().trim().min(1)]).optional().nullable(),

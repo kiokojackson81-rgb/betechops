@@ -30,6 +30,8 @@ type RawLppRow = {
   customerId: string;
   productId: string | null;
   customProductName: string | null;
+  itemSerial: string | null;
+  itemWarranty: string | null;
   publicToken: string;
   quantity: number;
   agreedUnitPrice: Prisma.Decimal;
@@ -164,6 +166,8 @@ export type SerializedLppAccount = {
   customerLocationNotes: string | null;
   productId: string | null;
   productName: string | null;
+  itemSerial: string | null;
+  itemWarranty: string | null;
   quantity: number;
   agreedUnitPrice: number;
   assignedToId: string | null;
@@ -267,6 +271,8 @@ export type CreateLppInput = {
   customerId: string;
   productId?: string | null;
   customProductName?: string | null;
+  itemSerial?: string | null;
+  itemWarranty?: string | null;
   quantity?: number;
   agreedUnitPrice: number | string | Prisma.Decimal;
   agreedTotal?: number | string | Prisma.Decimal | null;
@@ -903,6 +909,8 @@ export async function createLipaPolePole(
   if (agreedTotal.lte(0)) throw new Error("INVALID_AGREED_TOTAL");
   const productId = trimToNull(input.productId ?? null);
   const customProductName = trimToNull(input.customProductName ?? null);
+  const itemSerial = trimToNull(input.itemSerial ?? null);
+  const itemWarranty = trimToNull(input.itemWarranty ?? null);
   if (!productId && !customProductName) throw new Error("INVALID_PRODUCT");
 
   return withLppTransaction(db, async (tx) => {
@@ -915,7 +923,7 @@ export async function createLipaPolePole(
 
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "LipaPolePole" (
-        "id", "reference", "customerId", "productId", "customProductName", "publicToken", "quantity", "agreedUnitPrice", "agreedTotal",
+        "id", "reference", "customerId", "productId", "customProductName", "itemSerial", "itemWarranty", "publicToken", "quantity", "agreedUnitPrice", "agreedTotal",
         "currency", "status", "paymentMode", "reservationMode", "expectedCompletionDate", "salespersonId",
         "source", "notes", "createdById", "createdAt", "updatedAt"
       ) VALUES (
@@ -924,6 +932,8 @@ export async function createLipaPolePole(
         ${input.customerId},
         ${productId},
         ${customProductName},
+        ${itemSerial},
+        ${itemWarranty},
         ${publicToken},
         ${quantity},
         ${agreedUnitPrice},
@@ -951,6 +961,8 @@ export async function createLipaPolePole(
         customerId: input.customerId,
         productId,
         customProductName,
+        itemSerial,
+        itemWarranty,
         agreedTotal: agreedTotal.toString(),
       },
     });
@@ -964,6 +976,8 @@ export async function createLipaPolePole(
         customerId: input.customerId,
         productId,
         customProductName,
+        itemSerial,
+        itemWarranty,
         quantity,
         agreedUnitPrice: agreedUnitPrice.toString(),
         agreedTotal: agreedTotal.toString(),
@@ -1756,6 +1770,8 @@ export async function getSerializedLppAccountDetail(lipaPolePoleId: string, db: 
     customerLocationNotes: meta.customerLocationNotes,
     productId: lpp.productId,
     productName: meta.productName,
+    itemSerial: lpp.itemSerial ?? null,
+    itemWarranty: lpp.itemWarranty ?? null,
     quantity: Number(lpp.quantity ?? 1),
     agreedUnitPrice: Number(lpp.agreedUnitPrice ?? 0),
     assignedToId: lpp.assignedToId,
@@ -1886,6 +1902,8 @@ export async function listSerializedLppAccounts(
       customerLocationNotes: null,
       productId: row.productId,
       productName: row.productName,
+      itemSerial: row.itemSerial ?? null,
+      itemWarranty: row.itemWarranty ?? null,
       quantity: Number(row.quantity ?? 1),
       agreedUnitPrice: Number(row.agreedUnitPrice ?? 0),
       assignedToId: row.assignedToId,

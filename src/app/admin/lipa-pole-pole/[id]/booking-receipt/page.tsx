@@ -488,6 +488,8 @@ export default async function LppBookingReceiptPage({
               <td colSpan={3}>
                 <div className="lpp-product-label">Item Name</div>
                 <div className="lpp-product-name">{account.productName || "No product selected"}</div>
+                {account.itemSerial ? <div><strong>Serial / IMEI:</strong> {account.itemSerial}</div> : null}
+                {account.itemWarranty ? <div><strong>Warranty:</strong> {account.itemWarranty}</div> : null}
               </td>
             </tr>
             <tr>

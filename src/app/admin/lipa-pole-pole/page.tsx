@@ -23,6 +23,8 @@ type LppListItem = {
   customerLocationNotes: string | null;
   productId: string | null;
   productName: string | null;
+  itemSerial: string | null;
+  itemWarranty: string | null;
   quantity: number;
   agreedUnitPrice: number;
   assignedToId: string | null;

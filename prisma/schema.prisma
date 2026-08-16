@@ -1982,6 +1982,8 @@ model LipaPolePole {
   customerId             String
   productId              String?
   customProductName      String?
+  itemSerial             String?
+  itemWarranty           String?
   publicToken            String                      @unique
   quantity               Int                         @default(1)
   agreedUnitPrice        Decimal                     @db.Decimal(14, 2)

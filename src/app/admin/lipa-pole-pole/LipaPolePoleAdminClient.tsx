@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import PosProductSelectorModal, { type PosCatalogProduct } from "@/components/receipts/PosProductSelectorModal";
+import { findSimilarProducts } from "@/lib/posProductSimilarity";
 import {
   Calendar,
   CheckCircle2,
@@ -17,7 +18,7 @@ import {
   Wallet,
   X,
 } from "lucide-react";
-import { Fragment, useEffect, useMemo, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
+import { Fragment, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
 
 type LppListItem = {
   id: string;
@@ -32,6 +33,8 @@ type LppListItem = {
   customerLocationNotes: string | null;
   productId: string | null;
   productName: string | null;
+  itemSerial: string | null;
+  itemWarranty: string | null;
   quantity: number;
   agreedUnitPrice: number;
   assignedToId: string | null;
@@ -133,6 +136,8 @@ type LppDetail = {
     isFullyPaid: boolean;
   };
 };
+
+const warrantyOptions = ["1 Year", "2 Years", "3 Years", "5 Years", "6 Years", "10 Years"];
 
 type StaffOption = {
   id: string;
@@ -417,6 +422,9 @@ export default function LipaPolePoleAdminClient({
   const [product, setProduct] = useState<PosCatalogProduct | null>(null);
   const [productEntryOpen, setProductEntryOpen] = useState(false);
   const [productSelectorOpen, setProductSelectorOpen] = useState(false);
+  const [catalogProducts, setCatalogProducts] = useState<PosCatalogProduct[]>([]);
+  const [showItemSerial, setShowItemSerial] = useState(false);
+  const [showItemWarranty, setShowItemWarranty] = useState(false);
   const [staffId, setStaffId] = useState<string>("");
   const [assignAgent, setAssignAgent] = useState<SearchOption | null>(null);
   const [createSuccess, setCreateSuccess] = useState<{
@@ -437,6 +445,8 @@ export default function LipaPolePoleAdminClient({
     estateLandmark: "",
     locationNotes: "",
     productDescription: "",
+    itemSerial: "",
+    itemWarranty: "",
     quantity: "1",
     agreedUnitPrice: "",
     installmentFrequency: "MONTHLY" as InstallmentFrequency,
@@ -532,6 +542,21 @@ export default function LipaPolePoleAdminClient({
     const matched = staffMembers.find((member) => member.id === defaultStaffId);
     if (matched) setStaffId(matched.id);
   }, [defaultStaffId, staffId, staffMembers]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/products?activeOnly=1&limit=2000", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("Failed to load products"))))
+      .then((data) => {
+        if (!cancelled) setCatalogProducts(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        if (!cancelled) setCatalogProducts([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     setDetail(initialDetail);
@@ -638,15 +663,20 @@ export default function LipaPolePoleAdminClient({
       setCreateForm((current) => ({
         ...current,
         productDescription: "",
+        itemSerial: "",
+        itemWarranty: "",
         agreedUnitPrice: "",
         quantity: "1",
       }));
       return;
     }
     setProductEntryOpen(true);
+    const defaultWarranty = typeof option.defaultWarranty === "string" ? option.defaultWarranty.trim() : "";
+    if (defaultWarranty) setShowItemWarranty(true);
     setCreateForm((current) => ({
       ...current,
       productDescription: option.name,
+      itemWarranty: defaultWarranty,
       agreedUnitPrice: Number(option.sellingPrice) > 0 ? String(Number(option.sellingPrice)) : current.agreedUnitPrice,
     }));
   }
@@ -657,6 +687,8 @@ export default function LipaPolePoleAdminClient({
     setCreateForm((current) => ({
       ...current,
       productDescription: "",
+      itemSerial: "",
+      itemWarranty: "",
       quantity: "1",
       agreedUnitPrice: "",
     }));
@@ -757,6 +789,8 @@ export default function LipaPolePoleAdminClient({
         },
         productId: product?.id ?? null,
         customProductName: createForm.productDescription.trim(),
+        itemSerial: showItemSerial ? createForm.itemSerial.trim() || null : null,
+        itemWarranty: showItemWarranty ? createForm.itemWarranty.trim() || null : null,
         quantity: createQuantity,
         agreedUnitPrice: createForm.agreedUnitPrice,
         agreedTotal: createAgreedTotal,
@@ -824,6 +858,8 @@ export default function LipaPolePoleAdminClient({
       setShowCreateMoreDetails(false);
       setProduct(null);
       setProductEntryOpen(false);
+      setShowItemSerial(false);
+      setShowItemWarranty(false);
       setStaffId(defaultStaffId ?? "");
       setCreateForm({
         customerName: "",
@@ -834,6 +870,8 @@ export default function LipaPolePoleAdminClient({
         estateLandmark: "",
         locationNotes: "",
         productDescription: "",
+        itemSerial: "",
+        itemWarranty: "",
         quantity: "1",
         agreedUnitPrice: "",
         installmentFrequency: "MONTHLY",
@@ -1144,6 +1182,11 @@ export default function LipaPolePoleAdminClient({
   const createInstallmentAmount = createInstallmentCount > 0 ? createBalance / createInstallmentCount : createBalance;
   const createExpectedCompletionDate = addInstallmentPeriods(createInstallmentCount, createForm.installmentFrequency);
   const createInstallmentSchedule = buildInstallmentPreview(createBalance, createInstallmentCount, createForm.installmentFrequency);
+  const deferredProductDescription = useDeferredValue(createForm.productDescription);
+  const suggestedProducts = useMemo(
+    () => product ? [] : findSimilarProducts(deferredProductDescription, catalogProducts, 0.5, 3),
+    [catalogProducts, deferredProductDescription, product],
+  );
   const selectedStaff = staffMembers.find((member) => member.id === staffId) ?? null;
 
   return (
@@ -1536,25 +1579,76 @@ export default function LipaPolePoleAdminClient({
                   <div className="mb-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Product</div>
                   {productEntryOpen ? (
                     <div className="rounded-2xl border border-white/10 bg-slate-950/55 p-4">
-                      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_180px_190px_auto] lg:items-end">
-                        <div className="min-w-0 self-start">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Item description</div>
-                          <textarea
-                            className={`${textareaClass} mt-2 min-h-[88px]`}
-                            value={createForm.productDescription}
-                            onChange={(event) => setCreateForm((current) => ({ ...current, productDescription: event.target.value }))}
-                            placeholder="Item description"
-                            maxLength={1000}
+                      <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-3">
+                        <label className="inline-flex items-center gap-2 text-sm text-slate-200">
+                          <input
+                            type="checkbox"
+                            checked={showItemSerial}
+                            onChange={(event) => setShowItemSerial(event.target.checked)}
+                            className="h-4 w-4 rounded border-slate-600 bg-slate-950 accent-blue-500"
                           />
-                          {product ? (
-                            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-wide text-slate-400">
-                              <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-emerald-200">Catalog</span>
-                              {product.sku ? <span className="break-all">SKU: {product.sku}</span> : null}
+                          Add serial / IMEI (optional)
+                        </label>
+                        <label className="inline-flex items-center gap-2 text-sm text-slate-200">
+                          <input
+                            type="checkbox"
+                            checked={showItemWarranty}
+                            onChange={(event) => setShowItemWarranty(event.target.checked)}
+                            className="h-4 w-4 rounded border-slate-600 bg-slate-950 accent-blue-500"
+                          />
+                          Capture warranty per item
+                        </label>
+                      </div>
+
+                      <div className="min-w-0">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Item description</div>
+                        <textarea
+                          className={`${textareaClass} mt-2 min-h-[112px] w-full resize-y`}
+                          value={createForm.productDescription}
+                          onChange={(event) => {
+                            const productDescription = event.target.value;
+                            setCreateForm((current) => ({ ...current, productDescription }));
+                            if (product && productDescription.trim() !== product.name.trim()) setProduct(null);
+                          }}
+                          placeholder="Type an item description to see matching POS products"
+                          maxLength={1000}
+                          rows={4}
+                        />
+                        {product ? (
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-wide text-slate-400">
+                            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-emerald-200">Catalog</span>
+                            {product.sku ? <span className="break-all">SKU: {product.sku}</span> : null}
+                          </div>
+                        ) : (
+                          <div className="mt-2 text-xs text-slate-500">Manual item. Select a suggested catalogue product when available.</div>
+                        )}
+                        {suggestedProducts.length ? (
+                          <div className="mt-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3">
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200">Possible existing products</div>
+                            <div className="mt-2 space-y-2">
+                              {suggestedProducts.map(({ item: match, score }) => (
+                                <div key={match.id} className="flex flex-wrap items-start justify-between gap-3 rounded-xl bg-slate-950/35 px-3 py-2">
+                                  <div className="min-w-0">
+                                    <div className="break-words text-sm font-medium text-white">{match.name}</div>
+                                    <div className="break-all text-xs text-slate-300">
+                                      {match.sku} · Selling KES {Number(match.sellingPrice || 0).toLocaleString()}
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    className="shrink-0 rounded-full border border-amber-400/30 px-3 py-1 text-xs font-semibold text-amber-100 hover:bg-amber-400/10"
+                                    onClick={() => handleProductChange(match)}
+                                  >
+                                    Use this · {Math.round(score * 100)}%
+                                  </button>
+                                </div>
+                              ))}
                             </div>
-                          ) : (
-                            <div className="mt-2 text-xs text-slate-500">Manual item</div>
-                          )}
-                        </div>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-[180px_minmax(190px,1fr)_auto] xl:items-end">
                         <StepperInput
                           label="Quantity"
                           value={createForm.quantity}
@@ -1572,12 +1666,42 @@ export default function LipaPolePoleAdminClient({
                         </Field>
                         <button
                           type="button"
-                          className="rounded-2xl border border-rose-500/25 px-4 py-3 text-sm font-semibold text-rose-300 transition hover:bg-rose-500/10"
+                          className="rounded-2xl border border-rose-500/25 px-4 py-3 text-sm font-semibold text-rose-300 transition hover:bg-rose-500/10 sm:col-span-2 xl:col-span-1"
                           onClick={() => handleProductChange(null)}
                         >
                           Remove
                         </button>
                       </div>
+                      {showItemSerial || showItemWarranty ? (
+                        <div className="mt-4 grid gap-4 md:grid-cols-2">
+                          {showItemSerial ? (
+                            <Field label="Serial / IMEI (optional)">
+                              <input
+                                className={inputClass}
+                                value={createForm.itemSerial}
+                                onChange={(event) => setCreateForm((current) => ({ ...current, itemSerial: event.target.value }))}
+                                placeholder="Enter serial or IMEI"
+                                maxLength={255}
+                              />
+                            </Field>
+                          ) : null}
+                          {showItemWarranty ? (
+                            <Field label="Item warranty">
+                              <select
+                                className={inputClass}
+                                value={createForm.itemWarranty}
+                                onChange={(event) => setCreateForm((current) => ({ ...current, itemWarranty: event.target.value }))}
+                              >
+                                <option value="">No warranty</option>
+                                {createForm.itemWarranty && !warrantyOptions.includes(createForm.itemWarranty) ? (
+                                  <option value={createForm.itemWarranty}>{createForm.itemWarranty}</option>
+                                ) : null}
+                                {warrantyOptions.map((warranty) => <option key={warranty} value={warranty}>{warranty}</option>)}
+                              </select>
+                            </Field>
+                          ) : null}
+                        </div>
+                      ) : null}
                       <div className="mt-4 flex items-center justify-between gap-4 border-t border-white/10 pt-4 text-sm">
                         <span className="text-slate-400">Agreed total</span>
                         <span className="font-semibold text-white">{formatKes(createAgreedTotal)}</span>
@@ -2079,6 +2203,8 @@ function ExpandedRowDetails({
               <DetailBlock title="Agreement" className="xl:col-span-2">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <InfoPair label="Product" value={account.productName || "No product selected"} />
+                  {account.itemSerial ? <InfoPair label="Serial / IMEI" value={account.itemSerial} /> : null}
+                  {account.itemWarranty ? <InfoPair label="Warranty" value={account.itemWarranty} /> : null}
                   <InfoPair label="Quantity" value={String(account.quantity)} />
                   <InfoPair label="Unit price" value={formatKes(account.agreedUnitPrice)} />
                   <InfoPair label="Agreed total" value={formatKes(detail.summary.agreedTotal)} />

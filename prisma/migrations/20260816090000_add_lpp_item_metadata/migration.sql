@@ -1,0 +1,3 @@
+ALTER TABLE "LipaPolePole"
+ADD COLUMN IF NOT EXISTS "itemSerial" TEXT,
+ADD COLUMN IF NOT EXISTS "itemWarranty" TEXT;

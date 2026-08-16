@@ -79,6 +79,8 @@ export async function POST(req: Request, context: ParamsContext) {
           quantity: Number(summary.lpp.quantity ?? 1),
           unitPrice: Number(summary.lpp.agreedUnitPrice ?? 0),
           sellingPrice: Number(summary.lpp.agreedUnitPrice ?? 0),
+          serial: summary.lpp.itemSerial ?? null,
+          warranty: summary.lpp.itemWarranty ?? null,
         },
       ],
       metadata: {
