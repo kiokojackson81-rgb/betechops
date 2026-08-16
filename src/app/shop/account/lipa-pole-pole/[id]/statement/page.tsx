@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { getSerializedLppAccountDetail } from "@/lib/lipaPolePoleService";
 import LppDocumentActions from "@/app/shop/account/lipa-pole-pole/[id]/LppDocumentActions";
+import { getNextLppInstallment } from "@/lib/lipaPolePoleSchedule";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,7 @@ export default async function ShopLppStatementPage({
   if (!detail || detail.account.customerId !== user.id) {
     redirect("/shop/account");
   }
+  const nextInstallment = getNextLppInstallment(detail.installments, detail.summary.totalPaid);
 
   return (
     <main className="min-h-screen bg-white px-6 py-8 text-slate-950">
@@ -74,6 +76,11 @@ export default async function ShopLppStatementPage({
           <div className="rounded-2xl border p-4"><div className="text-xs uppercase text-slate-500">Balance</div><div className="mt-1 font-black">{formatCurrency(detail.summary.balance)}</div></div>
           <div className="rounded-2xl border p-4"><div className="text-xs uppercase text-slate-500">Progress</div><div className="mt-1 font-black">{detail.summary.percentagePaid.toFixed(2)}%</div></div>
         </div>
+        {nextInstallment ? (
+          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm">
+            <span className="font-bold">Next installment:</span> {formatCurrency(nextInstallment.amount)} due {formatDate(nextInstallment.dueDate)}
+          </div>
+        ) : null}
 
         <table className="mt-8 w-full border-collapse text-sm">
           <thead>

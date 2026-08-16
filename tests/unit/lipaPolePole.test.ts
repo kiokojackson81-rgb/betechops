@@ -63,6 +63,24 @@ describe("lipaPolePole domain rules", () => {
     expect(awaitingConversion).toBe("COMPLETED");
   });
 
+  test("activates a draft account after the first verified deposit", () => {
+    expect(deriveLppOperationalStatus({
+      currentStatus: "DRAFT",
+      agreedTotal: "280000",
+      payments: [{ amount: "500", status: "SUCCESS" }],
+      expectedCompletionDate: "2026-09-16T00:00:00.000Z",
+      now: new Date("2026-08-16T00:00:00.000Z"),
+    })).toBe("ACTIVE");
+
+    expect(deriveLppOperationalStatus({
+      currentStatus: "DRAFT",
+      agreedTotal: "280000",
+      payments: [{ amount: "500", status: "PENDING" }],
+      expectedCompletionDate: "2026-09-16T00:00:00.000Z",
+      now: new Date("2026-08-16T00:00:00.000Z"),
+    })).toBe("DRAFT");
+  });
+
   test("blocks conversion until fully paid and only once", () => {
     expect(() =>
       assertLppEligibleForConversion({

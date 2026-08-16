@@ -7,6 +7,7 @@ import {
 } from "@/lib/lipaPolePoleTerms";
 import BookingReceiptAutoPrint from "./BookingReceiptAutoPrint";
 import BookingReceiptPrintControls from "./BookingReceiptPrintControls";
+import { getNextLppInstallment } from "@/lib/lipaPolePoleSchedule";
 
 export const dynamic = "force-dynamic";
 
@@ -98,6 +99,7 @@ export default async function LppBookingReceiptPage({
   });
   const paymentFrequency = inferInstallmentFrequency(installments, account.createdAt);
   const installmentAmount = installments[0]?.expectedAmount ?? 0;
+  const nextInstallment = getNextLppInstallment(installments, summary.totalPaid);
   const location = [account.customerTown, account.customerEstateLandmark, account.customerCounty].filter(Boolean).join(", ");
   const letterheadUrl = branding.letterheadUrl || "/letterhead.jpg";
   const paymentMethod = firstSuccessfulPayment ? titleCase(firstSuccessfulPayment.method) : "Not captured";
@@ -558,6 +560,11 @@ export default async function LppBookingReceiptPage({
             <div className="lpp-plan-item"><span>Each payment</span><strong>{installmentAmount > 0 ? formatKes(installmentAmount) : "Not set"}</strong></div>
             <div className="lpp-plan-item"><span>Expected completion</span><strong>{formatDate(account.expectedCompletionDate)}</strong></div>
           </div>
+          {nextInstallment ? (
+            <div style={{ marginTop: 7, border: "1px solid #f3d7a1", borderRadius: 7, background: "#fff8e8", padding: "6px 8px", fontSize: 9 }}>
+              <strong>Next installment:</strong> {formatKes(nextInstallment.amount)} due {formatDate(nextInstallment.dueDate)}
+            </div>
+          ) : null}
 
           {installments.length > 0 ? (
             <div>

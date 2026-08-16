@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { getSerializedLppAccountDetail } from "@/lib/lipaPolePoleService";
 import LppDocumentActions from "@/app/shop/account/lipa-pole-pole/[id]/LppDocumentActions";
+import { getNextLppInstallment } from "@/lib/lipaPolePoleSchedule";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +63,7 @@ export default async function ShopLppAcknowledgementPage({
       : payment.status === "PENDING"
         ? "PENDING VERIFICATION"
         : "REJECTED";
+  const nextInstallment = getNextLppInstallment(detail.installments, totalPaid);
 
   return (
     <main className="min-h-screen bg-white px-6 py-8 text-slate-950">
@@ -88,6 +90,7 @@ export default async function ShopLppAcknowledgementPage({
             <div><span className="font-bold">Payment Method:</span> {payment.method}</div>
             <div><span className="font-bold">Reference:</span> {payment.reference || "-"}</div>
             <div><span className="font-bold">Date:</span> {formatDate(payment.receivedAt)}</div>
+            {nextInstallment ? <div><span className="font-bold">Next Installment:</span> {formatCurrency(nextInstallment.amount)} due {formatDate(nextInstallment.dueDate)}</div> : null}
           </div>
         </div>
 

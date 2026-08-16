@@ -11,6 +11,7 @@ import {
   normalizeLppStatus,
   type LipaPolePolePaymentMethod,
 } from "@/lib/lipaPolePole";
+import { extractMpesaTransactionCode } from "@/lib/mpesaReference";
 import { sendLppReminderChannelNotification } from "@/lib/lipaPolePoleNotifications";
 
 type DbClient = typeof prisma | Prisma.TransactionClient;
@@ -1154,7 +1155,9 @@ export async function recordLppPayment(
   if (amount.lte(0)) throw new Error("INVALID_PAYMENT_AMOUNT");
   const paymentStatus = input.status ?? "SUCCESS";
   const rawReference = trimToNull(input.reference ?? null);
-  const normalizedReference = input.method === "MPESA" ? rawReference?.toUpperCase() ?? null : rawReference;
+  const normalizedReference = input.method === "MPESA"
+    ? extractMpesaTransactionCode(rawReference) ?? rawReference?.toUpperCase() ?? null
+    : rawReference;
 
   return withLppTransaction(db, async (tx) => {
     const lpp = await lockLppOrThrow(tx, input.lipaPolePoleId);
@@ -1838,11 +1841,14 @@ function serializeLppItem(row: RawLppItemRow): SerializedLppItem {
 }
 
 function serializeLppPayment(row: RawLppPaymentRow): SerializedLppPayment {
+  const reference = row.method === "MPESA"
+    ? extractMpesaTransactionCode(row.reference) ?? row.reference ?? null
+    : row.reference ?? null;
   return {
     id: row.id,
     amount: Number(row.amount ?? 0),
     method: row.method,
-    reference: row.reference ?? null,
+    reference,
     status: row.status,
     receivedById: row.receivedById ?? null,
     receivedAt: row.receivedAt.toISOString(),
@@ -2005,7 +2011,15 @@ export async function getSerializedLppAccountDetail(lipaPolePoleId: string, db: 
     totalPaid: Number(summary.totalPaid ?? 0),
     balance: Number(summary.balance ?? 0),
     percentagePaid: Number(summary.percentagePaid ?? 0),
-    status: lpp.status,
+    status: deriveLppOperationalStatus({
+      currentStatus: lpp.status,
+      agreedTotal: lpp.agreedTotal,
+      payments,
+      expectedCompletionDate: lpp.expectedCompletionDate,
+      convertedReceiptId: lpp.convertedReceiptId,
+      convertedProjectId: lpp.convertedProjectId,
+      fulfilledAt: lpp.fulfilledAt,
+    }),
     paymentMode: lpp.paymentMode,
     reservationMode: lpp.reservationMode,
     source: lpp.source ?? null,
@@ -2113,6 +2127,15 @@ export async function listSerializedLppAccounts(
     const agreedTotal = Number(row.agreedTotal ?? 0);
     const balance = Math.max(0, agreedTotal - totalPaid);
     const percentagePaid = agreedTotal > 0 ? Math.min(100, Math.round((totalPaid / agreedTotal) * 10000) / 100) : 0;
+    const derivedStatus = deriveLppOperationalStatus({
+      currentStatus: row.status,
+      agreedTotal,
+      payments: totalPaid > 0 ? [{ amount: totalPaid, status: "SUCCESS" }] : [],
+      expectedCompletionDate: row.expectedCompletionDate,
+      convertedReceiptId: row.convertedReceiptId,
+      convertedProjectId: row.convertedProjectId,
+      fulfilledAt: row.fulfilledAt,
+    });
     return {
       id: row.id,
       reference: row.reference,
@@ -2140,7 +2163,7 @@ export async function listSerializedLppAccounts(
       totalPaid,
       balance,
       percentagePaid,
-      status: row.status,
+      status: derivedStatus,
       paymentMode: row.paymentMode,
       reservationMode: row.reservationMode,
       source: row.source ?? null,

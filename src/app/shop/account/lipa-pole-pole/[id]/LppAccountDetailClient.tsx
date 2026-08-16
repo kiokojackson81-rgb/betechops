@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { LIPA_POLE_POLE_MPESA_ACCOUNT, LIPA_POLE_POLE_MPESA_PAYBILL } from "@/lib/lipaPolePoleConfig";
 import { formatMpesaReferenceInput } from "@/lib/mpesaReference";
+import { getNextLppInstallment } from "@/lib/lipaPolePoleSchedule";
 
 type LppDetail = {
   account: {
@@ -44,6 +45,11 @@ type LppDetail = {
     rejectedAt?: string | null;
     rejectionReason?: string | null;
   }>;
+  installments: Array<{
+    id: string;
+    dueDate: string;
+    expectedAmount: number;
+  }>;
   summary: {
     agreedTotal: number;
     totalPaid: number;
@@ -83,6 +89,7 @@ export default function LppAccountDetailClient({ initialDetail }: { initialDetai
   const [submitting, setSubmitting] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const nextInstallment = getNextLppInstallment(detail.installments, detail.summary.totalPaid);
 
   async function refresh() {
     const response = await fetch(`/api/shop/lipa-pole-pole/${encodeURIComponent(detail.account.id)}`, {
@@ -186,6 +193,16 @@ export default function LppAccountDetailClient({ initialDetail }: { initialDetai
         <div className="mt-2 text-sm font-semibold text-slate-600">
           {detail.summary.percentagePaid.toFixed(2)}% paid
         </div>
+
+        {nextInstallment && detail.summary.balance > 0 ? (
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-amber-200 bg-amber-50 px-5 py-4">
+            <div>
+              <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a0000]">Next installment</div>
+              <div className="mt-1 text-sm font-semibold text-slate-600">Due {formatDate(nextInstallment.dueDate)}</div>
+            </div>
+            <div className="text-xl font-black text-slate-950">{formatCurrency(nextInstallment.amount)}</div>
+          </div>
+        ) : null}
 
         <div className="mt-5 flex flex-wrap gap-2">
           {detail.summary.balance > 0 ? (

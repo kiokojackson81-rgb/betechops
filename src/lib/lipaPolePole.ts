@@ -149,7 +149,7 @@ export function deriveLppOperationalStatus(input: {
   }
 
   if (current === "ON_HOLD") return "ON_HOLD";
-  if (current === "DRAFT") return "DRAFT";
+  if (current === "DRAFT" && summary.totalPaid.lte(ZERO)) return "DRAFT";
 
   const now = input.now ?? new Date();
   const expectedCompletionDate = input.expectedCompletionDate ? new Date(input.expectedCompletionDate) : null;
