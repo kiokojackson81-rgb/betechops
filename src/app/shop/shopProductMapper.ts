@@ -548,7 +548,10 @@ function buildMappingWarnings(
   return warnings;
 }
 
-function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview {
+function mapOpsProduct(
+  product: OpsCatalogueProduct,
+  options: { autoEnableLipaPolePole?: boolean } = {},
+): ShopProductMappingPreview {
   const price = Number(product.sellingPrice);
   const explicitShopCategory = normalizeShopCategoryValue(product.shopCategory);
   const inferredCategory = inferCategoryDefinition(product);
@@ -670,7 +673,9 @@ function mapOpsProduct(product: OpsCatalogueProduct): ShopProductMappingPreview 
         commissionEnabled: Boolean(product.commissionEnabled),
         commissionAmount: product.commissionAmount == null ? null : Number(product.commissionAmount),
         commissionRequiresApproval: Boolean(product.commissionRequiresApproval),
-        lipaPolePoleEnabled: Boolean(product.lipaPolePoleEnabled),
+        lipaPolePoleEnabled:
+          Boolean(product.lipaPolePoleEnabled) ||
+          (Boolean(options.autoEnableLipaPolePole) && price >= 500),
         lipaPolePoleMinDeposit:
           product.lipaPolePoleMinDeposit == null ? null : Number(product.lipaPolePoleMinDeposit),
         lipaPolePoleMaxDays:
@@ -764,7 +769,10 @@ export async function getOpsCatalogueProductMappedById(opsProductId: string) {
 const getCachedOpsCatalogueProductsReadOnly = unstable_cache(
   async () => {
     const products = await queryOpsCatalogueProducts();
-    return products.map(mapOpsProduct).filter((entry): entry is ShopProductMappingPreview => Boolean(entry));
+    const autoEnableLipaPolePole = !products.some((product) => product.lipaPolePoleEnabled === true);
+    return products
+      .map((product) => mapOpsProduct(product, { autoEnableLipaPolePole }))
+      .filter((entry): entry is ShopProductMappingPreview => Boolean(entry));
   },
   ["shop:ops-catalogue:readonly:v1"],
   {

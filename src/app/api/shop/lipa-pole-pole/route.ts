@@ -106,6 +106,10 @@ export async function POST(request: Request) {
         lipaPolePoleMaxDays: number | null;
         lipaPolePoleDefaultDays: number | null;
         lipaPolePoleTerms: string | null;
+        isActive: boolean;
+        status: string | null;
+        ecommerceVisible: boolean;
+        showInShop: boolean;
       }>>(Prisma.sql`
         SELECT
           "name",
@@ -114,14 +118,34 @@ export async function POST(request: Request) {
           "lipaPolePoleMinDeposit",
           "lipaPolePoleMaxDays",
           "lipaPolePoleDefaultDays",
-          "lipaPolePoleTerms"
+          "lipaPolePoleTerms",
+          COALESCE("isActive", true) AS "isActive",
+          "status",
+          COALESCE("ecommerceVisible", false) AS "ecommerceVisible",
+          COALESCE("showInShop", false) AS "showInShop"
         FROM "Product"
         WHERE "id" = ${product.id}
         LIMIT 1
       `)
     : [];
 
-  if (!productConfig?.lipaPolePoleEnabled) {
+  const [configuredEligibility] = await prisma.$queryRaw<Array<{ configured: boolean }>>(Prisma.sql`
+    SELECT EXISTS(
+      SELECT 1
+      FROM "Product"
+      WHERE "lipaPolePoleEnabled" = true
+    ) AS "configured"
+  `);
+  const fallbackEligible = Boolean(
+    productConfig &&
+    !configuredEligibility?.configured &&
+    productConfig.isActive &&
+    (productConfig.status == null || productConfig.status === "ACTIVE") &&
+    (productConfig.ecommerceVisible || productConfig.showInShop) &&
+    Number(productConfig.sellingPrice) >= LIPA_POLE_POLE_MIN_DEPOSIT,
+  );
+
+  if (!productConfig?.lipaPolePoleEnabled && !fallbackEligible) {
     return noStoreJson({ error: "Lipa Pole Pole is not enabled for this product." }, { status: 409 });
   }
 
