@@ -1481,22 +1481,22 @@ export default function LipaPolePoleAdminClient({
             </div>
 
             <div className="overflow-x-auto">
-              <table className="min-w-full border-separate border-spacing-0 text-sm">
+              <table className="w-full min-w-[1780px] border-separate border-spacing-0 text-sm">
                 <thead className="bg-slate-950/50 text-left text-[11px] uppercase tracking-[0.18em] text-slate-500">
                   <tr>
-                    <th className="px-4 py-4">Select</th>
-                    <th className="px-4 py-4">Open</th>
-                    <th className="px-4 py-4">Customer</th>
-                    <th className="px-4 py-4">LPP #</th>
-                    <th className="px-4 py-4">Product</th>
-                    <th className="px-4 py-4">Total</th>
-                    <th className="px-4 py-4">Paid</th>
-                    <th className="px-4 py-4">Balance</th>
-                    <th className="px-4 py-4">Progress</th>
-                    <th className="px-4 py-4">Due Date</th>
-                    <th className="px-4 py-4">Agent</th>
-                    <th className="px-4 py-4">Status</th>
-                    <th className="px-4 py-4 text-right">Actions</th>
+                    <th className="w-[72px] whitespace-nowrap px-4 py-4">Select</th>
+                    <th className="w-[80px] whitespace-nowrap px-4 py-4">Open</th>
+                    <th className="w-[420px] px-4 py-4">Product</th>
+                    <th className="w-[210px] whitespace-nowrap px-4 py-4">Customer</th>
+                    <th className="w-[160px] whitespace-nowrap px-4 py-4">LPP #</th>
+                    <th className="w-[125px] whitespace-nowrap px-4 py-4">Total</th>
+                    <th className="w-[125px] whitespace-nowrap px-4 py-4">Paid</th>
+                    <th className="w-[125px] whitespace-nowrap px-4 py-4">Balance</th>
+                    <th className="w-[150px] whitespace-nowrap px-4 py-4">Progress</th>
+                    <th className="w-[150px] whitespace-nowrap px-4 py-4">Due Date</th>
+                    <th className="w-[140px] whitespace-nowrap px-4 py-4">Agent</th>
+                    <th className="w-[130px] whitespace-nowrap px-4 py-4">Status</th>
+                    <th className="w-[110px] whitespace-nowrap px-4 py-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1537,17 +1537,17 @@ export default function LipaPolePoleAdminClient({
                             </button>
                           </td>
                           <td className="border-t border-white/6 px-4 py-4 align-top">
-                            <div className="font-medium text-white">{item.customerName || "Unknown customer"}</div>
-                            <div className="mt-1 text-xs text-slate-500">{item.customerPhone || "No phone"}</div>
-                          </td>
-                          <td className="border-t border-white/6 px-4 py-4 align-top text-slate-300">{item.reference}</td>
-                          <td className="border-t border-white/6 px-4 py-4 align-top">
-                            <div className="text-white">{item.productName || "No product"}</div>
+                            <div className="max-w-[420px] break-words leading-6 text-white">{item.productName || "No product"}</div>
                             <div className="mt-1 text-xs text-slate-500">Qty {item.quantity}</div>
                           </td>
-                          <td className="border-t border-white/6 px-4 py-4 align-top text-slate-200">{formatKes(item.agreedTotal)}</td>
-                          <td className="border-t border-white/6 px-4 py-4 align-top text-emerald-300">{formatKes(item.totalPaid)}</td>
-                          <td className="border-t border-white/6 px-4 py-4 align-top font-medium text-amber-300">{formatKes(item.balance)}</td>
+                          <td className="border-t border-white/6 px-4 py-4 align-top">
+                            <div className="whitespace-nowrap font-medium text-white">{item.customerName || "Unknown customer"}</div>
+                            <div className="mt-1 whitespace-nowrap text-xs text-slate-500">{item.customerPhone || "No phone"}</div>
+                          </td>
+                          <td className="whitespace-nowrap border-t border-white/6 px-4 py-4 align-top text-slate-300">{item.reference}</td>
+                          <td className="whitespace-nowrap border-t border-white/6 px-4 py-4 align-top text-slate-200">{formatKes(item.agreedTotal)}</td>
+                          <td className="whitespace-nowrap border-t border-white/6 px-4 py-4 align-top text-emerald-300">{formatKes(item.totalPaid)}</td>
+                          <td className="whitespace-nowrap border-t border-white/6 px-4 py-4 align-top font-medium text-amber-300">{formatKes(item.balance)}</td>
                           <td className="border-t border-white/6 px-4 py-4 align-top">
                             <div className="w-[110px]">
                               <div className="mb-1 text-xs text-slate-400">{Math.round(item.percentagePaid)}%</div>
@@ -1557,10 +1557,10 @@ export default function LipaPolePoleAdminClient({
                             </div>
                           </td>
                           <td className="border-t border-white/6 px-4 py-4 align-top">
-                            <div className="text-white">{formatDate(item.expectedCompletionDate)}</div>
-                            <div className={`mt-1 text-xs ${due.tone}`}>{due.label}</div>
+                            <div className="whitespace-nowrap text-white">{formatDate(item.expectedCompletionDate)}</div>
+                            <div className={`mt-1 whitespace-nowrap text-xs ${due.tone}`}>{due.label}</div>
                           </td>
-                          <td className="border-t border-white/6 px-4 py-4 align-top text-slate-300">{item.assignedToName || "Unassigned"}</td>
+                          <td className="whitespace-nowrap border-t border-white/6 px-4 py-4 align-top text-slate-300">{item.assignedToName || "Unassigned"}</td>
                           <td className="border-t border-white/6 px-4 py-4 align-top">
                             <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(item.status)}`}>
                               {titleCase(item.status)}
