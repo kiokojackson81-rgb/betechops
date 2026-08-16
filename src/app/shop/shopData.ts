@@ -449,6 +449,8 @@ export const footerGroups = [
       { label: "Request a Solar System Quote", href: "#quote" },
       { label: "Talk to our solar team on WhatsApp", href: "https://wa.me/254722151083" },
       { label: "Warranty support", href: "#support" },
+      { label: "Lipa Pole Pole", href: SHOP_LIPA_POLE_POLE_HREF },
+      { label: "Solar Installation Terms & Conditions", href: "/p/terms" },
       { label: "Delivered countrywide", href: "#support" },
     ],
   },
