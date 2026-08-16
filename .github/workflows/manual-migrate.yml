@@ -19,13 +19,8 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 9
-
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci --ignore-scripts
 
       - name: Run Prisma Migrate Deploy
         env:
@@ -33,7 +28,7 @@ jobs:
           DIRECT_URL: ${{ secrets.PROD_DATABASE_URL }}
         run: |
           echo "Running prisma migrate deploy against production database"
-          pnpm prisma migrate deploy
+          npx prisma migrate deploy
 
       - name: Show migrate status
         env:
