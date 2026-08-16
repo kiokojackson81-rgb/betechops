@@ -660,6 +660,13 @@ export default function AccountClient({
                         >
                           Print statement
                         </Link>
+                        <Link
+                          href={`/shop/account/lipa-pole-pole/${encodeURIComponent(account.id)}/booking-receipt?autoPrint=1`}
+                          target="_blank"
+                          className={`${shopStyles.secondaryButton} whitespace-nowrap`}
+                        >
+                          Download booking receipt
+                        </Link>
                       </div>
                     </div>
                   ))

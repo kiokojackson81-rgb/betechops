@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { getSerializedLppAccountDetail } from "@/lib/lipaPolePoleService";
+import LppDocumentActions from "@/app/shop/account/lipa-pole-pole/[id]/LppDocumentActions";
 
 export const dynamic = "force-dynamic";
 
@@ -49,9 +50,7 @@ export default async function ShopLppStatementPage({
             <h1 className="mt-2 text-3xl font-black">Lipa Pole Pole Statement</h1>
             <div className="mt-2 text-sm text-slate-600">{detail.account.reference}</div>
           </div>
-          <button onClick={() => window.print()} className="rounded-full border px-4 py-2 text-sm font-semibold">
-            Print
-          </button>
+          <LppDocumentActions backHref={`/shop/account/lipa-pole-pole/${encodeURIComponent(id)}`} />
         </div>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2">

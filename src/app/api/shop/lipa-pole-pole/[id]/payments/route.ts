@@ -2,13 +2,14 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { noStoreJson } from "@/lib/api";
 import { getSerializedLppAccountDetail, recordLppPayment } from "@/lib/lipaPolePoleService";
+import { extractMpesaTransactionCode } from "@/lib/mpesaReference";
 
 export const dynamic = "force-dynamic";
 
 const paymentSchema = z.object({
   amount: z.coerce.number().positive(),
   method: z.enum(["MPESA", "CASH", "BANK", "CARD", "OTHER"]),
-  reference: z.string().trim().max(255).optional().or(z.literal("")).nullable(),
+  reference: z.string().trim().max(2000).optional().or(z.literal("")).nullable(),
   notes: z.string().trim().max(1000).optional().or(z.literal("")).nullable(),
 });
 
@@ -41,7 +42,15 @@ export async function POST(request: Request, context: ParamsContext) {
     return noStoreJson({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  if (parsed.data.method !== "CASH" && !normalizeOptional(parsed.data.reference)) {
+  const submittedReference = normalizeOptional(parsed.data.reference);
+  const paymentReference = parsed.data.method === "MPESA"
+    ? extractMpesaTransactionCode(submittedReference)
+    : submittedReference;
+
+  if (parsed.data.method === "MPESA" && !paymentReference) {
+    return noStoreJson({ error: "Enter the 10-character M-Pesa transaction code, for example UHG3K3STB0. You may also paste the full M-Pesa message." }, { status: 400 });
+  }
+  if (parsed.data.method !== "CASH" && !paymentReference) {
     return noStoreJson({ error: "Reference is required for non-cash payments." }, { status: 400 });
   }
 
@@ -50,7 +59,7 @@ export async function POST(request: Request, context: ParamsContext) {
       lipaPolePoleId: id,
       amount: parsed.data.amount,
       method: parsed.data.method,
-      reference: normalizeOptional(parsed.data.reference),
+      reference: paymentReference,
       receivedById: null,
       notes: normalizeOptional(parsed.data.notes) || "Submitted from customer portal.",
       status: "PENDING",

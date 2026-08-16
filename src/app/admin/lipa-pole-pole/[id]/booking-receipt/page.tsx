@@ -84,13 +84,13 @@ export default async function LppBookingReceiptPage({
   }
 
   const { account, items, payments, installments, summary } = detail;
-  const successfulPayments = payments
-    .filter((payment) => payment.status === "SUCCESS")
+  const paymentStatementRows = payments
     .toSorted((left, right) => new Date(left.receivedAt).getTime() - new Date(right.receivedAt).getTime());
+  const successfulPayments = paymentStatementRows.filter((payment) => payment.status === "SUCCESS" && !payment.reversedAt);
   const firstSuccessfulPayment = successfulPayments[0] ?? null;
   let runningPaid = 0;
-  const paymentStatement = successfulPayments.map((payment) => {
-    runningPaid += payment.amount;
+  const paymentStatement = paymentStatementRows.map((payment) => {
+    if (payment.status === "SUCCESS" && !payment.reversedAt) runningPaid += payment.amount;
     return {
       ...payment,
       balanceAfterPayment: Math.max(0, summary.agreedTotal - runningPaid),
@@ -534,14 +534,14 @@ export default async function LppBookingReceiptPage({
                     <td>{formatDateTime(payment.receivedAt)}</td>
                     <td>
                       <div className="lpp-payment-reference">{payment.reference || "No reference"}</div>
-                      <div className="lpp-payment-method">{titleCase(payment.method)}</div>
+                      <div className="lpp-payment-method">{titleCase(payment.method)} · {payment.reversedAt ? "Reversed" : titleCase(payment.status)}</div>
                     </td>
                     <td className="lpp-right"><strong>{formatKes(payment.amount)}</strong></td>
                     <td className="lpp-right">{formatKes(payment.balanceAfterPayment)}</td>
                   </tr>
                 ))}
                 <tr className="lpp-payment-summary-row">
-                  <td colSpan={2}>Confirmed payments: {paymentStatement.length}</td>
+                  <td colSpan={2}>Submitted: {paymentStatement.length} · Confirmed: {successfulPayments.length}</td>
                   <td className="lpp-right">{formatKes(summary.totalPaid)}</td>
                   <td className="lpp-right">{formatKes(summary.balance)}</td>
                 </tr>

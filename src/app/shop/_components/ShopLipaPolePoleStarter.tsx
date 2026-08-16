@@ -12,6 +12,7 @@ import {
   LIPA_POLE_POLE_MPESA_ACCOUNT,
   LIPA_POLE_POLE_MPESA_PAYBILL,
 } from "@/lib/lipaPolePoleConfig";
+import { formatMpesaReferenceInput } from "@/lib/mpesaReference";
 import { LIPA_POLE_POLE_TERMS_PATH } from "@/lib/lipaPolePoleTerms";
 
 type ShopLipaPolePoleStarterProps = {
@@ -474,7 +475,7 @@ export default function ShopLipaPolePoleStarter({
                       <ol className="mt-5 grid gap-2 rounded-[22px] border border-[#7a0000]/10 bg-white p-5 text-sm leading-6 text-slate-700">
                         {["Open M-Pesa.", "Select Lipa na M-Pesa.", "Select Pay Bill.", `Enter Business Number ${LIPA_POLE_POLE_MPESA_PAYBILL}.`, `Enter Account Number ${LIPA_POLE_POLE_MPESA_ACCOUNT}.`, `Enter ${formatCurrency(initialPayment)}.`, "Complete payment.", "Enter the M-Pesa confirmation code below."].map((instruction, index) => <li key={instruction} className="flex gap-3"><span className="font-black text-[#7a0000]">{index + 1}.</span><span>{instruction}</span></li>)}
                       </ol>
-                      <label className="mt-5 grid gap-2 text-sm font-bold text-slate-700">M-Pesa Transaction Code<input value={transactionCode} onChange={(event) => setTransactionCode(event.target.value.toUpperCase())} className={inputClass} placeholder="e.g. TGQ7ABC123" autoCapitalize="characters" required /></label>
+                      <label className="mt-5 grid gap-2 text-sm font-bold text-slate-700">M-Pesa Transaction Code<input value={transactionCode} onChange={(event) => setTransactionCode(formatMpesaReferenceInput(event.target.value))} className={inputClass} placeholder="e.g. UHG3K3STB0 or paste the full message" autoCapitalize="characters" required /><span className="text-xs font-medium text-slate-500">You can paste the full M-Pesa message. Only the 10-character transaction code will be saved.</span></label>
                       <p className="mt-3 text-xs leading-5 text-slate-500">Submitting a code does not credit your balance. Betech staff must verify the payment first.</p>
                       {error ? <div className="mt-4 rounded-[16px] border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</div> : null}
                       <button type="submit" disabled={submitting} className="mt-5 inline-flex min-h-14 w-full items-center justify-center rounded-[18px] bg-[#0f9d58] px-5 py-3 text-sm font-black uppercase tracking-[0.06em] text-white shadow-[0_18px_34px_rgba(15,157,88,0.22)] disabled:opacity-50">{submitting ? "Submitting..." : "Submit Payment"}</button>

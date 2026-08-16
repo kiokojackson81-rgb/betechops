@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { LIPA_POLE_POLE_MPESA_ACCOUNT, LIPA_POLE_POLE_MPESA_PAYBILL } from "@/lib/lipaPolePoleConfig";
+import { formatMpesaReferenceInput } from "@/lib/mpesaReference";
 
 type LppDetail = {
   account: {
@@ -198,6 +199,13 @@ export default function LppAccountDetailClient({ initialDetail }: { initialDetai
           >
             Print statement
           </Link>
+          <Link
+            href={`/shop/account/lipa-pole-pole/${encodeURIComponent(detail.account.id)}/booking-receipt?autoPrint=1`}
+            target="_blank"
+            className="rounded-[16px] border border-[#7a0000]/14 bg-white px-4 py-3 text-sm font-bold text-[#7a0000]"
+          >
+            Download booking receipt
+          </Link>
           {detail.account.convertedReceiptId ? (
             <Link
               href={`/receipts/${encodeURIComponent(detail.account.convertedReceiptId)}`}
@@ -239,11 +247,12 @@ export default function LppAccountDetailClient({ initialDetail }: { initialDetai
               M-Pesa transaction code
               <input
                 value={paymentForm.reference}
-                onChange={(event) => setPaymentForm((current) => ({ ...current, reference: event.target.value }))}
+                onChange={(event) => setPaymentForm((current) => ({ ...current, reference: formatMpesaReferenceInput(event.target.value) }))}
                 className="min-h-[3rem] rounded-[16px] border border-[#7a0000]/10 bg-white px-4"
-                placeholder="e.g. TGQ7ABC123"
+                placeholder="e.g. UHG3K3STB0 or paste the full message"
                 required
               />
+              <span className="text-xs font-medium text-slate-500">Paste the full message if easier. Only the M-Pesa transaction code is saved.</span>
             </label>
             <div className="rounded-[16px] border border-[#7a0000]/10 bg-[#fffaf4] p-4 text-sm text-slate-700">
               <div>Current balance: <strong>{formatCurrency(detail.summary.balance)}</strong></div>
