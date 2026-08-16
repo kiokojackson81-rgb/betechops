@@ -120,7 +120,7 @@ export default async function AdminCustomerProfilePage({
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {metricCard("Total purchases", formatMoney(context.sales.totalPurchasesValue))}
         {metricCard("Voice calls", String(context.voice.totalCalls))}
-        {metricCard("Open follow-ups", String(context.voice.openFollowUps))}
+        {metricCard("Lipa Pole Pole balance", formatMoney(context.lipaPolePole.outstandingBalance))}
         {metricCard("Portal", context.account.hasPortalAccess ? "Active" : "Pending")}
       </div>
 
@@ -154,6 +154,7 @@ export default async function AdminCustomerProfilePage({
               {context.quickLinks.receiptDeskHref ? <Link href={context.quickLinks.receiptDeskHref} className="rounded-full border border-white/10 px-3 py-2 text-slate-200 transition hover:border-white/20 hover:text-white">Receipts desk</Link> : null}
               {context.quickLinks.quotationHref ? <Link href={context.quickLinks.quotationHref} className="rounded-full border border-white/10 px-3 py-2 text-slate-200 transition hover:border-white/20 hover:text-white">Quotations</Link> : null}
               {context.quickLinks.webOrdersHref ? <Link href={context.quickLinks.webOrdersHref} className="rounded-full border border-white/10 px-3 py-2 text-slate-200 transition hover:border-white/20 hover:text-white">Web orders</Link> : null}
+              {context.quickLinks.lipaPolePoleHref ? <Link href={context.quickLinks.lipaPolePoleHref} className="rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-amber-100 transition hover:border-amber-300/35">Lipa Pole Pole</Link> : null}
               {context.quickLinks.chatraceInboxHref ? <a href={context.quickLinks.chatraceInboxHref} target="_blank" rel="noreferrer" className="rounded-full border border-white/10 px-3 py-2 text-slate-200 transition hover:border-white/20 hover:text-white">Chatrace inbox</a> : null}
             </div>
           </section>
@@ -170,6 +171,29 @@ export default async function AdminCustomerProfilePage({
               {metricCard("Pending web orders", String(context.sales.pendingWebOrders))}
               {metricCard("Pending POD", String(context.sales.pendingPod))}
               {metricCard("Portal sign-in", context.account.lastLoginMethod || "Not recorded")}
+            </div>
+          </section>
+
+          <section className="rounded-[26px] border border-white/10 bg-slate-950/60 p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Lipa Pole Pole accounts</div>
+              <div className="text-xs text-slate-500">{context.lipaPolePole.activeAccounts} active · {context.lipaPolePole.totalAccounts} total</div>
+            </div>
+            <div className="mt-4 grid gap-4 md:grid-cols-3">
+              {metricCard("Agreed value", formatMoney(context.lipaPolePole.agreedTotal))}
+              {metricCard("Total paid", formatMoney(context.lipaPolePole.totalPaid))}
+              {metricCard("Outstanding", formatMoney(context.lipaPolePole.outstandingBalance))}
+            </div>
+            <div className="mt-4 space-y-3">
+              {context.lipaPolePole.accounts.length ? context.lipaPolePole.accounts.map((account) => (
+                <div key={account.id} className="flex flex-col gap-3 rounded-2xl border border-white/5 bg-white/[0.03] p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="font-semibold text-white">{account.reference} · {account.productName || "Product booking"}</div>
+                    <div className="mt-1 text-xs text-slate-500">{formatStatus(account.status)} · Paid {formatMoney(account.totalPaid)} · Balance {formatMoney(account.balance)}</div>
+                  </div>
+                  <Link href={account.href} className="rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-xs font-semibold text-amber-100 transition hover:border-amber-300/35">Open LPP</Link>
+                </div>
+              )) : <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-sm text-slate-500">No Lipa Pole Pole accounts linked to this customer.</div>}
             </div>
           </section>
 

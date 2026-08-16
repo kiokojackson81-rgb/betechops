@@ -3,6 +3,7 @@
 import Link from "next/link";
 import PosProductSelectorModal, { type PosCatalogProduct } from "@/components/receipts/PosProductSelectorModal";
 import { findSimilarProducts } from "@/lib/posProductSimilarity";
+import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 import {
   Calendar,
   CheckCircle2,
@@ -148,6 +149,46 @@ type LppDetail = {
   };
 };
 
+type Customer360Context = {
+  profile: {
+    displayName: string;
+    accountUserId: string | null;
+    location: string | null;
+  };
+  account: {
+    hasPortalAccess: boolean;
+    lastLoginMethod: string | null;
+  };
+  voice: {
+    totalCalls: number;
+    openFollowUps: number;
+    lastCallAt: string | null;
+  };
+  sales: {
+    totalPurchasesValue: number;
+    openQuotations: number;
+    pendingWebOrders: number;
+  };
+  lipaPolePole: {
+    totalAccounts: number;
+    activeAccounts: number;
+    outstandingBalance: number;
+  };
+  quickLinks: {
+    voiceHistoryHref: string | null;
+    receiptDeskHref: string | null;
+    quotationHref: string | null;
+    webOrdersHref: string | null;
+  };
+  timeline: Array<{
+    id: string;
+    title: string;
+    detail: string;
+    at: string;
+    href: string | null;
+  }>;
+};
+
 const warrantyOptions = ["1 Year", "2 Years", "3 Years", "5 Years", "6 Years", "10 Years"];
 
 type CreateLppItem = {
@@ -258,6 +299,17 @@ function formatDateTime(value: string | null | undefined) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function buildCustomerPortalHref(account: LppListItem) {
+  const params = new URLSearchParams({
+    userId: account.customerId,
+    name: account.customerName || "",
+    phone: account.customerPhone || "",
+    email: account.customerEmail || "",
+    callbackUrl: `/shop/account/lipa-pole-pole/${encodeURIComponent(account.id)}`,
+  });
+  return `/api/admin/customers/portal-login?${params.toString()}`;
 }
 
 function toDateInputValue(value: Date) {
@@ -421,6 +473,9 @@ export default function LipaPolePoleAdminClient({
 }) {
   const [items, setItems] = useState(initialItems);
   const [detail, setDetail] = useState<LppDetail | null>(initialDetail);
+  const [customerContext, setCustomerContext] = useState<Customer360Context | null>(null);
+  const [isLoadingCustomerContext, setIsLoadingCustomerContext] = useState(false);
+  const customerContextAccount = detail?.account ?? null;
   const [selectedId, setSelectedId] = useState(initialDetail?.account.id ?? initialItems[0]?.id ?? "");
   const [expandedLppId, setExpandedLppId] = useState(initialDetail?.account.id ?? "");
   const [activeTab, setActiveTab] = useState<DetailsTab>("OVERVIEW");
@@ -592,6 +647,35 @@ export default function LipaPolePoleAdminClient({
     setSelectedId(nextId);
     setExpandedLppId(initialDetail?.account.id ?? "");
   }, [initialDetail, initialItems]);
+
+  useEffect(() => {
+    const account = customerContextAccount;
+    if (!account) {
+      setCustomerContext(null);
+      return;
+    }
+    const controller = new AbortController();
+    const params = new URLSearchParams({
+      customerUserId: account.customerId,
+      displayName: account.customerName || "",
+      phones: account.customerPhone || "",
+      emails: account.customerEmail || "",
+    });
+    setIsLoadingCustomerContext(true);
+    void fetch(`/api/admin/customers/context?${params.toString()}`, {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error(`context_${response.status}`)))
+      .then((payload: Customer360Context) => setCustomerContext(payload))
+      .catch((error) => {
+        if ((error as { name?: string }).name !== "AbortError") setCustomerContext(null);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setIsLoadingCustomerContext(false);
+      });
+    return () => controller.abort();
+  }, [customerContextAccount]);
 
   useEffect(() => {
     setPage(1);
@@ -1512,6 +1596,8 @@ export default function LipaPolePoleAdminClient({
                               ) : (
                                 <ExpandedRowDetails
                                   detail={rowDetail}
+                                  customerContext={customerContext}
+                                  isLoadingCustomerContext={isLoadingCustomerContext}
                                   activeTab={activeTab}
                                   onTabChange={setActiveTab}
                                   onOpenAction={setActionModal}
@@ -2070,6 +2156,8 @@ export default function LipaPolePoleAdminClient({
 
 function ExpandedRowDetails({
   detail,
+  customerContext,
+  isLoadingCustomerContext,
   activeTab,
   onTabChange,
   onOpenAction,
@@ -2082,6 +2170,8 @@ function ExpandedRowDetails({
   isConvertingProject,
 }: {
   detail: LppDetail;
+  customerContext: Customer360Context | null;
+  isLoadingCustomerContext: boolean;
   activeTab: DetailsTab;
   onTabChange: (tab: DetailsTab) => void;
   onOpenAction: (action: ActionModal) => void;
@@ -2099,6 +2189,12 @@ function ExpandedRowDetails({
   const initialPayment = getInitialSuccessfulPayment(detail.payments);
   const currentPaidDiffersFromDeposit =
     initialPayment && Math.round(detail.summary.totalPaid * 100) !== Math.round(initialPayment.amount * 100);
+  const customerProfileHref = buildAdminCustomerProfileHref({
+    customerUserId: account.customerId,
+    phone: account.customerPhone,
+    email: account.customerEmail,
+    displayName: account.customerName,
+  });
 
   return (
     <div className="overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(9,16,28,0.94),rgba(7,12,22,0.98))]">
@@ -2106,6 +2202,9 @@ function ExpandedRowDetails({
         <SummaryCard title="Account Summary">
           <SummaryValue label={account.reference} value={account.customerName || "Unknown customer"} />
           <div className="text-sm text-slate-400">{account.customerPhone || "No phone"}</div>
+          <Link href={customerProfileHref} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-100 transition hover:border-cyan-300/40">
+            Open Customer 360
+          </Link>
           <div className="mt-4 text-white">{detail.items[0]?.description || account.productName || "No product selected"}</div>
           <div className="mt-1 text-sm text-slate-500">{detail.items.length} product line{detail.items.length === 1 ? "" : "s"}</div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -2169,6 +2268,9 @@ function ExpandedRowDetails({
                   <InfoPair label="Phone" value={account.customerPhone || "No phone"} />
                   <InfoPair label="Email" value={account.customerEmail || "Not captured"} />
                   <InfoPair label="Location" value={describeLocation(account)} />
+                  <Link href={customerProfileHref} target="_blank" rel="noreferrer" className="inline-flex w-full items-center justify-center rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300/40">
+                    Open customer in new tab
+                  </Link>
                 </div>
               </DetailBlock>
               <DetailBlock title="Agreement" className="xl:col-span-2">
@@ -2201,6 +2303,43 @@ function ExpandedRowDetails({
                 </div>
               </DetailBlock>
             </div>
+
+            <DetailBlock title="Customer 360 Activity">
+              {isLoadingCustomerContext ? <EmptyBlock text="Loading linked customer activity..." /> : customerContext ? (
+                <div className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+                    <MetricTile label="Portal" value={customerContext.account.hasPortalAccess ? "Active" : "Pending"} tone={customerContext.account.hasPortalAccess ? "text-emerald-300" : "text-amber-300"} />
+                    <MetricTile label="LPP Accounts" value={String(customerContext.lipaPolePole.totalAccounts)} />
+                    <MetricTile label="LPP Balance" value={formatKes(customerContext.lipaPolePole.outstandingBalance)} tone="text-amber-300" />
+                    <MetricTile label="Purchases" value={formatKes(customerContext.sales.totalPurchasesValue)} tone="text-emerald-300" />
+                    <MetricTile label="Calls" value={String(customerContext.voice.totalCalls)} />
+                    <MetricTile label="Open Follow-ups" value={String(customerContext.voice.openFollowUps)} />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Link href={customerProfileHref} target="_blank" rel="noreferrer" className={primaryButtonClass}>Open Customer 360</Link>
+                    <a href={buildCustomerPortalHref(account)} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100 transition hover:border-emerald-300/50">Open customer account</a>
+                    {customerContext.quickLinks.voiceHistoryHref ? <Link href={customerContext.quickLinks.voiceHistoryHref} target="_blank" rel="noreferrer" className={secondaryButtonClass}>Voice history</Link> : null}
+                    {customerContext.quickLinks.receiptDeskHref ? <Link href={customerContext.quickLinks.receiptDeskHref} target="_blank" rel="noreferrer" className={secondaryButtonClass}>Receipts</Link> : null}
+                    {customerContext.quickLinks.quotationHref ? <Link href={customerContext.quickLinks.quotationHref} target="_blank" rel="noreferrer" className={secondaryButtonClass}>Quotations</Link> : null}
+                    {customerContext.quickLinks.webOrdersHref ? <Link href={customerContext.quickLinks.webOrdersHref} target="_blank" rel="noreferrer" className={secondaryButtonClass}>Web orders</Link> : null}
+                  </div>
+                  <div className="grid gap-3 xl:grid-cols-2">
+                    {customerContext.timeline.slice(0, 6).map((item) => (
+                      <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-semibold text-white">{item.title}</div>
+                            <div className="mt-1 text-xs text-slate-400">{item.detail}</div>
+                          </div>
+                          <div className="shrink-0 text-xs text-slate-500">{formatDateTime(item.at)}</div>
+                        </div>
+                        {item.href ? <Link href={item.href} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-xs font-semibold text-cyan-300 hover:text-cyan-200">Open activity</Link> : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : <EmptyBlock text="No linked cross-system customer activity was found." />}
+            </DetailBlock>
 
             <DetailBlock title="Payment Schedule">
               {detail.installments.length === 0 ? (

@@ -5,6 +5,7 @@ import { resolveVoiceProviderOutcome } from "@/lib/voiceOperations";
 import { findSafeCustomerProfileByUserId } from "@/lib/customerProfile";
 import { listCustomerQuoteRequests, listQuotationEvents } from "@/lib/quoteRequests";
 import type { ChatraceLookupResult } from "@/lib/integrations/chatrace";
+import { listSerializedLppAccounts } from "@/lib/lipaPolePoleService";
 
 export type AdminCustomerContextInput = {
   customerUserId?: string | null;
@@ -107,6 +108,25 @@ export type AdminCustomerContextResponse = {
     href: string;
     pdfHref: string;
   }>;
+  lipaPolePole: {
+    totalAccounts: number;
+    activeAccounts: number;
+    agreedTotal: number;
+    totalPaid: number;
+    outstandingBalance: number;
+    lastActivityAt: string | null;
+    accounts: Array<{
+      id: string;
+      reference: string;
+      productName: string | null;
+      status: string;
+      agreedTotal: number;
+      totalPaid: number;
+      balance: number;
+      updatedAt: string;
+      href: string;
+    }>;
+  };
   chatrace: {
     found: boolean;
     lastInteractionAt: string | null;
@@ -123,6 +143,7 @@ export type AdminCustomerContextResponse = {
     quotationHref: string | null;
     webOrdersHref: string | null;
     chatraceInboxHref: string | null;
+    lipaPolePoleHref: string | null;
   };
   timeline: AdminCustomerContextTimelineItem[];
 };
@@ -232,15 +253,6 @@ export async function getAdminCustomerContext(
     (input.phones || [])
       .map((phone) => normalizeKenyanPhone(phone || ""))
       .filter(Boolean),
-  );
-  const normalizedPhones = Array.from(
-    new Set(
-      inputCanonicalPhones
-        .flatMap((phone) => {
-          return getKenyanPhoneVariants(phone);
-        })
-        .filter(Boolean),
-    ),
   );
   const normalizedEmails = uniqueStrings(input.emails || []).map((email) => email.toLowerCase());
 
@@ -401,6 +413,9 @@ export async function getAdminCustomerContext(
     : [];
   const latestQuotation = recentCustomerQuotations[0] ?? voiceContext?.recentQuotations[0] ?? null;
   const latestAgentOrder = voiceContext?.recentAgentOrders[0] ?? null;
+  const lppAccounts = resolvedUserId
+    ? await listSerializedLppAccounts({ customerId: resolvedUserId, take: 20 })
+    : [];
   const recentQuotationEvents = await Promise.all(
     recentCustomerQuotations.slice(0, 2).map(async (quotation) => ({
       quotation,
@@ -489,6 +504,14 @@ export async function getAdminCustomerContext(
         tone: "sales" as const,
       })),
     ),
+    ...lppAccounts.slice(0, 6).map((account) => ({
+      id: `lpp-${account.id}`,
+      title: `Lipa Pole Pole ${account.reference}`,
+      detail: `${account.productName || "Product booking"} · ${normalizeStatusLabel(account.status) || "Account"} · Balance KES ${Math.round(account.balance).toLocaleString("en-KE")}`,
+      at: account.updatedAt,
+      href: `/admin/lipa-pole-pole?id=${encodeURIComponent(account.id)}`,
+      tone: "account" as const,
+    })),
     ...(voiceContext?.chatrace.found && voiceContext.chatrace.lastInteractionAt
       ? [
           {
@@ -630,6 +653,25 @@ export async function getAdminCustomerContext(
         pdfHref: buildQuotationPdfHref(quotation.id),
       };
     }),
+    lipaPolePole: {
+      totalAccounts: lppAccounts.length,
+      activeAccounts: lppAccounts.filter((account) => !["CANCELLED", "CLOSED", "CONVERTED_TO_POS", "CONVERTED_TO_PROJECT"].includes(account.status)).length,
+      agreedTotal: lppAccounts.reduce((total, account) => total + account.agreedTotal, 0),
+      totalPaid: lppAccounts.reduce((total, account) => total + account.totalPaid, 0),
+      outstandingBalance: lppAccounts.reduce((total, account) => total + account.balance, 0),
+      lastActivityAt: lppAccounts[0]?.updatedAt ?? null,
+      accounts: lppAccounts.slice(0, 10).map((account) => ({
+        id: account.id,
+        reference: account.reference,
+        productName: account.productName,
+        status: account.status,
+        agreedTotal: account.agreedTotal,
+        totalPaid: account.totalPaid,
+        balance: account.balance,
+        updatedAt: account.updatedAt,
+        href: `/admin/lipa-pole-pole?id=${encodeURIComponent(account.id)}`,
+      })),
+    },
     chatrace: mapChatrace(
       voiceContext?.chatrace || {
         found: false,
@@ -653,6 +695,9 @@ export async function getAdminCustomerContext(
       quotationHref: latestQuotation ? buildQuotationHref(latestQuotation.id) : "/marketing/receipts?tab=quotations",
       webOrdersHref: latestWebOrder ? buildWebOrdersHref(latestWebOrder.id) : "/marketing/receipts?tab=web-orders",
       chatraceInboxHref: voiceContext?.chatrace.inboxUrl ?? null,
+      lipaPolePoleHref: lppAccounts[0]
+        ? `/admin/lipa-pole-pole?id=${encodeURIComponent(lppAccounts[0].id)}`
+        : null,
     },
     timeline,
   };
