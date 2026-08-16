@@ -2,7 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
+import {
+  getTownsForCounty,
+  kenyaCountyOptions,
+} from "@/lib/agents/kenyaMarkets";
 
 type Props = {
   initialName: string;
@@ -50,7 +53,16 @@ export default function CompleteProfileForm({
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ name, email, phone, whatsappNumber, county, town, estateLandmark, locationNotes }),
+      body: JSON.stringify({
+        name,
+        email,
+        phone,
+        whatsappNumber,
+        county,
+        town,
+        estateLandmark,
+        locationNotes,
+      }),
     });
 
     const payload = await response.json().catch(() => null);
@@ -65,18 +77,30 @@ export default function CompleteProfileForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 rounded-[2rem] border border-[#7a0000]/10 bg-white p-5 shadow-[0_20px_50px_rgba(15,23,42,0.06)] sm:p-6">
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-4 rounded-[2rem] border border-[#7a0000]/10 bg-white p-5 shadow-[0_20px_50px_rgba(15,23,42,0.06)] sm:p-6"
+    >
       <div>
-        <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">Complete your profile</h1>
+        <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
+          Complete your profile
+        </h1>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          Your phone number is already verified. Add your name and any extra details you want Betech to reuse in checkout and support.
+          Your phone number is already verified. Add your name and any extra
+          details you want Betech to reuse in checkout and support.
         </p>
       </div>
 
-      {error ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
+      {error ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      ) : null}
 
       <label className="block">
-        <span className="mb-2 block text-sm font-semibold text-slate-700">Full name</span>
+        <span className="mb-2 block text-sm font-semibold text-slate-700">
+          Full name
+        </span>
         <input
           type="text"
           required
@@ -87,7 +111,9 @@ export default function CompleteProfileForm({
       </label>
 
       <label className="block">
-        <span className="mb-2 block text-sm font-semibold text-slate-700">Email address</span>
+        <span className="mb-2 block text-sm font-semibold text-slate-700">
+          Email address
+        </span>
         <input
           type="email"
           value={email}
@@ -97,7 +123,9 @@ export default function CompleteProfileForm({
       </label>
 
       <label className="block">
-        <span className="mb-2 block text-sm font-semibold text-slate-700">Phone number</span>
+        <span className="mb-2 block text-sm font-semibold text-slate-700">
+          Phone number
+        </span>
         <input
           type="tel"
           value={phone}
@@ -108,7 +136,9 @@ export default function CompleteProfileForm({
       </label>
 
       <label className="block">
-        <span className="mb-2 block text-sm font-semibold text-slate-700">WhatsApp number</span>
+        <span className="mb-2 block text-sm font-semibold text-slate-700">
+          WhatsApp number
+        </span>
         <input
           type="tel"
           value={whatsappNumber}
@@ -120,14 +150,20 @@ export default function CompleteProfileForm({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block">
-          <span className="mb-2 block text-sm font-semibold text-slate-700">County</span>
+          <span className="mb-2 block text-sm font-semibold text-slate-700">
+            County
+          </span>
           <select
             value={county}
             onChange={(event) => {
               const nextCounty = event.target.value;
               const nextTowns = getTownsForCounty(nextCounty);
               setCounty(nextCounty);
-              setTown((current) => (nextTowns.some((townOption) => townOption === current) ? current : ""));
+              setTown((current) =>
+                nextTowns.some((townOption) => townOption === current)
+                  ? current
+                  : "",
+              );
             }}
             className="w-full rounded-2xl border border-[#ead8c4] bg-[#fffdf9] px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#7a0000]/35 focus:ring-2 focus:ring-[#f2b20f]/30"
           >
@@ -141,14 +177,18 @@ export default function CompleteProfileForm({
         </label>
 
         <label className="block">
-          <span className="mb-2 block text-sm font-semibold text-slate-700">Town / city</span>
+          <span className="mb-2 block text-sm font-semibold text-slate-700">
+            Town / city
+          </span>
           <select
             value={town}
             onChange={(event) => setTown(event.target.value)}
             disabled={!county}
             className="w-full rounded-2xl border border-[#ead8c4] bg-[#fffdf9] px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#7a0000]/35 focus:ring-2 focus:ring-[#f2b20f]/30"
           >
-            <option value="">{county ? "Select town / city" : "Choose county first"}</option>
+            <option value="">
+              {county ? "Select town / city" : "Choose county first"}
+            </option>
             {townOptions.map((townOption) => (
               <option key={townOption} value={townOption}>
                 {townOption}
@@ -159,7 +199,9 @@ export default function CompleteProfileForm({
       </div>
 
       <label className="block">
-        <span className="mb-2 block text-sm font-semibold text-slate-700">Specific locality / estate / landmark</span>
+        <span className="mb-2 block text-sm font-semibold text-slate-700">
+          Specific locality / estate / landmark
+        </span>
         <input
           type="text"
           value={estateLandmark}
@@ -169,7 +211,9 @@ export default function CompleteProfileForm({
       </label>
 
       <label className="block">
-        <span className="mb-2 block text-sm font-semibold text-slate-700">Delivery notes</span>
+        <span className="mb-2 block text-sm font-semibold text-slate-700">
+          Delivery notes
+        </span>
         <textarea
           rows={3}
           value={locationNotes}

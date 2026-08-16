@@ -1,11 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import CompleteProfileForm from "@/app/account/complete-profile/CompleteProfileForm";
-import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
-import ShopFooter from "@/app/shop/_components/ShopFooter";
-import ShopHeader from "@/app/shop/_components/ShopHeader";
-import { shopStyles } from "@/app/shop/_components/shopStyles";
-import { shopNavLinks } from "@/app/shop/shopData";
 import { findSafeCustomerProfileByUserId } from "@/lib/customerProfile";
 
 export const dynamic = "force-dynamic";
@@ -31,33 +26,24 @@ export default async function CompleteProfilePage() {
   }
 
   return (
-    <div className={shopStyles.page}>
-      <ShopHeader navLinks={shopNavLinks} />
-      <section className="py-6 sm:py-8">
-        <div className={shopStyles.shell}>
-          <div className="mx-auto max-w-2xl">
-            <div className="mb-5 rounded-[1.8rem] border border-[#f2b20f]/20 bg-[linear-gradient(180deg,#fff7e7_0%,#fffdf9_100%)] px-5 py-5 shadow-[0_18px_40px_rgba(15,23,42,0.05)]">
-              <div className="text-xs font-black uppercase tracking-[0.24em] text-[#7a0000]">Phone verified</div>
-              <div className="mt-2 text-3xl font-black tracking-tight text-slate-950">Finish setting up your Betech account</div>
-              <div className="mt-3 text-sm leading-6 text-slate-600">
-                We already verified your phone number with OTP. Add your profile details once so your orders, referrals, and account history stay under one identity.
-              </div>
-            </div>
-            <CompleteProfileForm
-              initialName={dbUser?.name || ""}
-              initialEmail={dbUser?.email || ""}
-              initialPhone={dbUser?.phone || ""}
-              initialWhatsappNumber={dbUser?.whatsappNumber || ""}
-              initialCounty={dbUser?.county || ""}
-              initialTown={dbUser?.town || ""}
-              initialEstateLandmark={dbUser?.estateLandmark || ""}
-              initialLocationNotes={dbUser?.locationNotes || ""}
-            />
-          </div>
+    <div className="mx-auto w-full max-w-3xl">
+      <div className="mb-5 rounded-[1.8rem] border border-[#f2b20f]/20 bg-[linear-gradient(180deg,#fff7e7_0%,#fffdf9_100%)] px-5 py-5 shadow-[0_18px_40px_rgba(15,23,42,0.05)]">
+        <div className="text-xs font-black uppercase tracking-[0.24em] text-[#7a0000]">Phone verified</div>
+        <div className="mt-2 text-3xl font-black tracking-tight text-slate-950">Finish setting up your Betech account</div>
+        <div className="mt-3 text-sm leading-6 text-slate-600">
+          We already verified your phone number with OTP. Add your profile details once so your orders, referrals, and account history stay under one identity.
         </div>
-      </section>
-      <ShopFooter />
-      <FloatingWhatsApp />
+      </div>
+      <CompleteProfileForm
+        initialName={dbUser?.name || ""}
+        initialEmail={dbUser?.email || ""}
+        initialPhone={dbUser?.phone || ""}
+        initialWhatsappNumber={dbUser?.whatsappNumber || ""}
+        initialCounty={dbUser?.county || ""}
+        initialTown={dbUser?.town || ""}
+        initialEstateLandmark={dbUser?.estateLandmark || ""}
+        initialLocationNotes={dbUser?.locationNotes || ""}
+      />
     </div>
   );
 }
