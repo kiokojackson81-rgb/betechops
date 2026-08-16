@@ -104,7 +104,7 @@ export default async function AccountLipaPolePolePage() {
                   href={`/shop/account/lipa-pole-pole/${account.id}`}
                   className={shopStyles.secondaryButton}
                 >
-                  Open account
+                  See details
                 </Link>
                 <Link
                   href={`/shop/account/lipa-pole-pole/${account.id}/statement`}

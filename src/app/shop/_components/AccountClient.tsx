@@ -652,7 +652,7 @@ export default function AccountClient({
                           href={`/shop/account/lipa-pole-pole/${encodeURIComponent(account.id)}`}
                           className={`${shopStyles.secondaryButton} whitespace-nowrap`}
                         >
-                          Open account
+                          See details
                         </Link>
                         <Link
                           href={`/shop/account/lipa-pole-pole/${encodeURIComponent(account.id)}/statement`}
