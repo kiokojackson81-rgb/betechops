@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { CheckCircle2, WalletCards, X } from "lucide-react";
 import { formatCurrency } from "@/app/shop/_components/shopStyles";
 import {
@@ -254,8 +255,8 @@ export default function ShopLipaPolePoleStarter({
         Lipa Pole Pole
       </button>
 
-      {open ? (
-        <div className="fixed inset-0 z-[80] bg-slate-950/75 sm:flex sm:items-center sm:justify-center sm:p-4 xl:p-6" role="dialog" aria-modal="true" aria-labelledby="lpp-dialog-title">
+      {open && typeof document !== "undefined" ? createPortal(
+        <div className="fixed inset-0 z-[9999] bg-slate-950/75 sm:flex sm:items-center sm:justify-center sm:p-4 xl:p-6" role="dialog" aria-modal="true" aria-labelledby="lpp-dialog-title">
           <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#fcfaf7] sm:h-[calc(100dvh-2rem)] sm:max-h-[900px] sm:max-w-[1320px] sm:rounded-[30px] sm:border sm:border-white/20 sm:shadow-[0_35px_100px_rgba(15,23,42,0.45)] xl:h-[calc(100dvh-3rem)]">
             <div className="flex shrink-0 items-center justify-between border-b border-[#7a0000]/10 bg-white px-4 py-3 sm:px-6">
               <div>
@@ -383,7 +384,8 @@ export default function ShopLipaPolePoleStarter({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </>
   );
