@@ -30,6 +30,19 @@ function formatDate(value: string | null | undefined) {
   });
 }
 
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "Not set";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not set";
+  return date.toLocaleString("en-KE", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function titleCase(value: string | null | undefined) {
   if (!value) return "Not captured";
   return value.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
@@ -71,7 +84,18 @@ export default async function LppBookingReceiptPage({
   }
 
   const { account, payments, installments, summary } = detail;
-  const firstSuccessfulPayment = payments.find((payment) => payment.status === "SUCCESS") ?? null;
+  const successfulPayments = payments
+    .filter((payment) => payment.status === "SUCCESS")
+    .toSorted((left, right) => new Date(left.receivedAt).getTime() - new Date(right.receivedAt).getTime());
+  const firstSuccessfulPayment = successfulPayments[0] ?? null;
+  let runningPaid = 0;
+  const paymentStatement = successfulPayments.map((payment) => {
+    runningPaid += payment.amount;
+    return {
+      ...payment,
+      balanceAfterPayment: Math.max(0, summary.agreedTotal - runningPaid),
+    };
+  });
   const paymentFrequency = inferInstallmentFrequency(installments, account.createdAt);
   const installmentAmount = installments[0]?.expectedAmount ?? 0;
   const location = [account.customerTown, account.customerEstateLandmark, account.customerCounty].filter(Boolean).join(", ");
@@ -213,6 +237,60 @@ export default async function LppBookingReceiptPage({
           font-weight: 800;
         }
         .lpp-balance-row td { color: #b45309; font-weight: 800; }
+        .lpp-payment-history {
+          margin-top: 8px;
+          border: 1px solid #e5e7eb;
+          border-radius: 9px;
+          overflow: hidden;
+        }
+        .lpp-payment-history-title {
+          padding: 7px 8px;
+          background: #fffdf8;
+          color: ${branding.brandColor};
+          font-size: 9px;
+          font-weight: 800;
+          letter-spacing: .13em;
+          text-transform: uppercase;
+        }
+        .lpp-payment-table {
+          width: 100%;
+          margin: 0;
+          border-collapse: collapse;
+          font-size: 9px !important;
+        }
+        .lpp-payment-table th {
+          padding: 5px 7px;
+          border-top: 1px solid #e5e7eb;
+          border-bottom: 1px solid #e5e7eb;
+          background: #f8fafc;
+          color: #475569;
+          font-size: 8px;
+          font-weight: 800;
+          letter-spacing: .07em;
+          text-align: left;
+          text-transform: uppercase;
+        }
+        .lpp-payment-table td {
+          padding: 5px 7px;
+          border-bottom: 1px solid #eef2f7;
+          vertical-align: top;
+        }
+        .lpp-payment-table tbody tr:last-child td { border-bottom: 0; }
+        .lpp-payment-reference {
+          font-weight: 800;
+          color: #111827;
+          word-break: break-word;
+        }
+        .lpp-payment-method {
+          margin-top: 1px;
+          color: #64748b;
+          font-size: 8px;
+        }
+        .lpp-payment-summary-row td {
+          border-top: 1px solid #d1d5db;
+          background: #f8fafc;
+          font-weight: 800;
+        }
         .lpp-section {
           margin-top: 9px;
           border: 1px solid #e5e7eb;
@@ -339,6 +417,11 @@ export default async function LppBookingReceiptPage({
             padding: 6px;
             break-inside: auto;
           }
+          .lpp-payment-history { margin-top: 5px; }
+          .lpp-payment-history-title { padding: 4px 6px; }
+          .lpp-payment-table th, .lpp-payment-table td { padding: 3px 5px; }
+          .lpp-payment-table thead { display: table-header-group; }
+          .lpp-payment-table tr { break-inside: avoid; }
           .lpp-plan-grid {
             grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 4px;
@@ -430,6 +513,40 @@ export default async function LppBookingReceiptPage({
             <tr className="lpp-balance-row"><td>Balance Due</td><td>{formatKes(summary.balance)}</td></tr>
           </tbody>
         </table>
+
+        {paymentStatement.length > 0 ? (
+          <section className="lpp-payment-history">
+            <div className="lpp-payment-history-title">Payment Statement</div>
+            <table className="lpp-payment-table">
+              <thead>
+                <tr>
+                  <th style={{ width: "28%" }}>Payment Date</th>
+                  <th>Transaction</th>
+                  <th className="lpp-right" style={{ width: "18%" }}>Amount</th>
+                  <th className="lpp-right" style={{ width: "20%" }}>Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paymentStatement.map((payment) => (
+                  <tr key={payment.id}>
+                    <td>{formatDateTime(payment.receivedAt)}</td>
+                    <td>
+                      <div className="lpp-payment-reference">{payment.reference || "No reference"}</div>
+                      <div className="lpp-payment-method">{titleCase(payment.method)}</div>
+                    </td>
+                    <td className="lpp-right"><strong>{formatKes(payment.amount)}</strong></td>
+                    <td className="lpp-right">{formatKes(payment.balanceAfterPayment)}</td>
+                  </tr>
+                ))}
+                <tr className="lpp-payment-summary-row">
+                  <td colSpan={2}>Confirmed payments: {paymentStatement.length}</td>
+                  <td className="lpp-right">{formatKes(summary.totalPaid)}</td>
+                  <td className="lpp-right">{formatKes(summary.balance)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+        ) : null}
 
         <section className="lpp-section">
           <div className="lpp-section-title">Lipa Pole Pole Payment Plan</div>
