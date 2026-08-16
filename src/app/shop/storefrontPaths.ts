@@ -6,6 +6,7 @@ export const SHOP_CART_HREF = "/cart";
 export const SHOP_CHECKOUT_HREF = "/checkout";
 export const SHOP_CHECKOUT_LOGIN_HREF = "/login/phone?callbackUrl=/checkout";
 export const SHOP_REQUEST_QUOTE_HREF = "/request-quote";
+export const SHOP_LIPA_POLE_POLE_HREF = "/lipa-pole-pole";
 export const SHOP_ORDER_SUCCESS_HREF = "/order-success";
 export const SHOP_QUOTE_SUCCESS_HREF = "/quote-success";
 

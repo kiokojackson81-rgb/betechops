@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { LIPA_POLE_POLE_MPESA_ACCOUNT, LIPA_POLE_POLE_MPESA_PAYBILL } from "@/lib/lipaPolePoleConfig";
 
 type LppDetail = {
   account: {
@@ -39,6 +40,8 @@ type LppDetail = {
     receivedAt: string;
     notes: string | null;
     reversedAt: string | null;
+    rejectedAt?: string | null;
+    rejectionReason?: string | null;
   }>;
   summary: {
     agreedTotal: number;
@@ -118,7 +121,7 @@ export default function LppAccountDetailClient({ initialDetail }: { initialDetai
         reference: "",
         notes: "",
       });
-      setBanner("Payment submitted successfully.");
+      setBanner("Payment submitted for verification. We will update your balance after confirming the payment.");
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Failed to record payment.");
     } finally {
@@ -184,6 +187,11 @@ export default function LppAccountDetailClient({ initialDetail }: { initialDetai
         </div>
 
         <div className="mt-5 flex flex-wrap gap-2">
+          {detail.summary.balance > 0 ? (
+            <a href="#make-payment" className="rounded-[16px] bg-[#7a0000] px-4 py-3 text-sm font-bold text-white">
+              Make a payment
+            </a>
+          ) : null}
           <Link
             href={`/shop/account/lipa-pole-pole/${encodeURIComponent(detail.account.id)}/statement`}
             className="rounded-[16px] border border-[#7a0000]/14 bg-white px-4 py-3 text-sm font-bold text-[#7a0000]"
@@ -203,13 +211,14 @@ export default function LppAccountDetailClient({ initialDetail }: { initialDetai
 
       <section className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
         <form
+          id="make-payment"
           onSubmit={submitPayment}
           className="rounded-[28px] border border-[#7a0000]/10 bg-white p-6 shadow-[0_22px_60px_rgba(15,23,42,0.08)]"
         >
           <div className="text-xs font-black uppercase tracking-[0.18em] text-[#7a0000]">Continue paying</div>
-          <h2 className="mt-2 text-2xl font-black text-slate-950">Record a new payment</h2>
+          <h2 className="mt-2 text-2xl font-black text-slate-950">Pay with M-Pesa</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            Use the same account to keep your balance updated. For M-Pesa, bank, or card payments, include the payment reference.
+            Send your payment to Paybill <strong>{LIPA_POLE_POLE_MPESA_PAYBILL}</strong>, account number <strong>{LIPA_POLE_POLE_MPESA_ACCOUNT}</strong>, then submit the confirmation code. Pending payments do not reduce your balance until verified.
           </p>
           {banner ? <div className="mt-4 rounded-[18px] border border-[#0f9d58]/15 bg-[#f4fff7] px-4 py-3 text-sm text-[#0f9d58]">{banner}</div> : null}
           {error ? <div className="mt-4 rounded-[18px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
@@ -222,32 +231,24 @@ export default function LppAccountDetailClient({ initialDetail }: { initialDetai
                 className="min-h-[3rem] rounded-[16px] border border-[#7a0000]/10 bg-white px-4"
                 type="number"
                 min={1}
+                max={detail.summary.balance}
                 required
               />
             </label>
             <label className="grid gap-2 text-sm font-semibold text-slate-700">
-              Payment method
-              <select
-                value={paymentForm.method}
-                onChange={(event) => setPaymentForm((current) => ({ ...current, method: event.target.value }))}
-                className="min-h-[3rem] rounded-[16px] border border-[#7a0000]/10 bg-white px-4"
-              >
-                <option value="MPESA">M-Pesa</option>
-                <option value="BANK">Bank</option>
-                <option value="CARD">Card</option>
-                <option value="CASH">Cash</option>
-                <option value="OTHER">Other</option>
-              </select>
-            </label>
-            <label className="grid gap-2 text-sm font-semibold text-slate-700">
-              Reference
+              M-Pesa transaction code
               <input
                 value={paymentForm.reference}
                 onChange={(event) => setPaymentForm((current) => ({ ...current, reference: event.target.value }))}
                 className="min-h-[3rem] rounded-[16px] border border-[#7a0000]/10 bg-white px-4"
-                placeholder="M-Pesa / bank / card reference"
+                placeholder="e.g. TGQ7ABC123"
+                required
               />
             </label>
+            <div className="rounded-[16px] border border-[#7a0000]/10 bg-[#fffaf4] p-4 text-sm text-slate-700">
+              <div>Current balance: <strong>{formatCurrency(detail.summary.balance)}</strong></div>
+              <div className="mt-1">Balance after verification: <strong>{formatCurrency(Math.max(0, detail.summary.balance - Number(paymentForm.amount || 0)))}</strong></div>
+            </div>
             <label className="grid gap-2 text-sm font-semibold text-slate-700">
               Notes
               <textarea
@@ -262,7 +263,7 @@ export default function LppAccountDetailClient({ initialDetail }: { initialDetai
               disabled={submitting}
               className="rounded-[18px] bg-[#7a0000] px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
             >
-              {submitting ? "Saving..." : "Record payment"}
+              {submitting ? "Submitting..." : "Submit payment"}
             </button>
           </div>
         </form>
@@ -282,10 +283,11 @@ export default function LppAccountDetailClient({ initialDetail }: { initialDetai
                       </div>
                     </div>
                     <div className="rounded-full bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-[#7a0000]">
-                      {payment.status}
+                      {payment.status === "SUCCESS" ? "Verified" : payment.status === "PENDING" ? "Pending verification" : payment.status === "FAILED" ? "Rejected" : payment.status}
                     </div>
                   </div>
                   {payment.notes ? <div className="mt-2 text-sm text-slate-600">{payment.notes}</div> : null}
+                  {payment.rejectionReason ? <div className="mt-2 text-sm font-semibold text-red-700">Reason: {payment.rejectionReason}</div> : null}
                   {payment.reversedAt ? (
                     <div className="mt-2 text-sm font-semibold text-red-700">
                       Reversed on {formatDate(payment.reversedAt)}

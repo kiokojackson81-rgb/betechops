@@ -53,6 +53,7 @@ export async function POST(request: Request, context: ParamsContext) {
       reference: normalizeOptional(parsed.data.reference),
       receivedById: null,
       notes: normalizeOptional(parsed.data.notes) || "Submitted from customer portal.",
+      status: "PENDING",
     });
 
     return noStoreJson({ ok: true, payment }, { status: 201 });
@@ -63,9 +64,15 @@ export async function POST(request: Request, context: ParamsContext) {
         ? 404
         : ["INVALID_PAYMENT_AMOUNT", "LPP_OVERPAYMENT_NOT_ALLOWED"].includes(message)
           ? 400
+          : message === "DUPLICATE_PAYMENT_REFERENCE"
+            ? 409
           : message === "LPP_NOT_ACCEPTING_PAYMENTS"
             ? 409
             : 500;
-    return noStoreJson({ error: message }, { status });
+    return noStoreJson({
+      error: message === "DUPLICATE_PAYMENT_REFERENCE"
+        ? "This M-Pesa transaction code has already been submitted. Please check the code and try again."
+        : message,
+    }, { status });
   }
 }

@@ -5,6 +5,11 @@ import Link from "next/link";
 import { Wallet } from "lucide-react";
 import { formatCurrency } from "@/app/shop/_components/shopStyles";
 import { LIPA_POLE_POLE_TERMS_PATH } from "@/lib/lipaPolePoleTerms";
+import {
+  LIPA_POLE_POLE_MIN_DEPOSIT,
+  LIPA_POLE_POLE_MPESA_ACCOUNT,
+  LIPA_POLE_POLE_MPESA_PAYBILL,
+} from "@/lib/lipaPolePoleConfig";
 
 type ShopLipaPolePoleStarterProps = {
   product: {
@@ -59,7 +64,7 @@ export default function ShopLipaPolePoleStarter({
     estateLandmark: customer.estateLandmark,
     locationNotes: customer.locationNotes,
     quantity: "1",
-    initialPaymentAmount: String(Math.max(0, Math.round(product.lipaPolePoleMinDeposit || 0))),
+    initialPaymentAmount: String(Math.max(LIPA_POLE_POLE_MIN_DEPOSIT, Math.round(product.lipaPolePoleMinDeposit || 0))),
     initialPaymentMethod: "MPESA",
     initialPaymentReference: "",
     initialPaymentNotes: "",
@@ -105,6 +110,7 @@ export default function ShopLipaPolePoleStarter({
           initialPaymentReference: form.initialPaymentReference,
           initialPaymentNotes: form.initialPaymentNotes,
           notes: form.notes,
+          termsAccepted,
         }),
       });
       const data = (await response.json().catch(() => ({}))) as {
@@ -142,7 +148,7 @@ export default function ShopLipaPolePoleStarter({
       </button>
       {successHref ? (
         <div className="rounded-[18px] border border-[#0f9d58]/15 bg-[#f4fff7] px-4 py-3 text-sm text-slate-700">
-          Lipa Pole Pole account created.{" "}
+          Lipa Pole Pole booking created. Your payment is pending verification.{" "}
           <Link href={successHref} className="font-bold text-[#0f9d58]">
             Open account
           </Link>
@@ -181,6 +187,13 @@ export default function ShopLipaPolePoleStarter({
                 <div className="text-[11px] font-black uppercase tracking-[0.12em] text-[#7a0000]">Remaining balance</div>
                 <div className="mt-1 text-lg font-black text-slate-950">{formatCurrency(balance)}</div>
               </div>
+            </div>
+
+            <div className="mt-4 rounded-[20px] border border-[#0f9d58]/20 bg-[#f4fff7] p-4 text-sm leading-6 text-slate-700">
+              <div className="font-black uppercase tracking-[0.12em] text-[#0f9d58]">Pay with M-Pesa</div>
+              <div className="mt-2">Paybill: <strong>{LIPA_POLE_POLE_MPESA_PAYBILL}</strong></div>
+              <div>Account number: <strong>{LIPA_POLE_POLE_MPESA_ACCOUNT}</strong></div>
+              <div className="mt-2">Send the initial payment shown above, then enter the M-Pesa confirmation code below. Your balance updates only after Betech verifies the payment.</div>
             </div>
 
             {product.lipaPolePoleTerms ? (
@@ -272,31 +285,18 @@ export default function ShopLipaPolePoleStarter({
                   onChange={(event) => setForm((current) => ({ ...current, initialPaymentAmount: event.target.value }))}
                   className={inputClass}
                   type="number"
-                  min={Math.max(0, Math.round(product.lipaPolePoleMinDeposit || 0))}
+                  min={Math.max(LIPA_POLE_POLE_MIN_DEPOSIT, Math.round(product.lipaPolePoleMinDeposit || 0))}
                   required
                 />
               </label>
               <label className="grid gap-2 text-sm font-semibold text-slate-700">
-                Payment method
-                <select
-                  value={form.initialPaymentMethod}
-                  onChange={(event) => setForm((current) => ({ ...current, initialPaymentMethod: event.target.value }))}
-                  className={inputClass}
-                >
-                  <option value="MPESA">M-Pesa</option>
-                  <option value="BANK">Bank</option>
-                  <option value="CARD">Card</option>
-                  <option value="CASH">Cash</option>
-                  <option value="OTHER">Other</option>
-                </select>
-              </label>
-              <label className="grid gap-2 text-sm font-semibold text-slate-700">
-                Payment reference
+                M-Pesa transaction code
                 <input
                   value={form.initialPaymentReference}
                   onChange={(event) => setForm((current) => ({ ...current, initialPaymentReference: event.target.value }))}
                   className={inputClass}
-                  placeholder="M-Pesa / bank / card reference"
+                  placeholder="e.g. TGQ7ABC123"
+                  required={form.initialPaymentMethod !== "CASH"}
                 />
               </label>
               <label className="grid gap-2 text-sm font-semibold text-slate-700">

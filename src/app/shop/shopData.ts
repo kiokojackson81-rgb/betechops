@@ -1,5 +1,5 @@
 import { SHOP_CATEGORY_DEFINITIONS } from "@/app/shop/shopCatalogConfig";
-import { getShopCategoryHref, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
+import { getShopCategoryHref, SHOP_LIPA_POLE_POLE_HREF, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
 
 export type ShopCategory = {
   slug: string;
@@ -69,6 +69,7 @@ export type ShopProductSection = {
 };
 
 export const shopNavLinks = [
+  { label: "Lipa Pole Pole", href: SHOP_LIPA_POLE_POLE_HREF },
   { label: "Solar Full Kits", href: getShopCategoryHref("solar-full-kits") },
   { label: "Solar Panels", href: getShopCategoryHref("solar-panels") },
   { label: "Batteries", href: getShopCategoryHref("solar-batteries") },

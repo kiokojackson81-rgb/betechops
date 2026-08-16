@@ -710,7 +710,7 @@ export default function LipaPolePoleAdminClient({
 
   function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    void createAccount(null, false);
+    handleCreateAndPrint();
   }
 
   function closeCreateFlow() {
@@ -974,6 +974,23 @@ export default function LipaPolePoleAdminClient({
       });
       await refreshList(selectedId);
       setBanner({ tone: "success", text: "Payment reversed." });
+    } catch (error) {
+      showError(error);
+    }
+  }
+
+  async function handleReviewPayment(paymentId: string, action: "VERIFY" | "REJECT") {
+    if (!selectedId) return;
+    const reason = action === "REJECT" ? window.prompt("Enter rejection reason") : null;
+    if (action === "REJECT" && (!reason || !reason.trim())) return;
+    setBanner(null);
+    try {
+      await readJson(`/api/lipa-pole-pole/${selectedId}/payments/${paymentId}/${action === "VERIFY" ? "verify" : "reject"}`, {
+        method: "POST",
+        body: JSON.stringify(action === "REJECT" ? { reason: reason?.trim() } : {}),
+      });
+      await refreshList(selectedId);
+      setBanner({ tone: "success", text: action === "VERIFY" ? "Payment verified and balance updated." : "Payment rejected." });
     } catch (error) {
       showError(error);
     }
@@ -1501,6 +1518,8 @@ export default function LipaPolePoleAdminClient({
                                   onConvertToPos={() => void handleConvertToPos()}
                                   onConvertToProject={() => void handleConvertToProject()}
                                   onReversePayment={handleReversePayment}
+                                  onVerifyPayment={(paymentId) => void handleReviewPayment(paymentId, "VERIFY")}
+                                  onRejectPayment={(paymentId) => void handleReviewPayment(paymentId, "REJECT")}
                                   isConvertingPos={isConvertingPos}
                                   isConvertingProject={isConvertingProject}
                                 />
@@ -1845,13 +1864,9 @@ export default function LipaPolePoleAdminClient({
               <button type="button" className={secondaryButtonClass} onClick={closeCreateFlow} disabled={isSubmittingCreate}>
                 Cancel
               </button>
-              <button type="submit" className={primaryButtonClass} disabled={isSubmittingCreate}>
-                {isSubmittingCreate ? "Creating..." : "Create account"}
-              </button>
               <button
-                type="button"
+                type="submit"
                 className="inline-flex w-full items-center justify-center rounded-2xl border border-blue-400/50 bg-blue-500/10 px-4 py-3 text-sm font-semibold text-blue-100 transition hover:bg-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-                onClick={handleCreateAndPrint}
                 disabled={isSubmittingCreate}
               >
                 {isSubmittingCreate ? "Creating..." : "Create & Print Booking Receipt"}
@@ -2061,6 +2076,8 @@ function ExpandedRowDetails({
   onConvertToPos,
   onConvertToProject,
   onReversePayment,
+  onVerifyPayment,
+  onRejectPayment,
   isConvertingPos,
   isConvertingProject,
 }: {
@@ -2071,6 +2088,8 @@ function ExpandedRowDetails({
   onConvertToPos: () => void;
   onConvertToProject: () => void;
   onReversePayment: (paymentId: string) => void;
+  onVerifyPayment: (paymentId: string) => void;
+  onRejectPayment: (paymentId: string) => void;
   isConvertingPos: boolean;
   isConvertingProject: boolean;
 }) {
@@ -2270,7 +2289,12 @@ function ExpandedRowDetails({
                           </span>
                         </td>
                         <td className="py-3 text-right">
-                          {payment.status === "SUCCESS" ? (
+                          {payment.status === "PENDING" ? (
+                            <div className="flex justify-end gap-3">
+                              <button type="button" className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-300 hover:text-emerald-200" onClick={() => onVerifyPayment(payment.id)}>Verify</button>
+                              <button type="button" className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-300 hover:text-rose-200" onClick={() => onRejectPayment(payment.id)}>Reject</button>
+                            </div>
+                          ) : payment.status === "SUCCESS" ? (
                             <button type="button" className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-200 transition hover:text-rose-100" onClick={() => void onReversePayment(payment.id)}>
                               Reverse
                             </button>

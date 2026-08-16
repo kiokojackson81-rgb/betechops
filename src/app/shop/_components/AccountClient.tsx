@@ -158,6 +158,10 @@ export default function AccountClient({
     const complete = fields.filter((value) => value.trim()).length;
     return Math.round((complete / fields.length) * 100);
   }, [form]);
+  const activeLppAccounts = recentLppAccounts.filter((account) => !["COMPLETED", "CONVERTED_TO_POS", "CONVERTED_TO_PROJECT", "CANCELLED", "REFUNDED", "CLOSED"].includes(account.status));
+  const lppTotalPaid = recentLppAccounts.reduce((total, account) => total + account.totalPaid, 0);
+  const lppRemaining = activeLppAccounts.reduce((total, account) => total + account.balance, 0);
+  const lppCompleted = recentLppAccounts.filter((account) => ["COMPLETED", "CONVERTED_TO_POS", "CONVERTED_TO_PROJECT", "CLOSED"].includes(account.status)).length;
 
   const effectiveOrders = useMemo(() => {
     if (recentOrders.length) return recentOrders;
@@ -602,6 +606,12 @@ export default function AccountClient({
                   Start another
                 </Link>
               </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-[18px] border border-[#7a0000]/10 bg-[#fcfaf7] p-4"><div className="text-[11px] font-black uppercase tracking-[0.12em] text-[#7a0000]">Active plans</div><div className="mt-1 text-xl font-black text-slate-950">{activeLppAccounts.length}</div></div>
+                <div className="rounded-[18px] border border-[#7a0000]/10 bg-[#fcfaf7] p-4"><div className="text-[11px] font-black uppercase tracking-[0.12em] text-[#7a0000]">Total paid</div><div className="mt-1 text-xl font-black text-slate-950">{formatCurrency(lppTotalPaid)}</div></div>
+                <div className="rounded-[18px] border border-[#7a0000]/10 bg-[#fcfaf7] p-4"><div className="text-[11px] font-black uppercase tracking-[0.12em] text-[#7a0000]">Remaining</div><div className="mt-1 text-xl font-black text-slate-950">{formatCurrency(lppRemaining)}</div></div>
+                <div className="rounded-[18px] border border-[#7a0000]/10 bg-[#fcfaf7] p-4"><div className="text-[11px] font-black uppercase tracking-[0.12em] text-[#7a0000]">Completed</div><div className="mt-1 text-xl font-black text-slate-950">{lppCompleted}</div></div>
+              </div>
               <div className="mt-4 space-y-3">
                 {recentLppAccounts.length ? (
                   recentLppAccounts.slice(0, 3).map((account) => (
@@ -633,6 +643,11 @@ export default function AccountClient({
                         {account.percentagePaid.toFixed(2)}% paid
                       </div>
                       <div className="mt-4 flex flex-wrap gap-2">
+                        {account.balance > 0 ? (
+                          <Link href={`/shop/account/lipa-pole-pole/${encodeURIComponent(account.id)}#make-payment`} className={`${shopStyles.primaryButton} whitespace-nowrap`}>
+                            Make a payment
+                          </Link>
+                        ) : null}
                         <Link
                           href={`/shop/account/lipa-pole-pole/${encodeURIComponent(account.id)}`}
                           className={`${shopStyles.secondaryButton} whitespace-nowrap`}

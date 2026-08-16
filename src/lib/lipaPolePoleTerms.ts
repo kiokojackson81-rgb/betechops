@@ -1,4 +1,5 @@
 export const LIPA_POLE_POLE_TERMS_PATH = "/p/lipa-pole-pole-terms";
+export const LIPA_POLE_POLE_TERMS_VERSION = "2026-08-16";
 export const LIPA_POLE_POLE_TERMS_URL = `https://www.betech.co.ke${LIPA_POLE_POLE_TERMS_PATH}`;
 export const LIPA_POLE_POLE_TERMS_DISPLAY_URL = "www.betech.co.ke/p/lipa-pole-pole-terms";
 

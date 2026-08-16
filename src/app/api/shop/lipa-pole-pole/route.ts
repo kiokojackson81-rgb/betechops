@@ -6,6 +6,8 @@ import { createLipaPolePole, listSerializedLppAccounts } from "@/lib/lipaPolePol
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { LIPA_POLE_POLE_TERMS_VERSION } from "@/lib/lipaPolePoleTerms";
+import { LIPA_POLE_POLE_MIN_DEPOSIT } from "@/lib/lipaPolePoleConfig";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +27,7 @@ const createShopLppSchema = z.object({
   initialPaymentReference: z.string().trim().max(255).optional().or(z.literal("")).nullable(),
   initialPaymentNotes: z.string().trim().max(1000).optional().or(z.literal("")).nullable(),
   notes: z.string().trim().max(2000).optional().or(z.literal("")).nullable(),
+  termsAccepted: z.literal(true),
 });
 
 function normalizeOptional(value: string | null | undefined) {
@@ -132,12 +135,19 @@ export async function POST(request: Request) {
     );
   }
 
-  const minDeposit = Number(productConfig.lipaPolePoleMinDeposit || 0);
+  const minDeposit = Number(productConfig.lipaPolePoleMinDeposit || LIPA_POLE_POLE_MIN_DEPOSIT);
   if (payload.initialPaymentAmount < minDeposit) {
     return noStoreJson(
       { error: `Minimum deposit for this product is KES ${Math.round(minDeposit).toLocaleString("en-KE")}.` },
       { status: 400 },
     );
+  }
+  const agreedTotal = Number(productConfig.sellingPrice) * payload.quantity;
+  if (payload.initialPaymentAmount > agreedTotal) {
+    return noStoreJson({ error: "Initial payment cannot exceed the agreed product price." }, { status: 400 });
+  }
+  if (payload.initialPaymentMethod !== "CASH" && !normalizeOptional(payload.initialPaymentReference)) {
+    return noStoreJson({ error: "Enter the payment transaction reference." }, { status: 400 });
   }
 
   await updateSafeCustomerProfile(user.id, {
@@ -163,6 +173,8 @@ export async function POST(request: Request) {
       reservationMode: "SOFT_RESERVE",
       source: "SHOP_SELF_SERVICE",
       notes: normalizeOptional(payload.notes) || productConfig.lipaPolePoleTerms || null,
+      termsAcceptedAt: new Date(),
+      termsVersion: LIPA_POLE_POLE_TERMS_VERSION,
       createdById: user.id,
       assignment: {
         assignedById: user.id,
@@ -173,6 +185,7 @@ export async function POST(request: Request) {
         reference: normalizeOptional(payload.initialPaymentReference),
         notes: normalizeOptional(payload.initialPaymentNotes) || "Customer portal deposit.",
         receivedById: null,
+        status: "PENDING",
       },
     });
 
@@ -182,9 +195,13 @@ export async function POST(request: Request) {
     const status =
       message === "NO_ELIGIBLE_CUSTOMER_SERVICE_AGENT"
         ? 409
-        : message === "INVALID_DATE" || message === "INVALID_AGREED_TOTAL"
+        : ["INVALID_DATE", "INVALID_AGREED_TOTAL", "DUPLICATE_PAYMENT_REFERENCE"].includes(message)
           ? 400
           : 500;
-    return noStoreJson({ error: message }, { status });
+    return noStoreJson({
+      error: message === "DUPLICATE_PAYMENT_REFERENCE"
+        ? "This M-Pesa transaction code has already been submitted. Please check the code and try again."
+        : message,
+    }, { status });
   }
 }

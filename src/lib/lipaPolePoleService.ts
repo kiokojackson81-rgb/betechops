@@ -45,6 +45,8 @@ type RawLppRow = {
   salespersonId: string | null;
   source: string | null;
   notes: string | null;
+  termsAcceptedAt: Date | null;
+  termsVersion: string | null;
   completedAt: Date | null;
   convertedAt: Date | null;
   convertedById: string | null;
@@ -68,6 +70,10 @@ type RawLppPaymentRow = {
   receivedById: string | null;
   receivedAt: Date;
   notes: string | null;
+  verifiedAt: Date | null;
+  verifiedById: string | null;
+  rejectedAt: Date | null;
+  rejectionReason: string | null;
   reversedAt: Date | null;
   reversedById: string | null;
   reversalReason: string | null;
@@ -183,6 +189,8 @@ export type SerializedLppAccount = {
   productName: string | null;
   itemSerial: string | null;
   itemWarranty: string | null;
+  termsAcceptedAt: string | null;
+  termsVersion: string | null;
   quantity: number;
   agreedUnitPrice: number;
   assignedToId: string | null;
@@ -219,6 +227,10 @@ export type SerializedLppPayment = {
   receivedById: string | null;
   receivedAt: string;
   notes: string | null;
+  verifiedAt: string | null;
+  verifiedById: string | null;
+  rejectedAt: string | null;
+  rejectionReason: string | null;
   reversedAt: string | null;
   reversalReason: string | null;
   createdAt: string;
@@ -318,6 +330,8 @@ export type CreateLppInput = {
   salespersonId?: string | null;
   source?: string | null;
   notes?: string | null;
+  termsAcceptedAt?: Date | string | null;
+  termsVersion?: string | null;
   createdById?: string | null;
   installmentPlan?: {
     frequency: "WEEKLY" | "MONTHLY";
@@ -330,6 +344,7 @@ export type CreateLppInput = {
     receivedById?: string | null;
     notes?: string | null;
     receivedAt?: Date | string | null;
+    status?: "PENDING" | "SUCCESS";
   } | null;
   assignment?: {
     assignedToId?: string | null;
@@ -359,6 +374,15 @@ export type RecordLppPaymentInput = {
   receivedAt?: Date | string | null;
   notes?: string | null;
   allowOverpaymentOverride?: boolean;
+  status?: "PENDING" | "SUCCESS";
+};
+
+export type ReviewLppPaymentInput = {
+  lipaPolePoleId: string;
+  paymentId: string;
+  reviewedById?: string | null;
+  action: "VERIFY" | "REJECT";
+  rejectionReason?: string | null;
 };
 
 export type ReverseLppPaymentInput = {
@@ -992,7 +1016,7 @@ export async function createLipaPolePole(
       INSERT INTO "LipaPolePole" (
         "id", "reference", "customerId", "productId", "customProductName", "itemSerial", "itemWarranty", "publicToken", "quantity", "agreedUnitPrice", "agreedTotal",
         "currency", "status", "paymentMode", "reservationMode", "expectedCompletionDate", "salespersonId",
-        "source", "notes", "createdById", "createdAt", "updatedAt"
+        "source", "notes", "termsAcceptedAt", "termsVersion", "createdById", "createdAt", "updatedAt"
       ) VALUES (
         ${id},
         ${reference},
@@ -1013,6 +1037,8 @@ export async function createLipaPolePole(
         ${trimToNull(input.salespersonId ?? null)},
         ${trimToNull(input.source ?? null)},
         ${trimToNull(input.notes ?? null)},
+        ${normalizeOptionalDate(input.termsAcceptedAt)},
+        ${trimToNull(input.termsVersion ?? null)},
         ${trimToNull(input.createdById ?? null)},
         CURRENT_TIMESTAMP,
         CURRENT_TIMESTAMP
@@ -1083,6 +1109,7 @@ export async function createLipaPolePole(
           receivedById: input.initialPayment.receivedById ?? input.createdById ?? null,
           receivedAt: input.initialPayment.receivedAt ?? now,
           notes: input.initialPayment.notes ?? "Initial deposit",
+          status: input.initialPayment.status ?? "SUCCESS",
         },
         tx,
       );
@@ -1125,6 +1152,9 @@ export async function recordLppPayment(
 ) {
   const amount = toMoney(input.amount);
   if (amount.lte(0)) throw new Error("INVALID_PAYMENT_AMOUNT");
+  const paymentStatus = input.status ?? "SUCCESS";
+  const rawReference = trimToNull(input.reference ?? null);
+  const normalizedReference = input.method === "MPESA" ? rawReference?.toUpperCase() ?? null : rawReference;
 
   return withLppTransaction(db, async (tx) => {
     const lpp = await lockLppOrThrow(tx, input.lipaPolePoleId);
@@ -1143,22 +1173,34 @@ export async function recordLppPayment(
       throw new Error("LPP_OVERPAYMENT_NOT_ALLOWED");
     }
 
+    if (normalizedReference) {
+      const duplicate = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+        SELECT "id" FROM "LipaPolePolePayment"
+        WHERE UPPER("reference") = UPPER(${normalizedReference})
+        LIMIT 1
+      `);
+      if (duplicate[0]) throw new Error("DUPLICATE_PAYMENT_REFERENCE");
+    }
+
     const paymentId = randomUUID();
     const receivedAt = normalizeOptionalDate(input.receivedAt) ?? new Date();
 
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "LipaPolePolePayment" (
-        "id", "lipaPolePoleId", "amount", "method", "reference", "status", "receivedById", "receivedAt", "notes", "createdAt"
+        "id", "lipaPolePoleId", "amount", "method", "reference", "status", "receivedById", "receivedAt", "notes",
+        "verifiedAt", "verifiedById", "createdAt"
       ) VALUES (
         ${paymentId},
         ${input.lipaPolePoleId},
         ${amount},
         ${input.method}::"LipaPolePolePaymentMethod",
-        ${trimToNull(input.reference ?? null)},
-        ${"SUCCESS"}::"LipaPolePolePaymentStatus",
+        ${normalizedReference},
+        ${paymentStatus}::"LipaPolePolePaymentStatus",
         ${trimToNull(input.receivedById ?? null)},
         ${receivedAt},
         ${trimToNull(input.notes ?? null)},
+        ${paymentStatus === "SUCCESS" ? receivedAt : null},
+        ${paymentStatus === "SUCCESS" ? trimToNull(input.receivedById ?? null) : null},
         CURRENT_TIMESTAMP
       )
     `);
@@ -1168,19 +1210,20 @@ export async function recordLppPayment(
 
     await writeLppEvent(tx, {
       lipaPolePoleId: input.lipaPolePoleId,
-      eventType: "PAYMENT_RECEIVED",
+      eventType: paymentStatus === "SUCCESS" ? "PAYMENT_RECEIVED" : "PAYMENT_SUBMITTED",
       actorId: input.receivedById ?? null,
       metadata: {
         paymentId,
         amount: amount.toString(),
         method: input.method,
-        reference: trimToNull(input.reference ?? null),
+        reference: normalizedReference,
+        status: paymentStatus,
         totalPaid: completion.summary.totalPaid.toString(),
         balance: completion.summary.balance.toString(),
       },
     });
 
-    if (completion.summary.isFullyPaid) {
+    if (paymentStatus === "SUCCESS" && completion.summary.isFullyPaid) {
       await writeLppEvent(tx, {
         lipaPolePoleId: input.lipaPolePoleId,
         eventType: "COMPLETED",
@@ -1196,7 +1239,7 @@ export async function recordLppPayment(
       actorId: input.receivedById ?? null,
       entity: "LipaPolePole",
       entityId: input.lipaPolePoleId,
-      action: "PAYMENT_RECEIVED",
+      action: paymentStatus === "SUCCESS" ? "PAYMENT_RECEIVED" : "PAYMENT_SUBMITTED",
       before: {
         totalPaid: summaryBefore.totalPaid.toString(),
         balance: summaryBefore.balance.toString(),
@@ -1205,7 +1248,8 @@ export async function recordLppPayment(
       after: {
         paymentId,
         amount: amount.toString(),
-        reference: trimToNull(input.reference ?? null),
+        reference: normalizedReference,
+        paymentStatus,
         totalPaid: completion.summary.totalPaid.toString(),
         balance: completion.summary.balance.toString(),
         status: completion.lpp.status,
@@ -1217,6 +1261,75 @@ export async function recordLppPayment(
       paymentId,
       summary: completion.summary,
     };
+  });
+}
+
+export async function reviewLppPayment(
+  input: ReviewLppPaymentInput,
+  db: DbClient = prisma,
+) {
+  const rejectionReason = trimToNull(input.rejectionReason ?? null);
+  if (input.action === "REJECT" && !rejectionReason) throw new Error("REJECTION_REASON_REQUIRED");
+
+  return withLppTransaction(db, async (tx) => {
+    const lpp = await lockLppOrThrow(tx, input.lipaPolePoleId);
+    const rows = await tx.$queryRaw<RawLppPaymentRow[]>(Prisma.sql`
+      SELECT * FROM "LipaPolePolePayment"
+      WHERE "id" = ${input.paymentId} AND "lipaPolePoleId" = ${input.lipaPolePoleId}
+      FOR UPDATE
+    `);
+    const payment = rows[0];
+    if (!payment) throw new Error("LPP_PAYMENT_NOT_FOUND");
+    if (normalizeLppPaymentStatus(payment.status) !== "PENDING") throw new Error("LPP_PAYMENT_ALREADY_REVIEWED");
+
+    const now = new Date();
+    const paymentsBefore = await getLppPayments(tx, input.lipaPolePoleId);
+    const summaryBefore = computeLppFinancialSummary({ agreedTotal: lpp.agreedTotal, payments: paymentsBefore });
+
+    if (input.action === "VERIFY") {
+      if (payment.amount.gt(summaryBefore.balance)) throw new Error("LPP_OVERPAYMENT_NOT_ALLOWED");
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE "LipaPolePolePayment"
+        SET "status" = 'SUCCESS', "verifiedAt" = ${now}, "verifiedById" = ${trimToNull(input.reviewedById ?? null)}
+        WHERE "id" = ${payment.id}
+      `);
+    } else {
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE "LipaPolePolePayment"
+        SET "status" = 'FAILED', "rejectedAt" = ${now}, "rejectionReason" = ${rejectionReason}
+        WHERE "id" = ${payment.id}
+      `);
+    }
+
+    const paymentsAfter = await getLppPayments(tx, input.lipaPolePoleId);
+    const completion = await updateLppStatusAndCompletion(tx, { lpp, payments: paymentsAfter, now });
+    const eventType = input.action === "VERIFY" ? "PAYMENT_VERIFIED" : "PAYMENT_REJECTED";
+    await writeLppEvent(tx, {
+      lipaPolePoleId: input.lipaPolePoleId,
+      eventType,
+      actorId: input.reviewedById ?? null,
+      metadata: {
+        paymentId: payment.id,
+        amount: payment.amount.toString(),
+        reference: payment.reference,
+        rejectionReason,
+        totalPaid: completion.summary.totalPaid.toString(),
+        balance: completion.summary.balance.toString(),
+      },
+    });
+    await writeActionLog(tx, {
+      actorId: input.reviewedById ?? null,
+      entity: "LipaPolePolePayment",
+      entityId: payment.id,
+      action: eventType,
+      before: { status: payment.status } as Prisma.JsonObject,
+      after: {
+        status: input.action === "VERIFY" ? "SUCCESS" : "FAILED",
+        rejectionReason,
+      } as Prisma.JsonObject,
+    });
+
+    return { paymentId: payment.id, lpp: completion.lpp, summary: completion.summary };
   });
 }
 
@@ -1734,6 +1847,10 @@ function serializeLppPayment(row: RawLppPaymentRow): SerializedLppPayment {
     receivedById: row.receivedById ?? null,
     receivedAt: row.receivedAt.toISOString(),
     notes: row.notes ?? null,
+    verifiedAt: row.verifiedAt ? row.verifiedAt.toISOString() : null,
+    verifiedById: row.verifiedById ?? null,
+    rejectedAt: row.rejectedAt ? row.rejectedAt.toISOString() : null,
+    rejectionReason: row.rejectionReason ?? null,
     reversedAt: row.reversedAt ? row.reversedAt.toISOString() : null,
     reversalReason: row.reversalReason ?? null,
     createdAt: row.createdAt.toISOString(),
@@ -1876,6 +1993,8 @@ export async function getSerializedLppAccountDetail(lipaPolePoleId: string, db: 
     productName: meta.productName,
     itemSerial: lpp.itemSerial ?? null,
     itemWarranty: lpp.itemWarranty ?? null,
+    termsAcceptedAt: lpp.termsAcceptedAt ? lpp.termsAcceptedAt.toISOString() : null,
+    termsVersion: lpp.termsVersion ?? null,
     quantity: Number(lpp.quantity ?? 1),
     agreedUnitPrice: Number(lpp.agreedUnitPrice ?? 0),
     assignedToId: lpp.assignedToId,
@@ -2009,6 +2128,8 @@ export async function listSerializedLppAccounts(
       productName: row.productName,
       itemSerial: row.itemSerial ?? null,
       itemWarranty: row.itemWarranty ?? null,
+      termsAcceptedAt: row.termsAcceptedAt ? row.termsAcceptedAt.toISOString() : null,
+      termsVersion: row.termsVersion ?? null,
       quantity: Number(row.quantity ?? 1),
       agreedUnitPrice: Number(row.agreedUnitPrice ?? 0),
       assignedToId: row.assignedToId,

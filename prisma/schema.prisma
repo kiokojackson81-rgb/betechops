@@ -1997,6 +1997,8 @@ model LipaPolePole {
   salespersonId          String?
   source                 String?
   notes                  String?
+  termsAcceptedAt        DateTime?
+  termsVersion           String?
   completedAt            DateTime?
   convertedAt            DateTime?
   convertedById          String?
@@ -2063,6 +2065,10 @@ model LipaPolePolePayment {
   receivedById   String?
   receivedAt     DateTime                  @default(now())
   notes          String?
+  verifiedAt     DateTime?
+  verifiedById   String?
+  rejectedAt     DateTime?
+  rejectionReason String?
   reversedAt     DateTime?
   reversedById   String?
   reversalReason String?
