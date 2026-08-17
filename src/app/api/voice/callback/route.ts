@@ -5,6 +5,7 @@ import {
   createVoiceEventFromPayload,
   ensureVoiceLeadForCaller,
   getVoiceRouteTargets,
+  hasAnsweredVoiceBridge,
   inferVoiceCompletionStatus,
   isVoiceCallActive,
   parseVoicePayloadFromRequest,
@@ -37,7 +38,8 @@ function xmlResponse(body: string) {
 }
 
 function buildAdminFallbackXml() {
-  const adminNumber = safeString(process.env.BETECH_VOICE_ADMIN_NUMBER) || "+254705663175";
+  const adminNumber =
+    safeString(process.env.BETECH_VOICE_ADMIN_NUMBER) || "+254705663175";
   return buildVoiceXmlResponse({
     preDialMessage: null,
     phoneNumbers: [adminNumber],
@@ -45,18 +47,30 @@ function buildAdminFallbackXml() {
 }
 
 function getBrowserDialedNumber(payload: Record<string, string>) {
-  return safeString(payload.clientDialedNumber || payload.ClientDialedNumber || payload.dialedNumber || payload.DialedNumber);
+  return safeString(
+    payload.clientDialedNumber ||
+      payload.ClientDialedNumber ||
+      payload.dialedNumber ||
+      payload.DialedNumber,
+  );
 }
 
 function isTrustedVoiceCallback(payload: Record<string, string>) {
-  const configuredUsername = safeString(process.env.AFRICASTALKING_USERNAME).toLowerCase();
+  const configuredUsername = safeString(
+    process.env.AFRICASTALKING_USERNAME,
+  ).toLowerCase();
   if (!configuredUsername) return true;
-  const payloadUsername = safeString(payload.username || payload.userName || payload.Username).toLowerCase();
+  const payloadUsername = safeString(
+    payload.username || payload.userName || payload.Username,
+  ).toLowerCase();
   if (!payloadUsername) return true;
   return payloadUsername === configuredUsername;
 }
 
-function inferTerminalStatus(payload: Record<string, string>, plan: VoiceRoutePlan | null) {
+function inferTerminalStatus(
+  payload: Record<string, string>,
+  plan: VoiceRoutePlan | null,
+) {
   return inferVoiceCompletionStatus(payload, {
     treatZeroDurationSuccessAsNoAnswer: Boolean(plan?.hops.length),
     treatInboundSuccessWithoutBridgeAsNoAnswer: Boolean(plan?.hops.length),
@@ -67,31 +81,42 @@ export async function POST(request: Request) {
   let payload: Record<string, string> = {};
   try {
     const requestUrl = new URL(request.url);
-    const hopIndex = Math.max(0, Number.parseInt(requestUrl.searchParams.get("hop") || "0", 10) || 0);
-    const routePlanFromQuery = decodeRoutePlan(requestUrl.searchParams.get("routePlan"));
+    const hopIndex = Math.max(
+      0,
+      Number.parseInt(requestUrl.searchParams.get("hop") || "0", 10) || 0,
+    );
+    const routePlanFromQuery = decodeRoutePlan(
+      requestUrl.searchParams.get("routePlan"),
+    );
     payload = await parseVoicePayloadFromRequest(request);
     console.info("[voice.callback] inbound", payload);
     if (!isTrustedVoiceCallback(payload)) {
       console.warn("[voice.callback.untrusted_username]", {
         configured: safeString(process.env.AFRICASTALKING_USERNAME),
-        payloadUsername: safeString(payload.username || payload.userName || payload.Username),
+        payloadUsername: safeString(
+          payload.username || payload.userName || payload.Username,
+        ),
       });
     }
 
     const browserDialedNumber = getBrowserDialedNumber(payload);
-    const normalizedPayload =
-      browserDialedNumber
-        ? {
-            ...payload,
-            direction: "OUTBOUND",
-            destinationNumber: browserDialedNumber,
-          }
-        : payload;
+    const normalizedPayload = browserDialedNumber
+      ? {
+          ...payload,
+          direction: "OUTBOUND",
+          destinationNumber: browserDialedNumber,
+        }
+      : payload;
 
     const status = inferTerminalStatus(normalizedPayload, routePlanFromQuery);
     const isActive = isVoiceCallActive(normalizedPayload);
     const resolvedPayload =
-      status === safeString(normalizedPayload.status || normalizedPayload.callSessionState || normalizedPayload.callStatus)
+      status ===
+      safeString(
+        normalizedPayload.status ||
+          normalizedPayload.callSessionState ||
+          normalizedPayload.callStatus,
+      )
         ? normalizedPayload
         : { ...normalizedPayload, status };
 
@@ -104,7 +129,9 @@ export async function POST(request: Request) {
       await createVoiceEventFromPayload(
         {
           ...resolvedPayload,
-          eventType: isActive ? "WEBRTC_OUTBOUND_CREATED" : "WEBRTC_OUTBOUND_COMPLETED",
+          eventType: isActive
+            ? "WEBRTC_OUTBOUND_CREATED"
+            : "WEBRTC_OUTBOUND_COMPLETED",
         },
         voiceCall.id,
       );
@@ -126,31 +153,50 @@ export async function POST(request: Request) {
         const resolvedRoute = await getVoiceRouteTargets({
           date: new Date(),
           callerNumber:
-            normalizedPayload.callerNumber || normalizedPayload.caller || normalizedPayload.from || "",
+            normalizedPayload.callerNumber ||
+            normalizedPayload.caller ||
+            normalizedPayload.from ||
+            "",
         });
         return {
           hops: resolvedRoute.orderedTargets.flatMap((target) =>
-            (target.dialValues?.length ? target.dialValues : [target.dialValue || target.phoneNumber])
+            (target.dialValues?.length
+              ? target.dialValues
+              : [target.dialValue || target.phoneNumber]
+            )
               .filter(Boolean)
               .map((dialValue) => ({
                 label: target.label,
                 dialValue,
+                targetUserId: target.userId,
               })),
           ),
           primaryTargetUserId: resolvedRoute.primaryTarget?.userId ?? null,
           routeType: resolvedRoute.routeType,
           routeReason: resolvedRoute.routeReason,
           routedTo: resolvedRoute.orderedTargets
-            .flatMap((target) => target.dialValues?.length ? target.dialValues : [target.dialValue || target.phoneNumber])
+            .flatMap((target) =>
+              target.dialValues?.length
+                ? target.dialValues
+                : [target.dialValue || target.phoneNumber],
+            )
             .filter(Boolean)
             .join(","),
         } satisfies VoiceRoutePlan;
       })());
     const currentHop = effectiveRoutePlan.hops[hopIndex] ?? null;
     const hasRoutableTarget = effectiveRoutePlan.hops.length > 0;
-    const routeAwareStatus = inferTerminalStatus(normalizedPayload, effectiveRoutePlan);
+    const routeAwareStatus = inferTerminalStatus(
+      normalizedPayload,
+      effectiveRoutePlan,
+    );
     const routeAnnotatedPayload =
-      routeAwareStatus === safeString(normalizedPayload.status || normalizedPayload.callSessionState || normalizedPayload.callStatus)
+      routeAwareStatus ===
+      safeString(
+        normalizedPayload.status ||
+          normalizedPayload.callSessionState ||
+          normalizedPayload.callStatus,
+      )
         ? {
             ...normalizedPayload,
             routeReason: effectiveRoutePlan.routeReason || "",
@@ -161,17 +207,26 @@ export async function POST(request: Request) {
             routeReason: effectiveRoutePlan.routeReason || "",
           };
 
+    const answeredHop =
+      currentHop &&
+      hasAnsweredVoiceBridge(routeAnnotatedPayload, routeAwareStatus)
+        ? currentHop
+        : null;
     const voiceCall = await upsertVoiceCallFromPayload(routeAnnotatedPayload, {
       routeType: effectiveRoutePlan.routeType,
       routedTo: effectiveRoutePlan.routedTo,
-      assignedToId: effectiveRoutePlan.primaryTargetUserId,
+      assignedToId:
+        answeredHop?.targetUserId ?? effectiveRoutePlan.primaryTargetUserId,
+      answeredById: answeredHop?.targetUserId ?? null,
+      answeredNumber: answeredHop?.dialValue ?? null,
+      answeredAt: answeredHop ? new Date() : null,
     });
-      await createVoiceEventFromPayload(
-        {
-          ...routeAnnotatedPayload,
-          eventType: isActive ? "CALL_CREATED" : "CALL_COMPLETED",
-        },
-        voiceCall.id,
+    await createVoiceEventFromPayload(
+      {
+        ...routeAnnotatedPayload,
+        eventType: isActive ? "CALL_CREATED" : "CALL_COMPLETED",
+      },
+      voiceCall.id,
     );
 
     await ensureVoiceLeadForCaller({
@@ -215,7 +270,11 @@ export async function POST(request: Request) {
         },
         voiceCall.id,
       );
-      return xmlResponse(buildVoiceMessageXmlResponse("No agents are currently available. Please try again shortly."));
+      return xmlResponse(
+        buildVoiceMessageXmlResponse(
+          "No agents are currently available. Please try again shortly.",
+        ),
+      );
     }
 
     if (effectiveRoutePlan.hops.length > 1) {
@@ -250,7 +309,11 @@ export async function POST(request: Request) {
           fallbackPhoneNumber: currentHop.dialValue,
           fallbackRedirectUrl:
             hopIndex + 1 < effectiveRoutePlan.hops.length
-              ? buildRoutePlanRedirectUrl(requestUrl, effectiveRoutePlan, hopIndex + 1)
+              ? buildRoutePlanRedirectUrl(
+                  requestUrl,
+                  effectiveRoutePlan,
+                  hopIndex + 1,
+                )
               : null,
         }),
       );
@@ -277,7 +340,11 @@ export async function POST(request: Request) {
         phoneNumber: currentHop.dialValue,
         redirectUrl:
           hopIndex + 1 < effectiveRoutePlan.hops.length
-            ? buildRoutePlanRedirectUrl(requestUrl, effectiveRoutePlan, hopIndex + 1)
+            ? buildRoutePlanRedirectUrl(
+                requestUrl,
+                effectiveRoutePlan,
+                hopIndex + 1,
+              )
             : null,
       }),
     );

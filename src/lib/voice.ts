@@ -9,8 +9,15 @@ import { isVoiceWebrtcClientReady } from "@/lib/voiceWebrtc/registry";
 import { maybeSendCallFeedbackSms } from "@/lib/feedbackSms";
 import { generateFeedbackToken } from "@/lib/feedbackToken";
 import { getShopBaseUrl } from "@/lib/runtimeUrls";
-import { isInternalVoicePhone, maybeSendMissedCallSms, sendVoiceSmsOncePerDay } from "@/lib/voiceSmsNotifications";
-import { getVoiceAdminTestNumber, isVoiceAdminTestPhone } from "@/lib/voiceTestNumbers";
+import {
+  isInternalVoicePhone,
+  maybeSendMissedCallSms,
+  sendVoiceSmsOncePerDay,
+} from "@/lib/voiceSmsNotifications";
+import {
+  getVoiceAdminTestNumber,
+  isVoiceAdminTestPhone,
+} from "@/lib/voiceTestNumbers";
 
 const NAIROBI_TIMEZONE = "Africa/Nairobi";
 const ATTEMPTED_CALL_THRESHOLD_SECONDS = 14;
@@ -19,7 +26,7 @@ const CALLBACK_REQUEST_TOKEN_EXPIRY_DAYS = 14;
 type VoicePayload = Record<string, string>;
 type VoiceRouteLabel = "BRENDAH" | "JENNIFER" | "ADMIN" | "OVERFLOW";
 
-type VoiceRouteTarget = {
+export type VoiceRouteTarget = {
   label: VoiceRouteLabel;
   phoneNumber: string;
   userId: string | null;
@@ -36,6 +43,7 @@ type VoiceRouteTarget = {
 };
 
 const VOICE_PRESENCE_ROUTING_WINDOW_MS = 90 * 1000;
+const DEFAULT_VOICE_STICKY_OWNER_DAYS = 60;
 
 function isRoutingBlockingVoiceStatus(status: string | null | undefined) {
   return [
@@ -52,7 +60,11 @@ function isRoutingBlockingVoiceStatus(status: string | null | undefined) {
 }
 
 function isVoiceWebrtcEnabled() {
-  return String(process.env.NEXT_PUBLIC_VOICE_WEBRTC_ENABLED || "").trim().toLowerCase() === "true";
+  return (
+    String(process.env.NEXT_PUBLIC_VOICE_WEBRTC_ENABLED || "")
+      .trim()
+      .toLowerCase() === "true"
+  );
 }
 
 function getDefaultWebrtcClientName(label: VoiceRouteTarget["label"]) {
@@ -63,7 +75,11 @@ function getDefaultWebrtcClientName(label: VoiceRouteTarget["label"]) {
 }
 
 export function safeString(value: unknown) {
-  return typeof value === "string" ? value.trim() : value == null ? "" : String(value).trim();
+  return typeof value === "string"
+    ? value.trim()
+    : value == null
+      ? ""
+      : String(value).trim();
 }
 
 export function safeNumber(value: unknown, fallback = 0) {
@@ -78,12 +94,25 @@ export function isVoiceCallActive(payload: VoicePayload) {
   if (["0", "false", "no"].includes(rawIsActive)) return false;
 
   const sessionState = safeString(payload.callSessionState).toLowerCase();
-  if (["completed", "ended", "terminated", "aborted", "failed"].includes(sessionState)) {
+  if (
+    ["completed", "ended", "terminated", "aborted", "failed"].includes(
+      sessionState,
+    )
+  ) {
     return false;
   }
 
   const status = safeString(payload.status).toLowerCase();
-  if (["completed", "aborted", "failed", "busy", "no answer", "no_answer"].includes(status)) {
+  if (
+    [
+      "completed",
+      "aborted",
+      "failed",
+      "busy",
+      "no answer",
+      "no_answer",
+    ].includes(status)
+  ) {
     return false;
   }
 
@@ -99,7 +128,9 @@ function formatNairobiParts(date: Date) {
     hour12: false,
   });
   const parts = formatter.formatToParts(date);
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const values = Object.fromEntries(
+    parts.map((part) => [part.type, part.value]),
+  );
   const weekday = String(values.weekday || "");
   const hour = Number(values.hour || "0");
   const minute = Number(values.minute || "0");
@@ -119,6 +150,18 @@ function normalizeVoiceNumber(input: string | undefined) {
   return normalizeKenyanPhone(input || "");
 }
 
+function getVoiceStickyOwnerCutoff(date: Date) {
+  const configuredDays = Number.parseInt(
+    String(process.env.BETECH_VOICE_STICKY_OWNER_DAYS || ""),
+    10,
+  );
+  const stickyDays =
+    Number.isFinite(configuredDays) && configuredDays > 0
+      ? configuredDays
+      : DEFAULT_VOICE_STICKY_OWNER_DAYS;
+  return new Date(date.getTime() - stickyDays * 24 * 60 * 60 * 1000);
+}
+
 function getConfiguredPhone(label: "BRENDAH" | "JENNIFER" | "ADMIN") {
   const envKey =
     label === "BRENDAH"
@@ -132,7 +175,9 @@ function getConfiguredPhone(label: "BRENDAH" | "JENNIFER" | "ADMIN") {
 }
 
 function normalizeCompareValue(value: string | null | undefined) {
-  return String(value || "").trim().toLowerCase();
+  return String(value || "")
+    .trim()
+    .toLowerCase();
 }
 
 async function resolveRoutingUsers() {
@@ -145,7 +190,11 @@ async function resolveRoutingUsers() {
       isActive: true,
       OR: [
         { role: "ADMIN" },
-        { phone: { in: [brendahPhone, jenniferPhone, adminPhone].filter(Boolean) } },
+        {
+          phone: {
+            in: [brendahPhone, jenniferPhone, adminPhone].filter(Boolean),
+          },
+        },
         { email: { contains: "brendah", mode: "insensitive" } },
         { email: { contains: "jen", mode: "insensitive" } },
         { email: { contains: "jackson", mode: "insensitive" } },
@@ -164,17 +213,28 @@ async function resolveRoutingUsers() {
     orderBy: [{ role: "asc" }, { name: "asc" }],
   });
 
-  const findUserId = (label: VoiceRouteTarget["label"], phoneNumber: string | null) => {
+  const findUserId = (
+    label: VoiceRouteTarget["label"],
+    phoneNumber: string | null,
+  ) => {
     const matched = users.find((user) => {
       const normalizedPhone = normalizeCompareValue(user.phone);
       const normalizedEmail = normalizeCompareValue(user.email);
       const normalizedName = normalizeCompareValue(user.name);
-      if (phoneNumber && normalizedPhone === normalizeCompareValue(phoneNumber)) return true;
+      if (phoneNumber && normalizedPhone === normalizeCompareValue(phoneNumber))
+        return true;
       if (label === "BRENDAH") {
-        return normalizedEmail.includes("brendah") || normalizedName.includes("brendah");
+        return (
+          normalizedEmail.includes("brendah") ||
+          normalizedName.includes("brendah")
+        );
       }
       if (label === "JENNIFER") {
-        return normalizedEmail.includes("jen") || normalizedName.includes("jennifer") || normalizedName.includes("jeniffer");
+        return (
+          normalizedEmail.includes("jen") ||
+          normalizedName.includes("jennifer") ||
+          normalizedName.includes("jeniffer")
+        );
       }
       return (
         normalizedEmail.includes("jackson") ||
@@ -193,7 +253,9 @@ async function resolveRoutingUsers() {
   };
 }
 
-async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], VoiceRouteTarget>> {
+async function buildVoiceTargets(): Promise<
+  Record<VoiceRouteTarget["label"], VoiceRouteTarget>
+> {
   const brendahPhone = getConfiguredPhone("BRENDAH");
   const jenniferPhone = getConfiguredPhone("JENNIFER");
   const adminPhone = getConfiguredPhone("ADMIN");
@@ -213,15 +275,42 @@ async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], Vo
       },
     },
   });
-  const overflowUserId = voiceRoutingConfig?.overflowUserId ?? null;
-  const overflowPhone = normalizeVoiceNumber(voiceRoutingConfig?.overflowPhone || voiceRoutingConfig?.overflowUser?.phone || "");
-
-  const userIds = [brendahUserId, jenniferUserId, adminUserId, overflowUserId].filter(
-    (value): value is string => Boolean(value),
+  const overflowPhone = normalizeVoiceNumber(
+    voiceRoutingConfig?.overflowPhone ||
+      voiceRoutingConfig?.overflowUser?.phone ||
+      "",
   );
+  const overflowPhoneUser =
+    !voiceRoutingConfig?.overflowUserId && overflowPhone
+      ? await prisma.user.findFirst({
+          where: {
+            isActive: true,
+            phone: { in: getKenyanPhoneVariants(overflowPhone) },
+          },
+          select: { id: true },
+        })
+      : null;
+  const overflowUserId =
+    voiceRoutingConfig?.overflowUserId ?? overflowPhoneUser?.id ?? null;
+
+  const userIds = [
+    brendahUserId,
+    jenniferUserId,
+    adminUserId,
+    overflowUserId,
+  ].filter((value): value is string => Boolean(value));
   const [presences, routingPreferences]: [
-    Array<{ userId: string; status: string; lastSeenAt: Date; currentCallId: string | null }>,
-    Array<{ userId: string; routingEnabled: boolean; allowAfterHoursCalls: boolean }>,
+    Array<{
+      userId: string;
+      status: string;
+      lastSeenAt: Date;
+      currentCallId: string | null;
+    }>,
+    Array<{
+      userId: string;
+      routingEnabled: boolean;
+      allowAfterHoursCalls: boolean;
+    }>,
   ] = await Promise.all([
     userIds.length
       ? prisma.voiceAgentPresence.findMany({
@@ -249,7 +338,10 @@ async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], Vo
   for (const presence of presences) {
     presenceByUserId.set(presence.userId, presence);
   }
-  const routingPreferenceByUserId = new Map<string, (typeof routingPreferences)[number]>();
+  const routingPreferenceByUserId = new Map<
+    string,
+    (typeof routingPreferences)[number]
+  >();
   for (const preference of routingPreferences) {
     routingPreferenceByUserId.set(preference.userId, preference);
   }
@@ -261,7 +353,17 @@ async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], Vo
             { isActive: true },
             {
               status: {
-                in: ["queued", "ringing", "initiated", "dialing", "in_progress", "answered", "connected", "processing", "transferred"],
+                in: [
+                  "queued",
+                  "ringing",
+                  "initiated",
+                  "dialing",
+                  "in_progress",
+                  "answered",
+                  "connected",
+                  "processing",
+                  "transferred",
+                ],
               },
             },
           ],
@@ -291,19 +393,27 @@ async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], Vo
     options?: { alwaysDial?: boolean; defaultAllowAfterHoursCalls?: boolean },
   ): VoiceRouteTarget => {
     const presence = userId ? presenceByUserId.get(userId) : null;
-    const routingPreference = userId ? routingPreferenceByUserId.get(userId) : null;
+    const routingPreference = userId
+      ? routingPreferenceByUserId.get(userId)
+      : null;
     const webRtcRegistration = userId ? isVoiceWebrtcClientReady(userId) : null;
-    const presenceStatus = safeString(presence?.status).toUpperCase() || "OFFLINE";
+    const presenceStatus =
+      safeString(presence?.status).toUpperCase() || "OFFLINE";
     const lastSeenAt = presence?.lastSeenAt ?? null;
     const currentCallId = safeString(presence?.currentCallId);
-    const assignedActiveCallId = userId ? activeCallByUserId.get(userId) ?? null : null;
+    const assignedActiveCallId = userId
+      ? (activeCallByUserId.get(userId) ?? null)
+      : null;
     const hasBusyCall = Boolean(currentCallId || assignedActiveCallId);
     const routingEnabled = routingPreference?.routingEnabled ?? true;
-    const allowAfterHoursCalls = routingPreference?.allowAfterHoursCalls ?? Boolean(options?.defaultAllowAfterHoursCalls);
+    const allowAfterHoursCalls =
+      routingPreference?.allowAfterHoursCalls ??
+      Boolean(options?.defaultAllowAfterHoursCalls);
     const skipReasons: string[] = [];
     if (!phoneNumber) skipReasons.push("missing_mobile_fallback");
     if (!routingEnabled) skipReasons.push("routing_disabled");
-    if (!userId && label !== "OVERFLOW") skipReasons.push("missing_routing_user");
+    if (!userId && label !== "OVERFLOW")
+      skipReasons.push("missing_routing_user");
     if (!options?.alwaysDial) {
       if (!presence) {
         skipReasons.push("missing_presence");
@@ -311,7 +421,10 @@ async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], Vo
         if (presenceStatus !== "AVAILABLE") {
           skipReasons.push(`status_${presenceStatus.toLowerCase()}`);
         }
-        if (lastSeenAt && now - lastSeenAt.getTime() > VOICE_PRESENCE_ROUTING_WINDOW_MS) {
+        if (
+          lastSeenAt &&
+          now - lastSeenAt.getTime() > VOICE_PRESENCE_ROUTING_WINDOW_MS
+        ) {
           skipReasons.push("stale_presence");
         }
         if (!lastSeenAt) {
@@ -329,11 +442,16 @@ async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], Vo
         ? true
         : presenceStatus === "AVAILABLE" &&
           Boolean(lastSeenAt) &&
-          now - (lastSeenAt?.getTime() ?? 0) <= VOICE_PRESENCE_ROUTING_WINDOW_MS &&
+          now - (lastSeenAt?.getTime() ?? 0) <=
+            VOICE_PRESENCE_ROUTING_WINDOW_MS &&
           !hasBusyCall);
-    const webRtcIdentity = webRtcRegistration?.identity ?? buildVoiceWebrtcIdentity(getDefaultWebrtcClientName(label)) ?? null;
+    const webRtcIdentity =
+      webRtcRegistration?.identity ??
+      buildVoiceWebrtcIdentity(getDefaultWebrtcClientName(label)) ??
+      null;
     if (isVoiceWebrtcEnabled() && !options?.alwaysDial) {
-      if (!webRtcRegistration?.identity) skipReasons.push("missing_browser_identity");
+      if (!webRtcRegistration?.identity)
+        skipReasons.push("missing_browser_identity");
       if (!webRtcRegistration) skipReasons.push("browser_not_registered");
     }
     const dialValues = [phoneNumber].filter(Boolean);
@@ -388,7 +506,12 @@ async function buildVoiceTargets(): Promise<Record<VoiceRouteTarget["label"], Vo
 type VoiceRouteSelection = {
   preferredTarget: VoiceRouteTarget | null;
   orderedTargets: VoiceRouteTarget[];
-  routeReason: "after_hours" | "returning_customer" | "round_robin" | "admin_only" | "assigned_owner";
+  routeReason:
+    | "after_hours"
+    | "returning_customer"
+    | "round_robin"
+    | "admin_only"
+    | "assigned_owner";
 };
 
 async function findAssignedLeadTarget(
@@ -399,7 +522,9 @@ async function findAssignedLeadTarget(
   const phoneVariants = getKenyanPhoneVariants(callerNumber);
   if (!phoneVariants.length) return null;
 
-  const agentUserIds = agentTargets.map((target) => target.userId).filter((value): value is string => Boolean(value));
+  const agentUserIds = agentTargets
+    .map((target) => target.userId)
+    .filter((value): value is string => Boolean(value));
   if (!agentUserIds.length) return null;
 
   const assignedLead = await prisma.voiceLead.findFirst({
@@ -414,7 +539,11 @@ async function findAssignedLeadTarget(
   });
 
   if (!assignedLead?.assignedToId) return null;
-  return agentTargets.find((target) => target.userId === assignedLead.assignedToId) ?? null;
+  return (
+    agentTargets.find(
+      (target) => target.userId === assignedLead.assignedToId,
+    ) ?? null
+  );
 }
 
 async function findAssignedFollowUpTarget(
@@ -425,7 +554,9 @@ async function findAssignedFollowUpTarget(
   const phoneVariants = getKenyanPhoneVariants(callerNumber);
   if (!phoneVariants.length) return null;
 
-  const agentUserIds = agentTargets.map((target) => target.userId).filter((value): value is string => Boolean(value));
+  const agentUserIds = agentTargets
+    .map((target) => target.userId)
+    .filter((value): value is string => Boolean(value));
   if (!agentUserIds.length) return null;
 
   const followUp = await prisma.voiceFollowUp.findFirst({
@@ -441,7 +572,10 @@ async function findAssignedFollowUpTarget(
   });
 
   if (!followUp?.assignedToId) return null;
-  return agentTargets.find((target) => target.userId === followUp.assignedToId) ?? null;
+  return (
+    agentTargets.find((target) => target.userId === followUp.assignedToId) ??
+    null
+  );
 }
 
 async function findStickyOwnerTarget(
@@ -452,7 +586,9 @@ async function findStickyOwnerTarget(
   const phoneVariants = getKenyanPhoneVariants(callerNumber);
   if (!phoneVariants.length) return null;
 
-  const agentUserIds = agentTargets.map((target) => target.userId).filter((value): value is string => Boolean(value));
+  const agentUserIds = agentTargets
+    .map((target) => target.userId)
+    .filter((value): value is string => Boolean(value));
   if (!agentUserIds.length) return null;
 
   const [followUp, lead, lastCall] = await Promise.all([
@@ -485,15 +621,27 @@ async function findStickyOwnerTarget(
   ]);
 
   const freshest = [followUp, lead, lastCall]
-    .filter((item): item is { assignedToId: string | null; updatedAt: Date; createdAt: Date } => Boolean(item?.assignedToId))
+    .filter(
+      (
+        item,
+      ): item is {
+        assignedToId: string | null;
+        updatedAt: Date;
+        createdAt: Date;
+      } => Boolean(item?.assignedToId),
+    )
     .sort((left, right) => {
-      const rightTime = right.updatedAt?.getTime?.() ?? right.createdAt.getTime();
+      const rightTime =
+        right.updatedAt?.getTime?.() ?? right.createdAt.getTime();
       const leftTime = left.updatedAt?.getTime?.() ?? left.createdAt.getTime();
       return rightTime - leftTime;
     })[0];
 
   if (!freshest?.assignedToId) return null;
-  return agentTargets.find((target) => target.userId === freshest.assignedToId) ?? null;
+  return (
+    agentTargets.find((target) => target.userId === freshest.assignedToId) ??
+    null
+  );
 }
 
 async function findPreviousAgentTarget(
@@ -504,7 +652,9 @@ async function findPreviousAgentTarget(
   const phoneVariants = getKenyanPhoneVariants(callerNumber);
   if (!phoneVariants.length) return null;
 
-  const agentUserIds = agentTargets.map((target) => target.userId).filter((value): value is string => Boolean(value));
+  const agentUserIds = agentTargets
+    .map((target) => target.userId)
+    .filter((value): value is string => Boolean(value));
   if (!agentUserIds.length) return null;
 
   const lastCall = await prisma.voiceCall.findFirst({
@@ -520,11 +670,59 @@ async function findPreviousAgentTarget(
   });
 
   if (!lastCall?.assignedToId) return null;
-  return agentTargets.find((target) => target.userId === lastCall.assignedToId) ?? null;
+  return (
+    agentTargets.find((target) => target.userId === lastCall.assignedToId) ??
+    null
+  );
+}
+
+async function findLastAnsweredTarget(
+  callerNumber: string | null,
+  targets: VoiceRouteTarget[],
+  date: Date,
+): Promise<VoiceRouteTarget | null> {
+  if (!callerNumber) return null;
+  const phoneVariants = getKenyanPhoneVariants(callerNumber);
+  if (!phoneVariants.length || !targets.length) return null;
+
+  const lastAnsweredCall = await prisma.voiceCall.findFirst({
+    where: {
+      direction: "INBOUND",
+      callerNumber: { in: phoneVariants },
+      answeredAt: { gte: getVoiceStickyOwnerCutoff(date) },
+      answeredNumber: { not: null },
+    },
+    orderBy: [{ answeredAt: "desc" }, { createdAt: "desc" }],
+    select: {
+      answeredById: true,
+      answeredNumber: true,
+    },
+  });
+  if (!lastAnsweredCall?.answeredNumber) return null;
+
+  const normalizedAnsweredNumber = normalizeVoiceNumber(
+    lastAnsweredCall.answeredNumber,
+  );
+  return (
+    targets.find((target) =>
+      target.dialValues.some(
+        (dialValue) =>
+          normalizeVoiceNumber(dialValue) === normalizedAnsweredNumber,
+      ),
+    ) ??
+    targets.find(
+      (target) =>
+        Boolean(lastAnsweredCall.answeredById) &&
+        target.userId === lastAnsweredCall.answeredById,
+    ) ??
+    null
+  );
 }
 
 async function findRoundRobinTarget(agentTargets: VoiceRouteTarget[]) {
-  const agentUserIds = agentTargets.map((target) => target.userId).filter((value): value is string => Boolean(value));
+  const agentUserIds = agentTargets
+    .map((target) => target.userId)
+    .filter((value): value is string => Boolean(value));
   if (!agentUserIds.length) return agentTargets[0] ?? null;
 
   const lastAssignedCall = await prisma.voiceCall.findFirst({
@@ -539,9 +737,15 @@ async function findRoundRobinTarget(agentTargets: VoiceRouteTarget[]) {
   });
 
   if (!lastAssignedCall?.assignedToId) return agentTargets[0] ?? null;
-  const lastIndex = agentTargets.findIndex((target) => target.userId === lastAssignedCall.assignedToId);
+  const lastIndex = agentTargets.findIndex(
+    (target) => target.userId === lastAssignedCall.assignedToId,
+  );
   if (lastIndex < 0) return agentTargets[0] ?? null;
-  return agentTargets[(lastIndex + 1) % agentTargets.length] ?? agentTargets[0] ?? null;
+  return (
+    agentTargets[(lastIndex + 1) % agentTargets.length] ??
+    agentTargets[0] ??
+    null
+  );
 }
 
 function buildWorkingHoursSelection(input: {
@@ -552,21 +756,34 @@ function buildWorkingHoursSelection(input: {
   preferAdminFirst?: boolean;
 }): VoiceRouteSelection {
   const alternateTargets = input.agentTargets.filter(
-    (target) => target.userId && target.userId !== input.preferredTarget?.userId,
+    (target) =>
+      target.userId && target.userId !== input.preferredTarget?.userId,
   );
   const orderedTargets = (
     input.preferAdminFirst
       ? [
-          ...(input.adminTarget.phoneNumber && input.adminTarget.routingEnabled ? [input.adminTarget] : []),
-          ...(input.preferredTarget?.phoneNumber ? [input.preferredTarget] : []),
+          ...(input.adminTarget.phoneNumber && input.adminTarget.routingEnabled
+            ? [input.adminTarget]
+            : []),
+          ...(input.preferredTarget?.phoneNumber
+            ? [input.preferredTarget]
+            : []),
           ...alternateTargets.filter((target) => Boolean(target.phoneNumber)),
         ]
       : [
-          ...(input.preferredTarget?.phoneNumber ? [input.preferredTarget] : []),
+          ...(input.preferredTarget?.phoneNumber
+            ? [input.preferredTarget]
+            : []),
           ...alternateTargets.filter((target) => Boolean(target.phoneNumber)),
-          ...(input.adminTarget.phoneNumber && input.adminTarget.routingEnabled ? [input.adminTarget] : []),
+          ...(input.adminTarget.phoneNumber && input.adminTarget.routingEnabled
+            ? [input.adminTarget]
+            : []),
         ]
-  ).filter((target, index, array) => array.findIndex((candidate) => candidate.label === target.label) === index);
+  ).filter(
+    (target, index, array) =>
+      array.findIndex((candidate) => candidate.label === target.label) ===
+      index,
+  );
 
   return {
     preferredTarget: input.preferredTarget,
@@ -575,13 +792,51 @@ function buildWorkingHoursSelection(input: {
   };
 }
 
-export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerNumber?: string | null }) {
-  const date = input instanceof Date ? input : input?.date ?? new Date();
-  const callerNumber = normalizeVoiceNumber(input instanceof Date ? "" : input?.callerNumber || "");
-  const targets = await buildVoiceTargets();
-  const allConfiguredTargets = [targets.BRENDAH, targets.JENNIFER, targets.ADMIN, targets.OVERFLOW].filter(
-    (target) => target.phoneNumber,
+export function buildStickyVoiceTargetOrder(input: {
+  stickyTarget: VoiceRouteTarget;
+  roundRobinTarget: VoiceRouteTarget | null;
+  agentTargets: VoiceRouteTarget[];
+  adminTarget: VoiceRouteTarget;
+}) {
+  const roundRobinIndex = input.roundRobinTarget
+    ? input.agentTargets.findIndex(
+        (target) => target.label === input.roundRobinTarget?.label,
+      )
+    : -1;
+  const rotatedAgents =
+    roundRobinIndex > 0
+      ? [
+          ...input.agentTargets.slice(roundRobinIndex),
+          ...input.agentTargets.slice(0, roundRobinIndex),
+        ]
+      : input.agentTargets;
+  const seenNumbers = new Set<string>();
+
+  return [input.stickyTarget, ...rotatedAgents, input.adminTarget].filter(
+    (target) => {
+      const normalizedNumber = normalizeVoiceNumber(target.phoneNumber);
+      if (!normalizedNumber || !target.routingEnabled) return false;
+      if (seenNumbers.has(normalizedNumber)) return false;
+      seenNumbers.add(normalizedNumber);
+      return true;
+    },
   );
+}
+
+export async function getVoiceRouteTargets(
+  input?: Date | { date?: Date; callerNumber?: string | null },
+) {
+  const date = input instanceof Date ? input : (input?.date ?? new Date());
+  const callerNumber = normalizeVoiceNumber(
+    input instanceof Date ? "" : input?.callerNumber || "",
+  );
+  const targets = await buildVoiceTargets();
+  const allConfiguredTargets = [
+    targets.BRENDAH,
+    targets.JENNIFER,
+    targets.ADMIN,
+    targets.OVERFLOW,
+  ].filter((target) => target.phoneNumber);
   const agentTargets = [targets.BRENDAH, targets.JENNIFER].filter(
     (target) => target.phoneNumber && target.routingEnabled,
   );
@@ -597,7 +852,9 @@ export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerN
       orderedTargets: [adminTarget],
       primaryTarget: adminTarget,
       availableTargets: adminTarget.isAvailable ? [adminTarget] : [],
-      unavailableTargets: allConfiguredTargets.filter((target) => target.label !== "ADMIN"),
+      unavailableTargets: allConfiguredTargets.filter(
+        (target) => target.label !== "ADMIN",
+      ),
       hasAvailableTarget: adminTarget.isAvailable,
       hasRoutableTarget: true,
       usedMobileFallback: false,
@@ -606,11 +863,18 @@ export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerN
   }
 
   if (!isWithinVoiceWorkingHours(date)) {
-    const afterHoursTargets = [adminTarget, targets.BRENDAH, targets.JENNIFER, overflowTarget].filter(
+    const afterHoursTargets = [
+      adminTarget,
+      targets.BRENDAH,
+      targets.JENNIFER,
+      overflowTarget,
+    ].filter(
       (target) =>
         target.phoneNumber &&
         target.routingEnabled &&
-        (target.label === "ADMIN" || target.label === "OVERFLOW" || target.allowAfterHoursCalls),
+        (target.label === "ADMIN" ||
+          target.label === "OVERFLOW" ||
+          target.allowAfterHoursCalls),
     );
     const orderedTargets = afterHoursTargets;
     return {
@@ -618,19 +882,47 @@ export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerN
       orderedTargets,
       primaryTarget: orderedTargets[0] ?? null,
       availableTargets: orderedTargets.filter((target) => target.isAvailable),
-      unavailableTargets: allConfiguredTargets.filter((target) => !orderedTargets.includes(target)),
+      unavailableTargets: allConfiguredTargets.filter(
+        (target) => !orderedTargets.includes(target),
+      ),
       hasAvailableTarget: orderedTargets.some((target) => target.isAvailable),
       hasRoutableTarget: orderedTargets.length > 0,
-      usedMobileFallback: orderedTargets.some((target) => target.label === "OVERFLOW"),
+      usedMobileFallback: orderedTargets.some(
+        (target) => target.label === "OVERFLOW",
+      ),
       routeReason: "after_hours" as const,
     };
   }
 
-  const assignedFollowUpTarget = await findAssignedFollowUpTarget(callerNumber, agentTargets);
-  const assignedLeadTarget = await findAssignedLeadTarget(callerNumber, agentTargets);
-  const previousAgentTarget = await findPreviousAgentTarget(callerNumber, agentTargets);
-  const stickyOwnerTarget = await findStickyOwnerTarget(callerNumber, agentTargets);
-  const stickyTarget = stickyOwnerTarget ?? assignedFollowUpTarget ?? assignedLeadTarget ?? previousAgentTarget;
+  const assignedFollowUpTarget = await findAssignedFollowUpTarget(
+    callerNumber,
+    agentTargets,
+  );
+  const assignedLeadTarget = await findAssignedLeadTarget(
+    callerNumber,
+    agentTargets,
+  );
+  const previousAgentTarget = await findPreviousAgentTarget(
+    callerNumber,
+    agentTargets,
+  );
+  const stickyOwnerTarget = await findStickyOwnerTarget(
+    callerNumber,
+    agentTargets,
+  );
+  const lastAnsweredTarget = await findLastAnsweredTarget(
+    callerNumber,
+    [targets.BRENDAH, targets.JENNIFER, targets.ADMIN, targets.OVERFLOW].filter(
+      (target) => target.phoneNumber && target.routingEnabled,
+    ),
+    date,
+  );
+  const stickyTarget =
+    lastAnsweredTarget ??
+    stickyOwnerTarget ??
+    assignedFollowUpTarget ??
+    assignedLeadTarget ??
+    previousAgentTarget;
 
   if (!stickyTarget && !agentTargets.length && directFallbackTargets.length) {
     console.info("[voice.routing.direct_fallback]", {
@@ -651,24 +943,37 @@ export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerN
       routeType: "DIRECT_FALLBACK",
       orderedTargets: directFallbackTargets,
       primaryTarget: directFallbackTargets[0] ?? null,
-      availableTargets: directFallbackTargets.filter((target) => target.isAvailable),
-      unavailableTargets: allConfiguredTargets.filter((target) => !directFallbackTargets.includes(target)),
-      hasAvailableTarget: directFallbackTargets.some((target) => target.isAvailable),
+      availableTargets: directFallbackTargets.filter(
+        (target) => target.isAvailable,
+      ),
+      unavailableTargets: allConfiguredTargets.filter(
+        (target) => !directFallbackTargets.includes(target),
+      ),
+      hasAvailableTarget: directFallbackTargets.some(
+        (target) => target.isAvailable,
+      ),
       hasRoutableTarget: true,
       usedMobileFallback: false,
       routeReason: "admin_only" as const,
     };
   }
 
-  const roundRobinTarget = stickyTarget ? null : await findRoundRobinTarget(agentTargets);
+  const roundRobinTarget = await findRoundRobinTarget(agentTargets);
   const selection = stickyTarget
-    ? buildWorkingHoursSelection({
+    ? {
         preferredTarget: stickyTarget,
-        agentTargets,
-        adminTarget,
-        routeReason: stickyOwnerTarget ? "assigned_owner" : "returning_customer",
-        preferAdminFirst: false,
-      })
+        orderedTargets: buildStickyVoiceTargetOrder({
+          stickyTarget,
+          roundRobinTarget,
+          agentTargets,
+          adminTarget,
+        }),
+        routeReason: lastAnsweredTarget
+          ? ("assigned_owner" as const)
+          : stickyOwnerTarget
+            ? ("assigned_owner" as const)
+            : ("returning_customer" as const),
+      }
     : buildWorkingHoursSelection({
         preferredTarget: roundRobinTarget,
         agentTargets,
@@ -681,12 +986,13 @@ export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerN
   const orderedTargets = selection.orderedTargets.length
     ? selection.orderedTargets
     : directFallbackTargets;
-  const availableTargets = workingTargets.filter((target) => target.phoneNumber && target.isAvailable);
+  const availableTargets = workingTargets.filter(
+    (target) => target.phoneNumber && target.isAvailable,
+  );
   const hasRoutableTarget = orderedTargets.length > 0;
-  const primaryTarget =
-    selection.preferredTarget?.userId
-      ? selection.preferredTarget
-      : orderedTargets[0] ?? null;
+  const primaryTarget = selection.preferredTarget?.userId
+    ? selection.preferredTarget
+    : (orderedTargets[0] ?? null);
 
   if (!availableTargets.length || orderedTargets[0]?.label === "ADMIN") {
     console.warn("[voice.routing.fallback]", {
@@ -696,6 +1002,7 @@ export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerN
       assignedFollowUpTarget: assignedFollowUpTarget?.label ?? null,
       assignedLeadTarget: assignedLeadTarget?.label ?? null,
       stickyOwnerTarget: stickyOwnerTarget?.label ?? null,
+      lastAnsweredTarget: lastAnsweredTarget?.label ?? null,
       previousAgent: previousAgentTarget?.label ?? null,
       preferAdminFirst: false,
       roundRobinTarget: roundRobinTarget?.label ?? null,
@@ -718,15 +1025,23 @@ export async function getVoiceRouteTargets(input?: Date | { date?: Date; callerN
     orderedTargets,
     primaryTarget,
     availableTargets,
-    unavailableTargets: workingTargets.filter((target) => target.phoneNumber && !target.isAvailable),
+    unavailableTargets: workingTargets.filter(
+      (target) => target.phoneNumber && !target.isAvailable,
+    ),
     hasAvailableTarget: availableTargets.length > 0,
     hasRoutableTarget,
-    usedMobileFallback: Boolean(orderedTargets.find((target) => target.label === "ADMIN" || target.label === "OVERFLOW")),
+    usedMobileFallback: Boolean(
+      orderedTargets.find(
+        (target) => target.label === "ADMIN" || target.label === "OVERFLOW",
+      ),
+    ),
     routeReason: selection.routeReason,
   };
 }
 
-async function resolveAnsweredAgentAssignment(destinationNumber: string | null) {
+async function resolveAnsweredAgentAssignment(
+  destinationNumber: string | null,
+) {
   const normalizedDestination = normalizeVoiceNumber(destinationNumber || "");
   if (!normalizedDestination) return null;
 
@@ -734,8 +1049,10 @@ async function resolveAnsweredAgentAssignment(destinationNumber: string | null) 
   const brendahPhone = getConfiguredPhone("BRENDAH");
   const jenniferPhone = getConfiguredPhone("JENNIFER");
 
-  if (normalizedDestination === brendahPhone && routingUsers.BRENDAH) return routingUsers.BRENDAH;
-  if (normalizedDestination === jenniferPhone && routingUsers.JENNIFER) return routingUsers.JENNIFER;
+  if (normalizedDestination === brendahPhone && routingUsers.BRENDAH)
+    return routingUsers.BRENDAH;
+  if (normalizedDestination === jenniferPhone && routingUsers.JENNIFER)
+    return routingUsers.JENNIFER;
   return null;
 }
 
@@ -768,10 +1085,15 @@ function escapeXml(value: string) {
 }
 
 export async function parseVoicePayloadFromRequest(request: Request) {
-  const contentType = safeString(request.headers.get("content-type")).toLowerCase();
+  const contentType = safeString(
+    request.headers.get("content-type"),
+  ).toLowerCase();
 
   if (contentType.includes("application/json")) {
-    const json = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const json = (await request.json().catch(() => ({}))) as Record<
+      string,
+      unknown
+    >;
     const payload: VoicePayload = {};
     for (const [key, value] of Object.entries(json)) {
       payload[key] = safeString(value);
@@ -813,19 +1135,31 @@ export function inferVoiceCompletionStatus(
     treatInboundSuccessWithoutBridgeAsNoAnswer?: boolean;
   },
 ) {
-  const hangupCause = safeString(payload.lastBridgeHangupCause || payload.bridgeHangupCause || payload.hangupCause).toUpperCase();
+  const hangupCause = safeString(
+    payload.lastBridgeHangupCause ||
+      payload.bridgeHangupCause ||
+      payload.hangupCause,
+  ).toUpperCase();
   if (hangupCause === "USER_BUSY" || hangupCause === "BUSY") return "busy";
-  if (hangupCause === "NO_ANSWER" || hangupCause === "NO ANSWER") return "no_answer";
+  if (hangupCause === "NO_ANSWER" || hangupCause === "NO ANSWER")
+    return "no_answer";
 
   const normalizedStatus = safeString(payload.status).toLowerCase();
-  const normalizedSessionState = safeString(payload.callSessionState).toLowerCase();
-  const duration = parseInteger(payload.durationInSeconds || payload.duration) ?? 0;
-  const direction = safeString(payload.direction || "INBOUND").toUpperCase() || "INBOUND";
-  const treatZeroDurationSuccessAsNoAnswer = options?.treatZeroDurationSuccessAsNoAnswer !== false;
-  const treatInboundSuccessWithoutBridgeAsNoAnswer = options?.treatInboundSuccessWithoutBridgeAsNoAnswer === true;
+  const normalizedSessionState = safeString(
+    payload.callSessionState,
+  ).toLowerCase();
+  const duration =
+    parseInteger(payload.durationInSeconds || payload.duration) ?? 0;
+  const direction =
+    safeString(payload.direction || "INBOUND").toUpperCase() || "INBOUND";
+  const treatZeroDurationSuccessAsNoAnswer =
+    options?.treatZeroDurationSuccessAsNoAnswer !== false;
+  const treatInboundSuccessWithoutBridgeAsNoAnswer =
+    options?.treatInboundSuccessWithoutBridgeAsNoAnswer === true;
   const isProviderTerminalSuccess =
-    ["success", "successful", "completed", "complete"].includes(normalizedStatus) ||
-    ["completed", "complete"].includes(normalizedSessionState);
+    ["success", "successful", "completed", "complete"].includes(
+      normalizedStatus,
+    ) || ["completed", "complete"].includes(normalizedSessionState);
   const bridgeStatus = safeString(
     payload.dialCallStatus ||
       payload.lastBridgeDialStatus ||
@@ -850,29 +1184,56 @@ export function inferVoiceCompletionStatus(
     bridgeDuration > 0 ||
     dialDuration > 0 ||
     Boolean(safeString(payload.recordingUrl)) ||
-    Boolean(safeString(payload.dialDestinationNumber || payload.lastDialDestinationNumber)) ||
-    ["answered", "connected", "completed", "complete", "success", "successful", "transferred", "bridged"].includes(
-      bridgeStatus,
+    Boolean(
+      safeString(
+        payload.dialDestinationNumber || payload.lastDialDestinationNumber,
+      ),
     ) ||
-    Boolean(hangupCause && !["USER_BUSY", "BUSY", "NO_ANSWER", "NO ANSWER"].includes(hangupCause));
+    [
+      "answered",
+      "connected",
+      "completed",
+      "complete",
+      "success",
+      "successful",
+      "transferred",
+      "bridged",
+    ].includes(bridgeStatus) ||
+    Boolean(
+      hangupCause &&
+      !["USER_BUSY", "BUSY", "NO_ANSWER", "NO ANSWER"].includes(hangupCause),
+    );
 
   if (["connected", "in_progress", "transferred"].includes(normalizedStatus)) {
     return normalizedStatus;
   }
   if (normalizedStatus === "answered") {
-    if (direction === "INBOUND" && duration > 0 && treatInboundSuccessWithoutBridgeAsNoAnswer && !hasBridgeEvidence) {
-      return duration < ATTEMPTED_CALL_THRESHOLD_SECONDS ? "attempted_call" : "no_answer";
+    if (
+      direction === "INBOUND" &&
+      duration > 0 &&
+      treatInboundSuccessWithoutBridgeAsNoAnswer &&
+      !hasBridgeEvidence
+    ) {
+      return duration < ATTEMPTED_CALL_THRESHOLD_SECONDS
+        ? "attempted_call"
+        : "no_answer";
     }
     return normalizedStatus;
   }
 
-  if (isProviderTerminalSuccess && treatZeroDurationSuccessAsNoAnswer && duration <= 0) {
+  if (
+    isProviderTerminalSuccess &&
+    treatZeroDurationSuccessAsNoAnswer &&
+    duration <= 0
+  ) {
     return "no_answer";
   }
 
   if (isProviderTerminalSuccess && direction === "INBOUND" && duration > 0) {
     if (treatInboundSuccessWithoutBridgeAsNoAnswer && !hasBridgeEvidence) {
-      return duration < ATTEMPTED_CALL_THRESHOLD_SECONDS ? "attempted_call" : "no_answer";
+      return duration < ATTEMPTED_CALL_THRESHOLD_SECONDS
+        ? "attempted_call"
+        : "no_answer";
     }
     return "answered";
   }
@@ -880,9 +1241,60 @@ export function inferVoiceCompletionStatus(
   return normalizeVoiceStatus(payload);
 }
 
+export function hasAnsweredVoiceBridge(
+  payload: VoicePayload,
+  inferredStatus = inferVoiceCompletionStatus(payload, {
+    treatZeroDurationSuccessAsNoAnswer: true,
+    treatInboundSuccessWithoutBridgeAsNoAnswer: true,
+  }),
+) {
+  if (!isAnsweredBusinessStatus(inferredStatus)) return false;
+
+  const bridgeStatus = safeString(
+    payload.dialCallStatus ||
+      payload.lastBridgeDialStatus ||
+      payload.bridgeStatus ||
+      payload.lastBridgeStatus ||
+      payload.bridgeCallStatus,
+  ).toLowerCase();
+  const bridgeDuration =
+    parseInteger(
+      payload.bridgeDurationInSeconds ||
+        payload.lastBridgeDurationInSeconds ||
+        payload.talkDurationInSeconds ||
+        payload.conversationDurationInSeconds,
+    ) ?? 0;
+  const dialDuration =
+    parseInteger(
+      payload.dialDurationInSeconds ||
+        payload.dialDuration ||
+        payload.dialCallDurationInSeconds,
+    ) ?? 0;
+
+  return (
+    bridgeDuration > 0 ||
+    dialDuration > 0 ||
+    Boolean(safeString(payload.recordingUrl)) ||
+    [
+      "answered",
+      "connected",
+      "completed",
+      "complete",
+      "success",
+      "successful",
+      "transferred",
+      "bridged",
+    ].includes(bridgeStatus)
+  );
+}
+
 function getInternalRoutingPhoneSet() {
   return new Set(
-    [getConfiguredPhone("BRENDAH"), getConfiguredPhone("JENNIFER"), getConfiguredPhone("ADMIN")]
+    [
+      getConfiguredPhone("BRENDAH"),
+      getConfiguredPhone("JENNIFER"),
+      getConfiguredPhone("ADMIN"),
+    ]
       .map((value) => normalizeVoiceNumber(value || ""))
       .filter(Boolean),
   );
@@ -908,7 +1320,15 @@ function isAttemptedCallStatus(status: string | null | undefined) {
 
 function isAnsweredBusinessStatus(status: string | null | undefined) {
   const normalized = safeString(status).toLowerCase();
-  return ["answered", "connected", "completed", "complete", "successful", "success", "transferred"].includes(normalized);
+  return [
+    "answered",
+    "connected",
+    "completed",
+    "complete",
+    "successful",
+    "success",
+    "transferred",
+  ].includes(normalized);
 }
 
 function getVoiceCallbackRequestPublicUrl(token: string) {
@@ -921,7 +1341,9 @@ function getVoiceCallbackRequestExpiryDate(now = new Date()) {
   return expires;
 }
 
-async function createUniqueVoiceCallbackRequestToken(tx: Prisma.TransactionClient | typeof prisma) {
+async function createUniqueVoiceCallbackRequestToken(
+  tx: Prisma.TransactionClient | typeof prisma,
+) {
   for (let attempt = 0; attempt < 12; attempt += 1) {
     const token = generateFeedbackToken(attempt >= 4 ? 6 : 5);
     const existing = await tx.voiceCallbackRequest.findUnique({
@@ -933,16 +1355,23 @@ async function createUniqueVoiceCallbackRequestToken(tx: Prisma.TransactionClien
   throw new Error("voice_callback_request_token_generation_failed");
 }
 
-async function resolveVoiceCallbackOwnerIdForPhone(phone: string, assignedToId?: string | null) {
+async function resolveVoiceCallbackOwnerIdForPhone(
+  phone: string,
+  assignedToId?: string | null,
+) {
   const routingUsers = await resolveRoutingUsers();
   const routingTargets = await buildVoiceTargets();
-  const candidateTargets = [routingTargets.BRENDAH, routingTargets.JENNIFER].filter(
-    (target) => target.label !== "ADMIN" && target.userId,
-  );
+  const candidateTargets = [
+    routingTargets.BRENDAH,
+    routingTargets.JENNIFER,
+  ].filter((target) => target.label !== "ADMIN" && target.userId);
 
   if (!candidateTargets.length) return null;
   if (assignedToId && assignedToId !== routingUsers.ADMIN) {
-    return candidateTargets.find((target) => target.userId === assignedToId)?.userId ?? assignedToId;
+    return (
+      candidateTargets.find((target) => target.userId === assignedToId)
+        ?.userId ?? assignedToId
+    );
   }
 
   const stickyTarget = await findStickyOwnerTarget(phone, candidateTargets);
@@ -976,7 +1405,10 @@ async function ensureVoiceCallbackRequestSession(input: {
   }
 
   const token = await createUniqueVoiceCallbackRequestToken(prisma);
-  const resolvedAgentId = await resolveVoiceCallbackOwnerIdForPhone(normalizedPhone, input.agentId);
+  const resolvedAgentId = await resolveVoiceCallbackOwnerIdForPhone(
+    normalizedPhone,
+    input.agentId,
+  );
   return prisma.voiceCallbackRequest.create({
     data: {
       token,
@@ -1007,12 +1439,16 @@ async function maybeSendAttemptedCallSms(call: {
   }
 
   const targetPhone =
-    String(call.direction || "").trim().toUpperCase() === "OUTBOUND"
+    String(call.direction || "")
+      .trim()
+      .toUpperCase() === "OUTBOUND"
       ? call.destinationNumber || call.callerNumber || ""
       : call.callerNumber || call.destinationNumber || "";
   const normalizedPhone = normalizeVoiceNumber(targetPhone);
-  if (!normalizedPhone) return { sent: false, reason: "missing_phone" } as const;
-  if (isInternalVoicePhone(normalizedPhone)) return { sent: false, reason: "internal_phone" } as const;
+  if (!normalizedPhone)
+    return { sent: false, reason: "missing_phone" } as const;
+  if (isInternalVoicePhone(normalizedPhone))
+    return { sent: false, reason: "internal_phone" } as const;
 
   const session = await ensureVoiceCallbackRequestSession({
     phoneNumber: normalizedPhone,
@@ -1023,7 +1459,8 @@ async function maybeSendAttemptedCallSms(call: {
   });
 
   if (!session) return { sent: false, reason: "session_not_created" } as const;
-  if (session.smsSent) return { sent: false, reason: "already_sent_for_call" } as const;
+  if (session.smsSent)
+    return { sent: false, reason: "already_sent_for_call" } as const;
 
   const callbackUrl = getVoiceCallbackRequestPublicUrl(session.token);
   const message =
@@ -1058,15 +1495,23 @@ async function maybeSendAttemptedCallSms(call: {
   } as const;
 }
 
-function logAttemptedCallSmsResult(call: {
-  id: string;
-  direction: string;
-  callerNumber: string;
-  destinationNumber?: string | null;
-  status: string;
-  durationInSeconds?: number | null;
-  assignedToId?: string | null;
-}, result: { sent: boolean; reason: string; providerMessageId?: string | null; token?: string }) {
+function logAttemptedCallSmsResult(
+  call: {
+    id: string;
+    direction: string;
+    callerNumber: string;
+    destinationNumber?: string | null;
+    status: string;
+    durationInSeconds?: number | null;
+    assignedToId?: string | null;
+  },
+  result: {
+    sent: boolean;
+    reason: string;
+    providerMessageId?: string | null;
+    token?: string;
+  },
+) {
   console.info("[voice.sms.attempted_call_result]", {
     callId: call.id,
     direction: call.direction,
@@ -1082,7 +1527,9 @@ function logAttemptedCallSmsResult(call: {
     skippedBecauseInternalPhone:
       result.reason === "internal_phone"
         ? normalizeVoiceNumber(
-            String(call.direction || "").trim().toUpperCase() === "OUTBOUND"
+            String(call.direction || "")
+              .trim()
+              .toUpperCase() === "OUTBOUND"
               ? call.destinationNumber || call.callerNumber || ""
               : call.callerNumber || call.destinationNumber || "",
           )
@@ -1121,7 +1568,11 @@ export async function getPublicVoiceCallbackRequestByToken(token: string) {
   const isExpired = session.expiresAt.getTime() < now.getTime();
   return {
     session,
-    state: session.followUpCreated ? "requested" : isExpired ? "expired" : "active",
+    state: session.followUpCreated
+      ? "requested"
+      : isExpired
+        ? "expired"
+        : "active",
   } as const;
 }
 
@@ -1150,21 +1601,29 @@ export async function fulfillVoiceCallbackRequestByToken(token: string) {
     });
 
     if (!session) return { ok: false, error: "invalid_token" } as const;
-    if (session.expiresAt.getTime() < Date.now()) return { ok: false, error: "expired_token" } as const;
+    if (session.expiresAt.getTime() < Date.now())
+      return { ok: false, error: "expired_token" } as const;
 
     const now = new Date();
     let followUpTaskId = session.followUpTaskId;
 
     if (!session.followUpCreated) {
-      if (!session.voiceCallId) return { ok: false, error: "missing_voice_call" } as const;
-      const assignedToId = session.agentId ?? (await resolveVoiceCallbackOwnerIdForPhone(session.normalizedPhone, null));
+      if (!session.voiceCallId)
+        return { ok: false, error: "missing_voice_call" } as const;
+      const assignedToId =
+        session.agentId ??
+        (await resolveVoiceCallbackOwnerIdForPhone(
+          session.normalizedPhone,
+          null,
+        ));
       const followUp = await ensureAutoCallbackFollowUp({
         voiceCallId: session.voiceCallId,
         phone: session.normalizedPhone || session.phoneNumber,
         assignedToId,
         status: "attempted_call",
         title: "Customer requested callback",
-        notes: "Customer clicked the callback request link after an attempted call.",
+        notes:
+          "Customer clicked the callback request link after an attempted call.",
       });
       followUpTaskId = followUp?.id ?? null;
     }
@@ -1216,7 +1675,9 @@ async function ensureAutoCallbackFollowUp(input: {
     orderBy: [{ updatedAt: "desc" }],
   });
 
-  const notes = input.notes?.trim() || `Auto-created after ${safeString(input.status).replace(/_/g, " ") || "missed"} call.`;
+  const notes =
+    input.notes?.trim() ||
+    `Auto-created after ${safeString(input.status).replace(/_/g, " ") || "missed"} call.`;
   const dueAt = new Date(Date.now() + 15 * 60 * 1000);
   const title = input.title?.trim() || "Call back customer";
 
@@ -1256,7 +1717,11 @@ async function closeVoiceCallbackWorkForAnsweredCall(call: {
   status: string;
   durationInSeconds?: number | null;
 }) {
-  if (!isAnsweredBusinessStatus(call.status) && Number(call.durationInSeconds ?? 0) <= 0) return;
+  if (
+    !isAnsweredBusinessStatus(call.status) &&
+    Number(call.durationInSeconds ?? 0) <= 0
+  )
+    return;
 
   const phoneVariants = getCustomerContactPhones(call);
   if (!phoneVariants.length) return;
@@ -1318,7 +1783,10 @@ export async function syncVoiceCallAutomation(input: {
       startedAt: input.startedAt ?? null,
       endedAt: input.endedAt ?? null,
     }).catch((smsError) => {
-      console.warn("[voice.sms.attempted_call_skipped]", smsError instanceof Error ? smsError.message : smsError);
+      console.warn(
+        "[voice.sms.attempted_call_skipped]",
+        smsError instanceof Error ? smsError.message : smsError,
+      );
       return null;
     });
     if (attemptedSmsResult) {
@@ -1381,7 +1849,10 @@ export async function syncVoiceCallAutomation(input: {
       durationInSeconds: input.durationInSeconds ?? null,
       startedAt: input.startedAt ?? null,
     }).catch((smsError) => {
-      console.warn("[voice.sms.missed_call_skipped]", smsError instanceof Error ? smsError.message : smsError);
+      console.warn(
+        "[voice.sms.missed_call_skipped]",
+        smsError instanceof Error ? smsError.message : smsError,
+      );
     });
 
     return;
@@ -1407,7 +1878,10 @@ export async function syncVoiceCallAutomation(input: {
     startedAt: input.startedAt ?? null,
     endedAt: input.endedAt ?? null,
   }).catch((smsError) => {
-    console.warn("[voice.sms.feedback_skipped]", smsError instanceof Error ? smsError.message : smsError);
+    console.warn(
+      "[voice.sms.feedback_skipped]",
+      smsError instanceof Error ? smsError.message : smsError,
+    );
   });
 }
 
@@ -1430,11 +1904,17 @@ function parseDate(value: string | undefined) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-export async function upsertVoiceCallFromPayload(payload: VoicePayload, input?: {
-  routeType?: string | null;
-  routedTo?: string | null;
-  assignedToId?: string | null;
-}) {
+export async function upsertVoiceCallFromPayload(
+  payload: VoicePayload,
+  input?: {
+    routeType?: string | null;
+    routedTo?: string | null;
+    assignedToId?: string | null;
+    answeredById?: string | null;
+    answeredNumber?: string | null;
+    answeredAt?: Date | null;
+  },
+) {
   const sessionId = safeString(payload.sessionId || payload.SessionId);
   if (!sessionId) {
     throw new Error("missing_session_id");
@@ -1449,11 +1929,15 @@ export async function upsertVoiceCallFromPayload(payload: VoicePayload, input?: 
     },
   });
 
-  const callerNumber = normalizeVoiceNumber(payload.callerNumber || payload.caller || payload.from);
-  const destinationNumber = normalizeVoiceNumber(payload.destinationNumber || payload.to || payload.calledNumber);
+  const callerNumber = normalizeVoiceNumber(
+    payload.callerNumber || payload.caller || payload.from,
+  );
+  const destinationNumber = normalizeVoiceNumber(
+    payload.destinationNumber || payload.to || payload.calledNumber,
+  );
   const isRoutedInboundCall = Boolean(
     safeString(input?.routeType ?? existingCall?.routeType) ||
-      safeString(input?.routedTo ?? existingCall?.routedTo),
+    safeString(input?.routedTo ?? existingCall?.routedTo),
   );
   const inferredStatus = inferVoiceCompletionStatus(payload, {
     treatZeroDurationSuccessAsNoAnswer: isRoutedInboundCall,
@@ -1461,26 +1945,40 @@ export async function upsertVoiceCallFromPayload(payload: VoicePayload, input?: 
   });
   const status = inferredStatus || normalizeVoiceStatus(payload);
   const isActive = isVoiceCallActive(payload);
-  const customerLink = callerNumber ? await resolveVoiceCustomerLinkByPhone(callerNumber) : null;
+  const customerLink = callerNumber
+    ? await resolveVoiceCustomerLinkByPhone(callerNumber)
+    : null;
   const customerId = customerLink?.matchedCustomer?.id ?? null;
-  const answeredAgentAssignment = input?.assignedToId == null ? await resolveAnsweredAgentAssignment(destinationNumber) : null;
+  const answeredAgentAssignment =
+    input?.assignedToId == null
+      ? await resolveAnsweredAgentAssignment(destinationNumber)
+      : null;
 
   const voiceCall = await prisma.voiceCall.upsert({
     where: { sessionId },
     create: {
       sessionId,
-      direction: safeString(payload.direction || "INBOUND").toUpperCase() || "INBOUND",
-      callerNumber: callerNumber || safeString(payload.callerNumber || payload.caller || "unknown") || "unknown",
+      direction:
+        safeString(payload.direction || "INBOUND").toUpperCase() || "INBOUND",
+      callerNumber:
+        callerNumber ||
+        safeString(payload.callerNumber || payload.caller || "unknown") ||
+        "unknown",
       destinationNumber: destinationNumber || null,
       isActive,
       status,
       routedTo: input?.routedTo ?? null,
       routeType: input?.routeType ?? null,
       assignedToId: input?.assignedToId ?? answeredAgentAssignment ?? null,
+      answeredById: input?.answeredById ?? null,
+      answeredNumber: normalizeVoiceNumber(input?.answeredNumber || "") || null,
+      answeredAt: input?.answeredAt ?? null,
       customerId,
       startedAt: parseDate(payload.startTime) ?? new Date(),
       endedAt: parseDate(payload.endTime),
-      durationInSeconds: parseInteger(payload.durationInSeconds || payload.duration),
+      durationInSeconds: parseInteger(
+        payload.durationInSeconds || payload.duration,
+      ),
       currencyCode: safeString(payload.currencyCode) || null,
       amount: parseMoney(payload.amount ?? "0"),
       recordingUrl: safeString(payload.recordingUrl) || null,
@@ -1489,17 +1987,27 @@ export async function upsertVoiceCallFromPayload(payload: VoicePayload, input?: 
       rawPayloadJson: payload,
     },
     update: {
-      direction: safeString(payload.direction || "INBOUND").toUpperCase() || "INBOUND",
-      callerNumber: callerNumber || safeString(payload.callerNumber || payload.caller || "unknown") || "unknown",
+      direction:
+        safeString(payload.direction || "INBOUND").toUpperCase() || "INBOUND",
+      callerNumber:
+        callerNumber ||
+        safeString(payload.callerNumber || payload.caller || "unknown") ||
+        "unknown",
       destinationNumber: destinationNumber || null,
       isActive,
       status,
       routedTo: input?.routedTo ?? undefined,
       routeType: input?.routeType ?? undefined,
       assignedToId: input?.assignedToId ?? answeredAgentAssignment ?? undefined,
+      answeredById: input?.answeredById ?? undefined,
+      answeredNumber:
+        normalizeVoiceNumber(input?.answeredNumber || "") || undefined,
+      answeredAt: input?.answeredAt ?? undefined,
       customerId: customerId ?? undefined,
       endedAt: parseDate(payload.endTime) ?? undefined,
-      durationInSeconds: parseInteger(payload.durationInSeconds || payload.duration) ?? undefined,
+      durationInSeconds:
+        parseInteger(payload.durationInSeconds || payload.duration) ??
+        undefined,
       currencyCode: safeString(payload.currencyCode) || undefined,
       amount: parseMoney(payload.amount) ?? undefined,
       recordingUrl: safeString(payload.recordingUrl) || undefined,
@@ -1520,7 +2028,10 @@ export async function upsertVoiceCallFromPayload(payload: VoicePayload, input?: 
   return voiceCall;
 }
 
-export async function createVoiceEventFromPayload(payload: VoicePayload, voiceCallId?: string | null) {
+export async function createVoiceEventFromPayload(
+  payload: VoicePayload,
+  voiceCallId?: string | null,
+) {
   const sessionId = safeString(payload.sessionId || payload.SessionId);
   if (!sessionId) {
     throw new Error("missing_session_id");
@@ -1530,7 +2041,13 @@ export async function createVoiceEventFromPayload(payload: VoicePayload, voiceCa
     data: {
       voiceCallId: voiceCallId ?? null,
       sessionId,
-      eventType: safeString(payload.eventType || payload.status || payload.callStatus || payload.callSessionState || "unknown"),
+      eventType: safeString(
+        payload.eventType ||
+          payload.status ||
+          payload.callStatus ||
+          payload.callSessionState ||
+          "unknown",
+      ),
       payloadJson: payload,
     },
   });
@@ -1546,7 +2063,9 @@ export async function createVoiceEventFromPayload(payload: VoicePayload, voiceCa
 }
 
 function shouldCreateMissedLead(status: string) {
-  const normalized = String(status || "").trim().toLowerCase();
+  const normalized = String(status || "")
+    .trim()
+    .toLowerCase();
   return [
     "missed",
     "no_answer",
@@ -1574,14 +2093,19 @@ export async function createOrUpdateMissedVoiceLead(call: {
 
   const phone = normalizeVoiceNumber(call.callerNumber) || call.callerNumber;
   if (isVoiceAdminTestPhone(phone)) return null;
-  const customerLink = phone ? await resolveVoiceCustomerLinkByPhone(phone) : null;
+  const customerLink = phone
+    ? await resolveVoiceCustomerLinkByPhone(phone)
+    : null;
   const customerId = customerLink?.matchedCustomer?.id ?? null;
   const callerName = customerLink?.matchedCustomer?.name ?? null;
   const existing = await prisma.voiceLead.findFirst({
     where: { phone, status: { in: ["open", "pending_follow_up"] } },
     orderBy: { updatedAt: "desc" },
   });
-  const leadOwnerId = (await resolveVoiceCallbackOwnerIdForPhone(phone, call.assignedToId)) ?? existing?.assignedToId ?? null;
+  const leadOwnerId =
+    (await resolveVoiceCallbackOwnerIdForPhone(phone, call.assignedToId)) ??
+    existing?.assignedToId ??
+    null;
 
   if (call.voiceCallId && leadOwnerId && leadOwnerId !== call.assignedToId) {
     await prisma.voiceCall.updateMany({
@@ -1641,8 +2165,11 @@ export async function ensureVoiceLeadForCaller(call: {
 
   const phone = normalizeVoiceNumber(call.callerNumber) || call.callerNumber;
   if (isVoiceAdminTestPhone(phone)) return null;
-  const customerLink = call.customerId ? null : await resolveVoiceCustomerLinkByPhone(phone);
-  const customerId = call.customerId ?? customerLink?.matchedCustomer?.id ?? null;
+  const customerLink = call.customerId
+    ? null
+    : await resolveVoiceCustomerLinkByPhone(phone);
+  const customerId =
+    call.customerId ?? customerLink?.matchedCustomer?.id ?? null;
   if (customerId) return null;
 
   const existing = await prisma.voiceLead.findFirst({

@@ -4,6 +4,7 @@ import { toSpeechText } from "@/lib/voiceSpeech";
 export type VoiceRouteHop = {
   label: string;
   dialValue: string;
+  targetUserId: string | null;
 };
 
 export type VoiceRoutePlan = {
@@ -45,13 +46,16 @@ export function encodeRoutePlan(plan: VoiceRoutePlan) {
 export function decodeRoutePlan(serialized: string | null) {
   if (!serialized) return null;
   try {
-    const parsed = JSON.parse(Buffer.from(serialized, "base64url").toString("utf8")) as Partial<VoiceRoutePlan>;
+    const parsed = JSON.parse(
+      Buffer.from(serialized, "base64url").toString("utf8"),
+    ) as Partial<VoiceRoutePlan>;
     if (!Array.isArray(parsed.hops) || !parsed.hops.length) return null;
     return {
       hops: parsed.hops
         .map((hop) => ({
           label: safeString(hop?.label),
           dialValue: safeString(hop?.dialValue),
+          targetUserId: safeString(hop?.targetUserId || "") || null,
         }))
         .filter((hop) => hop.label && hop.dialValue),
       primaryTargetUserId: safeString(parsed.primaryTargetUserId || "") || null,
@@ -64,7 +68,11 @@ export function decodeRoutePlan(serialized: string | null) {
   }
 }
 
-export function buildRoutePlanRedirectUrl(requestUrl: URL, plan: VoiceRoutePlan, hopIndex: number) {
+export function buildRoutePlanRedirectUrl(
+  requestUrl: URL,
+  plan: VoiceRoutePlan,
+  hopIndex: number,
+) {
   const redirectUrl = new URL("/api/voice/callback", requestUrl.origin);
   redirectUrl.searchParams.set("hop", String(hopIndex));
   redirectUrl.searchParams.set("routePlan", encodeRoutePlan(plan));
@@ -77,9 +85,15 @@ export function buildDialAttemptXml(input: {
   preDialMessage?: string | null;
   maxDurationSeconds?: number;
 }) {
-  const sayPart = input.preDialMessage ? `<Say voice="woman">${escapeVoiceXml(toSpeechText(input.preDialMessage))}</Say>` : "";
-  const maxDurationPart = input.maxDurationSeconds ? ` maxDuration="${input.maxDurationSeconds}"` : "";
-  const redirectPart = input.redirectUrl ? `<Redirect>${escapeVoiceXml(input.redirectUrl)}</Redirect>` : "";
+  const sayPart = input.preDialMessage
+    ? `<Say voice="woman">${escapeVoiceXml(toSpeechText(input.preDialMessage))}</Say>`
+    : "";
+  const maxDurationPart = input.maxDurationSeconds
+    ? ` maxDuration="${input.maxDurationSeconds}"`
+    : "";
+  const redirectPart = input.redirectUrl
+    ? `<Redirect>${escapeVoiceXml(input.redirectUrl)}</Redirect>`
+    : "";
   return (
     `<?xml version="1.0" encoding="UTF-8"?>` +
     `<Response>${sayPart}<Dial record="true" phoneNumbers="${escapeVoiceXml(input.phoneNumber)}"${maxDurationPart} />${redirectPart}</Response>`
@@ -97,7 +111,8 @@ export function buildWorkingHoursIvrXml(input: {
   const fallbackRedirectPart = input.fallbackRedirectUrl
     ? `<Redirect>${escapeVoiceXml(input.fallbackRedirectUrl)}</Redirect>`
     : "";
-  return `<?xml version="1.0" encoding="UTF-8"?>` +
+  return (
+    `<?xml version="1.0" encoding="UTF-8"?>` +
     `<Response>` +
     `<Say voice="woman">${escapeVoiceXml(toSpeechText(BETECH_WORKING_HOURS_WELCOME_MESSAGE))}</Say>` +
     `<GetDigits timeout="${BETECH_WORKING_HOURS_DIGITS_TIMEOUT_SECONDS}" numDigits="1" callbackUrl="${escapeVoiceXml(input.callbackUrl)}">` +
@@ -105,19 +120,24 @@ export function buildWorkingHoursIvrXml(input: {
     `</GetDigits>` +
     fallbackDialPart +
     fallbackRedirectPart +
-    `</Response>`;
+    `</Response>`
+  );
 }
 
 export function buildVoiceRoutePlanFromPhoneNumbers(input: {
   labels?: string[];
   phoneNumbers: string[];
+  targetUserIds?: Array<string | null>;
   routeType: string;
 }) {
-  const normalizedNumbers = input.phoneNumbers.map((number) => safeString(number)).filter(Boolean);
+  const normalizedNumbers = input.phoneNumbers
+    .map((number) => safeString(number))
+    .filter(Boolean);
   return {
     hops: normalizedNumbers.map((dialValue, index) => ({
       label: input.labels?.[index] || `${input.routeType}_${index + 1}`,
       dialValue,
+      targetUserId: input.targetUserIds?.[index] ?? null,
     })),
     primaryTargetUserId: null,
     routeType: input.routeType,
