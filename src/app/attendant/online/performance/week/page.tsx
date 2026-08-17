@@ -6,27 +6,32 @@ import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod"
 import { canonicalNairobiWeekStartUtc, formatNairobiDate, mondayToSundayNairobiWindow, parseDateOnlyUtc } from "@/lib/weekWindow";
 import WeekProfitEntriesClient from "@/app/admin/online/performance/_components/WeekProfitEntries.client";
 import { Prisma } from "@prisma/client";
+import { canAccessOnlineSupervisorWorkspace } from "@/lib/onlineSupervisorAccess";
 
 export const dynamic = "force-dynamic";
 
 const currency = new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 });
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-type SearchParams = { weekStart?: string; periodKey?: string; accountId?: string };
+type SearchParams = { weekStart?: string; periodKey?: string; accountId?: string; impersonateId?: string };
 
 export default async function AttendantPerformanceWeekPage({
   searchParams,
 }: {
   searchParams?: Promise<SearchParams> | SearchParams;
 }) {
-  const session = await auth();
-  const email = String((session?.user as any)?.email ?? "").toLowerCase();
-  const actorId = String((session?.user as any)?.id ?? "");
-  if (email !== "benjamin@betech.co.ke") {
+  const resolved = await Promise.resolve(searchParams ?? {});
+  if (!(await canAccessOnlineSupervisorWorkspace(resolved.impersonateId))) {
     return redirect("/not-authorized");
   }
-
-  const resolved = await Promise.resolve(searchParams ?? {});
+  const session = await auth();
+  const actorId = resolved.impersonateId || String((session?.user as { id?: string } | undefined)?.id ?? "");
+  const impersonateQuery = resolved.impersonateId
+    ? `&impersonateId=${encodeURIComponent(resolved.impersonateId)}`
+    : "";
+  const captureHref = resolved.impersonateId
+    ? `/attendant/online/performance/capture?impersonateId=${encodeURIComponent(resolved.impersonateId)}`
+    : "/attendant/online/performance/capture";
   const period = parseTradingPeriodKey(resolved.periodKey) ?? getTradingPeriodFor(new Date());
   const accountId = (resolved.accountId ?? "").trim();
 
@@ -37,7 +42,10 @@ export default async function AttendantPerformanceWeekPage({
       <div className="space-y-6">
         <h1 className="text-2xl font-semibold text-white">Week performance</h1>
         <p className="text-sm text-slate-400">Missing `weekStart` query parameter.</p>
-        <Link href="/attendant/online/performance" className="text-emerald-200 hover:text-emerald-100">
+        <Link
+          href={resolved.impersonateId ? `/attendant/online/performance?impersonateId=${encodeURIComponent(resolved.impersonateId)}` : "/attendant/online/performance"}
+          className="text-emerald-200 hover:text-emerald-100"
+        >
           Back to performance
         </Link>
       </div>
@@ -147,8 +155,7 @@ export default async function AttendantPerformanceWeekPage({
   const lossEntriesFlagged = rows.filter((e) => Boolean((e as any).isLoss));
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <main className="mx-auto max-w-6xl space-y-6 p-6">
+    <div className="space-y-6">
         <header className="space-y-2">
           <p className="text-xs uppercase tracking-wide text-slate-400">Online ops</p>
           <h1 className="text-3xl font-semibold text-white">Week performance</h1>
@@ -157,13 +164,13 @@ export default async function AttendantPerformanceWeekPage({
           </p>
           <div className="flex flex-wrap gap-2 pt-1">
             <Link
-              href={`/attendant/online/performance?periodKey=${encodeURIComponent(period.key)}`}
+              href={`/attendant/online/performance?periodKey=${encodeURIComponent(period.key)}${impersonateQuery}`}
               className="rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5"
             >
               Back to performance
             </Link>
             <Link
-              href="/attendant/online/performance/capture"
+              href={captureHref}
               className="rounded-full border border-emerald-500/50 px-4 py-2 text-sm font-semibold text-emerald-200 hover:bg-emerald-500/10"
             >
               Capture profit
@@ -222,7 +229,6 @@ export default async function AttendantPerformanceWeekPage({
             Net payout = item credit + commission + shipping. Profit = net payout - buying price.
           </p>
         </section>
-      </main>
     </div>
   );
 }

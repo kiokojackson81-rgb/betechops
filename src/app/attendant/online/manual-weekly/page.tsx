@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import ToastContainer from "@/app/_components/ToastContainer";
 import MarketplaceWeeklyCsvUpload from "@/app/_components/MarketplaceWeeklyCsvUpload.client";
 import { showToast } from "@/lib/ui/toast";
@@ -47,6 +47,8 @@ type WeeklySaleRow = {
 const currency = new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 });
 
 export default function AttendantManualWeeklyPage() {
+  const searchParams = useSearchParams();
+  const impersonateId = searchParams.get("impersonateId")?.trim() || "";
   const [meId, setMeId] = useState<string>("");
   const [isBenjamin, setIsBenjamin] = useState(false);
   const [shops, setShops] = useState<ShopPayload[]>([]);
@@ -71,14 +73,20 @@ export default function AttendantManualWeeklyPage() {
 
   useEffect(() => {
     (async () => {
-      const res = await fetch("/api/attendants/me", { cache: "no-store" });
+      const params = new URLSearchParams();
+      if (impersonateId) {
+        params.set("impersonateId", impersonateId);
+        params.set("scope", "mine");
+      }
+      const query = params.toString();
+      const res = await fetch(`/api/attendants/me${query ? `?${query}` : ""}`, { cache: "no-store" });
       const data = (await res.json().catch(() => null)) as any;
       const email = String(data?.user?.email ?? data?.data?.user?.email ?? "").toLowerCase();
       const id = String(data?.user?.id ?? data?.data?.user?.id ?? "");
       setMeId(id);
       setIsBenjamin(email === "benjamin@betech.co.ke");
     })().catch(() => {});
-  }, []);
+  }, [impersonateId]);
 
   const loadShops = async () => {
     setShopsLoading(true);
@@ -150,11 +158,9 @@ export default function AttendantManualWeeklyPage() {
 
   if (!isBenjamin) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100">
-        <main className="mx-auto max-w-6xl space-y-6 p-6">
+      <div className="rounded-2xl border border-rose-400/20 bg-rose-500/10 p-6 text-slate-100">
           <h1 className="text-2xl font-semibold text-white">Manual weekly</h1>
           <p className="text-sm text-slate-400">Not authorized.</p>
-        </main>
       </div>
     );
   }
@@ -200,21 +206,12 @@ export default function AttendantManualWeeklyPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
+    <div className="space-y-6">
       <ToastContainer />
-      <main className="mx-auto max-w-6xl space-y-6 p-6">
         <header className="space-y-2">
           <p className="text-xs uppercase tracking-wide text-slate-400">Online ops</p>
           <h1 className="text-3xl font-semibold text-white">Manual weekly</h1>
           <p className="text-sm text-slate-300">Enter manual weekly totals (admin can approve/analyze later).</p>
-          <div className="flex flex-wrap gap-2 pt-1">
-            <Link
-              href="/attendant/online"
-              className="rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5"
-            >
-              Back to dashboard
-            </Link>
-          </div>
         </header>
 
         <section className="rounded-2xl border border-white/10 bg-slate-900/40 p-6">
@@ -310,7 +307,6 @@ export default function AttendantManualWeeklyPage() {
           </table>
         </div>
         </section>
-      </main>
     </div>
   );
 }

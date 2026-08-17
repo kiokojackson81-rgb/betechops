@@ -14,11 +14,7 @@ import {
 import { computeMarketplaceCommission } from "@/lib/onlineCommission";
 import { showToast } from "@/lib/ui/toast";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { signOut } from "next-auth/react";
 import { buildEarningsCardBreakdown } from "@/lib/earningsCardBreakdown";
-import BenjaminPosPricingPanel from "./BenjaminPosPricingPanel";
-import OnlineOperationsShell from "./OnlineOperationsShell";
 import {
   BadgeDollarSign,
   FileText,
@@ -289,19 +285,16 @@ const formatNairobiParam = (date: Date, endOfDay = false) => {
 };
 
 export default function AttendantOnlineClient({ mode = "online" }: { mode?: "online" | "general" }) {
-  const router = useRouter();
   const { currentPeriod, selectedPeriod, selectedPeriodKey, setSelectedPeriod } =
     useTradingPeriodQueryState();
   const period = selectedPeriod;
   const [userId, setUserId] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [supervisorPerformanceTools, setSupervisorPerformanceTools] = useState(false);
   const [impersonated, setImpersonated] = useState<boolean>(false);
   const [impersonatedBy, setImpersonatedBy] = useState<string | null>(null);
   const [impersonateId, setImpersonateId] = useState<string | null>(null);
-  const [showBenjaminPosPricing, setShowBenjaminPosPricing] = useState(false);
 
   const appendImpersonateParam = useCallback(
     (params: URLSearchParams) => {
@@ -414,7 +407,6 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
       if (!payload) return;
       if (payload?.user?.id) setUserId(payload.user.id);
       if (payload?.user?.name) setUserName(String(payload.user.name));
-      if (payload?.user?.role) setUserRole(payload.user.role);
       if (payload?.user?.email) setUserEmail(String(payload.user.email));
       setSupervisorPerformanceTools(Boolean(payload?.flags?.supervisorPerformanceTools));
       // capture impersonation metadata when present so UI can surface it
@@ -976,18 +968,12 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
     tierMessage: marketplaceTierInfo.message,
   };
   const receiptsHistoryHref = userId
-    ? `/receipts?attendantId=${encodeURIComponent(userId)}&start=${encodeURIComponent(
+    ? `/attendant/online/receipts?view=history&attendantId=${encodeURIComponent(userId)}&start=${encodeURIComponent(
         period.start.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" }),
       )}&end=${encodeURIComponent(period.end.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" }))}`
-    : "/receipts";
+    : "/attendant/online/receipts?view=history";
   const { locked: statsLocked, toggle: toggleStatsLock } = useCardLock("onlineops:quickstats");
   const displayName = userName || userEmail || (isGeneralOpsView ? "Operations team" : "Online attendant");
-  const roleLabel = isBenjaminSupervisor
-    ? "Online Supervisor"
-    : userRole?.replace(/_/g, " ") || (isGeneralOpsView ? "General Operations" : "Online Attendant");
-  const dashboardHref = impersonateId
-    ? `/attendant/online?impersonateId=${encodeURIComponent(impersonateId)}`
-    : "/attendant/online";
   const dashboardKpis = [
     ...(!isGeneralOpsView
       ? [{
@@ -1048,7 +1034,7 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
     const params = new URLSearchParams();
     if (impersonateId) params.set("impersonateId", impersonateId);
     const query = params.toString();
-    return query ? `/attendant/wellness?${query}` : "/attendant/wellness";
+    return query ? `/attendant/online/wellness?${query}` : "/attendant/online/wellness";
   })();
   const performanceReportHref = (() => {
     const params = new URLSearchParams({ periodKey: selectedPeriodKey });
@@ -1080,29 +1066,7 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
   };
 
   return (
-    <OnlineOperationsShell
-      userName={displayName}
-      userEmail={userEmail || "Account loading..."}
-      roleLabel={roleLabel}
-      dashboardTitle={isGeneralOpsView ? "General Operations Dashboard" : "Online Operations Dashboard"}
-      dashboardDescription={
-        isGeneralOpsView
-          ? "Direct sales, POS receipts, commissions, and payroll."
-          : "Marketplace performance, POS receipts, commissions, and payroll."
-      }
-      dashboardHref={dashboardHref}
-      receiptsHref={receiptsHistoryHref}
-      reportHref={performanceReportHref}
-      wellnessHref={wellnessHref}
-      isSupervisor={isBenjaminSupervisor}
-      pricingOpen={showBenjaminPosPricing}
-      onOpenPerformance={() => router.push("/attendant/online/performance")}
-      onOpenProfitCapture={() => router.push("/attendant/online/performance/capture")}
-      onOpenManualWeekly={() => router.push("/attendant/online/manual-weekly")}
-      onTogglePricing={() => setShowBenjaminPosPricing((current) => !current)}
-      onLogout={() => void signOut({ callbackUrl: "/" })}
-    >
-      <div className="space-y-6">
+    <div className="space-y-6">
         <ImpersonationBanner />
 
         <section className="rounded-[28px] border border-white/10 bg-gradient-to-br from-white/8 via-white/4 to-transparent p-5 shadow-2xl shadow-black/20 sm:p-6">
@@ -1135,7 +1099,7 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
                     {isGeneralOpsView ? `${receiptsCount} POS receipts` : `${accountRows.length} marketplace account rows`}
                   </div>
                 </div>
-                <a href={performanceReportHref} target="_blank" rel="noreferrer" className="inline-flex rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:bg-cyan-400/15">
+                <a href={performanceReportHref} download className="inline-flex rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:bg-cyan-400/15">
                   Download report
                 </a>
               </div>
@@ -1145,21 +1109,6 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
             </div>
           </div>
         </section>
-
-        {isBenjaminSupervisor && showBenjaminPosPricing ? (
-          <section className="rounded-[28px] border border-cyan-400/20 bg-cyan-400/5 p-3 sm:p-4">
-            <div className="mb-3 flex items-center justify-between gap-3 px-1">
-              <div>
-                <div className="text-xs uppercase tracking-[0.22em] text-cyan-200">Supervisor workspace</div>
-                <div className="mt-1 text-lg font-semibold text-white">POS pricing queue</div>
-              </div>
-              <button type="button" onClick={() => setShowBenjaminPosPricing(false)} className="rounded-full border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5">
-                Close
-              </button>
-            </div>
-            <BenjaminPosPricingPanel onQueueEmpty={() => setShowBenjaminPosPricing(false)} />
-          </section>
-        ) : null}
 
         <section>
           <div className="mb-3 flex items-center justify-between gap-3">
@@ -1289,9 +1238,9 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
                 <p className="mt-1 text-xs text-slate-400">Open routine work without leaving the dashboard context.</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <Link href="/receipts" className="rounded-2xl bg-emerald-500 px-3 py-3 text-center text-sm font-semibold text-black">Create receipt</Link>
+                <Link href="/attendant/online/receipts?view=create" className="rounded-2xl bg-emerald-500 px-3 py-3 text-center text-sm font-semibold text-black">Create receipt</Link>
                 <Link href={receiptsHistoryHref} className="rounded-2xl border border-white/10 px-3 py-3 text-center text-sm text-slate-200 hover:bg-white/5">Receipt history</Link>
-                <a href={performanceReportHref} target="_blank" rel="noreferrer" className="rounded-2xl border border-white/10 px-3 py-3 text-center text-sm text-slate-200 hover:bg-white/5">Performance PDF</a>
+                <a href={performanceReportHref} download className="rounded-2xl border border-white/10 px-3 py-3 text-center text-sm text-slate-200 hover:bg-white/5">Performance PDF</a>
                 <Link href={wellnessHref} className="rounded-2xl border border-white/10 px-3 py-3 text-center text-sm text-slate-200 hover:bg-white/5">Wellness</Link>
                 {!isGeneralOpsView && userId ? (
                   <a href={marketplaceWeeksExportHref} className="col-span-2 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 px-3 py-3 text-center text-sm text-cyan-100 hover:bg-cyan-400/10">Download full weeks PDF</a>
@@ -1344,17 +1293,16 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
                   <p className="mt-1 text-sm text-slate-400">Restricted performance and pricing controls.</p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <button type="button" onClick={() => router.push("/attendant/online/performance")} className="rounded-2xl border border-white/10 px-3 py-3 text-sm text-slate-200 hover:bg-white/5">Performance</button>
-                  <button type="button" onClick={() => router.push("/attendant/online/performance/capture")} className="rounded-2xl border border-white/10 px-3 py-3 text-sm text-slate-200 hover:bg-white/5">Capture profit</button>
-                  <button type="button" onClick={() => router.push("/attendant/online/manual-weekly")} className="rounded-2xl border border-white/10 px-3 py-3 text-sm text-slate-200 hover:bg-white/5">Manual weekly</button>
-                  <button type="button" onClick={() => setShowBenjaminPosPricing((current) => !current)} className="rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-3 py-3 text-sm text-cyan-100 hover:bg-cyan-400/15">{showBenjaminPosPricing ? "Close pricing" : "POS pricing"}</button>
+                  <Link href="/attendant/online/performance" className="rounded-2xl border border-white/10 px-3 py-3 text-center text-sm text-slate-200 hover:bg-white/5">Performance</Link>
+                  <Link href="/attendant/online/performance/capture" className="rounded-2xl border border-white/10 px-3 py-3 text-center text-sm text-slate-200 hover:bg-white/5">Capture profit</Link>
+                  <Link href="/attendant/online/manual-weekly" className="rounded-2xl border border-white/10 px-3 py-3 text-center text-sm text-slate-200 hover:bg-white/5">Manual weekly</Link>
+                  <Link href="/attendant/online/pos-pricing" className="rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-3 py-3 text-center text-sm text-cyan-100 hover:bg-cyan-400/15">POS pricing</Link>
                 </div>
               </Card>
             ) : null}
           </aside>
         </div>
-      </div>
-    </OnlineOperationsShell>
+    </div>
   );
 }
 

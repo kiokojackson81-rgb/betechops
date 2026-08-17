@@ -1,14 +1,17 @@
-import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import ProfitCaptureFormClient from "@/app/admin/online/performance/_components/ProfitCaptureForm.client";
 import { prisma } from "@/lib/prisma";
+import { canAccessOnlineSupervisorWorkspace } from "@/lib/onlineSupervisorAccess";
 
 export const dynamic = "force-dynamic";
 
-export default async function AttendantPerformanceCapturePage() {
-  const session = await auth();
-  const email = String((session?.user as any)?.email ?? "").toLowerCase();
-  if (email !== "benjamin@betech.co.ke") {
+export default async function AttendantPerformanceCapturePage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ impersonateId?: string }> | { impersonateId?: string };
+}) {
+  const resolved = await Promise.resolve(searchParams ?? {});
+  if (!(await canAccessOnlineSupervisorWorkspace(resolved.impersonateId))) {
     return redirect("/not-authorized");
   }
 
@@ -19,8 +22,7 @@ export default async function AttendantPerformanceCapturePage() {
   });
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <main className="mx-auto max-w-6xl space-y-6 p-6">
+    <div className="space-y-6">
         <header className="space-y-2">
           <p className="text-xs uppercase tracking-wide text-slate-400">Online ops</p>
           <h1 className="text-3xl font-semibold text-white">Capture Buying price</h1>
@@ -29,8 +31,15 @@ export default async function AttendantPerformanceCapturePage() {
           </p>
         </header>
 
-        <ProfitCaptureFormClient accounts={accounts} limitedView backHref="/attendant/online/performance" />
-      </main>
+        <ProfitCaptureFormClient
+          accounts={accounts}
+          limitedView
+          backHref={
+            resolved.impersonateId
+              ? `/attendant/online/performance?impersonateId=${encodeURIComponent(resolved.impersonateId)}`
+              : "/attendant/online/performance"
+          }
+        />
     </div>
   );
 }

@@ -33,11 +33,13 @@ type PublicStaffOption = {
 export default function ReceiptsPageClient({
   initial,
   initialOnlyPos = true,
+  initialView = "create",
 }: {
   initial: ReceiptRow[];
   initialOnlyPos?: boolean;
+  initialView?: "create" | "list";
 }) {
-  const [view, setView] = useState<"create" | "list">("create");
+  const [view, setView] = useState<"create" | "list">(initialView);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ReceiptRow[]>(initial ?? []);
   const [loading, setLoading] = useState(false);
@@ -70,6 +72,10 @@ export default function ReceiptsPageClient({
 
   const listRef = useRef<HTMLDivElement | null>(null);
   const formRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setView(initialView);
+  }, [initialView]);
 
   const scrollIntoView = (ref: React.RefObject<HTMLDivElement | null>) => {
     if (ref.current) {

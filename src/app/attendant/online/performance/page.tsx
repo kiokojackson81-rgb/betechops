@@ -1,20 +1,31 @@
-import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
 import Link from "next/link";
 import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { ATTENDANT_ONLINE_OPS_WEEK_COUNT, getOnlineOpsWeeksForTradingPeriod } from "@/lib/onlineOpsWeeks";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { canAccessOnlineSupervisorWorkspace } from "@/lib/onlineSupervisorAccess";
 
 export const dynamic = "force-dynamic";
 
-export default async function AttendantPerformancePage() {
-  const session = await auth();
-  const email = String((session?.user as any)?.email ?? "").toLowerCase();
-  const actorId = String((session?.user as any)?.id ?? "");
-  if (email !== "benjamin@betech.co.ke") {
+export default async function AttendantPerformancePage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ impersonateId?: string }> | { impersonateId?: string };
+}) {
+  const resolved = await Promise.resolve(searchParams ?? {});
+  if (!(await canAccessOnlineSupervisorWorkspace(resolved.impersonateId))) {
     return redirect("/not-authorized");
   }
+  const session = await auth();
+  const actorId = resolved.impersonateId || String((session?.user as { id?: string } | undefined)?.id ?? "");
+  const impersonateQuery = resolved.impersonateId
+    ? `&impersonateId=${encodeURIComponent(resolved.impersonateId)}`
+    : "";
+  const captureHref = resolved.impersonateId
+    ? `/attendant/online/performance/capture?impersonateId=${encodeURIComponent(resolved.impersonateId)}`
+    : "/attendant/online/performance/capture";
 
   const period = getTradingPeriodFor(new Date());
   const now = new Date();
@@ -43,21 +54,14 @@ export default async function AttendantPerformancePage() {
   const lossMap = new Map(lossCounts.map((r) => [r.weekStart, r.count]));
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <main className="mx-auto max-w-6xl space-y-6 p-6">
+    <div className="space-y-6">
         <header className="space-y-2">
           <p className="text-xs uppercase tracking-wide text-slate-400">Online ops</p>
           <h1 className="text-3xl font-semibold text-white">Performance</h1>
           <p className="text-sm text-slate-300">Review your captured entries per order (no totals).</p>
           <div className="flex flex-wrap gap-2 pt-1">
             <Link
-              href="/attendant/online"
-              className="rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5"
-            >
-              Back to dashboard
-            </Link>
-            <Link
-              href="/attendant/online/performance/capture"
+              href={captureHref}
               className="rounded-full border border-emerald-500/50 px-4 py-2 text-sm font-semibold text-emerald-200 hover:bg-emerald-500/10"
             >
               Capture profit
@@ -79,7 +83,7 @@ export default async function AttendantPerformancePage() {
                 return (
                   <Link
                     key={wk.key}
-                    href={`/attendant/online/performance/week?periodKey=${encodeURIComponent(period.key)}&weekStart=${encodeURIComponent(wk.startInput)}`}
+                    href={`/attendant/online/performance/week?periodKey=${encodeURIComponent(period.key)}&weekStart=${encodeURIComponent(wk.startInput)}${impersonateQuery}`}
                     className="rounded-2xl border border-white/10 bg-slate-950/30 px-4 py-4 hover:bg-white/5"
                   >
                     <p className="text-xs uppercase tracking-wide text-slate-500">Week</p>
@@ -94,7 +98,6 @@ export default async function AttendantPerformancePage() {
             </div>
           </section>
         )}
-      </main>
     </div>
   );
 }

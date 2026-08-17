@@ -23,10 +23,14 @@ type ShellProps = {
   roleLabel: string;
   dashboardTitle: string;
   dashboardDescription: string;
+  workspaceLabel: string;
   dashboardHref: string;
   receiptsHref: string;
+  createReceiptHref: string;
   reportHref: string;
   wellnessHref: string;
+  activePath: string;
+  receiptView: string;
   isSupervisor: boolean;
   pricingOpen: boolean;
   onOpenPerformance: () => void;
@@ -46,10 +50,14 @@ export default function OnlineOperationsShell({
   roleLabel,
   dashboardTitle,
   dashboardDescription,
+  workspaceLabel,
   dashboardHref,
   receiptsHref,
+  createReceiptHref,
   reportHref,
   wellnessHref,
+  activePath,
+  receiptView,
   isSupervisor,
   pricingOpen,
   onOpenPerformance,
@@ -58,17 +66,22 @@ export default function OnlineOperationsShell({
   onTogglePricing,
   onLogout,
 }: ShellProps) {
+  const activeClass = (href: string, exact = false) => {
+    const path = href.split("?")[0];
+    const active = exact ? activePath === path : activePath === path || activePath.startsWith(`${path}/`);
+    return active ? "border-cyan-400/40 bg-cyan-400/10 text-white" : "";
+  };
   const mobileLinks = [
     { href: dashboardHref, label: "Dashboard", icon: LayoutDashboard },
     { href: receiptsHref, label: "Receipts", icon: Receipt },
-    { href: "/receipts", label: "Create receipt", icon: ShoppingBag },
+    { href: createReceiptHref, label: "Create receipt", icon: ShoppingBag },
     { href: wellnessHref, label: "Wellness", icon: HeartPulse },
   ];
 
   return (
     <div className="min-h-screen bg-[#07111f] text-slate-100">
       <div className="mx-auto flex min-h-screen max-w-[1700px]">
-        <aside className="hidden w-[280px] shrink-0 border-r border-white/10 bg-[#06101d] px-5 py-6 lg:block">
+        <aside className="sticky top-0 hidden h-screen w-[280px] shrink-0 overflow-y-auto border-r border-white/10 bg-[#06101d] px-5 py-6 lg:block">
           <div className="mb-8 rounded-3xl border border-cyan-400/20 bg-gradient-to-br from-cyan-400/15 via-emerald-400/10 to-transparent p-4">
             <div className="flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-400/15 text-cyan-200">
@@ -76,7 +89,7 @@ export default function OnlineOperationsShell({
               </div>
               <div>
                 <div className="text-xl font-semibold tracking-tight text-white">Betech</div>
-                <div className="text-xs uppercase tracking-[0.22em] text-cyan-100/75">Online Operations</div>
+                <div className="text-xs uppercase tracking-[0.22em] text-cyan-100/75">{workspaceLabel}</div>
               </div>
             </div>
             <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-3">
@@ -90,15 +103,15 @@ export default function OnlineOperationsShell({
             <div>
               <div className="mb-2 px-3 text-[11px] uppercase tracking-[0.24em] text-slate-500">Operations</div>
               <div className="space-y-1">
-                <Link href={dashboardHref} className={`${navItemClass} border-cyan-400/40 bg-cyan-400/10 text-white`}>
+                <Link href={dashboardHref} className={`${navItemClass} ${activeClass(dashboardHref, true)}`}>
                   <LayoutDashboard className="h-4 w-4 text-cyan-200" />
                   Dashboard
                 </Link>
-                <Link href={receiptsHref} className={navItemClass}>
+                <Link href={receiptsHref} className={`${navItemClass} ${activePath.includes("/receipts") && receiptView !== "create" ? "border-cyan-400/40 bg-cyan-400/10 text-white" : ""}`}>
                   <Receipt className="h-4 w-4" />
                   Receipt history
                 </Link>
-                <Link href="/receipts" className={navItemClass}>
+                <Link href={createReceiptHref} className={`${navItemClass} ${activePath.includes("/receipts") && receiptView === "create" ? "border-cyan-400/40 bg-cyan-400/10 text-white" : ""}`}>
                   <ShoppingBag className="h-4 w-4" />
                   Create receipt
                 </Link>
@@ -108,11 +121,11 @@ export default function OnlineOperationsShell({
             <div>
               <div className="mb-2 px-3 text-[11px] uppercase tracking-[0.24em] text-slate-500">Reports & employee</div>
               <div className="space-y-1">
-                <a href={reportHref} target="_blank" rel="noreferrer" className={navItemClass}>
+                <a href={reportHref} download className={navItemClass}>
                   <FileDown className="h-4 w-4" />
                   Performance report
                 </a>
-                <Link href={wellnessHref} className={navItemClass}>
+                <Link href={wellnessHref} className={`${navItemClass} ${activeClass(wellnessHref)}`}>
                   <HeartPulse className="h-4 w-4" />
                   Wellness
                 </Link>
@@ -123,15 +136,15 @@ export default function OnlineOperationsShell({
               <div>
                 <div className="mb-2 px-3 text-[11px] uppercase tracking-[0.24em] text-slate-500">Supervisor tools</div>
                 <div className="space-y-1">
-                  <button type="button" onClick={onOpenPerformance} className={`${navItemClass} w-full text-left`}>
+                  <button type="button" onClick={onOpenPerformance} className={`${navItemClass} ${activePath.endsWith("/performance") || activePath.includes("/performance/week") ? "border-cyan-400/40 bg-cyan-400/10 text-white" : ""} w-full text-left`}>
                     <BarChart3 className="h-4 w-4" />
                     Performance
                   </button>
-                  <button type="button" onClick={onOpenProfitCapture} className={`${navItemClass} w-full text-left`}>
+                  <button type="button" onClick={onOpenProfitCapture} className={`${navItemClass} ${activeClass("/attendant/online/performance/capture", true)} w-full text-left`}>
                     <CircleDollarSign className="h-4 w-4" />
                     Capture profit
                   </button>
-                  <button type="button" onClick={onOpenManualWeekly} className={`${navItemClass} w-full text-left`}>
+                  <button type="button" onClick={onOpenManualWeekly} className={`${navItemClass} ${activeClass("/attendant/online/manual-weekly")} w-full text-left`}>
                     <Activity className="h-4 w-4" />
                     Manual weekly
                   </button>
@@ -159,7 +172,7 @@ export default function OnlineOperationsShell({
         </aside>
 
         <div className="min-w-0 flex-1">
-          <header className="flex flex-col gap-3 border-b border-white/10 bg-white/5 px-4 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between lg:px-8">
+          <header className="sticky top-0 z-30 flex flex-col gap-3 border-b border-white/10 bg-[#101a2a]/95 px-4 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between lg:px-8">
             <div className="min-w-0">
               <div className="flex items-center gap-2 text-white">
                 <Activity className="h-4 w-4 text-cyan-200" />
@@ -183,13 +196,36 @@ export default function OnlineOperationsShell({
             <div className="flex gap-2 overflow-x-auto pb-1">
               {mobileLinks.map((item) => {
                 const Icon = item.icon;
+                const isReceiptLink = item.label === "Receipts";
+                const isCreateLink = item.label === "Create receipt";
+                const isActive = isReceiptLink
+                  ? activePath.includes("/receipts") && receiptView !== "create"
+                  : isCreateLink
+                    ? activePath.includes("/receipts") && receiptView === "create"
+                    : Boolean(activeClass(item.href));
                 return (
-                  <Link key={`${item.href}-${item.label}`} href={item.href} className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-white/10 px-4 py-2 text-sm text-slate-200 transition hover:bg-white/5">
+                  <Link key={`${item.href}-${item.label}`} href={item.href} className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-4 py-2 text-sm transition hover:bg-white/5 ${isActive ? "border-cyan-400/40 bg-cyan-400/10 text-white" : "border-white/10 text-slate-200"}`}>
                     <Icon className="h-4 w-4" />
                     {item.label}
                   </Link>
                 );
               })}
+              {isSupervisor ? (
+                <>
+                  <button type="button" onClick={onOpenPerformance} className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-slate-200">
+                    <BarChart3 className="h-4 w-4" /> Performance
+                  </button>
+                  <button type="button" onClick={onOpenProfitCapture} className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-slate-200">
+                    <CircleDollarSign className="h-4 w-4" /> Capture profit
+                  </button>
+                  <button type="button" onClick={onOpenManualWeekly} className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-slate-200">
+                    <Activity className="h-4 w-4" /> Manual weekly
+                  </button>
+                  <button type="button" onClick={onTogglePricing} className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-slate-200">
+                    <Settings2 className="h-4 w-4" /> POS pricing
+                  </button>
+                </>
+              ) : null}
               <button type="button" onClick={onLogout} className="inline-flex shrink-0 items-center gap-2 rounded-full border border-rose-500/20 px-4 py-2 text-sm text-rose-100">
                 <LogOut className="h-4 w-4" />
                 Log out
