@@ -1086,6 +1086,13 @@ export async function GET(req: NextRequest) {
   const totalCount = summaryRows.length;
   const totalSales = summaryRows.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
   const totalProfit = summaryRows.reduce((sum, row) => sum + Number((row as any).profit ?? 0), 0);
+  const podReceipts = summaryRows.filter((row) => Boolean((row as any).isPodDelivery)).length;
+  const pendingProjectReceipts = summaryRows.filter(
+    (row) => Boolean((row as any).isProjectReceipt) && String((row as any).projectStage ?? "") !== "COMPLETED_POSTED",
+  ).length;
+  const completedProjectReceipts = summaryRows.filter(
+    (row) => Boolean((row as any).isProjectReceipt) && String((row as any).projectStage ?? "") === "COMPLETED_POSTED",
+  ).length;
   const paged = filteredByEffectiveDate.slice((page - 1) * size, page * size);
   const totalPages = Math.max(1, Math.ceil(totalCount / size));
     const data = {
@@ -1095,6 +1102,9 @@ export async function GET(req: NextRequest) {
         totalCount,
         totalSales,
         totalProfit,
+        podReceipts,
+        pendingProjectReceipts,
+        completedProjectReceipts,
       },
     };
     return NextResponse.json(composeIdentityResponse(metaWithScope, data));

@@ -29,7 +29,7 @@ type DailyReportReceiptRow = {
   projectPaymentStatus?: string | null;
 };
 
-type PodFilterValue = "all" | "normal_only" | "settled" | "pod_pending" | "pod_delivered" | "pod_failed";
+type PodFilterValue = "all" | "normal_only" | "settled" | "pod_all" | "pod_pending" | "pod_delivered" | "pod_failed";
 
 type ExtraFilterAction = {
   key: string;
@@ -54,7 +54,13 @@ type Props = {
   showPodFilters?: boolean;
   initialPodFilter?: PodFilterValue;
   extraFilterActions?: ExtraFilterAction[];
-  onSummary?: (s: { totalSales: number; count: number }) => void;
+  onSummary?: (s: {
+    totalSales: number;
+    count: number;
+    podReceipts: number;
+    pendingProjectReceipts: number;
+    completedProjectReceipts: number;
+  }) => void;
   carryForwardPending?: boolean;
   showProjectFilter?: boolean;
   summarySalesOnly?: boolean;
@@ -68,6 +74,9 @@ type ReceiptsApiResponse = {
   summary?: {
     totalCount?: number;
     totalSales?: number;
+    podReceipts?: number;
+    pendingProjectReceipts?: number;
+    completedProjectReceipts?: number;
   };
   error?: string;
 };
@@ -233,7 +242,13 @@ export default function DailyReportReceiptsPanel({
       setLastFetchUrl(null);
       setLastFetchStatus(null);
       setLastFetchCount(0);
-      onSummaryRef.current?.({ totalSales: 0, count: 0 });
+      onSummaryRef.current?.({
+        totalSales: 0,
+        count: 0,
+        podReceipts: 0,
+        pendingProjectReceipts: 0,
+        completedProjectReceipts: 0,
+      });
       return () => controller.abort();
     }
 
@@ -259,6 +274,8 @@ export default function DailyReportReceiptsPanel({
           params.set("customerType", "project");
         } else if (podFilter === "normal_only") {
           params.set("customerType", "normal");
+        } else if (podFilter === "pod_all") {
+          params.set("customerType", "pod");
         } else if (podFilter === "pod_pending") {
           params.set("customerType", "pod");
           params.set("status", "pending");
@@ -311,7 +328,19 @@ export default function DailyReportReceiptsPanel({
               : typeof data?.paging?.totalCount === "number"
                 ? Number(data.paging.totalCount)
                 : arr.length;
-          onSummaryRef.current?.({ totalSales, count });
+          onSummaryRef.current?.({
+            totalSales,
+            count,
+            podReceipts: Number(data?.summary?.podReceipts ?? arr.filter((receipt) => receipt.isPodDelivery).length),
+            pendingProjectReceipts: Number(
+              data?.summary?.pendingProjectReceipts ??
+                arr.filter((receipt) => receipt.isProjectReceipt && receipt.projectStage !== "COMPLETED_POSTED").length,
+            ),
+            completedProjectReceipts: Number(
+              data?.summary?.completedProjectReceipts ??
+                arr.filter((receipt) => receipt.isProjectReceipt && receipt.projectStage === "COMPLETED_POSTED").length,
+            ),
+          });
         }
       } catch (err) {
         if (!cancelled) {
@@ -585,6 +614,7 @@ export default function DailyReportReceiptsPanel({
               { key: "all", label: onlyPos ? "All POS receipts" : "All receipts" },
               { key: "normal_only", label: "Normal only" },
               { key: "settled", label: "Settled receipts" },
+              { key: "pod_all", label: "All POD receipts" },
               { key: "pod_pending", label: "POD pending" },
               { key: "pod_delivered", label: "POD delivered" },
               { key: "pod_failed", label: "POD failed" },
