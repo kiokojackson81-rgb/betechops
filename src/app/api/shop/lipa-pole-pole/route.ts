@@ -7,7 +7,10 @@ import { normalizeKenyanPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { LIPA_POLE_POLE_TERMS_VERSION } from "@/lib/lipaPolePoleTerms";
-import { LIPA_POLE_POLE_MIN_DEPOSIT } from "@/lib/lipaPolePoleConfig";
+import {
+  getLipaPolePoleMaxInstallments,
+  LIPA_POLE_POLE_MIN_DEPOSIT,
+} from "@/lib/lipaPolePoleConfig";
 
 export const dynamic = "force-dynamic";
 
@@ -22,13 +25,24 @@ const createShopLppSchema = z.object({
   estateLandmark: z.string().trim().max(255).optional().or(z.literal("")).nullable(),
   locationNotes: z.string().trim().max(1000).optional().or(z.literal("")).nullable(),
   paymentFrequency: z.enum(["WEEKLY", "MONTHLY"]),
-  installmentCount: z.coerce.number().int().min(1).max(52),
+  installmentCount: z.coerce.number().int().min(1).max(26),
   initialPaymentAmount: z.coerce.number().positive(),
   initialPaymentMethod: z.enum(["MPESA", "CASH", "BANK", "CARD", "OTHER"]).default("MPESA"),
   initialPaymentReference: z.string().trim().max(255).optional().or(z.literal("")).nullable(),
   initialPaymentNotes: z.string().trim().max(1000).optional().or(z.literal("")).nullable(),
   notes: z.string().trim().max(2000).optional().or(z.literal("")).nullable(),
   termsAccepted: z.literal(true),
+}).superRefine((value, ctx) => {
+  const max = getLipaPolePoleMaxInstallments(value.paymentFrequency);
+  if (value.installmentCount > max) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["installmentCount"],
+      message: value.paymentFrequency === "WEEKLY"
+        ? "The maximum Lipa Pole Pole period is 26 weeks."
+        : "The maximum Lipa Pole Pole period is 6 months.",
+    });
+  }
 });
 
 function normalizeOptional(value: string | null | undefined) {
@@ -47,11 +61,6 @@ function calculateDueDate(frequency: "WEEKLY" | "MONTHLY", count: number) {
   if (frequency === "WEEKLY") return addDays(dueDate, count * 7);
   dueDate.setMonth(dueDate.getMonth() + count);
   return dueDate;
-}
-
-function diffDays(from: Date, to: Date) {
-  const ms = to.getTime() - from.getTime();
-  return Math.ceil(ms / (24 * 60 * 60 * 1000));
 }
 
 export async function GET() {
@@ -149,14 +158,6 @@ export async function POST(request: Request) {
   }
 
   const dueDate = calculateDueDate(payload.paymentFrequency, payload.installmentCount);
-  const maxDays = Number(productConfig.lipaPolePoleMaxDays || 0);
-  if (maxDays > 0 && diffDays(new Date(), dueDate) > maxDays) {
-    return noStoreJson(
-      { error: `Completion date cannot exceed ${maxDays} days for this product.` },
-      { status: 400 },
-    );
-  }
-
   const minDeposit = Number(productConfig.lipaPolePoleMinDeposit || LIPA_POLE_POLE_MIN_DEPOSIT);
   if (payload.initialPaymentAmount < minDeposit) {
     return noStoreJson(
@@ -222,7 +223,7 @@ export async function POST(request: Request) {
     const status =
       message === "NO_ELIGIBLE_CUSTOMER_SERVICE_AGENT"
         ? 409
-        : ["INVALID_DATE", "INVALID_AGREED_TOTAL", "DUPLICATE_PAYMENT_REFERENCE"].includes(message)
+        : ["INVALID_DATE", "INVALID_AGREED_TOTAL", "DUPLICATE_PAYMENT_REFERENCE", "LPP_INSTALLMENT_PERIOD_EXCEEDED"].includes(message)
           ? 400
           : 500;
     return noStoreJson({

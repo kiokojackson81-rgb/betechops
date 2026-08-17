@@ -12,6 +12,7 @@ import {
   type LipaPolePolePaymentMethod,
 } from "@/lib/lipaPolePole";
 import { extractMpesaTransactionCode } from "@/lib/mpesaReference";
+import { getLipaPolePoleMaxInstallments } from "@/lib/lipaPolePoleConfig";
 import {
   sendLppLifecycleChannelNotification,
   sendLppReminderChannelNotification,
@@ -1079,6 +1080,14 @@ export async function createLipaPolePole(
   input: CreateLppInput,
   db: DbClient = prisma,
 ) {
+  if (input.installmentPlan) {
+    const count = input.installmentPlan.count;
+    const max = getLipaPolePoleMaxInstallments(input.installmentPlan.frequency);
+    if (!Number.isInteger(count) || count < 1 || count > max) {
+      throw new Error("LPP_INSTALLMENT_PERIOD_EXCEEDED");
+    }
+  }
+
   const normalizedItems = (
     input.items?.length
       ? input.items

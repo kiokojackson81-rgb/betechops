@@ -5,6 +5,10 @@ import PosProductSelectorModal, { type PosCatalogProduct } from "@/components/re
 import { findSimilarProducts } from "@/lib/posProductSimilarity";
 import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 import {
+  getLipaPolePoleDefaultInstallments,
+  getLipaPolePoleMaxInstallments,
+} from "@/lib/lipaPolePoleConfig";
+import {
   Calendar,
   CheckCircle2,
   ChevronDown,
@@ -535,7 +539,7 @@ export default function LipaPolePoleAdminClient({
     estateLandmark: "",
     locationNotes: "",
     installmentFrequency: "MONTHLY" as InstallmentFrequency,
-    installmentCount: "3",
+    installmentCount: String(getLipaPolePoleDefaultInstallments("MONTHLY")),
     notes: "",
     initialPaymentAmount: "",
     initialPaymentMethod: "MPESA",
@@ -865,8 +869,8 @@ export default function LipaPolePoleAdminClient({
       failValidation("Installments must be at least 1.");
       return;
     }
-    if (createInstallmentCount > 60) {
-      failValidation("Installments cannot exceed 60.");
+    if (createInstallmentCount > createMaxInstallments) {
+      failValidation(`The maximum Lipa Pole Pole period is ${createForm.installmentFrequency === "WEEKLY" ? "26 weeks" : "6 months"}.`);
       return;
     }
     if (createDeposit < 0) {
@@ -982,7 +986,7 @@ export default function LipaPolePoleAdminClient({
         estateLandmark: "",
         locationNotes: "",
         installmentFrequency: "MONTHLY",
-        installmentCount: "3",
+        installmentCount: String(getLipaPolePoleDefaultInstallments("MONTHLY")),
         notes: "",
         initialPaymentAmount: "",
         initialPaymentMethod: "MPESA",
@@ -1342,7 +1346,8 @@ export default function LipaPolePoleAdminClient({
   );
   const createDeposit = Math.max(0, Number(createForm.initialPaymentAmount || 0));
   const createBalance = Math.max(0, createAgreedTotal - createDeposit);
-  const createInstallmentCount = Math.max(1, Number(createForm.installmentCount || "1"));
+  const createMaxInstallments = getLipaPolePoleMaxInstallments(createForm.installmentFrequency);
+  const createInstallmentCount = Math.max(1, Math.min(createMaxInstallments, Number(createForm.installmentCount || "1")));
   const createInstallmentAmount = createInstallmentCount > 0 ? createBalance / createInstallmentCount : createBalance;
   const createExpectedCompletionDate = addInstallmentPeriods(createInstallmentCount, createForm.installmentFrequency);
   const createInstallmentSchedule = buildInstallmentPreview(createBalance, createInstallmentCount, createForm.installmentFrequency);
@@ -1862,7 +1867,11 @@ export default function LipaPolePoleAdminClient({
                           <button
                             key={frequency}
                             type="button"
-                            onClick={() => setCreateForm((current) => ({ ...current, installmentFrequency: frequency }))}
+                            onClick={() => setCreateForm((current) => ({
+                              ...current,
+                              installmentFrequency: frequency,
+                              installmentCount: String(getLipaPolePoleDefaultInstallments(frequency)),
+                            }))}
                             className={`rounded-2xl border px-4 py-3 text-left transition ${
                               createForm.installmentFrequency === frequency
                                 ? "border-blue-400/30 bg-blue-500/15 text-blue-100"
@@ -1878,10 +1887,16 @@ export default function LipaPolePoleAdminClient({
 
                     <div className="grid gap-4 md:grid-cols-2">
                       <StepperInput
-                        label={`Number of ${createForm.installmentFrequency === "WEEKLY" ? "weekly" : "monthly"} payments`}
+                        label={`Number of ${createForm.installmentFrequency === "WEEKLY" ? "weekly" : "monthly"} payments (max ${createMaxInstallments})`}
                         value={createForm.installmentCount}
-                        onChange={(value) => setCreateForm((current) => ({ ...current, installmentCount: value }))}
+                        onChange={(value) => setCreateForm((current) => ({
+                          ...current,
+                          installmentCount: value === ""
+                            ? ""
+                            : String(Math.min(createMaxInstallments, Math.max(1, Number(value) || 1))),
+                        }))}
                         min={1}
+                        max={createMaxInstallments}
                       />
                       <Field label="Expected completion">
                         <input
@@ -2854,11 +2869,13 @@ function StepperInput({
   value,
   onChange,
   min = 0,
+  max = Number.POSITIVE_INFINITY,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   min?: number;
+  max?: number;
 }) {
   const currentValue = Number(value || String(min));
 
@@ -2869,19 +2886,24 @@ function StepperInput({
           type="button"
           className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-slate-200 transition hover:border-white/20 hover:text-white"
           onClick={() => onChange(String(Math.max(min, currentValue - 1)))}
+          disabled={currentValue <= min}
         >
           <Minus className="h-4 w-4" />
         </button>
         <input
           className="w-full bg-transparent text-center text-sm text-white outline-none"
+          type="number"
           inputMode="numeric"
+          min={min}
+          max={Number.isFinite(max) ? max : undefined}
           value={value}
           onChange={(event) => onChange(event.target.value)}
         />
         <button
           type="button"
           className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-slate-200 transition hover:border-white/20 hover:text-white"
-          onClick={() => onChange(String(Math.max(min, currentValue + 1)))}
+          onClick={() => onChange(String(Math.min(max, Math.max(min, currentValue + 1))))}
+          disabled={currentValue >= max}
         >
           <Plus className="h-4 w-4" />
         </button>

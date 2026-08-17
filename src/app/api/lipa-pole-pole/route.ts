@@ -4,6 +4,7 @@ import { updateSafeCustomerProfile } from "@/lib/customerProfile";
 import { createLipaPolePole, getSerializedLppAccountDetail, listSerializedLppAccounts } from "@/lib/lipaPolePoleService";
 import { normalizeKenyanPhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
+import { getLipaPolePoleMaxInstallments } from "@/lib/lipaPolePoleConfig";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +45,18 @@ const createLppSchema = z.object({
   notes: z.string().trim().max(4000).optional().nullable(),
   installmentPlan: z.object({
     frequency: z.enum(["WEEKLY", "MONTHLY"]),
-    count: z.coerce.number().int().min(1).max(60),
+    count: z.coerce.number().int().min(1).max(26),
+  }).superRefine((value, ctx) => {
+    const max = getLipaPolePoleMaxInstallments(value.frequency);
+    if (value.count > max) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["count"],
+        message: value.frequency === "WEEKLY"
+          ? "The maximum Lipa Pole Pole period is 26 weeks."
+          : "The maximum Lipa Pole Pole period is 6 months.",
+      });
+    }
   }).optional().nullable(),
   initialPayment: z.object({
     amount: z.union([z.coerce.number().positive(), z.string().trim().min(1)]),
@@ -171,7 +183,7 @@ async function resolveCustomerId(
 }
 
 function mapErrorStatus(message: string) {
-  if (message === "INVALID_AGREED_TOTAL" || message === "INVALID_DATE" || message === "INVALID_PRODUCT") return 400;
+  if (["INVALID_AGREED_TOTAL", "INVALID_DATE", "INVALID_PRODUCT", "LPP_INSTALLMENT_PERIOD_EXCEEDED"].includes(message)) return 400;
   if (message === "NO_ELIGIBLE_CUSTOMER_SERVICE_AGENT") return 409;
   if (message === "Customer details are required." || message === "Enter a valid Kenyan phone number." || message === "Could not create or resolve customer.") return 400;
   return 500;

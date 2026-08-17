@@ -11,6 +11,8 @@ import {
   LIPA_POLE_POLE_MIN_DEPOSIT,
   LIPA_POLE_POLE_MPESA_ACCOUNT,
   LIPA_POLE_POLE_MPESA_PAYBILL,
+  getLipaPolePoleDefaultInstallments,
+  getLipaPolePoleMaxInstallments,
 } from "@/lib/lipaPolePoleConfig";
 import { formatMpesaReferenceInput } from "@/lib/mpesaReference";
 import { LIPA_POLE_POLE_TERMS_PATH } from "@/lib/lipaPolePoleTerms";
@@ -98,8 +100,8 @@ export default function ShopLipaPolePoleStarter({
     quantity: "1",
     initialPaymentAmount: String(minimumDeposit),
     paymentFrequency: "MONTHLY",
-    installmentCount: String(Math.max(1, Math.round((product.lipaPolePoleDefaultDays || 30) / 30))),
-  }), [customer, minimumDeposit, product.lipaPolePoleDefaultDays]);
+    installmentCount: String(getLipaPolePoleDefaultInstallments("MONTHLY")),
+  }), [customer, minimumDeposit]);
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<BookingStep>("setup");
   const [form, setForm] = useState<BookingForm>(initialForm);
@@ -116,10 +118,7 @@ export default function ShopLipaPolePoleStarter({
   const initialPayment = Math.max(0, Number(form.initialPaymentAmount || 0));
   const balance = Math.max(0, agreedTotal - initialPayment);
   const progress = agreedTotal > 0 ? Math.min(100, (initialPayment / agreedTotal) * 100) : 0;
-  const configuredMaxDays = Math.max(0, Number(product.lipaPolePoleMaxDays || 0));
-  const maxInstallments = form.paymentFrequency === "WEEKLY"
-    ? Math.max(1, Math.min(52, configuredMaxDays ? Math.floor(configuredMaxDays / 7) : 52))
-    : Math.max(1, Math.min(24, configuredMaxDays ? Math.floor(configuredMaxDays / 30) : 24));
+  const maxInstallments = getLipaPolePoleMaxInstallments(form.paymentFrequency);
   const installmentCount = Math.max(1, Math.min(maxInstallments, Number.parseInt(form.installmentCount, 10) || 1));
   const installmentAmount = balance / installmentCount;
   const planStart = new Date();
@@ -138,7 +137,23 @@ export default function ShopLipaPolePoleStarter({
       const saved = window.sessionStorage.getItem(draftKey(product.opsProductId));
       if (saved) {
         const parsed = JSON.parse(saved) as { form?: Partial<BookingForm>; termsAccepted?: boolean };
-        setForm((current) => ({ ...current, ...parsed.form }));
+        setForm((current) => {
+          const restoredForm = { ...current, ...parsed.form };
+          const restoredFrequency = restoredForm.paymentFrequency === "WEEKLY" ? "WEEKLY" : "MONTHLY";
+          const restoredCount = Math.max(
+            1,
+            Math.min(
+              getLipaPolePoleMaxInstallments(restoredFrequency),
+              Number.parseInt(restoredForm.installmentCount, 10) ||
+                getLipaPolePoleDefaultInstallments(restoredFrequency),
+            ),
+          );
+          return {
+            ...restoredForm,
+            paymentFrequency: restoredFrequency,
+            installmentCount: String(restoredCount),
+          };
+        });
         setTermsAccepted(Boolean(parsed.termsAccepted));
         restored = true;
       }
@@ -376,13 +391,13 @@ export default function ShopLipaPolePoleStarter({
                           <legend className="text-sm font-bold text-slate-700">Payment frequency</legend>
                           <div className="grid grid-cols-2 gap-3">
                             {(["WEEKLY", "MONTHLY"] as const).map((frequency) => (
-                              <button key={frequency} type="button" onClick={() => setForm((current) => ({ ...current, paymentFrequency: frequency, installmentCount: "1" }))} className={`min-h-12 rounded-[16px] border px-4 text-sm font-black transition ${form.paymentFrequency === frequency ? "border-[#7a0000] bg-[#7a0000] text-white shadow-md" : "border-[#7a0000]/12 bg-white text-slate-700 hover:border-[#7a0000]/35"}`}>
+                              <button key={frequency} type="button" onClick={() => setForm((current) => ({ ...current, paymentFrequency: frequency, installmentCount: String(getLipaPolePoleDefaultInstallments(frequency)) }))} className={`min-h-12 rounded-[16px] border px-4 text-sm font-black transition ${form.paymentFrequency === frequency ? "border-[#7a0000] bg-[#7a0000] text-white shadow-md" : "border-[#7a0000]/12 bg-white text-slate-700 hover:border-[#7a0000]/35"}`}>
                                 {frequency === "WEEKLY" ? "Weekly" : "Monthly"}
                               </button>
                             ))}
                           </div>
                         </fieldset>
-                        <label className="grid gap-2 text-sm font-bold text-slate-700 sm:col-span-2">Number of {form.paymentFrequency === "WEEKLY" ? "weeks" : "months"}<input value={form.installmentCount} onChange={(event) => setForm((current) => ({ ...current, installmentCount: event.target.value }))} className={inputClass} type="number" min={1} max={maxInstallments} inputMode="numeric" required /><span className="text-xs font-medium text-slate-500">Up to {maxInstallments} {form.paymentFrequency === "WEEKLY" ? "weeks" : "months"} for this product.</span></label>
+                        <label className="grid gap-2 text-sm font-bold text-slate-700 sm:col-span-2">Number of {form.paymentFrequency === "WEEKLY" ? "weeks" : "months"}<input value={form.installmentCount} onChange={(event) => setForm((current) => ({ ...current, installmentCount: event.target.value === "" ? "" : String(Math.min(maxInstallments, Math.max(1, Number.parseInt(event.target.value, 10) || 1))) }))} className={inputClass} type="number" min={1} max={maxInstallments} inputMode="numeric" required /><span className="text-xs font-medium text-slate-500">Maximum period: {form.paymentFrequency === "WEEKLY" ? "26 weeks" : "6 months"}.</span></label>
                       </div>
 
                       <details className="mt-4 rounded-[18px] border border-[#7a0000]/10 bg-white p-4">
