@@ -3,8 +3,6 @@
 import React, { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Card from "@/app/_components/Card";
 import Button from "@/app/_components/Button";
-// SensitiveValue and card-lock helpers removed (cards cleaned up)
-import QuickStatsCard from "@/components/QuickStatsCard";
 import { useCardLock, LockButton } from "@/app/_components/useCardLock";
 import PeriodSwitcher from "@/app/_components/PeriodSwitcher";
 import useTradingPeriodQueryState from "@/app/_components/useTradingPeriodQueryState";
@@ -20,6 +18,15 @@ import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { buildEarningsCardBreakdown } from "@/lib/earningsCardBreakdown";
 import BenjaminPosPricingPanel from "./BenjaminPosPricingPanel";
+import OnlineOperationsShell from "./OnlineOperationsShell";
+import {
+  BadgeDollarSign,
+  FileText,
+  Receipt,
+  ShoppingBag,
+  Store,
+  TrendingUp,
+} from "lucide-react";
 
 type TradingWeekChip = { key: string; label: string; start: Date; end: Date };
 
@@ -287,6 +294,7 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
     useTradingPeriodQueryState();
   const period = selectedPeriod;
   const [userId, setUserId] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [supervisorPerformanceTools, setSupervisorPerformanceTools] = useState(false);
@@ -405,6 +413,7 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
       const payload = await parseIdentityResponse(res);
       if (!payload) return;
       if (payload?.user?.id) setUserId(payload.user.id);
+      if (payload?.user?.name) setUserName(String(payload.user.name));
       if (payload?.user?.role) setUserRole(payload.user.role);
       if (payload?.user?.email) setUserEmail(String(payload.user.email));
       setSupervisorPerformanceTools(Boolean(payload?.flags?.supervisorPerformanceTools));
@@ -966,13 +975,75 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
     tierProgress: marketplaceTierInfo.progress,
     tierMessage: marketplaceTierInfo.message,
   };
-  const earningsSummaryForCard = payrollSummary;
-
   const receiptsHistoryHref = userId
     ? `/receipts?attendantId=${encodeURIComponent(userId)}&start=${encodeURIComponent(
         period.start.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" }),
       )}&end=${encodeURIComponent(period.end.toLocaleDateString("en-CA", { timeZone: "Africa/Nairobi" }))}`
     : "/receipts";
+  const { locked: statsLocked, toggle: toggleStatsLock } = useCardLock("onlineops:quickstats");
+  const displayName = userName || userEmail || (isGeneralOpsView ? "Operations team" : "Online attendant");
+  const roleLabel = isBenjaminSupervisor
+    ? "Online Supervisor"
+    : userRole?.replace(/_/g, " ") || (isGeneralOpsView ? "General Operations" : "Online Attendant");
+  const dashboardHref = impersonateId
+    ? `/attendant/online?impersonateId=${encodeURIComponent(impersonateId)}`
+    : "/attendant/online";
+  const dashboardKpis = [
+    ...(!isGeneralOpsView
+      ? [{
+          label: "Marketplace sales",
+          value: formatKES(quickStatsPayload.marketplaceSales),
+          hint: `${marketplaceOverviewTotals.orders.toLocaleString("en-KE")} orders in selected weeks`,
+          href: "#marketplace-overview",
+          icon: Store,
+          tone: "text-cyan-200",
+        }]
+      : []),
+    {
+      label: "Direct POS sales",
+      value: formatKES(quickStatsPayload.directSales),
+      hint: `${quickStatsPayload.receiptsCount.toLocaleString("en-KE")} linked receipts`,
+      href: receiptsHistoryHref,
+      icon: ShoppingBag,
+      tone: "text-emerald-200",
+    },
+    {
+      label: "POS receipts",
+      value: quickStatsPayload.receiptsCount.toLocaleString("en-KE"),
+      hint: "Receipts in the selected period",
+      href: receiptsHistoryHref,
+      icon: Receipt,
+      tone: "text-sky-200",
+    },
+    {
+      label: "Total sales",
+      value: formatKES(quickStatsPayload.totalSales),
+      hint: isGeneralOpsView ? "Direct sales in selected range" : "Direct and marketplace channels",
+      href: isGeneralOpsView ? receiptsHistoryHref : "#marketplace-overview",
+      icon: TrendingUp,
+      tone: "text-emerald-200",
+    },
+    {
+      label: "Commission",
+      value: formatKES(quickStatsPayload.commission),
+      hint: "Payroll-linked commission total",
+      href: "#earnings",
+      icon: BadgeDollarSign,
+      tone: "text-amber-200",
+    },
+    ...(!isGeneralOpsView
+      ? [{
+          label: "Next marketplace tier",
+          value: quickStatsPayload.tierMessage,
+          hint: "Discretionary marketplace ladder",
+          href: "#tier-progress",
+          icon: FileText,
+          tone: "text-violet-200",
+        }]
+      : []),
+  ];
+  const earningsSummaryForCard = payrollSummary;
+
   const wellnessHref = (() => {
     const params = new URLSearchParams();
     if (impersonateId) params.set("impersonateId", impersonateId);
@@ -1009,284 +1080,292 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <main className="mx-auto max-w-6xl space-y-6 p-6">
-        <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold">
-              {isGeneralOpsView ? "General Operations" : "Online Operations"}
-            </h1>
-            <p className="text-sm text-slate-300">
-              {isGeneralOpsView
-                ? "Track receipts, direct sales performance, and payroll-linked earnings in one place."
-                : "Track marketplace shop sales, receipt activity, and payroll-linked earnings in one place."}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 rounded-full border border-slate-800 bg-slate-950/50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">
-            <Link
-              href={receiptsHistoryHref}
-              className="rounded-full border border-transparent px-3 py-1 transition hover:border-slate-500"
-            >
-              Receipts
-            </Link>
-            <a
-              href={performanceReportHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-full border border-transparent px-3 py-1 transition hover:border-slate-500"
-            >
-              Download report
-            </a>
-            <Link
-              href={wellnessHref}
-              className="rounded-full border border-transparent px-3 py-1 transition hover:border-slate-500"
-            >
-              Wellness
-            </Link>
-            {isBenjaminSupervisor ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => router.push("/attendant/online/performance")}
-                  className="rounded-full border border-transparent px-3 py-1 transition hover:border-slate-500"
-                >
-                  Performance
-                </button>
-                <button
-                  type="button"
-                  onClick={() => router.push("/attendant/online/performance/capture")}
-                  className="rounded-full border border-transparent px-3 py-1 transition hover:border-slate-500"
-                >
-                  Capture profit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => router.push("/attendant/online/manual-weekly")}
-                  className="rounded-full border border-transparent px-3 py-1 transition hover:border-slate-500"
-                >
-                  Manual weekly
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowBenjaminPosPricing((prev) => !prev)}
-                  className={`rounded-full border px-3 py-1 transition ${
-                    showBenjaminPosPricing
-                      ? "border-cyan-400/50 bg-cyan-400/10 text-cyan-200"
-                      : "border-transparent hover:border-slate-500"
-                  }`}
-                >
-                  POS Pricing
-                </button>
-              </>
-            ) : null}
-            <Link
-              href="/receipts"
-              className="rounded-full border border-emerald-500/40 bg-emerald-500/20 px-3 py-1 text-emerald-200 transition hover:bg-emerald-500/30"
-            >
-              Create receipt
-            </Link>
-            <button
-              type="button"
-              onClick={() => signOut({ callbackUrl: "/" })}
-              className="rounded-full border border-transparent px-3 py-1 transition hover:border-slate-500"
-            >
-              Log out
-            </button>
-          </div>
-        </header>
+    <OnlineOperationsShell
+      userName={displayName}
+      userEmail={userEmail || "Account loading..."}
+      roleLabel={roleLabel}
+      dashboardTitle={isGeneralOpsView ? "General Operations Dashboard" : "Online Operations Dashboard"}
+      dashboardDescription={
+        isGeneralOpsView
+          ? "Direct sales, POS receipts, commissions, and payroll."
+          : "Marketplace performance, POS receipts, commissions, and payroll."
+      }
+      dashboardHref={dashboardHref}
+      receiptsHref={receiptsHistoryHref}
+      reportHref={performanceReportHref}
+      wellnessHref={wellnessHref}
+      isSupervisor={isBenjaminSupervisor}
+      pricingOpen={showBenjaminPosPricing}
+      onOpenPerformance={() => router.push("/attendant/online/performance")}
+      onOpenProfitCapture={() => router.push("/attendant/online/performance/capture")}
+      onOpenManualWeekly={() => router.push("/attendant/online/manual-weekly")}
+      onTogglePricing={() => setShowBenjaminPosPricing((current) => !current)}
+      onLogout={() => void signOut({ callbackUrl: "/" })}
+    >
+      <div className="space-y-6">
+        <ImpersonationBanner />
 
-        <div className="flex flex-col gap-3 rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-4 md:px-8 md:py-5">
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Statistics period</p>
-              <p className="text-lg font-semibold text-slate-100">{selectedPeriod.label}</p>
-              {selectedPeriodKey !== currentPeriod.key && (
-                <p className="text-xs text-amber-300">Showing archived period.</p>
-              )}
+        <section className="rounded-[28px] border border-white/10 bg-gradient-to-br from-white/8 via-white/4 to-transparent p-5 shadow-2xl shadow-black/20 sm:p-6">
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+            <div className="max-w-3xl">
+              <div className="text-xs uppercase tracking-[0.26em] text-cyan-200/80">
+                {isGeneralOpsView ? "General operations" : "Online operations"}
+              </div>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white">
+                Good morning, {displayName}.
+              </h1>
+              <p className="mt-2 text-sm leading-6 text-slate-300">
+                {isGeneralOpsView
+                  ? "Your direct sales, receipt activity, payroll earnings, and employee tools are connected here."
+                  : "Your marketplace accounts, POS receipts, commissions, and payroll earnings are connected here."}
+              </p>
+              {selectedPeriodKey !== currentPeriod.key ? (
+                <div className="mt-3 inline-flex rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 text-xs uppercase tracking-[0.18em] text-amber-100">
+                  Archived period
+                </div>
+              ) : null}
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <a
-                href={performanceReportHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 hover:bg-emerald-500/15"
-              >
-                Download performance report
-              </a>
-              <PeriodSwitcher
-                currentPeriod={currentPeriod}
-                selectedPeriod={selectedPeriod}
-                onSelectPeriod={setSelectedPeriod}
-              />
+
+            <div className="min-w-0 rounded-3xl border border-white/10 bg-[#091223] p-4 xl:w-[520px]">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Statistics period</div>
+                  <div className="mt-1 text-lg font-semibold text-white">{selectedPeriod.label}</div>
+                  <div className="mt-1 text-xs text-slate-400">
+                    {isGeneralOpsView ? `${receiptsCount} POS receipts` : `${accountRows.length} marketplace account rows`}
+                  </div>
+                </div>
+                <a href={performanceReportHref} target="_blank" rel="noreferrer" className="inline-flex rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:bg-cyan-400/15">
+                  Download report
+                </a>
+              </div>
+              <div className="mt-4 border-t border-white/10 pt-4">
+                <PeriodSwitcher currentPeriod={currentPeriod} selectedPeriod={selectedPeriod} onSelectPeriod={setSelectedPeriod} />
+              </div>
             </div>
           </div>
-        </div>
+        </section>
 
         {isBenjaminSupervisor && showBenjaminPosPricing ? (
-          <BenjaminPosPricingPanel
-            onQueueEmpty={() => {
-              setShowBenjaminPosPricing(false);
-            }}
-          />
+          <section className="rounded-[28px] border border-cyan-400/20 bg-cyan-400/5 p-3 sm:p-4">
+            <div className="mb-3 flex items-center justify-between gap-3 px-1">
+              <div>
+                <div className="text-xs uppercase tracking-[0.22em] text-cyan-200">Supervisor workspace</div>
+                <div className="mt-1 text-lg font-semibold text-white">POS pricing queue</div>
+              </div>
+              <button type="button" onClick={() => setShowBenjaminPosPricing(false)} className="rounded-full border border-white/10 px-4 py-2 text-sm text-slate-200 hover:bg-white/5">
+                Close
+              </button>
+            </div>
+            <BenjaminPosPricingPanel onQueueEmpty={() => setShowBenjaminPosPricing(false)} />
+          </section>
         ) : null}
 
-        {/* Payroll earnings period banner removed */}
+        <section>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-lg font-semibold text-white">Performance snapshot</div>
+              <div className="text-sm text-slate-400">Live values for {quickStatsPeriodLabel}.</div>
+            </div>
+            <LockButton locked={statsLocked} onToggle={toggleStatsLock} />
+          </div>
+          <div className={`grid gap-4 sm:grid-cols-2 ${dashboardKpis.length > 4 ? "xl:grid-cols-6" : "xl:grid-cols-4"}`}>
+            {dashboardKpis.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link key={item.label} href={item.href} className="min-w-0 rounded-[24px] border border-white/10 bg-white/5 p-5 transition hover:border-cyan-400/30 hover:bg-white/[0.08]">
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-sm text-slate-300">{item.label}</span>
+                    <Icon className={`h-5 w-5 shrink-0 ${item.tone}`} />
+                  </div>
+                  <div className="mt-4 break-words text-2xl font-semibold leading-tight tracking-tight text-white">
+                    {statsLocked ? "•••" : item.value}
+                  </div>
+                  <div className="mt-2 text-xs leading-5 text-slate-400">{item.hint}</div>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
 
-        <div className="grid gap-6 lg:grid-cols-12">
-          {!isGeneralOpsView ? <div className="space-y-6 lg:col-span-8">
-            {/* Render the receipts editor as a single card (it contains its own header/totals) */}
-            <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
-              <div className="flex flex-col gap-1">
-                <p className="text-xs uppercase tracking-wide text-slate-400">
-                  Online orders &amp; channels
-                </p>
-                <h2 className="text-lg font-semibold">Marketplace overview</h2>
-                <p className="text-sm text-slate-400">
-                  See how your sales are distributed across marketplaces.
-                </p>
-                <p className="text-[11px] text-amber-300">
-                  Marketplace ladder is memo-only and may be withheld for misconduct, abandonment, or resignation.
-                </p>
+        <div className={isGeneralOpsView ? "block" : "grid gap-6 xl:grid-cols-[minmax(0,1.8fr)_360px]"}>
+          {!isGeneralOpsView ? (
+            <section id="marketplace-overview" className="min-w-0 scroll-mt-6 space-y-4 rounded-[28px] border border-white/10 bg-[#091223] p-4 shadow-2xl shadow-black/20 sm:p-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <div className="text-xs uppercase tracking-[0.22em] text-cyan-200/75">Online orders & channels</div>
+                  <h2 className="mt-1 text-xl font-semibold text-white">Marketplace performance</h2>
+                  <p className="mt-1 text-sm text-slate-400">Select one or more weeks to review account sales, commissions, and submission status.</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {userId ? (
+                    <a href={marketplaceWeeksExportHref} className="rounded-2xl border border-white/10 px-4 py-2 text-sm text-slate-200 transition hover:bg-white/5">
+                      Download full weeks PDF
+                    </a>
+                  ) : null}
+                  <Button type="button" variant="secondary" className="px-4" onClick={() => void refreshAllOnlineStats()} disabled={weeklyLoading}>
+                    {weeklyLoading ? "Refreshing…" : "Refresh online stats"}
+                  </Button>
+                </div>
               </div>
 
-              <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/70">
-                <div className="px-4 py-3">
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div>
-                      <p className="text-[11px] uppercase tracking-wide text-slate-400">Total sales (selected range)</p>
-                      <p className="text-3xl font-semibold text-white">{formatKES(marketplaceOverviewTotals.sales)}</p>
-                      <p className="text-xs text-slate-500">Commission: {formatKES(marketplaceOverviewTotals.commission)}</p>
-                      {selectedRangeOperatingCapital ? (
-                        <div className="mt-3 text-xs">
-                          <p className="text-slate-400">
-                            Weekly operating capital:{" "}
-                            <span className="font-semibold text-emerald-300">
-                              {formatKES(selectedRangeOperatingCapital.netPayoutAfterDeduction)}
-                            </span>
-                          </p>
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-3">
-                      {userId ? (
-                        <a
-                          href={marketplaceWeeksExportHref}
-                          className="rounded-xl border border-white/10 bg-transparent px-4 py-2 text-sm text-slate-200 transition hover:bg-white/5"
-                        >
-                          Download full weeks PDF
-                        </a>
-                      ) : null}
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="px-4"
-                        onClick={() => void refreshAllOnlineStats()}
-                        disabled={weeklyLoading}
-                      >
-                        {weeklyLoading ? "Refreshing…" : "Refresh online stats"}
-                      </Button>
-                    </div>
-                  </div>
-                  <p className="mt-2 text-xs text-slate-500">
-                    Click week chips to combine totals across multiple weeks or choose the marketplace period for everything.
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {tradingWeeks.map((week) => (
-                      <button
-                        key={week.key}
-                        type="button"
-                        onClick={() => {
-                          if (activeWeekKeys.includes("period")) {
-                            setActiveWeekKeys([week.key]);
-                            return;
-                          }
-                          if (activeWeekKeys.includes(week.key)) {
-                            const remaining = activeWeekKeys.filter((key) => key !== week.key);
-                            setActiveWeekKeys(remaining.length ? remaining : [week.key]);
-                            return;
-                          }
-                          setActiveWeekKeys([...activeWeekKeys, week.key]);
-                        }}
-                        className={[
-                          "rounded-full border px-3 py-1 text-xs font-semibold transition",
-                          activeWeekKeys.includes(week.key)
-                            ? "border-emerald-500 bg-emerald-500/10 text-emerald-200"
-                            : "border-slate-800 bg-slate-950/40 text-slate-300 hover:border-slate-700",
-                        ].join(" ")}
-                      >
-                        {week.label}
-                      </button>
-                    ))}
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <MetricCard label="Selected sales" value={formatKES(marketplaceOverviewTotals.sales)} />
+                <MetricCard label="Commission" value={formatKES(marketplaceOverviewTotals.commission)} />
+                <MetricCard label="Orders" value={marketplaceOverviewTotals.orders.toLocaleString("en-KE")} />
+                <MetricCard label="Operating capital" value={selectedRangeOperatingCapital ? formatKES(selectedRangeOperatingCapital.netPayoutAfterDeduction) : "Not available"} />
+              </div>
+
+              <div className="sticky top-0 z-10 rounded-2xl border border-white/10 bg-[#091223]/95 p-3 backdrop-blur">
+                <div className="flex flex-wrap gap-2">
+                  {tradingWeeks.map((week) => (
                     <button
+                      key={week.key}
                       type="button"
-                      onClick={() => setActiveWeekKeys(["period"])}
-                      className={[
-                        "rounded-full border px-3 py-1 text-xs font-semibold transition",
-                        activeWeekKeys.includes("period")
-                          ? "border-emerald-500 bg-emerald-500/10 text-emerald-200"
-                          : "border-slate-800 bg-slate-950/40 text-slate-300 hover:border-slate-700",
-                      ].join(" ")}
-                        >
-                          Full period
-                        </button>
-                  </div>
-                  <div className="mt-3 text-xs text-slate-400">
-                    Weeks shown are the last {ATTENDANT_ONLINE_OPS_WEEK_COUNT} full weeks in the selected trading period.
-                  </div>
+                      onClick={() => {
+                        if (activeWeekKeys.includes("period")) {
+                          setActiveWeekKeys([week.key]);
+                          return;
+                        }
+                        if (activeWeekKeys.includes(week.key)) {
+                          const remaining = activeWeekKeys.filter((key) => key !== week.key);
+                          setActiveWeekKeys(remaining.length ? remaining : [week.key]);
+                          return;
+                        }
+                        setActiveWeekKeys([...activeWeekKeys, week.key]);
+                      }}
+                      className={`rounded-full border px-3 py-2 text-xs font-semibold transition ${activeWeekKeys.includes(week.key) ? "border-cyan-400 bg-cyan-400/10 text-cyan-100" : "border-white/10 text-slate-300 hover:border-white/20"}`}
+                    >
+                      {week.label}
+                    </button>
+                  ))}
+                  <button type="button" onClick={() => setActiveWeekKeys(["period"])} className={`rounded-full border px-3 py-2 text-xs font-semibold transition ${activeWeekKeys.includes("period") ? "border-cyan-400 bg-cyan-400/10 text-cyan-100" : "border-white/10 text-slate-300 hover:border-white/20"}`}>
+                    Full period
+                  </button>
                 </div>
-                <div className="border-t border-slate-800 px-4 pt-3">
-                  <div className="grid grid-cols-2 gap-2 text-[11px] uppercase tracking-wide text-slate-400">
-                    <span>Accounts</span>
-                    <span className="text-right">Sales / Commission</span>
-                  </div>
-                  {accountRows.length === 0 ? (
-                    <div className="py-4 text-sm text-slate-400">Select a week or the full period to see account sales.</div>
-                  ) : (
-                    accountRows.map((row) => (
-                      <div key={`${row.shopId}-${row.weekStart}`} className="grid grid-cols-2 gap-2 border-t border-slate-800 py-3 text-sm text-slate-300">
-                        <div>
-                          <p className="font-semibold text-white">{row.shopName}</p>
-                          <p className="text-[11px] uppercase tracking-wide text-slate-500">{row.platform}</p>
-                          {renderAccountStatusBadges(
-                            accountStatusSummaryById.get(String(row.accountId ?? row.shopId ?? "").trim()),
-                          )}
-                        </div>
-                        <div className="flex flex-col items-end text-right">
-                          <span className="text-emerald-300">{formatKES(row.sales)}</span>
-                          <span className="text-xs text-slate-400">{formatKES(row.commission)}</span>
-                        </div>
+                <div className="mt-2 text-xs text-slate-500">The last {ATTENDANT_ONLINE_OPS_WEEK_COUNT} full weeks are available. Week selections can be combined.</div>
+              </div>
+
+              <div className="overflow-hidden rounded-2xl border border-white/10">
+                <div className="hidden grid-cols-[minmax(0,1fr)_120px_160px] gap-3 bg-white/[0.04] px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-slate-500 sm:grid">
+                  <span>Account</span>
+                  <span>Orders</span>
+                  <span className="text-right">Sales / commission</span>
+                </div>
+                {accountRows.length === 0 ? (
+                  <div className="p-6 text-sm text-slate-400">Select a week or the full period to see account sales.</div>
+                ) : (
+                  accountRows.map((row) => (
+                    <div key={`${row.shopId}-${row.weekStart}`} className="grid gap-3 border-t border-white/10 p-4 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_120px_160px] sm:items-center">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-white">{row.shopName}</div>
+                        <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-slate-500">{row.platform}</div>
+                        {renderAccountStatusBadges(accountStatusSummaryById.get(String(row.accountId ?? row.shopId ?? "").trim()))}
                       </div>
-                    ))
-                  )}
-                </div>
+                      <div className="text-sm text-slate-300"><span className="sm:hidden">Orders: </span>{Number(row.orders || 0).toLocaleString("en-KE")}</div>
+                      <div className="sm:text-right">
+                        <div className="font-semibold text-emerald-300">{formatKES(row.sales)}</div>
+                        <div className="text-xs text-slate-400">{formatKES(row.commission)} commission</div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4 text-xs leading-5 text-amber-100/80">
+                Marketplace ladder is memo-only and may be withheld for misconduct, abandonment, or resignation.
+              </div>
+            </section>
+          ) : null}
+
+          <aside className={`space-y-4 ${isGeneralOpsView ? "xl:grid xl:grid-cols-2 xl:gap-4 xl:space-y-0" : ""}`}>
+            <div id="earnings" className="scroll-mt-6">
+              <PayrollEarningsCard summary={earningsSummaryForCard} loading={payrollLoading} periodLabel={period.label} fallbackCommission={commission} downloadHref={payslipHref} />
+            </div>
+
+            <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
+              <div>
+                <h2 className="text-xl font-semibold text-white">Quick actions</h2>
+                <p className="mt-1 text-xs text-slate-400">Open routine work without leaving the dashboard context.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Link href="/receipts" className="rounded-2xl bg-emerald-500 px-3 py-3 text-center text-sm font-semibold text-black">Create receipt</Link>
+                <Link href={receiptsHistoryHref} className="rounded-2xl border border-white/10 px-3 py-3 text-center text-sm text-slate-200 hover:bg-white/5">Receipt history</Link>
+                <a href={performanceReportHref} target="_blank" rel="noreferrer" className="rounded-2xl border border-white/10 px-3 py-3 text-center text-sm text-slate-200 hover:bg-white/5">Performance PDF</a>
+                <Link href={wellnessHref} className="rounded-2xl border border-white/10 px-3 py-3 text-center text-sm text-slate-200 hover:bg-white/5">Wellness</Link>
+                {!isGeneralOpsView && userId ? (
+                  <a href={marketplaceWeeksExportHref} className="col-span-2 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 px-3 py-3 text-center text-sm text-cyan-100 hover:bg-cyan-400/10">Download full weeks PDF</a>
+                ) : null}
               </div>
             </Card>
-          </div> : null}
 
-          <div className={`space-y-4 ${isGeneralOpsView ? "lg:col-span-12" : "lg:col-span-4"}`}>
-            <QuickStatsCard
-              variant="onlineOps"
-              loading={receiptStatsLoading || weeklyLoading || onlineSummaryLoading || payrollLoading}
-              onlineOps={quickStatsPayload}
-              hideMarketplace={isGeneralOpsView}
-            />
+            {!isGeneralOpsView ? (
+              <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
+                <div id="tier-progress" className="scroll-mt-6">
+                  <h2 className="text-xl font-semibold text-white">Channel snapshot</h2>
+                  <p className="mt-1 text-xs text-slate-400">Selected marketplace range.</p>
+                </div>
+                <div className="space-y-3">
+                  {platformAggregates.map((platform) => (
+                    <div key={platform.key} className="rounded-2xl bg-slate-950/60 p-3">
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <span className="font-semibold text-white">{platform.name}</span>
+                        <span className="text-emerald-300">{statsLocked ? "•••" : formatKES(platform.sales)}</span>
+                      </div>
+                      <div className="mt-1 text-xs text-slate-500">{platform.orders.toLocaleString("en-KE")} orders · {statsLocked ? "•••" : formatKES(platform.commission)} commission</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <MetricCard
+                    label="Direct POS commission"
+                    value={statsLocked ? "•••" : formatKES(quickStatsPayload.directCommission)}
+                  />
+                  <MetricCard
+                    label="Marketplace commission"
+                    value={statsLocked ? "•••" : formatKES(quickStatsPayload.marketplaceCommission)}
+                  />
+                </div>
+                <div className="rounded-2xl border border-white/10 p-3">
+                  <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Next tier</div>
+                  <div className="mt-2 text-sm font-semibold text-white">{statsLocked ? "•••" : marketplaceTierInfo.message}</div>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-800">
+                    <div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-emerald-300" style={{ width: `${Math.round(marketplaceTierInfo.progress * 100)}%` }} />
+                  </div>
+                  <div className="mt-2 text-[11px] text-slate-500">Memo ladder only; discretionary and may be withheld.</div>
+                </div>
+              </Card>
+            ) : null}
 
-            <PayrollEarningsCard
-              summary={earningsSummaryForCard}
-              loading={payrollLoading}
-              periodLabel={period.label}
-              fallbackCommission={commission}
-              downloadHref={payslipHref}
-            />
-
-            {/* Marketplace Assigned shops card removed as requested */}
-          </div>
+            {isBenjaminSupervisor ? (
+              <Card className="space-y-4 border-cyan-400/20 bg-cyan-400/5 shadow-xl shadow-black/40">
+                <div>
+                  <div className="text-xs uppercase tracking-[0.2em] text-cyan-200">Supervisor tools</div>
+                  <p className="mt-1 text-sm text-slate-400">Restricted performance and pricing controls.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <button type="button" onClick={() => router.push("/attendant/online/performance")} className="rounded-2xl border border-white/10 px-3 py-3 text-sm text-slate-200 hover:bg-white/5">Performance</button>
+                  <button type="button" onClick={() => router.push("/attendant/online/performance/capture")} className="rounded-2xl border border-white/10 px-3 py-3 text-sm text-slate-200 hover:bg-white/5">Capture profit</button>
+                  <button type="button" onClick={() => router.push("/attendant/online/manual-weekly")} className="rounded-2xl border border-white/10 px-3 py-3 text-sm text-slate-200 hover:bg-white/5">Manual weekly</button>
+                  <button type="button" onClick={() => setShowBenjaminPosPricing((current) => !current)} className="rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-3 py-3 text-sm text-cyan-100 hover:bg-cyan-400/15">{showBenjaminPosPricing ? "Close pricing" : "POS pricing"}</button>
+                </div>
+              </Card>
+            ) : null}
+          </aside>
         </div>
-      </main>
+      </div>
+    </OnlineOperationsShell>
+  );
+}
+
+function MetricCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+      <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">{label}</div>
+      <div className="mt-2 break-words text-lg font-semibold text-white">{value}</div>
     </div>
   );
 }
-// Marketplace Assigned shops card removed per request
 
 function PayrollEarningsCard({
   summary,
