@@ -79,6 +79,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
   shops: MarketplaceShopOption[];
   weeks: MarketplaceWeekOption[];
   defaultWeekStart?: string;
+  defaultShopId?: string;
   assignees?: Array<{ id: string; name: string }>;
   defaultAssigneeId?: string;
   disableAssigneeSelect?: boolean;
@@ -89,7 +90,7 @@ export default function MarketplaceWeeklyCsvUpload(props: {
   const weeks = props.weeks ?? [];
   const defaultWeekStart = props.defaultWeekStart ?? weeks.at(-1)?.startInput ?? weeks[0]?.startInput ?? "";
 
-  const [shopId, setShopId] = useState("");
+  const [shopId, setShopId] = useState(props.defaultShopId ?? "");
   const [weekStart, setWeekStart] = useState<string>(defaultWeekStart);
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);

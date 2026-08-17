@@ -49,6 +49,8 @@ const currency = new Intl.NumberFormat("en-KE", { style: "currency", currency: "
 export default function AttendantManualWeeklyPage() {
   const searchParams = useSearchParams();
   const impersonateId = searchParams.get("impersonateId")?.trim() || "";
+  const requestedWeekStart = searchParams.get("weekStart")?.trim() || "";
+  const requestedShopId = searchParams.get("shopId")?.trim() || "";
   const [meId, setMeId] = useState<string>("");
   const [isBenjamin, setIsBenjamin] = useState(false);
   const [shops, setShops] = useState<ShopPayload[]>([]);
@@ -66,10 +68,15 @@ export default function AttendantManualWeeklyPage() {
   );
 
   useEffect(() => {
+    const requestedWeek = weeks.find((week) => week.startInput === requestedWeekStart);
+    if (requestedWeek) {
+      setWeekStart(requestedWeek.startInput);
+      return;
+    }
     const last = weeks.at(-1);
     if (!last) return;
     setWeekStart(last.startInput);
-  }, [weeks]);
+  }, [requestedWeekStart, weeks]);
 
   useEffect(() => {
     (async () => {
@@ -222,10 +229,12 @@ export default function AttendantManualWeeklyPage() {
 
           <div className="mt-4">
             <MarketplaceWeeklyCsvUpload
+              key={`weekly-upload-${weekStart}-${requestedShopId}`}
               title="CSV weekly upload"
               shops={csvShops}
               weeks={csvWeeks}
               defaultWeekStart={weekStart}
+              defaultShopId={requestedShopId}
               disableAssigneeSelect
               defaultAssigneeId={meId}
               hideSummaryTotals

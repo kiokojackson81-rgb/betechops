@@ -14,6 +14,7 @@ import {
 import { computeMarketplaceCommission } from "@/lib/onlineCommission";
 import { showToast } from "@/lib/ui/toast";
 import Link from "next/link";
+import SupervisorTodoCenter from "./SupervisorTodoCenter";
 import { buildEarningsCardBreakdown } from "@/lib/earningsCardBreakdown";
 import {
   BadgeDollarSign,
@@ -1109,6 +1110,10 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
             </div>
           </div>
         </section>
+
+        {isBenjaminSupervisor && !isGeneralOpsView ? (
+          <SupervisorTodoCenter impersonateId={impersonateId ?? ""} />
+        ) : null}
 
         <section>
           <div className="mb-3 flex items-center justify-between gap-3">
