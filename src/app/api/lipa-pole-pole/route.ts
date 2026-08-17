@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getActorId, noStoreJson, requireRole } from "@/lib/api";
+import { getActorId, noStoreJson, requireRoleOrBenjamin } from "@/lib/api";
 import { updateSafeCustomerProfile } from "@/lib/customerProfile";
 import { createLipaPolePole, getSerializedLppAccountDetail, listSerializedLppAccounts } from "@/lib/lipaPolePoleService";
 import { normalizeKenyanPhone } from "@/lib/phone";
@@ -190,7 +190,7 @@ function mapErrorStatus(message: string) {
 }
 
 export async function POST(req: Request) {
-  const auth = await requireRole(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
+  const auth = await requireRoleOrBenjamin(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
   if (!auth.ok) return auth.res;
 
   const body = await req.json().catch(() => ({}));
@@ -235,7 +235,7 @@ export async function POST(req: Request) {
 }
 
 export async function GET(req: Request) {
-  const auth = await requireRole(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
+  const auth = await requireRoleOrBenjamin(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
   if (!auth.ok) return auth.res;
 
   const { searchParams } = new URL(req.url);
@@ -247,7 +247,8 @@ export async function GET(req: Request) {
     (await getActorId());
 
   const requestedAssignedToId = (searchParams.get("assignedToId") || "").trim() || null;
-  const assignedToId = auth.role === "ATTENDANT" ? actorId : requestedAssignedToId;
+  const assignedToId =
+    auth.role === "ATTENDANT" && !auth.isBenjamin ? actorId : requestedAssignedToId;
 
   const items = await listSerializedLppAccounts({
     q: q ?? undefined,

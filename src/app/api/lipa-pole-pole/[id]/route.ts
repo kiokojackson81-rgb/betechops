@@ -1,4 +1,4 @@
-import { getActorId, noStoreJson, requireRole } from "@/lib/api";
+import { getActorId, noStoreJson, requireRole, requireRoleOrBenjamin } from "@/lib/api";
 import {
   deleteTestLipaPolePoleAccount,
   getSerializedLppAccountDetail,
@@ -17,7 +17,7 @@ function resolveParams(context: ParamsContext): Promise<{ id: string }> {
 }
 
 export async function GET(_req: Request, context: ParamsContext) {
-  const auth = await requireRole(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
+  const auth = await requireRoleOrBenjamin(["ADMIN", "SUPERVISOR", "ATTENDANT"]);
   if (!auth.ok) return auth.res;
 
   const actorId =
@@ -27,7 +27,7 @@ export async function GET(_req: Request, context: ParamsContext) {
 
   try {
     const detail = await getSerializedLppAccountDetail(id);
-    if (auth.role === "ATTENDANT" && detail.account.assignedToId !== actorId) {
+    if (auth.role === "ATTENDANT" && !auth.isBenjamin && detail.account.assignedToId !== actorId) {
       return noStoreJson({ error: "Forbidden" }, { status: 403 });
     }
     return noStoreJson({ ok: true, ...detail });

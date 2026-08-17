@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { Fragment, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
 
-type LppListItem = {
+export type LppListItem = {
   id: string;
   reference: string;
   customerId: string;
@@ -67,7 +67,7 @@ type LppListItem = {
   fulfillmentMethod: string | null;
 };
 
-type LppDetail = {
+export type LppDetail = {
   account: LppListItem;
   items: Array<{
     id: string;
@@ -466,6 +466,7 @@ export default function LipaPolePoleAdminClient({
   initialQ,
   initialStatus,
   embeddedCreateMode = false,
+  workspaceEmbedded = false,
   onCancelInlineCreate,
 }: {
   initialItems: LppListItem[];
@@ -473,6 +474,7 @@ export default function LipaPolePoleAdminClient({
   initialQ: string;
   initialStatus: string;
   embeddedCreateMode?: boolean;
+  workspaceEmbedded?: boolean;
   onCancelInlineCreate?: () => void;
 }) {
   const [items, setItems] = useState(initialItems);
@@ -1364,7 +1366,7 @@ export default function LipaPolePoleAdminClient({
   return (
     <main
       className={
-        embeddedCreateMode
+        embeddedCreateMode || workspaceEmbedded
           ? "text-slate-100"
           : "min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(29,78,216,0.18),transparent_28%),radial-gradient(circle_at_top_right,rgba(15,23,42,0.7),transparent_36%),linear-gradient(180deg,#08111f_0%,#050b16_100%)] px-4 py-5 text-slate-100 lg:px-6 xl:px-8"
       }

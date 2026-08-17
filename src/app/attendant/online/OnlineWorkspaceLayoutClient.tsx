@@ -20,6 +20,9 @@ const initialIdentity: Identity = {
 };
 
 function pageHeading(pathname: string, mode: "online" | "general") {
+  if (pathname.includes("/lipa-pole-pole")) {
+    return ["Lipa Pole Pole", "Manage bookings, payments, follow-ups, statements, and customer activity."];
+  }
   if (pathname.includes("/performance/capture")) {
     return ["Capture Buying Price", "Record buying prices and transaction details without leaving the operations workspace."];
   }
@@ -118,6 +121,7 @@ export default function OnlineWorkspaceLayoutClient({
       receiptView={searchParams.get("view") ?? "history"}
       isSupervisor={identity.isSupervisor}
       pricingOpen={pathname.includes("/pos-pricing")}
+      onOpenLipaPolePole={() => router.push(withImpersonation("/attendant/online/lipa-pole-pole"))}
       onOpenPerformance={() => router.push(withImpersonation("/attendant/online/performance"))}
       onOpenProfitCapture={() => router.push(withImpersonation("/attendant/online/performance/capture"))}
       onOpenManualWeekly={() => router.push(withImpersonation("/attendant/online/manual-weekly"))}

@@ -8,6 +8,7 @@ import {
   CircleDollarSign,
   FileDown,
   HeartPulse,
+  HandCoins,
   LayoutDashboard,
   LogOut,
   Receipt,
@@ -34,6 +35,7 @@ type ShellProps = {
   isSupervisor: boolean;
   pricingOpen: boolean;
   onOpenPerformance: () => void;
+  onOpenLipaPolePole: () => void;
   onOpenProfitCapture: () => void;
   onOpenManualWeekly: () => void;
   onTogglePricing: () => void;
@@ -61,6 +63,7 @@ export default function OnlineOperationsShell({
   isSupervisor,
   pricingOpen,
   onOpenPerformance,
+  onOpenLipaPolePole,
   onOpenProfitCapture,
   onOpenManualWeekly,
   onTogglePricing,
@@ -136,6 +139,10 @@ export default function OnlineOperationsShell({
               <div>
                 <div className="mb-2 px-3 text-[11px] uppercase tracking-[0.24em] text-slate-500">Supervisor tools</div>
                 <div className="space-y-1">
+                  <button type="button" onClick={onOpenLipaPolePole} className={`${navItemClass} ${activeClass("/attendant/online/lipa-pole-pole")} w-full text-left`}>
+                    <HandCoins className="h-4 w-4" />
+                    Lipa Pole Pole
+                  </button>
                   <button type="button" onClick={onOpenPerformance} className={`${navItemClass} ${activePath.endsWith("/performance") || activePath.includes("/performance/week") ? "border-cyan-400/40 bg-cyan-400/10 text-white" : ""} w-full text-left`}>
                     <BarChart3 className="h-4 w-4" />
                     Performance
@@ -212,6 +219,9 @@ export default function OnlineOperationsShell({
               })}
               {isSupervisor ? (
                 <>
+                  <button type="button" onClick={onOpenLipaPolePole} className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm ${activeClass("/attendant/online/lipa-pole-pole") ? "border-cyan-400/40 bg-cyan-400/10 text-white" : "border-white/10 text-slate-200"}`}>
+                    <HandCoins className="h-4 w-4" /> Lipa Pole Pole
+                  </button>
                   <button type="button" onClick={onOpenPerformance} className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-slate-200">
                     <BarChart3 className="h-4 w-4" /> Performance
                   </button>

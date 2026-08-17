@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { getAdminCustomerContext } from "@/lib/adminCustomerContext";
+import { requireRoleOrBenjamin } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -13,15 +13,8 @@ function splitList(value: string | null) {
 }
 
 export async function GET(request: Request) {
-  const session = await auth();
-  const role = (session?.user as { role?: string } | undefined)?.role ?? "";
-
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (role !== "ADMIN" && role !== "SUPERVISOR") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const access = await requireRoleOrBenjamin(["ADMIN", "SUPERVISOR"]);
+  if (!access.ok) return access.res;
 
   try {
     const url = new URL(request.url);
