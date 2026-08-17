@@ -41,6 +41,7 @@ export type EarningsCardLine = {
   label: string;
   amount: number;
   kind: "earning" | "deduction";
+  category?: "earning" | "commission" | "deduction";
 };
 
 type BreakdownResult = {
@@ -178,5 +179,15 @@ export function buildEarningsCardBreakdown(summary: SummaryLike | null | undefin
       ? totalEarningsDerived - totalDeductionsDerived
       : num(summary.netPay ?? totalEarnings - totalDeductions);
 
-  return { lines, totalEarnings, totalDeductions, netPay };
+  const classifiedLines = lines.map((line) => ({
+    ...line,
+    category:
+      line.kind === "deduction"
+        ? ("deduction" as const)
+        : /commission|profit share|support adjustment|top-up/i.test(line.label)
+          ? ("commission" as const)
+          : ("earning" as const),
+  }));
+
+  return { lines: classifiedLines, totalEarnings, totalDeductions, netPay };
 }
