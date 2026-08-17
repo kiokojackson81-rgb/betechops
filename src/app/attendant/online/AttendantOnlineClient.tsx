@@ -1067,16 +1067,16 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
         <ImpersonationBanner />
 
-        <section className="rounded-[28px] border border-white/10 bg-gradient-to-br from-white/8 via-white/4 to-transparent p-5 shadow-2xl shadow-black/20 sm:p-6">
+        <section className="rounded-[22px] border border-white/10 bg-gradient-to-br from-white/8 via-white/4 to-transparent p-4 shadow-2xl shadow-black/20 sm:rounded-[28px] sm:p-6">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
             <div className="max-w-3xl">
               <div className="text-xs uppercase tracking-[0.26em] text-cyan-200/80">
                 {isGeneralOpsView ? "General operations" : "Online operations"}
               </div>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white">
+              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
                 Good morning, {displayName}.
               </h1>
               <p className="mt-2 text-sm leading-6 text-slate-300">
@@ -1100,7 +1100,7 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
                     {isGeneralOpsView ? `${receiptsCount} POS receipts` : `${accountRows.length} marketplace account rows`}
                   </div>
                 </div>
-                <a href={performanceReportHref} download className="inline-flex rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:bg-cyan-400/15">
+                <a href={performanceReportHref} download className="inline-flex w-full items-center justify-center rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:bg-cyan-400/15 sm:w-auto sm:py-2">
                   Download report
                 </a>
               </div>
@@ -1123,16 +1123,16 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
             </div>
             <LockButton locked={statsLocked} onToggle={toggleStatsLock} />
           </div>
-          <div className={`grid gap-4 sm:grid-cols-2 ${dashboardKpis.length > 4 ? "xl:grid-cols-6" : "xl:grid-cols-4"}`}>
+          <div className={`grid grid-cols-2 gap-2 sm:gap-4 ${dashboardKpis.length > 4 ? "xl:grid-cols-6" : "xl:grid-cols-4"}`}>
             {dashboardKpis.map((item) => {
               const Icon = item.icon;
               return (
-                <Link key={item.label} href={item.href} className="min-w-0 rounded-[24px] border border-white/10 bg-white/5 p-5 transition hover:border-cyan-400/30 hover:bg-white/[0.08]">
+                <Link key={item.label} href={item.href} className="min-w-0 rounded-[18px] border border-white/10 bg-white/5 p-3 transition hover:border-cyan-400/30 hover:bg-white/[0.08] sm:rounded-[24px] sm:p-5">
                   <div className="flex items-start justify-between gap-3">
                     <span className="text-sm text-slate-300">{item.label}</span>
                     <Icon className={`h-5 w-5 shrink-0 ${item.tone}`} />
                   </div>
-                  <div className="mt-4 break-words text-2xl font-semibold leading-tight tracking-tight text-white">
+                  <div className="mt-3 break-words text-xl font-semibold leading-tight tracking-tight text-white sm:mt-4 sm:text-2xl">
                     {statsLocked ? "•••" : item.value}
                   </div>
                   <div className="mt-2 text-xs leading-5 text-slate-400">{item.hint}</div>
@@ -1144,14 +1144,14 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
 
         <div className={isGeneralOpsView ? "block" : "grid gap-6 xl:grid-cols-[minmax(0,1.8fr)_360px]"}>
           {!isGeneralOpsView ? (
-            <section id="marketplace-overview" className="min-w-0 scroll-mt-6 space-y-4 rounded-[28px] border border-white/10 bg-[#091223] p-4 shadow-2xl shadow-black/20 sm:p-5">
+            <section id="marketplace-overview" className="min-w-0 scroll-mt-36 space-y-4 rounded-[22px] border border-white/10 bg-[#091223] p-3 shadow-2xl shadow-black/20 sm:scroll-mt-6 sm:rounded-[28px] sm:p-5">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <div className="text-xs uppercase tracking-[0.22em] text-cyan-200/75">Online orders & channels</div>
                   <h2 className="mt-1 text-xl font-semibold text-white">Marketplace performance</h2>
                   <p className="mt-1 text-sm text-slate-400">Select one or more weeks to review account sales, commissions, and submission status.</p>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="grid gap-2 sm:flex sm:flex-wrap">
                   {userId ? (
                     <a href={marketplaceWeeksExportHref} className="rounded-2xl border border-white/10 px-4 py-2 text-sm text-slate-200 transition hover:bg-white/5">
                       Download full weeks PDF
@@ -1170,8 +1170,8 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
                 <MetricCard label="Operating capital" value={selectedRangeOperatingCapital ? formatKES(selectedRangeOperatingCapital.netPayoutAfterDeduction) : "Not available"} />
               </div>
 
-              <div className="sticky top-0 z-10 rounded-2xl border border-white/10 bg-[#091223]/95 p-3 backdrop-blur">
-                <div className="flex flex-wrap gap-2">
+              <div className="rounded-2xl border border-white/10 bg-[#091223]/95 p-3 backdrop-blur sm:sticky sm:top-0 sm:z-10">
+                <div className="flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
                   {tradingWeeks.map((week) => (
                     <button
                       key={week.key}
@@ -1188,7 +1188,7 @@ export default function AttendantOnlineClient({ mode = "online" }: { mode?: "onl
                         }
                         setActiveWeekKeys([...activeWeekKeys, week.key]);
                       }}
-                      className={`rounded-full border px-3 py-2 text-xs font-semibold transition ${activeWeekKeys.includes(week.key) ? "border-cyan-400 bg-cyan-400/10 text-cyan-100" : "border-white/10 text-slate-300 hover:border-white/20"}`}
+                      className={`shrink-0 rounded-full border px-3 py-2 text-xs font-semibold transition ${activeWeekKeys.includes(week.key) ? "border-cyan-400 bg-cyan-400/10 text-cyan-100" : "border-white/10 text-slate-300 hover:border-white/20"}`}
                     >
                       {week.label}
                     </button>
@@ -1338,6 +1338,8 @@ function PayrollEarningsCard({
     commissionTotal:
       summary?.commissionTotal ?? summary?.commission ?? summary?.salesCommission ?? fallbackCommission ?? 0,
   });
+  const earningLines = breakdown.lines.filter((row) => row.kind === "earning");
+  const deductionLines = breakdown.lines.filter((row) => row.kind === "deduction");
   const { locked, toggle } = useCardLock("onlineops:earnings");
   return (
     <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
@@ -1358,21 +1360,34 @@ function PayrollEarningsCard({
         <span className="text-emerald-300 font-semibold">{locked ? "•••" : formatKES(breakdown.netPay)}</span>
       </div>
 
-      <div className="space-y-2">
-        {breakdown.lines.map((row) => (
+      <div id="commissions" className="scroll-mt-36 space-y-2 sm:scroll-mt-6">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-200/70">Earnings & commissions</div>
+        {earningLines.map((row) => (
           <div key={row.label} className="flex items-center justify-between rounded-2xl bg-slate-950/60 px-3 py-3 text-sm text-slate-300">
             <span className="text-[11px] uppercase tracking-wide text-slate-400">{row.label}</span>
-            <span className={`text-base font-semibold ${row.kind === "deduction" ? "text-rose-300" : "text-emerald-300"}`}>
-              {locked ? "•••" : `${row.kind === "deduction" ? "-" : ""}${formatKES(Math.abs(row.amount))}`}
+            <span className="text-base font-semibold text-emerald-300">
+              {locked ? "•••" : formatKES(Math.abs(row.amount))}
             </span>
           </div>
         ))}
-        {breakdown.lines.length === 0 && (
+        {earningLines.length === 0 && (
           <div className="text-sm text-slate-400">{loading ? "Loading..." : "No earnings data"}</div>
         )}
       </div>
+      <div id="deductions" className="scroll-mt-36 space-y-2 sm:scroll-mt-6">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-200/70">Deductions</div>
+        {deductionLines.map((row) => (
+          <div key={row.label} className="flex items-center justify-between rounded-2xl bg-rose-950/20 px-3 py-3 text-sm text-slate-300">
+            <span className="text-[11px] uppercase tracking-wide text-slate-400">{row.label}</span>
+            <span className="text-base font-semibold text-rose-300">
+              {locked ? "•••" : `-${formatKES(Math.abs(row.amount))}`}
+            </span>
+          </div>
+        ))}
+        {deductionLines.length === 0 ? <div className="rounded-2xl bg-slate-950/40 px-3 py-3 text-sm text-slate-500">No deductions this period</div> : null}
+      </div>
       {downloadHref ? (
-        <div className="pt-1">
+        <div id="payslip" className="scroll-mt-36 pt-1 sm:scroll-mt-6">
           <Link
             href={downloadHref}
             className="inline-flex rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/10"

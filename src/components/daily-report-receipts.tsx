@@ -534,7 +534,7 @@ export default function DailyReportReceiptsPanel({
   })();
 
   return (
-    <section id="my-receipts" className="rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-6 md:px-8">
+    <section id="my-receipts" className="rounded-[20px] border border-slate-800 bg-slate-950/70 px-3 py-4 sm:rounded-3xl sm:px-6 sm:py-6 md:px-8">
       {!hideHeader && (
         <>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -569,7 +569,7 @@ export default function DailyReportReceiptsPanel({
 
       <div className="mt-5 space-y-3">
         {showPodFilters && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex gap-2 overflow-x-auto pb-2 sm:flex-wrap sm:overflow-visible sm:pb-0">
             {extraFilterActions.map((action) => (
               <button
                 key={action.key}
@@ -624,7 +624,7 @@ export default function DailyReportReceiptsPanel({
                 type="button"
                 onClick={() => setPodFilter(option.key as PodFilterValue)}
                 disabled={receiptScopeFilter === "projects"}
-                className={`rounded-full border px-4 py-1 text-[11px] font-semibold uppercase tracking-wide transition ${
+                className={`shrink-0 rounded-full border px-4 py-2 text-[11px] font-semibold uppercase tracking-wide transition sm:py-1 ${
                   podFilter === option.key
                     ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
                     : "border-white/15 text-slate-200 hover:border-emerald-500 hover:text-white"
@@ -653,7 +653,7 @@ export default function DailyReportReceiptsPanel({
               return (
               <div
                 key={receipt.id}
-                className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4"
+                className="rounded-[18px] border border-white/10 bg-white/[0.03] p-3 sm:rounded-[22px] sm:p-4"
               >
                 <div className="grid gap-3 lg:grid-cols-[140px_1.3fr_1fr_160px_140px_150px] lg:items-center">
                   <div>
@@ -668,7 +668,7 @@ export default function DailyReportReceiptsPanel({
                     </span>
                   </div>
                   <div className="min-w-0">
-                    <Link href={customerProfileHref} className="font-semibold text-white transition hover:text-cyan-200">
+                    <Link href={customerProfileHref} className="break-words font-semibold text-white transition hover:text-cyan-200">
                       {receipt.customerName ?? "-"}
                     </Link>
                     <div className="mt-1 text-xs text-slate-400">{receipt.customerPhone || "-"}</div>
@@ -705,7 +705,7 @@ export default function DailyReportReceiptsPanel({
                     ) : null}
                     <div className="mt-2 text-xs text-slate-500">{formatDateTime(receipt.createdAt)}</div>
                   </div>
-                  <div className="flex flex-wrap gap-2 lg:justify-end">
+                  <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 lg:flex lg:flex-wrap lg:justify-end">
                     {receipt.isPodDelivery && String(receipt.podDeliveryStatus ?? "").toLowerCase() === "pending" && receipt.source === "pos" ? (
                       <button
                         type="button"
@@ -725,13 +725,13 @@ export default function DailyReportReceiptsPanel({
                       </button>
                     ) : null}
                     {receipt.detailUrl ? (
-                      <a href={receipt.detailUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/25 hover:bg-white/[0.06]">Open receipt</a>
+                      <a href={receipt.detailUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/25 hover:bg-white/[0.06]">Open receipt</a>
                     ) : receipt.source === "pos" && receipt.id ? (
-                      <a href={`/receipts/${receipt.id}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/25 hover:bg-white/[0.06]">Open receipt</a>
+                      <a href={`/receipts/${receipt.id}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/25 hover:bg-white/[0.06]">Open receipt</a>
                     ) : (
                       <span className="text-xs text-slate-500">Unavailable</span>
                     )}
-                    <Link href={customerProfileHref} className="inline-flex items-center rounded-full border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-300/30 hover:bg-cyan-500/20">
+                    <Link href={customerProfileHref} className="inline-flex items-center justify-center rounded-full border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-300/30 hover:bg-cyan-500/20">
                       Open customer
                     </Link>
                   </div>
@@ -751,15 +751,15 @@ export default function DailyReportReceiptsPanel({
         )}
       </div>
       {podActionReceipt ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-          <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-slate-950 p-6 shadow-2xl shadow-black/60">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-2 sm:items-center sm:px-4">
+          <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-[24px] border border-white/10 bg-slate-950 p-4 shadow-2xl shadow-black/60 sm:rounded-3xl sm:p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-500">POD update</p>
                 <h3 className="mt-1 text-xl font-semibold text-white">{podActionReceipt.orderRef ?? podActionReceipt.receiptNumber ?? podActionReceipt.id}</h3>
                 <p className="mt-2 text-sm text-slate-400">Record the delivery outcome and attach proof if available.</p>
               </div>
-              <button type="button" onClick={closePodAction} className="rounded-full border border-white/10 px-3 py-1 text-sm text-slate-300 hover:bg-white/10">
+              <button type="button" onClick={closePodAction} aria-label="Close POD update" className="shrink-0 rounded-full border border-white/10 px-3 py-1 text-sm text-slate-300 hover:bg-white/10">
                 Close
               </button>
             </div>
@@ -817,7 +817,7 @@ export default function DailyReportReceiptsPanel({
               ) : null}
               {actionError ? <div className="rounded-xl border border-rose-600/60 bg-rose-900/30 px-4 py-2 text-sm text-rose-200">{actionError}</div> : null}
             </div>
-            <div className="mt-6 flex justify-end gap-2">
+            <div className="mt-6 grid grid-cols-2 gap-2 sm:flex sm:justify-end">
               <button
                 type="button"
                 onClick={closePodAction}
@@ -839,15 +839,15 @@ export default function DailyReportReceiptsPanel({
         </div>
       ) : null}
       {feeReceipt ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-950 p-6 shadow-2xl shadow-black/60">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-2 sm:items-center sm:px-4">
+          <div className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-[24px] border border-white/10 bg-slate-950 p-4 shadow-2xl shadow-black/60 sm:rounded-3xl sm:p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-500">POD delivery fee</p>
                 <h3 className="mt-1 text-xl font-semibold text-white">{feeReceipt.orderRef ?? feeReceipt.receiptNumber ?? feeReceipt.id}</h3>
                 <p className="mt-2 text-sm text-slate-400">Save the delivery charge so POD profit is reduced by the correct amount.</p>
               </div>
-              <button type="button" onClick={closeFeeAction} className="rounded-full border border-white/10 px-3 py-1 text-sm text-slate-300 hover:bg-white/10">
+              <button type="button" onClick={closeFeeAction} aria-label="Close delivery fee" className="shrink-0 rounded-full border border-white/10 px-3 py-1 text-sm text-slate-300 hover:bg-white/10">
                 Close
               </button>
             </div>
@@ -876,7 +876,7 @@ export default function DailyReportReceiptsPanel({
               </label>
               {feeError ? <div className="rounded-xl border border-rose-600/60 bg-rose-900/30 px-4 py-2 text-sm text-rose-200">{feeError}</div> : null}
             </div>
-            <div className="mt-6 flex justify-end gap-2">
+            <div className="mt-6 grid grid-cols-2 gap-2 sm:flex sm:justify-end">
               <button
                 type="button"
                 onClick={closeFeeAction}

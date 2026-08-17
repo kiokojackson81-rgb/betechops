@@ -102,6 +102,7 @@ export default function OnlineWorkspaceLayoutClient({
   if (impersonateId) reportParams.set("impersonateId", impersonateId);
   const reportQuery = reportParams.toString();
   const reportHref = `/api/attendant/daily-report/performance-receipt/pdf${reportQuery ? `?${reportQuery}` : ""}`;
+  const payslipHref = `/api/attendant/payslip${reportQuery ? `?${reportQuery}` : ""}`;
   const [dashboardTitle, dashboardDescription] = pageHeading(pathname, mode);
 
   return (
@@ -116,6 +117,7 @@ export default function OnlineWorkspaceLayoutClient({
       receiptsHref={receiptsHref}
       createReceiptHref={createReceiptHref}
       reportHref={reportHref}
+      payslipHref={payslipHref}
       wellnessHref={wellnessHref}
       activePath={pathname}
       receiptView={searchParams.get("view") ?? "history"}

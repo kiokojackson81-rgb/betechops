@@ -216,16 +216,16 @@ export default function ReceiptsPageClient({
 
   if (view === "list") {
     return (
-      <div className="page-shell space-y-6 py-6">
-        <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="page-shell space-y-4 py-3 sm:space-y-6 sm:py-6">
+        <section className="rounded-[22px] border border-white/10 bg-slate-900/80 p-4 shadow-xl shadow-black/40 sm:rounded-3xl sm:p-6">
+          <div className="flex flex-col items-start justify-between gap-3 sm:flex-row">
             <div>
-              <h1 className="text-4xl font-semibold text-white">Receipts history</h1>
+              <h1 className="text-2xl font-semibold text-white sm:text-4xl">Receipts history</h1>
               <p className="mt-2 text-sm text-slate-300">
                 Browse your POS receipts and open the same shared receipt page used across the system.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
               <button
                 type="button"
                 onClick={openCreateView}
@@ -244,16 +244,16 @@ export default function ReceiptsPageClient({
           </div>
         </section>
 
-        <section ref={listRef} className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
+        <section ref={listRef} className="rounded-[22px] border border-white/10 bg-slate-900/80 p-3 shadow-xl shadow-black/40 sm:rounded-3xl sm:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Current period by default</p>
-              <h2 className="text-2xl font-semibold text-white">POS receipts and project activity</h2>
+              <h2 className="text-xl font-semibold text-white sm:text-2xl">POS receipts and project activity</h2>
               <p className="text-sm text-slate-400">
                 Review receipt sales, commission, pending projects, and POD activity for any selected range.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
+            <div className="grid grid-cols-2 gap-2 text-[10px] font-semibold uppercase tracking-wide sm:flex sm:flex-wrap sm:text-[11px]">
               {[
                 { key: "today", label: "Today" },
                 { key: "yesterday", label: "Yesterday" },
@@ -264,7 +264,7 @@ export default function ReceiptsPageClient({
                   key={option.key}
                   type="button"
                   onClick={() => setHistoryRange(option.key as "today" | "yesterday" | "thisWeek" | "period")}
-                  className="rounded-full border border-white/15 px-4 py-1 text-slate-200 hover:border-emerald-500 hover:text-white"
+                  className="rounded-full border border-white/15 px-3 py-2 text-slate-200 hover:border-emerald-500 hover:text-white sm:px-4 sm:py-1"
                 >
                   {option.label}
                 </button>
@@ -303,41 +303,41 @@ export default function ReceiptsPageClient({
             </label>
           </div>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-6">
+            <div className="col-span-2 rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-3 sm:col-span-1 sm:px-4">
               <p className="text-[11px] uppercase tracking-wide text-slate-400">Selected period</p>
               <p className="mt-1 text-sm font-semibold text-slate-100">{historyStart}</p>
               <p className="text-xs text-slate-400">to {historyEnd}</p>
             </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-3 sm:px-4">
               <p className="text-[11px] uppercase tracking-wide text-slate-400">Receipts</p>
-              <p className="text-2xl font-semibold text-emerald-300">{historySummary.count}</p>
+              <p className="text-xl font-semibold text-emerald-300 sm:text-2xl">{historySummary.count}</p>
               <p className="text-xs text-slate-400">Captured in the selected window</p>
             </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-3 sm:px-4">
               <p className="text-[11px] uppercase tracking-wide text-slate-400">Total sales</p>
-              <p className="text-2xl font-semibold text-emerald-300">
+              <p className="break-words text-xl font-semibold text-emerald-300 sm:text-2xl">
                 KES {historySummary.totalSales.toLocaleString("en-KE", { maximumFractionDigits: 0 })}
               </p>
               <p className="text-xs text-slate-400">Aggregated from the receipts below</p>
             </div>
-            <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/5 px-4 py-3">
+            <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/5 px-3 py-3 sm:px-4">
               <p className="text-[11px] uppercase tracking-wide text-cyan-200/70">Receipt commission</p>
-              <p className="text-2xl font-semibold text-cyan-200">
+              <p className="break-words text-xl font-semibold text-cyan-200 sm:text-2xl">
                 {historyCommissionLoading
                   ? "Loading..."
                   : `KES ${historyCommission.toLocaleString("en-KE", { maximumFractionDigits: 0 })}`}
               </p>
               <p className="text-xs text-slate-400">Direct commission for this range</p>
             </div>
-            <div className="rounded-2xl border border-amber-400/20 bg-amber-400/5 px-4 py-3">
+            <div className="rounded-2xl border border-amber-400/20 bg-amber-400/5 px-3 py-3 sm:px-4">
               <p className="text-[11px] uppercase tracking-wide text-amber-200/70">Pending projects</p>
-              <p className="text-2xl font-semibold text-amber-200">{historySummary.pendingProjectReceipts}</p>
+              <p className="text-xl font-semibold text-amber-200 sm:text-2xl">{historySummary.pendingProjectReceipts}</p>
               <p className="text-xs text-slate-400">Not completed and posted to POS sales</p>
             </div>
-            <div className="rounded-2xl border border-yellow-400/20 bg-yellow-400/5 px-4 py-3">
+            <div className="rounded-2xl border border-yellow-400/20 bg-yellow-400/5 px-3 py-3 sm:px-4">
               <p className="text-[11px] uppercase tracking-wide text-yellow-200/70">POD receipts</p>
-              <p className="text-2xl font-semibold text-yellow-200">{historySummary.podReceipts}</p>
+              <p className="text-xl font-semibold text-yellow-200 sm:text-2xl">{historySummary.podReceipts}</p>
               <p className="text-xs text-slate-400">Pay-on-delivery receipts in range</p>
             </div>
           </div>
