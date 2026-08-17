@@ -12,7 +12,13 @@ import {
   type LipaPolePolePaymentMethod,
 } from "@/lib/lipaPolePole";
 import { extractMpesaTransactionCode } from "@/lib/mpesaReference";
-import { sendLppReminderChannelNotification } from "@/lib/lipaPolePoleNotifications";
+import {
+  sendLppLifecycleChannelNotification,
+  sendLppReminderChannelNotification,
+  type LppLifecycleEvent,
+  type LppLifecycleNotificationContext,
+  type LppLifecycleRecipient,
+} from "@/lib/lipaPolePoleNotifications";
 
 type DbClient = typeof prisma | Prisma.TransactionClient;
 
@@ -451,7 +457,11 @@ export type ProcessLppReminderSummary = {
   results: Array<Record<string, unknown>>;
 };
 
-const DEFAULT_LPP_ELIGIBLE_ROLE_NAMES = ["ADMIN", "SUPERVISOR", "ATTENDANT"] as const;
+const DEFAULT_LPP_ELIGIBLE_ROLE_NAMES = [
+  "ADMIN",
+  "SUPERVISOR",
+  "ATTENDANT",
+] as const;
 const DEFAULT_LPP_ELIGIBLE_CATEGORIES = ["BETECH_OPS"] as const;
 
 function normalizeOptionalDate(value: Date | string | null | undefined) {
@@ -484,7 +494,11 @@ function splitInstallmentAmounts(total: Prisma.Decimal, count: number) {
   });
 }
 
-function addInstallmentDueDate(base: Date, index: number, frequency: "WEEKLY" | "MONTHLY") {
+function addInstallmentDueDate(
+  base: Date,
+  index: number,
+  frequency: "WEEKLY" | "MONTHLY",
+) {
   const dueDate = new Date(base);
   if (frequency === "WEEKLY") {
     dueDate.setDate(dueDate.getDate() + (index + 1) * 7);
@@ -548,14 +562,19 @@ export function pickNextRoundRobinAgent(
     return sorted[0];
   }
 
-  const previousIndex = sorted.findIndex((agent) => agent.id === previousAssignedToId);
+  const previousIndex = sorted.findIndex(
+    (agent) => agent.id === previousAssignedToId,
+  );
   if (previousIndex === -1) {
     return sorted[0];
   }
   return sorted[(previousIndex + 1) % sorted.length];
 }
 
-async function withLppTransaction<T>(db: DbClient, run: (tx: Prisma.TransactionClient) => Promise<T>) {
+async function withLppTransaction<T>(
+  db: DbClient,
+  run: (tx: Prisma.TransactionClient) => Promise<T>,
+) {
   if ("$transaction" in db && typeof db.$transaction === "function") {
     return db.$transaction(async (tx) => run(tx), { timeout: 15_000 });
   }
@@ -706,7 +725,10 @@ async function getLppInstallments(db: DbClient, lipaPolePoleId: string) {
   `);
 }
 
-async function getLppReminderDispatchContext(db: DbClient, lipaPolePoleId: string) {
+async function getLppReminderDispatchContext(
+  db: DbClient,
+  lipaPolePoleId: string,
+) {
   const rows = await db.$queryRaw<RawLppReminderDispatchRow[]>(Prisma.sql`
     SELECT
       lpp."reference",
@@ -758,14 +780,20 @@ async function getEligibleCustomerServiceAgents(
     eligibleCategories?: string[];
   },
 ) {
-  const roles = (input?.eligibleRoleNames?.length ? input.eligibleRoleNames : [...DEFAULT_LPP_ELIGIBLE_ROLE_NAMES]).map((value) =>
-    String(value).trim().toUpperCase(),
-  );
-  const categories = (input?.eligibleCategories?.length ? input.eligibleCategories : [...DEFAULT_LPP_ELIGIBLE_CATEGORIES]).map((value) =>
-    String(value).trim().toUpperCase(),
-  );
+  const roles = (
+    input?.eligibleRoleNames?.length
+      ? input.eligibleRoleNames
+      : [...DEFAULT_LPP_ELIGIBLE_ROLE_NAMES]
+  ).map((value) => String(value).trim().toUpperCase());
+  const categories = (
+    input?.eligibleCategories?.length
+      ? input.eligibleCategories
+      : [...DEFAULT_LPP_ELIGIBLE_CATEGORIES]
+  ).map((value) => String(value).trim().toUpperCase());
 
-  const roleSql = roles.length ? Prisma.sql`OR "role"::text IN (${Prisma.join(roles)})` : Prisma.empty;
+  const roleSql = roles.length
+    ? Prisma.sql`OR "role"::text IN (${Prisma.join(roles)})`
+    : Prisma.empty;
   const categorySql = categories.length
     ? Prisma.sql`OR COALESCE("attendantCategory"::text, '') IN (${Prisma.join(categories)})`
     : Prisma.empty;
@@ -826,8 +854,10 @@ async function updateLppStatusAndCompletion(
   });
 
   const completedAt =
-    summary.isFullyPaid && !input.lpp.convertedReceiptId && !input.lpp.convertedProjectId
-      ? input.lpp.completedAt ?? (input.now ?? new Date())
+    summary.isFullyPaid &&
+    !input.lpp.convertedReceiptId &&
+    !input.lpp.convertedProjectId
+      ? (input.lpp.completedAt ?? input.now ?? new Date())
       : null;
 
   await db.$executeRaw(Prisma.sql`
@@ -871,9 +901,14 @@ function ensureLppEligibleForConversion(
   }
 }
 
-async function isLppFinalTransactionFullyPaid(lpp: RawLppRow, db: DbClient = prisma) {
+async function isLppFinalTransactionFullyPaid(
+  lpp: RawLppRow,
+  db: DbClient = prisma,
+) {
   if (lpp.convertedReceiptId) {
-    const rows = await db.$queryRaw<Array<{ paymentStatus: string | null }>>(Prisma.sql`
+    const rows = await db.$queryRaw<
+      Array<{ paymentStatus: string | null }>
+    >(Prisma.sql`
       SELECT o."paymentStatus"::text AS "paymentStatus"
       FROM "Receipt" r
       INNER JOIN "Order" o ON o."id" = r."orderId"
@@ -884,7 +919,9 @@ async function isLppFinalTransactionFullyPaid(lpp: RawLppRow, db: DbClient = pri
   }
 
   if (lpp.convertedProjectId) {
-    const rows = await db.$queryRaw<Array<{ paymentStatus: string }>>(Prisma.sql`
+    const rows = await db.$queryRaw<
+      Array<{ paymentStatus: string }>
+    >(Prisma.sql`
       SELECT "paymentStatus"
       FROM "QuoteProjectOrder"
       WHERE "quoteRequestId" = ${lpp.convertedProjectId}
@@ -905,7 +942,8 @@ export async function assignLipaPolePole(
     const previousAssignedToId = lpp.assignedToId;
 
     let assignedAgentId = trimToNull(input.assignedToId);
-    let assignmentMethod: LppAssignmentMethod = input.method ?? (assignedAgentId ? "MANUAL" : "ROUND_ROBIN");
+    let assignmentMethod: LppAssignmentMethod =
+      input.method ?? (assignedAgentId ? "MANUAL" : "ROUND_ROBIN");
 
     if (!assignedAgentId) {
       const eligibleAgents = await getEligibleCustomerServiceAgents(tx, {
@@ -955,8 +993,13 @@ export async function assignLipaPolePole(
       entity: "LipaPolePole",
       entityId: input.lipaPolePoleId,
       action: previousAssignedToId ? "REASSIGN" : "ASSIGN",
-      before: previousAssignedToId ? ({ assignedToId: previousAssignedToId } as Prisma.JsonObject) : null,
-      after: { assignedToId: assignedAgentId, assignmentMethod } as Prisma.JsonObject,
+      before: previousAssignedToId
+        ? ({ assignedToId: previousAssignedToId } as Prisma.JsonObject)
+        : null,
+      after: {
+        assignedToId: assignedAgentId,
+        assignmentMethod,
+      } as Prisma.JsonObject,
     });
 
     const updated = await getLppById(tx, input.lipaPolePoleId);
@@ -969,16 +1012,19 @@ export async function createLipaPolePole(
   input: CreateLppInput,
   db: DbClient = prisma,
 ) {
-  const normalizedItems = (input.items?.length
-    ? input.items
-    : [{
-        productId: input.productId,
-        description: input.customProductName ?? "",
-        quantity: input.quantity,
-        unitPrice: input.agreedUnitPrice,
-        serial: input.itemSerial,
-        warranty: input.itemWarranty,
-      }]
+  const normalizedItems = (
+    input.items?.length
+      ? input.items
+      : [
+          {
+            productId: input.productId,
+            description: input.customProductName ?? "",
+            quantity: input.quantity,
+            unitPrice: input.agreedUnitPrice,
+            serial: input.itemSerial,
+            warranty: input.itemWarranty,
+          },
+        ]
   ).map((item) => {
     const quantity = Math.max(1, Math.trunc(Number(item.quantity ?? 1)));
     const unitPrice = toMoney(item.unitPrice);
@@ -998,20 +1044,28 @@ export async function createLipaPolePole(
   const firstItem = normalizedItems[0];
   const quantity = firstItem.quantity;
   const agreedUnitPrice = firstItem.unitPrice;
-  const agreedTotal = normalizedItems.reduce((total, item) => total.add(item.total), new Prisma.Decimal(0));
+  const agreedTotal = normalizedItems.reduce(
+    (total, item) => total.add(item.total),
+    new Prisma.Decimal(0),
+  );
   if (agreedTotal.lte(0)) throw new Error("INVALID_AGREED_TOTAL");
   const productId = firstItem.productId;
   const customProductName = firstItem.description;
   const itemSerial = firstItem.serial;
   const itemWarranty = firstItem.warranty;
 
-  return withLppTransaction(db, async (tx) => {
+  const created = await withLppTransaction(db, async (tx) => {
     const now = new Date();
     const reference = await nextLppReference(tx, now);
     const id = randomUUID();
     const publicToken = randomUUID();
-    const initialPaymentAmount = input.initialPayment ? toMoney(input.initialPayment.amount) : new Prisma.Decimal(0);
-    const remainingBalance = Prisma.Decimal.max(new Prisma.Decimal(0), agreedTotal.sub(initialPaymentAmount));
+    const initialPaymentAmount = input.initialPayment
+      ? toMoney(input.initialPayment.amount)
+      : new Prisma.Decimal(0);
+    const remainingBalance = Prisma.Decimal.max(
+      new Prisma.Decimal(0),
+      agreedTotal.sub(initialPaymentAmount),
+    );
 
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "LipaPolePole" (
@@ -1032,8 +1086,8 @@ export async function createLipaPolePole(
         ${agreedTotal},
         ${trimToNull(input.currency) ?? "KES"},
         ${"DRAFT"}::"LipaPolePoleStatus",
-        ${(trimToNull(input.paymentMode) ?? "FLEXIBLE")}::"LipaPolePolePaymentMode",
-        ${(trimToNull(input.reservationMode) ?? "SOFT_RESERVE")}::"LipaPolePoleReservationMode",
+        ${trimToNull(input.paymentMode) ?? "FLEXIBLE"}::"LipaPolePolePaymentMode",
+        ${trimToNull(input.reservationMode) ?? "SOFT_RESERVE"}::"LipaPolePoleReservationMode",
         ${normalizeOptionalDate(input.expectedCompletionDate)},
         ${trimToNull(input.salespersonId ?? null)},
         ${trimToNull(input.source ?? null)},
@@ -1107,7 +1161,8 @@ export async function createLipaPolePole(
           amount: input.initialPayment.amount,
           method: input.initialPayment.method,
           reference: input.initialPayment.reference ?? null,
-          receivedById: input.initialPayment.receivedById ?? input.createdById ?? null,
+          receivedById:
+            input.initialPayment.receivedById ?? input.createdById ?? null,
           receivedAt: input.initialPayment.receivedAt ?? now,
           notes: input.initialPayment.notes ?? "Initial deposit",
           status: input.initialPayment.status ?? "SUCCESS",
@@ -1116,14 +1171,19 @@ export async function createLipaPolePole(
       );
     } else {
       const created = await lockLppOrThrow(tx, id);
-      await updateLppStatusAndCompletion(tx, { lpp: created, payments: [], now });
+      await updateLppStatusAndCompletion(tx, {
+        lpp: created,
+        payments: [],
+        now,
+      });
     }
 
     await assignLipaPolePole(
       {
         lipaPolePoleId: id,
         assignedToId: input.assignment?.assignedToId ?? null,
-        assignedById: input.assignment?.assignedById ?? input.createdById ?? null,
+        assignedById:
+          input.assignment?.assignedById ?? input.createdById ?? null,
         method: input.assignment?.method,
         eligibleRoleNames: input.assignment?.eligibleRoleNames,
         eligibleCategories: input.assignment?.eligibleCategories,
@@ -1145,6 +1205,13 @@ export async function createLipaPolePole(
     if (!finalRow) throw new Error("LPP_NOT_FOUND_AFTER_CREATE");
     return finalRow;
   });
+  if (db === prisma) {
+    await safelyDispatchLppLifecycleNotifications({
+      lipaPolePoleId: created.id,
+      event: "ACCOUNT_CREATED",
+    });
+  }
+  return created;
 }
 
 export async function recordLppPayment(
@@ -1155,14 +1222,25 @@ export async function recordLppPayment(
   if (amount.lte(0)) throw new Error("INVALID_PAYMENT_AMOUNT");
   const paymentStatus = input.status ?? "SUCCESS";
   const rawReference = trimToNull(input.reference ?? null);
-  const normalizedReference = input.method === "MPESA"
-    ? extractMpesaTransactionCode(rawReference) ?? rawReference?.toUpperCase() ?? null
-    : rawReference;
+  const normalizedReference =
+    input.method === "MPESA"
+      ? (extractMpesaTransactionCode(rawReference) ??
+        rawReference?.toUpperCase() ??
+        null)
+      : rawReference;
 
-  return withLppTransaction(db, async (tx) => {
+  const result = await withLppTransaction(db, async (tx) => {
     const lpp = await lockLppOrThrow(tx, input.lipaPolePoleId);
     const status = normalizeLppStatus(lpp.status);
-    if (["CANCELLED", "REFUNDED", "CONVERTED_TO_POS", "CONVERTED_TO_PROJECT", "CLOSED"].includes(status)) {
+    if (
+      [
+        "CANCELLED",
+        "REFUNDED",
+        "CONVERTED_TO_POS",
+        "CONVERTED_TO_PROJECT",
+        "CLOSED",
+      ].includes(status)
+    ) {
       throw new Error("LPP_NOT_ACCEPTING_PAYMENTS");
     }
 
@@ -1209,11 +1287,16 @@ export async function recordLppPayment(
     `);
 
     const paymentsAfter = await getLppPayments(tx, input.lipaPolePoleId);
-    const completion = await updateLppStatusAndCompletion(tx, { lpp, payments: paymentsAfter, now: receivedAt });
+    const completion = await updateLppStatusAndCompletion(tx, {
+      lpp,
+      payments: paymentsAfter,
+      now: receivedAt,
+    });
 
     await writeLppEvent(tx, {
       lipaPolePoleId: input.lipaPolePoleId,
-      eventType: paymentStatus === "SUCCESS" ? "PAYMENT_RECEIVED" : "PAYMENT_SUBMITTED",
+      eventType:
+        paymentStatus === "SUCCESS" ? "PAYMENT_RECEIVED" : "PAYMENT_SUBMITTED",
       actorId: input.receivedById ?? null,
       metadata: {
         paymentId,
@@ -1242,7 +1325,8 @@ export async function recordLppPayment(
       actorId: input.receivedById ?? null,
       entity: "LipaPolePole",
       entityId: input.lipaPolePoleId,
-      action: paymentStatus === "SUCCESS" ? "PAYMENT_RECEIVED" : "PAYMENT_SUBMITTED",
+      action:
+        paymentStatus === "SUCCESS" ? "PAYMENT_RECEIVED" : "PAYMENT_SUBMITTED",
       before: {
         totalPaid: summaryBefore.totalPaid.toString(),
         balance: summaryBefore.balance.toString(),
@@ -1265,6 +1349,19 @@ export async function recordLppPayment(
       summary: completion.summary,
     };
   });
+  if (db === prisma) {
+    await safelyDispatchLppLifecycleNotifications({
+      lipaPolePoleId: input.lipaPolePoleId,
+      paymentId: result.paymentId,
+      event:
+        paymentStatus === "SUCCESS"
+          ? result.summary.isFullyPaid
+            ? "PLAN_COMPLETED"
+            : "PAYMENT_RECEIVED"
+          : "PAYMENT_SUBMITTED",
+    });
+  }
+  return result;
 }
 
 export async function reviewLppPayment(
@@ -1272,9 +1369,10 @@ export async function reviewLppPayment(
   db: DbClient = prisma,
 ) {
   const rejectionReason = trimToNull(input.rejectionReason ?? null);
-  if (input.action === "REJECT" && !rejectionReason) throw new Error("REJECTION_REASON_REQUIRED");
+  if (input.action === "REJECT" && !rejectionReason)
+    throw new Error("REJECTION_REASON_REQUIRED");
 
-  return withLppTransaction(db, async (tx) => {
+  const result = await withLppTransaction(db, async (tx) => {
     const lpp = await lockLppOrThrow(tx, input.lipaPolePoleId);
     const rows = await tx.$queryRaw<RawLppPaymentRow[]>(Prisma.sql`
       SELECT * FROM "LipaPolePolePayment"
@@ -1283,14 +1381,19 @@ export async function reviewLppPayment(
     `);
     const payment = rows[0];
     if (!payment) throw new Error("LPP_PAYMENT_NOT_FOUND");
-    if (normalizeLppPaymentStatus(payment.status) !== "PENDING") throw new Error("LPP_PAYMENT_ALREADY_REVIEWED");
+    if (normalizeLppPaymentStatus(payment.status) !== "PENDING")
+      throw new Error("LPP_PAYMENT_ALREADY_REVIEWED");
 
     const now = new Date();
     const paymentsBefore = await getLppPayments(tx, input.lipaPolePoleId);
-    const summaryBefore = computeLppFinancialSummary({ agreedTotal: lpp.agreedTotal, payments: paymentsBefore });
+    const summaryBefore = computeLppFinancialSummary({
+      agreedTotal: lpp.agreedTotal,
+      payments: paymentsBefore,
+    });
 
     if (input.action === "VERIFY") {
-      if (payment.amount.gt(summaryBefore.balance)) throw new Error("LPP_OVERPAYMENT_NOT_ALLOWED");
+      if (payment.amount.gt(summaryBefore.balance))
+        throw new Error("LPP_OVERPAYMENT_NOT_ALLOWED");
       await tx.$executeRaw(Prisma.sql`
         UPDATE "LipaPolePolePayment"
         SET "status" = 'SUCCESS', "verifiedAt" = ${now}, "verifiedById" = ${trimToNull(input.reviewedById ?? null)}
@@ -1305,8 +1408,13 @@ export async function reviewLppPayment(
     }
 
     const paymentsAfter = await getLppPayments(tx, input.lipaPolePoleId);
-    const completion = await updateLppStatusAndCompletion(tx, { lpp, payments: paymentsAfter, now });
-    const eventType = input.action === "VERIFY" ? "PAYMENT_VERIFIED" : "PAYMENT_REJECTED";
+    const completion = await updateLppStatusAndCompletion(tx, {
+      lpp,
+      payments: paymentsAfter,
+      now,
+    });
+    const eventType =
+      input.action === "VERIFY" ? "PAYMENT_VERIFIED" : "PAYMENT_REJECTED";
     await writeLppEvent(tx, {
       lipaPolePoleId: input.lipaPolePoleId,
       eventType,
@@ -1332,8 +1440,25 @@ export async function reviewLppPayment(
       } as Prisma.JsonObject,
     });
 
-    return { paymentId: payment.id, lpp: completion.lpp, summary: completion.summary };
+    return {
+      paymentId: payment.id,
+      lpp: completion.lpp,
+      summary: completion.summary,
+    };
   });
+  if (db === prisma) {
+    await safelyDispatchLppLifecycleNotifications({
+      lipaPolePoleId: input.lipaPolePoleId,
+      paymentId: result.paymentId,
+      event:
+        input.action === "REJECT"
+          ? "PAYMENT_REJECTED"
+          : result.summary.isFullyPaid
+            ? "PLAN_COMPLETED"
+            : "PAYMENT_VERIFIED",
+    });
+  }
+  return result;
 }
 
 export async function reverseLppPayment(
@@ -1344,13 +1469,20 @@ export async function reverseLppPayment(
   const reason = trimToNull(input.reason);
   if (!reason) throw new Error("REVERSAL_REASON_REQUIRED");
 
-  return withLppTransaction(db, async (tx) => {
+  const result = await withLppTransaction(db, async (tx) => {
     const lpp = await lockLppOrThrow(tx, input.lipaPolePoleId);
-    if ((lpp.convertedReceiptId || lpp.convertedProjectId) && !input.allowConvertedCorrection) {
-      throw new Error("LPP_CONVERTED_PAYMENT_REVERSAL_REQUIRES_FINANCIAL_CORRECTION");
+    if (
+      (lpp.convertedReceiptId || lpp.convertedProjectId) &&
+      !input.allowConvertedCorrection
+    ) {
+      throw new Error(
+        "LPP_CONVERTED_PAYMENT_REVERSAL_REQUIRES_FINANCIAL_CORRECTION",
+      );
     }
 
-    const rows = await (tx as typeof prisma).$queryRaw<RawLppPaymentRow[]>(Prisma.sql`
+    const rows = await (tx as typeof prisma).$queryRaw<
+      RawLppPaymentRow[]
+    >(Prisma.sql`
       SELECT *
       FROM "LipaPolePolePayment"
       WHERE "id" = ${input.paymentId}
@@ -1374,7 +1506,11 @@ export async function reverseLppPayment(
     `);
 
     const paymentsAfter = await getLppPayments(tx, input.lipaPolePoleId);
-    const completion = await updateLppStatusAndCompletion(tx, { lpp, payments: paymentsAfter, now: reversedAt });
+    const completion = await updateLppStatusAndCompletion(tx, {
+      lpp,
+      payments: paymentsAfter,
+      now: reversedAt,
+    });
 
     await writeLppEvent(tx, {
       lipaPolePoleId: input.lipaPolePoleId,
@@ -1413,6 +1549,14 @@ export async function reverseLppPayment(
       summary: completion.summary,
     };
   });
+  if (db === prisma) {
+    await safelyDispatchLppLifecycleNotifications({
+      lipaPolePoleId: input.lipaPolePoleId,
+      paymentId: result.reversedPaymentId,
+      event: "PAYMENT_REVERSED",
+    });
+  }
+  return result;
 }
 
 export async function completeLipaPolePole(
@@ -1422,11 +1566,19 @@ export async function completeLipaPolePole(
   return withLppTransaction(db, async (tx) => {
     const lpp = await lockLppOrThrow(tx, lipaPolePoleId);
     const payments = await getLppPayments(tx, lipaPolePoleId);
-    const completion = await updateLppStatusAndCompletion(tx, { lpp, payments, now: new Date() });
+    const completion = await updateLppStatusAndCompletion(tx, {
+      lpp,
+      payments,
+      now: new Date(),
+    });
     if (!completion.summary.isFullyPaid) {
       throw new Error("LPP_BALANCE_NOT_ZERO");
     }
-    if (!["COMPLETED", "AWAITING_CONVERSION"].includes(normalizeLppStatus(completion.lpp.status))) {
+    if (
+      !["COMPLETED", "AWAITING_CONVERSION"].includes(
+        normalizeLppStatus(completion.lpp.status),
+      )
+    ) {
       await tx.$executeRaw(Prisma.sql`
         UPDATE "LipaPolePole"
         SET
@@ -1455,12 +1607,19 @@ export async function convertLppToPos(
   return withLppTransaction(db, async (tx) => {
     const lpp = await lockLppOrThrow(tx, input.lipaPolePoleId);
     const payments = await getLppPayments(tx, input.lipaPolePoleId);
-    const completion = await updateLppStatusAndCompletion(tx, { lpp, payments, now: new Date() });
+    const completion = await updateLppStatusAndCompletion(tx, {
+      lpp,
+      payments,
+      now: new Date(),
+    });
 
     if (completion.lpp.convertedReceiptId === receiptId) {
       return completion.lpp;
     }
-    if (completion.lpp.convertedReceiptId || completion.lpp.convertedProjectId) {
+    if (
+      completion.lpp.convertedReceiptId ||
+      completion.lpp.convertedProjectId
+    ) {
       throw new Error("LPP_ALREADY_CONVERTED");
     }
 
@@ -1520,12 +1679,19 @@ export async function convertLppToProject(
   return withLppTransaction(db, async (tx) => {
     const lpp = await lockLppOrThrow(tx, input.lipaPolePoleId);
     const payments = await getLppPayments(tx, input.lipaPolePoleId);
-    const completion = await updateLppStatusAndCompletion(tx, { lpp, payments, now: new Date() });
+    const completion = await updateLppStatusAndCompletion(tx, {
+      lpp,
+      payments,
+      now: new Date(),
+    });
 
     if (completion.lpp.convertedProjectId === projectId) {
       return completion.lpp;
     }
-    if (completion.lpp.convertedReceiptId || completion.lpp.convertedProjectId) {
+    if (
+      completion.lpp.convertedReceiptId ||
+      completion.lpp.convertedProjectId
+    ) {
       throw new Error("LPP_ALREADY_CONVERTED");
     }
 
@@ -1582,7 +1748,7 @@ export async function releaseLppProduct(
   const fulfillmentMethod = trimToNull(input.fulfillmentMethod);
   if (!fulfillmentMethod) throw new Error("FULFILLMENT_METHOD_REQUIRED");
 
-  return withLppTransaction(db, async (tx) => {
+  const released = await withLppTransaction(db, async (tx) => {
     const lpp = await lockLppOrThrow(tx, input.lipaPolePoleId);
     if (lpp.fulfilledAt) throw new Error("LPP_ALREADY_FULFILLED");
 
@@ -1646,6 +1812,13 @@ export async function releaseLppProduct(
     if (!refreshed) throw new Error("LPP_NOT_FOUND_AFTER_RELEASE");
     return refreshed;
   });
+  if (db === prisma) {
+    await safelyDispatchLppLifecycleNotifications({
+      lipaPolePoleId: input.lipaPolePoleId,
+      event: "PRODUCT_RELEASED",
+    });
+  }
+  return released;
 }
 
 export async function createLppFollowUp(
@@ -1659,7 +1832,8 @@ export async function createLppFollowUp(
     const lpp = await getLppById(tx, input.lipaPolePoleId);
     if (!lpp) throw new Error("LPP_NOT_FOUND");
 
-    const assignedToId = trimToNull(input.assignedToId ?? null) ?? lpp.assignedToId;
+    const assignedToId =
+      trimToNull(input.assignedToId ?? null) ?? lpp.assignedToId;
     const taskDate = normalizeOptionalDate(input.taskDate) ?? null;
     const id = randomUUID();
 
@@ -1694,7 +1868,9 @@ export async function createLppFollowUp(
     });
 
     const followUps = await getLppFollowUps(tx, input.lipaPolePoleId);
-    return serializeLppFollowUp(followUps.find((row) => row.id === id) ?? followUps[0]);
+    return serializeLppFollowUp(
+      followUps.find((row) => row.id === id) ?? followUps[0],
+    );
   });
 }
 
@@ -1740,7 +1916,9 @@ export async function createLppPromise(
     });
 
     const promises = await getLppPromises(tx, input.lipaPolePoleId);
-    return serializeLppPromise(promises.find((row) => row.id === id) ?? promises[0]);
+    return serializeLppPromise(
+      promises.find((row) => row.id === id) ?? promises[0],
+    );
   });
 }
 
@@ -1805,7 +1983,7 @@ async function updateLppReminderDeliveryState(
       "payloadSnapshot" = ${(input.payloadSnapshot ?? null) as Prisma.JsonObject | null},
       "sentAt" = ${
         input.status === "SENT"
-          ? input.sentAt ?? new Date()
+          ? (input.sentAt ?? new Date())
           : input.sentAt === undefined
             ? Prisma.raw(`"sentAt"`)
             : input.sentAt
@@ -1814,7 +1992,203 @@ async function updateLppReminderDeliveryState(
   `);
 }
 
-export async function getLppAccountSummary(lipaPolePoleId: string, db: DbClient = prisma) {
+type LppLifecycleDispatchInput = {
+  lipaPolePoleId: string;
+  event: LppLifecycleEvent;
+  paymentId?: string | null;
+};
+
+async function dispatchLppLifecycleNotifications(
+  input: LppLifecycleDispatchInput,
+) {
+  const rows = await prisma.$queryRaw<
+    Array<{
+      reference: string;
+      currency: string;
+      agreedTotal: Prisma.Decimal;
+      expectedCompletionDate: Date | null;
+      createdAt: Date;
+      customerName: string | null;
+      customerPhone: string | null;
+      customerEmail: string | null;
+      agentName: string | null;
+      agentPhone: string | null;
+      agentEmail: string | null;
+      productName: string | null;
+      totalPaid: Prisma.Decimal;
+      paymentAmount: Prisma.Decimal | null;
+      paymentReference: string | null;
+      paymentReason: string | null;
+      nextInstallmentDate: Date | null;
+      nextInstallmentAmount: Prisma.Decimal | null;
+    }>
+  >(Prisma.sql`
+    SELECT
+      lpp."reference",
+      lpp."currency",
+      lpp."agreedTotal",
+      lpp."expectedCompletionDate",
+      lpp."createdAt",
+      customer."name" AS "customerName",
+      customer."phone" AS "customerPhone",
+      customer."email" AS "customerEmail",
+      agent."name" AS "agentName",
+      agent."phone" AS "agentPhone",
+      agent."email" AS "agentEmail",
+      COALESCE(NULLIF(lpp."customProductName", ''), product."name") AS "productName",
+      COALESCE(payment_totals."totalPaid", 0)::numeric AS "totalPaid",
+      event_payment."amount" AS "paymentAmount",
+      event_payment."reference" AS "paymentReference",
+      COALESCE(event_payment."rejectionReason", event_payment."reversalReason") AS "paymentReason",
+      next_installment."dueDate" AS "nextInstallmentDate",
+      next_installment."expectedAmount" AS "nextInstallmentAmount"
+    FROM "LipaPolePole" lpp
+    INNER JOIN "User" customer ON customer."id" = lpp."customerId"
+    LEFT JOIN "User" agent ON agent."id" = lpp."assignedToId"
+    LEFT JOIN "Product" product ON product."id" = lpp."productId"
+    LEFT JOIN LATERAL (
+      SELECT COALESCE(SUM(payment."amount"), 0)::numeric AS "totalPaid"
+      FROM "LipaPolePolePayment" payment
+      WHERE payment."lipaPolePoleId" = lpp."id" AND payment."status" = 'SUCCESS'
+    ) payment_totals ON TRUE
+    LEFT JOIN "LipaPolePolePayment" event_payment
+      ON event_payment."id" = ${trimToNull(input.paymentId ?? null)}
+      AND event_payment."lipaPolePoleId" = lpp."id"
+    LEFT JOIN LATERAL (
+      SELECT installment."dueDate", installment."expectedAmount"
+      FROM "LipaPolePoleInstallment" installment
+      WHERE installment."lipaPolePoleId" = lpp."id"
+        AND installment."dueDate" >= CURRENT_DATE
+      ORDER BY installment."dueDate" ASC
+      LIMIT 1
+    ) next_installment ON TRUE
+    WHERE lpp."id" = ${input.lipaPolePoleId}
+    LIMIT 1
+  `);
+  const row = rows[0];
+  if (!row) return;
+
+  const totalPaid = Number(row.totalPaid ?? 0);
+  const agreedTotal = Number(row.agreedTotal ?? 0);
+  const baseUrl = String(
+    process.env.NEXT_PUBLIC_SITE_URL ||
+      process.env.APP_URL ||
+      "https://www.betech.co.ke",
+  ).replace(/\/$/, "");
+  const opsUrl = String(
+    process.env.NEXT_PUBLIC_OPS_URL || "https://ops.betech.co.ke",
+  ).replace(/\/$/, "");
+  const baseContext: Omit<LppLifecycleNotificationContext, "recipient"> = {
+    event: input.event,
+    reference: row.reference,
+    customerName: row.customerName,
+    customerPhone: row.customerPhone,
+    customerEmail: row.customerEmail,
+    agentName: row.agentName,
+    agentPhone: row.agentPhone,
+    agentEmail: row.agentEmail,
+    productName: row.productName,
+    dueDate: row.expectedCompletionDate,
+    agreedTotal,
+    totalPaid,
+    balance: Math.max(0, agreedTotal - totalPaid),
+    currency: row.currency,
+    paymentAmount: row.paymentAmount == null ? null : Number(row.paymentAmount),
+    paymentReference:
+      row.paymentReference == null
+        ? null
+        : (extractMpesaTransactionCode(row.paymentReference) ??
+          row.paymentReference),
+    reason: row.paymentReason,
+    nextInstallmentDate: row.nextInstallmentDate,
+    nextInstallmentAmount:
+      row.nextInstallmentAmount == null
+        ? null
+        : Number(row.nextInstallmentAmount),
+    accountUrl: `${baseUrl}/shop/account/lipa-pole-pole/${encodeURIComponent(input.lipaPolePoleId)}`,
+    adminUrl: `${opsUrl}/admin/lipa-pole-pole?id=${encodeURIComponent(input.lipaPolePoleId)}`,
+  };
+  const recipients: LppLifecycleRecipient[] = ["CUSTOMER"];
+  if (
+    ["ACCOUNT_CREATED", "PAYMENT_SUBMITTED"].includes(input.event) &&
+    (row.agentPhone || row.agentEmail)
+  ) {
+    recipients.push("ASSIGNED_AGENT");
+  }
+
+  const deliveries = recipients.flatMap((recipient) =>
+    (["SMS", "EMAIL"] as const).map((channel) => ({ recipient, channel })),
+  );
+
+  await Promise.all(
+    deliveries.map(async ({ recipient, channel }) => {
+      const reminderType = [
+        "LIFECYCLE",
+        input.event,
+        input.paymentId || "ACCOUNT",
+        recipient,
+      ].join("_");
+      const reminder = await createLppReminderRecord({
+        lipaPolePoleId: input.lipaPolePoleId,
+        reminderType,
+        dueDate: row.createdAt,
+        scheduledFor: new Date(),
+        channel,
+        payloadSnapshot: { event: input.event, recipient, channel },
+      });
+      if (!reminder.created) return;
+
+      const result = await sendLppLifecycleChannelNotification(
+        { ...baseContext, recipient },
+        channel,
+      );
+      await updateLppReminderDeliveryState(prisma, {
+        idempotencyKey: reminder.idempotencyKey,
+        status: result.status,
+        providerMessageId: result.providerMessageId,
+        sentAt: result.status === "SENT" ? new Date() : null,
+        payloadSnapshot: {
+          event: input.event,
+          recipient,
+          channel,
+          resultStatus: result.status,
+          error: result.error,
+          ...(result.payloadSnapshot as Record<string, Prisma.JsonValue>),
+        },
+      });
+      await writeLppEvent(prisma, {
+        lipaPolePoleId: input.lipaPolePoleId,
+        eventType: `NOTIFICATION_${result.status}`,
+        actorId: null,
+        metadata: {
+          lifecycleEvent: input.event,
+          recipient,
+          channel,
+          providerMessageId: result.providerMessageId,
+          error: result.error,
+        },
+      });
+    }),
+  );
+}
+
+async function safelyDispatchLppLifecycleNotifications(
+  input: LppLifecycleDispatchInput,
+) {
+  try {
+    await dispatchLppLifecycleNotifications(input);
+  } catch (error) {
+    console.error("[lpp notifications] lifecycle dispatch failed", {
+      ...input,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+export async function getLppAccountSummary(
+  lipaPolePoleId: string,
+  db: DbClient = prisma,
+) {
   const lpp = await getLppById(db, lipaPolePoleId);
   if (!lpp) throw new Error("LPP_NOT_FOUND");
   const payments = await getLppPayments(db, lipaPolePoleId);
@@ -1841,9 +2215,10 @@ function serializeLppItem(row: RawLppItemRow): SerializedLppItem {
 }
 
 function serializeLppPayment(row: RawLppPaymentRow): SerializedLppPayment {
-  const reference = row.method === "MPESA"
-    ? extractMpesaTransactionCode(row.reference) ?? row.reference ?? null
-    : row.reference ?? null;
+  const reference =
+    row.method === "MPESA"
+      ? (extractMpesaTransactionCode(row.reference) ?? row.reference ?? null)
+      : (row.reference ?? null);
   return {
     id: row.id,
     amount: Number(row.amount ?? 0),
@@ -1918,7 +2293,9 @@ function serializeLppPromise(row: RawLppPromiseRow): SerializedLppPromise {
   };
 }
 
-function serializeLppInstallment(row: RawLppInstallmentRow): SerializedLppInstallment {
+function serializeLppInstallment(
+  row: RawLppInstallmentRow,
+): SerializedLppInstallment {
   return {
     id: row.id,
     dueDate: row.dueDate.toISOString(),
@@ -1929,21 +2306,29 @@ function serializeLppInstallment(row: RawLppInstallmentRow): SerializedLppInstal
   };
 }
 
-export async function getSerializedLppAccountDetail(lipaPolePoleId: string, db: DbClient = prisma) {
-  const { lpp, payments, items, summary } = await getLppAccountSummary(lipaPolePoleId, db);
-  const rows = await db.$queryRaw<Array<{
-    customerName: string | null;
-    customerPhone: string | null;
-    customerEmail: string | null;
-    customerCounty: string | null;
-    customerTown: string | null;
-    customerEstateLandmark: string | null;
-    customerLocationNotes: string | null;
-    productName: string | null;
-    assignedToName: string | null;
-    salespersonName: string | null;
-    fulfilledByName: string | null;
-  }>>(Prisma.sql`
+export async function getSerializedLppAccountDetail(
+  lipaPolePoleId: string,
+  db: DbClient = prisma,
+) {
+  const { lpp, payments, items, summary } = await getLppAccountSummary(
+    lipaPolePoleId,
+    db,
+  );
+  const rows = await db.$queryRaw<
+    Array<{
+      customerName: string | null;
+      customerPhone: string | null;
+      customerEmail: string | null;
+      customerCounty: string | null;
+      customerTown: string | null;
+      customerEstateLandmark: string | null;
+      customerLocationNotes: string | null;
+      productName: string | null;
+      assignedToName: string | null;
+      salespersonName: string | null;
+      fulfilledByName: string | null;
+    }>
+  >(Prisma.sql`
     SELECT
       c."name" AS "customerName",
       c."phone" AS "customerPhone",
@@ -1999,7 +2384,9 @@ export async function getSerializedLppAccountDetail(lipaPolePoleId: string, db: 
     productName: meta.productName,
     itemSerial: lpp.itemSerial ?? null,
     itemWarranty: lpp.itemWarranty ?? null,
-    termsAcceptedAt: lpp.termsAcceptedAt ? lpp.termsAcceptedAt.toISOString() : null,
+    termsAcceptedAt: lpp.termsAcceptedAt
+      ? lpp.termsAcceptedAt.toISOString()
+      : null,
     termsVersion: lpp.termsVersion ?? null,
     quantity: Number(lpp.quantity ?? 1),
     agreedUnitPrice: Number(lpp.agreedUnitPrice ?? 0),
@@ -2023,7 +2410,9 @@ export async function getSerializedLppAccountDetail(lipaPolePoleId: string, db: 
     paymentMode: lpp.paymentMode,
     reservationMode: lpp.reservationMode,
     source: lpp.source ?? null,
-    expectedCompletionDate: lpp.expectedCompletionDate ? lpp.expectedCompletionDate.toISOString() : null,
+    expectedCompletionDate: lpp.expectedCompletionDate
+      ? lpp.expectedCompletionDate.toISOString()
+      : null,
     createdAt: lpp.createdAt.toISOString(),
     updatedAt: lpp.updatedAt.toISOString(),
     completedAt: lpp.completedAt ? lpp.completedAt.toISOString() : null,
@@ -2071,14 +2460,18 @@ export async function listSerializedLppAccounts(
   const customerId = trimToNull(input?.customerId ?? null);
   const take = Math.min(200, Math.max(1, Number(input?.take ?? 100)));
 
-  const rows = await db.$queryRaw<Array<RawLppRow & {
-    customerName: string | null;
-    customerPhone: string | null;
-    customerEmail: string | null;
-    productName: string | null;
-    assignedToName: string | null;
-    salespersonName: string | null;
-  }>>(Prisma.sql`
+  const rows = await db.$queryRaw<
+    Array<
+      RawLppRow & {
+        customerName: string | null;
+        customerPhone: string | null;
+        customerEmail: string | null;
+        productName: string | null;
+        assignedToName: string | null;
+        salespersonName: string | null;
+      }
+    >
+  >(Prisma.sql`
     SELECT
       lpp.*,
       c."name" AS "customerName",
@@ -2110,23 +2503,30 @@ export async function listSerializedLppAccounts(
     LIMIT ${take}
   `);
 
-  const paymentAgg = await db.$queryRaw<Array<{
-    lipaPolePoleId: string;
-    totalPaid: Prisma.Decimal;
-  }>>(Prisma.sql`
+  const paymentAgg = await db.$queryRaw<
+    Array<{
+      lipaPolePoleId: string;
+      totalPaid: Prisma.Decimal;
+    }>
+  >(Prisma.sql`
     SELECT "lipaPolePoleId", COALESCE(SUM("amount"), 0)::numeric AS "totalPaid"
     FROM "LipaPolePolePayment"
     WHERE "status" = 'SUCCESS'
       AND "lipaPolePoleId" IN (${Prisma.join(rows.map((row) => row.id).length ? rows.map((row) => row.id) : [""])})
     GROUP BY "lipaPolePoleId"
   `);
-  const totalPaidById = new Map(paymentAgg.map((row) => [row.lipaPolePoleId, Number(row.totalPaid ?? 0)]));
+  const totalPaidById = new Map(
+    paymentAgg.map((row) => [row.lipaPolePoleId, Number(row.totalPaid ?? 0)]),
+  );
 
   return rows.map((row) => {
     const totalPaid = totalPaidById.get(row.id) ?? 0;
     const agreedTotal = Number(row.agreedTotal ?? 0);
     const balance = Math.max(0, agreedTotal - totalPaid);
-    const percentagePaid = agreedTotal > 0 ? Math.min(100, Math.round((totalPaid / agreedTotal) * 10000) / 100) : 0;
+    const percentagePaid =
+      agreedTotal > 0
+        ? Math.min(100, Math.round((totalPaid / agreedTotal) * 10000) / 100)
+        : 0;
     const derivedStatus = deriveLppOperationalStatus({
       currentStatus: row.status,
       agreedTotal,
@@ -2151,7 +2551,9 @@ export async function listSerializedLppAccounts(
       productName: row.productName,
       itemSerial: row.itemSerial ?? null,
       itemWarranty: row.itemWarranty ?? null,
-      termsAcceptedAt: row.termsAcceptedAt ? row.termsAcceptedAt.toISOString() : null,
+      termsAcceptedAt: row.termsAcceptedAt
+        ? row.termsAcceptedAt.toISOString()
+        : null,
       termsVersion: row.termsVersion ?? null,
       quantity: Number(row.quantity ?? 1),
       agreedUnitPrice: Number(row.agreedUnitPrice ?? 0),
@@ -2167,7 +2569,9 @@ export async function listSerializedLppAccounts(
       paymentMode: row.paymentMode,
       reservationMode: row.reservationMode,
       source: row.source ?? null,
-      expectedCompletionDate: row.expectedCompletionDate ? row.expectedCompletionDate.toISOString() : null,
+      expectedCompletionDate: row.expectedCompletionDate
+        ? row.expectedCompletionDate.toISOString()
+        : null,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       completedAt: row.completedAt ? row.completedAt.toISOString() : null,
@@ -2279,7 +2683,13 @@ export async function processDueLppReminders(
     });
     const dueDate = lpp.expectedCompletionDate;
 
-    if (!dueDate || financials.isFullyPaid || ["CONVERTED_TO_POS", "CONVERTED_TO_PROJECT", "CLOSED"].includes(currentStatus)) {
+    if (
+      !dueDate ||
+      financials.isFullyPaid ||
+      ["CONVERTED_TO_POS", "CONVERTED_TO_PROJECT", "CLOSED"].includes(
+        currentStatus,
+      )
+    ) {
       summary.results.push({
         lppId: lpp.id,
         reference: lpp.reference,
@@ -2295,8 +2705,13 @@ export async function processDueLppReminders(
     const dispatchContext = await getLppReminderDispatchContext(db, lpp.id);
 
     for (const offset of dayOffsets) {
-      const triggerDate = new Date(dueDate.getTime() - offset.days * 24 * 60 * 60 * 1000);
-      if (normalizeReminderDateKey(triggerDate) !== normalizeReminderDateKey(now)) continue;
+      const triggerDate = new Date(
+        dueDate.getTime() - offset.days * 24 * 60 * 60 * 1000,
+      );
+      if (
+        normalizeReminderDateKey(triggerDate) !== normalizeReminderDateKey(now)
+      )
+        continue;
 
       const payloadSnapshot: Record<string, Prisma.JsonValue> = {
         reference: lpp.reference,
@@ -2367,13 +2782,19 @@ export async function processDueLppReminders(
           if (!reminder.created) continue;
 
           summary.reminderRecordsCreated += 1;
-          const dispatchResult = await sendLppReminderChannelNotification(notificationContext, channel);
+          const dispatchResult = await sendLppReminderChannelNotification(
+            notificationContext,
+            channel,
+          );
           const mergedPayload = {
             ...payloadSnapshot,
             channel,
             resultStatus: dispatchResult.status,
             error: dispatchResult.error,
-            ...(dispatchResult.payloadSnapshot as Record<string, Prisma.JsonValue>),
+            ...(dispatchResult.payloadSnapshot as Record<
+              string,
+              Prisma.JsonValue
+            >),
           };
 
           await updateLppReminderDeliveryState(db, {
@@ -2385,7 +2806,8 @@ export async function processDueLppReminders(
           });
 
           if (dispatchResult.status === "SENT") summary.notificationsSent += 1;
-          else if (dispatchResult.status === "FAILED") summary.notificationsFailed += 1;
+          else if (dispatchResult.status === "FAILED")
+            summary.notificationsFailed += 1;
           else summary.notificationsSkipped += 1;
 
           await writeLppEvent(db, {
@@ -2429,7 +2851,11 @@ export async function processDueLppReminders(
       const promises = await getLppPromises(db, lpp.id);
       for (const promise of promises) {
         if (promise.status !== "ACTIVE") continue;
-        if (normalizeReminderDateKey(promise.promiseDate) > normalizeReminderDateKey(now)) continue;
+        if (
+          normalizeReminderDateKey(promise.promiseDate) >
+          normalizeReminderDateKey(now)
+        )
+          continue;
         await db.$executeRaw(Prisma.sql`
           UPDATE "LipaPolePolePromise"
           SET "status" = ${"BROKEN"}, "updatedAt" = CURRENT_TIMESTAMP

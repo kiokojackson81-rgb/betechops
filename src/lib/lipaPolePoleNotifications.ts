@@ -30,6 +30,43 @@ export type LppReminderDeliveryResult = {
   payloadSnapshot: Record<string, unknown>;
 };
 
+export type LppLifecycleEvent =
+  | "ACCOUNT_CREATED"
+  | "PAYMENT_SUBMITTED"
+  | "PAYMENT_RECEIVED"
+  | "PAYMENT_VERIFIED"
+  | "PAYMENT_REJECTED"
+  | "PAYMENT_REVERSED"
+  | "PLAN_COMPLETED"
+  | "PRODUCT_RELEASED";
+
+export type LppLifecycleRecipient = "CUSTOMER" | "ASSIGNED_AGENT";
+
+export type LppLifecycleNotificationContext = {
+  event: LppLifecycleEvent;
+  recipient: LppLifecycleRecipient;
+  reference: string;
+  customerName: string | null;
+  customerPhone: string | null;
+  customerEmail: string | null;
+  agentName: string | null;
+  agentPhone: string | null;
+  agentEmail: string | null;
+  productName: string | null;
+  dueDate: Date | null;
+  agreedTotal: number;
+  totalPaid: number;
+  balance: number;
+  currency: string;
+  paymentAmount?: number | null;
+  paymentReference?: string | null;
+  reason?: string | null;
+  nextInstallmentDate?: Date | null;
+  nextInstallmentAmount?: number | null;
+  accountUrl: string;
+  adminUrl: string;
+};
+
 function formatCurrency(amount: number, currency: string) {
   const normalizedCurrency = currency === "KES" ? "KES" : currency || "KES";
   const formatted = new Intl.NumberFormat("en-KE", {
@@ -37,7 +74,9 @@ function formatCurrency(amount: number, currency: string) {
     currency: normalizedCurrency,
     maximumFractionDigits: 0,
   }).format(Number.isFinite(amount) ? amount : 0);
-  return normalizedCurrency === "KES" ? formatted.replace("KES", "KSh") : formatted;
+  return normalizedCurrency === "KES"
+    ? formatted.replace("KES", "KSh")
+    : formatted;
 }
 
 function formatDate(value: Date) {
@@ -47,6 +86,208 @@ function formatDate(value: Date) {
     year: "numeric",
     timeZone: "Africa/Nairobi",
   }).format(value);
+}
+
+function escapeHtml(value: string | null | undefined) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function lifecycleLead(context: LppLifecycleNotificationContext) {
+  const amount = formatCurrency(context.paymentAmount || 0, context.currency);
+  switch (context.event) {
+    case "ACCOUNT_CREATED":
+      return `Your Lipa Pole Pole booking ${context.reference} has been created successfully.`;
+    case "PAYMENT_SUBMITTED":
+      return `Your payment of ${amount} for ${context.reference} has been submitted and is awaiting verification.`;
+    case "PAYMENT_RECEIVED":
+      return `We have received your payment of ${amount} for ${context.reference}.`;
+    case "PAYMENT_VERIFIED":
+      return `Your payment of ${amount} for ${context.reference} has been verified.`;
+    case "PAYMENT_REJECTED":
+      return `Your submitted payment of ${amount} for ${context.reference} could not be verified.`;
+    case "PAYMENT_REVERSED":
+      return `A payment of ${amount} on ${context.reference} has been reversed.`;
+    case "PLAN_COMPLETED":
+      return `Congratulations. Your Lipa Pole Pole plan ${context.reference} is fully paid.`;
+    case "PRODUCT_RELEASED":
+      return `The product for Lipa Pole Pole plan ${context.reference} has been released successfully.`;
+  }
+}
+
+function lifecycleSubject(context: LppLifecycleNotificationContext) {
+  const labels: Record<LppLifecycleEvent, string> = {
+    ACCOUNT_CREATED: "Lipa Pole Pole booking confirmed",
+    PAYMENT_SUBMITTED: "Lipa Pole Pole payment awaiting verification",
+    PAYMENT_RECEIVED: "Lipa Pole Pole payment received",
+    PAYMENT_VERIFIED: "Lipa Pole Pole payment verified",
+    PAYMENT_REJECTED: "Lipa Pole Pole payment needs attention",
+    PAYMENT_REVERSED: "Lipa Pole Pole payment reversed",
+    PLAN_COMPLETED: "Lipa Pole Pole plan fully paid",
+    PRODUCT_RELEASED: "Lipa Pole Pole product released",
+  };
+  return `${labels[context.event]} - ${context.reference}`;
+}
+
+function nextPaymentText(context: LppLifecycleNotificationContext) {
+  if (context.balance <= 0) return null;
+  if (context.nextInstallmentDate && context.nextInstallmentAmount) {
+    return `Next payment: ${formatCurrency(context.nextInstallmentAmount, context.currency)} by ${formatDate(context.nextInstallmentDate)}.`;
+  }
+  if (context.dueDate)
+    return `Completion date: ${formatDate(context.dueDate)}.`;
+  return null;
+}
+
+function buildLifecycleCustomerSms(context: LppLifecycleNotificationContext) {
+  return [
+    `Hello ${context.customerName || "Customer"},`,
+    lifecycleLead(context),
+    context.productName ? `Product: ${context.productName}.` : null,
+    context.paymentReference
+      ? `Payment ref: ${context.paymentReference}.`
+      : null,
+    context.reason ? `Reason: ${context.reason}.` : null,
+    `Paid: ${formatCurrency(context.totalPaid, context.currency)}.`,
+    `Balance: ${formatCurrency(context.balance, context.currency)}.`,
+    nextPaymentText(context),
+    `View details: ${context.accountUrl}`,
+    "- Betech Solar Solutions",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function buildLifecycleAgentSms(context: LppLifecycleNotificationContext) {
+  const action =
+    context.event === "PAYMENT_SUBMITTED"
+      ? `${context.customerName || "A customer"} submitted ${formatCurrency(context.paymentAmount || 0, context.currency)} for verification.`
+      : `New Lipa Pole Pole account ${context.reference} has been assigned to you for ${context.customerName || "a customer"}.`;
+  return `Hello ${context.agentName || "Team member"}, ${action} Product: ${context.productName || "Not specified"}. Open: ${context.adminUrl} - BetechOps`;
+}
+
+function buildLifecycleEmailHtml(context: LppLifecycleNotificationContext) {
+  const lead =
+    context.recipient === "ASSIGNED_AGENT"
+      ? buildLifecycleAgentSms(context)
+      : lifecycleLead(context);
+  return `<div style="font-size:15px;line-height:1.8;color:#334155">
+    <p style="margin:0 0 12px">Hello ${escapeHtml(context.recipient === "ASSIGNED_AGENT" ? context.agentName || "Team member" : context.customerName || "Customer")},</p>
+    <p style="margin:0 0 12px">${escapeHtml(lead)}</p>
+    <p style="margin:0 0 12px"><strong>Reference:</strong> ${escapeHtml(context.reference)}<br />
+      ${context.productName ? `<strong>Product:</strong> ${escapeHtml(context.productName)}<br />` : ""}
+      ${context.paymentAmount ? `<strong>Payment:</strong> ${escapeHtml(formatCurrency(context.paymentAmount, context.currency))}<br />` : ""}
+      ${context.paymentReference ? `<strong>Payment reference:</strong> ${escapeHtml(context.paymentReference)}<br />` : ""}
+      <strong>Total paid:</strong> ${escapeHtml(formatCurrency(context.totalPaid, context.currency))}<br />
+      <strong>Balance:</strong> ${escapeHtml(formatCurrency(context.balance, context.currency))}<br />
+      ${context.nextInstallmentDate && context.nextInstallmentAmount ? `<strong>Next payment:</strong> ${escapeHtml(formatCurrency(context.nextInstallmentAmount, context.currency))} by ${escapeHtml(formatDate(context.nextInstallmentDate))}<br />` : ""}
+      ${context.reason ? `<strong>Reason:</strong> ${escapeHtml(context.reason)}<br />` : ""}
+    </p>
+  </div>`;
+}
+
+export async function sendLppLifecycleChannelNotification(
+  context: LppLifecycleNotificationContext,
+  channel: "SMS" | "EMAIL",
+): Promise<LppReminderDeliveryResult> {
+  const phone =
+    context.recipient === "ASSIGNED_AGENT"
+      ? context.agentPhone
+      : context.customerPhone;
+  const email = String(
+    context.recipient === "ASSIGNED_AGENT"
+      ? context.agentEmail
+      : context.customerEmail || "",
+  ).trim();
+  const normalizedPhone = getNormalizedPhone(phone);
+  const smsBody =
+    context.recipient === "ASSIGNED_AGENT"
+      ? buildLifecycleAgentSms(context)
+      : buildLifecycleCustomerSms(context);
+
+  if (channel === "SMS") {
+    if (!normalizedPhone)
+      return {
+        channel,
+        status: "SKIPPED",
+        providerMessageId: null,
+        error: "missing_phone",
+        payloadSnapshot: { provider: "africasTalking" },
+      };
+    try {
+      const response = (await sendTransactionalSms(
+        normalizedPhone,
+        smsBody,
+      )) as { SMSMessageData?: { Recipients?: Array<{ messageId?: string }> } };
+      return {
+        channel,
+        status: "SENT",
+        providerMessageId:
+          response.SMSMessageData?.Recipients?.[0]?.messageId ?? null,
+        error: null,
+        payloadSnapshot: {
+          provider: "africasTalking",
+          providerResponse: response,
+        },
+      };
+    } catch (error) {
+      return {
+        channel,
+        status: "FAILED",
+        providerMessageId: null,
+        error: error instanceof Error ? error.message : "sms_send_failed",
+        payloadSnapshot: { provider: "africasTalking" },
+      };
+    }
+  }
+
+  if (!isValidEmail(email))
+    return {
+      channel,
+      status: "SKIPPED",
+      providerMessageId: null,
+      error: "missing_or_invalid_email",
+      payloadSnapshot: { provider: "email" },
+    };
+  try {
+    const response = await sendGeneralCustomerNotificationEmail({
+      to: email,
+      subject: lifecycleSubject(context),
+      title: lifecycleSubject(context).split(" - ")[0],
+      intro: `Reference: ${context.reference}`,
+      bodyHtml: buildLifecycleEmailHtml(context),
+      bodyText: smsBody,
+      ctaLabel:
+        context.recipient === "ASSIGNED_AGENT"
+          ? "Open in BetechOps"
+          : "View payment plan",
+      ctaUrl:
+        context.recipient === "ASSIGNED_AGENT"
+          ? context.adminUrl
+          : context.accountUrl,
+      outro: "Kind regards,\nBetech Solar Solutions",
+    });
+    return {
+      channel,
+      status: "SENT",
+      providerMessageId:
+        typeof response?.messageId === "string" ? response.messageId : null,
+      error: null,
+      payloadSnapshot: { provider: "email", providerResponse: response },
+    };
+  } catch (error) {
+    return {
+      channel,
+      status: "FAILED",
+      providerMessageId: null,
+      error: error instanceof Error ? error.message : "email_send_failed",
+      payloadSnapshot: { provider: "email" },
+    };
+  }
 }
 
 function isValidEmail(value: string | null | undefined) {
@@ -170,15 +411,22 @@ export async function sendLppReminderChannelNotification(
       };
     }
     try {
-      const response = (await sendTransactionalSms(normalizedPhone, smsBody)) as {
+      const response = (await sendTransactionalSms(
+        normalizedPhone,
+        smsBody,
+      )) as {
         SMSMessageData?: { Recipients?: Array<{ messageId?: string }> };
       };
       return {
         channel,
         status: "SENT",
-        providerMessageId: response.SMSMessageData?.Recipients?.[0]?.messageId ?? null,
+        providerMessageId:
+          response.SMSMessageData?.Recipients?.[0]?.messageId ?? null,
         error: null,
-        payloadSnapshot: { provider: "africasTalking", providerResponse: response },
+        payloadSnapshot: {
+          provider: "africasTalking",
+          providerResponse: response,
+        },
       };
     } catch (error) {
       return {
@@ -220,7 +468,10 @@ export async function sendLppReminderChannelNotification(
         status: "SENT",
         providerMessageId: response.messages?.[0]?.id ?? null,
         error: null,
-        payloadSnapshot: { provider: "whatsapp_business", providerResponse: response },
+        payloadSnapshot: {
+          provider: "whatsapp_business",
+          providerResponse: response,
+        },
       };
     } catch (error) {
       return {
@@ -256,7 +507,8 @@ export async function sendLppReminderChannelNotification(
     return {
       channel,
       status: "SENT",
-      providerMessageId: typeof response?.messageId === "string" ? response.messageId : null,
+      providerMessageId:
+        typeof response?.messageId === "string" ? response.messageId : null,
       error: null,
       payloadSnapshot: { provider: "email", providerResponse: response },
     };
