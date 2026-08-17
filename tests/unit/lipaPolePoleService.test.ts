@@ -1,6 +1,9 @@
 jest.mock("server-only", () => ({}), { virtual: true });
 
-import { pickNextRoundRobinAgent } from "@/lib/lipaPolePoleService";
+import {
+  assertLppEligibleForPermanentDelete,
+  pickNextRoundRobinAgent,
+} from "@/lib/lipaPolePoleService";
 
 describe("lipaPolePoleService", () => {
   test("round robin starts from the first sorted eligible agent", () => {
@@ -38,5 +41,33 @@ describe("lipaPolePoleService", () => {
     );
 
     expect(next.id).toBe("a");
+  });
+
+  test("permanent delete requires the exact LPP reference", () => {
+    expect(() =>
+      assertLppEligibleForPermanentDelete({
+        reference: "LPP-2026-000123",
+        confirmation: "LPP-2026-000124",
+      }),
+    ).toThrow("LPP_DELETE_CONFIRMATION_MISMATCH");
+  });
+
+  test("permanent delete blocks converted or fulfilled accounts", () => {
+    expect(() =>
+      assertLppEligibleForPermanentDelete({
+        reference: "LPP-2026-000123",
+        confirmation: "LPP-2026-000123",
+        convertedReceiptId: "receipt-1",
+      }),
+    ).toThrow("LPP_DELETE_LINKED_TRANSACTION");
+  });
+
+  test("permanent delete accepts an unconverted test account", () => {
+    expect(() =>
+      assertLppEligibleForPermanentDelete({
+        reference: "LPP-2026-000123",
+        confirmation: "LPP-2026-000123",
+      }),
+    ).not.toThrow();
   });
 });

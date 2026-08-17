@@ -64,6 +64,12 @@ export default async function AdminReceiptsPage({
         <div className="w-full px-4 py-6 lg:px-8 xl:px-12">
           <div className="mb-4 flex flex-wrap gap-2">
             <Link
+              href="/admin/lipa-pole-pole"
+              className="rounded-full border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-amber-100 transition hover:border-amber-300"
+            >
+              Lipa Pole Pole Accounts
+            </Link>
+            <Link
               href="/admin/quotation-center"
               className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-400"
             >

@@ -490,6 +490,8 @@ export default function LipaPolePoleAdminClient({
   const [isConvertingPos, setIsConvertingPos] = useState(false);
   const [isConvertingProject, setIsConvertingProject] = useState(false);
   const [isReleasing, setIsReleasing] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [canDeleteAccounts, setCanDeleteAccounts] = useState(false);
   const [isSubmittingFollowUp, setIsSubmittingFollowUp] = useState(false);
   const [isSubmittingPromise, setIsSubmittingPromise] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(embeddedCreateMode);
@@ -581,9 +583,19 @@ export default function LipaPolePoleAdminClient({
           typeof json?.user?.id === "string" && json.user.id.trim()
             ? json.user.id.trim()
             : null;
-        if (!cancelled) setDefaultStaffId(sessionUserId);
+        const sessionRole =
+          typeof json?.user?.role === "string"
+            ? json.user.role.trim().toUpperCase()
+            : "";
+        if (!cancelled) {
+          setDefaultStaffId(sessionUserId);
+          setCanDeleteAccounts(sessionRole === "ADMIN");
+        }
       } catch {
-        if (!cancelled) setDefaultStaffId(null);
+        if (!cancelled) {
+          setDefaultStaffId(null);
+          setCanDeleteAccounts(false);
+        }
       }
     })();
     return () => {
@@ -1146,6 +1158,45 @@ export default function LipaPolePoleAdminClient({
     }
   }
 
+  async function handleDeleteAccount() {
+    const account = detail?.account;
+    if (!account || !canDeleteAccounts || isDeletingAccount) return;
+
+    const confirmation = window.prompt(
+      `Permanently delete test account ${account.reference} and all of its Lipa Pole Pole payments, installments, and activity?\n\nType ${account.reference} to confirm.`,
+    );
+    if (confirmation === null) return;
+    if (confirmation.trim() !== account.reference) {
+      setBanner({
+        tone: "error",
+        text: `Deletion cancelled. Enter the exact reference ${account.reference}.`,
+      });
+      return;
+    }
+
+    setIsDeletingAccount(true);
+    setBanner(null);
+    try {
+      await readJson(`/api/lipa-pole-pole/${account.id}`, {
+        method: "DELETE",
+        body: JSON.stringify({ confirmation: confirmation.trim() }),
+      });
+      setDetail(null);
+      setSelectedId("");
+      setExpandedLppId("");
+      setItems((current) => current.filter((item) => item.id !== account.id));
+      await refreshList();
+      setBanner({
+        tone: "success",
+        text: `${account.reference} and its Lipa Pole Pole records were permanently deleted.`,
+      });
+    } catch (error) {
+      showError(error);
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  }
+
   async function handleCreateFollowUp(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedId) return;
@@ -1606,8 +1657,11 @@ export default function LipaPolePoleAdminClient({
                                   onReversePayment={handleReversePayment}
                                   onVerifyPayment={(paymentId) => void handleReviewPayment(paymentId, "VERIFY")}
                                   onRejectPayment={(paymentId) => void handleReviewPayment(paymentId, "REJECT")}
+                                  onDeleteAccount={() => void handleDeleteAccount()}
                                   isConvertingPos={isConvertingPos}
                                   isConvertingProject={isConvertingProject}
+                                  isDeletingAccount={isDeletingAccount}
+                                  canDeleteAccounts={canDeleteAccounts}
                                 />
                               )}
                             </td>
@@ -2166,8 +2220,11 @@ function ExpandedRowDetails({
   onReversePayment,
   onVerifyPayment,
   onRejectPayment,
+  onDeleteAccount,
   isConvertingPos,
   isConvertingProject,
+  isDeletingAccount,
+  canDeleteAccounts,
 }: {
   detail: LppDetail;
   customerContext: Customer360Context | null;
@@ -2180,8 +2237,11 @@ function ExpandedRowDetails({
   onReversePayment: (paymentId: string) => void;
   onVerifyPayment: (paymentId: string) => void;
   onRejectPayment: (paymentId: string) => void;
+  onDeleteAccount: () => void;
   isConvertingPos: boolean;
   isConvertingProject: boolean;
+  isDeletingAccount: boolean;
+  canDeleteAccounts: boolean;
 }) {
   const account = detail.account;
   const due = describeDueDate(account.expectedCompletionDate);
@@ -2579,6 +2639,18 @@ function ExpandedRowDetails({
           {(account.convertedReceiptId || account.convertedProjectId) && !account.fulfilledAt ? (
             <button type="button" className="inline-flex items-center justify-center rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15" onClick={() => onOpenAction("RELEASE")}>
               Release Product
+            </button>
+          ) : null}
+
+          {canDeleteAccounts && !account.convertedReceiptId && !account.convertedProjectId && !account.fulfilledAt ? (
+            <button
+              type="button"
+              className="ml-auto inline-flex items-center justify-center rounded-2xl border border-rose-500/35 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-100 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={onDeleteAccount}
+              disabled={isDeletingAccount}
+              title="Permanently delete this test Lipa Pole Pole account"
+            >
+              {isDeletingAccount ? "Deleting..." : "Delete Test Account"}
             </button>
           ) : null}
         </div>

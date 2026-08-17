@@ -901,6 +901,73 @@ function ensureLppEligibleForConversion(
   }
 }
 
+export function assertLppEligibleForPermanentDelete(input: {
+  reference: string;
+  confirmation: string;
+  convertedReceiptId?: string | null;
+  convertedProjectId?: string | null;
+  fulfilledAt?: Date | string | null;
+}) {
+  if (input.confirmation.trim() !== input.reference) {
+    throw new Error("LPP_DELETE_CONFIRMATION_MISMATCH");
+  }
+
+  if (input.convertedReceiptId || input.convertedProjectId || input.fulfilledAt) {
+    throw new Error("LPP_DELETE_LINKED_TRANSACTION");
+  }
+}
+
+export async function deleteTestLipaPolePoleAccount(
+  input: {
+    lipaPolePoleId: string;
+    confirmation: string;
+    actorId?: string | null;
+  },
+  db: DbClient = prisma,
+) {
+  return withLppTransaction(db, async (tx) => {
+    const lpp = await lockLppOrThrow(tx, input.lipaPolePoleId);
+
+    assertLppEligibleForPermanentDelete({
+      reference: lpp.reference,
+      confirmation: input.confirmation,
+      convertedReceiptId: lpp.convertedReceiptId,
+      convertedProjectId: lpp.convertedProjectId,
+      fulfilledAt: lpp.fulfilledAt,
+    });
+
+    const [items, payments] = await Promise.all([
+      getLppItems(tx, lpp.id),
+      getLppPayments(tx, lpp.id),
+    ]);
+
+    await writeActionLog(tx, {
+      actorId: input.actorId,
+      entity: "LipaPolePole",
+      entityId: lpp.id,
+      action: "DELETE_TEST_ACCOUNT",
+      before: {
+        reference: lpp.reference,
+        customerId: lpp.customerId,
+        status: lpp.status,
+        agreedTotal: Number(lpp.agreedTotal),
+        itemCount: items.length,
+        paymentCount: payments.length,
+        createdAt: lpp.createdAt.toISOString(),
+      },
+      after: { deleted: true },
+    });
+
+    const deleted = await tx.$executeRaw(Prisma.sql`
+      DELETE FROM "LipaPolePole"
+      WHERE "id" = ${lpp.id}
+    `);
+    if (deleted !== 1) throw new Error("LPP_DELETE_FAILED");
+
+    return { id: lpp.id, reference: lpp.reference };
+  });
+}
+
 async function isLppFinalTransactionFullyPaid(
   lpp: RawLppRow,
   db: DbClient = prisma,

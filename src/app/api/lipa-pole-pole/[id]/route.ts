@@ -1,5 +1,8 @@
 import { getActorId, noStoreJson, requireRole } from "@/lib/api";
-import { getSerializedLppAccountDetail } from "@/lib/lipaPolePoleService";
+import {
+  deleteTestLipaPolePoleAccount,
+  getSerializedLppAccountDetail,
+} from "@/lib/lipaPolePoleService";
 
 export const dynamic = "force-dynamic";
 
@@ -32,5 +35,47 @@ export async function GET(_req: Request, context: ParamsContext) {
     const message = error instanceof Error ? error.message : "Failed to load LPP account";
     const status = message === "LPP_NOT_FOUND" ? 404 : 500;
     return noStoreJson({ error: message }, { status });
+  }
+}
+
+export async function DELETE(req: Request, context: ParamsContext) {
+  const auth = await requireRole("ADMIN");
+  if (!auth.ok) return auth.res;
+
+  const actorId =
+    (auth.session?.user as { id?: string } | undefined)?.id ??
+    (await getActorId());
+  const { id } = await resolveParams(context);
+  const body = (await req.json().catch(() => null)) as
+    | { confirmation?: unknown }
+    | null;
+  const confirmation =
+    typeof body?.confirmation === "string" ? body.confirmation : "";
+
+  try {
+    const deleted = await deleteTestLipaPolePoleAccount({
+      lipaPolePoleId: id,
+      confirmation,
+      actorId,
+    });
+    return noStoreJson({ ok: true, deleted });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to delete LPP account";
+    const status =
+      message === "LPP_NOT_FOUND"
+        ? 404
+        : message === "LPP_DELETE_CONFIRMATION_MISMATCH"
+          ? 400
+          : message === "LPP_DELETE_LINKED_TRANSACTION"
+            ? 409
+            : 500;
+    const publicMessage =
+      message === "LPP_DELETE_CONFIRMATION_MISMATCH"
+        ? "The confirmation reference does not match this Lipa Pole Pole account."
+        : message === "LPP_DELETE_LINKED_TRANSACTION"
+          ? "This account is linked to a receipt, project, or completed fulfillment and cannot be permanently deleted."
+          : message;
+    return noStoreJson({ error: publicMessage }, { status });
   }
 }
