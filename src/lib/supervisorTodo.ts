@@ -1,4 +1,3 @@
-import { Prisma } from "@prisma/client";
 import { getUnpricedDailySalesForCurrentPeriod } from "@/lib/marketingUnpricedSales";
 import { prisma } from "@/lib/prisma";
 import { formatNairobiDate, mondayToSundayNairobiWindow } from "@/lib/weekWindow";
@@ -18,21 +17,7 @@ export type SupervisorTodoTask = {
   contextLabel?: string;
 };
 
-export type SupervisorTodoItem = SupervisorTodoTask & {
-  readyToConfirm: boolean;
-};
-
-const TODO_ENTITY = "SupervisorTodo";
-const TODO_CREATED = "TODO_CREATED";
-const TODO_COMPLETED = "TODO_COMPLETED";
-
-function isTaskSnapshot(value: unknown): value is SupervisorTodoTask {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const task = value as Record<string, unknown>;
-  return ["key", "category", "priority", "title", "description", "href", "actionLabel", "createdAt"].every(
-    (field) => typeof task[field] === "string",
-  );
-}
+export type SupervisorTodoItem = SupervisorTodoTask;
 
 async function getPricingTasks(): Promise<SupervisorTodoTask[]> {
   const sales = (await getUnpricedDailySalesForCurrentPeriod()).filter((sale) => sale.source === "support");
@@ -208,73 +193,8 @@ export async function buildLiveSupervisorTodos(now = new Date()) {
     getJumiaTasks(now),
     getLipaPolePoleTasks(),
   ]);
-  return queues.flat();
-}
-
-export async function syncSupervisorTodos(actorId: string) {
-  const liveTasks = await buildLiveSupervisorTodos();
-  const logs = await prisma.actionLog.findMany({
-    where: { entity: TODO_ENTITY, action: { in: [TODO_CREATED, TODO_COMPLETED] } },
-    select: { entityId: true, action: true, after: true, createdAt: true },
-    orderBy: { createdAt: "desc" },
-    take: 1000,
-  });
-  const completedKeys = new Set(logs.filter((log) => log.action === TODO_COMPLETED).map((log) => log.entityId));
-  const createdByKey = new Map<string, SupervisorTodoTask>();
-  for (const log of logs) {
-    if (log.action === TODO_CREATED && !createdByKey.has(log.entityId) && isTaskSnapshot(log.after)) {
-      createdByKey.set(log.entityId, log.after);
-    }
-  }
-
-  const newTasks = liveTasks.filter((task) => !createdByKey.has(task.key) && !completedKeys.has(task.key));
-  if (newTasks.length) {
-    await prisma.actionLog.createMany({
-      data: newTasks.map((task) => ({
-        actorId,
-        entity: TODO_ENTITY,
-        entityId: task.key,
-        action: TODO_CREATED,
-        after: task as unknown as Prisma.InputJsonValue,
-      })),
-    });
-    for (const task of newTasks) createdByKey.set(task.key, task);
-  }
-
-  const liveKeys = new Set(liveTasks.map((task) => task.key));
   const priorityOrder: Record<SupervisorTodoPriority, number> = { URGENT: 0, HIGH: 1, NORMAL: 2 };
-  const items = Array.from(createdByKey.values())
-    .filter((task) => !completedKeys.has(task.key))
-    .map<SupervisorTodoItem>((task) => ({ ...task, readyToConfirm: !liveKeys.has(task.key) }))
+  return queues
+    .flat()
     .sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority] || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-
-  return items;
-}
-
-export async function confirmSupervisorTodo(input: { actorId: string; key: string }) {
-  const liveTasks = await buildLiveSupervisorTodos();
-  if (liveTasks.some((task) => task.key === input.key)) {
-    throw new Error("TODO_STILL_PENDING");
-  }
-  const existing = await prisma.actionLog.findFirst({
-    where: { entity: TODO_ENTITY, entityId: input.key, action: TODO_CREATED },
-    select: { id: true },
-  });
-  if (!existing) throw new Error("TODO_NOT_FOUND");
-
-  const alreadyCompleted = await prisma.actionLog.findFirst({
-    where: { entity: TODO_ENTITY, entityId: input.key, action: TODO_COMPLETED },
-    select: { id: true },
-  });
-  if (!alreadyCompleted) {
-    await prisma.actionLog.create({
-      data: {
-        actorId: input.actorId,
-        entity: TODO_ENTITY,
-        entityId: input.key,
-        action: TODO_COMPLETED,
-        after: { confirmedAt: new Date().toISOString() },
-      },
-    });
-  }
 }

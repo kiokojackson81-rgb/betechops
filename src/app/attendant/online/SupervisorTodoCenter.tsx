@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { BellRing, CheckCheck, CircleAlert, Clock3, RefreshCw } from "lucide-react";
+import { BellRing, CheckCheck, Clock3, RefreshCw } from "lucide-react";
 import type { SupervisorTodoCategory, SupervisorTodoItem } from "@/lib/supervisorTodo";
 
 type Filter = "ALL" | SupervisorTodoCategory;
@@ -23,8 +23,7 @@ export default function SupervisorTodoCenter({ impersonateId }: { impersonateId:
   const [items, setItems] = useState<SupervisorTodoItem[]>([]);
   const [filter, setFilter] = useState<Filter>("ALL");
   const [loading, setLoading] = useState(true);
-  const [confirmingKey, setConfirmingKey] = useState("");
-  const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const loadItems = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -34,8 +33,9 @@ export default function SupervisorTodoCenter({ impersonateId }: { impersonateId:
       const body = await response.json().catch(() => null);
       if (!response.ok) throw new Error(body?.error || "Failed to load supervisor tasks.");
       setItems(Array.isArray(body?.items) ? body.items : []);
+      setErrorMessage("");
     } catch (error) {
-      setMessage({ tone: "error", text: error instanceof Error ? error.message : "Failed to load supervisor tasks." });
+      setErrorMessage(error instanceof Error ? error.message : "Failed to load supervisor tasks.");
     } finally {
       if (!quiet) setLoading(false);
     }
@@ -43,36 +43,20 @@ export default function SupervisorTodoCenter({ impersonateId }: { impersonateId:
 
   useEffect(() => {
     void loadItems();
-    const intervalId = window.setInterval(() => void loadItems(true), 60_000);
-    return () => window.clearInterval(intervalId);
+    const refresh = () => void loadItems(true);
+    const intervalId = window.setInterval(refresh, 15_000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", refresh);
+    };
   }, [loadItems]);
-
-  const confirmDone = async (item: SupervisorTodoItem) => {
-    setConfirmingKey(item.key);
-    setMessage(null);
-    try {
-      const response = await fetch("/api/attendant/online/supervisor-todos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: item.key, impersonateId: impersonateId || undefined }),
-      });
-      const body = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(body?.error || "Failed to confirm task.");
-      setItems((current) => current.filter((entry) => entry.key !== item.key));
-      setMessage({ tone: "success", text: `Confirmed: ${item.title}` });
-    } catch (error) {
-      setMessage({ tone: "error", text: error instanceof Error ? error.message : "Failed to confirm task." });
-    } finally {
-      setConfirmingKey("");
-    }
-  };
 
   const counts = items.reduce<Record<SupervisorTodoCategory, number>>(
     (totals, item) => ({ ...totals, [item.category]: totals[item.category] + 1 }),
     { PRICING: 0, JUMIA: 0, LIPA_POLE_POLE: 0 },
   );
   const visibleItems = filter === "ALL" ? items : items.filter((item) => item.category === filter);
-  const readyCount = items.filter((item) => item.readyToConfirm).length;
 
   return (
     <section className="overflow-hidden rounded-[28px] border border-cyan-400/20 bg-[#091223] shadow-2xl shadow-black/20">
@@ -84,7 +68,7 @@ export default function SupervisorTodoCenter({ impersonateId }: { impersonateId:
             </div>
             <h2 className="mt-2 text-2xl font-semibold text-white">Today&apos;s operational to-do list</h2>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-400">
-              Live pricing, Jumia weekly, and Lipa Pole Pole work. Tasks can only be confirmed after the linked workflow is complete.
+              Live pricing, Jumia weekly, and Lipa Pole Pole work. Completed tasks disappear automatically when their workflow is resolved.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -93,8 +77,8 @@ export default function SupervisorTodoCenter({ impersonateId }: { impersonateId:
               <div className="mt-1 text-2xl font-semibold text-white">{items.length}</div>
             </div>
             <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3">
-              <div className="text-[11px] uppercase tracking-[0.18em] text-emerald-200/70">Ready to confirm</div>
-              <div className="mt-1 text-2xl font-semibold text-emerald-200">{readyCount}</div>
+              <div className="text-[11px] uppercase tracking-[0.18em] text-emerald-200/70">Automatic sync</div>
+              <div className="mt-1 text-sm font-semibold text-emerald-200">Every 15 seconds</div>
             </div>
             <button
               type="button"
@@ -128,9 +112,9 @@ export default function SupervisorTodoCenter({ impersonateId }: { impersonateId:
           ))}
         </div>
 
-        {message ? (
-          <div className={`mt-3 rounded-2xl border px-4 py-3 text-sm ${message.tone === "success" ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-100" : "border-rose-400/25 bg-rose-400/10 text-rose-100"}`}>
-            {message.text}
+        {errorMessage ? (
+          <div className="mt-3 rounded-2xl border border-rose-400/25 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">
+            {errorMessage}
           </div>
         ) : null}
 
@@ -144,15 +128,15 @@ export default function SupervisorTodoCenter({ impersonateId }: { impersonateId:
               <div className="mt-1 text-sm text-slate-400">The queue will update automatically when new work arrives.</div>
             </div>
           ) : visibleItems.map((item) => (
-            <article key={item.key} className={`rounded-3xl border p-4 ${item.readyToConfirm ? "border-emerald-400/25 bg-emerald-400/5" : item.priority === "URGENT" ? "border-rose-400/25 bg-rose-400/5" : "border-white/10 bg-white/[0.03]"}`}>
+            <article key={item.key} className={`rounded-3xl border p-4 ${item.priority === "URGENT" ? "border-rose-400/25 bg-rose-400/5" : "border-white/10 bg-white/[0.03]"}`}>
               <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-300">
                       {categoryLabels[item.category]}
                     </span>
-                    <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${item.readyToConfirm ? "bg-emerald-400/15 text-emerald-200" : item.priority === "URGENT" ? "bg-rose-400/15 text-rose-200" : item.priority === "HIGH" ? "bg-amber-400/15 text-amber-100" : "bg-slate-400/10 text-slate-300"}`}>
-                      {item.readyToConfirm ? "Ready to confirm" : item.priority}
+                    <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${item.priority === "URGENT" ? "bg-rose-400/15 text-rose-200" : item.priority === "HIGH" ? "bg-amber-400/15 text-amber-100" : "bg-slate-400/10 text-slate-300"}`}>
+                      {item.priority}
                     </span>
                     {item.contextLabel ? <span className="text-xs text-slate-500">{item.contextLabel}</span> : null}
                   </div>
@@ -163,22 +147,9 @@ export default function SupervisorTodoCenter({ impersonateId }: { impersonateId:
                     {new Date(item.createdAt).toLocaleString("en-KE", { dateStyle: "medium", timeStyle: "short" })}
                   </div>
                 </div>
-                <div className="flex shrink-0 flex-wrap gap-2">
-                  {!item.readyToConfirm ? (
-                    <Link href={withImpersonation(item.href, impersonateId)} className="inline-flex items-center justify-center rounded-2xl bg-cyan-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300">
-                      {item.actionLabel}
-                    </Link>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => void confirmDone(item)}
-                    disabled={confirmingKey === item.key}
-                    className={`inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-2.5 text-sm font-semibold transition disabled:opacity-60 ${item.readyToConfirm ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-100 hover:bg-emerald-400/15" : "border-white/10 text-slate-300 hover:bg-white/5"}`}
-                  >
-                    {item.readyToConfirm ? <CheckCheck className="h-4 w-4" /> : <CircleAlert className="h-4 w-4" />}
-                    {confirmingKey === item.key ? "Checking..." : "Confirm done"}
-                  </button>
-                </div>
+                <Link href={withImpersonation(item.href, impersonateId)} className="inline-flex shrink-0 items-center justify-center rounded-2xl bg-cyan-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300">
+                  {item.actionLabel}
+                </Link>
               </div>
             </article>
           ))}
