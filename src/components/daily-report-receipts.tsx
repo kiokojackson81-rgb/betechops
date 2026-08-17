@@ -655,7 +655,7 @@ export default function DailyReportReceiptsPanel({
                 key={receipt.id}
                 className="rounded-[18px] border border-white/10 bg-white/[0.03] p-3 sm:rounded-[22px] sm:p-4"
               >
-                <div className="grid gap-3 lg:grid-cols-[140px_1.3fr_1fr_160px_140px_150px] lg:items-center">
+                <div className="grid gap-4 md:grid-cols-2 md:items-start xl:grid-cols-[80px_minmax(190px,1.4fr)_minmax(120px,0.75fr)_minmax(135px,0.8fr)_minmax(150px,0.9fr)_minmax(150px,auto)] xl:items-center">
                   <div>
                     <span
                       className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${
@@ -667,12 +667,12 @@ export default function DailyReportReceiptsPanel({
                       {receipt.isPodDelivery ? "POD" : "POS"}
                     </span>
                   </div>
-                  <div className="min-w-0">
-                    <Link href={customerProfileHref} className="break-words font-semibold text-white transition hover:text-cyan-200">
+                  <div className="min-w-0 md:pr-3">
+                    <Link href={customerProfileHref} className="line-clamp-2 font-semibold leading-5 text-white transition hover:text-cyan-200">
                       {receipt.customerName ?? "-"}
                     </Link>
-                    <div className="mt-1 text-xs text-slate-400">{receipt.customerPhone || "-"}</div>
-                    <div className="mt-1 text-xs text-slate-500">{receipt.orderRef ?? receipt.receiptNumber ?? receipt.docType ?? receipt.id}</div>
+                    <div className="mt-1 break-normal text-xs text-slate-400">{receipt.customerPhone || "-"}</div>
+                    <div className="mt-1 break-all text-xs text-slate-500">{receipt.orderRef ?? receipt.receiptNumber ?? receipt.docType ?? receipt.id}</div>
                   </div>
                   <div className="text-sm text-slate-300">
                     <div>{receipt.docType ?? "Receipt"}</div>
@@ -705,7 +705,7 @@ export default function DailyReportReceiptsPanel({
                     ) : null}
                     <div className="mt-2 text-xs text-slate-500">{formatDateTime(receipt.createdAt)}</div>
                   </div>
-                  <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 lg:flex lg:flex-wrap lg:justify-end">
+                  <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 md:col-span-2 xl:col-span-1 xl:flex xl:flex-wrap xl:justify-end">
                     {receipt.isPodDelivery && String(receipt.podDeliveryStatus ?? "").toLowerCase() === "pending" && receipt.source === "pos" ? (
                       <button
                         type="button"
