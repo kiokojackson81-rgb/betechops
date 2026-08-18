@@ -18,6 +18,7 @@ import {
   ShoppingBag,
   Store,
   UsersRound,
+  WalletCards,
 } from "lucide-react";
 
 type Identity = {
@@ -35,6 +36,9 @@ const initialIdentity: Identity = {
 function pageHeading(pathname: string) {
   if (pathname.includes("/products")) {
     return ["Website Products", "Add, edit, publish, price, and maintain products shown on the Betech website."];
+  }
+  if (pathname.includes("/earnings")) {
+    return ["Earnings & Payroll", "Review salary, commissions, deductions, month comparisons, reports, and payslips."];
   }
   if (pathname.includes("/agent-orders")) {
     return ["Agent Orders", "Review, process, and follow up agent-assisted customer orders."];
@@ -100,6 +104,7 @@ export default function MarketingWorkspaceShell({ children }: { children: ReactN
     agentOrders: withImpersonation("/marketing/agent-orders"),
     quotations: withImpersonation("/marketing/receipts?tab=quotations"),
     products: withImpersonation("/marketing/products"),
+    earnings: withImpersonation("/marketing/earnings"),
     createReceipt: withImpersonation("/receipts?view=create"),
     voice: withImpersonation("/attendant/voice?tab=followups"),
     wellness: withImpersonation("/attendant/wellness"),
@@ -111,6 +116,7 @@ export default function MarketingWorkspaceShell({ children }: { children: ReactN
     if (key === "dashboard") return pathname === "/marketing/tracker";
     if (key === "agentOrders") return pathname.includes("/agent-orders");
     if (key === "products") return pathname.includes("/products");
+    if (key === "earnings") return pathname.includes("/earnings");
     if (key === "pos") return pathname.includes("/receipts") && (currentTab === "pos" || !currentTab);
     if (key === "webOrders") return pathname.includes("/receipts") && currentTab === "web-orders";
     if (key === "quotations") return pathname.includes("/receipts") && currentTab === "quotations";
@@ -182,6 +188,7 @@ export default function MarketingWorkspaceShell({ children }: { children: ReactN
             <div>
               <div className="mb-2 px-3 text-[11px] uppercase tracking-[0.24em] text-slate-500">Reports & payroll</div>
               <div className="space-y-1">
+                <Link href={links.earnings} className={navClass(isActive("earnings"))}><WalletCards className="h-4 w-4 text-emerald-200" />Earnings & payroll</Link>
                 <a href={links.report} download className={navClass()}><FileDown className="h-4 w-4" />Performance report</a>
                 <a href={links.payslip} download className={navClass()}><FileDown className="h-4 w-4 text-amber-200" />Download payslip</a>
               </div>
@@ -236,6 +243,7 @@ export default function MarketingWorkspaceShell({ children }: { children: ReactN
                 <Link href={links.createReceipt} className="rounded-xl border border-white/10 px-3 py-2 text-center text-xs">Create receipt</Link>
                 <Link href={links.voice} className="rounded-xl border border-white/10 px-3 py-2 text-center text-xs">Follow-ups</Link>
                 <Link href={links.wellness} className="rounded-xl border border-white/10 px-3 py-2 text-center text-xs">Wellness</Link>
+                <Link href={links.earnings} className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 px-3 py-2 text-center text-xs text-emerald-100">Earnings</Link>
                 <a href={links.report} download className="rounded-xl border border-cyan-400/20 bg-cyan-400/5 px-3 py-2 text-center text-xs text-cyan-100">Report PDF</a>
                 <a href={links.payslip} download className="rounded-xl border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-center text-xs text-amber-100">Payslip PDF</a>
               </div>
