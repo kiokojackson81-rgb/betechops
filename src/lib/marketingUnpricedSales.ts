@@ -10,6 +10,9 @@ export type PendingReceiptItem = {
   productName: string;
   buyingPrice: number | null;
   catalogProductId?: string | null;
+  quantity?: number;
+  unitSellingPrice?: number;
+  sellingTotal?: number;
 };
 
 export type UnpricedSale = {
@@ -41,6 +44,7 @@ type LinkedReceiptOrderItem = {
   hasCost: boolean;
   resolvedBuyingPrice: number;
   quantity: number;
+  unitSellingPrice: number;
 };
 
 type LinkedReceiptContext = {
@@ -52,6 +56,8 @@ type LinkedReceiptPayloadItem = {
   name: string;
   productId: string | null;
   isDeliveryFee: boolean;
+  quantity: number;
+  unitSellingPrice: number;
 };
 
 function isMeaningfulProductName(value: string | null | undefined): value is string {
@@ -185,6 +191,7 @@ export async function getUnpricedDailySalesForRange({
               select: {
                 productId: true,
                 quantity: true,
+                sellingPrice: true,
                 product: { select: { name: true, lastBuyingPrice: true, variableCost: true } },
                 orderCosts: {
                   orderBy: { createdAt: "desc" },
@@ -278,6 +285,8 @@ export async function getUnpricedDailySalesForRange({
           name,
           productId: rawProductId.trim() || null,
           isDeliveryFee: Boolean(item?.isDeliveryFee),
+          quantity: Math.max(1, Math.trunc(Number(item?.quantity ?? 1) || 1)),
+          unitSellingPrice: Number(item?.unitPrice ?? item?.sellingPrice ?? 0) || 0,
         };
       })
       .filter((item) => isMeaningfulProductName(item.name));
@@ -298,6 +307,7 @@ export async function getUnpricedDailySalesForRange({
           hasCost: resolvedBuyingPrice > 0 || (item.profitSnapshots?.length ?? 0) > 0,
           resolvedBuyingPrice,
           quantity: Math.max(1, Number(item.quantity ?? 1)),
+          unitSellingPrice: Number(item.sellingPrice ?? 0),
         };
       })
       .filter((item) => isMeaningfulProductName(item.name));
@@ -460,11 +470,22 @@ export async function getUnpricedDailySalesForRange({
       ];
       const resolvedReceiptItems = pendingItems.map((item, index) => {
         const resolvedName = isMeaningfulProductName(item.productName) ? item.productName.trim() : fallbackItemNames[index] || fallbackItemNames[0] || "Item";
+        const orderedIndex = receiptItemsOrdered.findIndex((candidate) => candidate.id === item.id);
+        const payloadItem = payloadItemsExcludingDelivery[orderedIndex] ?? null;
+        const linkedOrderItem =
+          linkedReceiptItems.find(
+            (candidate) => normalizeProductName(candidate.name) === normalizeProductName(resolvedName),
+          ) ?? linkedReceiptItems[orderedIndex] ?? null;
+        const quantity = payloadItem?.quantity ?? linkedOrderItem?.quantity ?? 1;
+        const unitSellingPrice = payloadItem?.unitSellingPrice ?? linkedOrderItem?.unitSellingPrice ?? 0;
         return {
           id: item.id,
           productName: resolvedName,
           buyingPrice: item.buyingPrice ? Number(item.buyingPrice) : null,
           catalogProductId: catalogProductIdByReceiptItemId.get(item.id) ?? null,
+          quantity,
+          unitSellingPrice,
+          sellingTotal: quantity * unitSellingPrice,
         };
       });
       return {

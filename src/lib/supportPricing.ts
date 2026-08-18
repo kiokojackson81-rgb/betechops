@@ -45,6 +45,7 @@ export const decodeSupportSaleProduct = (value: string | null | undefined) =>
 export function allocateSupportSellingShares(
   receiptItems: ReceiptPayloadItem[],
   supportItems: SupportReceiptItemLike[],
+  receiptSellingTotal?: number,
 ): Map<string, number> {
   const deliveryTotal = receiptItems
     .filter((item) => isDeliveryFeePayloadItem(item))
@@ -107,6 +108,27 @@ export function allocateSupportSellingShares(
 
   if (deliveryTarget && deliveryTotal > 0) {
     shares.set(deliveryTarget.id, (shares.get(deliveryTarget.id) ?? 0) + deliveryTotal);
+  }
+
+  const targetTotal = Math.max(0, Math.round(toNumber(receiptSellingTotal)));
+  const allocatedTotal = [...shares.values()].reduce((sum, value) => sum + value, 0);
+  if (supportItems.length > 0 && targetTotal > 0 && Math.round(allocatedTotal) !== targetTotal) {
+    const weights = supportItems.map((item) => Math.max(0, shares.get(item.id) ?? 0));
+    const weightTotal = weights.reduce((sum, value) => sum + value, 0);
+    let remainder = targetTotal;
+
+    supportItems.forEach((item, index) => {
+      const share =
+        index === supportItems.length - 1
+          ? remainder
+          : Math.floor(
+              weightTotal > 0
+                ? (weights[index] / weightTotal) * targetTotal
+                : targetTotal / supportItems.length,
+            );
+      shares.set(item.id, share);
+      remainder -= share;
+    });
   }
 
   return shares;

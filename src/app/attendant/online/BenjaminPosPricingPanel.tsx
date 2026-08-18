@@ -17,32 +17,6 @@ function getDraftKey(sale: UnpricedSale) {
   return `${sale.source}:${sale.id}`;
 }
 
-function allocateReceiptBuyingPrices(
-  total: number,
-  items: Array<{ id: string; saleValue?: number }>,
-) {
-  const roundedTotal = Math.max(0, Math.round(total));
-  if (!items.length || roundedTotal <= 0) return [];
-  const weights = items.map((item) => Math.max(0, item.saleValue ?? 0));
-  const weightSum = weights.reduce((sum, value) => sum + value, 0);
-  let remainder = roundedTotal;
-  const allocations = items.map((item, index) => {
-    const value =
-      weightSum > 0
-        ? Math.floor((weights[index] / weightSum) * roundedTotal)
-        : Math.floor(roundedTotal / items.length);
-    remainder -= value;
-    return { id: item.id, value };
-  });
-  let pointer = 0;
-  while (remainder > 0 && allocations.length > 0) {
-    allocations[pointer % allocations.length].value += 1;
-    remainder -= 1;
-    pointer += 1;
-  }
-  return allocations;
-}
-
 export default function BenjaminPosPricingPanel({
   onQueueEmpty,
 }: {
@@ -97,30 +71,32 @@ export default function BenjaminPosPricingPanel({
 
   const handlePriceSupportReceipt = async (sale: UnpricedSale) => {
     const draftKey = getDraftKey(sale);
-    const draft = buyingDrafts[draftKey];
-    const saveToCatalog = Boolean(saveToCatalogDrafts[draftKey]);
-    const numeric = Number(draft);
-    if (!draft || Number.isNaN(numeric) || numeric <= 0) {
-      showToast("Enter a valid buying price", "error");
-      return;
-    }
     const items = (sale.receiptItems as PendingReceiptItem[] | undefined) ?? [];
     if (!items.length) {
       showToast("No receipt items available for pricing", "error");
       return;
     }
 
-    const allocations = allocateReceiptBuyingPrices(Math.round(numeric), items as Array<{ id: string; saleValue?: number }>);
+    const enteredItems = items
+      .map((item) => ({ item, unitBuyingPrice: Number(buyingDrafts[item.id]) }))
+      .filter(({ unitBuyingPrice }) => Number.isFinite(unitBuyingPrice) && unitBuyingPrice > 0);
+    if (!enteredItems.length) {
+      showToast("Enter a unit buying price for at least one item", "error");
+      return;
+    }
+
     setPricingKey(draftKey);
     try {
-      for (const { id, value } of allocations) {
+      for (const { item, unitBuyingPrice } of enteredItems) {
+        const quantity = Math.max(1, Number(item.quantity ?? 1));
         const res = await fetch("/api/support/price-sale", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            receiptItemId: id,
-            buyingPrice: value,
-            saveToCatalog,
+            receiptItemId: item.id,
+            buyingPrice: Math.round(unitBuyingPrice * quantity),
+            unitBuyingPrice: Math.round(unitBuyingPrice),
+            saveToCatalog: Boolean(saveToCatalogDrafts[item.id]),
           }),
           credentials: "same-origin",
         });
@@ -130,21 +106,24 @@ export default function BenjaminPosPricingPanel({
         }
       }
 
-      setSales((prev) => prev.filter((row) => row.id !== sale.id));
       setBuyingDrafts((prev) => {
         const next = { ...prev };
-        delete next[draftKey];
+        enteredItems.forEach(({ item }) => delete next[item.id]);
         return next;
       });
       setSaveToCatalogDrafts((prev) => {
         const next = { ...prev };
-        delete next[draftKey];
+        enteredItems.forEach(({ item }) => delete next[item.id]);
         return next;
       });
-      showToast("Buying price saved", "success");
-      if (sales.length <= 1) {
-        onQueueEmpty?.();
-      }
+      const completed = enteredItems.length === items.length;
+      showToast(
+        completed
+          ? "All item costs saved. Receipt profit is now calculated."
+          : `${enteredItems.length} item cost${enteredItems.length === 1 ? "" : "s"} saved. Profit remains pending.`,
+        "success",
+      );
+      await fetchSales();
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Failed to save buying price", "error");
     } finally {
@@ -191,15 +170,20 @@ export default function BenjaminPosPricingPanel({
           {sales.map((sale) => {
             const draftKey = getDraftKey(sale);
             const receiptItems = (sale.receiptItems as PendingReceiptItem[] | undefined) ?? [];
-            const canSaveToCatalog = receiptItems.length > 0 && receiptItems.every((item) => Boolean(item.catalogProductId));
             const saleDate = new Date(sale.saleDate);
+            const pricedCount = Math.max(0, Number(sale.itemsTotal ?? receiptItems.length) - receiptItems.length);
+            const enteredCount = receiptItems.filter((item) => Number(buyingDrafts[item.id]) > 0).length;
+            const enteredBuyingTotal = receiptItems.reduce(
+              (sum, item) => sum + Math.max(0, Number(buyingDrafts[item.id]) || 0) * Math.max(1, Number(item.quantity ?? 1)),
+              0,
+            );
 
             return (
               <div
                 key={sale.id}
                 className="rounded-3xl border border-slate-800 bg-slate-950/60 p-4"
               >
-                <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.7fr)_180px]">
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(260px,0.8fr)]">
                   <div className="space-y-2">
                     <div className="font-semibold text-white">{sale.productName}</div>
                     {sale.receiptId ? (
@@ -216,66 +200,95 @@ export default function BenjaminPosPricingPanel({
                     {sale.day ? <div className="text-sm text-slate-500">Day: {sale.day}</div> : null}
                   </div>
 
-                  <div className="space-y-1 text-sm text-slate-300">
+                  <div className="space-y-1 rounded-2xl border border-slate-800 bg-slate-950/50 p-4 text-sm text-slate-300">
                     <div>
                       {saleDate.toLocaleDateString("en-KE")} {saleDate.toLocaleTimeString("en-KE")}
                     </div>
                     <div>Receipt value: {formatKES(sale.sellingPrice)}</div>
                     <div>Payment: {sale.paymentMethod ?? "N/A"}</div>
                     <div>Receipt: {sale.receiptNumber || "N/A"}</div>
-                    <div className="text-[11px] uppercase tracking-wide text-slate-500">
-                      {((sale.itemsPending ?? receiptItems.length ?? 0) || 0).toLocaleString()} pending
-                      {sale.itemsTotal ? ` of ${sale.itemsTotal}` : ""} items
+                    <div className="font-medium text-amber-300">
+                      {pricedCount} of {sale.itemsTotal ?? receiptItems.length} items priced
                     </div>
                   </div>
+                </div>
 
-                  <div className="space-y-3">
-                    <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-3 text-sm text-slate-200">
-                      <div className="font-medium text-white">{sale.productName}</div>
+                <div className="mt-5 overflow-hidden rounded-2xl border border-slate-800">
+                  <div className="hidden grid-cols-[minmax(0,1fr)_90px_130px_150px_170px] gap-3 bg-slate-900 px-4 py-3 text-[11px] uppercase tracking-[0.16em] text-slate-500 md:grid">
+                    <span>Item</span>
+                    <span>Quantity</span>
+                    <span>Selling total</span>
+                    <span>Unit buying price</span>
+                    <span>Line buying total</span>
+                  </div>
+                  <div className="divide-y divide-slate-800">
+                    {receiptItems.map((item) => {
+                      const quantity = Math.max(1, Number(item.quantity ?? 1));
+                      const unitBuyingPrice = Math.max(0, Number(buyingDrafts[item.id]) || 0);
+                      const lineBuyingTotal = unitBuyingPrice * quantity;
+                      return (
+                        <div key={item.id} className="grid gap-3 bg-slate-950/40 p-4 md:grid-cols-[minmax(0,1fr)_90px_130px_150px_170px] md:items-center">
+                          <div>
+                            <div className="font-medium text-white">{item.productName}</div>
+                            <div className="mt-1 text-xs text-slate-500 md:hidden">Quantity: {quantity}</div>
+                          </div>
+                          <div className="hidden text-sm text-slate-300 md:block">{quantity}</div>
+                          <div className="text-sm text-slate-300">
+                            <span className="mr-2 text-xs text-slate-500 md:hidden">Selling:</span>
+                            {formatKES(Number(item.sellingTotal ?? 0))}
+                          </div>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={buyingDrafts[item.id] ?? ""}
+                            onChange={(event) => setBuyingDrafts((prev) => ({ ...prev, [item.id]: event.target.value }))}
+                            placeholder="Unit cost"
+                            aria-label={`Unit buying price for ${item.productName}`}
+                            className="w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2.5 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/60"
+                          />
+                          <div className="text-sm font-semibold text-emerald-300">
+                            <span className="mr-2 text-xs font-normal text-slate-500 md:hidden">Line cost:</span>
+                            {formatKES(lineBuyingTotal)}
+                          </div>
+                          <label className="md:col-span-5 flex items-start gap-2 text-xs text-slate-400">
+                            <input
+                              type="checkbox"
+                              className="mt-0.5 h-4 w-4 rounded border-white/15 bg-slate-950 text-emerald-400"
+                              checked={Boolean(saveToCatalogDrafts[item.id])}
+                              onChange={(event) => setSaveToCatalogDrafts((prev) => ({ ...prev, [item.id]: event.target.checked }))}
+                              disabled={!item.catalogProductId}
+                            />
+                            <span>
+                              Save this unit cost to the product catalogue
+                              {!item.catalogProductId ? " (catalogue product not linked)" : ""}
+                            </span>
+                          </label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="mt-5 flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Entered buying total</div>
+                    <div className="mt-1 text-xl font-semibold text-white">{formatKES(enteredBuyingTotal)}</div>
+                    <div className="mt-1 text-xs text-amber-300">
+                      Profit remains pending until all {sale.itemsTotal ?? receiptItems.length} items are priced.
                     </div>
-                    <input
-                      type="number"
-                      value={buyingDrafts[draftKey] ?? ""}
-                      onChange={(event) =>
-                        setBuyingDrafts((prev) => ({
-                          ...prev,
-                          [draftKey]: event.target.value,
-                        }))
-                      }
-                      placeholder="Total buying price"
-                      className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/60"
-                    />
-                    <label className="flex items-start gap-3 text-sm text-slate-400">
-                      <input
-                        type="checkbox"
-                        className="mt-1 h-4 w-4 rounded border-white/15 bg-slate-950 text-emerald-400"
-                        checked={Boolean(saveToCatalogDrafts[draftKey])}
-                        onChange={(event) =>
-                          setSaveToCatalogDrafts((prev) => ({
-                            ...prev,
-                            [draftKey]: event.target.checked,
-                          }))
-                        }
-                        disabled={!canSaveToCatalog}
-                      />
-                      <span>
-                        Save this buying price to product catalog for future profit calculation{" "}
-                        {!canSaveToCatalog
-                          ? "Catalog product not linked, buying price cannot be saved for future use."
-                          : ""}
-                      </span>
-                    </label>
                   </div>
-
-                  <div className="flex items-start">
-                    <Button
-                      onClick={() => void handlePriceSupportReceipt(sale)}
-                      disabled={pricingKey === draftKey}
-                      className="w-full bg-emerald-500 font-semibold text-black hover:brightness-95"
-                    >
-                      {pricingKey === draftKey ? "Saving…" : "Price receipt"}
-                    </Button>
-                  </div>
+                  <Button
+                    onClick={() => void handlePriceSupportReceipt(sale)}
+                    disabled={pricingKey === draftKey || enteredCount === 0}
+                    className="w-full bg-emerald-500 font-semibold text-black hover:brightness-95 sm:w-auto"
+                  >
+                    {pricingKey === draftKey
+                      ? "Saving…"
+                      : enteredCount === receiptItems.length
+                        ? "Complete receipt pricing"
+                        : `Save ${enteredCount} priced item${enteredCount === 1 ? "" : "s"}`}
+                  </Button>
                 </div>
               </div>
             );

@@ -17,6 +17,7 @@ export const dynamic = "force-dynamic";
 type SupportPricePayload = {
   receiptItemId: string;
   buyingPrice: number;
+  unitBuyingPrice?: number;
   saveToCatalog?: boolean;
 };
 
@@ -144,6 +145,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "buyingPrice must be a positive number" }, { status: 400 });
   }
   const roundedPrice = Math.round(parsedBuyingPrice);
+  const parsedUnitBuyingPrice = Number(payload.unitBuyingPrice ?? parsedBuyingPrice);
+  if (!Number.isFinite(parsedUnitBuyingPrice) || parsedUnitBuyingPrice <= 0) {
+    return NextResponse.json({ error: "unitBuyingPrice must be a positive number" }, { status: 400 });
+  }
+  const roundedUnitBuyingPrice = Math.round(parsedUnitBuyingPrice);
 
   const receiptItem = await prisma.supportReceiptItem.findUnique({
     where: { id: payload.receiptItemId },
@@ -199,7 +205,7 @@ export async function POST(req: Request) {
       await tx.product.update({
         where: { id: catalogProductId },
         data: {
-          lastBuyingPrice: roundedPrice,
+          lastBuyingPrice: roundedUnitBuyingPrice,
           variableCost: false,
         },
       });
@@ -265,7 +271,7 @@ export async function POST(req: Request) {
       const nextTotals = {
         ...existingTotals,
         buyingTotal: receiptBuyingTotal,
-        profit: receiptBuyingTotal > 0 ? total - receiptBuyingTotal : 0,
+        profit: allItemsPriced ? total - receiptBuyingTotal : 0,
         needsPricing: !allItemsPriced,
       };
       await tx.receipt.update({
@@ -282,13 +288,34 @@ export async function POST(req: Request) {
       });
     };
 
-    const sellingShares = allocateSupportSellingShares(linkedReceiptItems, refreshedReceipt.items);
-    const productLabel = encodeSupportSaleProduct(receiptItem.productName ?? "Item", receiptItem.id);
+    const sellingShares = allocateSupportSellingShares(
+      linkedReceiptItems,
+      refreshedReceipt.items,
+      Number(refreshedReceipt.sellingTotal ?? 0),
+    );
     const itemSellingPrice = Math.max(0, Math.round(Number(sellingShares.get(receiptItem.id) ?? sellingPrice)));
     recognizedSaleValue = itemSellingPrice;
     const entryIdsToRecalc = new Set<string>([entryId]);
+    const saleLabels = refreshedReceipt.items.map((item) =>
+      encodeSupportSaleProduct(item.productName ?? "Item", item.id),
+    );
+    const existingSales = saleLabels.length
+      ? await tx.supportSale.findMany({
+          where: { product: { in: saleLabels } },
+          select: { id: true, entryId: true, product: true },
+        })
+      : [];
 
-    if (submitterId && itemSellingPrice > 0) {
+    for (const sale of existingSales) {
+      entryIdsToRecalc.add(sale.entryId);
+    }
+
+    if (!allItemsPriced && saleLabels.length) {
+      // Receipt economics are recognized atomically only after every line has a cost.
+      await tx.supportSale.deleteMany({ where: { product: { in: saleLabels } } });
+    }
+
+    if (allItemsPriced && submitterId) {
       const startOfToday = new Date(now);
       startOfToday.setHours(0, 0, 0, 0);
       const endOfToday = new Date(now);
@@ -312,44 +339,28 @@ export async function POST(req: Request) {
           },
           select: { id: true },
         });
-
-      const existingSale = await tx.supportSale.findFirst({
-        where: { product: productLabel },
-        select: { id: true, entryId: true },
-      });
-
       entryIdsToRecalc.add(pricingEntry.id);
-      if (existingSale?.entryId) {
-        entryIdsToRecalc.add(existingSale.entryId);
-      }
 
-      if (existingSale) {
-        await tx.supportSale.update({
-          where: { id: existingSale.id },
-          data: {
-            entryId: pricingEntry.id,
-            product: productLabel,
-            buyingPrice: roundedPrice,
-            sellingPrice: itemSellingPrice,
-            receiptNumber: canonicalReceipt ?? refreshedReceipt.receiptNumber ?? null,
-            paymentMethod: refreshedReceipt.paymentMethod,
-            itemsCount: 1,
-            createdAt: now,
-          },
-        });
-      } else {
-        await tx.supportSale.create({
-          data: {
-            entryId: pricingEntry.id,
-            product: productLabel,
-            buyingPrice: roundedPrice,
-            sellingPrice: itemSellingPrice,
-            receiptNumber: canonicalReceipt ?? refreshedReceipt.receiptNumber ?? null,
-            paymentMethod: refreshedReceipt.paymentMethod,
-            itemsCount: 1,
-            createdAt: now,
-          },
-        });
+      for (const item of refreshedReceipt.items) {
+        const productLabel = encodeSupportSaleProduct(item.productName ?? "Item", item.id);
+        const existingSale = existingSales.find((sale) => sale.product === productLabel);
+        const lineSellingPrice = Math.max(0, Math.round(Number(sellingShares.get(item.id) ?? 0)));
+        const saleData = {
+          entryId: pricingEntry.id,
+          product: productLabel,
+          buyingPrice: Math.max(0, Math.round(Number(item.buyingPrice ?? 0))),
+          sellingPrice: lineSellingPrice,
+          receiptNumber: canonicalReceipt ?? refreshedReceipt.receiptNumber ?? null,
+          paymentMethod: refreshedReceipt.paymentMethod,
+          itemsCount: 1,
+          createdAt: now,
+        };
+
+        if (existingSale) {
+          await tx.supportSale.update({ where: { id: existingSale.id }, data: saleData });
+        } else {
+          await tx.supportSale.create({ data: saleData });
+        }
       }
     }
 
