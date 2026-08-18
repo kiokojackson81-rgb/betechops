@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { signOut } from "next-auth/react";
-import { CalendarIcon } from "lucide-react";
+import { ArrowRight, CalendarIcon, FileDown, Receipt, WalletCards } from "lucide-react";
 import Card from "@/app/_components/Card";
 import SensitiveValue from "@/components/SensitiveValue";
 import Button from "@/app/_components/Button";
@@ -14,7 +13,7 @@ import useTradingPeriodQueryState from "@/app/_components/useTradingPeriodQueryS
 import getLandingPage from "@/lib/getLandingPage";
 import { useCardLock, LockButton } from "@/app/_components/useCardLock";
 import { buildEarningsCardBreakdown } from "@/lib/earningsCardBreakdown";
-import { mapPayrollToEarningsSummary } from "@/lib/payrollMapping";
+import { mapPayrollToEarningsSummary, type PayrollSummary } from "@/lib/payrollMapping";
 import { withImpersonateId } from "@/lib/impersonation";
 
 type PaymentMethod = "MPESA" | "CASH" | "";
@@ -61,6 +60,11 @@ type SupportEarningsSummary = {
   otherDeductionsTotal: number;
   netPay: number;
   adjustmentEntries?: { id: string; label: string; amount: number; adjustmentType: string; adjustmentKind: string }[];
+};
+
+type PayrollSummaryResponse = {
+  row?: PayrollSummary | null;
+  rows?: PayrollSummary[];
 };
 
 const inputClasses =
@@ -169,7 +173,7 @@ export default function SupportOpsPage() {
         if (data) setServerSummary(data);
       }
       if (earningsRes.ok) {
-        const data = (await earningsRes.json().catch(() => null)) as any;
+        const data = (await earningsRes.json().catch(() => null)) as PayrollSummaryResponse | null;
         const row = data?.row ?? data?.rows?.[0] ?? null;
         if (row) {
           setEarningsSummary(
@@ -309,123 +313,73 @@ export default function SupportOpsPage() {
   const periodLabel = serverSummary?.period.label ?? tradingPeriodLabel;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <form onSubmit={handleSubmit} className="mx-auto max-w-6xl space-y-6 p-6">
-        <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold">Support Operations</h1>
-            <p className="text-sm text-slate-300">
-              Sales capture, performance tracking, and quick earnings breakdown.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            {currentUserId ? (
-              <Link
-                href={`/receipts?attendantId=${encodeURIComponent(currentUserId)}`}
-                className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
-              >
-                Receipts
-              </Link>
-            ) : null}
-            <Link
-              href={wellnessHref}
-              className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
-            >
-              Wellness
-            </Link>
-            <button
-              type="button"
-              onClick={() => signOut({ callbackUrl: "/" })}
-              className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/40 hover:bg-white/10"
-            >
-              Log out
-            </button>
-          </div>
-        </header>
-
-        <div className="flex flex-col gap-3 rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-4 md:px-8 md:py-5">
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+    <form onSubmit={handleSubmit} className="mx-auto max-w-[1400px] space-y-5 sm:space-y-6">
+        <section className="overflow-hidden rounded-[28px] border border-cyan-400/15 bg-gradient-to-br from-[#132235] via-[#0d1929] to-[#07111f] p-5 shadow-2xl shadow-black/20 sm:p-7">
+          <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr] xl:items-center">
             <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Statistics period</p>
-              <p className="text-lg font-semibold text-slate-100">{selectedPeriod.label}</p>
-              {selectedPeriodKey !== currentPeriod.key && (
-                <p className="text-xs text-amber-300">Showing archived period.</p>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <Link
-                href={performanceReportHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200 transition hover:border-emerald-400 hover:bg-emerald-500/15"
-              >
-                Download PDF
-              </Link>
-              <PeriodSwitcher
-                currentPeriod={currentPeriod}
-                selectedPeriod={selectedPeriod}
-                onSelectPeriod={setSelectedPeriod}
-              />
-            </div>
-          </div>
-        </div>
-
-        <Card className="border-slate-800 bg-slate-950/70">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">Date</p>
-              <div className="mt-2 flex items-center gap-2">
-                <CalendarIcon size={16} className="text-slate-400" />
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(event) => {
-                    setDate(event.target.value);
-                    const next = new Date(event.target.value);
-                    if (!Number.isNaN(next.getTime())) {
-                      setDayOfWeek(
-                        next.toLocaleDateString("en-KE", { weekday: "long" }),
-                      );
-                    }
-                  }}
-                  className={inputClasses}
-                />
+              <p className="text-xs uppercase tracking-[0.25em] text-cyan-200">Support desk</p>
+              <h1 className="mt-3 max-w-3xl text-3xl font-semibold tracking-tight text-white sm:text-4xl">Keep customer support activity and daily performance in one place.</h1>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">Capture battery activity, monitor receipt performance, and review the earnings generated during the selected period.</p>
+              <div className="mt-5 flex flex-wrap gap-2">
+                <a href="#daily-report" className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300">Complete daily report <ArrowRight className="h-4 w-4" /></a>
+                {currentUserId ? <Link href={`/receipts?attendantId=${encodeURIComponent(currentUserId)}`} className="inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2.5 text-sm text-white transition hover:bg-white/5"><Receipt className="h-4 w-4" />View receipts</Link> : null}
+                <Link href={wellnessHref} className="inline-flex items-center rounded-full border border-white/15 px-4 py-2.5 text-sm text-white transition hover:bg-white/5">Wellness</Link>
               </div>
             </div>
-            <div className="w-full md:w-auto">
-              <p className="text-xs uppercase tracking-wide text-slate-400">Day</p>
-              <select
-                value={dayOfWeek}
-                onChange={(event) => setDayOfWeek(event.target.value)}
-                className={inputClasses}
-              >
-                {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map(
-                  (day) => (
-                    <option key={day} value={day}>
-                      {day}
-                    </option>
-                  ),
-                )}
-              </select>
+            <div className="rounded-3xl border border-white/10 bg-[#081426]/80 p-5">
+              <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Statistics period</p>
+              <p className="mt-2 text-xl font-semibold text-white">{selectedPeriod.label}</p>
+              <p className="mt-1 text-sm text-slate-400">{selectedPeriodKey === currentPeriod.key ? "Current active period" : "Archived performance period"}</p>
+              <div className="my-4 h-px bg-white/10" />
+              <div className="flex flex-wrap gap-2">
+                <PeriodSwitcher
+                  currentPeriod={currentPeriod}
+                  selectedPeriod={selectedPeriod}
+                  onSelectPeriod={setSelectedPeriod}
+                />
+                <a href={performanceReportHref} download className="inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100"><FileDown className="h-4 w-4" />Report</a>
+              </div>
             </div>
           </div>
-        </Card>
+        </section>
+
+        <section id="performance" className="scroll-mt-36">
+          <SupportQuickStats
+            periodLabel={periodLabel}
+            receipts={combined.receipts}
+            salesKes={combined.sales}
+            items={combined.items}
+            commissionKes={commissionDisplay}
+            newBatteries={combined.newBatteries}
+            changedBatteries={combined.changedBatteries}
+            performanceBonus={performanceBonus}
+            totalProfit={Number(serverSummary?.aggregates.totalProfit ?? totals.totalProfit)}
+          />
+        </section>
 
         <div className="grid gap-6 lg:grid-cols-12">
-          <div className="space-y-6 lg:col-span-8">
-            <section className="space-y-4 rounded-2xl border border-white/10 bg-slate-950/70 p-6">
-              <div className="flex items-center justify-between">
+          <section id="daily-report" className="scroll-mt-36 space-y-5 rounded-3xl border border-white/10 bg-[#0d1828] p-4 sm:p-6 lg:col-span-7">
+              <div className="flex flex-col gap-3 border-b border-white/10 pb-5 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-400">
-                    Performance (Support Ops)
-                  </p>
-                  <h2 className="text-lg font-semibold">Battery metrics</h2>
+                  <p className="text-xs uppercase tracking-[0.2em] text-emerald-300">Daily activity</p>
+                  <h2 className="mt-1 text-xl font-semibold text-white">Battery performance report</h2>
+                  <p className="mt-1 text-sm text-slate-400">Record completed battery support work for payroll and reporting.</p>
                 </div>
-                <div className="rounded-full border border-emerald-500/30 px-3 py-1 text-xs text-emerald-200">
-                  70 KES per battery
-                </div>
+                <div className="w-fit rounded-full border border-emerald-500/30 bg-emerald-500/5 px-3 py-1 text-xs text-emerald-200">KES 70 per battery</div>
               </div>
-              <div className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="text-xs uppercase tracking-wide text-slate-400">Report date</span>
+                  <div className="mt-2 flex items-center gap-2"><CalendarIcon size={16} className="text-slate-400" /><input type="date" value={date} onChange={(event) => { setDate(event.target.value); const next = new Date(event.target.value); if (!Number.isNaN(next.getTime())) setDayOfWeek(next.toLocaleDateString("en-KE", { weekday: "long" })); }} className={inputClasses} /></div>
+                </label>
+                <label className="block">
+                  <span className="text-xs uppercase tracking-wide text-slate-400">Day</span>
+                  <select value={dayOfWeek} onChange={(event) => setDayOfWeek(event.target.value)} className={`${inputClasses} mt-2`}>
+                    {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day) => <option key={day} value={day}>{day}</option>)}
+                  </select>
+                </label>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
                 <NumberRow
                   label="New batteries written"
                   value={newBatteries}
@@ -437,15 +391,10 @@ export default function SupportOpsPage() {
                   onChange={setChangedBatteries}
                 />
               </div>
-            </section>
 
-            {error && (
-              <div className="rounded-xl border border-rose-700/40 bg-rose-900/20 px-4 py-3 text-sm text-rose-200">
-                {error}
-              </div>
-            )}
+              {error && <div className="rounded-xl border border-rose-700/40 bg-rose-900/20 px-4 py-3 text-sm text-rose-200">{error}</div>}
 
-            <div className="flex flex-wrap justify-end gap-3">
+            <div className="flex flex-col-reverse gap-3 border-t border-white/10 pt-5 sm:flex-row sm:justify-end">
               <Button
                 type="button"
                 variant="secondary"
@@ -463,26 +412,14 @@ export default function SupportOpsPage() {
                 {submitting ? "Submitting..." : "Submit report"}
               </Button>
             </div>
-          </div>
+          </section>
 
-          <div className="space-y-4 lg:col-span-4">
-            <SupportQuickStats
-              periodLabel={periodLabel}
-              receipts={combined.receipts}
-              salesKes={combined.sales}
-              items={combined.items}
-              commissionKes={commissionDisplay}
-              newBatteries={combined.newBatteries}
-              changedBatteries={combined.changedBatteries}
-              performanceBonus={performanceBonus}
-              totalProfit={Number(serverSummary?.aggregates.totalProfit ?? totals.totalProfit)}
-            />
-
+          <section id="earnings" className="scroll-mt-36 space-y-4 lg:col-span-5">
+            <div className="flex items-center gap-3 px-1"><WalletCards className="h-5 w-5 text-emerald-300" /><div><h2 className="font-semibold text-white">Earnings & payroll</h2><p className="text-sm text-slate-400">Current selected-period breakdown</p></div></div>
             <SupportEarningsCard summary={earningsSummary} downloadHref={payslipHref} />
-          </div>
+          </section>
         </div>
       </form>
-    </div>
   );
 }
 
@@ -552,7 +489,7 @@ function SupportQuickStats({
   ];
 
   return (
-    <Card className="space-y-5 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
+    <Card className="space-y-5 border-white/10 bg-[#0d1828] shadow-xl shadow-black/20">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-xl font-semibold text-slate-100">Quick stats</h2>
@@ -560,7 +497,7 @@ function SupportQuickStats({
         </div>
         <LockButton locked={locked} onToggle={toggle} />
       </div>
-      <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         {stats.map((stat) => (
           <div
             key={stat.label}
@@ -606,7 +543,7 @@ function SupportEarningsCard({
   const formatCurrency = (value: number) => `KES ${value.toLocaleString()}`;
 
   return (
-    <Card className="space-y-4 border-slate-800 bg-slate-900/80 shadow-xl shadow-black/40">
+    <Card className="space-y-4 border-white/10 bg-[#0d1828] shadow-xl shadow-black/20">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div>
@@ -661,8 +598,8 @@ function NumberRow({
   onChange: (value: number | "") => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4">
-      <span className="text-sm text-slate-100">{label}</span>
+    <label className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+      <span className="text-sm text-slate-200">{label}</span>
       <input
         type="number"
         min={0}
@@ -670,8 +607,8 @@ function NumberRow({
         onChange={(event) =>
           onChange(event.target.value === "" ? "" : Number(event.target.value))
         }
-        className="w-28 rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-right text-sm text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+        className="mt-3 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-3 text-right text-lg font-semibold text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
       />
-    </div>
+    </label>
   );
 }
