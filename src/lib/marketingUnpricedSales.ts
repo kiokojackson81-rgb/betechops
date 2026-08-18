@@ -3,6 +3,7 @@ import { getCurrentTradingPeriodFor } from "./marketingPeriod";
 import { nowInNairobi } from "@/lib/timezone";
 import { canonicalReceiptNumber } from "./receiptGuard";
 import { readReceiptProjectFlow } from "./receiptProjects";
+import { recalcSupportEntry } from "./marketingReceiptCleanup";
 
 export type PendingReceiptItem = {
   id: string;
@@ -38,6 +39,8 @@ type LinkedReceiptOrderItem = {
   name: string;
   productId: string | null;
   hasCost: boolean;
+  resolvedBuyingPrice: number;
+  quantity: number;
 };
 
 type LinkedReceiptContext = {
@@ -142,6 +145,30 @@ export async function getUnpricedDailySalesForRange({
     ),
   );
 
+  const supportProductNames = Array.from(
+    new Set(
+      supportReceipts
+        .flatMap((receipt) => receipt.items.map((item) => item.productName.trim()))
+        .filter(isMeaningfulProductName),
+    ),
+  );
+  const catalogProducts = supportProductNames.length
+    ? await prisma.product.findMany({
+        where: {
+          OR: supportProductNames.map((name) => ({ name: { equals: name, mode: "insensitive" as const } })),
+        },
+        select: { id: true, name: true, lastBuyingPrice: true, variableCost: true },
+      })
+    : [];
+  const catalogProductsByName = new Map<
+    string,
+    { id: string; name: string; lastBuyingPrice: number | null; variableCost: boolean } | null
+  >();
+  for (const product of catalogProducts) {
+    const key = normalizeProductName(product.name);
+    catalogProductsByName.set(key, catalogProductsByName.has(key) ? null : product);
+  }
+
   const receiptOrderItems =
     receiptNumberCandidates.length > 0
       ? await prisma.order.findMany({
@@ -157,8 +184,13 @@ export async function getUnpricedDailySalesForRange({
             items: {
               select: {
                 productId: true,
-                product: { select: { name: true } },
-                orderCosts: { select: { id: true }, take: 1 },
+                quantity: true,
+                product: { select: { name: true, lastBuyingPrice: true, variableCost: true } },
+                orderCosts: {
+                  orderBy: { createdAt: "desc" },
+                  select: { id: true, unitCost: true },
+                  take: 1,
+                },
                 profitSnapshots: { select: { id: true }, take: 1 },
               },
             },
@@ -256,11 +288,18 @@ export async function getUnpricedDailySalesForRange({
 
   for (const order of receiptOrderItems) {
     const linkedItems = order.items
-      .map((item) => ({
-        name: String(item.product?.name || "").trim(),
-        productId: item.productId ? String(item.productId).trim() : null,
-        hasCost: (item.orderCosts?.length ?? 0) > 0 || (item.profitSnapshots?.length ?? 0) > 0,
-      }))
+      .map((item) => {
+        const recordedCost = Number(item.orderCosts?.[0]?.unitCost ?? 0);
+        const catalogCost = item.product?.variableCost ? 0 : Number(item.product?.lastBuyingPrice ?? 0);
+        const resolvedBuyingPrice = recordedCost > 0 ? recordedCost : catalogCost > 0 ? catalogCost : 0;
+        return {
+          name: String(item.product?.name || "").trim(),
+          productId: item.productId ? String(item.productId).trim() : null,
+          hasCost: resolvedBuyingPrice > 0 || (item.profitSnapshots?.length ?? 0) > 0,
+          resolvedBuyingPrice,
+          quantity: Math.max(1, Number(item.quantity ?? 1)),
+        };
+      })
       .filter((item) => isMeaningfulProductName(item.name));
     if (!linkedItems.length) continue;
     const raw = order.orderNumber?.trim();
@@ -274,6 +313,57 @@ export async function getUnpricedDailySalesForRange({
     };
     if (raw) orderItemsByReceiptNumber.set(raw, context);
     if (canonical) orderItemsByReceiptNumber.set(canonical, context);
+  }
+
+  // Repair stale support-ledger costs before building the pending queue.
+  for (const receipt of supportReceipts) {
+    const receiptNumber = receipt.receiptNumber?.trim() ?? "";
+    const linkedContext =
+      orderItemsByReceiptNumber.get(receiptNumber) ??
+      orderItemsByReceiptNumber.get(canonicalReceiptNumber(receiptNumber) ?? "") ??
+      null;
+    const orderedItems = [...receipt.items].sort((left, right) => {
+      const byCreatedAt = left.createdAt.getTime() - right.createdAt.getTime();
+      return byCreatedAt !== 0 ? byCreatedAt : left.id.localeCompare(right.id);
+    });
+    const updates: Array<{ id: string; buyingPrice: number }> = [];
+    orderedItems.forEach((item, index) => {
+      if (Number(item.buyingPrice ?? 0) > 0) return;
+      const normalizedName = normalizeProductName(item.productName);
+      const linkedItem =
+        (normalizedName
+          ? linkedContext?.items.find((candidate) => normalizeProductName(candidate.name) === normalizedName)
+          : undefined) ?? linkedContext?.items[index];
+      const catalogProduct = normalizedName ? catalogProductsByName.get(normalizedName) : null;
+      const catalogBuyingPrice = catalogProduct?.variableCost ? 0 : Number(catalogProduct?.lastBuyingPrice ?? 0);
+      const resolvedBuyingPrice = linkedItem?.resolvedBuyingPrice || catalogBuyingPrice;
+      if (resolvedBuyingPrice <= 0) return;
+      updates.push({
+        id: item.id,
+        buyingPrice: Math.round(resolvedBuyingPrice * (linkedItem?.quantity ?? 1)),
+      });
+    });
+    if (!updates.length) continue;
+
+    const updateById = new Map(updates.map((item) => [item.id, item.buyingPrice]));
+    await prisma.$transaction(async (tx) => {
+      for (const update of updates) {
+        await tx.supportReceiptItem.update({
+          where: { id: update.id },
+          data: { buyingPrice: update.buyingPrice, pricedAt: new Date() },
+        });
+      }
+      const buyingTotal = receipt.items.reduce(
+        (sum, item) => sum + (updateById.get(item.id) ?? Number(item.buyingPrice ?? 0)),
+        0,
+      );
+      await tx.supportReceipt.update({ where: { id: receipt.id }, data: { buyingTotal } });
+      await recalcSupportEntry(tx, receipt.dailyEntryId);
+    });
+    for (const item of receipt.items) {
+      const repairedPrice = updateById.get(item.id);
+      if (repairedPrice !== undefined) item.buyingPrice = repairedPrice;
+    }
   }
 
   const marketingSales: UnpricedSale[] = dailyReportSales.map((sale) => {
@@ -343,7 +433,10 @@ export async function getUnpricedDailySalesForRange({
         const linkedOrderItem = linkedReceiptItems[index] ?? null;
         catalogProductIdByReceiptItemId.set(
           item.id,
-          payloadItem?.productId?.trim() || linkedOrderItem?.productId?.trim() || null,
+          payloadItem?.productId?.trim() ||
+            linkedOrderItem?.productId?.trim() ||
+            catalogProductsByName.get(normalizeProductName(item.productName))?.id ||
+            null,
         );
       });
       const pendingItems = (receipt.items || []).filter((item, index) => {
@@ -353,7 +446,12 @@ export async function getUnpricedDailySalesForRange({
           (itemName
             ? linkedReceiptItems.find((linked) => normalizeProductName(linked.name) === itemName)
             : undefined) ?? linkedReceiptItems[index];
-        return !matchedLinkedItem?.hasCost;
+        const catalogProduct = itemName ? catalogProductsByName.get(itemName) : null;
+        const hasFixedCatalogCost =
+          Boolean(catalogProduct) &&
+          !catalogProduct?.variableCost &&
+          Number(catalogProduct?.lastBuyingPrice ?? 0) > 0;
+        return !matchedLinkedItem?.hasCost && !hasFixedCatalogCost;
       });
       if (!pendingItems.length) return null;
       const fallbackItemNames = [

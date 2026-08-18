@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { getProductTableCapabilities } from "@/lib/productTableCapabilities";
 import { resolveCanonicalProductBrand } from "@/lib/productBrands";
 import { recomputeOrderEconomics } from "@/lib/recomputeOrderEconomics";
+import { canonicalReceiptNumber } from "@/lib/receiptGuard";
+import { recalcMarketingEntry, recalcSupportEntry } from "@/lib/marketingReceiptCleanup";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
@@ -376,6 +378,7 @@ export async function PATCH(req: Request, context: ParamsContext) {
 
   let backfilledItems = 0;
   let recomputedOrders = 0;
+  let synchronizedReceiptItems = 0;
   if (capabilities.schemaMode === "modern") {
     const nextBuyingPrice = Number(updated.lastBuyingPrice ?? 0);
     if (Number.isFinite(nextBuyingPrice) && nextBuyingPrice > 0) {
@@ -387,6 +390,8 @@ export async function PATCH(req: Request, context: ParamsContext) {
         select: {
           id: true,
           orderId: true,
+          quantity: true,
+          order: { select: { orderNumber: true } },
         },
       });
 
@@ -405,6 +410,79 @@ export async function PATCH(req: Request, context: ParamsContext) {
           await recomputeOrderEconomics(orderId);
         }
         recomputedOrders = touchedOrderIds.length;
+
+        const receiptNumbers = Array.from(
+          new Set(
+            itemsMissingCosts.flatMap((item) => {
+              const raw = item.order.orderNumber?.trim() ?? "";
+              const canonical = canonicalReceiptNumber(raw) ?? "";
+              return [raw, canonical].filter(Boolean);
+            }),
+          ),
+        );
+        if (receiptNumbers.length > 0) {
+          const productNames = Array.from(
+            new Set([String(existing.name ?? "").trim(), String(updated.name ?? "").trim()].filter(Boolean)),
+          );
+          const [supportReceipts, marketingReceipts] = await Promise.all([
+            prisma.supportReceipt.findMany({
+              where: { receiptNumber: { in: receiptNumbers } },
+              include: { items: true },
+            }),
+            prisma.marketingReceipt.findMany({
+              where: { receiptNumber: { in: receiptNumbers } },
+              include: { items: true },
+            }),
+          ]);
+          const normalizeName = (value: string) =>
+            value.toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+          const normalizedProductNames = new Set(productNames.map(normalizeName));
+          const quantityByReceipt = new Map<string, number>();
+          for (const item of itemsMissingCosts) {
+            const raw = item.order.orderNumber?.trim() ?? "";
+            const quantity = Math.max(1, Number(item.quantity ?? 1));
+            if (raw) quantityByReceipt.set(raw, quantity);
+            const canonical = canonicalReceiptNumber(raw);
+            if (canonical) quantityByReceipt.set(canonical, quantity);
+          }
+
+          for (const receipt of supportReceipts) {
+            const totalCost = Math.round(nextBuyingPrice * (quantityByReceipt.get(receipt.receiptNumber ?? "") ?? 1));
+            const matchingItems = receipt.items.filter(
+              (item) => Number(item.buyingPrice ?? 0) <= 0 && normalizedProductNames.has(normalizeName(item.productName)),
+            );
+            for (const item of matchingItems) {
+              await prisma.supportReceiptItem.update({
+                where: { id: item.id },
+                data: { buyingPrice: totalCost, pricedAt: new Date() },
+              });
+              item.buyingPrice = totalCost;
+              synchronizedReceiptItems += 1;
+            }
+            if (matchingItems.length > 0) {
+              const buyingTotal = receipt.items.reduce((sum, item) => sum + Number(item.buyingPrice ?? 0), 0);
+              await prisma.supportReceipt.update({ where: { id: receipt.id }, data: { buyingTotal } });
+              await recalcSupportEntry(prisma, receipt.dailyEntryId);
+            }
+          }
+
+          for (const receipt of marketingReceipts) {
+            const totalCost = Math.round(nextBuyingPrice * (quantityByReceipt.get(receipt.receiptNumber ?? "") ?? 1));
+            const matchingItems = receipt.items.filter(
+              (item) => Number(item.buyingPrice ?? 0) <= 0 && normalizedProductNames.has(normalizeName(item.productName)),
+            );
+            for (const item of matchingItems) {
+              await prisma.marketingReceiptItem.update({ where: { id: item.id }, data: { buyingPrice: totalCost } });
+              item.buyingPrice = totalCost;
+              synchronizedReceiptItems += 1;
+            }
+            if (matchingItems.length > 0) {
+              const buyingTotal = receipt.items.reduce((sum, item) => sum + Number(item.buyingPrice ?? 0), 0);
+              await prisma.marketingReceipt.update({ where: { id: receipt.id }, data: { buyingTotal } });
+              await recalcMarketingEntry(prisma, receipt.dailyEntryId);
+            }
+          }
+        }
       }
     }
   }
@@ -428,6 +506,7 @@ export async function PATCH(req: Request, context: ParamsContext) {
     backfill: {
       items: backfilledItems,
       orders: recomputedOrders,
+      receiptItems: synchronizedReceiptItems,
     },
   });
 }

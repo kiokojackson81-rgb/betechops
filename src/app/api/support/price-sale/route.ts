@@ -47,6 +47,7 @@ function getLinkedReceiptPayloadItems(data: unknown) {
 async function resolveSupportReceiptItemCatalogProductId(
   receiptItem: {
     id: string;
+    productName: string;
     receipt?: {
       receiptNumber?: string | null;
       items?: Array<{ id: string; createdAt: Date }> | null;
@@ -67,11 +68,24 @@ async function resolveSupportReceiptItemCatalogProductId(
   const receiptNumber = String(receipt.receiptNumber ?? "").trim();
   const canonicalReceipt = canonicalReceiptNumber(receiptNumber) ?? receiptNumber;
   const candidates = Array.from(new Set([receiptNumber, canonicalReceipt].filter(Boolean)));
-  if (!candidates.length) return null;
+  const resolveUniqueProductByName = async () => {
+    const matchingProducts = await prisma.product.findMany({
+      where: { name: { equals: receiptItem.productName.trim(), mode: "insensitive" } },
+      select: { id: true },
+      take: 2,
+    });
+    return matchingProducts.length === 1 ? matchingProducts[0].id : null;
+  };
+  if (!candidates.length) return resolveUniqueProductByName();
 
   const [linkedReceipt, linkedOrder] = await Promise.all([
     prisma.receipt.findFirst({
-      where: { receiptNumber: { in: candidates } },
+      where: {
+        OR: [
+          { receiptNumber: { in: candidates } },
+          { order: { orderNumber: { in: candidates } } },
+        ],
+      },
       select: { data: true },
     }),
     prisma.order.findFirst({
@@ -90,7 +104,9 @@ async function resolveSupportReceiptItemCatalogProductId(
   if (payloadProductId) return payloadProductId;
 
   const orderProductId = linkedOrder?.items?.[supportItemIndex]?.productId;
-  return orderProductId ? String(orderProductId).trim() : null;
+  if (orderProductId) return String(orderProductId).trim();
+
+  return resolveUniqueProductByName();
 }
 
 export async function POST(req: Request) {
@@ -180,7 +196,7 @@ export async function POST(req: Request) {
     });
 
     if (saveToCatalog && catalogProductId) {
-      await tx.product.updateMany({
+      await tx.product.update({
         where: { id: catalogProductId },
         data: {
           lastBuyingPrice: roundedPrice,
