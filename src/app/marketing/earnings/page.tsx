@@ -127,6 +127,22 @@ function canAccessMarketing(role: string | null | undefined, category: string | 
   return role === "ADMIN" || role === "SUPERVISOR" || category === "MARKETING_OPS" || category === "DIRECT_SALES_OPS";
 }
 
+function canAccessOnlineEarnings(role: string | null | undefined, category: string | null | undefined) {
+  return (
+    role === "ADMIN" ||
+    role === "SUPERVISOR" ||
+    [
+      "TECHNICAL_TEAM",
+      "DIRECT_SALES_OPS",
+      "MARKETING_OPS",
+      "JUMIA_KILIMALL_OPS",
+      "SUPPORT_OPS",
+      "GENERAL_OPS",
+      "BETECH_OPS",
+    ].includes(String(category ?? ""))
+  );
+}
+
 export default async function MarketingEarningsPage({ searchParams }: EarningsPageProps) {
   const session = await auth();
   const actor = session?.user as {
@@ -136,9 +152,11 @@ export default async function MarketingEarningsPage({ searchParams }: EarningsPa
   } | undefined;
 
   if (!actor?.id) redirect("/admin/login");
-  if (!canAccessMarketing(actor.role, actor.attendantCategory)) redirect("/not-authorized");
 
   const params = (await searchParams) ?? {};
+  const workspace = firstParam(params.workspace) === "online" ? "online" : "marketing";
+  const canAccessWorkspace = workspace === "online" ? canAccessOnlineEarnings : canAccessMarketing;
+  if (!canAccessWorkspace(actor.role, actor.attendantCategory)) redirect("/not-authorized");
   const impersonateId = String(firstParam(params.impersonateId) ?? "").trim() || null;
   const requestedPeriod = parseTradingPeriodKey(firstParam(params.periodKey));
   const selectedPeriod = requestedPeriod ?? getTradingPeriodFor(new Date());
@@ -148,7 +166,7 @@ export default async function MarketingEarningsPage({ searchParams }: EarningsPa
     select: { id: true, name: true, email: true, attendantCategory: true, isActive: true },
   });
 
-  if (!attendant || !canAccessMarketing(actor.role, attendant.attendantCategory)) redirect("/not-authorized");
+  if (!attendant || !canAccessWorkspace(actor.role, attendant.attendantCategory)) redirect("/not-authorized");
 
   const comparisonPeriods: TradingPeriod[] = [];
   let cursor = selectedPeriod;
@@ -172,7 +190,8 @@ export default async function MarketingEarningsPage({ searchParams }: EarningsPa
   const recentOptions = getRecentTradingPeriods(12);
   if (!recentOptions.some((period) => period.key === selectedPeriod.key)) recentOptions.push(selectedPeriod);
 
-  const pageHref = (periodKey: string) => withImpersonateId(`/marketing/earnings?periodKey=${encodeURIComponent(periodKey)}`, impersonateId);
+  const earningsPath = workspace === "online" ? "/attendant/online/earnings" : "/marketing/earnings";
+  const pageHref = (periodKey: string) => withImpersonateId(`${earningsPath}?periodKey=${encodeURIComponent(periodKey)}`, impersonateId);
   const payslipHref = withImpersonateId(`/api/attendant/payslip?periodKey=${encodeURIComponent(selectedPeriod.key)}`, impersonateId);
   const reportHref = withImpersonateId(`/api/attendant/daily-report/performance-receipt/pdf?periodKey=${encodeURIComponent(selectedPeriod.key)}`, impersonateId);
 

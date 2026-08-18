@@ -33,6 +33,7 @@ type ShellProps = {
   reportHref: string;
   payslipHref: string;
   wellnessHref: string;
+  earningsHref: string;
   activePath: string;
   receiptView: string;
   isSupervisor: boolean;
@@ -62,6 +63,7 @@ export default function OnlineOperationsShell({
   reportHref,
   payslipHref,
   wellnessHref,
+  earningsHref,
   activePath,
   receiptView,
   isSupervisor,
@@ -84,7 +86,7 @@ export default function OnlineOperationsShell({
     { href: createReceiptHref, label: "Create receipt", icon: ShoppingBag },
     { href: wellnessHref, label: "Wellness", icon: HeartPulse },
   ];
-  const dashboardSectionHref = (section: string) => `${dashboardHref}#${section}`;
+  const earningsSectionHref = (section: string) => `${earningsHref}#${section}`;
 
   return (
     <div className="min-h-screen bg-[#07111f] text-slate-100">
@@ -143,15 +145,15 @@ export default function OnlineOperationsShell({
             <div>
               <div className="mb-2 px-3 text-[11px] uppercase tracking-[0.24em] text-slate-500">Earnings & payroll</div>
               <div className="space-y-1">
-                <Link href={dashboardSectionHref("earnings")} className={navItemClass}>
+                <Link href={earningsSectionHref("earnings")} className={`${navItemClass} ${activeClass(earningsHref)}`}>
                   <WalletCards className="h-4 w-4 text-emerald-200" />
                   Earnings overview
                 </Link>
-                <Link href={dashboardSectionHref("commissions")} className={navItemClass}>
+                <Link href={earningsSectionHref("commissions")} className={`${navItemClass} ${activeClass(earningsHref)}`}>
                   <CircleDollarSign className="h-4 w-4 text-amber-200" />
                   Commissions
                 </Link>
-                <Link href={dashboardSectionHref("deductions")} className={navItemClass}>
+                <Link href={earningsSectionHref("deductions")} className={`${navItemClass} ${activeClass(earningsHref)}`}>
                   <MinusCircle className="h-4 w-4 text-rose-200" />
                   Deductions
                 </Link>
@@ -254,9 +256,9 @@ export default function OnlineOperationsShell({
                 <span className="text-xs text-slate-500">Open</span>
               </summary>
               <div className="grid grid-cols-2 gap-2 border-t border-white/10 p-2 sm:grid-cols-4">
-                <Link href={dashboardSectionHref("earnings")} className="rounded-xl border border-white/10 px-3 py-2 text-center text-xs text-slate-200">Overview</Link>
-                <Link href={dashboardSectionHref("commissions")} className="rounded-xl border border-white/10 px-3 py-2 text-center text-xs text-slate-200">Commissions</Link>
-                <Link href={dashboardSectionHref("deductions")} className="rounded-xl border border-white/10 px-3 py-2 text-center text-xs text-slate-200">Deductions</Link>
+                <Link href={earningsSectionHref("earnings")} className="rounded-xl border border-white/10 px-3 py-2 text-center text-xs text-slate-200">Overview</Link>
+                <Link href={earningsSectionHref("commissions")} className="rounded-xl border border-white/10 px-3 py-2 text-center text-xs text-slate-200">Commissions</Link>
+                <Link href={earningsSectionHref("deductions")} className="rounded-xl border border-white/10 px-3 py-2 text-center text-xs text-slate-200">Deductions</Link>
                 <a href={payslipHref} download className="rounded-xl border border-cyan-400/20 bg-cyan-400/5 px-3 py-2 text-center text-xs text-cyan-100">Payslip PDF</a>
               </div>
             </details>

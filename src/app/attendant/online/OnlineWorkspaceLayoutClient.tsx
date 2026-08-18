@@ -44,6 +44,9 @@ function pageHeading(pathname: string, mode: "online" | "general") {
   if (pathname.includes("/wellness")) {
     return ["Wellness Center", "Manage leave, cash support, and employee wellness requests."];
   }
+  if (pathname.includes("/earnings")) {
+    return ["Earnings & Payroll", "Review salary, commissions, deductions, period comparisons, reports, and payslips."];
+  }
   return mode === "general"
     ? ["General Operations Dashboard", "Direct sales, POS receipts, commissions, and payroll."]
     : ["Online Operations Dashboard", "Marketplace performance, POS receipts, commissions, and payroll."];
@@ -98,6 +101,7 @@ export default function OnlineWorkspaceLayoutClient({
   const receiptsHref = withImpersonation(mode === "general" ? "/receipts" : "/attendant/online/receipts?view=history");
   const createReceiptHref = withImpersonation(mode === "general" ? "/receipts" : "/attendant/online/receipts?view=create");
   const wellnessHref = withImpersonation(mode === "general" ? "/attendant/wellness" : "/attendant/online/wellness");
+  const earningsHref = mode === "general" ? dashboardHref : withImpersonation("/attendant/online/earnings");
   const reportParams = new URLSearchParams();
   if (impersonateId) reportParams.set("impersonateId", impersonateId);
   const reportQuery = reportParams.toString();
@@ -119,6 +123,7 @@ export default function OnlineWorkspaceLayoutClient({
       reportHref={reportHref}
       payslipHref={payslipHref}
       wellnessHref={wellnessHref}
+      earningsHref={earningsHref}
       activePath={pathname}
       receiptView={searchParams.get("view") ?? "history"}
       isSupervisor={identity.isSupervisor}
