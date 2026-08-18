@@ -437,6 +437,9 @@ export default function ReceiptsAdminClient({
   const [detail, setDetail] = useState<ReceiptDetailPayload | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [recalculatingReceiptId, setRecalculatingReceiptId] = useState<string | null>(null);
+  const [buyingPriceEditorOpen, setBuyingPriceEditorOpen] = useState(false);
+  const [buyingPriceDraft, setBuyingPriceDraft] = useState<Record<string, string>>({});
+  const [buyingPriceSaving, setBuyingPriceSaving] = useState(false);
   const [commissionEditorOpen, setCommissionEditorOpen] = useState(false);
   const [commissionInput, setCommissionInput] = useState("");
   const [commissionSaving, setCommissionSaving] = useState(false);
@@ -977,6 +980,9 @@ export default function ReceiptsAdminClient({
     setSelected(null);
     setDetail(null);
     setProjectEditor(null);
+    setBuyingPriceEditorOpen(false);
+    setBuyingPriceDraft({});
+    setBuyingPriceSaving(false);
     setDetailLoading(false);
   };
 
@@ -1649,6 +1655,59 @@ export default function ReceiptsAdminClient({
   const profitColor =
     canShowReceiptProfit && profitAmount >= 0 ? "text-emerald-300" : canShowReceiptProfit ? "text-rose-400" : "text-slate-400";
   const hasSupportItems = Boolean(detail?.supportItems?.length);
+  const buyingPricePreview = itemsWithCost.reduce((sum, item) => {
+    const draftValue = buyingPriceDraft[item.id];
+    const unitCost = draftValue === undefined ? Number(item.buyingPrice ?? 0) : Number(draftValue);
+    return sum + (Number.isFinite(unitCost) ? Math.max(0, unitCost) : 0) * Math.max(1, Number(item.quantity ?? 1));
+  }, 0);
+  const profitPreview = receiptGrandTotal - buyingPricePreview - posCommissionTotal;
+  const openBuyingPriceEditor = () => {
+    setBuyingPriceDraft(
+      Object.fromEntries(itemsWithCost.map((item) => [item.id, item.buyingPrice === null ? "" : String(item.buyingPrice)])),
+    );
+    setBuyingPriceEditorOpen(true);
+  };
+  const saveBuyingPrices = async () => {
+    if (!selected?.id || !itemsWithCost.length) return;
+    const items = itemsWithCost.map((item) => ({
+      orderItemId: item.id,
+      buyingPrice: Number(buyingPriceDraft[item.id]),
+    }));
+    const hasInvalidPrice = items.some(
+      (item) => buyingPriceDraft[item.orderItemId]?.trim() === "" || !Number.isFinite(item.buyingPrice) || item.buyingPrice < 0,
+    );
+    if (hasInvalidPrice) {
+      showToast("Enter a valid buying price for every item", "warn");
+      return;
+    }
+
+    setBuyingPriceSaving(true);
+    try {
+      const response = await fetch(`/api/receipts/${selected.id}/buying-prices`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ items }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload?.error || "Failed to update buying prices");
+
+      showToast(
+        `Buying prices saved. Profit recalculated to ${formatCurrency(payload?.profit ?? profitPreview)}.`,
+        "success",
+      );
+      setBuyingPriceEditorOpen(false);
+      setBuyingPriceDraft({});
+      await loadRows(page, { silent: true });
+      await fetchSummary();
+      await fetchReceiptDetail(selected.id);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to update buying prices";
+      showToast(message, "error");
+    } finally {
+      setBuyingPriceSaving(false);
+    }
+  };
   const tradingPeriod = getTradingPeriodFor(new Date());
   const rangeLabelText =
     quickRange === "today"
@@ -2210,21 +2269,31 @@ export default function ReceiptsAdminClient({
       {drawerOpen && (
         <>
           <div className="fixed inset-0 z-40 bg-black/60" onClick={closeDrawer} />
-          <aside className="fixed inset-y-0 right-0 z-50 w-full max-w-xl transform bg-slate-950 p-6 text-slate-100 shadow-2xl shadow-black/60 transition-transform">
+          <aside className="fixed inset-y-0 right-0 z-50 w-full max-w-xl transform overflow-y-auto bg-slate-950 p-6 text-slate-100 shadow-2xl shadow-black/60 transition-transform">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Receipt detail</p>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
                   <h2 className="text-xl font-semibold text-white">{selected?.orderRef || selected?.id}</h2>
                   {allowEdit && selected?.id ? (
-                    <button
-                      type="button"
-                      onClick={() => void handleRecalculateReceiptCosts(selected.id)}
-                      disabled={recalculatingReceiptId === selected.id}
-                      className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50"
-                    >
-                      {recalculatingReceiptId === selected.id ? "Recalculating..." : "Recalculate cost"}
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={openBuyingPriceEditor}
+                        disabled={detailLoading || itemsWithCost.length === 0}
+                        className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100 hover:bg-cyan-500/20 disabled:opacity-50"
+                      >
+                        Edit buying prices
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleRecalculateReceiptCosts(selected.id)}
+                        disabled={recalculatingReceiptId === selected.id}
+                        className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50"
+                      >
+                        {recalculatingReceiptId === selected.id ? "Recalculating..." : "Use catalogue cost"}
+                      </button>
+                    </>
                   ) : null}
                 </div>
               </div>
@@ -2380,6 +2449,48 @@ export default function ReceiptsAdminClient({
                     </p>
                   )}
                 </div>
+
+                {allowEdit && buyingPriceEditorOpen && (
+                  <section className="rounded-2xl border border-cyan-400/30 bg-cyan-400/5 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">Edit buying prices</p>
+                        <p className="mt-1 text-xs leading-5 text-slate-400">Update unit costs only. Selling prices and customer totals will not change.</p>
+                      </div>
+                      <button type="button" onClick={() => setBuyingPriceEditorOpen(false)} disabled={buyingPriceSaving} className="rounded-lg border border-white/10 px-2 py-1 text-xs text-slate-300 disabled:opacity-50">Cancel</button>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      {itemsWithCost.map((item) => (
+                        <label key={item.id} className="grid gap-2 rounded-xl border border-white/10 bg-slate-950/50 p-3 sm:grid-cols-[1fr_150px] sm:items-center">
+                          <span>
+                            <span className="block text-sm font-semibold text-white">{item.displayName || "Item"}</span>
+                            <span className="text-xs text-slate-500">Qty {Math.max(1, Number(item.quantity ?? 1))} · Selling {formatCurrency(item.sellingPrice)}</span>
+                          </span>
+                          <span className="relative block">
+                            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">KES</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              inputMode="decimal"
+                              value={buyingPriceDraft[item.id] ?? ""}
+                              onChange={(event) => setBuyingPriceDraft((current) => ({ ...current, [item.id]: event.target.value }))}
+                              className="w-full rounded-lg border border-white/15 bg-slate-950 py-2 pl-11 pr-3 text-right text-sm font-semibold text-white outline-none focus:border-cyan-400"
+                              aria-label={`Buying price for ${item.displayName || "item"}`}
+                            />
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-3 rounded-xl border border-white/10 bg-slate-950/40 p-3 text-sm">
+                      <div><p className="text-xs text-slate-500">New buying total</p><p className="font-semibold text-white">{formatCurrency(buyingPricePreview)}</p></div>
+                      <div><p className="text-xs text-slate-500">Estimated profit</p><p className={`font-semibold ${profitPreview >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{formatCurrency(profitPreview)}</p></div>
+                    </div>
+                    <button type="button" onClick={() => void saveBuyingPrices()} disabled={buyingPriceSaving} className="mt-4 w-full rounded-xl bg-cyan-300 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:opacity-50">
+                      {buyingPriceSaving ? "Saving and recalculating..." : "Save prices and recalculate profit"}
+                    </button>
+                  </section>
+                )}
 
                 {detail.receipt.data?.podDelivery && (
                   <div className="rounded-2xl border border-yellow-500/40 bg-yellow-500/5 p-4 text-sm text-yellow-100">
