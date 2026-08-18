@@ -20,7 +20,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import getLandingPage from "@/lib/getLandingPage";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import type { EarningsSummary } from "@/lib/marketingEarnings";
-import { signOut } from "next-auth/react";
 import { Trash2 } from "lucide-react";
 import { useCardLock, LockButton } from "@/app/_components/useCardLock";
 import type { UnpricedSale } from "@/lib/marketingUnpricedSales";
@@ -759,8 +758,6 @@ function ReceiptsList({ anchorId = "receipts" }: { anchorId?: string }) {
               <p className="text-sm font-semibold text-emerald-300">{formatKES(receipt.total)}</p>
               <Link
                 href={`/receipts/${receipt.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
                 className="text-xs text-emerald-300 hover:text-emerald-200"
               >
                 View details
@@ -780,108 +777,91 @@ export function MarketingTrackerTopActions() {
   const [downloadingPerformance, setDownloadingPerformance] = useState(false);
   const { selectedPeriod } = useTradingPeriodQueryState();
   const searchParams = useSearchParams();
-  const impersonateIdFromWindow = () =>
-    typeof window !== "undefined"
-      ? new URLSearchParams(window.location.search).get("impersonateId")
-      : null;
+  const impersonateId = searchParams.get("impersonateId");
+  const withContext = (href: string) => withImpersonateId(href, impersonateId);
   const selectedReportDate = searchParams.get("reportDate") || defaultFormState().date;
   const downloadPerformancePdf = () => {
     try {
       setDownloadingPerformance(true);
       const params = new URLSearchParams();
       if (selectedPeriod?.key) params.set("periodKey", selectedPeriod.key);
-      const imp = impersonateIdFromWindow();
-      if (imp) params.set("impersonateId", imp);
+      if (impersonateId) params.set("impersonateId", impersonateId);
       params.set("ts", String(Date.now()));
       const url = `/api/attendant/daily-report/performance-receipt/pdf?${params.toString()}`;
-      window.open(url, "_blank", "noopener,noreferrer");
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
     } finally {
       setTimeout(() => setDownloadingPerformance(false), 700);
     }
   };
 
   return (
-    <div className="flex flex-col gap-3 lg:items-end">
-      <Link
-        href={`/receipts?start=${selectedReportDate}&end=${selectedReportDate}`}
-        className="rounded-full border-2 border-emerald-400 bg-emerald-400/10 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-400/15"
-      >
-        Create Receipt
-      </Link>
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        <Link
+          href={withContext(`/receipts?view=create&start=${selectedReportDate}&end=${selectedReportDate}`)}
+          className="rounded-2xl bg-emerald-400 px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-950 transition hover:bg-emerald-300"
+        >
+          Create receipt
+        </Link>
+        <button
+          type="button"
+          onClick={downloadPerformancePdf}
+          className="rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:bg-cyan-400/15"
+        >
+          {downloadingPerformance ? "Preparing..." : "Download report"}
+        </button>
+      </div>
 
-      <div className="flex max-w-[46rem] flex-wrap justify-start gap-2 lg:justify-end">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         <Link
-          href="/marketing/receipts?tab=pos"
-          className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 hover:border-white/30 hover:bg-white/[0.06]"
+          href={withContext("/marketing/receipts?tab=pos")}
+          className="rounded-xl border border-white/10 px-3 py-2 text-center text-xs text-slate-200 hover:bg-white/5"
         >
-          Receipts
+          POS receipts
         </Link>
         <Link
-          href="/marketing/receipts?tab=pos"
-          className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 hover:border-white/30 hover:bg-white/[0.06]"
+          href={withContext("/marketing/receipts?tab=web-orders")}
+          className="rounded-xl border border-white/10 px-3 py-2 text-center text-xs text-slate-200 hover:bg-white/5"
         >
-          POS Receipts
+          Web orders
         </Link>
         <Link
-          href="/marketing/receipts?tab=web-orders"
-          className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 hover:border-white/30 hover:bg-white/[0.06]"
+          href={withContext("/marketing/agent-orders")}
+          className="rounded-xl border border-white/10 px-3 py-2 text-center text-xs text-slate-200 hover:bg-white/5"
         >
-          Web Orders
+          Agent orders
         </Link>
         <Link
-          href="/marketing/agent-orders"
-          className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 hover:border-white/30 hover:bg-white/[0.06]"
-        >
-          Agent Orders
-        </Link>
-        <Link
-          href="/marketing/receipts?tab=quotations"
-          className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 hover:border-white/30 hover:bg-white/[0.06]"
+          href={withContext("/marketing/receipts?tab=quotations")}
+          className="rounded-xl border border-white/10 px-3 py-2 text-center text-xs text-slate-200 hover:bg-white/5"
         >
           Quotations
         </Link>
         <Link
-          href={withImpersonateId("/attendant/voice", impersonateIdFromWindow())}
-          className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 hover:border-white/30 hover:bg-white/[0.06]"
+          href={withContext("/attendant/voice?tab=followups")}
+          className="rounded-xl border border-white/10 px-3 py-2 text-center text-xs text-slate-200 hover:bg-white/5"
         >
-          Voice Calls
+          Voice calls
         </Link>
-      </div>
-
-      <div className="flex max-w-[46rem] flex-wrap justify-start gap-2 lg:justify-end">
-        <button
-          type="button"
-          onClick={downloadPerformancePdf}
-          className="rounded-full border border-white/10 bg-slate-950/40 px-4 py-2 text-xs font-medium text-slate-200 hover:border-white/30 hover:bg-white/[0.06]"
-        >
-          {downloadingPerformance ? "Preparing…" : "Download report"}
-        </button>
-        <button
-          type="button"
-          onClick={downloadPerformancePdf}
-          className="rounded-full border border-white/10 bg-slate-950/40 px-4 py-2 text-xs font-medium text-slate-200 hover:border-white/30 hover:bg-white/[0.06]"
-        >
-          {downloadingPerformance ? "Preparing…" : "Performance PDF"}
-        </button>
         <Link
-          href={withImpersonateId("/attendant/wellness", impersonateIdFromWindow())}
-          className="rounded-full border border-white/10 bg-slate-950/40 px-4 py-2 text-xs font-medium text-slate-200 hover:border-white/30 hover:bg-white/[0.06]"
+          href={withContext("/attendant/wellness")}
+          className="rounded-xl border border-white/10 px-3 py-2 text-center text-xs text-slate-200 hover:bg-white/5"
         >
           Wellness
         </Link>
-        <button
-          type="button"
-          onClick={() => signOut({ callbackUrl: "/attendant/login" })}
-          className="rounded-full border border-white/10 bg-slate-950/40 px-4 py-2 text-xs font-medium text-slate-200 hover:border-white/30 hover:bg-white/[0.06]"
-        >
-          Log out
-        </button>
       </div>
     </div>
   );
 }
 
 export default function MarketingTrackerLegacySections() {
+  const searchParams = useSearchParams();
+  const trackerImpersonateId = searchParams.get("impersonateId");
   const impersonateIdFromWindow = () =>
     typeof window !== "undefined"
       ? new URLSearchParams(window.location.search).get("impersonateId")
@@ -2473,7 +2453,7 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
                 />
                 <BrendahLegacyEarningsCard
                   summary={earningsSummary}
-                  downloadHref={`/api/attendant/payslip?periodKey=${encodeURIComponent(selectedPeriod.key)}`}
+                  downloadHref={withImpersonateId(`/api/attendant/payslip?periodKey=${encodeURIComponent(selectedPeriod.key)}`, trackerImpersonateId)}
                 />
               </>
             ) : (
@@ -2493,7 +2473,7 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
                 />
                 <EarningsCard
                   summary={earningsSummary}
-                  downloadHref={`/api/attendant/payslip?periodKey=${encodeURIComponent(selectedPeriod.key)}`}
+                  downloadHref={withImpersonateId(`/api/attendant/payslip?periodKey=${encodeURIComponent(selectedPeriod.key)}`, trackerImpersonateId)}
                 />
               </>
             )}

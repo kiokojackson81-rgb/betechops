@@ -453,7 +453,7 @@ type TrackerPageProps = {
 
 export default async function MarketingTrackerPage({ searchParams }: TrackerPageProps) {
   const session = await auth();
-  const user = session?.user as {
+  const actor = session?.user as {
     id?: string | null;
     email?: string | null;
     name?: string | null;
@@ -461,9 +461,8 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
     attendantCategory?: string | null;
   } | undefined;
 
-  if (!session || !user?.id) redirect("/admin/login");
-  if (!canAccessOperationsHub(user.role, user.attendantCategory)) redirect("/not-authorized");
-  const userId = user.id;
+  if (!session || !actor?.id) redirect("/admin/login");
+  if (!canAccessOperationsHub(actor.role, actor.attendantCategory)) redirect("/not-authorized");
 
   const resolvedSearchParams = (await searchParams) ?? {};
   const periodKeyParam = Array.isArray(resolvedSearchParams.periodKey)
@@ -475,6 +474,26 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
   const impersonateId = typeof impersonateIdParam === "string" && impersonateIdParam.trim()
     ? impersonateIdParam.trim()
     : null;
+  let user = actor;
+
+  if (actor.role === "ADMIN" && impersonateId) {
+    const target = await prisma.user.findUnique({
+      where: { id: impersonateId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        attendantCategory: true,
+      },
+    });
+
+    if (target && canAccessOperationsHub(target.role, target.attendantCategory)) {
+      user = target;
+    }
+  }
+
+  const userId = String(user.id);
   const period = parseTradingPeriodKey(periodKeyParam) ?? getTradingPeriodFor(new Date());
   const nairobiDate = new Intl.DateTimeFormat("en-KE", {
     weekday: "short",
@@ -483,6 +502,13 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
     year: "numeric",
     timeZone: "Africa/Nairobi",
   }).format(new Date());
+  const nairobiHour = Number(
+    new Intl.DateTimeFormat("en-KE", {
+      hour: "2-digit",
+      hourCycle: "h23",
+      timeZone: "Africa/Nairobi",
+    }).format(new Date()),
+  );
   const [
     rawWebsiteOrders,
     rawQuoteRequests,
@@ -732,18 +758,17 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
   const voiceQueueCount = voiceMissedCount + voiceFollowUpCount;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <main className="mx-auto max-w-7xl space-y-6 p-6">
-        <header className="rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(15,23,42,.98),rgba(2,6,23,.98))] px-6 py-6 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+    <div className="mx-auto max-w-[1420px] space-y-4 text-slate-100 sm:space-y-6">
+        <header className="rounded-[22px] border border-white/10 bg-gradient-to-br from-white/8 via-white/4 to-transparent p-4 shadow-2xl shadow-black/20 sm:rounded-[28px] sm:p-6">
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_520px] xl:items-start">
             <div className="space-y-4">
-              <div className="inline-flex items-center rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
-                {staffRoleLabel(user.role, user.attendantCategory)}
-              </div>
+              <div className="text-xs uppercase tracking-[0.26em] text-cyan-200/80">{staffRoleLabel(user.role, user.attendantCategory)}</div>
               <div>
-                <h1 className="max-w-xl text-4xl font-semibold leading-tight text-white">Sales Operations Dashboard</h1>
+                <h1 className="max-w-2xl text-2xl font-semibold leading-tight tracking-tight text-white sm:text-3xl">
+                  Good {nairobiHour < 12 ? "morning" : nairobiHour < 17 ? "afternoon" : "evening"}, {user.name?.split(" ")[0] || "there"}.
+                </h1>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
-                  Pending sales work, web orders, agent orders, quotations, POD follow-up, and staff reporting in one place.
+                  Your sales queues, quotations, customer follow-ups, daily reporting, commission, and payroll are connected here.
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -759,11 +784,21 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
               </div>
             </div>
 
-            <MarketingTrackerTopActions />
+            <div className="min-w-0 rounded-3xl border border-white/10 bg-[#091223] p-4">
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-white/10 pb-4">
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Statistics period</div>
+                  <div className="mt-1 text-lg font-semibold text-white">{period.label}</div>
+                  <div className="mt-1 text-xs text-slate-400">Today · {nairobiDate}</div>
+                </div>
+                <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-100">Nairobi</span>
+              </div>
+              <MarketingTrackerTopActions />
+            </div>
           </div>
         </header>
 
-        <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
+        <section id="attention" className="scroll-mt-36 rounded-[22px] border border-white/10 bg-[#091223] p-3 shadow-2xl shadow-black/20 sm:scroll-mt-6 sm:rounded-[28px] sm:p-5">
           <div className="mb-5">
             <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Needs Attention</div>
             <h2 className="mt-2 text-2xl font-semibold text-white">Sales Control Center</h2>
@@ -778,35 +813,35 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
               count={websiteOrdersPending.length}
               currentPeriodCount={websiteOrdersInPeriod.length}
               carriedForwardCount={websiteOrdersCarriedForward.length}
-              href="/marketing/receipts?tab=web-orders"
+              href={withImpersonateId("/marketing/receipts?tab=web-orders", impersonateId)}
             />
             <PendingKpiCard
               title="Agent Orders"
               count={openAgentOrders.length}
               currentPeriodCount={openAgentOrdersInPeriod.length}
               carriedForwardCount={openAgentOrdersCarriedForward.length}
-              href="/marketing/agent-orders"
+              href={withImpersonateId("/marketing/agent-orders", impersonateId)}
             />
             <PendingKpiCard
               title="Quotations"
               count={quoteRequests.length}
               currentPeriodCount={quoteRequestsInPeriod.length}
               carriedForwardCount={quoteRequestsCarriedForward.length}
-              href="/marketing/receipts?tab=quotations"
+              href={withImpersonateId("/marketing/receipts?tab=quotations", impersonateId)}
             />
             <PendingKpiCard
               title="POD Follow-up"
               count={pendingPodFollowUp.length}
               currentPeriodCount={pendingPodFollowUpInPeriod.length}
               carriedForwardCount={pendingPodFollowUpCarriedForward.length}
-              href="/marketing/receipts?tab=pos&pod=pending"
+              href={withImpersonateId("/marketing/receipts?tab=pos&pod=pending", impersonateId)}
             />
             <PendingKpiCard
               title="Missed Calls / Follow-ups"
               count={voiceQueueCount}
               currentPeriodCount={voiceMissedCount}
               carriedForwardCount={voiceFollowUpCount}
-              href="/attendant/voice?tab=followups"
+              href={withImpersonateId("/attendant/voice?tab=followups", impersonateId)}
               breakdownLabel="Missed"
               secondaryBreakdownLabel="Follow-ups"
             />
@@ -829,7 +864,7 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
               needsAttentionQueue.map((item) => (
                 <div
                   key={item.id}
-                  className="grid gap-3 rounded-[22px] border border-white/10 bg-white/[0.03] p-4 lg:grid-cols-[140px_1.3fr_1fr_160px_140px_150px]"
+                  className="grid gap-4 rounded-[20px] border border-white/10 bg-white/[0.03] p-3 md:grid-cols-2 xl:grid-cols-[120px_minmax(180px,1.3fr)_minmax(130px,.8fr)_minmax(120px,.7fr)_minmax(130px,.8fr)_minmax(130px,auto)] xl:items-center"
                 >
                   <div className="flex flex-col items-start gap-2">
                     <span className="inline-flex rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-100">
@@ -841,8 +876,8 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
                       </span>
                     ) : null}
                   </div>
-                  <div>
-                    <Link href={item.customerHref} className="font-semibold text-white transition hover:text-cyan-200">
+                  <div className="min-w-0">
+                    <Link href={withImpersonateId(item.customerHref, impersonateId)} className="line-clamp-2 font-semibold leading-5 text-white transition hover:text-cyan-200">
                       {item.customerName}
                     </Link>
                     <div className="mt-1 text-sm text-slate-400">{item.phone || "No phone captured"}</div>
@@ -859,7 +894,7 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
                     <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Assigned</div>
                     <div className="mt-1 text-slate-200">{item.assignedTo || "Shared queue"}</div>
                   </div>
-                  <div className="flex items-center justify-start lg:justify-end">
+                  <div className="flex items-center justify-start md:col-span-2 xl:col-span-1 xl:justify-end">
                     <Link
                       href={item.href}
                       className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-300/30 hover:bg-emerald-400/15"
@@ -883,7 +918,7 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
           </div>
         </section>
 
-        <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.96),rgba(2,6,23,.98))] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
+        <section id="daily-report" className="scroll-mt-36 rounded-[22px] border border-white/10 bg-[#091223] p-3 shadow-2xl shadow-black/20 sm:scroll-mt-6 sm:rounded-[28px] sm:p-5">
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Staff Report & Payroll</div>
@@ -896,7 +931,6 @@ export default async function MarketingTrackerPage({ searchParams }: TrackerPage
           <MarketingTrackerLegacySections />
         </section>
 
-      </main>
     </div>
   );
 }
