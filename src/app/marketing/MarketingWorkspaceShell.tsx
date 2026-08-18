@@ -40,6 +40,9 @@ function pageHeading(pathname: string) {
   if (pathname.includes("/earnings")) {
     return ["Earnings & Payroll", "Review salary, commissions, deductions, month comparisons, reports, and payslips."];
   }
+  if (pathname.includes("/wellness")) {
+    return ["Wellness Center", "Manage leave, cash support, supporting documents, and upcoming deductions."];
+  }
   if (pathname.includes("/agent-orders")) {
     return ["Agent Orders", "Review, process, and follow up agent-assisted customer orders."];
   }
@@ -107,7 +110,7 @@ export default function MarketingWorkspaceShell({ children }: { children: ReactN
     earnings: withImpersonation("/marketing/earnings"),
     createReceipt: withImpersonation("/receipts?view=create"),
     voice: withImpersonation("/attendant/voice?tab=followups"),
-    wellness: withImpersonation("/attendant/wellness"),
+    wellness: withImpersonation("/marketing/wellness"),
     report: withImpersonation("/api/attendant/daily-report/performance-receipt/pdf"),
     payslip: withImpersonation("/api/attendant/payslip"),
   };
@@ -117,6 +120,7 @@ export default function MarketingWorkspaceShell({ children }: { children: ReactN
     if (key === "agentOrders") return pathname.includes("/agent-orders");
     if (key === "products") return pathname.includes("/products");
     if (key === "earnings") return pathname.includes("/earnings");
+    if (key === "wellness") return pathname.includes("/wellness");
     if (key === "pos") return pathname.includes("/receipts") && (currentTab === "pos" || !currentTab);
     if (key === "webOrders") return pathname.includes("/receipts") && currentTab === "web-orders";
     if (key === "quotations") return pathname.includes("/receipts") && currentTab === "quotations";
@@ -181,7 +185,7 @@ export default function MarketingWorkspaceShell({ children }: { children: ReactN
               <div className="space-y-1">
                 <Link href={links.createReceipt} className={navClass()}><ShoppingBag className="h-4 w-4 text-emerald-200" />Create receipt</Link>
                 <Link href={links.voice} className={navClass()}><PhoneCall className="h-4 w-4" />Calls & follow-ups</Link>
-                <Link href={links.wellness} className={navClass()}><HeartPulse className="h-4 w-4" />Wellness</Link>
+                <Link href={links.wellness} className={navClass(isActive("wellness"))}><HeartPulse className="h-4 w-4" />Wellness</Link>
               </div>
             </div>
 
