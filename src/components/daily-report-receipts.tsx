@@ -655,7 +655,7 @@ export default function DailyReportReceiptsPanel({
                 key={receipt.id}
                 className="rounded-[18px] border border-white/10 bg-white/[0.03] p-3 sm:rounded-[22px] sm:p-4"
               >
-                <div className="grid gap-4 md:grid-cols-2 md:items-start xl:grid-cols-[80px_minmax(190px,1.4fr)_minmax(120px,0.75fr)_minmax(135px,0.8fr)_minmax(150px,0.9fr)_minmax(150px,auto)] xl:items-center">
+                <div className="grid min-w-0 gap-4 md:grid-cols-2 md:items-start xl:grid-cols-[72px_minmax(0,1.35fr)_minmax(0,.7fr)_minmax(0,.8fr)_minmax(0,.9fr)_minmax(0,1.05fr)] xl:items-center">
                   <div>
                     <span
                       className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${
@@ -674,11 +674,11 @@ export default function DailyReportReceiptsPanel({
                     <div className="mt-1 break-normal text-xs text-slate-400">{receipt.customerPhone || "-"}</div>
                     <div className="mt-1 break-all text-xs text-slate-500">{receipt.orderRef ?? receipt.receiptNumber ?? receipt.docType ?? receipt.id}</div>
                   </div>
-                  <div className="text-sm text-slate-300">
+                  <div className="min-w-0 text-sm text-slate-300">
                     <div>{receipt.docType ?? "Receipt"}</div>
                     <div className="mt-1 text-xs text-slate-500">{receipt.attendantName ?? "Attendant unknown"}</div>
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="font-semibold text-emerald-300">{formatKES(receipt.total)}</div>
                     {receipt.isPodDelivery && receipt.podDeliveryFee != null ? (
                       <div className="mt-1 text-xs text-emerald-200">Fee {formatKES(receipt.podDeliveryFee)}</div>
@@ -686,7 +686,7 @@ export default function DailyReportReceiptsPanel({
                       <div className="mt-1 text-xs text-slate-500">{receipt.customerEmail || "No email"}</div>
                     )}
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <span
                       className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] ${
                         projectStageLabel
@@ -705,7 +705,7 @@ export default function DailyReportReceiptsPanel({
                     ) : null}
                     <div className="mt-2 text-xs text-slate-500">{formatDateTime(receipt.createdAt)}</div>
                   </div>
-                  <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 md:col-span-2 xl:col-span-1 xl:flex xl:flex-wrap xl:justify-end">
+                  <div className="grid min-w-0 grid-cols-1 gap-2 min-[420px]:grid-cols-2 md:col-span-2 xl:col-span-1 xl:grid-cols-1 2xl:grid-cols-2">
                     {receipt.isPodDelivery && String(receipt.podDeliveryStatus ?? "").toLowerCase() === "pending" && receipt.source === "pos" ? (
                       <button
                         type="button"
@@ -725,13 +725,13 @@ export default function DailyReportReceiptsPanel({
                       </button>
                     ) : null}
                     {receipt.detailUrl ? (
-                      <a href={receipt.detailUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/25 hover:bg-white/[0.06]">Open receipt</a>
+                      <a href={receipt.detailUrl} className="inline-flex min-w-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/25 hover:bg-white/[0.06]">Open receipt</a>
                     ) : receipt.source === "pos" && receipt.id ? (
-                      <a href={`/receipts/${receipt.id}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/25 hover:bg-white/[0.06]">Open receipt</a>
+                      <a href={`/receipts/${receipt.id}`} className="inline-flex min-w-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/25 hover:bg-white/[0.06]">Open receipt</a>
                     ) : (
                       <span className="text-xs text-slate-500">Unavailable</span>
                     )}
-                    <Link href={customerProfileHref} className="inline-flex items-center justify-center rounded-full border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-300/30 hover:bg-cyan-500/20">
+                    <Link href={customerProfileHref} className="inline-flex min-w-0 items-center justify-center rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-cyan-100 transition hover:border-cyan-300/30 hover:bg-cyan-500/20">
                       Open customer
                     </Link>
                   </div>

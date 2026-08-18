@@ -419,10 +419,10 @@ function MarketingReceiptsPageInner() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <main className="mx-auto max-w-7xl space-y-4 p-4">
+    <div className="min-w-0 overflow-x-hidden bg-slate-950 text-slate-100">
+      <main className="mx-auto min-w-0 max-w-7xl space-y-4 p-2 sm:p-4">
         <header className="rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(15,23,42,.98),rgba(2,6,23,.98))] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
+          <div className="space-y-5">
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
@@ -441,11 +441,11 @@ function MarketingReceiptsPageInner() {
                 </p>
               </div>
             </div>
-            <div className="flex flex-wrap gap-2 xl:justify-end">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
               <button
                 type="button"
                 onClick={() => setReceiptViewMode("receipts")}
-                className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                className={`min-h-11 rounded-2xl border px-3 py-2 text-xs font-semibold uppercase tracking-wide transition ${
                   viewMode === "receipts"
                     ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
                     : "border-white/10 bg-white/[0.03] text-slate-100 hover:border-white/30 hover:bg-white/[0.06]"
@@ -456,7 +456,7 @@ function MarketingReceiptsPageInner() {
               <button
                 type="button"
                 onClick={() => setReceiptViewMode("web-orders")}
-                className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                className={`min-h-11 rounded-2xl border px-3 py-2 text-xs font-semibold uppercase tracking-wide transition ${
                   viewMode === "web-orders"
                     ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
                     : "border-white/10 bg-white/[0.03] text-slate-100 hover:border-white/30 hover:bg-white/[0.06]"
@@ -467,7 +467,7 @@ function MarketingReceiptsPageInner() {
               <button
                 type="button"
                 onClick={() => setReceiptViewMode("quote-requests")}
-                className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                className={`min-h-11 rounded-2xl border px-3 py-2 text-xs font-semibold uppercase tracking-wide transition ${
                   viewMode === "quote-requests"
                     ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
                     : "border-white/10 bg-white/[0.03] text-slate-100 hover:border-white/30 hover:bg-white/[0.06]"
@@ -477,13 +477,13 @@ function MarketingReceiptsPageInner() {
               </button>
               <Link
                 href={impersonateId ? `/marketing/agent-orders?impersonateId=${encodeURIComponent(impersonateId)}` : "/marketing/agent-orders"}
-                className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.06]"
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.06]"
               >
                 Agent Orders
               </Link>
               <Link
                 href={impersonateId ? `/marketing/tracker?impersonateId=${encodeURIComponent(impersonateId)}` : "/marketing/tracker"}
-                className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.06]"
+                className="col-span-2 inline-flex min-h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-100 transition hover:border-white/30 hover:bg-white/[0.06] sm:col-span-1"
               >
                 Operations Overview
               </Link>
@@ -538,10 +538,13 @@ function MarketingReceiptsPageInner() {
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-[20px] border border-white/10 bg-slate-900/80 p-3">
             <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-              Total Sales
+              Visible Receipt Value
             </div>
             <div className="mt-2 text-xl font-semibold text-white">{formatKES(summary.totalSales)}</div>
             <div className="mt-1 text-xs text-slate-400">{selectedRangeLabel}</div>
+            <div className="mt-1 text-[11px] text-slate-500">
+              Includes pending, unpaid, and paid receipts shown in this desk.
+            </div>
           </div>
           <div className="rounded-[20px] border border-white/10 bg-slate-900/80 p-3">
             <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">

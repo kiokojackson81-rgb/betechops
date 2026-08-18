@@ -12,6 +12,7 @@ import {
   HeartPulse,
   LayoutDashboard,
   LogOut,
+  PackageSearch,
   PhoneCall,
   Receipt,
   ShoppingBag,
@@ -32,6 +33,9 @@ const initialIdentity: Identity = {
 };
 
 function pageHeading(pathname: string) {
+  if (pathname.includes("/products")) {
+    return ["Website Products", "Add, edit, publish, price, and maintain products shown on the Betech website."];
+  }
   if (pathname.includes("/agent-orders")) {
     return ["Agent Orders", "Review, process, and follow up agent-assisted customer orders."];
   }
@@ -95,6 +99,7 @@ export default function MarketingWorkspaceShell({ children }: { children: ReactN
     webOrders: withImpersonation("/marketing/receipts?tab=web-orders"),
     agentOrders: withImpersonation("/marketing/agent-orders"),
     quotations: withImpersonation("/marketing/receipts?tab=quotations"),
+    products: withImpersonation("/marketing/products"),
     createReceipt: withImpersonation("/receipts?view=create"),
     voice: withImpersonation("/attendant/voice?tab=followups"),
     wellness: withImpersonation("/attendant/wellness"),
@@ -105,6 +110,7 @@ export default function MarketingWorkspaceShell({ children }: { children: ReactN
   const isActive = (key: keyof typeof links) => {
     if (key === "dashboard") return pathname === "/marketing/tracker";
     if (key === "agentOrders") return pathname.includes("/agent-orders");
+    if (key === "products") return pathname.includes("/products");
     if (key === "pos") return pathname.includes("/receipts") && (currentTab === "pos" || !currentTab);
     if (key === "webOrders") return pathname.includes("/receipts") && currentTab === "web-orders";
     if (key === "quotations") return pathname.includes("/receipts") && currentTab === "quotations";
@@ -116,6 +122,10 @@ export default function MarketingWorkspaceShell({ children }: { children: ReactN
         ? "border-cyan-400/30 bg-cyan-400/10 text-white"
         : "border-transparent text-slate-300 hover:border-white/10 hover:bg-white/5 hover:text-white"
     }`;
+  const canManageProducts =
+    identity.email.toLowerCase() === "brendah@betech.co.ke" ||
+    identity.role.toUpperCase() === "ADMIN" ||
+    identity.role.toUpperCase() === "SUPERVISOR";
 
   const coreMobileLinks = [
     { key: "dashboard" as const, href: links.dashboard, label: "Dashboard", icon: LayoutDashboard },
@@ -154,6 +164,9 @@ export default function MarketingWorkspaceShell({ children }: { children: ReactN
                 <Link href={links.webOrders} className={navClass(isActive("webOrders"))}><Globe2 className="h-4 w-4" />Website orders</Link>
                 <Link href={links.agentOrders} className={navClass(isActive("agentOrders"))}><UsersRound className="h-4 w-4" />Agent orders</Link>
                 <Link href={links.quotations} className={navClass(isActive("quotations"))}><FileText className="h-4 w-4" />Quotations</Link>
+                {canManageProducts ? (
+                  <Link href={links.products} className={navClass(isActive("products"))}><PackageSearch className="h-4 w-4 text-amber-200" />Website products</Link>
+                ) : null}
               </div>
             </div>
 
@@ -217,6 +230,9 @@ export default function MarketingWorkspaceShell({ children }: { children: ReactN
               </summary>
               <div className="grid grid-cols-2 gap-2 border-t border-white/10 p-2 sm:grid-cols-4">
                 <Link href={links.quotations} className="rounded-xl border border-white/10 px-3 py-2 text-center text-xs">Quotations</Link>
+                {canManageProducts ? (
+                  <Link href={links.products} className="rounded-xl border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-center text-xs text-amber-100">Website products</Link>
+                ) : null}
                 <Link href={links.createReceipt} className="rounded-xl border border-white/10 px-3 py-2 text-center text-xs">Create receipt</Link>
                 <Link href={links.voice} className="rounded-xl border border-white/10 px-3 py-2 text-center text-xs">Follow-ups</Link>
                 <Link href={links.wellness} className="rounded-xl border border-white/10 px-3 py-2 text-center text-xs">Wellness</Link>
