@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { buildMockProductsResponse, isShopOpsApiEnabled } from "@/app/shop/integrationPlan";
 import { filterShopProducts, getOpsCatalogueProductsReadOnlyMapped } from "@/app/shop/shopProductMapper";
-import { allShopProducts } from "@/app/shop/shopData";
+import { allShopProducts, type ShopProduct } from "@/app/shop/shopData";
 
 // TODO: Keep catalogue reads read-only until live ecommerce order handling is approved.
 // TODO: Do not create POS records, receipts, stock deductions, or payments from /shop in Phase 9.
@@ -10,14 +10,23 @@ export async function GET(request: Request) {
   const category = searchParams.get("category");
   const subcategory = searchParams.get("subcategory");
   const q = searchParams.get("q");
-  const fallback = buildMockProductsResponse(filterShopProducts(allShopProducts, { category, subcategory, q }));
+  const eligibleOnly = searchParams.get("lipaPolePole") === "eligible";
+  const keepEligible = (products: ShopProduct[]) =>
+    eligibleOnly
+      ? products.filter((product) => product.lipaPolePoleEnabled && product.opsProductId)
+      : products;
+  const fallback = buildMockProductsResponse(
+    keepEligible(filterShopProducts(allShopProducts, { category, subcategory, q })),
+  );
 
   if (!isShopOpsApiEnabled()) {
     return NextResponse.json(fallback);
   }
 
   try {
-    const products = filterShopProducts(await getOpsCatalogueProductsReadOnlyMapped(), { category, subcategory, q });
+    const products = keepEligible(
+      filterShopProducts(await getOpsCatalogueProductsReadOnlyMapped(), { category, subcategory, q }),
+    );
 
     return NextResponse.json(
       {

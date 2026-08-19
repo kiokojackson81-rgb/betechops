@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, BadgeCheck, PackageCheck, ScrollText, Search, WalletCards } from "lucide-react";
+import { ArrowRight, BadgeCheck, PackageCheck, ScrollText, WalletCards } from "lucide-react";
+import LipaPolePoleProductSearch from "@/app/lipa-pole-pole/LipaPolePoleProductSearch";
 import ProductSection from "@/app/shop/_components/ProductSection";
 import ShopFooter from "@/app/shop/_components/ShopFooter";
 import ShopHeader from "@/app/shop/_components/ShopHeader";
@@ -10,6 +11,10 @@ import { getShopProducts } from "@/app/shop/shopApi";
 import { shopNavLinks } from "@/app/shop/shopData";
 import { SHOP_ACCOUNT_HREF } from "@/app/shop/storefrontPaths";
 import { LIPA_POLE_POLE_TERMS_PATH } from "@/lib/lipaPolePoleTerms";
+import {
+  compareProductsByLatest,
+  getPopularitySignalsForProducts,
+} from "@/lib/productPopularity";
 
 export const metadata: Metadata = {
   title: "Lipa Pole Pole | Betech Solar Solutions",
@@ -19,13 +24,36 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 type LipaPolePolePageProps = {
-  searchParams?: Promise<{ q?: string }>;
+  searchParams?: Promise<{ q?: string; sort?: string }>;
 };
 
+const ALLOWED_SORTS = new Set(["popular", "recent-purchase", "latest", "price-low", "price-high"]);
+
 export default async function LipaPolePolePage({ searchParams }: LipaPolePolePageProps) {
-  const query = String((await searchParams)?.q ?? "").trim();
+  const resolvedSearchParams = await searchParams;
+  const query = String(resolvedSearchParams?.q ?? "").trim();
+  const requestedSort = String(resolvedSearchParams?.sort ?? "popular");
+  const sort = ALLOWED_SORTS.has(requestedSort) ? requestedSort : "popular";
   const products = await getShopProducts(query ? { q: query } : undefined);
   const eligibleProducts = products.filter((product) => product.lipaPolePoleEnabled && product.opsProductId);
+  const popularitySignals = await getPopularitySignalsForProducts(eligibleProducts);
+  const sortedEligibleProducts = [...eligibleProducts].sort((a, b) => {
+    const left = popularitySignals.get(a.id) ?? { score: 0, latestAt: 0 };
+    const right = popularitySignals.get(b.id) ?? { score: 0, latestAt: 0 };
+
+    switch (sort) {
+      case "recent-purchase":
+        return right.latestAt - left.latestAt || right.score - left.score || a.name.localeCompare(b.name);
+      case "latest":
+        return compareProductsByLatest(a, b, popularitySignals);
+      case "price-low":
+        return a.price - b.price || a.name.localeCompare(b.name);
+      case "price-high":
+        return b.price - a.price || a.name.localeCompare(b.name);
+      default:
+        return right.score - left.score || right.latestAt - left.latestAt || a.name.localeCompare(b.name);
+    }
+  });
 
   return (
     <div className={`${shopStyles.page} pb-40 sm:pb-28`}>
@@ -86,22 +114,18 @@ export default async function LipaPolePolePage({ searchParams }: LipaPolePolePag
 
         <section className="py-3 sm:py-5">
           <div className={shopStyles.shell}>
-            <form action="/lipa-pole-pole" className={`${shopStyles.lightCard} flex flex-col gap-3 p-3 sm:flex-row sm:p-4`}>
-              <label className="flex min-h-12 flex-1 items-center gap-3 rounded-2xl border border-[#7a0000]/12 bg-[#fcfaf7] px-4">
-                <Search className="h-4 w-4 shrink-0 text-[#7a0000]" />
-                <input name="q" defaultValue={query} placeholder="Search eligible products" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400" />
-              </label>
-              <button type="submit" className={shopStyles.primaryButton}>Search Products</button>
-            </form>
+            <div className={`${shopStyles.lightCard} p-3 sm:p-4`}>
+              <LipaPolePoleProductSearch initialQuery={query} initialSort={sort} />
+            </div>
           </div>
         </section>
 
-        {eligibleProducts.length ? (
+        {sortedEligibleProducts.length ? (
           <ProductSection
             id="eligible-products"
             title={query ? `Eligible products matching “${query}”` : "Eligible Lipa Pole Pole Products"}
             subtitle="Open a product to review its price, deposit, payment schedule, and start your plan securely."
-            products={eligibleProducts}
+            products={sortedEligibleProducts}
           />
         ) : (
           <section id="eligible-products" className="py-4 sm:py-6">
