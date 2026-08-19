@@ -75,7 +75,7 @@ If the raw ops category is ambiguous or blank, fix it in ops before live launch 
 - `Solar Water Pumps`: DC Solar Water Pumps, AC Solar Water Pumps, Submersible Pumps, Surface Pumps, Borehole Pumps, Shallow Well Pumps, Deep Well Pumps, Booster Pumps, Irrigation Pumps, Livestock Water Pumps, Hybrid Water Pumps, Solar Pump Kits, Pump Controllers, Pumping Inverters, Petrol Water Pumps
 - `Solar Lights`: Solar Street Lights, Solar Flood Lights, Solar Wall Lights, Solar Garden Lights, Solar Motion Sensor Lights, Solar Ceiling Lights, Solar Indoor Lights, Solar Security Lights, Solar Camping Lights
 - `Solar Cameras & Security`: Solar CCTV Cameras, 4G Solar Cameras, WiFi Solar Cameras, PTZ Solar Cameras, Solar Security Kits, NVR Kits, CCTV Accessories
-- `DC Appliances`: DC TVs, DC Woofers, DC Fridges, DC Fans, DC Freezers, DC Bulbs, DC Air Coolers
+- `DC Appliances`: DC TVs, DC Woofers, DC Fridges, DC Fans, DC Freezers, DC Bulbs, DC Air Coolers, Solar Incubators
 - `Solar Water Heaters`: Pressurized Water Heaters, Non-Pressurized Water Heaters, Flat Plate Water Heaters, Vacuum Tube Water Heaters, Integrated Systems, Split Systems, Commercial Water Heaters
 - `Solar Charge Controllers`: PWM Controllers, MPPT Controllers, Bluetooth Controllers, LCD Controllers, High Voltage MPPTs
 - `Solar Accessories`: MC4 Connectors, Solar Cables, Battery Cables, Changeover Switches, Breakers, AVS Protectors, Surge Protectors, Fuse Holders, Distribution Boxes, Mounting Structures, Cable Clips, DC Bulbs, Solar Fans
