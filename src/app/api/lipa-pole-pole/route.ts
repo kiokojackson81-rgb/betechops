@@ -205,19 +205,22 @@ export async function POST(req: Request) {
 
   try {
     const customerId = await resolveCustomerId(parsed.data);
+    const ownerId = parsed.data.salespersonId ?? actorId;
+    if (!ownerId) {
+      return noStoreJson({ error: "Could not identify the staff member creating this Lipa Pole Pole account." }, { status: 400 });
+    }
     const created = await createLipaPolePole({
       ...parsed.data,
       customerId,
+      salespersonId: ownerId,
+      source: parsed.data.source ?? "STAFF_POS_CREATE",
       expectedCompletionDate: parsed.data.expectedCompletionDate ?? null,
       createdById: actorId,
-      assignment: parsed.data.assignment
-        ? {
-            ...parsed.data.assignment,
-            assignedById: parsed.data.assignment.assignedById ?? actorId,
-          }
-        : {
-            assignedById: actorId,
-          },
+      assignment: {
+        assignedToId: ownerId,
+        assignedById: actorId,
+        method: "MANUAL",
+      },
       initialPayment: parsed.data.initialPayment
         ? {
             ...parsed.data.initialPayment,

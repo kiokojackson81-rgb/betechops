@@ -55,6 +55,8 @@ export async function POST(req: Request, context: ParamsContext) {
     }
 
     const serial = `SALE-${summary.lpp.reference}`;
+    const receiptOwnerId =
+      summary.lpp.salespersonId ?? summary.lpp.assignedToId ?? actorId;
     const customerName =
       await prisma.user.findUnique({
         where: { id: summary.lpp.customerId },
@@ -68,7 +70,7 @@ export async function POST(req: Request, context: ParamsContext) {
       customerName: customerName?.name || "LPP Customer",
       customerPhone: customerName?.phone ?? null,
       customerEmail: customerName?.email ?? null,
-      issuedById: actorId ?? undefined,
+      issuedById: receiptOwnerId ?? undefined,
       notes: `Converted from Lipa Pole Pole ${summary.lpp.reference}`,
       paymentDetailsShown: true,
       items: summary.items.map((item) => ({
@@ -86,6 +88,9 @@ export async function POST(req: Request, context: ParamsContext) {
         lppId: summary.lpp.id,
         lppReference: summary.lpp.reference,
         lppCustomerId: summary.lpp.customerId,
+        lppSalespersonId: summary.lpp.salespersonId,
+        lppAssignedToId: summary.lpp.assignedToId,
+        lppConvertedById: actorId,
         lppPaymentTotal: completionSafeNumber(summary.summary.totalPaid),
         lppAgreedTotal: completionSafeNumber(summary.summary.agreedTotal),
       },

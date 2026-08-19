@@ -10,6 +10,7 @@ import { LIPA_POLE_POLE_TERMS_VERSION } from "@/lib/lipaPolePoleTerms";
 import {
   getLipaPolePoleMaxInstallments,
   LIPA_POLE_POLE_MIN_DEPOSIT,
+  LIPA_POLE_POLE_WEB_OWNER_EMAIL,
 } from "@/lib/lipaPolePoleConfig";
 
 export const dynamic = "force-dynamic";
@@ -171,6 +172,17 @@ export async function POST(request: Request) {
   }
   const initialPaymentReference = normalizeOptional(payload.initialPaymentReference);
 
+  const webOwner = await prisma.user.findUnique({
+    where: { email: LIPA_POLE_POLE_WEB_OWNER_EMAIL },
+    select: { id: true, isActive: true },
+  });
+  if (!webOwner?.isActive) {
+    return noStoreJson(
+      { error: "Lipa Pole Pole online booking is temporarily unavailable. Please contact our team for assistance." },
+      { status: 409 },
+    );
+  }
+
   await updateSafeCustomerProfile(user.id, {
     name: payload.customerName,
     phone: normalizedPhone,
@@ -191,6 +203,7 @@ export async function POST(request: Request) {
       agreedUnitPrice: productConfig.sellingPrice,
       currency: "KES",
       expectedCompletionDate: dueDate,
+      salespersonId: webOwner.id,
       paymentMode: "SCHEDULED",
       reservationMode: "SOFT_RESERVE",
       source: "SHOP_SELF_SERVICE",
@@ -203,7 +216,9 @@ export async function POST(request: Request) {
         count: payload.installmentCount,
       },
       assignment: {
+        assignedToId: webOwner.id,
         assignedById: user.id,
+        method: "MANUAL",
       },
       initialPayment: initialPaymentReference
         ? {
