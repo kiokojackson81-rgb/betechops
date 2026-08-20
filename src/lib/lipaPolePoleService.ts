@@ -11,7 +11,10 @@ import {
   normalizeLppStatus,
   type LipaPolePolePaymentMethod,
 } from "@/lib/lipaPolePole";
-import { extractMpesaTransactionCode } from "@/lib/mpesaReference";
+import {
+  extractMpesaTransactionCode,
+  normalizeLppPaymentReference,
+} from "@/lib/mpesaReference";
 import { getLipaPolePoleMaxInstallments } from "@/lib/lipaPolePoleConfig";
 import {
   sendLppLifecycleChannelNotification,
@@ -908,13 +911,22 @@ export function assertLppEligibleForPermanentDelete(input: {
   convertedReceiptId?: string | null;
   convertedProjectId?: string | null;
   fulfilledAt?: Date | string | null;
+  forceTestDeletion?: boolean;
+  reason?: string | null;
 }) {
   if (input.confirmation.trim() !== input.reference) {
     throw new Error("LPP_DELETE_CONFIRMATION_MISMATCH");
   }
 
-  if (input.convertedReceiptId || input.convertedProjectId || input.fulfilledAt) {
+  if (input.convertedReceiptId || input.convertedProjectId) {
     throw new Error("LPP_DELETE_LINKED_TRANSACTION");
+  }
+
+  if (input.fulfilledAt && !input.forceTestDeletion) {
+    throw new Error("LPP_DELETE_LINKED_TRANSACTION");
+  }
+  if (input.forceTestDeletion && !/\btest\b/i.test(input.reason ?? "")) {
+    throw new Error("LPP_FORCE_DELETE_REASON_REQUIRED");
   }
 }
 
@@ -923,6 +935,8 @@ export async function deleteTestLipaPolePoleAccount(
     lipaPolePoleId: string;
     confirmation: string;
     actorId?: string | null;
+    forceTestDeletion?: boolean;
+    reason?: string | null;
   },
   db: DbClient = prisma,
 ) {
@@ -935,6 +949,8 @@ export async function deleteTestLipaPolePoleAccount(
       convertedReceiptId: lpp.convertedReceiptId,
       convertedProjectId: lpp.convertedProjectId,
       fulfilledAt: lpp.fulfilledAt,
+      forceTestDeletion: input.forceTestDeletion,
+      reason: input.reason,
     });
 
     const [items, payments] = await Promise.all([
@@ -954,6 +970,12 @@ export async function deleteTestLipaPolePoleAccount(
         agreedTotal: Number(lpp.agreedTotal),
         itemCount: items.length,
         paymentCount: payments.length,
+        paymentReferences: payments
+          .map((payment) => trimToNull(payment.reference))
+          .filter((reference): reference is string => Boolean(reference))
+          .map((reference) => reference.toUpperCase()),
+        forceTestDeletion: Boolean(input.forceTestDeletion),
+        deletionReason: trimToNull(input.reason ?? null),
         createdAt: lpp.createdAt.toISOString(),
       },
       after: { deleted: true },
@@ -1297,13 +1319,14 @@ export async function recordLppPayment(
   const amount = toMoney(input.amount);
   if (amount.lte(0)) throw new Error("INVALID_PAYMENT_AMOUNT");
   const paymentStatus = input.status ?? "SUCCESS";
-  const rawReference = trimToNull(input.reference ?? null);
-  const normalizedReference =
-    input.method === "MPESA"
-      ? (extractMpesaTransactionCode(rawReference) ??
-        rawReference?.toUpperCase() ??
-        null)
-      : rawReference;
+  const normalizedReference = normalizeLppPaymentReference(
+    input.method,
+    input.reference,
+  );
+  const receivedAt = normalizeOptionalDate(input.receivedAt) ?? new Date();
+  if (receivedAt.getTime() > Date.now() + 5 * 60 * 1000) {
+    throw new Error("PAYMENT_DATE_IN_FUTURE");
+  }
 
   const result = await withLppTransaction(db, async (tx) => {
     const lpp = await lockLppOrThrow(tx, input.lipaPolePoleId);
@@ -1333,14 +1356,24 @@ export async function recordLppPayment(
     if (normalizedReference) {
       const duplicate = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
         SELECT "id" FROM "LipaPolePolePayment"
-        WHERE UPPER("reference") = UPPER(${normalizedReference})
+        WHERE UPPER(BTRIM("reference")) = UPPER(${normalizedReference})
+        UNION ALL
+        SELECT "id" FROM "ActionLog"
+        WHERE "entity" = 'LipaPolePole'
+          AND "action" = 'DELETE_TEST_ACCOUNT'
+          AND EXISTS (
+            SELECT 1
+            FROM jsonb_array_elements_text(
+              COALESCE("before"->'paymentReferences', '[]'::jsonb)
+            ) AS deleted_reference(value)
+            WHERE UPPER(deleted_reference.value) = UPPER(${normalizedReference})
+          )
         LIMIT 1
       `);
       if (duplicate[0]) throw new Error("DUPLICATE_PAYMENT_REFERENCE");
     }
 
     const paymentId = randomUUID();
-    const receivedAt = normalizeOptionalDate(input.receivedAt) ?? new Date();
 
     await tx.$executeRaw(Prisma.sql`
       INSERT INTO "LipaPolePolePayment" (

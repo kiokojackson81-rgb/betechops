@@ -4,6 +4,7 @@ import Link from "next/link";
 import PosProductSelectorModal, { type PosCatalogProduct } from "@/components/receipts/PosProductSelectorModal";
 import { findSimilarProducts } from "@/lib/posProductSimilarity";
 import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
+import { formatMpesaReferenceInput } from "@/lib/mpesaReference";
 import {
   getLipaPolePoleDefaultInstallments,
   getLipaPolePoleMaxInstallments,
@@ -1180,12 +1181,24 @@ export default function LipaPolePoleAdminClient({
       return;
     }
 
+    const forceTestDeletion = Boolean(account.fulfilledAt);
+    const reason = forceTestDeletion
+      ? window.prompt(
+          "This account has a fulfillment record. Enter a deletion reason containing the word test to continue.",
+        )
+      : "Test account cleanup";
+    if (reason === null) return;
+
     setIsDeletingAccount(true);
     setBanner(null);
     try {
       await readJson(`/api/lipa-pole-pole/${account.id}`, {
         method: "DELETE",
-        body: JSON.stringify({ confirmation: confirmation.trim() }),
+        body: JSON.stringify({
+          confirmation: confirmation.trim(),
+          forceTestDeletion,
+          reason: reason.trim(),
+        }),
       });
       setDetail(null);
       setSelectedId("");
@@ -2105,7 +2118,17 @@ export default function LipaPolePoleAdminClient({
                 </select>
               </Field>
               <Field label="Reference">
-                <input className={inputClass} value={paymentForm.reference} onChange={(event) => setPaymentForm((current) => ({ ...current, reference: event.target.value }))} />
+                <input
+                  className={inputClass}
+                  value={paymentForm.reference}
+                  onChange={(event) => setPaymentForm((current) => ({
+                    ...current,
+                    reference: current.method === "MPESA"
+                      ? formatMpesaReferenceInput(event.target.value)
+                      : event.target.value,
+                  }))}
+                  placeholder={paymentForm.method === "MPESA" ? "UHG3K3STB0 or paste full message" : "Transaction reference"}
+                />
               </Field>
               <Field label="Notes">
                 <textarea className={textareaClass} value={paymentForm.notes} onChange={(event) => setPaymentForm((current) => ({ ...current, notes: event.target.value }))} />
@@ -2659,7 +2682,7 @@ function ExpandedRowDetails({
             </button>
           ) : null}
 
-          {canDeleteAccounts && !account.convertedReceiptId && !account.convertedProjectId && !account.fulfilledAt ? (
+          {canDeleteAccounts && !account.convertedReceiptId && !account.convertedProjectId ? (
             <button
               type="button"
               className="ml-auto inline-flex items-center justify-center rounded-2xl border border-rose-500/35 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-100 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"

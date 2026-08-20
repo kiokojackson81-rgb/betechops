@@ -25,7 +25,7 @@ const paymentSchema = z.object({
 });
 
 function mapErrorStatus(message: string) {
-  if (["INVALID_PAYMENT_AMOUNT", "INVALID_DATE", "LPP_OVERPAYMENT_NOT_ALLOWED"].includes(message)) return 400;
+  if (["INVALID_PAYMENT_AMOUNT", "INVALID_DATE", "INVALID_MPESA_REFERENCE", "PAYMENT_REFERENCE_REQUIRED", "PAYMENT_DATE_IN_FUTURE", "LPP_OVERPAYMENT_NOT_ALLOWED"].includes(message)) return 400;
   if (message === "LPP_NOT_FOUND") return 404;
   if (message === "LPP_NOT_ACCEPTING_PAYMENTS") return 409;
   if (
@@ -58,10 +58,12 @@ export async function POST(req: Request, context: ParamsContext) {
       amount: parsed.data.amount,
       method: parsed.data.method,
       reference: parsed.data.reference ?? null,
-      receivedById: parsed.data.receivedById ?? actorId,
+      receivedById: actorId,
       receivedAt: parsed.data.receivedAt ?? null,
       notes: parsed.data.notes ?? null,
-      allowOverpaymentOverride: parsed.data.allowOverpaymentOverride ?? false,
+      allowOverpaymentOverride:
+        auth.role === "ADMIN" &&
+        (parsed.data.allowOverpaymentOverride ?? false),
     });
 
     const summary = await getLppAccountSummary(id);
@@ -74,6 +76,16 @@ export async function POST(req: Request, context: ParamsContext) {
     }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to record LPP payment";
-    return noStoreJson({ error: message }, { status: mapErrorStatus(message) });
+    const publicMessage =
+      message === "DUPLICATE_PAYMENT_REFERENCE"
+        ? "This payment reference has already been used on another Lipa Pole Pole payment."
+        : message === "INVALID_MPESA_REFERENCE"
+          ? "Enter the valid 10-character M-Pesa transaction code, for example UHG3K3STB0."
+          : message === "PAYMENT_REFERENCE_REQUIRED"
+            ? "A transaction reference is required for non-cash payments."
+            : message === "PAYMENT_DATE_IN_FUTURE"
+              ? "The payment date cannot be in the future."
+              : message;
+    return noStoreJson({ error: publicMessage }, { status: mapErrorStatus(message) });
   }
 }

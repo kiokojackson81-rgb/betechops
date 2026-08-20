@@ -70,4 +70,38 @@ describe("lipaPolePoleService", () => {
       }),
     ).not.toThrow();
   });
+
+  test("forced test deletion still blocks converted accounts", () => {
+    expect(() =>
+      assertLppEligibleForPermanentDelete({
+        reference: "LPP-2026-000123",
+        confirmation: "LPP-2026-000123",
+        convertedReceiptId: "receipt-1",
+        forceTestDeletion: true,
+        reason: "Remove test account",
+      }),
+    ).toThrow("LPP_DELETE_LINKED_TRANSACTION");
+  });
+
+  test("fulfilled test deletion requires an explicit test reason", () => {
+    expect(() =>
+      assertLppEligibleForPermanentDelete({
+        reference: "LPP-2026-000123",
+        confirmation: "LPP-2026-000123",
+        fulfilledAt: new Date(),
+        forceTestDeletion: true,
+        reason: "Cleanup",
+      }),
+    ).toThrow("LPP_FORCE_DELETE_REASON_REQUIRED");
+
+    expect(() =>
+      assertLppEligibleForPermanentDelete({
+        reference: "LPP-2026-000123",
+        confirmation: "LPP-2026-000123",
+        fulfilledAt: new Date(),
+        forceTestDeletion: true,
+        reason: "Remove confirmed test booking",
+      }),
+    ).not.toThrow();
+  });
 });

@@ -47,7 +47,7 @@ export async function DELETE(req: Request, context: ParamsContext) {
     (await getActorId());
   const { id } = await resolveParams(context);
   const body = (await req.json().catch(() => null)) as
-    | { confirmation?: unknown }
+    | { confirmation?: unknown; forceTestDeletion?: unknown; reason?: unknown }
     | null;
   const confirmation =
     typeof body?.confirmation === "string" ? body.confirmation : "";
@@ -57,6 +57,8 @@ export async function DELETE(req: Request, context: ParamsContext) {
       lipaPolePoleId: id,
       confirmation,
       actorId,
+      forceTestDeletion: body?.forceTestDeletion === true,
+      reason: typeof body?.reason === "string" ? body.reason : null,
     });
     return noStoreJson({ ok: true, deleted });
   } catch (error) {
@@ -67,12 +69,16 @@ export async function DELETE(req: Request, context: ParamsContext) {
         ? 404
         : message === "LPP_DELETE_CONFIRMATION_MISMATCH"
           ? 400
+          : message === "LPP_FORCE_DELETE_REASON_REQUIRED"
+            ? 400
           : message === "LPP_DELETE_LINKED_TRANSACTION"
             ? 409
             : 500;
     const publicMessage =
       message === "LPP_DELETE_CONFIRMATION_MISMATCH"
         ? "The confirmation reference does not match this Lipa Pole Pole account."
+        : message === "LPP_FORCE_DELETE_REASON_REQUIRED"
+          ? "Forced deletion requires a reason containing the word test."
         : message === "LPP_DELETE_LINKED_TRANSACTION"
           ? "This account is linked to a receipt, project, or completed fulfillment and cannot be permanently deleted."
           : message;

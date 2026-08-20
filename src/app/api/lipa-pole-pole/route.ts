@@ -183,8 +183,8 @@ async function resolveCustomerId(
 }
 
 function mapErrorStatus(message: string) {
-  if (["INVALID_AGREED_TOTAL", "INVALID_DATE", "INVALID_PRODUCT", "LPP_INSTALLMENT_PERIOD_EXCEEDED"].includes(message)) return 400;
-  if (message === "NO_ELIGIBLE_CUSTOMER_SERVICE_AGENT") return 409;
+  if (["INVALID_AGREED_TOTAL", "INVALID_DATE", "INVALID_PRODUCT", "INVALID_MPESA_REFERENCE", "PAYMENT_REFERENCE_REQUIRED", "PAYMENT_DATE_IN_FUTURE", "LPP_INSTALLMENT_PERIOD_EXCEEDED"].includes(message)) return 400;
+  if (["NO_ELIGIBLE_CUSTOMER_SERVICE_AGENT", "DUPLICATE_PAYMENT_REFERENCE"].includes(message)) return 409;
   if (message === "Customer details are required." || message === "Enter a valid Kenyan phone number." || message === "Could not create or resolve customer.") return 400;
   return 500;
 }
@@ -205,7 +205,10 @@ export async function POST(req: Request) {
 
   try {
     const customerId = await resolveCustomerId(parsed.data);
-    const ownerId = parsed.data.salespersonId ?? actorId;
+    const ownerId =
+      auth.role === "ATTENDANT"
+        ? actorId
+        : parsed.data.salespersonId ?? actorId;
     if (!ownerId) {
       return noStoreJson({ error: "Could not identify the staff member creating this Lipa Pole Pole account." }, { status: 400 });
     }
@@ -216,24 +219,34 @@ export async function POST(req: Request) {
       source: parsed.data.source ?? "STAFF_POS_CREATE",
       expectedCompletionDate: parsed.data.expectedCompletionDate ?? null,
       createdById: actorId,
+      initialPayment: parsed.data.initialPayment
+        ? {
+            ...parsed.data.initialPayment,
+            receivedById: actorId,
+          }
+        : null,
       assignment: {
         assignedToId: ownerId,
         assignedById: actorId,
         method: "MANUAL",
       },
-      initialPayment: parsed.data.initialPayment
-        ? {
-            ...parsed.data.initialPayment,
-            receivedById: parsed.data.initialPayment.receivedById ?? actorId,
-          }
-        : null,
     });
 
     const detail = await getSerializedLppAccountDetail(created.id);
     return noStoreJson({ ok: true, ...detail }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create LPP account";
-    return noStoreJson({ error: message }, { status: mapErrorStatus(message) });
+    const publicMessage =
+      message === "DUPLICATE_PAYMENT_REFERENCE"
+        ? "This payment reference has already been used on another Lipa Pole Pole payment."
+        : message === "INVALID_MPESA_REFERENCE"
+          ? "Enter the valid 10-character M-Pesa transaction code, for example UHG3K3STB0."
+          : message === "PAYMENT_REFERENCE_REQUIRED"
+            ? "A transaction reference is required for non-cash payments."
+            : message === "PAYMENT_DATE_IN_FUTURE"
+              ? "The payment date cannot be in the future."
+              : message;
+    return noStoreJson({ error: publicMessage }, { status: mapErrorStatus(message) });
   }
 }
 

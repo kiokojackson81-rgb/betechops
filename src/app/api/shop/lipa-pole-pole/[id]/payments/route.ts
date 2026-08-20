@@ -73,6 +73,8 @@ export async function POST(request: Request, context: ParamsContext) {
         ? 404
         : ["INVALID_PAYMENT_AMOUNT", "LPP_OVERPAYMENT_NOT_ALLOWED"].includes(message)
           ? 400
+          : ["INVALID_MPESA_REFERENCE", "PAYMENT_REFERENCE_REQUIRED", "PAYMENT_DATE_IN_FUTURE"].includes(message)
+            ? 400
           : message === "DUPLICATE_PAYMENT_REFERENCE"
             ? 409
           : message === "LPP_NOT_ACCEPTING_PAYMENTS"
@@ -81,7 +83,13 @@ export async function POST(request: Request, context: ParamsContext) {
     return noStoreJson({
       error: message === "DUPLICATE_PAYMENT_REFERENCE"
         ? "This M-Pesa transaction code has already been submitted. Please check the code and try again."
-        : message,
+        : message === "INVALID_MPESA_REFERENCE"
+          ? "Enter the valid 10-character M-Pesa transaction code, for example UHG3K3STB0."
+          : message === "PAYMENT_REFERENCE_REQUIRED"
+            ? "A transaction reference is required for non-cash payments."
+            : message === "PAYMENT_DATE_IN_FUTURE"
+              ? "The payment date cannot be in the future."
+              : message,
     }, { status });
   }
 }

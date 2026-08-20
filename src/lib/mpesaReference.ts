@@ -13,3 +13,19 @@ export function formatMpesaReferenceInput(value: string) {
   const extracted = extractMpesaTransactionCode(value);
   return extracted || value.toUpperCase().replace(/[\r\n]+/g, " ").slice(0, 2000);
 }
+
+export function normalizeLppPaymentReference(
+  method: "MPESA" | "CASH" | "BANK" | "CARD" | "OTHER",
+  value: string | null | undefined,
+) {
+  const trimmed = String(value || "").trim();
+  if (method === "MPESA") {
+    const code = extractMpesaTransactionCode(trimmed);
+    if (!code) throw new Error("INVALID_MPESA_REFERENCE");
+    return code;
+  }
+
+  if (method === "CASH") return trimmed || null;
+  if (!trimmed) throw new Error("PAYMENT_REFERENCE_REQUIRED");
+  return trimmed.toUpperCase().replace(/\s+/g, " ");
+}
