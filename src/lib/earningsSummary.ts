@@ -117,6 +117,11 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     period: tradingPeriod,
   });
   const marketingTotals = marketingSummary.totals;
+  if (normalizedEmail === "brendah@betech.co.ke") {
+    newProducts = marketingTotals.totalNewProducts;
+    editedProducts = marketingTotals.totalEditedProducts;
+    copiedProducts = marketingTotals.totalCopiedProducts;
+  }
 
   // Also include support aggregates and dedupe per-receipt to avoid double-counting
   const supportSummary = await getSupportPeriodAggregates({ userId: opts.userId, period: tradingPeriod });

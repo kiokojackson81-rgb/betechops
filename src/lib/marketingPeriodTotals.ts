@@ -5,6 +5,7 @@ import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import { COMMISSION_LADDER } from "@/lib/commissionCommon";
 import { loadPodDeliveryFeeMap } from "@/lib/podDeliveryFee";
+import { getMarketingProductActivity, getTradingPeriodDateKeys } from "@/lib/marketingProductActivity";
 
 type PrismaClientOrTx = PrismaClient | Prisma.TransactionClient;
 
@@ -92,6 +93,20 @@ export async function summarizeMarketingReportsForPeriod(opts: {
     typeof opts.userEmail === "string" && opts.userEmail.trim().length > 0
       ? opts.userEmail.trim().toLowerCase()
       : null;
+  const brendahProductActivity = normalizedEmail === "brendah@betech.co.ke"
+    ? await getMarketingProductActivity({
+        userId,
+        ...getTradingPeriodDateKeys(period),
+        client,
+      })
+    : null;
+  const applyProductActivity = (totals: MarketingPeriodTotals) => {
+    if (!brendahProductActivity) return totals;
+    totals.totalNewProducts = brendahProductActivity.uploaded;
+    totals.totalEditedProducts = brendahProductActivity.edited;
+    totals.totalCopiedProducts = brendahProductActivity.copied;
+    return totals;
+  };
 
   // Precompute POS receipts that are POD-pending in this period. If a POS
   // receipt exists with a pending podDelivery for the same canonical receipt
@@ -157,10 +172,10 @@ export async function summarizeMarketingReportsForPeriod(opts: {
       totals.totalReceipts = weeklyRows.length;
       totals.totalItems = 0;
       totals.paymentStats = { totalSalesMpesa: 0, totalSalesCash: 0, countMpesaReceipts: 0, countCashReceipts: 0 };
-      return { totals, entryCount: weeklyRows.length, rawRowCount: weeklyRows.length };
+      return { totals: applyProductActivity(totals), entryCount: weeklyRows.length, rawRowCount: weeklyRows.length };
     }
 
-    return { totals: emptyTotals(), entryCount: 0, rawRowCount: 0 };
+    return { totals: applyProductActivity(emptyTotals()), entryCount: 0, rawRowCount: 0 };
   }
 
   const totals = emptyTotals();
@@ -372,7 +387,7 @@ export async function summarizeMarketingReportsForPeriod(opts: {
   });
 
   return {
-    totals,
+    totals: applyProductActivity(totals),
     entryCount: marketingEntries.length + reports.length,
     rawRowCount,
     perReceipts: Object.fromEntries(Array.from(perReceipts.entries())),

@@ -25,6 +25,12 @@ export default async function MarketingProductsPage({ searchParams }: ProductsPa
   const initialEditProductId = Array.isArray(editProductParam)
     ? String(editProductParam[0] ?? "").trim()
     : String(editProductParam ?? "").trim();
+  const impersonateIdParam = params.impersonateId;
+  const activityOwnerId = role === "ADMIN"
+    ? Array.isArray(impersonateIdParam)
+      ? String(impersonateIdParam[0] ?? "").trim()
+      : String(impersonateIdParam ?? "").trim()
+    : null;
 
   return (
     <div className="mx-auto min-w-0 max-w-[1420px] space-y-5">
@@ -37,7 +43,11 @@ export default async function MarketingProductsPage({ searchParams }: ProductsPa
       </section>
 
       <div className="min-w-0 overflow-x-hidden">
-        <PosManagementClient mode="product-desk" initialEditProductId={initialEditProductId || null} />
+        <PosManagementClient
+          mode="product-desk"
+          initialEditProductId={initialEditProductId || null}
+          activityOwnerId={activityOwnerId || null}
+        />
       </div>
     </div>
   );

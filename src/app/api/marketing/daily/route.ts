@@ -6,6 +6,7 @@ import { getTradingPeriodFor } from "@/lib/tradingPeriod";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import { buildDuplicateMessage, canonicalReceiptNumber, findReceiptOwner } from "@/lib/receiptGuard";
 import { z } from "zod";
+import { getMarketingProductActivity } from "@/lib/marketingProductActivity";
 
 const BRENDAH_EMAIL = "brendah@betech.co.ke";
 const BRENDAH_EXTRA_YESNO_KEYS = [
@@ -110,6 +111,7 @@ export async function POST(req: Request) {
   if (!auth.ok) return auth.res;
   // allow admin to submit on behalf of another attendant via impersonateId query param
   let actorId = await getActorId();
+  let isBrendahActor = false;
   try {
     const url = new URL(req.url);
     const impersonateId = url.searchParams.get("impersonateId");
@@ -137,6 +139,7 @@ export async function POST(req: Request) {
       actorUser.attendantCategory === "DIRECT_SALES_OPS" ||
       String(actorUser.email ?? "").toLowerCase() === BRENDAH_EMAIL;
     if (!isAllowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    isBrendahActor = String(actorUser.email ?? "").toLowerCase() === BRENDAH_EMAIL;
   } catch (e) {
     return NextResponse.json({ error: "Failed to verify actor" }, { status: 500 });
   }
@@ -220,6 +223,18 @@ export async function POST(req: Request) {
     // Compose final yesNo/numeric values with Thursday-only guards.
     const finalYesNo = { ...yesNoValues } as Record<string, boolean>;
     const finalNumeric = { ...numericValues } as Record<string, number>;
+
+    if (isBrendahActor && actorId) {
+      const dateKey = String(date).slice(0, 10);
+      const activity = await getMarketingProductActivity({
+        userId: actorId,
+        startDate: dateKey,
+        client: prisma,
+      });
+      finalNumeric.productsUploaded = activity.uploaded;
+      finalNumeric.productsEdited = activity.edited;
+      finalNumeric.productsCopied = activity.copied;
+    }
 
     if (isThursday) {
       if (typeof weeklyMeetingAttendedRaw === "boolean") finalYesNo["weeklyMeetingAttended"] = weeklyMeetingAttendedRaw as boolean;

@@ -102,6 +102,23 @@ type RemoteSummaryPayload = {
   };
 };
 
+type ProductActivitySummary = {
+  uploaded: number;
+  edited: number;
+  copied: number;
+  commission: {
+    newProducts: number;
+    editedProducts: number;
+    copiedProducts: number;
+    total: number;
+  };
+};
+
+type ProductActivityPayload = {
+  daily: ProductActivitySummary;
+  periodTotals: ProductActivitySummary;
+};
+
 const getUnpricedSaleKey = (sale: GroupedUnpricedSale) => `${sale.source}:${sale.id}`;
 const getUnpricedDraftKey = (sale: GroupedUnpricedSale, receiptItemId?: string) =>
   receiptItemId ? `${sale.source}:item:${receiptItemId}` : getUnpricedSaleKey(sale);
@@ -921,6 +938,8 @@ export default function MarketingTrackerLegacySections() {
     serverPeriodSummary?.period ?? periodSummary?.period ?? undefined;
   const [buyingDrafts, setBuyingDrafts] = useState<Record<string, string>>({});
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+  const [productActivity, setProductActivity] = useState<ProductActivityPayload | null>(null);
+  const [productActivityLoading, setProductActivityLoading] = useState(false);
   const [deletingSaleKey, setDeletingSaleKey] = useState<string | null>(null);
   const [pricingSaleKey, setPricingSaleKey] = useState<string | null>(null);
   const unpricedQueueStats = useMemo(() => {
@@ -1304,6 +1323,54 @@ export default function MarketingTrackerLegacySections() {
       }
     })();
   }, [router]);
+
+  useEffect(() => {
+    if (currentUserEmail !== BRENDAH_EMAIL) {
+      setProductActivity(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    const loadProductActivity = async () => {
+      setProductActivityLoading(true);
+      try {
+        const params = new URLSearchParams({
+          date: form.date,
+          periodKey: selectedPeriodKey,
+        });
+        const imp = impersonateIdFromWindow();
+        if (imp) params.set("impersonateId", imp);
+        const response = await fetch(`/api/marketing/product-activity?${params.toString()}`, {
+          cache: "no-store",
+          credentials: "same-origin",
+          signal: controller.signal,
+        });
+        if (!response.ok) return;
+        const payload = (await response.json()) as ProductActivityPayload;
+        setProductActivity(payload);
+        setForm((current) => ({
+          ...current,
+          fields: {
+            ...current.fields,
+            productsUploaded: payload.daily.uploaded,
+            productsEdited: payload.daily.edited,
+            productsCopied: payload.daily.copied,
+          },
+        }));
+      } catch (error) {
+        if ((error as Error).name !== "AbortError") setProductActivity(null);
+      } finally {
+        setProductActivityLoading(false);
+      }
+    };
+
+    void loadProductActivity();
+    const interval = window.setInterval(loadProductActivity, 15_000);
+    return () => {
+      controller.abort();
+      window.clearInterval(interval);
+    };
+  }, [currentUserEmail, form.date, selectedPeriodKey]);
 
   // fetch + poll period summary so Quick stats stay in sync with server
   useEffect(() => {
@@ -1812,6 +1879,56 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
     </div>
   );
 
+  const renderAutomaticProductActivity = () => {
+    const daily = productActivity?.daily ?? {
+      uploaded: 0,
+      edited: 0,
+      copied: 0,
+      commission: { newProducts: 0, editedProducts: 0, copiedProducts: 0, total: 0 },
+    };
+    const periodTotals = productActivity?.periodTotals ?? daily;
+    const metrics = [
+      { label: "Products uploaded", daily: daily.uploaded, period: periodTotals.uploaded },
+      { label: "Products edited", daily: daily.edited, period: periodTotals.edited },
+      { label: "Products copied", daily: daily.copied, period: periodTotals.copied },
+    ];
+
+    return (
+      <Card className="border-emerald-400/20 bg-[linear-gradient(135deg,rgba(16,185,129,.12),rgba(15,23,42,.88)_48%,rgba(2,6,23,.96))] shadow-xl shadow-black/20">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">Automatically calculated</div>
+            <h2 className="mt-2 text-2xl font-semibold text-slate-100">Product &amp; stock management</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+              Website catalogue products created or edited in the product desk are already counted. No manual entry is required.
+            </p>
+          </div>
+          <Link
+            href={withImpersonateId("/marketing/products", trackerImpersonateId)}
+            className="inline-flex min-h-11 items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-400/15"
+          >
+            Manage products
+          </Link>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          {metrics.map((metric) => (
+            <div key={metric.label} className="rounded-2xl border border-white/10 bg-slate-950/55 p-4">
+              <div className="text-xs uppercase tracking-[0.16em] text-slate-400">{metric.label}</div>
+              <div className="mt-2 text-3xl font-semibold text-white">{productActivityLoading ? "..." : metric.daily}</div>
+              <div className="mt-1 text-xs text-slate-500">{metric.period} this trading period</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-3 flex flex-col gap-2 rounded-2xl border border-amber-300/15 bg-amber-300/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <span className="text-sm text-slate-300">Product activity commission for this trading period</span>
+          <span className="text-lg font-semibold text-amber-200">{formatKES(periodTotals.commission.total)}</span>
+        </div>
+      </Card>
+    );
+  };
+
   const renderLegacyTextarea = (key: string, label: string, placeholder: string) => (
     <div className="space-y-3" key={key}>
       <label className="text-xs uppercase tracking-[0.2em] text-slate-400">{label}</label>
@@ -1842,15 +1959,6 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
                     {renderLegacyBooleanButton("displayWellLabeled", "Display labeled")}
                   </div>
                 </div>
-              </div>
-            </Card>
-
-            <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
-              <h2 className="text-2xl font-semibold text-slate-100">Product & stock management</h2>
-              <div className="mt-6 space-y-6">
-                {renderLegacyNumberField("productsUploaded", "Products uploaded")}
-                {renderLegacyNumberField("productsEdited", "Products edited")}
-                {renderLegacyNumberField("productsCopied", "Products copied")}
               </div>
             </Card>
 
@@ -1934,15 +2042,6 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
                     {renderLegacyBooleanButton("displayWellLabeled", "Display labeled")}
                   </div>
                 </div>
-              </div>
-            </Card>
-
-            <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
-              <h2 className="text-2xl font-semibold text-slate-100">Product & stock management</h2>
-              <div className="mt-6 space-y-6">
-                {renderLegacyNumberField("productsUploaded", "Products uploaded")}
-                {renderLegacyNumberField("productsEdited", "Products edited")}
-                {renderLegacyNumberField("productsCopied", "Products copied")}
               </div>
             </Card>
 
@@ -2254,7 +2353,10 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
             </Card>
 
             {isBrendahLegacyProfile ? (
-              renderBrendahLegacyChecklist()
+              <div className="space-y-6">
+                {renderAutomaticProductActivity()}
+                {renderBrendahLegacyChecklist()}
+              </div>
             ) : (
               <Card className="border-slate-800 bg-slate-900/60 shadow-xl shadow-black/20">
                 <div className="mb-4 flex items-center justify-between gap-3">
@@ -2446,9 +2548,9 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
                   periodLabel={periodLabel}
                   receipts={displayedRecognizedReceipts}
                   salesKes={displayedRecognizedSalesKes}
-                  newProducts={Number((earningsSummary as any)?.totalNewProducts ?? 0)}
-                  editedProducts={Number((earningsSummary as any)?.totalEditedProducts ?? 0)}
-                  copiedProducts={Number((earningsSummary as any)?.totalCopiedProducts ?? 0)}
+                  newProducts={productActivity?.periodTotals.uploaded ?? Number((earningsSummary as any)?.totalNewProducts ?? 0)}
+                  editedProducts={productActivity?.periodTotals.edited ?? Number((earningsSummary as any)?.totalEditedProducts ?? 0)}
+                  copiedProducts={productActivity?.periodTotals.copied ?? Number((earningsSummary as any)?.totalCopiedProducts ?? 0)}
                   commissionKes={commissionKes}
                 />
                 <BrendahLegacyEarningsCard

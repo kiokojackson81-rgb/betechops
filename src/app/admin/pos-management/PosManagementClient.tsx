@@ -152,6 +152,7 @@ type BrandOption = {
 type PosManagementClientProps = {
   mode?: "admin" | "product-desk";
   initialEditProductId?: string | null;
+  activityOwnerId?: string | null;
 };
 
 const emptyDraft: ProductDraft = {
@@ -368,7 +369,7 @@ function getApiErrorMessage(json: unknown, fallback: string) {
   return fallback;
 }
 
-export default function PosManagementClient({ mode = "admin", initialEditProductId = null }: PosManagementClientProps) {
+export default function PosManagementClient({ mode = "admin", initialEditProductId = null, activityOwnerId = null }: PosManagementClientProps) {
   const isProductDeskMode = mode === "product-desk";
   const canManagePricing = !isProductDeskMode;
   const canManageCommissions = !isProductDeskMode;
@@ -1069,7 +1070,10 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
         ...(capabilities.shopBrand ? { shopBrand: draft.shopBrand.trim() || null } : {}),
       };
 
-      const url = draft.id ? `${productApiBase}/${draft.id}` : productApiBase;
+      const baseUrl = draft.id ? `${productApiBase}/${draft.id}` : productApiBase;
+      const url = activityOwnerId
+        ? `${baseUrl}?impersonateId=${encodeURIComponent(activityOwnerId)}`
+        : baseUrl;
       const method = draft.id ? "PATCH" : "POST";
       const res = await fetch(url, {
         method,

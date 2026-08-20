@@ -1,4 +1,5 @@
 import { noStoreJson, requireRoleOrBrendah, getActorId } from "@/lib/api";
+import { resolveProductActivityActor } from "@/lib/productActivityActor";
 import { prisma } from "@/lib/prisma";
 import { getProductTableCapabilities } from "@/lib/productTableCapabilities";
 import { resolveCanonicalProductBrand } from "@/lib/productBrands";
@@ -273,7 +274,12 @@ export async function PATCH(req: Request, context: ParamsContext) {
     return noStoreJson({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const actorId = (auth.session?.user as { id?: string } | undefined)?.id ?? (await getActorId());
+  const actorId = await resolveProductActivityActor({
+    request: req,
+    role: auth.role,
+    sessionUserId: (auth.session?.user as { id?: string } | undefined)?.id,
+    fallbackActorId: await getActorId(),
+  });
   const data = auth.isBrendah ? sanitizeBrendahProductUpdate(parsed.data) : parsed.data;
   const canonicalBrand =
     data.brand !== undefined ? await resolveCanonicalProductBrand(prisma, capabilities, data.brand) : undefined;
