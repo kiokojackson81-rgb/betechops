@@ -5,7 +5,11 @@ import { getTradingPeriodFor, type TradingPeriod } from "@/lib/tradingPeriod";
 import { getCommissionSummaryForSales } from "@/lib/marketingCommission";
 import { COMMISSION_LADDER } from "@/lib/commissionCommon";
 import { loadPodDeliveryFeeMap } from "@/lib/podDeliveryFee";
-import { getMarketingProductActivity, getTradingPeriodDateKeys } from "@/lib/marketingProductActivity";
+import {
+  getMarketingProductActivity,
+  getTradingPeriodDateKeys,
+  summarizeManualMarketplaceProductActivityEntries,
+} from "@/lib/marketingProductActivity";
 
 type PrismaClientOrTx = PrismaClient | Prisma.TransactionClient;
 
@@ -100,11 +104,15 @@ export async function summarizeMarketingReportsForPeriod(opts: {
         client,
       })
     : null;
+  let manualMarketplaceProductActivity = summarizeManualMarketplaceProductActivityEntries([]);
   const applyProductActivity = (totals: MarketingPeriodTotals) => {
     if (!brendahProductActivity) return totals;
-    totals.totalNewProducts = brendahProductActivity.uploaded;
-    totals.totalEditedProducts = brendahProductActivity.edited;
-    totals.totalCopiedProducts = brendahProductActivity.copied;
+    totals.totalNewProducts =
+      brendahProductActivity.uploaded + manualMarketplaceProductActivity.total.uploaded;
+    totals.totalEditedProducts =
+      brendahProductActivity.edited + manualMarketplaceProductActivity.total.edited;
+    totals.totalCopiedProducts =
+      brendahProductActivity.copied + manualMarketplaceProductActivity.total.copied;
     return totals;
   };
 
@@ -150,6 +158,9 @@ export async function summarizeMarketingReportsForPeriod(opts: {
       include: { sales: true },
     }),
   ]);
+  manualMarketplaceProductActivity = summarizeManualMarketplaceProductActivityEntries(
+    marketingEntries.map((entry) => ({ payload: entry.payload })),
+  );
 
   // If there are no marketing/daily report entries for the attendant in this
   // period, fall back to aggregating approved `WeeklySale` rows. This covers

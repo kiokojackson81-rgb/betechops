@@ -1,5 +1,9 @@
 import { noStoreJson, requireRoleOrBrendah } from "@/lib/api";
-import { getMarketingProductActivity } from "@/lib/marketingProductActivity";
+import {
+  combineMarketingProductActivity,
+  getManualMarketplaceProductActivity,
+  getMarketingProductActivity,
+} from "@/lib/marketingProductActivity";
 import { prisma } from "@/lib/prisma";
 import { getTradingPeriodFor, parseTradingPeriodKey } from "@/lib/tradingPeriod";
 
@@ -23,7 +27,7 @@ export async function GET(request: Request) {
       email: { equals: "brendah@betech.co.ke", mode: "insensitive" },
       isActive: true,
     },
-    select: { id: true },
+    select: { id: true, email: true },
   });
   if (!target) return noStoreJson({ error: "Product activity is only available for Brendah" }, { status: 403 });
 
@@ -35,7 +39,7 @@ export async function GET(request: Request) {
   const requestedPeriod = parseTradingPeriodKey(searchParams.get("periodKey") ?? undefined) ??
     getTradingPeriodFor(new Date(`${requestedDate}T12:00:00+03:00`));
   const [periodStart, periodEnd] = requestedPeriod.key.split("_");
-  const [daily, period] = await Promise.all([
+  const [websiteDaily, websitePeriod, marketplaceDaily, marketplacePeriod] = await Promise.all([
     getMarketingProductActivity({
       userId: target.id,
       startDate: requestedDate,
@@ -47,14 +51,32 @@ export async function GET(request: Request) {
       endDate: periodEnd,
       client: prisma,
     }),
+    getManualMarketplaceProductActivity({
+      userId: target.id,
+      userEmail: target.email,
+      startDate: requestedDate,
+      client: prisma,
+    }),
+    getManualMarketplaceProductActivity({
+      userId: target.id,
+      userEmail: target.email,
+      startDate: periodStart,
+      endDate: periodEnd,
+      client: prisma,
+    }),
   ]);
+
+  const daily = combineMarketingProductActivity(websiteDaily, marketplaceDaily.total);
+  const period = combineMarketingProductActivity(websitePeriod, marketplacePeriod.total);
 
   return noStoreJson({
     ok: true,
-    source: "POS_PRODUCT_ACTION_LOG",
+    source: "WEBSITE_ACTION_LOG_AND_MANUAL_MARKETPLACE_REPORTS",
     date: requestedDate,
     period: { key: requestedPeriod.key, label: requestedPeriod.label },
     daily,
     periodTotals: period,
+    website: { daily: websiteDaily, periodTotals: websitePeriod },
+    marketplaces: { daily: marketplaceDaily, periodTotals: marketplacePeriod },
   });
 }

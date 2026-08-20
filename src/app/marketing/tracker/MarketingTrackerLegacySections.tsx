@@ -45,6 +45,12 @@ const brendahLegacyFieldTypes = {
   productsUploaded: "numeric",
   productsEdited: "numeric",
   productsCopied: "numeric",
+  jumiaProductsUploaded: "numeric",
+  jumiaProductsEdited: "numeric",
+  jumiaProductsCopied: "numeric",
+  kilimallProductsUploaded: "numeric",
+  kilimallProductsEdited: "numeric",
+  kilimallProductsCopied: "numeric",
   repliedFbComments: "yesno",
   repliedFbDms: "yesno",
   repliedIgComments: "yesno",
@@ -117,6 +123,20 @@ type ProductActivitySummary = {
 type ProductActivityPayload = {
   daily: ProductActivitySummary;
   periodTotals: ProductActivitySummary;
+  website?: {
+    daily: ProductActivitySummary;
+    periodTotals: ProductActivitySummary;
+  };
+  marketplaces?: {
+    daily: MarketplaceProductActivityBreakdown;
+    periodTotals: MarketplaceProductActivityBreakdown;
+  };
+};
+
+type MarketplaceProductActivityBreakdown = {
+  jumia: ProductActivitySummary;
+  kilimall: ProductActivitySummary;
+  total: ProductActivitySummary;
 };
 
 const getUnpricedSaleKey = (sale: GroupedUnpricedSale) => `${sale.source}:${sale.id}`;
@@ -1348,13 +1368,14 @@ export default function MarketingTrackerLegacySections() {
         if (!response.ok) return;
         const payload = (await response.json()) as ProductActivityPayload;
         setProductActivity(payload);
+        const websiteDaily = payload.website?.daily ?? payload.daily;
         setForm((current) => ({
           ...current,
           fields: {
             ...current.fields,
-            productsUploaded: payload.daily.uploaded,
-            productsEdited: payload.daily.edited,
-            productsCopied: payload.daily.copied,
+            productsUploaded: websiteDaily.uploaded,
+            productsEdited: websiteDaily.edited,
+            productsCopied: websiteDaily.copied,
           },
         }));
       } catch (error) {
@@ -1880,13 +1901,14 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
   );
 
   const renderAutomaticProductActivity = () => {
-    const daily = productActivity?.daily ?? {
+    const emptyActivity = {
       uploaded: 0,
       edited: 0,
       copied: 0,
       commission: { newProducts: 0, editedProducts: 0, copiedProducts: 0, total: 0 },
     };
-    const periodTotals = productActivity?.periodTotals ?? daily;
+    const daily = productActivity?.website?.daily ?? productActivity?.daily ?? emptyActivity;
+    const periodTotals = productActivity?.website?.periodTotals ?? daily;
     const metrics = [
       { label: "Products uploaded", daily: daily.uploaded, period: periodTotals.uploaded },
       { label: "Products edited", daily: daily.edited, period: periodTotals.edited },
@@ -1924,6 +1946,101 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
         <div className="mt-3 flex flex-col gap-2 rounded-2xl border border-amber-300/15 bg-amber-300/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <span className="text-sm text-slate-300">Product activity commission for this trading period</span>
           <span className="text-lg font-semibold text-amber-200">{formatKES(periodTotals.commission.total)}</span>
+        </div>
+      </Card>
+    );
+  };
+
+  const renderManualMarketplaceProductActivity = () => {
+    const emptyActivity: ProductActivitySummary = {
+      uploaded: 0,
+      edited: 0,
+      copied: 0,
+      commission: { newProducts: 0, editedProducts: 0, copiedProducts: 0, total: 0 },
+    };
+    const savedDaily = productActivity?.marketplaces?.daily;
+    const periodTotals = productActivity?.marketplaces?.periodTotals;
+    const marketplaces = [
+      {
+        key: "jumia",
+        label: "Jumia",
+        fields: {
+          uploaded: "jumiaProductsUploaded",
+          edited: "jumiaProductsEdited",
+          copied: "jumiaProductsCopied",
+        },
+        daily: savedDaily?.jumia ?? emptyActivity,
+        period: periodTotals?.jumia ?? emptyActivity,
+      },
+      {
+        key: "kilimall",
+        label: "Kilimall",
+        fields: {
+          uploaded: "kilimallProductsUploaded",
+          edited: "kilimallProductsEdited",
+          copied: "kilimallProductsCopied",
+        },
+        daily: savedDaily?.kilimall ?? emptyActivity,
+        period: periodTotals?.kilimall ?? emptyActivity,
+      },
+    ] as const;
+
+    return (
+      <Card className="border-amber-400/20 bg-[linear-gradient(135deg,rgba(245,158,11,.10),rgba(15,23,42,.9)_48%,rgba(2,6,23,.96))] shadow-xl shadow-black/20">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
+            Manually recorded
+          </div>
+          <h2 className="mt-2 text-2xl font-semibold text-slate-100">Marketplace product uploads</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+            Record products uploaded, edited, or copied directly on Jumia and Kilimall. Submit the report to add these figures to today&apos;s activity and product commission.
+          </p>
+        </div>
+
+        <div className="mt-5 grid gap-4 xl:grid-cols-2">
+          {marketplaces.map((marketplace) => (
+            <section key={marketplace.key} className="rounded-3xl border border-white/10 bg-slate-950/55 p-4 sm:p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-semibold text-white">{marketplace.label}</h3>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Saved today: {marketplace.daily.uploaded} uploaded, {marketplace.daily.edited} edited, {marketplace.daily.copied} copied
+                  </p>
+                </div>
+                <span className="rounded-full border border-amber-300/20 bg-amber-300/5 px-3 py-1 text-xs text-amber-200">
+                  {marketplace.period.uploaded + marketplace.period.edited + marketplace.period.copied} this period
+                </span>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                {([
+                  ["uploaded", "Uploaded"],
+                  ["edited", "Edited"],
+                  ["copied", "Copied"],
+                ] as const).map(([activity, label]) => (
+                  <label key={activity} className="space-y-2">
+                    <span className="text-xs uppercase tracking-[0.16em] text-slate-400">{label}</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={String(form.fields[marketplace.fields[activity]] ?? "")}
+                      onChange={(event) => updateField(marketplace.fields[activity], event.target.value)}
+                      className="w-full rounded-2xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-lg font-semibold text-slate-100"
+                    />
+                  </label>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+
+        <div className="mt-4 flex flex-col gap-2 rounded-2xl border border-amber-300/15 bg-amber-300/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <span className="text-sm text-slate-300">
+            Saved marketplace activity: {(periodTotals?.total.uploaded ?? 0)} uploaded · {(periodTotals?.total.edited ?? 0)} edited · {(periodTotals?.total.copied ?? 0)} copied
+          </span>
+          <span className="text-sm font-semibold text-amber-100">
+            Commission {formatKES(periodTotals?.total.commission.total ?? 0)}
+          </span>
         </div>
       </Card>
     );
@@ -2355,6 +2472,7 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
             {isBrendahLegacyProfile ? (
               <div className="space-y-6">
                 {renderAutomaticProductActivity()}
+                {renderManualMarketplaceProductActivity()}
                 {renderBrendahLegacyChecklist()}
               </div>
             ) : (
