@@ -37,6 +37,14 @@ const BRENDAH_EXTRA_NUMERIC_KEYS = [
   "productDemoVideosRecorded",
   "fridayPostEngagingVideos",
 ];
+const BRENDAH_MARKETPLACE_NUMERIC_KEYS = [
+  "jumiaProductsUploaded",
+  "jumiaProductsEdited",
+  "jumiaProductsCopied",
+  "kilimallProductsUploaded",
+  "kilimallProductsEdited",
+  "kilimallProductsCopied",
+] as const;
 const BRENDAH_EXTRA_TEXT_KEYS = [
   "wednesdayFollowUpNotes",
   "wednesdayEngagementNotes",
@@ -240,6 +248,12 @@ export async function POST(req: Request) {
       finalNumeric.productsUploaded = activity.uploaded;
       finalNumeric.productsEdited = activity.edited;
       finalNumeric.productsCopied = activity.copied;
+      // Marketplace activity is saved through the dedicated idempotent endpoint.
+      // Keeping these fields at zero prevents a full daily report from counting
+      // the same Jumia or Kilimall work a second time.
+      BRENDAH_MARKETPLACE_NUMERIC_KEYS.forEach((key) => {
+        finalNumeric[key] = 0;
+      });
     }
 
     if (isThursday) {

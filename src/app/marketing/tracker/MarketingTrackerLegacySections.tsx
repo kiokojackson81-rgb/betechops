@@ -139,6 +139,30 @@ type MarketplaceProductActivityBreakdown = {
   total: ProductActivitySummary;
 };
 
+const summarizeProductActivityCounts = (counts: {
+  uploaded: number;
+  edited: number;
+  copied: number;
+}): ProductActivitySummary => {
+  const uploaded = Math.max(0, Math.floor(Number(counts.uploaded) || 0));
+  const edited = Math.max(0, Math.floor(Number(counts.edited) || 0));
+  const copied = Math.max(0, Math.floor(Number(counts.copied) || 0));
+  const newProducts = Math.min(Math.max(0, uploaded - 2_000) * 3, 10_000);
+  const editedProducts = Math.floor(edited / 10);
+  const copiedProducts = Math.floor(copied / 5);
+  return {
+    uploaded,
+    edited,
+    copied,
+    commission: {
+      newProducts,
+      editedProducts,
+      copiedProducts,
+      total: newProducts + editedProducts + copiedProducts,
+    },
+  };
+};
+
 const getUnpricedSaleKey = (sale: GroupedUnpricedSale) => `${sale.source}:${sale.id}`;
 const getUnpricedDraftKey = (sale: GroupedUnpricedSale, receiptItemId?: string) =>
   receiptItemId ? `${sale.source}:item:${receiptItemId}` : getUnpricedSaleKey(sale);
@@ -960,6 +984,9 @@ export default function MarketingTrackerLegacySections() {
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [productActivity, setProductActivity] = useState<ProductActivityPayload | null>(null);
   const [productActivityLoading, setProductActivityLoading] = useState(false);
+  const [marketplaceSaving, setMarketplaceSaving] = useState(false);
+  const [marketplaceDraftDirty, setMarketplaceDraftDirty] = useState(false);
+  const marketplaceDraftDirtyRef = useRef(false);
   const [deletingSaleKey, setDeletingSaleKey] = useState<string | null>(null);
   const [pricingSaleKey, setPricingSaleKey] = useState<string | null>(null);
   const unpricedQueueStats = useMemo(() => {
@@ -997,6 +1024,8 @@ export default function MarketingTrackerLegacySections() {
 
   useEffect(() => {
     setForm((prev) => ({ ...prev, dayOfWeek: deriveDayOfWeek(prev.date) }));
+    marketplaceDraftDirtyRef.current = false;
+    setMarketplaceDraftDirty(false);
   }, [form.date]);
 
   useEffect(() => {
@@ -1369,6 +1398,7 @@ export default function MarketingTrackerLegacySections() {
         const payload = (await response.json()) as ProductActivityPayload;
         setProductActivity(payload);
         const websiteDaily = payload.website?.daily ?? payload.daily;
+        const marketplaceDaily = payload.marketplaces?.daily;
         setForm((current) => ({
           ...current,
           fields: {
@@ -1376,6 +1406,16 @@ export default function MarketingTrackerLegacySections() {
             productsUploaded: websiteDaily.uploaded,
             productsEdited: websiteDaily.edited,
             productsCopied: websiteDaily.copied,
+            ...(!marketplaceDraftDirtyRef.current && marketplaceDaily
+              ? {
+                  jumiaProductsUploaded: marketplaceDaily.jumia.uploaded,
+                  jumiaProductsEdited: marketplaceDaily.jumia.edited,
+                  jumiaProductsCopied: marketplaceDaily.jumia.copied,
+                  kilimallProductsUploaded: marketplaceDaily.kilimall.uploaded,
+                  kilimallProductsEdited: marketplaceDaily.kilimall.edited,
+                  kilimallProductsCopied: marketplaceDaily.kilimall.copied,
+                }
+              : {}),
           },
         }));
       } catch (error) {
@@ -1573,6 +1613,75 @@ export default function MarketingTrackerLegacySections() {
     setForm((prev) => ({ ...prev, fields: { ...prev.fields, [key]: value } }));
   };
 
+  const updateMarketplaceField = (key: string, value: string) => {
+    marketplaceDraftDirtyRef.current = true;
+    setMarketplaceDraftDirty(true);
+    updateField(key, value);
+  };
+
+  const marketplaceDraft = useMemo(() => {
+    const count = (key: string) => Math.max(0, Math.floor(Number(form.fields[key]) || 0));
+    const jumia = summarizeProductActivityCounts({
+      uploaded: count("jumiaProductsUploaded"),
+      edited: count("jumiaProductsEdited"),
+      copied: count("jumiaProductsCopied"),
+    });
+    const kilimall = summarizeProductActivityCounts({
+      uploaded: count("kilimallProductsUploaded"),
+      edited: count("kilimallProductsEdited"),
+      copied: count("kilimallProductsCopied"),
+    });
+    return {
+      jumia,
+      kilimall,
+      total: summarizeProductActivityCounts({
+        uploaded: jumia.uploaded + kilimall.uploaded,
+        edited: jumia.edited + kilimall.edited,
+        copied: jumia.copied + kilimall.copied,
+      }),
+    };
+  }, [form.fields]);
+
+  const productActivityPreview = useMemo(() => {
+    const savedDaily = productActivity?.marketplaces?.daily.total;
+    const period = productActivity?.periodTotals;
+    return summarizeProductActivityCounts({
+      uploaded: (period?.uploaded ?? 0) - (savedDaily?.uploaded ?? 0) + marketplaceDraft.total.uploaded,
+      edited: (period?.edited ?? 0) - (savedDaily?.edited ?? 0) + marketplaceDraft.total.edited,
+      copied: (period?.copied ?? 0) - (savedDaily?.copied ?? 0) + marketplaceDraft.total.copied,
+    });
+  }, [marketplaceDraft, productActivity]);
+
+  const handleSaveMarketplaceActivity = async () => {
+    setMarketplaceSaving(true);
+    try {
+      const params = new URLSearchParams();
+      const impersonateId = impersonateIdFromWindow();
+      if (impersonateId) params.set("impersonateId", impersonateId);
+      const response = await fetch(`/api/marketing/product-activity${params.size ? `?${params.toString()}` : ""}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          date: form.date,
+          periodKey: selectedPeriodKey,
+          jumia: marketplaceDraft.jumia,
+          kilimall: marketplaceDraft.kilimall,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.error || "Failed to save marketplace activity");
+      setProductActivity(payload as ProductActivityPayload);
+      marketplaceDraftDirtyRef.current = false;
+      setMarketplaceDraftDirty(false);
+      showToast("Jumia and Kilimall product activity saved", "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Failed to save marketplace activity", "error");
+    } finally {
+      setMarketplaceSaving(false);
+    }
+  };
+
 const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems: number; filledReceiptsCount: number } => {
     const totalSales = receipts.reduce(
       (sum, r) =>
@@ -1711,6 +1820,14 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
       : preferredEarningsCommission > 0
       ? preferredEarningsCommission
       : commissionSummary.commission;
+  const previewCommissionKes = isBrendahLegacyProfile
+    ? Math.max(
+        0,
+        commissionKes +
+          productActivityPreview.commission.total -
+          (productActivity?.periodTotals.commission.total ?? 0),
+      )
+    : commissionKes;
   const nextTarget = commissionSummary.nextTarget;
   const periodLabel =
     periodSummary?.period.label ??
@@ -1993,7 +2110,7 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
           </div>
           <h2 className="mt-2 text-2xl font-semibold text-slate-100">Marketplace product uploads</h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-            Record products uploaded, edited, or copied directly on Jumia and Kilimall. Submit the report to add these figures to today&apos;s activity and product commission.
+            Record products uploaded, edited, or copied directly on Jumia and Kilimall. Quick stats update as you type; save when the figures are correct.
           </p>
         </div>
 
@@ -2024,7 +2141,7 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
                       min={0}
                       step={1}
                       value={String(form.fields[marketplace.fields[activity]] ?? "")}
-                      onChange={(event) => updateField(marketplace.fields[activity], event.target.value)}
+                      onChange={(event) => updateMarketplaceField(marketplace.fields[activity], event.target.value)}
                       className="w-full rounded-2xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-lg font-semibold text-slate-100"
                     />
                   </label>
@@ -2034,13 +2151,28 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
           ))}
         </div>
 
-        <div className="mt-4 flex flex-col gap-2 rounded-2xl border border-amber-300/15 bg-amber-300/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <span className="text-sm text-slate-300">
-            Saved marketplace activity: {(periodTotals?.total.uploaded ?? 0)} uploaded · {(periodTotals?.total.edited ?? 0)} edited · {(periodTotals?.total.copied ?? 0)} copied
-          </span>
-          <span className="text-sm font-semibold text-amber-100">
-            Commission {formatKES(periodTotals?.total.commission.total ?? 0)}
-          </span>
+        <div className="mt-4 flex flex-col gap-4 rounded-2xl border border-amber-300/15 bg-amber-300/5 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-sm text-slate-200">
+              Current entry: {marketplaceDraft.total.uploaded} uploaded · {marketplaceDraft.total.edited} edited · {marketplaceDraft.total.copied} copied
+            </div>
+            <div className="mt-1 text-xs text-slate-400">
+              Saved this period: {(periodTotals?.total.uploaded ?? 0)} uploaded · {(periodTotals?.total.edited ?? 0)} edited · {(periodTotals?.total.copied ?? 0)} copied
+            </div>
+          </div>
+          <div className="flex flex-col gap-3 sm:items-end">
+            <span className="text-sm font-semibold text-amber-100">
+              Preview commission {formatKES(productActivityPreview.commission.total)}
+            </span>
+            <Button
+              type="button"
+              onClick={() => void handleSaveMarketplaceActivity()}
+              disabled={marketplaceSaving || !marketplaceDraftDirty}
+              className="min-h-11 rounded-full bg-amber-400 px-6 font-semibold text-slate-950 hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {marketplaceSaving ? "Saving..." : marketplaceDraftDirty ? "Save marketplace activity" : "Saved"}
+            </Button>
+          </div>
         </div>
       </Card>
     );
@@ -2666,10 +2798,10 @@ const totals = useMemo((): { totalSales: number; totalProfit: number; totalItems
                   periodLabel={periodLabel}
                   receipts={displayedRecognizedReceipts}
                   salesKes={displayedRecognizedSalesKes}
-                  newProducts={productActivity?.periodTotals.uploaded ?? Number((earningsSummary as any)?.totalNewProducts ?? 0)}
-                  editedProducts={productActivity?.periodTotals.edited ?? Number((earningsSummary as any)?.totalEditedProducts ?? 0)}
-                  copiedProducts={productActivity?.periodTotals.copied ?? Number((earningsSummary as any)?.totalCopiedProducts ?? 0)}
-                  commissionKes={commissionKes}
+                  newProducts={productActivity ? productActivityPreview.uploaded : Number((earningsSummary as any)?.totalNewProducts ?? 0)}
+                  editedProducts={productActivity ? productActivityPreview.edited : Number((earningsSummary as any)?.totalEditedProducts ?? 0)}
+                  copiedProducts={productActivity ? productActivityPreview.copied : Number((earningsSummary as any)?.totalCopiedProducts ?? 0)}
+                  commissionKes={previewCommissionKes}
                 />
                 <BrendahLegacyEarningsCard
                   summary={earningsSummary}
