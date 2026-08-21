@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Headphones, MapPin, MessageCircle, ShieldCheck, Truck } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Headphones, MapPin, MessageCircle, PlayCircle, ShieldCheck, Truck } from "lucide-react";
 import type { ShopCategory } from "@/app/shop/shopData";
 import { getShopCategoryDefinition } from "@/app/shop/shopCatalogConfig";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
@@ -123,6 +123,21 @@ export default function ShopHero({ categories, heroImageUrl = "/agents/hero-gene
                     <Headphones className="h-4 w-4" />
                   </Link>
                 </div>
+                <Link
+                  href="https://www.tiktok.com/@betechsolarprojects"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2.5 flex min-h-[2.7rem] w-full items-center justify-between gap-3 rounded-2xl border border-white/15 bg-white/8 px-4 py-2 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:border-[#f2b20f]/55 hover:bg-white/12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2b20f]"
+                >
+                  <span className="flex items-center gap-2">
+                    <PlayCircle className="h-4 w-4 text-[#f2b20f]" />
+                    View our recent solar projects
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#ffd766]">
+                    TikTok
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                  </span>
+                </Link>
                 <div className="mt-3 text-[12px] leading-5 text-white/72 sm:text-sm">We deliver and install solar systems anywhere in Kenya, with support for both small orders and complete system setups.</div>
               </div>
 
