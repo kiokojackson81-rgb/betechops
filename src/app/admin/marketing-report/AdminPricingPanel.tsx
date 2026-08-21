@@ -26,6 +26,7 @@ const getSaleKey = (sale: GroupedUnpricedSale) => `${sale.source}:${sale.id}`;
 const dayFilters = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const getDraftKey = (sale: GroupedUnpricedSale, receiptItemId?: string) =>
   receiptItemId ? `${sale.source}:item:${receiptItemId}` : getSaleKey(sale);
+type ReceiptPricingMode = "individual" | "total";
 
 export default function AdminPricingPanel() {
   const [sales, setSales] = useState<UnpricedSale[]>([]);
@@ -33,6 +34,7 @@ export default function AdminPricingPanel() {
   const [loading, setLoading] = useState(true);
   const [buyingDrafts, setBuyingDrafts] = useState<Record<string, string>>({});
   const [saveToCatalogDrafts, setSaveToCatalogDrafts] = useState<Record<string, boolean>>({});
+  const [receiptPricingModes, setReceiptPricingModes] = useState<Record<string, ReceiptPricingMode>>({});
   const [pricingKey, setPricingKey] = useState<string | null>(null);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -181,7 +183,7 @@ export default function AdminPricingPanel() {
     sale: GroupedUnpricedSale,
     receiptItemId: string | undefined,
     buyingPrice: number,
-    options?: { overrideSaleId?: string; saveToCatalog?: boolean },
+    options?: { overrideSaleId?: string; saveToCatalog?: boolean; unitBuyingPrice?: number },
   ) => {
     if (sale.source === "support" && !receiptItemId) {
       throw new Error("Select a receipt item to price");
@@ -190,7 +192,12 @@ export default function AdminPricingPanel() {
     const endpoint = sale.source === "support" ? "/api/support/price-sale" : "/api/marketing/price-sale";
     const payload =
       sale.source === "support"
-        ? { receiptItemId, buyingPrice, saveToCatalog: Boolean(options?.saveToCatalog) }
+        ? {
+            receiptItemId,
+            buyingPrice,
+            unitBuyingPrice: options?.unitBuyingPrice,
+            saveToCatalog: Boolean(options?.saveToCatalog),
+          }
         : { dailySaleId: targetSaleId, buyingPrice, saveToCatalog: Boolean(options?.saveToCatalog) };
     const res = await fetch(endpoint, {
       method: "POST",
@@ -282,7 +289,12 @@ export default function AdminPricingPanel() {
     setPricingKey(draftKey);
     try {
       for (const { id, value } of allocations) {
-        await submitPrice(sale, id, value, { saveToCatalog });
+        const item = items.find((candidate) => candidate.id === id);
+        const quantity = Math.max(1, Number(item?.quantity ?? 1));
+        await submitPrice(sale, id, value, {
+          saveToCatalog,
+          unitBuyingPrice: Math.max(1, Math.round(value / quantity)),
+        });
       }
       setBuyingDrafts((prev) => {
         const next = { ...prev };
@@ -335,6 +347,66 @@ export default function AdminPricingPanel() {
       showToast("Buying price saved", "success");
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Failed to save buying price", "error");
+    } finally {
+      setPricingKey(null);
+    }
+  };
+
+  const handlePriceReceiptItemsIndividually = async (sale: GroupedUnpricedSale) => {
+    const items = (sale.receiptItems as ReceiptGroupingItem[] | undefined) ?? [];
+    if (!items.length) {
+      showToast("No receipt items available for pricing", "error");
+      return;
+    }
+
+    const itemPrices = items.map((item) => ({
+      item,
+      draftKey: getDraftKey(sale, item.id),
+      value: Number(buyingDrafts[getDraftKey(sale, item.id)]),
+    }));
+    if (itemPrices.some(({ value }) => !Number.isFinite(value) || value <= 0)) {
+      showToast("Enter a buying price for every pending item", "error");
+      return;
+    }
+
+    const groupKey = getDraftKey(sale);
+    setPricingKey(groupKey);
+    try {
+      for (const { item, draftKey, value } of itemPrices) {
+        const roundedValue = Math.round(value);
+        const saveToCatalog = Boolean(saveToCatalogDrafts[draftKey]);
+        if (sale.source === "support") {
+          const quantity = Math.max(1, Number(item.quantity ?? 1));
+          await submitPrice(sale, item.id, roundedValue, {
+            saveToCatalog,
+            unitBuyingPrice: Math.max(1, Math.round(roundedValue / quantity)),
+          });
+        } else {
+          await submitPrice(sale, undefined, roundedValue, {
+            overrideSaleId: item.id,
+            saveToCatalog: false,
+          });
+        }
+      }
+      setBuyingDrafts((prev) => {
+        const next = { ...prev };
+        itemPrices.forEach(({ draftKey }) => delete next[draftKey]);
+        return next;
+      });
+      setSaveToCatalogDrafts((prev) => {
+        const next = { ...prev };
+        itemPrices.forEach(({ draftKey }) => delete next[draftKey]);
+        return next;
+      });
+      showToast(`Buying prices saved for all ${items.length} pending items`, "success");
+    } catch (err) {
+      await fetchSales();
+      showToast(
+        err instanceof Error
+          ? `${err.message}. The queue was refreshed to show any items still pending.`
+          : "Failed to save all buying prices",
+        "error",
+      );
     } finally {
       setPricingKey(null);
     }
@@ -521,6 +593,21 @@ export default function AdminPricingPanel() {
                   hasReceiptItems &&
                   receiptItems!.every((item) => Boolean(item.catalogProductId));
                 const saveToCatalogKey = getDraftKey(sale);
+                const pricingMode = receiptPricingModes[key] ?? "individual";
+                const individualDrafts = (receiptItems ?? []).map((item) => ({
+                  item,
+                  key: getDraftKey(sale, item.id),
+                  value: Number(buyingDrafts[getDraftKey(sale, item.id)]),
+                }));
+                const allIndividualPricesEntered =
+                  individualDrafts.length > 0 &&
+                  individualDrafts.every(({ value }) => Number.isFinite(value) && value > 0);
+                const individualBuyingTotal = individualDrafts.reduce(
+                  (sum, { value }) => sum + (Number.isFinite(value) && value > 0 ? value : 0),
+                  0,
+                );
+                const totalBuyingDraft = Number(buyingDrafts[saveToCatalogKey]);
+                const totalBuyingPriceEntered = Number.isFinite(totalBuyingDraft) && totalBuyingDraft > 0;
                 return (
                   <tr key={key} className="border-t border-slate-800 bg-slate-950/30">
                     <td className="px-3 py-3 align-top">
@@ -562,40 +649,129 @@ export default function AdminPricingPanel() {
                     </td>
                     <td className="px-3 py-3 align-top">
                       {hasReceiptItems ? (
-                        <div className="space-y-2">
-                          <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-2 text-xs text-slate-300">
-                            <ul className="list-disc space-y-1 pl-4 text-slate-100">
-                              {receiptItems!.map((item) => (
-                                <li key={item.id} className="flex items-center justify-between gap-2">
-                                  <span>{item.productName || "Receipt item"}</span>
-                                  {typeof item.saleValue === "number" ? (
-                                    <span className="text-slate-400">{formatKES(item.saleValue)}</span>
-                                  ) : null}
-                                </li>
-                              ))}
-                            </ul>
+                        <div className="min-w-[420px] space-y-3">
+                          <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-800 bg-slate-950/50 p-1">
+                            {([
+                              ["individual", "Price one by one"],
+                              ["total", "Price all at once"],
+                            ] as const).map(([mode, label]) => (
+                              <button
+                                key={mode}
+                                type="button"
+                                onClick={() => setReceiptPricingModes((prev) => ({ ...prev, [key]: mode }))}
+                                className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                                  pricingMode === mode
+                                    ? "bg-emerald-400 text-slate-950"
+                                    : "text-slate-300 hover:bg-white/5"
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            ))}
                           </div>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="50"
-                            value={buyingDrafts[saveToCatalogKey] ?? ""}
-                            placeholder="Total buying price"
-                            onChange={(e) => handleSetDraft(saveToCatalogKey, e.target.value)}
-                          />
-                          <label className={`flex items-start gap-2 text-xs ${canSaveToCatalog ? "text-slate-300" : "text-slate-500"}`}>
-                            <input
-                              type="checkbox"
-                              checked={Boolean(saveToCatalogDrafts[saveToCatalogKey])}
-                              disabled={!canSaveToCatalog}
-                              onChange={(e) => handleSetSaveToCatalog(saveToCatalogKey, e.target.checked)}
-                              className="mt-0.5"
+
+                          <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/50 p-3">
+                            {receiptItems!.map((item, itemIndex) => {
+                              const itemDraftKey = getDraftKey(sale, item.id);
+                              const quantity = Math.max(1, Number(item.quantity ?? 1));
+                              const canSaveItemToCatalog = isSupportReceipt && Boolean(item.catalogProductId);
+                              return (
+                                <div
+                                  key={item.id}
+                                  className="grid gap-2 border-b border-slate-800 pb-3 last:border-b-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_150px]"
+                                >
+                                  <div className="min-w-0">
+                                    <div className="text-sm font-medium text-white">
+                                      {itemIndex + 1}. {item.productName || "Receipt item"}
+                                    </div>
+                                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-400">
+                                      <span>Qty {quantity}</span>
+                                      {typeof item.saleValue === "number" ? (
+                                        <span>Selling value {formatKES(item.saleValue)}</span>
+                                      ) : null}
+                                    </div>
+                                    {pricingMode === "individual" ? (
+                                      <label className={`mt-2 flex items-start gap-2 text-[11px] ${canSaveItemToCatalog ? "text-slate-300" : "text-slate-500"}`}>
+                                        <input
+                                          type="checkbox"
+                                          checked={Boolean(saveToCatalogDrafts[itemDraftKey])}
+                                          disabled={!canSaveItemToCatalog}
+                                          onChange={(event) => handleSetSaveToCatalog(itemDraftKey, event.target.checked)}
+                                          className="mt-0.5"
+                                        />
+                                        <span>
+                                          Save unit cost to catalogue
+                                          {!canSaveItemToCatalog ? " (product not linked)" : ""}
+                                        </span>
+                                      </label>
+                                    ) : null}
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                                      Line buying cost
+                                    </label>
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      step="50"
+                                      value={buyingDrafts[itemDraftKey] ?? ""}
+                                      placeholder="KES 0"
+                                      disabled={pricingMode === "total"}
+                                      onChange={(event) => handleSetDraft(itemDraftKey, event.target.value)}
+                                      className={pricingMode === "total" ? "mt-1 cursor-not-allowed opacity-40" : "mt-1"}
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          <div className={`rounded-xl border p-3 ${pricingMode === "total" ? "border-emerald-400/30 bg-emerald-400/5" : "border-slate-800 bg-slate-950/30"}`}>
+                            <div className="flex items-center justify-between gap-3 text-xs">
+                              <span className="font-medium text-slate-300">
+                                {pricingMode === "total" ? "Combined cost for pending items" : "Entered individual total"}
+                              </span>
+                              {pricingMode === "individual" ? (
+                                <span className="font-semibold text-emerald-300">{formatKES(individualBuyingTotal)}</span>
+                              ) : null}
+                            </div>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="50"
+                              value={buyingDrafts[saveToCatalogKey] ?? ""}
+                              placeholder="Total buying price for pending items"
+                              disabled={pricingMode === "individual"}
+                              onChange={(event) => handleSetDraft(saveToCatalogKey, event.target.value)}
+                              className={pricingMode === "individual" ? "mt-2 cursor-not-allowed opacity-40" : "mt-2"}
                             />
-                            <span>
-                              Save this buying price to product catalog for future profit calculation
-                              {!canSaveToCatalog ? " Catalog product not linked, buying price cannot be saved for future use." : ""}
-                            </span>
-                          </label>
+                            {pricingMode === "total" ? (
+                              <>
+                                <p className="mt-2 text-[11px] leading-4 text-amber-200/80">
+                                  This total is allocated only across the {receiptItems!.length} pending items shown above. Already-priced items are not changed.
+                                </p>
+                                <label className={`mt-2 flex items-start gap-2 text-xs ${canSaveToCatalog ? "text-slate-300" : "text-slate-500"}`}>
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(saveToCatalogDrafts[saveToCatalogKey])}
+                                    disabled={!canSaveToCatalog}
+                                    onChange={(event) => handleSetSaveToCatalog(saveToCatalogKey, event.target.checked)}
+                                    className="mt-0.5"
+                                  />
+                                  <span>
+                                    Save allocated unit costs to the product catalogue
+                                    {!canSaveToCatalog ? " (all products must be linked)" : ""}
+                                  </span>
+                                </label>
+                              </>
+                            ) : (
+                              <p className={`mt-2 text-[11px] ${allIndividualPricesEntered ? "text-emerald-300" : "text-amber-200"}`}>
+                                {allIndividualPricesEntered
+                                  ? `All ${receiptItems!.length} pending item prices are complete.`
+                                  : `Enter all ${receiptItems!.length} buying prices to enable pricing.`}
+                              </p>
+                            )}
+                          </div>
                         </div>
                       ) : (
                         <div className="space-y-2">
@@ -625,11 +801,24 @@ export default function AdminPricingPanel() {
                     <td className="px-3 py-3 align-top space-y-2">
                       {hasReceiptItems ? (
                         <Button
-                          onClick={() => (isSupportReceipt ? handlePriceSupportReceipt(sale) : handlePriceReceiptGroup(sale))}
-                          disabled={pricingKey === getDraftKey(sale)}
+                          onClick={() => {
+                            if (pricingMode === "individual") {
+                              void handlePriceReceiptItemsIndividually(sale);
+                              return;
+                            }
+                            void (isSupportReceipt ? handlePriceSupportReceipt(sale) : handlePriceReceiptGroup(sale));
+                          }}
+                          disabled={
+                            pricingKey === getDraftKey(sale) ||
+                            (pricingMode === "individual" ? !allIndividualPricesEntered : !totalBuyingPriceEntered)
+                          }
                           className="w-full bg-emerald-500 text-black font-semibold hover:brightness-95"
                         >
-                          {pricingKey === getDraftKey(sale) ? "Saving…" : "Price receipt"}
+                          {pricingKey === getDraftKey(sale)
+                            ? "Saving…"
+                            : pricingMode === "individual"
+                              ? `Price ${receiptItems!.length} items`
+                              : "Price pending total"}
                         </Button>
                       ) : (
                         <Button
