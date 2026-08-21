@@ -54,7 +54,7 @@ export async function POST(req: Request) {
   const identity = await resolveTargetUserId(req, { allowedImpersonationRoles: ["ADMIN" as Role] });
   const actorId = (auth.session?.user as { id?: string } | undefined)?.id ?? identity.actorId ?? null;
   const userId = identity.resolvedUserId;
-  const actorRole = identity.actorRole;
+  const actorRole = auth.role;
   const isAdminCreatingForStaff = actorRole === "ADMIN" && Boolean(identity.impersonateId);
   if (!userId || !actorId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -76,7 +76,12 @@ export async function POST(req: Request) {
 
   try {
     const normalizedRepaymentPeriod = repaymentPeriod > 0 ? assertCashAdvanceRepaymentPeriod(repaymentPeriod) : null;
-    await assertCashAdvanceWithinSalaryCap(userId, requestedAmount);
+    const salaryCapacity = await assertCashAdvanceWithinSalaryCap(userId, requestedAmount, {
+      allowSalaryCapOverride: actorRole === "ADMIN",
+    });
+    const salaryCapOverrideApplied =
+      isAdminCreatingForStaff &&
+      (salaryCapacity.salary <= 0 || requestedAmount > salaryCapacity.availableToBorrow);
 
     const created = await prisma.$transaction(async (tx) => {
       if (!isAdminCreatingForStaff) {
@@ -164,7 +169,11 @@ export async function POST(req: Request) {
         entity: "CashAdvance",
         entityId: created.id,
         action: "CREATE",
-        after: created as unknown as Prisma.InputJsonValue,
+        after: {
+          ...created,
+          salaryCapacity,
+          salaryCapOverrideApplied,
+        } as unknown as Prisma.InputJsonValue,
       },
     });
 

@@ -62,15 +62,21 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         sequenceNumber: number;
         amount: number;
       }> = [];
+      let salaryCapacity: {
+        salary: number;
+        outstandingBalance: number;
+        availableToBorrow: number;
+      } | null = null;
 
       if (decision === "APPROVED") {
         if (approvedAmount <= 0 || repaymentPeriod <= 0) {
           throw new Error("approvedAmount and repaymentPeriod must be greater than zero");
         }
         const normalizedRepaymentPeriod = assertCashAdvanceRepaymentPeriod(repaymentPeriod);
-        await assertCashAdvanceWithinSalaryCap(existing.userId, approvedAmount, {
+        salaryCapacity = await assertCashAdvanceWithinSalaryCap(existing.userId, approvedAmount, {
           db: tx,
           excludeAdvanceId: existing.id,
+          allowSalaryCapOverride: auth.role === "ADMIN",
         });
         const firstReferenceDate = body?.firstDeductionDate ? new Date(body.firstDeductionDate) : new Date();
         schedules = buildCashAdvanceInstallments({
@@ -176,6 +182,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
       }
 
+      const salaryCapOverrideApplied =
+        decision === "APPROVED" &&
+        auth.role === "ADMIN" &&
+        salaryCapacity !== null &&
+        (salaryCapacity.salary <= 0 || approvedAmount > salaryCapacity.availableToBorrow);
+
       await tx.actionLog.create({
         data: {
           actorId,
@@ -186,6 +198,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           after: {
             ...updated,
             schedules,
+            salaryCapacity,
+            salaryCapOverrideApplied,
           } as Prisma.InputJsonValue,
         },
       });

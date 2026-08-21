@@ -348,15 +348,19 @@ export function normalizeCashAdvanceRepaymentPeriodValue(period: number | null |
 export async function assertCashAdvanceWithinSalaryCap(
   userId: string,
   amount: number,
-  input?: { db?: DbClient; excludeAdvanceId?: string | null },
+  input?: {
+    db?: DbClient;
+    excludeAdvanceId?: string | null;
+    allowSalaryCapOverride?: boolean;
+  },
 ) {
   const requestedAmount = Math.max(0, Math.trunc(Number(amount ?? 0)));
   const capacity = await getCashAdvanceCapacity(userId, input);
 
-  if (capacity.salary <= 0) {
+  if (!input?.allowSalaryCapOverride && capacity.salary <= 0) {
     throw new Error("Cash advance is unavailable because no base salary is set");
   }
-  if (requestedAmount > capacity.availableToBorrow) {
+  if (!input?.allowSalaryCapOverride && requestedAmount > capacity.availableToBorrow) {
     throw new Error(
       `Cash advance exceeds salary limit. Salary is KES ${capacity.salary.toLocaleString()} and available borrowing is KES ${capacity.availableToBorrow.toLocaleString()}`,
     );

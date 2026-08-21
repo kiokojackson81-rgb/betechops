@@ -21,11 +21,13 @@ async function rebuildAdvanceSchedule(input: {
   approvedAmount: number;
   repaymentPeriod: number;
   firstDeductionDate?: string | null;
+  allowSalaryCapOverride: boolean;
 }) {
   const normalizedRepaymentPeriod = assertCashAdvanceRepaymentPeriod(input.repaymentPeriod);
-  await assertCashAdvanceWithinSalaryCap(input.userId, input.approvedAmount, {
+  const salaryCapacity = await assertCashAdvanceWithinSalaryCap(input.userId, input.approvedAmount, {
     db: input.tx,
     excludeAdvanceId: input.cashAdvanceId,
+    allowSalaryCapOverride: input.allowSalaryCapOverride,
   });
 
   const existingInstallments = await input.tx.cashAdvanceInstallment.findMany({
@@ -99,7 +101,13 @@ async function rebuildAdvanceSchedule(input: {
     });
   }
 
-  return updated;
+  return {
+    updated,
+    salaryCapacity,
+    salaryCapOverrideApplied:
+      input.allowSalaryCapOverride &&
+      (salaryCapacity.salary <= 0 || input.approvedAmount > salaryCapacity.availableToBorrow),
+  };
 }
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> | { id: string } }) {
@@ -160,8 +168,12 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         },
       });
 
+      let salaryCapAudit: {
+        salaryCapacity: { salary: number; outstandingBalance: number; availableToBorrow: number };
+        salaryCapOverrideApplied: boolean;
+      } | null = null;
       if (existing.status === "APPROVED") {
-        await rebuildAdvanceSchedule({
+        const rebuilt = await rebuildAdvanceSchedule({
           tx,
           cashAdvanceId: id,
           userId,
@@ -169,7 +181,12 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
           approvedAmount: approvedAmount > 0 ? approvedAmount : requestedAmount,
           repaymentPeriod,
           firstDeductionDate: body?.firstDeductionDate ?? null,
+          allowSalaryCapOverride: auth.role === "ADMIN",
         });
+        salaryCapAudit = {
+          salaryCapacity: rebuilt.salaryCapacity,
+          salaryCapOverrideApplied: rebuilt.salaryCapOverrideApplied,
+        };
       }
 
       const finalRecord = await tx.cashAdvance.findUnique({
@@ -188,7 +205,10 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
           entityId: id,
           action: "UPDATE",
           before: existing as unknown as Prisma.InputJsonValue,
-          after: finalRecord as unknown as Prisma.InputJsonValue,
+          after: {
+            ...finalRecord,
+            ...salaryCapAudit,
+          } as unknown as Prisma.InputJsonValue,
         },
       });
 

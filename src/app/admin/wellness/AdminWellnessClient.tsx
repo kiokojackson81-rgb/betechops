@@ -463,6 +463,10 @@ export default function AdminWellnessClient() {
 
       <section className="rounded-3xl border border-white/10 bg-white/5 p-5">
         <h2 className="text-lg font-semibold">Create Cash Advance</h2>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+          Admin may approve an advance above the employee&apos;s available salary limit when necessary.
+          Staff requests and supervisor approvals remain restricted to the salary-based limit.
+        </p>
         <div className="mt-4 grid gap-3 md:grid-cols-4">
           <label className="space-y-2 text-sm">
             <span className="text-slate-300">Staff</span>
