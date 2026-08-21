@@ -3,12 +3,13 @@
 import { Suspense, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Headphones, Menu, ShoppingCart, User2, WalletCards, X } from "lucide-react";
+import { ChevronDown, Grid2X2, Headphones, Menu, ShoppingCart, User2, WalletCards, X } from "lucide-react";
 import ShopPreviewBanner from "@/app/shop/_components/ShopPreviewBanner";
 import ShopSearchBar from "@/app/shop/_components/ShopSearchBar";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import { getShopCartCount, useShopCartItems } from "@/app/shop/cartStore";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
+import type { ShopNavigationItem } from "@/app/shop/shopData";
 import {
   SHOP_ACCOUNT_HREF,
   SHOP_CART_HREF,
@@ -17,7 +18,7 @@ import {
 } from "@/app/shop/storefrontPaths";
 
 type ShopHeaderProps = {
-  navLinks: { label: string; href: string }[];
+  navLinks: ShopNavigationItem[];
 };
 
 function SearchBarFallback({ compact = false }: { compact?: boolean }) {
@@ -36,6 +37,8 @@ function SearchBarFallback({ compact = false }: { compact?: boolean }) {
 
 export default function ShopHeader({ navLinks }: ShopHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [expandedItem, setExpandedItem] = useState<string | null>(null);
+  const [searchActive, setSearchActive] = useState(false);
   useShopCartItems();
   const cartCount = getShopCartCount();
 
@@ -85,23 +88,85 @@ export default function ShopHeader({ navLinks }: ShopHeaderProps) {
 
         <div className="mt-2 lg:hidden">
           <Suspense fallback={<SearchBarFallback compact />}>
-            <ShopSearchBar compact />
+            <ShopSearchBar
+              compact
+              onSearchStateChange={setSearchActive}
+              onSearchSubmit={() => setMenuOpen(false)}
+            />
           </Suspense>
         </div>
 
+        {searchActive ? (
+          <div className="mt-2 flex items-center justify-between lg:hidden">
+            <span className="text-xs font-semibold text-slate-500">Search results</span>
+            <button
+              type="button"
+              onClick={() => setMenuOpen((current) => !current)}
+              aria-expanded={menuOpen}
+              className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[#7a0000]/12 bg-white px-3 text-xs font-bold text-[#7a0000] shadow-[0_8px_18px_rgba(15,23,42,0.05)]"
+            >
+              <Grid2X2 className="h-3.5 w-3.5" />
+              Categories
+            </button>
+          </div>
+        ) : null}
+
         {menuOpen ? (
-          <div className="mt-2 rounded-[24px] border border-[#7a0000]/10 bg-white p-3 shadow-[0_16px_32px_rgba(15,23,42,0.08)] lg:hidden">
-            <nav className="grid gap-2">
-              {navLinks.map((item) => (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  onClick={() => setMenuOpen(false)}
-                  className="rounded-2xl border border-[#7a0000]/8 bg-[#fcfaf7] px-4 py-2.5 text-sm font-semibold text-slate-700"
-                >
-                  {item.label}
-                </Link>
-              ))}
+          <div className="absolute inset-x-0 top-full border-t border-[#7a0000]/8 bg-white/98 px-3.5 pb-4 pt-3 shadow-[0_22px_45px_rgba(15,23,42,0.16)] backdrop-blur lg:hidden sm:px-6">
+            <nav aria-label="Shop navigation" className="mx-auto grid max-h-[calc(100dvh-9.5rem)] max-w-3xl gap-1.5 overflow-y-auto overscroll-contain pr-1">
+              {navLinks.map((item) => {
+                const hasChildren = Boolean(item.children?.length);
+                const expanded = expandedItem === item.label;
+
+                return (
+                  <div key={item.label} className="overflow-hidden rounded-2xl border border-[#7a0000]/8 bg-[#fcfaf7]">
+                    {hasChildren ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedItem(expanded ? null : item.label)}
+                          aria-expanded={expanded}
+                          className="flex min-h-12 w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-bold text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#f59e0b]"
+                        >
+                          <span className="min-w-0 break-words">{item.label}</span>
+                          <ChevronDown className={`h-4 w-4 shrink-0 text-[#7a0000] transition-transform duration-200 ${expanded ? "rotate-180" : ""}`} />
+                        </button>
+                        <div className={`grid transition-[grid-template-rows] duration-200 ${expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
+                          <div className="overflow-hidden">
+                            <div className="grid gap-1 border-t border-[#7a0000]/8 bg-white p-2">
+                              <Link
+                                href={item.href}
+                                onClick={() => setMenuOpen(false)}
+                                className="rounded-xl bg-[#fff3d8] px-3 py-2.5 text-sm font-black text-[#7a0000]"
+                              >
+                                View all {item.label}
+                              </Link>
+                              {item.children?.map((child) => (
+                                <Link
+                                  key={child.href}
+                                  href={child.href}
+                                  onClick={() => setMenuOpen(false)}
+                                  className="min-h-11 rounded-xl px-3 py-2.5 text-sm font-semibold leading-5 text-slate-700 transition hover:bg-[#fff7ea] hover:text-[#7a0000]"
+                                >
+                                  {child.label}
+                                </Link>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <Link
+                        href={item.href}
+                        onClick={() => setMenuOpen(false)}
+                        className="flex min-h-12 items-center px-4 py-3 text-sm font-bold text-slate-800"
+                      >
+                        {item.label}
+                      </Link>
+                    )}
+                  </div>
+                );
+              })}
             </nav>
           </div>
         ) : null}

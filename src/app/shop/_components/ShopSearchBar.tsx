@@ -2,20 +2,24 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronRight, Search } from "lucide-react";
-import { SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
+import { ChevronRight, Search, X } from "lucide-react";
+import { getShopProductHref, SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
 
 type ShopSearchBarProps = {
   compact?: boolean;
+  onSearchStateChange?: (active: boolean) => void;
+  onSearchSubmit?: () => void;
 };
 
 type ShopSuggestion = {
   id: string;
   name: string;
   category: string;
+  slug: string;
+  opsProductId: string | null;
 };
 
-export default function ShopSearchBar({ compact = false }: ShopSearchBarProps) {
+export default function ShopSearchBar({ compact = false, onSearchStateChange, onSearchSubmit }: ShopSearchBarProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialQuery = useMemo(() => searchParams.get("q") ?? "", [searchParams]);
@@ -27,7 +31,8 @@ export default function ShopSearchBar({ compact = false }: ShopSearchBarProps) {
 
   useEffect(() => {
     setQuery(initialQuery);
-  }, [initialQuery]);
+    onSearchStateChange?.(Boolean(initialQuery.trim()));
+  }, [initialQuery, onSearchStateChange]);
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
@@ -63,7 +68,7 @@ export default function ShopSearchBar({ compact = false }: ShopSearchBarProps) {
         }
 
         const payload = (await response.json()) as {
-          products?: Array<{ id: string; name: string; category: string }>;
+          products?: Array<{ id: string; name: string; category: string; slug: string; opsProductId: string | null }>;
         };
 
         const nextSuggestions = Array.from(
@@ -76,6 +81,8 @@ export default function ShopSearchBar({ compact = false }: ShopSearchBarProps) {
                   id: product.id,
                   name: product.name,
                   category: product.category,
+                  slug: product.slug,
+                  opsProductId: product.opsProductId,
                 },
               ]),
           ).values(),
@@ -106,7 +113,18 @@ export default function ShopSearchBar({ compact = false }: ShopSearchBarProps) {
     const params = new URLSearchParams();
     if (trimmed) params.set("q", trimmed);
     setOpen(false);
+    onSearchStateChange?.(Boolean(trimmed));
+    onSearchSubmit?.();
     router.push(`${SHOP_HOME_HREF}${params.toString() ? `?${params.toString()}` : ""}#shop-catalogue`);
+  };
+
+  const clearSearch = () => {
+    setQuery("");
+    setSuggestions([]);
+    setOpen(false);
+    onSearchStateChange?.(false);
+    onSearchSubmit?.();
+    router.push(SHOP_HOME_HREF);
   };
 
   return (
@@ -135,12 +153,24 @@ export default function ShopSearchBar({ compact = false }: ShopSearchBarProps) {
             if (query.trim()) setOpen(true);
           }}
           onChange={(event) => {
-            setQuery(event.target.value);
-            setOpen(true);
+            const nextQuery = event.target.value;
+            setQuery(nextQuery);
+            setOpen(Boolean(nextQuery.trim()));
+            if (!nextQuery.trim() && initialQuery) clearSearch();
           }}
           placeholder="Search solar kits, inverters, batteries, pumps..."
           className="h-full w-full border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
         />
+        {query ? (
+          <button
+            type="button"
+            onClick={clearSearch}
+            aria-label="Clear product search"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-[#7a0000] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f59e0b]"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        ) : null}
         <button
           type="submit"
           aria-label="Search solar products"
@@ -174,7 +204,9 @@ export default function ShopSearchBar({ compact = false }: ShopSearchBarProps) {
               type="button"
               onClick={() => {
                 setQuery(suggestion.name);
-                goToSearchResults(suggestion.name);
+                setOpen(false);
+                onSearchSubmit?.();
+                router.push(getShopProductHref(suggestion.slug, suggestion.opsProductId));
               }}
               className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-[#fcfaf7] sm:px-5"
             >

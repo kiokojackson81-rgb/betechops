@@ -1,11 +1,18 @@
 import { SHOP_CATEGORY_DEFINITIONS } from "@/app/shop/shopCatalogConfig";
 import {
   getShopCategoryHref,
+  SHOP_ALL_PRODUCTS_HREF,
   SHOP_DELIVERY_PAYMENT_HREF,
   SHOP_LIPA_POLE_POLE_HREF,
   SHOP_REQUEST_QUOTE_HREF,
   SHOP_WARRANTY_SUPPORT_HREF,
 } from "@/app/shop/storefrontPaths";
+
+export type ShopNavigationItem = {
+  label: string;
+  href: string;
+  children?: Array<{ label: string; href: string }>;
+};
 
 export type ShopCategory = {
   slug: string;
@@ -74,14 +81,20 @@ export type ShopProductSection = {
   products: ShopProduct[];
 };
 
-export const shopNavLinks = [
+export const shopNavLinks: ShopNavigationItem[] = [
   { label: "Lipa Pole Pole", href: SHOP_LIPA_POLE_POLE_HREF },
-  { label: "Solar Full Kits", href: getShopCategoryHref("solar-full-kits") },
-  { label: "Solar Panels", href: getShopCategoryHref("solar-panels") },
-  { label: "Batteries", href: getShopCategoryHref("solar-batteries") },
-  { label: "Inverters", href: getShopCategoryHref("solar-inverters") },
-  { label: "Pumps", href: getShopCategoryHref("solar-water-pumps") },
+  { label: "All Products", href: SHOP_ALL_PRODUCTS_HREF },
+  ...SHOP_CATEGORY_DEFINITIONS.map((category) => ({
+    label: category.label,
+    href: getShopCategoryHref(category.value),
+    children: category.subcategories.map((subcategory) => ({
+      label: subcategory.label,
+      href: `${getShopCategoryHref(category.value)}?sub=${subcategory.value}`,
+    })),
+  })),
   { label: "Request Quote", href: SHOP_REQUEST_QUOTE_HREF },
+  { label: "Warranty Support", href: SHOP_WARRANTY_SUPPORT_HREF },
+  { label: "Delivery, Installation & Payment", href: SHOP_DELIVERY_PAYMENT_HREF },
 ];
 
 export function buildShopCategories(imageOverrides: Record<string, string> = {}): ShopCategory[] {
