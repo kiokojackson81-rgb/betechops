@@ -11,8 +11,8 @@ export type PublicTermsSection = {
   }>;
 };
 
-export const TERMS_EFFECTIVE_DATE = "12 August 2026";
-export const TERMS_VERSION = "1.0";
+export const TERMS_EFFECTIVE_DATE = "21 August 2026";
+export const TERMS_VERSION = "1.1";
 
 export const TERMS_TITLE =
   "Betech Solar Solutions Solar System Installation, Performance, Warranty & After-Sales Terms & Conditions";
@@ -73,6 +73,53 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
       "Protection equipment",
       "Communication between compatible devices",
       "Basic system configuration",
+    ],
+  },
+  {
+    number: "2A",
+    title: "Customer Inspection and Acceptance of Materials",
+    paragraphs: [
+      "The Customer has the right and responsibility to inspect the equipment and materials supplied by Betech before and during installation, where reasonably practicable.",
+      "If the Customer believes that any material, equipment, brand, model, capacity, quantity or other item being supplied is materially different from what was agreed, the Customer should raise the concern before that item is permanently installed or, where reasonably possible, before installation is completed.",
+      "The Customer may request clarification and, where there is a genuine material discrepancy between the agreed order and the equipment presented for installation, may request that the affected installation work be paused while the matter is reviewed.",
+    ],
+    subsections: [
+      {
+        title: "Acceptance After Installation and Handover",
+        paragraphs: [
+          "Where the Customer or the Customer’s authorized representative is present during installation and allows the work to proceed, is given a reasonable opportunity to inspect the supplied equipment, allows the equipment and materials to be installed, accepts testing and commissioning, accepts handover, or subsequently takes possession of or uses the installed system, the equipment and materials installed shall, subject to applicable Kenyan law, generally be considered accepted as the equipment supplied for that installation.",
+          "After installation, commissioning and handover, the Customer should not ordinarily claim that they simply preferred or expected a different brand, model, design, appearance, configuration or specification where the installed equipment was disclosed, reasonably available for inspection, and accepted during the installation process.",
+          "For example, a later statement such as ‘I wanted a different model’, ‘I expected another type’ or ‘I would now prefer different equipment’ does not by itself establish that Betech supplied defective or incorrect equipment where the equipment installed formed part of the final agreed transaction and was accepted during installation and handover.",
+        ],
+      },
+      {
+        title: "This Does Not Remove Genuine Customer Rights",
+        paragraphs: [
+          "Acceptance of installed materials does not prevent the Customer from reporting the matters listed below. Such matters will be handled through Betech’s applicable technical support, workmanship, complaint-management and manufacturer warranty procedures.",
+        ],
+        bullets: [
+          "A genuine product defect",
+          "A qualifying manufacturer warranty issue",
+          "Defective Betech workmanship",
+          "Equipment materially different from the equipment actually agreed or represented",
+          "Concealed damage or a material discrepancy that could not reasonably have been identified during installation",
+          "A system-performance issue requiring technical investigation",
+          "Any other right or remedy that cannot lawfully be excluded under applicable Kenyan law",
+        ],
+      },
+      {
+        title: "Changes Requested After Acceptance",
+        paragraphs: [
+          "Where the supplied equipment is operating correctly and corresponds with the final agreed transaction, but the Customer later requests a different brand, model, capacity, specification, appearance, configuration or equipment type, this will normally be treated as a customer-requested change or upgrade rather than a defect.",
+          "Any removal, replacement, additional equipment, transportation, labour, reinstallation or modification required to accommodate such a change may therefore be chargeable, unless Betech expressly agrees otherwise or the matter qualifies for another remedy under applicable law.",
+        ],
+      },
+      {
+        title: "Transaction Records",
+        paragraphs: [
+          "Where there is disagreement regarding what was finally agreed or supplied, Betech may refer to relevant transaction records, including the quotation, invoice, receipt, WhatsApp or other written communication, payment description, equipment records, serial numbers, installation photographs or videos, commissioning records and the equipment actually delivered and installed, subject to applicable law.",
+        ],
+      },
     ],
   },
   {
@@ -340,8 +387,18 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     number: 21,
     title: "Solar Performance Expectations",
     paragraphs: [
-      "Betech does not guarantee continuous maximum solar production because solar performance naturally varies.",
-      "Any daily-generation estimate is an estimate unless specifically guaranteed in writing.",
+      "Solar power generation naturally varies depending on weather and environmental conditions. While Betech Solar uses all-weather solar panels designed to continue generating power under different weather conditions, their output may reduce during periods of poor weather.",
+      "Factors that may affect solar production include cloud cover, rain, prolonged overcast conditions, seasonal changes, shading, and dust or dirt accumulation on the panels.",
+      "Betech Solar designs and installs systems to provide reliable solar energy based on the available solar resource. However, continuous maximum solar production cannot be guaranteed because solar energy ultimately depends on natural sunlight conditions that neither Betech Solar nor the equipment manufacturer can control.",
+    ],
+    bullets: [
+      "Reduced solar production during bad weather is normal and does not by itself mean that the solar system or panels are faulty.",
+      "Solar panels may continue producing electricity during cloudy or rainy conditions, but production can be significantly lower than during clear, sunny conditions.",
+      "Betech Solar cannot control weather, sunlight availability, cloud cover or other natural environmental conditions affecting solar generation.",
+      "Any estimated daily solar generation or expected charging time is an estimate based on reasonable operating and weather conditions, unless a specific performance level has been expressly guaranteed in writing.",
+      "A solar system should not be deemed defective or non-performing solely because generation is temporarily reduced due to poor weather conditions.",
+      "Customers should regularly inspect and clean their solar panels. Dust, dirt, leaves, bird droppings and other debris can block sunlight and reduce panel performance.",
+      "Panel cleaning should be carried out safely and at reasonable intervals depending on the environment. Locations with significant dust may require more frequent cleaning.",
     ],
   },
   {
@@ -657,6 +714,7 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
       "Solar installation includes more than the sale of unopened goods.",
       "It may include equipment allocation, transport, mounting, wiring, configuration, programming, labour, accessories, integration with the property and commissioning.",
       "Once supplied, installed, commissioned and handed over, the installation is generally considered completed.",
+      "Customer acceptance of equipment and materials is further governed by Section 2A – Customer Inspection and Acceptance of Materials.",
     ],
   },
   {
