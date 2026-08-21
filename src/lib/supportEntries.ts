@@ -75,18 +75,6 @@ export async function getSupportPeriodAggregates(opts: { userId: string; period:
     }
   }
 
-  const receiptsWithRecognizedSales = new Set<string>();
-  if (saleReceiptCanonicals.size > 0) {
-    const saleRows = await prisma.supportSale.findMany({
-      where: { receiptNumber: { in: Array.from(saleReceiptCanonicals) } },
-      select: { receiptNumber: true },
-    });
-    for (const sale of saleRows) {
-      const canonical = canonicalReceiptNumber(sale.receiptNumber ?? undefined);
-      if (canonical) receiptsWithRecognizedSales.add(canonical);
-    }
-  }
-
   const receiptExistenceByCanonical = new Set<string>(allReceiptCanonicals);
   if (saleReceiptCanonicals.size > 0) {
     const receiptRows = await prisma.supportReceipt.findMany({
@@ -131,14 +119,12 @@ export async function getSupportPeriodAggregates(opts: { userId: string; period:
     aggregates.newBatteries += (entry as any).newBatteries ?? 0;
     aggregates.changedBatteries += (entry as any).changedBatteries ?? 0;
 
-    const entryReceiptCanonicals = new Set<string>();
     for (const r of entry.receipts ?? []) {
       const canonical = canonicalReceiptNumber(r.receiptNumber ?? r.id);
       if (canonical && excludedCanonicals.has(canonical)) {
         // Skip this support receipt because a pos POD-pending receipt exists
         continue;
       }
-      if (canonical) entryReceiptCanonicals.add(canonical);
       const key = buildDatedReceiptKey(entry.date, r.receiptNumber ?? r.id) || `ID:${r.id}`;
       const selling = Number(r.sellingTotal ?? 0);
       const buying = Number(r.buyingTotal ?? 0);
@@ -146,8 +132,7 @@ export async function getSupportPeriodAggregates(opts: { userId: string; period:
       const method = normalizePaymentMethod(r.paymentMethod);
       const deliveryFee = canonical ? podDeliveryFeeMap.get(canonical) ?? 0 : 0;
       const feeForKey = deliveryFeeAppliedKeys.has(key) ? 0 : deliveryFee;
-      const recognizedProfit =
-        canonical && receiptsWithRecognizedSales.has(canonical) ? 0 : selling - buying - feeForKey;
+      const recognizedProfit = Math.max(0, selling - buying - feeForKey);
 
       const existing = seen.get(key);
       if (existing) {
@@ -173,8 +158,8 @@ export async function getSupportPeriodAggregates(opts: { userId: string; period:
       }
     }
 
-    // Also include SupportSale rows (some entries are recorded as sales-only without receipt rows).
-    // Avoid double-counting if a receipt row for the same receiptNumber exists in this entry.
+    // SupportReceipt is authoritative when present. SupportSale remains a fallback for
+    // legacy sales-only entries and must never be counted as another receipt/item row.
     const sales = (entry as any).sales ?? [];
     if (Array.isArray(sales) && sales.length > 0) {
       const entrySeen = new Set<string>();
@@ -182,6 +167,7 @@ export async function getSupportPeriodAggregates(opts: { userId: string; period:
         const receiptNumber = (sale as any).receiptNumber ?? null;
         const saleCanonical = canonicalReceiptNumber(receiptNumber);
         if (saleCanonical && excludedCanonicals.has(saleCanonical)) continue;
+        if (saleCanonical && receiptExistenceByCanonical.has(saleCanonical)) continue;
 
         const receiptIdBase = (receiptNumber && String(receiptNumber).trim().length > 0) ? String(receiptNumber).trim() : String((sale as any).id ?? "");
         if (!receiptIdBase) continue;
@@ -197,9 +183,8 @@ export async function getSupportPeriodAggregates(opts: { userId: string; period:
         const itemsCount = Math.max(1, Math.trunc(Number((sale as any).itemsCount ?? 1)));
         const deliveryFee = saleCanonical ? podDeliveryFeeMap.get(saleCanonical) ?? 0 : 0;
         const feeForKey = deliveryFeeAppliedKeys.has(key) ? 0 : deliveryFee;
-        const salesValue =
-          saleCanonical && receiptExistenceByCanonical.has(saleCanonical) ? 0 : selling;
-        const profitValue = buying > 0 ? selling - buying - feeForKey : 0;
+        const salesValue = selling;
+        const profitValue = buying > 0 ? Math.max(0, selling - buying - feeForKey) : 0;
 
         const existing = seen.get(key);
         if (existing) {
