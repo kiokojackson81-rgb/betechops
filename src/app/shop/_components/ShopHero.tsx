@@ -50,8 +50,8 @@ export default function ShopHero({ categories, heroImageUrl = "/agents/hero-gene
     <section className="pt-2.5 sm:pt-4">
       <div className={shopStyles.shell}>
         <div className="grid gap-3 lg:grid-cols-[0.24fr_0.52fr_0.24fr]">
-          <aside className={`${shopStyles.lightCard} hidden h-fit overflow-hidden lg:block`}>
-            <div className="border-b border-[#7a0000]/8 px-4 py-2.5 text-xs font-black uppercase tracking-[0.16em] text-[#7a0000]">
+          <aside className={`${shopStyles.lightCard} relative z-40 hidden h-fit overflow-visible lg:block`}>
+            <div className="rounded-t-[inherit] border-b border-[#7a0000]/8 px-4 py-2.5 text-xs font-black uppercase tracking-[0.16em] text-[#7a0000]">
               Shop categories
             </div>
             <nav className="grid">
@@ -59,20 +59,36 @@ export default function ShopHero({ categories, heroImageUrl = "/agents/hero-gene
                 <div key={category.slug} className="group relative">
                   <Link
                     href={getCategoryHref(category.slug)}
-                    className="flex items-center justify-between gap-3 border-b border-[#7a0000]/6 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-[#fff7ea] hover:text-[#7a0000]"
+                    aria-haspopup={getShopCategoryDefinition(category.slug)?.subcategories.length ? "menu" : undefined}
+                    className="flex items-center justify-between gap-3 border-b border-[#7a0000]/6 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-[#fff7ea] hover:text-[#7a0000] focus-visible:bg-[#fff7ea] focus-visible:text-[#7a0000] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#f2b20f]"
                   >
                     <span>{category.title}</span>
-                    <ArrowRight className="h-4 w-4 text-[#7a0000]/50" />
+                    <ArrowRight className="h-4 w-4 text-[#7a0000]/50 transition group-hover:translate-x-0.5 group-hover:text-[#7a0000] group-focus-within:translate-x-0.5 group-focus-within:text-[#7a0000]" />
                   </Link>
                   {getShopCategoryDefinition(category.slug)?.subcategories.length ? (
-                    <div className="pointer-events-none absolute left-[calc(100%-0.1rem)] top-0 z-30 hidden w-[19rem] rounded-[22px] border border-[#7a0000]/10 bg-white p-3 opacity-0 shadow-[0_22px_44px_rgba(15,23,42,0.12)] transition duration-200 group-hover:pointer-events-auto group-hover:opacity-100 lg:block">
-                      <div className="text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000]">Subcategories</div>
+                    <div
+                      role="menu"
+                      aria-label={`${category.title} subcategories`}
+                      className="invisible pointer-events-none absolute left-[calc(100%-0.1rem)] top-0 z-50 hidden w-[19rem] translate-x-1 rounded-[22px] border border-[#7a0000]/10 bg-white p-3 opacity-0 shadow-[0_22px_44px_rgba(15,23,42,0.12)] transition duration-200 group-hover:visible group-hover:pointer-events-auto group-hover:translate-x-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:pointer-events-auto group-focus-within:translate-x-0 group-focus-within:opacity-100 lg:block"
+                    >
+                      <div className="px-3 text-[11px] font-black uppercase tracking-[0.16em] text-[#7a0000]">
+                        {category.title}
+                      </div>
                       <div className="mt-2 grid gap-1.5">
+                        <Link
+                          href={getShopCategoryHref(category.slug)}
+                          role="menuitem"
+                          className="flex items-center justify-between rounded-2xl bg-[#fff7ea] px-3 py-2 text-xs font-black text-[#7a0000] transition hover:bg-[#fff0d0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2b20f]"
+                        >
+                          View all {category.title}
+                          <ArrowRight className="h-3.5 w-3.5" />
+                        </Link>
                         {getShopCategoryDefinition(category.slug)?.subcategories.map((subcategory) => (
                           <Link
                             key={subcategory.value}
                             href={`${getShopCategoryHref(category.slug)}?sub=${subcategory.value}`}
-                            className="rounded-2xl px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-[#fff7ea] hover:text-[#7a0000]"
+                            role="menuitem"
+                            className="rounded-2xl px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-[#fff7ea] hover:text-[#7a0000] focus-visible:bg-[#fff7ea] focus-visible:text-[#7a0000] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2b20f]"
                           >
                             {subcategory.label}
                           </Link>

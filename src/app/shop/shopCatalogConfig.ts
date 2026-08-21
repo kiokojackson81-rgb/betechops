@@ -216,8 +216,8 @@ export const SHOP_CATEGORY_DEFINITIONS: ShopCategoryDefinition[] = [
       "egg incubator",
       "poultry incubator",
     ],
-    subcategories: makeSubcategories(
-      [
+    subcategories: [
+      ...makeSubcategories([
         "DC TVs",
         "DC Woofers",
         "DC Fridges",
@@ -225,12 +225,13 @@ export const SHOP_CATEGORY_DEFINITIONS: ShopCategoryDefinition[] = [
         "DC Freezers",
         "DC Bulbs",
         "DC Air Coolers",
-        "Solar Incubators",
-      ],
+      ]),
       {
-        "Solar Incubators": ["egg incubator", "poultry incubator", "automatic incubator"],
+        value: "solar-incubators",
+        label: "DC Solar Incubator",
+        keywords: ["dc solar incubator", "solar incubator", "egg incubator", "poultry incubator", "automatic incubator"],
       },
-    ),
+    ],
   },
   {
     value: "solar-water-heaters",
