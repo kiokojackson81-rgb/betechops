@@ -1,5 +1,11 @@
 import { SHOP_CATEGORY_DEFINITIONS } from "@/app/shop/shopCatalogConfig";
-import { getShopCategoryHref, SHOP_LIPA_POLE_POLE_HREF, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
+import {
+  getShopCategoryHref,
+  SHOP_DELIVERY_PAYMENT_HREF,
+  SHOP_LIPA_POLE_POLE_HREF,
+  SHOP_REQUEST_QUOTE_HREF,
+  SHOP_WARRANTY_SUPPORT_HREF,
+} from "@/app/shop/storefrontPaths";
 
 export type ShopCategory = {
   slug: string;
@@ -435,32 +441,35 @@ export const allShopProducts = shopProductSections.flatMap((section) => section.
 
 export const footerGroups = [
   {
-    title: "Shop Categories",
+    title: "Contact & Social",
     links: [
-      { label: "Solar Panels", href: "#solar-panels" },
-      { label: "Inverters", href: "#solar-inverters" },
-      { label: "Batteries", href: "#solar-batteries" },
-      { label: "Water Pumps", href: "#solar-water-pumps" },
+      { label: "Call: 0722 151 083", href: "tel:+254722151083", icon: "phone" },
+      { label: "Call: 0703 241 917", href: "tel:+254703241917", icon: "phone" },
+      { label: "Call: 0716 722 151", href: "tel:+254716722151", icon: "phone" },
+      { label: "WhatsApp our team", href: "https://wa.me/254722151083", icon: "message" },
+      { label: "info@betech.co.ke", href: "mailto:info@betech.co.ke", icon: "mail" },
+      { label: "TikTok", href: "https://www.tiktok.com/@betechsolarsolutionske", icon: "play" },
+      { label: "Recent solar projects", href: "https://www.tiktok.com/@betechsolarprojects", icon: "projects" },
+      { label: "Facebook", href: "https://web.facebook.com/profile.php?id=61567374346730", icon: "social" },
     ],
   },
   {
     title: "Get Help",
     links: [
-      { label: "Request a Solar System Quote", href: "#quote" },
-      { label: "Talk to our solar team on WhatsApp", href: "https://wa.me/254722151083" },
-      { label: "Warranty support", href: "#support" },
-      { label: "Lipa Pole Pole", href: SHOP_LIPA_POLE_POLE_HREF },
-      { label: "Solar Installation Terms & Conditions", href: "/p/terms" },
-      { label: "Delivered countrywide", href: "#support" },
+      { label: "Request a Solar System Quote", href: SHOP_REQUEST_QUOTE_HREF, icon: "quote" },
+      { label: "Warranty support", href: SHOP_WARRANTY_SUPPORT_HREF, icon: "warranty" },
+      { label: "Lipa Pole Pole", href: SHOP_LIPA_POLE_POLE_HREF, icon: "payment" },
+      { label: "Solar Installation Terms & Conditions", href: "/p/terms", icon: "terms" },
+      { label: "Delivery, Installation & Payments", href: SHOP_DELIVERY_PAYMENT_HREF, icon: "delivery" },
     ],
   },
   {
     title: "Betech Solar Solutions",
     links: [
-      { label: "Betech Solar Online Store", href: "/shop" },
-      { label: "agents.betech.co.ke", href: "https://agents.betech.co.ke" },
-      { label: "ops.betech.co.ke", href: "https://ops.betech.co.ke" },
-      { label: "Click for Shop Direction", href: "https://www.tiktok.com/@betechsolarsolutionske/video/7546869303308569861" },
+      { label: "Betech Solar Online Store", href: "/", icon: "store" },
+      { label: "Agents portal", href: "https://agents.betech.co.ke", icon: "external" },
+      { label: "Operations portal", href: "https://ops.betech.co.ke", icon: "external" },
+      { label: "Get shop directions", href: "https://www.tiktok.com/@betechsolarsolutionske/video/7546869303308569861", icon: "location" },
     ],
   },
 ];
