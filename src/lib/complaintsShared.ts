@@ -1,0 +1,3 @@
+export const COMPLAINT_CATEGORIES = ["PRODUCT_NOT_WORKING", "INSTALLATION_ISSUE", "DELIVERY_ISSUE", "PAYMENT_OR_RECEIPT", "WARRANTY_CLAIM", "SOLAR_PERFORMANCE", "WRONG_OR_MISSING_ITEM", "CUSTOMER_SERVICE", "OTHER"] as const;
+export type ComplaintCategory = (typeof COMPLAINT_CATEGORIES)[number];
+export const complaintCategoryLabels: Record<ComplaintCategory, string> = { PRODUCT_NOT_WORKING: "Product not working", INSTALLATION_ISSUE: "Installation issue", DELIVERY_ISSUE: "Delivery issue", PAYMENT_OR_RECEIPT: "Payment or receipt", WARRANTY_CLAIM: "Warranty claim", SOLAR_PERFORMANCE: "Solar performance", WRONG_OR_MISSING_ITEM: "Wrong or missing item", CUSTOMER_SERVICE: "Customer service", OTHER: "Other" };

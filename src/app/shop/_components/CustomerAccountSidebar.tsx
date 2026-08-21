@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   UserRound,
   WalletCards,
+  MessageSquareWarning,
 } from "lucide-react";
 import ShopAccountLogoutButton from "@/app/shop/_components/ShopAccountLogoutButton";
 
@@ -44,6 +45,7 @@ export default function CustomerAccountSidebar({
       label: "Site visits",
       href: "/account/site-visits",
     },
+    { icon: MessageSquareWarning, label: "My complaints", href: "/account/complaints" },
   ];
 
   return (

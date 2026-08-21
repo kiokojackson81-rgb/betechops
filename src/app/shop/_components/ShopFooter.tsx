@@ -15,6 +15,7 @@ import {
   Store,
   Truck,
   WalletCards,
+  MessageSquareWarning,
 } from "lucide-react";
 import { footerGroups } from "@/app/shop/shopData";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
@@ -34,6 +35,7 @@ const footerIcons = {
   store: Store,
   external: ArrowUpRight,
   location: MapPin,
+  complaint: MessageSquareWarning,
 } as const;
 
 export default function ShopFooter() {

@@ -458,6 +458,7 @@ export const footerGroups = [
     links: [
       { label: "Request a Solar System Quote", href: SHOP_REQUEST_QUOTE_HREF, icon: "quote" },
       { label: "Warranty support", href: SHOP_WARRANTY_SUPPORT_HREF, icon: "warranty" },
+      { label: "Report an Issue / Complaint", href: "/support/report-issue", icon: "complaint" },
       { label: "Lipa Pole Pole", href: SHOP_LIPA_POLE_POLE_HREF, icon: "payment" },
       { label: "Solar Installation Terms & Conditions", href: "/p/terms", icon: "terms" },
       { label: "Delivery, Installation & Payments", href: SHOP_DELIVERY_PAYMENT_HREF, icon: "delivery" },
