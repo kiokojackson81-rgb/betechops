@@ -31,6 +31,13 @@ export function sanitizeProductDescription(value: string | null | undefined) {
   let text = String(value || "").trim();
   if (!text) return "";
 
+  text = text
+    .replace(/<a\s+[^>]*href=["']((?:https?:\/\/|mailto:|tel:)[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (_match, href, label) => `[${String(label).replace(/<[^>]+>/g, "").trim()}](${href})`)
+    .replace(/<(?:strong|b)[^>]*>/gi, "**")
+    .replace(/<\/(?:strong|b)>/gi, "**")
+    .replace(/<(?:em|i)[^>]*>/gi, "*")
+    .replace(/<\/(?:em|i)>/gi, "*");
+
   for (const [pattern, replacement] of BLOCK_TAG_REPLACEMENTS) {
     text = text.replace(pattern, replacement);
   }

@@ -245,21 +245,26 @@ export default async function ShopProductDetailPage({
       ? [
           {
             title: "Product details",
-            content: <MarkdownRendererClient mdText={product.fullDescription} />,
+            content: <MarkdownRendererClient mdText={product.fullDescription} variant="storefront" />,
           },
         ]
       : []),
     {
       title: "Key specifications",
       content: (
-        <ul className="grid gap-3 text-sm leading-6 text-slate-600">
-          {detailBullets.map((spec) => (
-            <li key={spec} className="flex items-start gap-3">
-              <BadgeCheck className="mt-1 h-4 w-4 shrink-0 text-[#7a0000]" />
-              <span>{spec}</span>
-            </li>
-          ))}
-        </ul>
+        <div className="grid max-w-5xl gap-3 sm:grid-cols-2">
+          {detailBullets.map((spec) => {
+            const labelMatch = spec.match(/^([^:]{2,42}):\s*(.+)$/);
+            return (
+              <div key={spec} className="flex min-w-0 items-start gap-3 rounded-2xl border border-[#7a0000]/8 bg-[#fcfaf7] p-3.5 sm:p-4">
+                <BadgeCheck className="mt-1 h-4 w-4 shrink-0 text-[#7a0000]" />
+                <div className="min-w-0 break-words text-sm leading-6 text-slate-700 [overflow-wrap:anywhere]">
+                  {labelMatch ? <><span className="font-extrabold text-slate-950">{labelMatch[1]}:</span> {labelMatch[2]}</> : spec}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       ),
     },
   ];
@@ -390,7 +395,7 @@ export default async function ShopProductDetailPage({
                     <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#7a0000]">{section.title}</div>
                     <div className="text-sm font-semibold text-slate-500 transition group-open:rotate-45">+</div>
                   </summary>
-                  <div className="border-t border-[#7a0000]/8 px-4 py-4 sm:px-6 sm:py-5">{section.content}</div>
+                  <div className="border-t border-[#7a0000]/8 px-4 py-4 sm:px-6 sm:py-6 lg:px-8">{section.content}</div>
                 </details>
               ))}
             </div>

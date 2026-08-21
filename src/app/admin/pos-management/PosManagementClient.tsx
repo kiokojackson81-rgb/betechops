@@ -6,6 +6,7 @@ import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 import { findSimilarProducts } from "@/lib/posProductSimilarity";
 import { showToast } from "@/lib/ui/toast";
 import { getAcceptedImageUploadHint, getAcceptedImageUploadValue } from "@/lib/images/uploadImageFormat";
+import ProductDescriptionEditor from "@/components/ProductDescriptionEditor";
 import {
   PRODUCT_GALLERY_AI_HEIGHT,
   PRODUCT_GALLERY_AI_MAX_SOURCE_EDGE,
@@ -1050,6 +1051,9 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
         commissionRequiresApproval: canManageCommissions && draft.commissionEnabled ? draft.commissionRequiresApproval : false,
         ...(capabilities.brand ? { brand: draft.brand.trim() || null } : {}),
         ...(capabilities.shortDescription ? { shortDescription: draft.shortDescription.trim() || null } : {}),
+        ...(capabilities.description ? { description: draft.description.trim() || null } : {}),
+        ...(capabilities.specifications ? { specifications: draft.specifications.trim() || null } : {}),
+        ...(capabilities.warrantyNotes ? { warrantyNotes: draft.warrantyNotes.trim() || null } : {}),
         ...(capabilities.warrantyPeriod ? { warrantyPeriod: draft.warrantyPeriod.trim() || null } : {}),
         ...(capabilities.mainImageUrl ? { mainImageUrl: draft.mainImageUrl.trim() || null } : {}),
         ...(capabilities.imageExtractedText ? { imageExtractedText: draft.imageExtractedText.trim() || null } : {}),
@@ -1065,7 +1069,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
         ...(capabilities.shopSubcategory ? { shopSubcategory: draft.shopSubcategory || null } : {}),
         ...(capabilities.shopShortDescription ? { shopShortDescription: draft.shopShortDescription.trim() || null } : {}),
         ...(capabilities.shopWarranty ? { shopWarranty: draft.shopWarranty.trim() || null } : {}),
-        ...(capabilities.shopSpecs ? { shopSpecs: draft.shopSpecs.trim() || null } : {}),
+        ...(capabilities.shopSpecs ? { shopSpecs: (draft.specifications || draft.shopSpecs).trim().slice(0, 2000) || null } : {}),
         ...(capabilities.shopImageUrl ? { shopImageUrl: draft.shopImageUrl.trim() || null } : {}),
         ...(capabilities.shopBrand ? { shopBrand: draft.shopBrand.trim() || null } : {}),
       };
@@ -1717,14 +1721,39 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                 </label>
 
                 <label className="text-sm text-slate-300 md:col-span-2">
-                  Short description
+                  Short product summary
                   <textarea
                     className={`${fieldClass} mt-1 min-h-[96px] disabled:cursor-not-allowed disabled:opacity-60`}
                     value={draft.shortDescription}
                     disabled={!(capabilities.shortDescription || capabilities.shopShortDescription)}
                     onChange={(e) => setDraft((s) => ({ ...s, shortDescription: e.target.value, shopShortDescription: e.target.value }))}
-                    placeholder="Short customer-facing description"
+                    placeholder="One short customer-facing overview for product cards and search results"
                   />
+                  <div className="mt-1 text-xs text-slate-500">Keep this concise. Use the structured editor below for the complete product page.</div>
+                </label>
+
+                <div className="md:col-span-2">
+                  <div className="mb-2">
+                    <div className="text-sm font-semibold text-slate-200">Product details</div>
+                    <div className="mt-1 text-xs leading-5 text-slate-500">Use the toolbar instead of typing formatting syntax manually. Existing plain text and Markdown remain compatible.</div>
+                  </div>
+                  <ProductDescriptionEditor
+                    value={draft.description}
+                    disabled={!capabilities.description}
+                    onChange={(description) => setDraft((current) => ({ ...current, description }))}
+                  />
+                </div>
+
+                <label className="text-sm text-slate-300 md:col-span-2">
+                  Key specifications
+                  <textarea
+                    className={`${fieldClass} mt-1 min-h-[140px] disabled:cursor-not-allowed disabled:opacity-60`}
+                    value={draft.specifications}
+                    disabled={!(capabilities.specifications || capabilities.shopSpecs)}
+                    onChange={(event) => setDraft((current) => ({ ...current, specifications: event.target.value, shopSpecs: event.target.value }))}
+                    placeholder={"Inverter: 5kW Hybrid\nBattery: 5.12kWh Lithium\nSolar Array: 4 x 585W"}
+                  />
+                  <div className="mt-1 text-xs text-slate-500">Enter one concise specification per line. Label-and-value rows such as “Battery: 5.12kWh Lithium” render as scannable cards.</div>
                 </label>
 
                 <label className="text-sm text-slate-300">

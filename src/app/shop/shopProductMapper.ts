@@ -575,13 +575,12 @@ function mapOpsProduct(
       product.sku,
     ]);
   const parsedSpecs = normalizeSpecificationLines(product.specifications);
+  const legacyShopSpecs = normalizeSpecificationLines(product.shopSpecs);
   const specs = compactUnique([
-    normalizeOptionalText(product.shortDescription),
-    product.shopSpecs?.trim() || null,
-    product.shopShortDescription?.trim() || null,
+    ...legacyShopSpecs,
     ...parsedSpecs,
     ...inferSpecs(product, category.title),
-  ]).slice(0, 4);
+  ]).slice(0, 12);
   const warranty =
     normalizeOptionalText(product.warrantyPeriod) ||
     product.shopWarranty?.trim() ||
