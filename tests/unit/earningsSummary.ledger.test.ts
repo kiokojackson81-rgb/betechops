@@ -11,6 +11,7 @@ jest.mock('@/lib/prisma', () => ({
     attendantPayrollAdjustment: { findMany: jest.fn().mockResolvedValue([]) },
     commissionLedger: { findUnique: jest.fn().mockResolvedValue(null) },
     $queryRaw: jest.fn().mockResolvedValue([]),
+    $executeRawUnsafe: jest.fn().mockResolvedValue(0),
   },
 }));
 
@@ -22,6 +23,15 @@ jest.mock('@/lib/supportEntries', () => ({
   getSupportPeriodAggregates: jest.fn().mockResolvedValue({ aggregates: {}, perReceipts: {} }),
 }));
 
+jest.mock('@/lib/posReceiptSummary', () => ({
+  summarizePosReceiptsForPeriod: jest.fn().mockResolvedValue({
+    totalSales: 0,
+    totalProfit: 0,
+    totalReceipts: 0,
+    totalItems: 0,
+  }),
+}));
+
 jest.mock('@/lib/commission', () => ({
   getOrCreateCommissionPeriod: jest.fn().mockResolvedValue({ period: { id: 'p' }, tiers: [], tradingPeriod: { start: new Date('2025-12-25T00:00:00Z'), end: new Date('2026-01-24T23:59:59.999Z'), key: '2025-12-24_2026-01-24' } }),
   computeSalesCommissionFromTiers: jest.fn().mockReturnValue(0),
@@ -30,6 +40,8 @@ jest.mock('@/lib/commission', () => ({
 
 const { getEarningsSummaryForUser } = require('@/lib/earningsSummary');
 const { prisma } = require('@/lib/prisma');
+const { getSupportPeriodAggregates } = require('@/lib/supportEntries');
+const { summarizePosReceiptsForPeriod } = require('@/lib/posReceiptSummary');
 
 describe('earningsSummary ledger lookup', () => {
   test('picks up ledger via detail.marketing.periodKey fallback', async () => {
@@ -41,5 +53,31 @@ describe('earningsSummary ledger lookup', () => {
     expect(summary.commission).toBe(1380);
     expect(summary.ledger).not.toBeNull();
     expect(summary.ledger.grossCommission).toBe(1380);
+  });
+
+  test('uses support receipt profit for SUPPORT_OPS POS profit commission', async () => {
+    prisma.user.findUnique.mockResolvedValueOnce({ email: 'justus@betech.co.ke', attendantCategory: 'SUPPORT_OPS' });
+    prisma.userCommissionConfig.findUnique.mockResolvedValueOnce({
+      userId: 'support-1',
+      posTotalsMode: 'USER',
+      salesCommissionMode: 'POS_PROFIT_10',
+    });
+    getSupportPeriodAggregates.mockResolvedValueOnce({
+      aggregates: { totalSales: 343650, totalProfit: 78850, totalReceipts: 5, totalItems: 7 },
+      perReceipts: {},
+    });
+    summarizePosReceiptsForPeriod.mockResolvedValueOnce({
+      totalSales: 343650,
+      totalProfit: 58100,
+      totalReceipts: 8,
+      totalItems: 11,
+    });
+
+    const summary = await getEarningsSummaryForUser({ userId: 'support-1', asOf: new Date('2025-12-30T00:00:00Z') });
+
+    expect(summary.salesCommission).toBe(7885);
+    expect(summary.totalProfit).toBe(78850);
+    expect(summary.totalReceipts).toBe(5);
+    expect(summary.totalItems).toBe(7);
   });
 });

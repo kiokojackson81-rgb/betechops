@@ -158,6 +158,11 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
   const isJeniffer = commissionConfig.salesCommissionMode === "JENIFFER_PRORATED";
   const isBrendah = commissionConfig.salesCommissionMode === "BRENDAH_DIRECT";
   const isPosProfit10 = commissionConfig.salesCommissionMode === "POS_PROFIT_10";
+  const supportAggregates = supportSummary.aggregates;
+  const useSupportProfitTotals =
+    isPosProfit10 &&
+    user?.attendantCategory === "SUPPORT_OPS" &&
+    Number(supportAggregates.totalReceipts ?? 0) > 0;
   let posSummary: Awaited<ReturnType<typeof summarizePosReceiptsForPeriod>> | null = null;
   if (usePosTotals) {
     const userIdForPos = commissionConfig.posTotalsMode === "GLOBAL" ? null : opts.userId;
@@ -169,7 +174,10 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
       paymentScope: commissionConfig.salesCommissionMode === "POS_PROFIT_10" ? "all" : "paidOnly",
     });
   }
-  if (usePosTotals && posSummary) {
+  if (useSupportProfitTotals) {
+    totalSales = Number(supportAggregates.totalSales ?? 0);
+    totalProfit = Number(supportAggregates.totalProfit ?? 0);
+  } else if (usePosTotals && posSummary) {
     totalSales = posSummary.totalSales;
     totalProfit = posSummary.totalProfit;
   } else if (mergedSales > totalSales) {
@@ -375,8 +383,16 @@ export async function getEarningsSummaryForUser(opts: { userId: string; asOf?: D
     totalNewProducts: newProducts,
     totalEditedProducts: editedProducts,
     totalCopiedProducts: copiedProducts,
-    totalItems: usePosTotals ? posSummary?.totalItems ?? 0 : mergedItems || 0,
-    totalReceipts: usePosTotals ? posSummary?.totalReceipts ?? 0 : merged.size || 0,
+    totalItems: useSupportProfitTotals
+      ? Number(supportAggregates.totalItems ?? 0)
+      : usePosTotals
+        ? posSummary?.totalItems ?? 0
+        : mergedItems || 0,
+    totalReceipts: useSupportProfitTotals
+      ? Number(supportAggregates.totalReceipts ?? 0)
+      : usePosTotals
+        ? posSummary?.totalReceipts ?? 0
+        : merged.size || 0,
     walkInsServed: 0,
     walkInsPurchased: 0,
     baseSalary,
