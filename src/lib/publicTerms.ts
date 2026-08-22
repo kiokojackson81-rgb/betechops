@@ -11,14 +11,14 @@ export type PublicTermsSection = {
   }>;
 };
 
-export const TERMS_EFFECTIVE_DATE = "21 August 2026";
-export const TERMS_VERSION = "1.1";
+export const TERMS_EFFECTIVE_DATE = "22 August 2026";
+export const TERMS_VERSION = "1.2";
 
 export const TERMS_TITLE =
   "Betech Solar Solutions Solar System Installation, Performance, Warranty & After-Sales Terms & Conditions";
 
 export const TERMS_SHORT_NOTICE =
-  "By engaging Betech Solar Solutions, making payment, requesting delivery or installation, or allowing our technicians to proceed with installation after these Terms have been made available to you, you confirm that you accept these Terms and Conditions, subject to applicable Kenyan law.";
+  "A Customer who does not agree with these Terms should not make payment, request dispatch, accept delivery or authorize Installation to commence. Subject to applicable Kenyan law, proceeding after reasonable access to these Terms constitutes acknowledgment and acceptance of the applicable Terms.";
 
 export const TERMS_INTRODUCTION = [
   "Thank you for choosing Betech Solar Solutions.",
@@ -33,8 +33,8 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     number: 1,
     title: "Betech Installation Commitment",
     paragraphs: [
-      "Depending on the purchased system, package or other agreed scope, Betech may provide professionally planned and executed solar installation works as part of the transaction.",
-      "The exact items supplied and installed depend on what the customer actually purchased or otherwise agreed with Betech.",
+      "Betech shall supply and perform only the Equipment, quantities, services and works identified in the Customer’s accepted quotation, invoice, receipt, System design or other applicable transaction record.",
+      "Any item or work not expressly included in those records is outside the agreed scope unless Betech and the Customer subsequently agree to it in writing.",
     ],
     bullets: [
       "Solar panel installation",
@@ -54,14 +54,39 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
       "Commissioning",
       "Basic operating guidance where appropriate",
     ],
+    subsections: [
+      {
+        title: "Existing Property and Installation Boundary",
+        paragraphs: [
+          "Unless expressly included, Betech’s scope does not include repairing or certifying the Customer’s existing internal wiring, sockets, switches, consumer unit, earthing system, generator, KPLC supply, plumbing, building works, existing solar equipment or defective appliances.",
+          "Betech’s responsibility ordinarily extends through the agreed Solar System and its agreed connection point. If an existing condition prevents safe Installation or Commissioning, Betech may pause work and separately quote corrective work before proceeding.",
+          "Betech remains responsible for damage directly caused by its negligent Installation or workmanship to the extent required by applicable law.",
+        ],
+      },
+      {
+        title: "Site and Structural Conditions",
+        paragraphs: [
+          "The Customer should disclose known roof leaks, weak structures, asbestos, concealed pipes or cables, hazardous materials and other site conditions that may affect Installation.",
+          "Betech is not responsible for a pre-existing defect or concealed condition that could not reasonably have been identified during the agreed assessment, except where responsibility arises under applicable law.",
+        ],
+      },
+      {
+        title: "Product Availability and Substitution",
+        paragraphs: [
+          "Betech shall endeavour to supply the agreed brand, model and specification. If an exact model becomes unavailable, Betech may propose an alternative with reasonably equivalent or better relevant specifications and applicable warranty.",
+          "The Customer shall be informed before Installation of a material substitution, and approval shall be obtained where the change materially affects capacity, functionality, warranty or the agreed specification. Betech shall not knowingly substitute materially inferior Equipment without informing the Customer.",
+        ],
+      },
+    ],
   },
   {
     number: 2,
     title: "Testing, Commissioning & Handover",
     paragraphs: [
-      "Betech normally tests the system after installation as part of installation completion and handover.",
-      "Once the system has been installed, tested and found to be operating normally, it is considered commissioned and handed over.",
-      "Any later concern is handled under Betech’s after-sales, workmanship and warranty procedures.",
+      "Following Installation, Betech may test solar generation, inverter operation, battery charging and discharging, changeover, protection devices and representative Customer loads as appropriate to the agreed System.",
+      "Betech may provide operating guidance and record Equipment, serial numbers, System settings, test results, outstanding items and other relevant Commissioning information.",
+      "Once Installation, testing and Commissioning are complete and the Customer accepts or begins using the System, it is considered commissioned, handed over and accepted, subject to recorded outstanding items, latent defects, applicable Warranties and rights that cannot lawfully be excluded.",
+      "A later concern shall be assessed through Betech’s after-sales, workmanship, complaint or Warranty procedures according to its actual cause.",
     ],
     bullets: [
       "PV input",
@@ -213,7 +238,8 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     number: 8,
     title: "Betech System Recommendations",
     paragraphs: [
-      "Where Betech makes a recommendation, it is based on information reasonably available at that time and is intended to guide the customer toward a practical system choice.",
+      "Where Betech sizes or recommends a System, the recommendation is based on the appliances, consumption information, load analysis, operating pattern, site information and objectives supplied by or agreed with the Customer at that time.",
+      "Any stated performance expectation is based on those declared loads and design assumptions. It should not be treated as applying to materially different loads, usage or site conditions unless Betech confirms the revised expectation in writing.",
     ],
     bullets: [
       "Appliance list",
@@ -236,8 +262,9 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     number: 9,
     title: "Customer Information Responsibility",
     paragraphs: [
-      "The customer should provide accurate information about electricity use, appliance load and expected backup requirements.",
-      "If the customer does not disclose relevant loads or later significantly increases consumption, the original system may no longer be sufficient.",
+      "The Customer must provide reasonably accurate information about appliances, simultaneous load, electricity consumption, intended use and expected backup requirements during System sizing.",
+      "If relevant loads are omitted, inaccurately described or later added or increased, the original performance expectations may no longer apply and the System may require additional solar panels, batteries, inverter capacity, electrical protection or other upgrades.",
+      "A later increase in consumption or addition of significant appliances does not by itself establish that the original System was defective, incorrectly sized or improperly installed where the System was designed from information supplied or approved by the Customer.",
     ],
     bullets: [
       "Appliances",
@@ -253,7 +280,18 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
       "Ovens",
       "Washing machines",
       "Machinery",
+      "Welding equipment",
+      "Commercial equipment",
       "Other major loads",
+    ],
+    subsections: [
+      {
+        title: "High-Consumption Appliances",
+        paragraphs: [
+          "Electric showers, instant water heaters, cookers, ovens, kettles, heating elements, pumps, air conditioners, machinery and similar loads can consume substantial battery energy in a short period and may also exceed inverter operating limits when used simultaneously.",
+          "Such appliances form part of the expected System performance only where they were specifically declared, assessed and included in the approved System design or other written technical commitment.",
+        ],
+      },
     ],
   },
   {
@@ -277,9 +315,9 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     number: 11,
     title: "Inverter Capacity",
     paragraphs: [
-      "Inverter capacity is commonly measured in watts or kilowatts.",
-      "For example, a 5kW inverter represents approximately 5,000W rated inverter capacity, subject to manufacturer specifications.",
-      "This rating relates mainly to the amount of electrical load the inverter can support. It does not represent battery capacity or guaranteed backup duration.",
+      "Inverter capacity is measured in watts or kilowatts (kW) and describes the maximum power the inverter can support subject to its technical specifications, surge capability, temperature, connected Equipment and operating conditions.",
+      "For example, a 5kW inverter represents approximately 5,000W rated inverter capacity. It does not mean that operating continuously at 5kW is appropriate in every condition.",
+      "Inverter rating does not represent stored battery energy, solar generation or guaranteed backup duration.",
     ],
   },
   {
@@ -303,16 +341,15 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     number: 13,
     title: "Battery Capacity",
     paragraphs: [
-      "Battery capacity is commonly measured in kWh.",
-      "A nominal 10kWh battery represents approximately 10 units of nominal stored energy when fully charged.",
-      "Actual usable capacity may be affected by battery management system behaviour, reserve settings, state of charge, inverter efficiency, manufacturer limits, temperature, battery condition and system settings.",
+      "Battery capacity is commonly measured in kilowatt-hours (kWh) and describes stored electrical energy. A nominal 10kWh battery represents approximately 10 units of nominal stored energy when fully charged.",
+      "Battery capacity does not represent guaranteed backup hours. Actual usable energy and runtime depend on Customer load, simultaneous appliance use, battery state of charge, discharge limits, inverter efficiency, manufacturer limits, temperature, battery age and condition, Customer usage behaviour, solar availability and System settings.",
     ],
   },
   {
     number: 14,
     title: "Battery Backup Expectations",
     paragraphs: [
-      "There is no guaranteed fixed backup duration simply based on battery size because backup depends heavily on the electrical load.",
+      "There is no guaranteed fixed backup duration simply based on battery size because runtime depends heavily on actual operating conditions and electrical load. The same battery may provide many hours under a light load but substantially shorter backup while high-power appliances operate.",
       "For illustration only, if approximately 10kWh of usable energy were available, a constant 1kW load would mathematically correspond to approximately 10 hours, a 2kW load to approximately 5 hours, and a 4kW load to approximately 2.5 hours before accounting for system losses, reserve limits and changing operating conditions.",
       "Actual runtime may be lower due to inverter losses, battery operating limits, changing loads, temperature, battery state of charge and manufacturer settings.",
       "Betech cannot promise fixed backup hours unless the electrical load is also defined.",
@@ -330,16 +367,16 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     number: 16,
     title: "Solar Panel Capacity",
     paragraphs: [
-      "Solar array capacity is commonly calculated as the number of panels multiplied by the panel rated wattage.",
+      "Solar PV capacity is expressed in kilowatt-peak (kWp) and represents the installed rated capacity under standardized test conditions, not constant real-world generation.",
       "For example, 8 panels x 600W = 4,800W = approximately 4.8kWp rated array.",
-      "Rated output is measured under standardized test conditions.",
+      "A 5kWp solar array does not mean that the System will continuously generate 5kW throughout the day.",
     ],
   },
   {
     number: 17,
     title: "Actual Solar Production",
     paragraphs: [
-      "Actual solar production varies and Betech does not guarantee continuous full panel rating.",
+      "Actual solar production is variable. Betech does not guarantee continuous full panel rating or a fixed quantity of daily generation unless a specific performance guarantee is expressly provided in writing.",
     ],
     bullets: [
       "Sunlight intensity",
@@ -347,13 +384,15 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
       "Cloud cover",
       "Rain",
       "Temperature",
+      "Solar irradiation",
       "Panel orientation",
-      "Panel angle",
+      "Panel inclination",
       "Shade",
       "Dust",
       "Dirt",
       "Bird droppings",
       "Seasonal changes",
+      "Site conditions",
       "Cable and conversion losses",
     ],
   },
@@ -387,9 +426,9 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     number: 21,
     title: "Solar Performance Expectations",
     paragraphs: [
-      "Solar power generation naturally varies depending on weather and environmental conditions. While Betech Solar uses all-weather solar panels designed to continue generating power under different weather conditions, their output may reduce during periods of poor weather.",
-      "Factors that may affect solar production include cloud cover, rain, prolonged overcast conditions, seasonal changes, shading, and dust or dirt accumulation on the panels.",
-      "Betech Solar designs and installs systems to provide reliable solar energy based on the available solar resource. However, continuous maximum solar production cannot be guaranteed because solar energy ultimately depends on natural sunlight conditions that neither Betech Solar nor the equipment manufacturer can control.",
+      "Solar PV generation and battery backup depend on operating and environmental conditions. Actual System performance may vary because of weather, cloud cover, rainfall, solar irradiation, season, time of day, shading, panel orientation and inclination, dust or dirt, panel temperature, site conditions, battery state of charge, Customer consumption and simultaneous appliance use.",
+      "Betech guarantees that supplied Equipment and Installation will operate in accordance with the agreed System design, applicable Equipment specifications and applicable Warranties. Betech does not guarantee fixed solar-generation units, fixed battery-backup hours or complete independence from grid or generator power where actual performance is affected by conditions outside the agreed design assumptions, unless Betech expressly provides that specific guarantee in writing.",
+      "Inverter rating, battery capacity and solar-panel capacity are Equipment and design ratings. None individually guarantees continuous operation at maximum inverter capacity, a fixed backup duration, a fixed amount of daily solar production, complete grid independence or permanent off-grid operation.",
     ],
     bullets: [
       "Reduced solar production during bad weather is normal and does not by itself mean that the solar system or panels are faulty.",
@@ -399,6 +438,16 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
       "A solar system should not be deemed defective or non-performing solely because generation is temporarily reduced due to poor weather conditions.",
       "Customers should regularly inspect and clean their solar panels. Dust, dirt, leaves, bird droppings and other debris can block sunlight and reduce panel performance.",
       "Panel cleaning should be carried out safely and at reasonable intervals depending on the environment. Locations with significant dust may require more frequent cleaning.",
+    ],
+    subsections: [
+      {
+        title: "Technical Faults and Normal Performance Variation",
+        paragraphs: [
+          "A faulty inverter, defective battery or panel, failed protection device, Installation defect or other covered Equipment failure shall be investigated through the applicable technical or Warranty process.",
+          "Reduced generation or shorter backup caused by cloudy or rainy weather, seasonal changes, increased consumption, high simultaneous loads, added appliances, low solar availability, Customer-changed settings, inadequate panel cleaning or shading introduced after Installation does not automatically establish Equipment failure.",
+          "Betech may reasonably assess the System design, declared loads, weather, available solar energy, battery state of charge, System settings and actual consumption before determining whether a defect exists.",
+        ],
+      },
     ],
   },
   {
@@ -414,15 +463,16 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     title: "KPLC / Grid Interaction",
     paragraphs: [
       "Hybrid systems may use solar, battery and KPLC/grid according to system settings and available energy.",
-      "Solar installation does not automatically mean the customer will stop purchasing KPLC electricity.",
+      "Installation of a Solar System does not automatically mean the property will stop using KPLC/grid or generator power. Depending on solar availability, Customer consumption, battery state of charge, weather, System configuration and load requirements, the System may continue drawing from an available grid or generator source.",
+      "Continued grid or generator use in those circumstances does not automatically indicate a System defect.",
     ],
   },
   {
     number: 24,
     title: "Standard Installation Boundary",
     paragraphs: [
-      "Unless additional electrical work is specifically included, Betech’s standard solar installation generally connects the supplied solar system to the customer’s appropriate distribution board, consumer unit or agreed main connection point.",
-      "Betech does not automatically rewire the entire premises.",
+      "Unless additional electrical work is expressly included, Betech’s standard Installation generally connects the supplied Solar System to the Customer’s appropriate distribution board, consumer unit or agreed main connection point.",
+      "Betech does not automatically rewire the entire premises or assume responsibility for Customer-owned installations outside the boundary described in Section 1.",
     ],
   },
   {
@@ -501,8 +551,8 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     title: "Earthing",
     paragraphs: [
       "Where an appropriate existing site earthing system exists, Betech may connect the solar installation to it.",
-      "If suitable earthing does not exist, Betech may advise the customer to arrange proper earthing through a qualified electrician.",
-      "Betech may provide additional earthing as separate chargeable work where agreed.",
+      "If suitable earthing or required distribution infrastructure does not exist, Betech may advise the Customer to arrange corrective work through a qualified electrician or may offer the work separately.",
+      "Where additional earthing or corrective infrastructure was not included in the original scope, Betech shall communicate any additional cost and obtain approval before undertaking that additional work.",
       "Proper earthing forms an important part of electrical safety but does not, by itself, guarantee protection against lightning or extreme electrical events.",
     ],
   },
@@ -519,26 +569,31 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     number: 33,
     title: "Customer Responsibilities After Installation",
     paragraphs: [
-      "After handover, the customer should operate the system responsibly and within rated limits.",
+      "After handover, the Customer should operate the System according to the instructions provided and within its rated and recommended limits.",
     ],
     bullets: [
       "Operate system within rated limits",
       "Avoid intentional overloading",
       "Seek advice before adding major loads",
+      "Provide accurate appliance and usage information during System sizing",
+      "Notify Betech before material load changes where technical guidance is required",
       "Keep inverter appropriately ventilated",
+      "Avoid blocking ventilation around batteries and inverters",
       "Keep battery dry/protected",
       "Keep equipment accessible",
       "Keep panels reasonably clean",
       "Report unusual faults",
       "Avoid unauthorized system modification",
+      "Avoid unauthorized changes to inverter, battery, charging, discharge or grid settings",
+      "Allow reasonable troubleshooting and diagnosis before treating normal variation as Equipment failure",
     ],
   },
   {
     number: 34,
     title: "Third-Party Modifications",
     paragraphs: [
-      "Betech is not responsible for faults introduced by another electrician or technician after handover.",
-      "Unauthorized modifications may affect complimentary support where the modification contributes to the issue.",
+      "The Customer should notify Betech before permitting another technician to materially modify Betech’s Installation during an applicable workmanship or Equipment Warranty period.",
+      "Betech is not responsible for a fault or damage caused or materially contributed to by unauthorized third-party work. The involvement of another technician does not automatically cancel unrelated Warranty rights where that work did not cause or contribute to the reported issue.",
     ],
     bullets: [
       "Rewiring",
@@ -557,6 +612,8 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
       "Inverters, batteries, panels and other equipment may have separate manufacturer warranties.",
       "Warranty duration depends on the brand, model, product and manufacturer terms.",
       "Manufacturer warranty is separate from Betech’s complimentary workmanship support.",
+      "Betech’s workmanship obligations concern the quality of the Installation work performed by Betech. Manufacturer or distributor Warranties concern qualifying Equipment defects and are administered according to their applicable terms.",
+      "Nothing in these Terms negates or varies an implied condition, statutory warranty or remedy that cannot lawfully be excluded under applicable Kenyan law.",
     ],
   },
   {
@@ -565,6 +622,8 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     paragraphs: [
       "For a warranty review, the customer may be required to provide relevant diagnostic and transaction information.",
       "The item may require remote testing, site testing, workshop testing, supplier testing or manufacturer testing before the cause is confirmed.",
+      "The usual process is: report and reference creation, remote diagnosis, review of available evidence or logs, technical inspection where appropriate, manufacturer or distributor assessment where required, and the applicable repair, replacement or other remedy once the cause and coverage are established.",
+      "The Customer shall provide reasonable access and cooperation needed for diagnosis. Betech shall keep the Customer reasonably informed where a third-party assessment is required but cannot guarantee that third party’s turnaround time.",
     ],
     bullets: [
       "Proof of purchase",
@@ -597,6 +656,7 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     title: "Manufacturer Decision",
     paragraphs: [
       "Where warranty approval rests with the manufacturer or distributor, Betech cannot guarantee approval before their assessment is complete.",
+      "Unless expressly included in the applicable Warranty or separately agreed in writing, a temporary or loan inverter, battery or other replacement item is not automatically included while assessment or repair is underway.",
     ],
     bullets: [
       "Repair",
@@ -636,6 +696,8 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     paragraphs: [
       "Complimentary Betech workmanship support may not cover events or conditions outside Betech workmanship.",
       "Manufacturer warranties may have their own additional exclusions.",
+      "An exclusion applies only where the excluded event or condition caused or materially contributed to the reported failure. Third-party work does not automatically remove unrelated Warranty rights where it did not cause or contribute to the problem.",
+      "Nothing in this section excludes a statutory right, genuine latent defect, qualifying manufacturer defect or Betech workmanship obligation that cannot lawfully be excluded.",
     ],
     bullets: [
       "Internal wiring",
@@ -691,6 +753,10 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     title: "Additional Work",
     paragraphs: [
       "Additional charges may apply for work outside the original installation scope unless specifically included.",
+      "A Customer-requested change to Equipment quantity, System capacity, Equipment location, cable route, distribution arrangement, delivery requirement or other agreed scope is a project variation where it changes the original work.",
+      "Betech shall communicate material effects on price and completion time before undertaking material additional work. Where an amount was presented as an estimate, any amendment or additional work should be agreed in accordance with applicable law.",
+      "The Customer shall provide reasonable site access and ensure required Customer works and infrastructure are ready. If work cannot proceed because of denied access, unfinished Customer works or another circumstance reasonably within the Customer’s control, Betech may reschedule and communicate any reasonable additional transport or remobilization cost before charging it.",
+      "Installation dates may be reasonably adjusted for adverse weather, unsafe site conditions, Customer changes, access restrictions, utility conditions, supply disruption or comparable circumstances outside Betech’s reasonable control. Betech shall use reasonable efforts to communicate material delays.",
     ],
     bullets: [
       "Internal rewiring",
@@ -705,6 +771,25 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
       "Construction-related work",
       "Additional earthing",
       "Expansion work",
+    ],
+  },
+  {
+    number: "47A",
+    title: "Payment Milestones and Delayed Payment",
+    paragraphs: [
+      "The Customer shall make payments according to the milestones stated in the applicable quotation, invoice, agreement or other transaction record.",
+      "Where an amount becomes due after Installation, testing or Commissioning, the applicable transaction record should identify the relevant milestone. An agreed balance due after Commissioning becomes payable when that milestone is completed, subject to recorded outstanding items and applicable law.",
+      "Failure to make an agreed payment when due may result in suspension of further non-emergency delivery, service or additional work, subject to applicable law and obligations already owed to the Customer.",
+      "Any change to an agreed price, estimate or payment milestone must be communicated and agreed where required by applicable law.",
+    ],
+  },
+  {
+    number: "47B",
+    title: "Delivery, Inspection and Storage",
+    paragraphs: [
+      "The Customer or authorized representative should inspect delivered Equipment for visible damage, quantity and model discrepancies and record any obvious concern on the delivery record or notify Betech promptly.",
+      "Where the Customer asks Betech to leave Equipment at the site before Installation, the Customer shall provide a reasonably secure, dry and suitable storage location. This does not remove Betech’s responsibility for damage caused before delivery or any right that cannot lawfully be excluded.",
+      "Responsibility for loss or damage after delivery shall be assessed according to the delivery arrangement, custody of the Equipment, applicable transaction records and applicable law.",
     ],
   },
   {
@@ -738,6 +823,7 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     title: "Cancellation Before Installation",
     paragraphs: [
       "Where cancellation occurs before installation, any refund may consider special-order equipment, equipment already allocated, non-returnable items, transport already incurred and other transaction-specific costs, subject to applicable law.",
+      "Any cancellation deduction or charge should reflect legitimate, reasonably identifiable costs already incurred or commitments made for the Customer’s transaction and shall not remove a remedy available for defective goods, misrepresentation or another right that cannot lawfully be excluded.",
     ],
   },
   {
@@ -762,6 +848,8 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     paragraphs: [
       "Complaints involving technical or system-performance concerns will generally follow the technical support process described in Section 4. Betech’s complaint-management approach focuses on obtaining relevant evidence, identifying the actual cause and determining the appropriate remedy.",
       "The appropriate outcome will then depend on the findings from that process and the actual cause identified.",
+      "Betech may assign a complaint or support reference, request relevant transaction and technical information, conduct remote or on-site diagnosis where appropriate, communicate findings and escalate unresolved matters for management review.",
+      "Where reasonably possible, the Customer should allow Betech an opportunity to inspect, diagnose and propose an appropriate remedy for an alleged technical or workmanship defect. This process does not prevent the Customer from exercising any statutory or legal remedy available under Kenyan law.",
     ],
   },
   {
@@ -954,8 +1042,10 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     number: 60,
     title: "Final System Specification",
     paragraphs: [
-      "For the purpose of determining the final agreed transaction and system specification, the applicable system may be identified from the invoice, receipt, quotation, WhatsApp agreement, written order, payment description, delivered equipment and installed equipment.",
+      "For the purpose of determining the final agreed transaction and System specification, the applicable System may be identified from the quotation, invoice, receipt, approved load assessment, System design, approved variation, WhatsApp or other written agreement, payment description, delivery and Installation records, Commissioning or completion documentation, Warranty documentation, delivered Equipment and installed Equipment.",
       "A formal quotation is not required in every case.",
+      "Specific technical performance commitments should be recorded in the quotation, System design or another written confirmation issued or approved by Betech. General marketing information, demonstrations and preliminary estimates must be read together with the final Customer-specific transaction records.",
+      "Nothing in this section excludes liability for fraudulent or otherwise legally actionable misrepresentation.",
     ],
   },
   {
@@ -972,6 +1062,7 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     title: "Matters Outside Betech’s Reasonable Control",
     paragraphs: [
       "Subject to applicable law, Betech cannot guarantee performance against external or changing factors beyond its reasonable control.",
+      "Neither party shall be treated as failing to perform solely because performance was prevented or materially delayed by a circumstance reasonably outside that party’s control. This does not excuse an obligation that could reasonably have been performed despite the event and does not exclude liability that cannot lawfully be excluded.",
     ],
     bullets: [
       "Weather",
@@ -988,6 +1079,8 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
       "Theft",
       "Vandalism",
       "Force majeure events",
+      "Government restrictions or civil disturbance",
+      "Material import, logistics or supply-chain disruption",
     ],
   },
   {
@@ -1004,12 +1097,15 @@ export const PUBLIC_TERMS_SECTIONS: PublicTermsSection[] = [
     number: 64,
     title: "Customer Acceptance",
     paragraphs: [
-      "By engaging Betech Solar Solutions and proceeding with the transaction after these Terms and Conditions have been made available, the Customer confirms acceptance of these Terms, subject to applicable Kenyan law.",
+      "The Customer should read these Terms together with the applicable quotation, invoice, receipt, load assessment, System design, approved variations, delivery and Installation records, Commissioning or completion documentation, Warranty documentation and other applicable transaction records.",
+      "By engaging Betech Solar Solutions and proceeding with the transaction after these Terms have been made reasonably available, the Customer acknowledges and accepts the applicable Terms, subject to applicable Kenyan law.",
       "Acceptance may be evidenced by conduct including requesting a system, agreeing to the price, making a deposit or full/partial payment, requesting delivery, booking installation, providing access to the installation premises, allowing installation to commence or continue, accepting commissioning, accepting handover or using the installed system.",
       "A physical site assessment, formal quotation or physical signature is not required in every transaction for these Terms to apply where the Customer has otherwise agreed to the system and transaction and proceeded with payment, delivery or installation.",
       "Where Betech has recommended a larger or different system and the Customer elects to purchase a smaller or alternative system because of budget, available installation space, preference or another reason, the Customer acknowledges that the selected system may have reduced generation, shorter backup, continued grid use or require future expansion.",
-      "A Customer who does not agree with these Terms should not make payment, request dispatch or authorize installation to commence.",
-      "Nothing in these Terms is intended to exclude any rights or remedies that cannot legally be excluded under applicable Kenyan law.",
+      "A Customer who does not agree with these Terms should not make payment, request dispatch, accept delivery or authorize Installation to commence.",
+      "The Customer acknowledges that Solar PV generation and battery backup depend on environmental and operating conditions. The selected System may experience reduced generation, shorter backup, continued grid or generator use, or require expansion where actual consumption exceeds the agreed design assumptions.",
+      "Where a System was designed from information supplied or approved by the Customer, later consumption increases or additional appliances may require System expansion and do not by themselves establish that the original System was defective, incorrectly sized or improperly installed.",
+      "Nothing in these Terms is intended to exclude, limit or restrict any Customer right, statutory Warranty, remedy or Betech obligation that cannot lawfully be excluded under applicable Kenyan law. If a provision conflicts with a mandatory legal requirement, that requirement applies to the extent of the conflict without necessarily invalidating the remaining provisions.",
     ],
   },
 ];
