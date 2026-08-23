@@ -172,7 +172,7 @@ export default async function ShopProductDetailPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams?: Promise<{ opsProductId?: string; ref?: string; lpp?: string }> | { opsProductId?: string; ref?: string; lpp?: string };
+  searchParams?: Promise<{ opsProductId?: string; ref?: string; lpp?: string; siteVisit?: string }> | { opsProductId?: string; ref?: string; lpp?: string; siteVisit?: string };
 }) {
   const { slug } = await params;
   const resolvedSearchParams = await Promise.resolve(searchParams ?? {});
@@ -212,6 +212,11 @@ export default async function ShopProductDetailPage({
     lpp: "1",
   }).toString()}`;
   const loginHref = `/login/phone?callbackUrl=${encodeURIComponent(lppReturnHref)}`;
+  const siteVisitReturnHref = `/${product.slug}?${new URLSearchParams({
+    ...(product.opsProductId ? { opsProductId: product.opsProductId } : {}),
+    siteVisit: "1",
+  }).toString()}`;
+  const siteVisitLoginHref = `/login/phone?callbackUrl=${encodeURIComponent(siteVisitReturnHref)}`;
   const supportItems = [
     {
       icon: <Truck className="h-4 w-4" />,
@@ -339,6 +344,7 @@ export default async function ShopProductDetailPage({
                     <ShopProductDetailActions
                       product={product}
                       openLipaPolePole={resolvedSearchParams.lpp === "1"}
+                      openSiteVisit={resolvedSearchParams.siteVisit === "1"}
                       customer={{
                         isAuthenticated: Boolean(sessionUser?.id),
                         name: viewerProfile?.name || sessionUser?.name || "",
@@ -350,6 +356,7 @@ export default async function ShopProductDetailPage({
                         locationNotes: viewerProfile?.locationNotes || "",
                       }}
                       loginHref={loginHref}
+                      siteVisitLoginHref={siteVisitLoginHref}
                     />
                   </div>
 

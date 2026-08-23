@@ -22,6 +22,9 @@ export type SiteVisitCreditStatus = (typeof SITE_VISIT_CREDIT_STATUSES)[number];
 export const SITE_VISIT_PAYMENT_VERIFICATION_STATUSES = ["NONE", "PENDING", "VERIFIED", "REJECTED"] as const;
 export type SiteVisitPaymentVerificationStatus = (typeof SITE_VISIT_PAYMENT_VERIFICATION_STATUSES)[number];
 
+export const DATA_LOGGER_STATUSES = ["NOT_REQUESTED", "REQUESTED", "SCHEDULED", "INSTALLED", "MONITORING", "COMPLETED"] as const;
+export type DataLoggerStatus = (typeof DATA_LOGGER_STATUSES)[number];
+
 export const SITE_VISIT_REASONS = [
   "LOAD_ASSESSMENT",
   "ROOF_INSPECTION",
@@ -70,7 +73,28 @@ export type SerializedSiteVisit = {
   paymentStatus: SiteVisitPaymentStatus;
   paymentReference: string | null;
   source: SiteVisitSource;
-  feeRegion: "NAIROBI" | "OUTSIDE_NAIROBI" | null;
+  feeRegion: "ZONE_1" | "ZONE_2" | "ZONE_3" | null;
+  serviceZone: "ZONE_1" | "ZONE_2" | "ZONE_3" | null;
+  serviceZoneLabel: string | null;
+  locationCounty: string | null;
+  locationTown: string | null;
+  appliedFee: number;
+  originProductId: string | null;
+  originProductName: string | null;
+  originProductSlug: string | null;
+  originProductPrice: number | null;
+  originProductCategory: string | null;
+  originProductImage: string | null;
+  originProductUrl: string | null;
+  dataLoggerRequested: boolean;
+  dataLoggerDays: number;
+  dataLoggerDailyRate: number;
+  dataLoggerFee: number;
+  dataLoggerStatus: DataLoggerStatus;
+  dataLoggerInstalledAt: string | null;
+  dataLoggerExpectedEndAt: string | null;
+  dataLoggerCompletedAt: string | null;
+  totalPayable: number;
   standardVisitFee: number | null;
   feeOverrideReason: string | null;
   paymentMethod: string | null;
@@ -139,6 +163,21 @@ export type CustomerSiteVisit = Pick<
   | "paymentStatus"
   | "paymentReference"
   | "paymentVerificationStatus"
+  | "serviceZone"
+  | "serviceZoneLabel"
+  | "originProductId"
+  | "originProductName"
+  | "originProductSlug"
+  | "originProductPrice"
+  | "originProductCategory"
+  | "originProductImage"
+  | "originProductUrl"
+  | "dataLoggerRequested"
+  | "dataLoggerDays"
+  | "dataLoggerDailyRate"
+  | "dataLoggerFee"
+  | "dataLoggerStatus"
+  | "totalPayable"
   | "quotationCreditStatus"
   | "outcome"
   | "rescheduleRequestedAt"

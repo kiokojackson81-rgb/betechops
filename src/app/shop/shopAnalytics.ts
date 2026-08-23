@@ -37,3 +37,17 @@ export function trackQuoteSubmitted(payload?: AnalyticsPayload) {
 export function trackWhatsAppClick(payload?: AnalyticsPayload) {
   logEvent("whatsapp_click", payload);
 }
+
+export function trackSiteVisitEvent(
+  eventName:
+    | "site_visit_clicked"
+    | "site_visit_started"
+    | "site_visit_location_selected"
+    | "site_visit_fee_shown"
+    | "data_logger_added"
+    | "site_visit_payment_started"
+    | "site_visit_booking_completed",
+  payload?: AnalyticsPayload,
+) {
+  logEvent(eventName, payload);
+}

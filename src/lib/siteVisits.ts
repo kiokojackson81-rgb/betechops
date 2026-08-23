@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
+import { extractMpesaTransactionCode } from "@/lib/mpesaReference";
 import { prisma } from "@/lib/prisma";
 import {
   QUOTE_PROJECT_TYPES,
@@ -11,6 +12,7 @@ import {
 } from "@/lib/quoteRequests";
 import {
   SITE_VISIT_OUTCOMES,
+  DATA_LOGGER_STATUSES,
   SITE_VISIT_PAYMENT_STATUSES,
   SITE_VISIT_REASONS,
   SITE_VISIT_STATUSES,
@@ -21,13 +23,17 @@ import {
   type SiteVisitPaymentStatus,
   type SiteVisitReason,
   type SiteVisitStatus,
+  type DataLoggerStatus,
 } from "@/lib/siteVisitShared";
 import {
+  calculateDataLoggerFee,
+  DATA_LOGGER_DAILY_RATE,
   deriveSiteVisitCreditStatus,
   getSiteVisitFeeRegion,
   getStandardSiteVisitFee,
   validateSiteVisitLifecycle,
 } from "@/lib/siteVisitPolicy";
+import { getServiceZone } from "@/lib/agents/kenyaMarkets";
 
 export {
   SITE_VISIT_OUTCOMES,
@@ -35,6 +41,8 @@ export {
   SITE_VISIT_REASONS,
   SITE_VISIT_STATUSES,
 };
+
+export { DATA_LOGGER_DAILY_RATE } from "@/lib/siteVisitPolicy";
 export type {
   SerializedSiteVisit,
   SerializedSiteVisitAttachment,
@@ -107,6 +115,28 @@ const SITE_VISIT_SCHEMA_SQL = [
   `CREATE UNIQUE INDEX IF NOT EXISTS "SiteVisit_visitRef_key" ON "SiteVisit"("visitRef")`,
   `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "source" TEXT NOT NULL DEFAULT 'STAFF'`,
   `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "feeRegion" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "serviceZone" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "serviceZoneLabel" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "locationCounty" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "locationTown" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "appliedFee" DOUBLE PRECISION`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "originProductId" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "bookingAttemptId" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "originProductName" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "originProductSlug" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "originProductPrice" DOUBLE PRECISION`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "originProductCategory" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "originProductImage" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "originProductUrl" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "dataLoggerRequested" BOOLEAN NOT NULL DEFAULT FALSE`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "dataLoggerDays" INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "dataLoggerDailyRate" DOUBLE PRECISION NOT NULL DEFAULT 5000`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "dataLoggerFee" DOUBLE PRECISION NOT NULL DEFAULT 0`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "dataLoggerStatus" TEXT NOT NULL DEFAULT 'NOT_REQUESTED'`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "dataLoggerInstalledAt" TIMESTAMP(3)`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "dataLoggerExpectedEndAt" TIMESTAMP(3)`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "dataLoggerCompletedAt" TIMESTAMP(3)`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "totalPayable" DOUBLE PRECISION`,
   `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "standardVisitFee" DOUBLE PRECISION`,
   `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "feeOverrideReason" TEXT`,
   `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "paymentMethod" TEXT`,
@@ -138,6 +168,7 @@ const SITE_VISIT_SCHEMA_SQL = [
   `CREATE INDEX IF NOT EXISTS "SiteVisit_quoteRequestId_createdAt_idx" ON "SiteVisit"("quoteRequestId","createdAt")`,
   `CREATE INDEX IF NOT EXISTS "SiteVisit_assignedStaffId_scheduledAt_idx" ON "SiteVisit"("assignedStaffId","scheduledAt")`,
   `CREATE INDEX IF NOT EXISTS "SiteVisit_assignedTechnicianId_scheduledAt_idx" ON "SiteVisit"("assignedTechnicianId","scheduledAt")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "SiteVisit_bookingAttemptId_key" ON "SiteVisit"("bookingAttemptId")`,
   `CREATE TABLE IF NOT EXISTS "SiteVisitEvent" (
     "id" TEXT NOT NULL,
     "siteVisitId" TEXT NOT NULL,
@@ -275,6 +306,27 @@ type SiteVisitRow = {
   paymentReference: string | null;
   source: string;
   feeRegion: string | null;
+  serviceZone: string | null;
+  serviceZoneLabel: string | null;
+  locationCounty: string | null;
+  locationTown: string | null;
+  appliedFee: number | null;
+  originProductId: string | null;
+  originProductName: string | null;
+  originProductSlug: string | null;
+  originProductPrice: number | null;
+  originProductCategory: string | null;
+  originProductImage: string | null;
+  originProductUrl: string | null;
+  dataLoggerRequested: boolean;
+  dataLoggerDays: number;
+  dataLoggerDailyRate: number;
+  dataLoggerFee: number;
+  dataLoggerStatus: string;
+  dataLoggerInstalledAt: Date | null;
+  dataLoggerExpectedEndAt: Date | null;
+  dataLoggerCompletedAt: Date | null;
+  totalPayable: number | null;
   standardVisitFee: number | null;
   feeOverrideReason: string | null;
   paymentMethod: string | null;
@@ -381,6 +433,27 @@ const SITE_VISIT_SELECT_SQL = Prisma.sql`
   "paymentReference",
   "source",
   "feeRegion",
+  "serviceZone",
+  "serviceZoneLabel",
+  "locationCounty",
+  "locationTown",
+  "appliedFee",
+  "originProductId",
+  "originProductName",
+  "originProductSlug",
+  "originProductPrice",
+  "originProductCategory",
+  "originProductImage",
+  "originProductUrl",
+  "dataLoggerRequested",
+  "dataLoggerDays",
+  "dataLoggerDailyRate",
+  "dataLoggerFee",
+  "dataLoggerStatus",
+  "dataLoggerInstalledAt",
+  "dataLoggerExpectedEndAt",
+  "dataLoggerCompletedAt",
+  "totalPayable",
   "standardVisitFee",
   "feeOverrideReason",
   "paymentMethod",
@@ -428,6 +501,7 @@ const SITE_VISIT_SELECT_SQL = Prisma.sql`
 `;
 
 export const siteVisitCreateSchema = z.object({
+  bookingAttemptId: z.string().uuid().optional(),
   quoteRef: z.string().trim().max(80).optional(),
   customerName: z.string().trim().min(2).max(120),
   customerPhone: z.string().trim().min(7).max(40),
@@ -463,6 +537,19 @@ export const siteVisitCreateSchema = z.object({
   appliancesToInspect: z.string().trim().max(4000).optional(),
   specialInstructions: z.string().trim().max(4000).optional(),
   internalNotes: z.string().trim().max(4000).optional(),
+  originProductId: z.string().trim().max(160).optional(),
+  originProductName: z.string().trim().max(500).optional(),
+  originProductSlug: z.string().trim().max(240).optional(),
+  originProductPrice: z.coerce.number().min(0).max(100000000).optional(),
+  originProductCategory: z.string().trim().max(160).optional(),
+  originProductImage: z.string().trim().max(2000).optional(),
+  originProductUrl: z.string().trim().max(2000).optional(),
+  dataLoggerRequested: z.boolean().optional(),
+  dataLoggerDays: z.coerce.number().int().min(1).max(3).optional(),
+  dataLoggerStatus: z.enum(DATA_LOGGER_STATUSES).optional(),
+  dataLoggerInstalledAt: z.string().trim().optional(),
+  dataLoggerExpectedEndAt: z.string().trim().optional(),
+  dataLoggerCompletedAt: z.string().trim().optional(),
 });
 
 export const siteVisitUpdateSchema = siteVisitCreateSchema.extend({
@@ -478,6 +565,7 @@ export const siteVisitUpdateSchema = siteVisitCreateSchema.extend({
 });
 
 export const customerSiteVisitCreateSchema = z.object({
+  bookingAttemptId: z.string().uuid().optional(),
   projectType: z.enum(QUOTE_PROJECT_TYPES),
   visitReason: z.enum(SITE_VISIT_REASONS),
   customerRequirements: z.string().trim().min(10).max(4000),
@@ -487,9 +575,16 @@ export const customerSiteVisitCreateSchema = z.object({
   landmark: z.string().trim().max(200).optional(),
   mapUrl: z.string().trim().url().max(1000).optional().or(z.literal("")),
   propertyType: z.string().trim().max(120).optional(),
+  alternativePhone: z.string().trim().max(80).optional(),
+  appliancesToInspect: z.string().trim().max(2000).optional(),
   accessInstructions: z.string().trim().max(1000).optional(),
+  specialInstructions: z.string().trim().max(2000).optional(),
   preferredDate: z.string().trim().min(1),
   preferredTimeLabel: z.enum(["MORNING", "AFTERNOON"]),
+  originProductId: z.string().trim().max(160).optional(),
+  originProductSlug: z.string().trim().max(240).optional(),
+  dataLoggerRequested: z.boolean().optional(),
+  dataLoggerDays: z.coerce.number().int().min(1).max(3).optional(),
 });
 
 export const customerSiteVisitActionSchema = z.discriminatedUnion("action", [
@@ -577,7 +672,28 @@ function serializeSiteVisit(row: SiteVisitRow): SerializedSiteVisit {
     paymentStatus: isSiteVisitPaymentStatus(row.paymentStatus) ? (String(row.paymentStatus).trim().toUpperCase() as SiteVisitPaymentStatus) : "UNPAID",
     paymentReference: row.paymentReference,
     source: row.source === "CUSTOMER_REQUEST" ? "CUSTOMER_REQUEST" : "STAFF",
-    feeRegion: row.feeRegion === "NAIROBI" || row.feeRegion === "OUTSIDE_NAIROBI" ? row.feeRegion : null,
+    feeRegion: row.feeRegion === "ZONE_1" || row.feeRegion === "ZONE_2" || row.feeRegion === "ZONE_3" ? row.feeRegion : null,
+    serviceZone: row.serviceZone === "ZONE_1" || row.serviceZone === "ZONE_2" || row.serviceZone === "ZONE_3" ? row.serviceZone : null,
+    serviceZoneLabel: row.serviceZoneLabel,
+    locationCounty: row.locationCounty,
+    locationTown: row.locationTown,
+    appliedFee: Number(row.appliedFee ?? row.visitFee ?? 0),
+    originProductId: row.originProductId,
+    originProductName: row.originProductName,
+    originProductSlug: row.originProductSlug,
+    originProductPrice: row.originProductPrice == null ? null : Number(row.originProductPrice),
+    originProductCategory: row.originProductCategory,
+    originProductImage: row.originProductImage,
+    originProductUrl: row.originProductUrl,
+    dataLoggerRequested: Boolean(row.dataLoggerRequested),
+    dataLoggerDays: Number(row.dataLoggerDays || 0),
+    dataLoggerDailyRate: Number(row.dataLoggerDailyRate || DATA_LOGGER_DAILY_RATE),
+    dataLoggerFee: Number(row.dataLoggerFee || 0),
+    dataLoggerStatus: isDataLoggerStatus(row.dataLoggerStatus) ? (String(row.dataLoggerStatus).trim().toUpperCase() as DataLoggerStatus) : "NOT_REQUESTED",
+    dataLoggerInstalledAt: toIso(row.dataLoggerInstalledAt),
+    dataLoggerExpectedEndAt: toIso(row.dataLoggerExpectedEndAt),
+    dataLoggerCompletedAt: toIso(row.dataLoggerCompletedAt),
+    totalPayable: Number(row.totalPayable ?? row.visitFee ?? 0),
     standardVisitFee: row.standardVisitFee == null ? null : Number(row.standardVisitFee),
     feeOverrideReason: row.feeOverrideReason,
     paymentMethod: row.paymentMethod,
@@ -760,6 +876,17 @@ export async function createSiteVisit(
 ) {
   await ensureSiteVisitsSchema();
 
+  if (input.bookingAttemptId && actor.customerUserId) {
+    const existingAttempt = await prisma.$queryRaw<SiteVisitRow[]>(Prisma.sql`
+      SELECT ${SITE_VISIT_SELECT_SQL}
+      FROM "SiteVisit"
+      WHERE "bookingAttemptId" = ${input.bookingAttemptId}
+        AND "customerUserId" = ${actor.customerUserId}
+      LIMIT 1
+    `);
+    if (existingAttempt[0]) return serializeSiteVisit(existingAttempt[0]);
+  }
+
   const linkedQuote = input.quoteRef?.trim() ? await getQuoteRequestByRef(input.quoteRef.trim()) : null;
   const userLabels = await resolveUserLabels({
     assignedStaffId: input.assignedStaffId || null,
@@ -771,17 +898,29 @@ export async function createSiteVisit(
   const scheduledAt = input.scheduledAt?.trim() ? new Date(input.scheduledAt) : null;
   const preferredDate = input.preferredDate?.trim() ? new Date(`${input.preferredDate.trim()}T00:00:00.000`) : null;
   const effectiveCounty = input.county?.trim() || linkedQuote?.county || null;
-  const standardVisitFee = getStandardSiteVisitFee(effectiveCounty);
+  const effectiveTown = input.town?.trim() || linkedQuote?.town || null;
+  const zone = getServiceZone(effectiveCounty, effectiveTown);
+  if (!zone) throw new Error("Select a recognized county and town before creating the Site Visit.");
+  const standardVisitFee = getStandardSiteVisitFee(effectiveCounty, effectiveTown);
   const visitFee = input.visitFee ?? standardVisitFee ?? 0;
-  const feeRegion = getSiteVisitFeeRegion(effectiveCounty);
+  const feeRegion = getSiteVisitFeeRegion(effectiveCounty, effectiveTown);
+  const dataLoggerRequested = Boolean(input.dataLoggerRequested);
+  const loggerPricing = calculateDataLoggerFee(dataLoggerRequested, input.dataLoggerDays);
+  const dataLoggerDays = loggerPricing.days;
+  const dataLoggerFee = loggerPricing.fee;
+  const totalPayable = Number(visitFee) + dataLoggerFee;
 
   const createdRows = await prisma.$queryRaw<SiteVisitRow[]>(Prisma.sql`
     INSERT INTO "SiteVisit" (
-      "id", "visitRef", "quoteRequestId", "quoteRef", "customerUserId", "customerName", "customerPhone", "customerEmail",
+      "id", "visitRef", "bookingAttemptId", "quoteRequestId", "quoteRef", "customerUserId", "customerName", "customerPhone", "customerEmail",
       "companyName", "siteContactPerson", "alternativePhone", "county", "town", "location", "mapUrl", "landmark",
       "propertyType", "accessInstructions", "projectType", "visitReason", "preferredDate", "preferredTimeLabel",
       "scheduledAt", "estimatedDurationMinutes", "assignedStaffId", "assignedStaffName", "assignedTechnicianId",
       "assignedTechnicianName", "transportMethod", "visitFee", "paymentStatus", "paymentReference", "source", "feeRegion",
+      "serviceZone", "serviceZoneLabel", "locationCounty", "locationTown", "appliedFee",
+      "originProductId", "originProductName", "originProductSlug", "originProductPrice", "originProductCategory",
+      "originProductImage", "originProductUrl", "dataLoggerRequested", "dataLoggerDays", "dataLoggerDailyRate",
+      "dataLoggerFee", "dataLoggerStatus", "dataLoggerInstalledAt", "dataLoggerExpectedEndAt", "dataLoggerCompletedAt", "totalPayable",
       "standardVisitFee", "feeOverrideReason", "paymentMethod", "paymentAmount", "paymentPaidAt", "paymentRecordedById",
       "paymentRecordedByName", "paymentVerificationStatus", "waiverReason", "waiverAuthorizedById", "waiverAuthorizedByName",
       "quotationCreditStatus", "customerRequirements",
@@ -790,6 +929,7 @@ export async function createSiteVisit(
     VALUES (
       ${randomUUID()},
       ${visitRef},
+      ${input.bookingAttemptId || null},
       ${linkedQuote?.id || null},
       ${linkedQuote?.quoteRef || input.quoteRef?.trim() || null},
       ${linkedQuote?.customerUserId || actor.customerUserId || null},
@@ -822,6 +962,27 @@ export async function createSiteVisit(
       ${input.paymentReference?.trim() || null},
       ${input.source || "STAFF"},
       ${feeRegion},
+      ${zone.id},
+      ${zone.name},
+      ${effectiveCounty},
+      ${effectiveTown},
+      ${Number(visitFee)},
+      ${input.originProductId?.trim() || null},
+      ${input.originProductName?.trim() || null},
+      ${input.originProductSlug?.trim() || null},
+      ${input.originProductPrice ?? null},
+      ${input.originProductCategory?.trim() || null},
+      ${input.originProductImage?.trim() || null},
+      ${input.originProductUrl?.trim() || null},
+      ${dataLoggerRequested},
+      ${dataLoggerDays},
+      ${DATA_LOGGER_DAILY_RATE},
+      ${dataLoggerFee},
+      ${dataLoggerRequested ? "REQUESTED" : "NOT_REQUESTED"},
+      ${input.dataLoggerInstalledAt ? new Date(input.dataLoggerInstalledAt) : null},
+      ${input.dataLoggerExpectedEndAt ? new Date(input.dataLoggerExpectedEndAt) : null},
+      ${input.dataLoggerCompletedAt ? new Date(input.dataLoggerCompletedAt) : null},
+      ${totalPayable},
       ${standardVisitFee},
       ${input.feeOverrideReason?.trim() || null},
       ${input.paymentMethod?.trim() || null},
@@ -842,6 +1003,8 @@ export async function createSiteVisit(
       ${actor.id},
       ${actor.name ?? actor.email ?? "Betech Staff"}
     )
+    ON CONFLICT ("bookingAttemptId") DO UPDATE SET "bookingAttemptId" = EXCLUDED."bookingAttemptId"
+      WHERE "SiteVisit"."customerUserId" = EXCLUDED."customerUserId"
     RETURNING ${SITE_VISIT_SELECT_SQL}
   `);
 
@@ -1063,6 +1226,40 @@ export async function updateSiteVisit(
       : null;
   const closedAt = nextStatus === "CLOSED" ? (existing.closedAt ? new Date(existing.closedAt) : new Date()) : null;
   const nextPaymentStatus = input.paymentStatus || existing.paymentStatus;
+  const nextDataLoggerRequested = input.dataLoggerRequested ?? existing.dataLoggerRequested;
+  const nextDataLoggerDays = nextDataLoggerRequested
+    ? Math.max(1, Math.min(3, Number(input.dataLoggerDays ?? existing.dataLoggerDays ?? 1)))
+    : 0;
+  const nextDataLoggerFee = nextDataLoggerDays * DATA_LOGGER_DAILY_RATE;
+  const nextDataLoggerStatus = input.dataLoggerStatus || existing.dataLoggerStatus;
+  const loggerInstalledAt = input.dataLoggerInstalledAt
+    ? new Date(input.dataLoggerInstalledAt)
+    : existing.dataLoggerInstalledAt
+      ? new Date(existing.dataLoggerInstalledAt)
+      : (["INSTALLED", "MONITORING", "COMPLETED"] as DataLoggerStatus[]).includes(nextDataLoggerStatus)
+        ? new Date()
+        : null;
+  const loggerExpectedEndAt = input.dataLoggerExpectedEndAt
+    ? new Date(input.dataLoggerExpectedEndAt)
+    : existing.dataLoggerExpectedEndAt
+      ? new Date(existing.dataLoggerExpectedEndAt)
+      : loggerInstalledAt
+        ? new Date(loggerInstalledAt.getTime() + nextDataLoggerDays * 24 * 60 * 60 * 1000)
+        : null;
+  const loggerCompletedAt = input.dataLoggerCompletedAt
+    ? new Date(input.dataLoggerCompletedAt)
+    : existing.dataLoggerCompletedAt
+      ? new Date(existing.dataLoggerCompletedAt)
+      : nextDataLoggerStatus === "COMPLETED"
+        ? new Date()
+        : null;
+  const nextVisitFee = Number(input.visitFee ?? existing.visitFee);
+  const nextCounty = input.county?.trim() || existing.county;
+  const nextTown = input.town?.trim() || existing.town;
+  const nextZone = getServiceZone(nextCounty, nextTown);
+  if ((input.county !== undefined || input.town !== undefined) && !nextZone) {
+    throw new Error("Select a recognized county and town before saving the Site Visit.");
+  }
   const nextCreditStatus = deriveSiteVisitCreditStatus({
     paymentStatus: nextPaymentStatus,
     currentStatus: existing.quotationCreditStatus,
@@ -1102,11 +1299,25 @@ export async function updateSiteVisit(
       "visitFee" = ${input.visitFee ?? existing.visitFee},
       "paymentStatus" = ${input.paymentStatus || existing.paymentStatus},
       "paymentReference" = ${input.paymentReference?.trim() || existing.paymentReference},
-      "feeRegion" = ${getSiteVisitFeeRegion(input.county?.trim() || existing.county)},
-      "standardVisitFee" = ${getStandardSiteVisitFee(input.county?.trim() || existing.county)},
+      "feeRegion" = ${nextZone?.id || existing.feeRegion},
+      "serviceZone" = ${nextZone?.id || existing.serviceZone},
+      "serviceZoneLabel" = ${nextZone?.name || existing.serviceZoneLabel},
+      "locationCounty" = ${nextCounty || existing.locationCounty},
+      "locationTown" = ${nextTown || existing.locationTown},
+      "appliedFee" = ${input.visitFee ?? existing.appliedFee},
+      "dataLoggerRequested" = ${nextDataLoggerRequested},
+      "dataLoggerDays" = ${nextDataLoggerDays},
+      "dataLoggerDailyRate" = ${DATA_LOGGER_DAILY_RATE},
+      "dataLoggerFee" = ${nextDataLoggerFee},
+      "dataLoggerStatus" = ${nextDataLoggerStatus},
+      "dataLoggerInstalledAt" = ${loggerInstalledAt},
+      "dataLoggerExpectedEndAt" = ${loggerExpectedEndAt},
+      "dataLoggerCompletedAt" = ${loggerCompletedAt},
+      "totalPayable" = ${nextVisitFee + nextDataLoggerFee},
+      "standardVisitFee" = ${nextZone?.siteVisitFee ?? existing.standardVisitFee},
       "feeOverrideReason" = ${input.feeOverrideReason?.trim() || existing.feeOverrideReason},
       "paymentMethod" = ${input.paymentMethod?.trim() || existing.paymentMethod},
-      "paymentAmount" = ${nextPaymentStatus === "PAID" ? Number(input.paymentAmount ?? existing.paymentAmount ?? input.visitFee ?? existing.visitFee) : existing.paymentAmount},
+      "paymentAmount" = ${nextPaymentStatus === "PAID" ? Number(input.paymentAmount ?? existing.paymentAmount ?? nextVisitFee + nextDataLoggerFee) : existing.paymentAmount},
       "paymentPaidAt" = ${nextPaymentStatus === "PAID" ? (existing.paymentPaidAt ? new Date(existing.paymentPaidAt) : new Date()) : null},
       "paymentRecordedById" = ${paymentChanged ? actor.id : existing.paymentRecordedById},
       "paymentRecordedByName" = ${paymentChanged ? actor.name ?? actor.email ?? "Betech Staff" : existing.paymentRecordedByName},
@@ -1223,6 +1434,10 @@ export async function listCustomerSiteVisits(input: {
   return rows.map(serializeSiteVisit);
 }
 
+function isDataLoggerStatus(value: unknown): value is DataLoggerStatus {
+  return DATA_LOGGER_STATUSES.includes(String(value).trim().toUpperCase() as DataLoggerStatus);
+}
+
 export function toCustomerSiteVisit(visit: SerializedSiteVisit) {
   return {
     id: visit.id,
@@ -1245,6 +1460,21 @@ export function toCustomerSiteVisit(visit: SerializedSiteVisit) {
     paymentStatus: visit.paymentStatus,
     paymentReference: visit.paymentReference,
     paymentVerificationStatus: visit.paymentVerificationStatus,
+    serviceZone: visit.serviceZone,
+    serviceZoneLabel: visit.serviceZoneLabel,
+    originProductId: visit.originProductId,
+    originProductName: visit.originProductName,
+    originProductSlug: visit.originProductSlug,
+    originProductPrice: visit.originProductPrice,
+    originProductCategory: visit.originProductCategory,
+    originProductImage: visit.originProductImage,
+    originProductUrl: visit.originProductUrl,
+    dataLoggerRequested: visit.dataLoggerRequested,
+    dataLoggerDays: visit.dataLoggerDays,
+    dataLoggerDailyRate: visit.dataLoggerDailyRate,
+    dataLoggerFee: visit.dataLoggerFee,
+    dataLoggerStatus: visit.dataLoggerStatus,
+    totalPayable: visit.totalPayable,
     quotationCreditStatus: visit.quotationCreditStatus,
     outcome: visit.outcome,
     rescheduleRequestedAt: visit.rescheduleRequestedAt,
@@ -1300,12 +1530,18 @@ export async function recordCustomerSiteVisitAction(
     });
   } else if (input.action === "UPDATE_LOCATION") {
     if (visit.status === "VISITED") throw new Error("Location cannot be changed after the visit is completed.");
-    const fee = getStandardSiteVisitFee(input.county) ?? visit.visitFee;
+    const zone = getServiceZone(input.county, input.town);
+    if (!zone) throw new Error("Select a recognized county and town before updating the location.");
+    const fee = zone.siteVisitFee;
     await prisma.$executeRaw(Prisma.sql`
       UPDATE "SiteVisit" SET "county" = ${input.county}, "town" = ${input.town}, "location" = ${input.location},
         "landmark" = ${input.landmark?.trim() || null}, "mapUrl" = ${input.mapUrl?.trim() || null},
-        "feeRegion" = ${getSiteVisitFeeRegion(input.county)}, "standardVisitFee" = ${fee},
-        "visitFee" = ${visit.paymentStatus === "UNPAID" ? fee : visit.visitFee}, "updatedAt" = CURRENT_TIMESTAMP
+        "feeRegion" = ${zone.id}, "serviceZone" = ${zone.id}, "serviceZoneLabel" = ${zone.name},
+        "locationCounty" = ${input.county}, "locationTown" = ${input.town}, "standardVisitFee" = ${fee},
+        "visitFee" = ${visit.paymentStatus === "UNPAID" ? fee : visit.visitFee},
+        "appliedFee" = ${visit.paymentStatus === "UNPAID" ? fee : visit.appliedFee},
+        "totalPayable" = ${(visit.paymentStatus === "UNPAID" ? fee : visit.visitFee) + visit.dataLoggerFee},
+        "updatedAt" = CURRENT_TIMESTAMP
       WHERE "id" = ${visit.id}
     `);
     await recordSiteVisitEvent({ siteVisitId: visit.id, eventType: "CUSTOMER_LOCATION_UPDATED", eventLabel: "Customer updated location", eventDetail: `${input.location}, ${input.town}, ${input.county}`, actorUserId: actor.id, actorName: actor.name ?? actor.email ?? "Customer" });
@@ -1314,12 +1550,23 @@ export async function recordCustomerSiteVisitAction(
     await recordSiteVisitEvent({ siteVisitId: visit.id, eventType: "CUSTOMER_CANCELLATION_REQUESTED", eventLabel: "Customer requested cancellation", eventDetail: input.reason, actorUserId: actor.id, actorName: actor.name ?? actor.email ?? "Customer" });
   } else {
     if (visit.paymentStatus === "PAID") throw new Error("This site visit fee is already paid.");
+    const paymentReference = input.paymentMethod.trim().toUpperCase() === "MPESA"
+      ? extractMpesaTransactionCode(input.paymentReference)
+      : input.paymentReference.trim().toUpperCase();
+    if (!paymentReference) throw new Error("Enter a valid 10-character M-Pesa transaction code.");
+    const duplicate = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT "id" FROM "SiteVisit"
+      WHERE UPPER(COALESCE("paymentReference", '')) = ${paymentReference}
+        AND "id" <> ${visit.id}
+      LIMIT 1
+    `);
+    if (duplicate.length) throw new Error("This payment reference has already been used for another booking.");
     await prisma.$executeRaw(Prisma.sql`
-      UPDATE "SiteVisit" SET "paymentMethod" = ${input.paymentMethod}, "paymentReference" = ${input.paymentReference},
-        "paymentAmount" = ${visit.visitFee}, "paymentSubmittedAt" = CURRENT_TIMESTAMP,
+      UPDATE "SiteVisit" SET "paymentMethod" = ${input.paymentMethod}, "paymentReference" = ${paymentReference},
+        "paymentAmount" = ${visit.totalPayable}, "paymentSubmittedAt" = CURRENT_TIMESTAMP,
         "paymentVerificationStatus" = 'PENDING', "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${visit.id}
     `);
-    await recordSiteVisitEvent({ siteVisitId: visit.id, eventType: "PAYMENT_SUBMITTED", eventLabel: "Payment submitted for verification", eventDetail: `${input.paymentMethod} · Ref ${input.paymentReference}`, actorUserId: actor.id, actorName: actor.name ?? actor.email ?? "Customer" });
+    await recordSiteVisitEvent({ siteVisitId: visit.id, eventType: "PAYMENT_SUBMITTED", eventLabel: "Payment submitted for verification", eventDetail: `${input.paymentMethod} · KES ${visit.totalPayable.toLocaleString("en-KE")} · Ref ${paymentReference}`, actorUserId: actor.id, actorName: actor.name ?? actor.email ?? "Customer" });
   }
   return getSiteVisitById(visit.id);
 }

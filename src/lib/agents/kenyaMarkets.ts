@@ -1,4 +1,37 @@
-export const kenyaCountyMarkets = [
+export type ServiceZone = "ZONE_1" | "ZONE_2" | "ZONE_3";
+
+export type ServiceZoneConfig = {
+  id: ServiceZone;
+  name: string;
+  siteVisitFee: number;
+  defaultDeliveryFee: number | null;
+};
+
+export const serviceZoneConfig: Record<ServiceZone, ServiceZoneConfig> = {
+  ZONE_1: { id: "ZONE_1", name: "Zone 1 — Nairobi Metropolitan Area", siteVisitFee: 2_000, defaultDeliveryFee: null },
+  ZONE_2: { id: "ZONE_2", name: "Zone 2 — Near-Nairobi Service Area", siteVisitFee: 5_000, defaultDeliveryFee: null },
+  ZONE_3: { id: "ZONE_3", name: "Zone 3 — Long-Distance Service Area", siteVisitFee: 10_000, defaultDeliveryFee: null },
+};
+
+const zoneOneCounties = new Set(["nairobi", "kiambu", "machakos", "kajiado"]);
+const zoneTwoCounties = new Set([
+  "murang a", "kirinyaga", "nyeri", "nyandarua", "nakuru", "embu", "makueni",
+  "kitui", "narok", "laikipia", "kericho", "bomet",
+]);
+
+export function normalizeKenyaLocationName(value: string | null | undefined) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[’'`]/g, " ")
+    .replace(/-/g, " ")
+    .replace(/\bcounty\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+const kenyaCountyMarketEntries = [
   { county: "Mombasa", towns: ["Mombasa", "Nyali", "Bamburi", "Likoni", "Changamwe"] },
   { county: "Kwale", towns: ["Ukunda", "Diani", "Msambweni", "Kwale", "Lunga Lunga"] },
   { county: "Kilifi", towns: ["Kilifi", "Malindi", "Mariakani", "Watamu", "Mtwapa"] },
@@ -48,9 +81,40 @@ export const kenyaCountyMarkets = [
   { county: "Nairobi", towns: ["Nairobi CBD", "Westlands", "Eastleigh", "Kasarani", "Embakasi"] },
 ] as const;
 
+function getZoneIdForKnownCounty(county: string): ServiceZone {
+  const normalized = normalizeKenyaLocationName(county);
+  if (zoneOneCounties.has(normalized)) return "ZONE_1";
+  if (zoneTwoCounties.has(normalized)) return "ZONE_2";
+  return "ZONE_3";
+}
+
+export const kenyaCountyMarkets = kenyaCountyMarketEntries.map((entry) => ({
+  ...entry,
+  zone: getZoneIdForKnownCounty(entry.county),
+}));
+
 export const kenyaCountyOptions = kenyaCountyMarkets.map((entry) => entry.county);
 
-export function getTownsForCounty(county: string) {
-  const match = kenyaCountyMarkets.find((entry) => entry.county === county);
+export function getTownsForCounty(county: string): string[] {
+  const normalizedCounty = normalizeKenyaLocationName(county);
+  const match = kenyaCountyMarkets.find((entry) => normalizeKenyaLocationName(entry.county) === normalizedCounty);
   return match ? [...match.towns] : [];
+}
+
+export function getServiceZone(county: string | null | undefined, town?: string | null): ServiceZoneConfig | null {
+  const normalizedCounty = normalizeKenyaLocationName(county);
+  if (!normalizedCounty) return null;
+  const market = kenyaCountyMarkets.find((entry) => normalizeKenyaLocationName(entry.county) === normalizedCounty);
+  if (!market) return null;
+  const normalizedTown = normalizeKenyaLocationName(town);
+  if (normalizedTown && !market.towns.some((entryTown) => normalizeKenyaLocationName(entryTown) === normalizedTown)) return null;
+  return serviceZoneConfig[market.zone];
+}
+
+export function getSiteVisitFee(county: string | null | undefined, town?: string | null) {
+  return getServiceZone(county, town)?.siteVisitFee ?? null;
+}
+
+export function getDeliveryZone(county: string | null | undefined, town?: string | null) {
+  return getServiceZone(county, town);
 }

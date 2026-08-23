@@ -17,7 +17,7 @@ import {
   saveMockOrder,
   saveShopCustomerProfile,
 } from "@/app/shop/shopStorage";
-import { getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
+import { getDeliveryZone, getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
 import { getProductAvailabilityMessage } from "@/app/shop/shopAvailability";
 import { getShopOrderSuccessHref, SHOP_CART_HREF, SHOP_HOME_HREF, SHOP_REQUEST_QUOTE_HREF } from "@/app/shop/storefrontPaths";
 
@@ -75,6 +75,7 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
     locationNotes: initialProfile.locationNotes,
   });
   const availableTowns = useMemo(() => getTownsForCounty(form.county), [form.county]);
+  const deliveryZone = getDeliveryZone(form.county, form.town);
 
   useEffect(() => {
     setHydrated(true);
@@ -343,6 +344,7 @@ export default function CheckoutClient({ products, isSignedIn, initialProfile }:
                 </select>
                 {fieldErrors.town ? <span className="text-xs font-semibold text-red-600">{fieldErrors.town}</span> : null}
               </label>
+              {deliveryZone ? <div className="rounded-[16px] border border-amber-300/40 bg-amber-50 p-3 text-sm text-slate-700 sm:col-span-2"><b className="text-[#7a0000]">{deliveryZone.name}</b><div className="mt-1">Destination: {form.town}, {form.county} County. Your delivery charge is calculated separately using the existing delivery rules.</div></div> : null}
               <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
                 Specific locality / estate / landmark
                 <input value={form.estateLandmark} onChange={(event) => setForm((current) => ({ ...current, estateLandmark: event.target.value }))} className={resolveFieldClass()} />

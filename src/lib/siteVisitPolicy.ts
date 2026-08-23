@@ -1,21 +1,27 @@
 import type { SiteVisitOutcome, SiteVisitStatus } from "@/lib/siteVisitShared";
+import { getServiceZone, getSiteVisitFee, type ServiceZone } from "@/lib/agents/kenyaMarkets";
 
-export const NAIROBI_SITE_VISIT_FEE = 2_000;
-export const OUTSIDE_NAIROBI_SITE_VISIT_FEE = 5_000;
-
-export type SiteVisitFeeRegion = "NAIROBI" | "OUTSIDE_NAIROBI";
+export type SiteVisitFeeRegion = ServiceZone;
 export type SiteVisitCreditStatus = "NOT_ELIGIBLE" | "AVAILABLE" | "APPLIED";
+export const PRODUCT_LINKED_SITE_VISIT_MINIMUM_EXCLUSIVE = 100_000;
+export const DATA_LOGGER_DAILY_RATE = 5_000;
 
-export function getSiteVisitFeeRegion(county: string | null | undefined): SiteVisitFeeRegion | null {
-  const normalized = String(county || "").trim().toLowerCase();
-  if (!normalized) return null;
-  return normalized === "nairobi" || normalized.startsWith("nairobi ") ? "NAIROBI" : "OUTSIDE_NAIROBI";
+export function isProductLinkedSiteVisitEligible(price: number | null | undefined) {
+  return Number(price || 0) > PRODUCT_LINKED_SITE_VISIT_MINIMUM_EXCLUSIVE;
 }
 
-export function getStandardSiteVisitFee(county: string | null | undefined) {
-  const region = getSiteVisitFeeRegion(county);
-  if (!region) return null;
-  return region === "NAIROBI" ? NAIROBI_SITE_VISIT_FEE : OUTSIDE_NAIROBI_SITE_VISIT_FEE;
+export function calculateDataLoggerFee(requested: boolean, days: number | null | undefined) {
+  if (!requested) return { days: 0, dailyRate: DATA_LOGGER_DAILY_RATE, fee: 0 };
+  const normalizedDays = Math.max(1, Math.min(3, Math.trunc(Number(days || 1))));
+  return { days: normalizedDays, dailyRate: DATA_LOGGER_DAILY_RATE, fee: normalizedDays * DATA_LOGGER_DAILY_RATE };
+}
+
+export function getSiteVisitFeeRegion(county: string | null | undefined, town?: string | null): SiteVisitFeeRegion | null {
+  return getServiceZone(county, town)?.id ?? null;
+}
+
+export function getStandardSiteVisitFee(county: string | null | undefined, town?: string | null) {
+  return getSiteVisitFee(county, town);
 }
 
 const VALID_TRANSITIONS: Record<SiteVisitStatus, readonly SiteVisitStatus[]> = {

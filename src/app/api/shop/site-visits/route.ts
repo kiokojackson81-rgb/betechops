@@ -5,6 +5,9 @@ import { prisma } from "@/lib/prisma";
 import { customerSiteVisitCreateSchema, createSiteVisit, listCustomerSiteVisits, toCustomerSiteVisit } from "@/lib/siteVisits";
 import { getStandardSiteVisitFee } from "@/lib/siteVisitPolicy";
 import { notifySiteVisitCustomer } from "@/lib/siteVisitNotifications";
+import { getShopProductBySlugOrOpsProductId } from "@/app/shop/shopApi";
+import { getShopProductHref } from "@/app/shop/storefrontPaths";
+import { isProductLinkedSiteVisitEligible } from "@/lib/siteVisitPolicy";
 
 export async function GET() {
   try {
@@ -49,14 +52,36 @@ export async function POST(request: Request) {
     const customerName = user?.name || sessionUser.name || "Betech Customer";
     const customerPhone = user?.phone || sessionUser.phone || "";
     if (!customerPhone) return NextResponse.json({ ok: false, error: "Add a phone number to your profile before booking." }, { status: 400 });
-    const visitFee = getStandardSiteVisitFee(parsed.data.county);
-    if (!visitFee) return NextResponse.json({ ok: false, error: "Select a valid county to calculate the site visit fee." }, { status: 400 });
+    const visitFee = getStandardSiteVisitFee(parsed.data.county, parsed.data.town);
+    if (!visitFee) return NextResponse.json({ ok: false, error: "Select a recognized county and town to calculate the site visit fee." }, { status: 400 });
+    const requestedProductId = parsed.data.originProductId?.trim() || "";
+    const requestedProductSlug = parsed.data.originProductSlug?.trim() || "";
+    const product = requestedProductId || requestedProductSlug
+      ? await getShopProductBySlugOrOpsProductId(requestedProductSlug, requestedProductId)
+      : null;
+    if ((requestedProductId || requestedProductSlug) && !product) {
+      return NextResponse.json({ ok: false, error: "The selected catalogue product is no longer available." }, { status: 400 });
+    }
+    if (product && !isProductLinkedSiteVisitEligible(product.price)) {
+      return NextResponse.json({ ok: false, error: "Product-linked Site Visits are available for products above KES 100,000." }, { status: 400 });
+    }
+    const dataLoggerRequested = Boolean(parsed.data.dataLoggerRequested);
+    const dataLoggerDays = dataLoggerRequested ? Math.max(1, Math.min(3, Number(parsed.data.dataLoggerDays || 1))) : undefined;
     const visit = await createSiteVisit({
       ...parsed.data,
       customerName,
       customerPhone,
       customerEmail: user?.email || sessionUser.email || "",
       visitFee,
+      originProductId: product ? (product.opsProductId || product.id) : undefined,
+      originProductName: product?.name,
+      originProductSlug: product?.slug,
+      originProductPrice: product?.price,
+      originProductCategory: product?.category,
+      originProductImage: product?.image,
+      originProductUrl: product ? getShopProductHref(product.slug, product.opsProductId) : undefined,
+      dataLoggerRequested,
+      dataLoggerDays,
       source: "CUSTOMER_REQUEST",
       paymentStatus: "UNPAID",
     }, {
@@ -66,7 +91,7 @@ export async function POST(request: Request) {
       email: user?.email || sessionUser.email || null,
     });
     if (!visit) return NextResponse.json({ ok: false, error: "Unable to create the site visit request." }, { status: 500 });
-    void notifySiteVisitCustomer({ event: "REQUEST_RECEIVED", customerName, phone: customerPhone, email: visit.customerEmail, visitRef: visit.visitRef, detail: `Fee KES ${visitFee.toLocaleString("en-KE")} is awaiting payment verification.` });
+    void notifySiteVisitCustomer({ event: "REQUEST_RECEIVED", customerName, phone: customerPhone, email: visit.customerEmail, visitRef: visit.visitRef, detail: `Total KES ${visit.totalPayable.toLocaleString("en-KE")} is awaiting payment verification.` });
     return NextResponse.json({ ok: true, visit: toCustomerSiteVisit(visit) }, { status: 201 });
   } catch (error) {
     console.error("[shop.site-visits] POST failed", error);

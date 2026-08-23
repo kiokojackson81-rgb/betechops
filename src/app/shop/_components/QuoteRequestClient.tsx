@@ -7,7 +7,7 @@ import { createQuoteRequest, type ShopApiError } from "@/app/shop/shopSubmitApi"
 import { trackQuoteSubmitted } from "@/app/shop/shopAnalytics";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
 import { getShopQuoteSuccessHref, SHOP_HOME_HREF } from "@/app/shop/storefrontPaths";
-import { getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
+import { getServiceZone, getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
 
 type QuoteRequestClientProps = {
   preferredProduct?: string;
@@ -172,6 +172,7 @@ export default function QuoteRequestClient({
   });
 
   const availableTowns = useMemo(() => getTownsForCounty(form.county), [form.county]);
+  const serviceZone = getServiceZone(form.county, form.town);
   const inputBaseClass = "min-h-[3.4rem] rounded-2xl border bg-white px-4 outline-none transition";
   const resolveFieldClass = (fieldName: string) =>
     `${inputBaseClass} ${fieldErrors[fieldName] ? "border-red-300 ring-2 ring-red-100" : "border-[#7a0000]/10 focus:border-[#7a0000]/30"}`;
@@ -493,6 +494,7 @@ export default function QuoteRequestClient({
             </select>
             {fieldErrors.town ? <span className="text-xs font-semibold text-red-600">{fieldErrors.town}</span> : null}
           </label>
+          {serviceZone ? <div className="rounded-2xl border border-amber-300/40 bg-amber-50 p-4 text-sm text-slate-700 sm:col-span-2"><b className="text-[#7a0000]">{serviceZone.name}</b><div className="mt-1">{form.town}, {form.county} County. This zone supports delivery, installation, and site-visit planning; final quotation charges remain itemized separately.</div></div> : null}
           <label className="grid gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
             Exact location / landmark
             <input

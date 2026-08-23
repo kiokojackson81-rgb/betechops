@@ -1,0 +1,24 @@
+ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "originProductId" TEXT;
+ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "bookingAttemptId" TEXT;
+ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "originProductName" TEXT;
+ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "originProductSlug" TEXT;
+ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "originProductPrice" DOUBLE PRECISION;
+ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "originProductCategory" TEXT;
+ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "originProductImage" TEXT;
+ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "originProductUrl" TEXT;
+ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "dataLoggerRequested" BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "dataLoggerDays" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "dataLoggerDailyRate" DOUBLE PRECISION NOT NULL DEFAULT 5000;
+ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "dataLoggerFee" DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "dataLoggerStatus" TEXT NOT NULL DEFAULT 'NOT_REQUESTED';
+ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "dataLoggerInstalledAt" TIMESTAMP(3);
+ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "dataLoggerExpectedEndAt" TIMESTAMP(3);
+ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "dataLoggerCompletedAt" TIMESTAMP(3);
+ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "totalPayable" DOUBLE PRECISION;
+
+UPDATE "SiteVisit"
+SET "totalPayable" = COALESCE("totalPayable", "visitFee")
+WHERE "totalPayable" IS NULL;
+
+CREATE INDEX IF NOT EXISTS "SiteVisit_originProductId_createdAt_idx" ON "SiteVisit"("originProductId", "createdAt");
+CREATE UNIQUE INDEX IF NOT EXISTS "SiteVisit_bookingAttemptId_key" ON "SiteVisit"("bookingAttemptId");

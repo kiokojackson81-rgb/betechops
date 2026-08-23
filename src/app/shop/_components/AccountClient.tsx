@@ -12,7 +12,7 @@ import {
   UserRound,
 } from "lucide-react";
 import CustomerAccountSidebar from "@/app/shop/_components/CustomerAccountSidebar";
-import { getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
+import { getServiceZone, getTownsForCounty, kenyaCountyOptions } from "@/lib/agents/kenyaMarkets";
 import type { SerializedQuoteRequest } from "@/lib/quoteRequests";
 import type { SerializedSiteVisit } from "@/lib/siteVisitShared";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
@@ -131,6 +131,7 @@ export default function AccountClient({
     () => !(initialProfile.county || initialProfile.town || initialProfile.estateLandmark || initialProfile.locationNotes),
   );
   const availableTowns = useMemo(() => getTownsForCounty(form.county), [form.county]);
+  const addressZone = getServiceZone(form.county, form.town);
 
   useEffect(() => {
     setForm(buildFormProfile(initialProfile, getShopCustomerProfile()));
@@ -419,6 +420,7 @@ export default function AccountClient({
                   </label>
                 </>
               )}
+              {addressZone ? <div className="rounded-[18px] border border-amber-300/40 bg-amber-50 p-4 text-sm text-slate-700 sm:col-span-2"><div className="font-black text-[#7a0000]">{addressZone.name}</div><div className="mt-1">This service zone is used for delivery, site visits, and installation logistics. Delivery charges are confirmed separately.</div></div> : null}
             </div>
 
             <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">

@@ -4,13 +4,17 @@ import {
   getStandardSiteVisitFee,
   validateSiteVisitLifecycle,
   isAllowedSiteVisitAttachment,
+  isProductLinkedSiteVisitEligible,
+  calculateDataLoggerFee,
 } from "@/lib/siteVisitPolicy";
 
 describe("site visit policy", () => {
-  it("applies the published Nairobi and outside-Nairobi fees", () => {
-    expect(getSiteVisitFeeRegion("Nairobi County")).toBe("NAIROBI");
+  it("applies the published three-zone site visit fees", () => {
+    expect(getSiteVisitFeeRegion("Nairobi County", "Nairobi CBD")).toBe("ZONE_1");
     expect(getStandardSiteVisitFee("Nairobi")).toBe(2_000);
-    expect(getStandardSiteVisitFee("Kiambu")).toBe(5_000);
+    expect(getStandardSiteVisitFee("Kiambu", "Thika")).toBe(2_000);
+    expect(getStandardSiteVisitFee("Nakuru", "Naivasha")).toBe(5_000);
+    expect(getStandardSiteVisitFee("Kisumu", "Kisumu")).toBe(10_000);
   });
 
   it("prevents invalid lifecycle jumps and incomplete closure", () => {
@@ -29,5 +33,13 @@ describe("site visit policy", () => {
     expect(isAllowedSiteVisitAttachment({ name: "site.jpg", type: "image/jpeg", size: 200_000 })).toBeNull();
     expect(isAllowedSiteVisitAttachment({ name: "payload.exe", type: "application/octet-stream", size: 200 })).toMatch(/only/i);
     expect(isAllowedSiteVisitAttachment({ name: "large.pdf", type: "application/pdf", size: 11 * 1024 * 1024 })).toMatch(/10 MB/i);
+  });
+
+  it("enforces the exclusive product threshold and logger limits", () => {
+    expect(isProductLinkedSiteVisitEligible(100_000)).toBe(false);
+    expect(isProductLinkedSiteVisitEligible(100_001)).toBe(true);
+    expect(calculateDataLoggerFee(false, 3)).toEqual({ days: 0, dailyRate: 5_000, fee: 0 });
+    expect(calculateDataLoggerFee(true, 2)).toEqual({ days: 2, dailyRate: 5_000, fee: 10_000 });
+    expect(calculateDataLoggerFee(true, 8).fee).toBe(15_000);
   });
 });
