@@ -23,6 +23,7 @@ import {
   encodeRoutePlan,
 } from "@/lib/voiceIvr";
 import { publishVoiceLiveEvent } from "@/lib/voiceLiveEvents";
+import { safelyProcessInboundCallCentreHealth } from "@/lib/voiceCallCentreHealth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -246,6 +247,7 @@ export async function POST(request: Request) {
       assignedToId: voiceCall.assignedToId,
       durationInSeconds: voiceCall.durationInSeconds,
     });
+    await safelyProcessInboundCallCentreHealth(voiceCall);
 
     if (!isActive) {
       await createVoiceEventFromPayload(

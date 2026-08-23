@@ -1808,6 +1808,53 @@ model VoiceCall {
   @@index([callerNumber, createdAt])
 }
 
+model VoiceCallCentreHealth {
+  id                          String    @id @default("default")
+  consecutiveBusy             Int       @default(0)
+  lastEvaluatedTerminalId     String?
+  lastEvaluatedTerminalStatus String?
+  lastBusyCallId              String?
+  lastInboundCallId           String?
+  lastInboundAt               DateTime?
+  lastAnsweredCallId          String?
+  lastAnsweredAt              DateTime?
+  busyIncidentActive          Boolean   @default(false)
+  busyIncidentStartedAt       DateTime?
+  busyIncidentAlertId         String?
+  inactivityIncidentActive    Boolean   @default(false)
+  inactivityIncidentStartedAt DateTime?
+  inactivityIncidentAlertId   String?
+  lastHealthCheckAt           DateTime?
+  lastAlertAt                 DateTime?
+  lastAlertReason             String?
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
+}
+
+model VoiceCallCentreAlert {
+  id                String    @id @default(cuid())
+  incidentKey       String    @unique
+  type              String
+  reason            String
+  detectedAt        DateTime
+  resolvedAt        DateTime?
+  chatraceContact   String?
+  issueFieldUpdated Boolean   @default(false)
+  timeFieldUpdated  Boolean   @default(false)
+  tagApplied        Boolean   @default(false)
+  tagAttemptedAt    DateTime?
+  deliveryStatus    String    @default("PENDING")
+  attemptCount      Int       @default(0)
+  lastAttemptAt     DateTime?
+  lastError         String?
+  associatedCallIds Json?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([type, detectedAt])
+  @@index([deliveryStatus, createdAt])
+}
+
 model VoiceEvent {
   id          String     @id @default(cuid())
   voiceCallId String?

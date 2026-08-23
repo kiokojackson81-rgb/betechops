@@ -24,6 +24,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import DialPad from "@/components/voice/DialPad";
 import VoiceFeedbackPanel from "@/components/voice/VoiceFeedbackPanel";
+import CallCentreHealthPanel from "@/components/voice/CallCentreHealthPanel";
 import VoiceSettingsClient from "@/components/voice/VoiceSettingsClient";
 import { useSoftphone } from "@/components/voice/SoftphoneProvider";
 import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
@@ -2002,6 +2003,8 @@ export default function VoiceConsoleClient({
                           )}
                         </div>
                       </section>
+
+                      {data.viewer.isAdmin ? <CallCentreHealthPanel /> : null}
 
                       {data.viewer.isAdmin && (adminWallboard || supervisorMetrics) ? (
                         <section className={cardShell("p-4")}>
