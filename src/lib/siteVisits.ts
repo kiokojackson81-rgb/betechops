@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import {
   QUOTE_PROJECT_TYPES,
   type QuoteProjectType,
+  createQuoteRequest,
   getQuoteRequestByRef,
   recordQuotationEvent,
 } from "@/lib/quoteRequests";
@@ -21,6 +22,12 @@ import {
   type SiteVisitReason,
   type SiteVisitStatus,
 } from "@/lib/siteVisitShared";
+import {
+  deriveSiteVisitCreditStatus,
+  getSiteVisitFeeRegion,
+  getStandardSiteVisitFee,
+  validateSiteVisitLifecycle,
+} from "@/lib/siteVisitPolicy";
 
 export {
   SITE_VISIT_OUTCOMES,
@@ -98,6 +105,33 @@ const SITE_VISIT_SCHEMA_SQL = [
     CONSTRAINT "SiteVisit_pkey" PRIMARY KEY ("id")
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "SiteVisit_visitRef_key" ON "SiteVisit"("visitRef")`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "source" TEXT NOT NULL DEFAULT 'STAFF'`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "feeRegion" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "standardVisitFee" DOUBLE PRECISION`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "feeOverrideReason" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "paymentMethod" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "paymentAmount" DOUBLE PRECISION`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "paymentSubmittedAt" TIMESTAMP(3)`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "paymentPaidAt" TIMESTAMP(3)`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "paymentRecordedById" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "paymentRecordedByName" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "paymentVerificationStatus" TEXT NOT NULL DEFAULT 'NONE'`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "waiverReason" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "waiverAuthorizedById" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "waiverAuthorizedByName" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "quotationCreditStatus" TEXT NOT NULL DEFAULT 'NOT_ELIGIBLE'`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "creditedQuotationId" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "creditedQuotationRef" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "creditedAmount" DOUBLE PRECISION`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "creditedAt" TIMESTAMP(3)`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "creditAppliedById" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "creditAppliedByName" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "rescheduleRequestedAt" TIMESTAMP(3)`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "rescheduleRequestedDate" TIMESTAMP(3)`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "rescheduleRequestedTimeLabel" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "rescheduleReason" TEXT`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "cancellationRequestedAt" TIMESTAMP(3)`,
+  `ALTER TABLE "SiteVisit" ADD COLUMN IF NOT EXISTS "cancellationReason" TEXT`,
   `CREATE INDEX IF NOT EXISTS "SiteVisit_status_scheduledAt_idx" ON "SiteVisit"("status","scheduledAt")`,
   `CREATE INDEX IF NOT EXISTS "SiteVisit_customerUserId_createdAt_idx" ON "SiteVisit"("customerUserId","createdAt")`,
   `CREATE INDEX IF NOT EXISTS "SiteVisit_customerPhone_createdAt_idx" ON "SiteVisit"("customerPhone","createdAt")`,
@@ -239,6 +273,33 @@ type SiteVisitRow = {
   visitFee: number | null;
   paymentStatus: string | null;
   paymentReference: string | null;
+  source: string;
+  feeRegion: string | null;
+  standardVisitFee: number | null;
+  feeOverrideReason: string | null;
+  paymentMethod: string | null;
+  paymentAmount: number | null;
+  paymentSubmittedAt: Date | string | null;
+  paymentPaidAt: Date | string | null;
+  paymentRecordedById: string | null;
+  paymentRecordedByName: string | null;
+  paymentVerificationStatus: string;
+  waiverReason: string | null;
+  waiverAuthorizedById: string | null;
+  waiverAuthorizedByName: string | null;
+  quotationCreditStatus: string;
+  creditedQuotationId: string | null;
+  creditedQuotationRef: string | null;
+  creditedAmount: number | null;
+  creditedAt: Date | string | null;
+  creditAppliedById: string | null;
+  creditAppliedByName: string | null;
+  rescheduleRequestedAt: Date | string | null;
+  rescheduleRequestedDate: Date | string | null;
+  rescheduleRequestedTimeLabel: string | null;
+  rescheduleReason: string | null;
+  cancellationRequestedAt: Date | string | null;
+  cancellationReason: string | null;
   customerRequirements: string | null;
   appliancesToInspect: string | null;
   specialInstructions: string | null;
@@ -318,6 +379,33 @@ const SITE_VISIT_SELECT_SQL = Prisma.sql`
   "visitFee",
   "paymentStatus",
   "paymentReference",
+  "source",
+  "feeRegion",
+  "standardVisitFee",
+  "feeOverrideReason",
+  "paymentMethod",
+  "paymentAmount",
+  "paymentSubmittedAt",
+  "paymentPaidAt",
+  "paymentRecordedById",
+  "paymentRecordedByName",
+  "paymentVerificationStatus",
+  "waiverReason",
+  "waiverAuthorizedById",
+  "waiverAuthorizedByName",
+  "quotationCreditStatus",
+  "creditedQuotationId",
+  "creditedQuotationRef",
+  "creditedAmount",
+  "creditedAt",
+  "creditAppliedById",
+  "creditAppliedByName",
+  "rescheduleRequestedAt",
+  "rescheduleRequestedDate",
+  "rescheduleRequestedTimeLabel",
+  "rescheduleReason",
+  "cancellationRequestedAt",
+  "cancellationReason",
   "customerRequirements",
   "appliancesToInspect",
   "specialInstructions",
@@ -366,6 +454,11 @@ export const siteVisitCreateSchema = z.object({
   visitFee: z.coerce.number().min(0).max(100000000).optional(),
   paymentStatus: z.enum(SITE_VISIT_PAYMENT_STATUSES).optional(),
   paymentReference: z.string().trim().max(160).optional(),
+  source: z.enum(["STAFF", "CUSTOMER_REQUEST"]).optional(),
+  feeOverrideReason: z.string().trim().max(500).optional(),
+  paymentMethod: z.string().trim().max(80).optional(),
+  paymentAmount: z.coerce.number().min(0).max(100000000).optional(),
+  waiverReason: z.string().trim().max(500).optional(),
   customerRequirements: z.string().trim().max(4000).optional(),
   appliancesToInspect: z.string().trim().max(4000).optional(),
   specialInstructions: z.string().trim().max(4000).optional(),
@@ -383,6 +476,47 @@ export const siteVisitUpdateSchema = siteVisitCreateSchema.extend({
   outcome: z.enum(SITE_VISIT_OUTCOMES).optional().nullable(),
   closedReason: z.string().trim().max(2000).optional(),
 });
+
+export const customerSiteVisitCreateSchema = z.object({
+  projectType: z.enum(QUOTE_PROJECT_TYPES),
+  visitReason: z.enum(SITE_VISIT_REASONS),
+  customerRequirements: z.string().trim().min(10).max(4000),
+  county: z.string().trim().min(2).max(120),
+  town: z.string().trim().min(2).max(120),
+  location: z.string().trim().min(2).max(300),
+  landmark: z.string().trim().max(200).optional(),
+  mapUrl: z.string().trim().url().max(1000).optional().or(z.literal("")),
+  propertyType: z.string().trim().max(120).optional(),
+  accessInstructions: z.string().trim().max(1000).optional(),
+  preferredDate: z.string().trim().min(1),
+  preferredTimeLabel: z.enum(["MORNING", "AFTERNOON"]),
+});
+
+export const customerSiteVisitActionSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("REQUEST_RESCHEDULE"),
+    preferredDate: z.string().trim().min(1),
+    preferredTimeLabel: z.enum(["MORNING", "AFTERNOON"]),
+    reason: z.string().trim().max(500).optional(),
+  }),
+  z.object({
+    action: z.literal("UPDATE_LOCATION"),
+    county: z.string().trim().min(2).max(120),
+    town: z.string().trim().min(2).max(120),
+    location: z.string().trim().min(2).max(300),
+    landmark: z.string().trim().max(200).optional(),
+    mapUrl: z.string().trim().url().max(1000).optional().or(z.literal("")),
+  }),
+  z.object({
+    action: z.literal("REQUEST_CANCELLATION"),
+    reason: z.string().trim().min(3).max(500),
+  }),
+  z.object({
+    action: z.literal("SUBMIT_PAYMENT"),
+    paymentMethod: z.string().trim().min(2).max(80),
+    paymentReference: z.string().trim().min(5).max(160),
+  }),
+]);
 
 function toIso(value: string | Date | null | undefined) {
   if (!value) return null;
@@ -442,6 +576,39 @@ function serializeSiteVisit(row: SiteVisitRow): SerializedSiteVisit {
     visitFee: Number(row.visitFee ?? 0),
     paymentStatus: isSiteVisitPaymentStatus(row.paymentStatus) ? (String(row.paymentStatus).trim().toUpperCase() as SiteVisitPaymentStatus) : "UNPAID",
     paymentReference: row.paymentReference,
+    source: row.source === "CUSTOMER_REQUEST" ? "CUSTOMER_REQUEST" : "STAFF",
+    feeRegion: row.feeRegion === "NAIROBI" || row.feeRegion === "OUTSIDE_NAIROBI" ? row.feeRegion : null,
+    standardVisitFee: row.standardVisitFee == null ? null : Number(row.standardVisitFee),
+    feeOverrideReason: row.feeOverrideReason,
+    paymentMethod: row.paymentMethod,
+    paymentAmount: row.paymentAmount == null ? null : Number(row.paymentAmount),
+    paymentSubmittedAt: toIso(row.paymentSubmittedAt),
+    paymentPaidAt: toIso(row.paymentPaidAt),
+    paymentRecordedById: row.paymentRecordedById,
+    paymentRecordedByName: row.paymentRecordedByName,
+    paymentVerificationStatus:
+      row.paymentVerificationStatus === "PENDING" || row.paymentVerificationStatus === "VERIFIED" || row.paymentVerificationStatus === "REJECTED"
+        ? row.paymentVerificationStatus
+        : "NONE",
+    waiverReason: row.waiverReason,
+    waiverAuthorizedById: row.waiverAuthorizedById,
+    waiverAuthorizedByName: row.waiverAuthorizedByName,
+    quotationCreditStatus:
+      row.quotationCreditStatus === "AVAILABLE" || row.quotationCreditStatus === "APPLIED"
+        ? row.quotationCreditStatus
+        : "NOT_ELIGIBLE",
+    creditedQuotationId: row.creditedQuotationId,
+    creditedQuotationRef: row.creditedQuotationRef,
+    creditedAmount: row.creditedAmount == null ? null : Number(row.creditedAmount),
+    creditedAt: toIso(row.creditedAt),
+    creditAppliedById: row.creditAppliedById,
+    creditAppliedByName: row.creditAppliedByName,
+    rescheduleRequestedAt: toIso(row.rescheduleRequestedAt),
+    rescheduleRequestedDate: toIso(row.rescheduleRequestedDate),
+    rescheduleRequestedTimeLabel: row.rescheduleRequestedTimeLabel,
+    rescheduleReason: row.rescheduleReason,
+    cancellationRequestedAt: toIso(row.cancellationRequestedAt),
+    cancellationReason: row.cancellationReason,
     customerRequirements: row.customerRequirements,
     appliancesToInspect: row.appliancesToInspect,
     specialInstructions: row.specialInstructions,
@@ -589,7 +756,7 @@ export async function ensureSiteVisitsSchema() {
 
 export async function createSiteVisit(
   input: z.infer<typeof siteVisitCreateSchema>,
-  actor: { id: string; name: string | null; email: string | null },
+  actor: { id: string; name: string | null; email: string | null; customerUserId?: string | null },
 ) {
   await ensureSiteVisitsSchema();
 
@@ -603,6 +770,10 @@ export async function createSiteVisit(
   const status: SiteVisitStatus = input.scheduledAt ? "SCHEDULED" : "PENDING";
   const scheduledAt = input.scheduledAt?.trim() ? new Date(input.scheduledAt) : null;
   const preferredDate = input.preferredDate?.trim() ? new Date(`${input.preferredDate.trim()}T00:00:00.000`) : null;
+  const effectiveCounty = input.county?.trim() || linkedQuote?.county || null;
+  const standardVisitFee = getStandardSiteVisitFee(effectiveCounty);
+  const visitFee = input.visitFee ?? standardVisitFee ?? 0;
+  const feeRegion = getSiteVisitFeeRegion(effectiveCounty);
 
   const createdRows = await prisma.$queryRaw<SiteVisitRow[]>(Prisma.sql`
     INSERT INTO "SiteVisit" (
@@ -610,7 +781,10 @@ export async function createSiteVisit(
       "companyName", "siteContactPerson", "alternativePhone", "county", "town", "location", "mapUrl", "landmark",
       "propertyType", "accessInstructions", "projectType", "visitReason", "preferredDate", "preferredTimeLabel",
       "scheduledAt", "estimatedDurationMinutes", "assignedStaffId", "assignedStaffName", "assignedTechnicianId",
-      "assignedTechnicianName", "transportMethod", "visitFee", "paymentStatus", "paymentReference", "customerRequirements",
+      "assignedTechnicianName", "transportMethod", "visitFee", "paymentStatus", "paymentReference", "source", "feeRegion",
+      "standardVisitFee", "feeOverrideReason", "paymentMethod", "paymentAmount", "paymentPaidAt", "paymentRecordedById",
+      "paymentRecordedByName", "paymentVerificationStatus", "waiverReason", "waiverAuthorizedById", "waiverAuthorizedByName",
+      "quotationCreditStatus", "customerRequirements",
       "appliancesToInspect", "specialInstructions", "internalNotes", "status", "createdById", "createdByName"
     )
     VALUES (
@@ -618,14 +792,14 @@ export async function createSiteVisit(
       ${visitRef},
       ${linkedQuote?.id || null},
       ${linkedQuote?.quoteRef || input.quoteRef?.trim() || null},
-      ${linkedQuote?.customerUserId || null},
+      ${linkedQuote?.customerUserId || actor.customerUserId || null},
       ${input.customerName.trim() || linkedQuote?.customerName || "Customer"},
       ${input.customerPhone.trim() || linkedQuote?.customerPhone || ""},
       ${input.customerEmail?.trim() || linkedQuote?.customerEmail || null},
       ${input.companyName?.trim() || null},
       ${input.siteContactPerson?.trim() || null},
       ${input.alternativePhone?.trim() || null},
-      ${input.county?.trim() || linkedQuote?.county || null},
+      ${effectiveCounty},
       ${input.town?.trim() || linkedQuote?.town || null},
       ${input.location?.trim() || linkedQuote?.customerLocation || null},
       ${input.mapUrl?.trim() || null},
@@ -643,9 +817,23 @@ export async function createSiteVisit(
       ${input.assignedTechnicianId?.trim() || null},
       ${userLabels.assignedTechnicianName},
       ${input.transportMethod?.trim() || null},
-      ${Number(input.visitFee ?? 0)},
+      ${Number(visitFee)},
       ${input.paymentStatus || "UNPAID"},
       ${input.paymentReference?.trim() || null},
+      ${input.source || "STAFF"},
+      ${feeRegion},
+      ${standardVisitFee},
+      ${input.feeOverrideReason?.trim() || null},
+      ${input.paymentMethod?.trim() || null},
+      ${input.paymentStatus === "PAID" ? Number(input.paymentAmount ?? visitFee) : null},
+      ${input.paymentStatus === "PAID" ? new Date() : null},
+      ${input.paymentStatus === "PAID" ? actor.id : null},
+      ${input.paymentStatus === "PAID" ? actor.name ?? actor.email ?? "Betech Staff" : null},
+      ${input.paymentStatus === "PAID" ? "VERIFIED" : "NONE"},
+      ${input.waiverReason?.trim() || null},
+      ${input.paymentStatus === "WAIVED" ? actor.id : null},
+      ${input.paymentStatus === "WAIVED" ? actor.name ?? actor.email ?? "Betech Staff" : null},
+      ${deriveSiteVisitCreditStatus({ paymentStatus: input.paymentStatus || "UNPAID" })},
       ${input.customerRequirements?.trim() || linkedQuote?.notes || null},
       ${input.appliancesToInspect?.trim() || linkedQuote?.loadDescription || null},
       ${input.specialInstructions?.trim() || null},
@@ -664,7 +852,7 @@ export async function createSiteVisit(
     siteVisitId: created.id,
     eventType: "SITE_VISIT_CREATED",
     eventLabel: "Site visit created",
-    eventDetail: created.quoteRef ? `Linked to ${created.quoteRef}` : null,
+    eventDetail: `${created.source === "CUSTOMER_REQUEST" ? "Customer request" : "Staff booking"} · Fee KES ${created.visitFee.toLocaleString("en-KE")}${created.quoteRef ? ` · Linked to ${created.quoteRef}` : ""}`,
     actorUserId: actor.id,
     actorName: actor.name ?? actor.email ?? "Betech Staff",
     metadata: { status: created.status },
@@ -692,6 +880,7 @@ export async function createSiteVisit(
 export async function listAdminSiteVisits(input?: {
   status?: SiteVisitStatus | "ALL";
   q?: string;
+  assignedUserId?: string | null;
 }) {
   await ensureSiteVisitsSchema();
   const query = String(input?.q || "").trim();
@@ -700,6 +889,7 @@ export async function listAdminSiteVisits(input?: {
     FROM "SiteVisit"
     WHERE 1 = 1
       ${buildStatusWhere(input?.status || "ALL")}
+      ${input?.assignedUserId ? Prisma.sql`AND ("assignedStaffId" = ${input.assignedUserId} OR "assignedTechnicianId" = ${input.assignedUserId})` : Prisma.empty}
       ${
         query
           ? Prisma.sql`AND (
@@ -848,6 +1038,19 @@ export async function updateSiteVisit(
 
   const nextStatus = input.status || existing.status;
   const nextOutcome = input.outcome === null ? null : input.outcome ?? existing.outcome;
+  const lifecycleError = validateSiteVisitLifecycle({
+    previousStatus: existing.status,
+    status: nextStatus,
+    outcome: nextOutcome,
+    closedReason: input.closedReason ?? existing.closedReason,
+  });
+  if (lifecycleError) throw new Error(lifecycleError);
+  if (input.paymentStatus === "PAID" && !String(input.paymentReference || existing.paymentReference || "").trim()) {
+    throw new Error("A payment reference is required before marking the visit fee paid.");
+  }
+  if (input.paymentStatus === "WAIVED" && !String(input.waiverReason || existing.waiverReason || "").trim()) {
+    throw new Error("A waiver reason is required before waiving the visit fee.");
+  }
   const scheduledAt = input.scheduledAt !== undefined
     ? (input.scheduledAt?.trim() ? new Date(input.scheduledAt) : null)
     : (existing.scheduledAt ? new Date(existing.scheduledAt) : null);
@@ -859,6 +1062,12 @@ export async function updateSiteVisit(
       ? (existing.completedAt ? new Date(existing.completedAt) : new Date())
       : null;
   const closedAt = nextStatus === "CLOSED" ? (existing.closedAt ? new Date(existing.closedAt) : new Date()) : null;
+  const nextPaymentStatus = input.paymentStatus || existing.paymentStatus;
+  const nextCreditStatus = deriveSiteVisitCreditStatus({
+    paymentStatus: nextPaymentStatus,
+    currentStatus: existing.quotationCreditStatus,
+  });
+  const paymentChanged = nextPaymentStatus !== existing.paymentStatus;
 
   const updatedRows = await prisma.$queryRaw<SiteVisitRow[]>(Prisma.sql`
     UPDATE "SiteVisit"
@@ -893,6 +1102,19 @@ export async function updateSiteVisit(
       "visitFee" = ${input.visitFee ?? existing.visitFee},
       "paymentStatus" = ${input.paymentStatus || existing.paymentStatus},
       "paymentReference" = ${input.paymentReference?.trim() || existing.paymentReference},
+      "feeRegion" = ${getSiteVisitFeeRegion(input.county?.trim() || existing.county)},
+      "standardVisitFee" = ${getStandardSiteVisitFee(input.county?.trim() || existing.county)},
+      "feeOverrideReason" = ${input.feeOverrideReason?.trim() || existing.feeOverrideReason},
+      "paymentMethod" = ${input.paymentMethod?.trim() || existing.paymentMethod},
+      "paymentAmount" = ${nextPaymentStatus === "PAID" ? Number(input.paymentAmount ?? existing.paymentAmount ?? input.visitFee ?? existing.visitFee) : existing.paymentAmount},
+      "paymentPaidAt" = ${nextPaymentStatus === "PAID" ? (existing.paymentPaidAt ? new Date(existing.paymentPaidAt) : new Date()) : null},
+      "paymentRecordedById" = ${paymentChanged ? actor.id : existing.paymentRecordedById},
+      "paymentRecordedByName" = ${paymentChanged ? actor.name ?? actor.email ?? "Betech Staff" : existing.paymentRecordedByName},
+      "paymentVerificationStatus" = ${nextPaymentStatus === "PAID" ? "VERIFIED" : existing.paymentVerificationStatus},
+      "waiverReason" = ${input.waiverReason?.trim() || existing.waiverReason},
+      "waiverAuthorizedById" = ${nextPaymentStatus === "WAIVED" ? actor.id : existing.waiverAuthorizedById},
+      "waiverAuthorizedByName" = ${nextPaymentStatus === "WAIVED" ? actor.name ?? actor.email ?? "Betech Staff" : existing.waiverAuthorizedByName},
+      "quotationCreditStatus" = ${nextCreditStatus},
       "customerRequirements" = ${input.customerRequirements?.trim() || existing.customerRequirements},
       "appliancesToInspect" = ${input.appliancesToInspect?.trim() || existing.appliancesToInspect},
       "specialInstructions" = ${input.specialInstructions?.trim() || existing.specialInstructions},
@@ -930,11 +1152,21 @@ export async function updateSiteVisit(
     updated = forcedRows[0] ? serializeSiteVisit(forcedRows[0]) : updated;
   }
 
+  const changes: string[] = [];
+  if (nextStatus !== existing.status) changes.push(`Status ${existing.status} → ${nextStatus}`);
+  if (updated.scheduledAt !== existing.scheduledAt) changes.push(`Schedule ${updated.scheduledAt ? new Date(updated.scheduledAt).toLocaleString("en-KE") : "removed"}`);
+  if (updated.assignedTechnicianId !== existing.assignedTechnicianId) changes.push(`Technician ${existing.assignedTechnicianName || "Unassigned"} → ${updated.assignedTechnicianName || "Unassigned"}`);
+  if (updated.visitFee !== existing.visitFee) changes.push(`Visit fee KES ${existing.visitFee.toLocaleString("en-KE")} → KES ${updated.visitFee.toLocaleString("en-KE")}`);
+  if (nextPaymentStatus !== existing.paymentStatus) changes.push(`Payment ${nextPaymentStatus}${updated.paymentReference ? ` · Ref ${updated.paymentReference}` : ""}`);
+  if (nextOutcome !== existing.outcome && nextOutcome) changes.push(`Outcome ${nextOutcome.replace(/_/g, " ")}`);
+  if (updated.assessmentSummary !== existing.assessmentSummary && updated.assessmentSummary) changes.push("Assessment submitted");
+  if (!changes.length) changes.push("Visit information updated");
+
   await recordSiteVisitEvent({
     siteVisitId: updated.id,
     eventType: "SITE_VISIT_UPDATED",
     eventLabel: nextStatus !== existing.status ? `Status changed to ${nextStatus}` : "Site visit updated",
-    eventDetail: nextOutcome && nextOutcome !== existing.outcome ? `Outcome: ${nextOutcome.replace(/_/g, " ").toLowerCase()}` : null,
+    eventDetail: changes.join(" · "),
     actorUserId: actor.id,
     actorName: actor.name ?? actor.email ?? "Betech Staff",
     metadata: {
@@ -980,7 +1212,7 @@ export async function listCustomerSiteVisits(input: {
   if (normalizedEmails.length) {
     conditions.push(Prisma.sql`LOWER(COALESCE("customerEmail", '')) IN (${Prisma.join(normalizedEmails)})`);
   }
-  const take = Math.max(1, Math.min(20, Number(input.take ?? 5)));
+  const take = Math.max(1, Math.min(100, Number(input.take ?? 5)));
   const rows = await prisma.$queryRaw<SiteVisitRow[]>(Prisma.sql`
     SELECT ${SITE_VISIT_SELECT_SQL}
     FROM "SiteVisit"
@@ -989,4 +1221,166 @@ export async function listCustomerSiteVisits(input: {
     LIMIT ${take}
   `);
   return rows.map(serializeSiteVisit);
+}
+
+export function toCustomerSiteVisit(visit: SerializedSiteVisit) {
+  return {
+    id: visit.id,
+    visitRef: visit.visitRef,
+    quoteRef: visit.quoteRef,
+    projectType: visit.projectType,
+    visitReason: visit.visitReason,
+    status: visit.status,
+    preferredDate: visit.preferredDate,
+    preferredTimeLabel: visit.preferredTimeLabel,
+    scheduledAt: visit.scheduledAt,
+    county: visit.county,
+    town: visit.town,
+    location: visit.location,
+    mapUrl: visit.mapUrl,
+    landmark: visit.landmark,
+    assignedTechnicianName: visit.assignedTechnicianName,
+    assignedStaffName: visit.assignedStaffName,
+    visitFee: visit.visitFee,
+    paymentStatus: visit.paymentStatus,
+    paymentReference: visit.paymentReference,
+    paymentVerificationStatus: visit.paymentVerificationStatus,
+    quotationCreditStatus: visit.quotationCreditStatus,
+    outcome: visit.outcome,
+    rescheduleRequestedAt: visit.rescheduleRequestedAt,
+    rescheduleRequestedDate: visit.rescheduleRequestedDate,
+    rescheduleRequestedTimeLabel: visit.rescheduleRequestedTimeLabel,
+    cancellationRequestedAt: visit.cancellationRequestedAt,
+    createdAt: visit.createdAt,
+    updatedAt: visit.updatedAt,
+  };
+}
+
+export async function customerOwnsSiteVisit(input: {
+  visitId: string;
+  userId: string;
+  phoneVariants: string[];
+  normalizedEmails: string[];
+}) {
+  const visit = await getSiteVisitById(input.visitId);
+  if (!visit) return null;
+  if (visit.customerUserId === input.userId) return visit;
+  const phones = new Set(input.phoneVariants.map((value) => value.trim()).filter(Boolean));
+  if (phones.has(visit.customerPhone.trim())) return visit;
+  const emails = new Set(input.normalizedEmails.map((value) => value.trim().toLowerCase()).filter(Boolean));
+  return visit.customerEmail && emails.has(visit.customerEmail.trim().toLowerCase()) ? visit : null;
+}
+
+export async function recordCustomerSiteVisitAction(
+  visit: SerializedSiteVisit,
+  input: z.infer<typeof customerSiteVisitActionSchema>,
+  actor: { id: string; name: string | null; email: string | null },
+) {
+  await ensureSiteVisitsSchema();
+  if (visit.status === "CLOSED") throw new Error("Closed site visits can no longer be changed.");
+
+  if (input.action === "REQUEST_RESCHEDULE") {
+    if (visit.status === "VISITED") throw new Error("A completed visit cannot be rescheduled.");
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE "SiteVisit" SET
+        "rescheduleRequestedAt" = CURRENT_TIMESTAMP,
+        "rescheduleRequestedDate" = ${new Date(`${input.preferredDate}T00:00:00.000`)},
+        "rescheduleRequestedTimeLabel" = ${input.preferredTimeLabel},
+        "rescheduleReason" = ${input.reason?.trim() || null},
+        "updatedAt" = CURRENT_TIMESTAMP
+      WHERE "id" = ${visit.id}
+    `);
+    await recordSiteVisitEvent({
+      siteVisitId: visit.id,
+      eventType: "CUSTOMER_RESCHEDULE_REQUESTED",
+      eventLabel: "Customer requested reschedule",
+      eventDetail: `${input.preferredDate} · ${input.preferredTimeLabel}${input.reason ? ` · ${input.reason}` : ""}`,
+      actorUserId: actor.id,
+      actorName: actor.name ?? actor.email ?? "Customer",
+    });
+  } else if (input.action === "UPDATE_LOCATION") {
+    if (visit.status === "VISITED") throw new Error("Location cannot be changed after the visit is completed.");
+    const fee = getStandardSiteVisitFee(input.county) ?? visit.visitFee;
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE "SiteVisit" SET "county" = ${input.county}, "town" = ${input.town}, "location" = ${input.location},
+        "landmark" = ${input.landmark?.trim() || null}, "mapUrl" = ${input.mapUrl?.trim() || null},
+        "feeRegion" = ${getSiteVisitFeeRegion(input.county)}, "standardVisitFee" = ${fee},
+        "visitFee" = ${visit.paymentStatus === "UNPAID" ? fee : visit.visitFee}, "updatedAt" = CURRENT_TIMESTAMP
+      WHERE "id" = ${visit.id}
+    `);
+    await recordSiteVisitEvent({ siteVisitId: visit.id, eventType: "CUSTOMER_LOCATION_UPDATED", eventLabel: "Customer updated location", eventDetail: `${input.location}, ${input.town}, ${input.county}`, actorUserId: actor.id, actorName: actor.name ?? actor.email ?? "Customer" });
+  } else if (input.action === "REQUEST_CANCELLATION") {
+    await prisma.$executeRaw(Prisma.sql`UPDATE "SiteVisit" SET "cancellationRequestedAt" = CURRENT_TIMESTAMP, "cancellationReason" = ${input.reason}, "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${visit.id}`);
+    await recordSiteVisitEvent({ siteVisitId: visit.id, eventType: "CUSTOMER_CANCELLATION_REQUESTED", eventLabel: "Customer requested cancellation", eventDetail: input.reason, actorUserId: actor.id, actorName: actor.name ?? actor.email ?? "Customer" });
+  } else {
+    if (visit.paymentStatus === "PAID") throw new Error("This site visit fee is already paid.");
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE "SiteVisit" SET "paymentMethod" = ${input.paymentMethod}, "paymentReference" = ${input.paymentReference},
+        "paymentAmount" = ${visit.visitFee}, "paymentSubmittedAt" = CURRENT_TIMESTAMP,
+        "paymentVerificationStatus" = 'PENDING', "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${visit.id}
+    `);
+    await recordSiteVisitEvent({ siteVisitId: visit.id, eventType: "PAYMENT_SUBMITTED", eventLabel: "Payment submitted for verification", eventDetail: `${input.paymentMethod} · Ref ${input.paymentReference}`, actorUserId: actor.id, actorName: actor.name ?? actor.email ?? "Customer" });
+  }
+  return getSiteVisitById(visit.id);
+}
+
+export async function createQuotationDraftFromSiteVisit(
+  visit: SerializedSiteVisit,
+  actor: { id: string; name: string | null; email: string | null },
+) {
+  if (visit.quoteRequestId) return getQuoteRequestByRef(visit.quoteRef || "");
+  if (visit.status !== "VISITED" && visit.status !== "CLOSED") {
+    throw new Error("Complete the site visit assessment before creating a quotation draft.");
+  }
+  const quote = await createQuoteRequest({
+    name: visit.customerName,
+    phone: visit.customerPhone,
+    email: visit.customerEmail || undefined,
+    customerUserId: visit.customerUserId || undefined,
+    location: [visit.location, visit.town, visit.county].filter(Boolean).join(", "),
+    county: visit.county || undefined,
+    town: visit.town || undefined,
+    specificLocation: visit.location || undefined,
+    projectType: visit.projectType || "OTHER",
+    propertyType: visit.propertyType || undefined,
+    load: visit.appliancesToInspect || undefined,
+    preferredProducts: visit.recommendedItems || visit.recommendedSystem || undefined,
+    notes: [
+      `Site visit: ${visit.visitRef}`,
+      visit.customerRequirements ? `Customer requirements: ${visit.customerRequirements}` : null,
+      visit.assessmentSummary ? `Assessment: ${visit.assessmentSummary}` : null,
+      visit.recommendedSystem ? `Recommended system: ${visit.recommendedSystem}` : null,
+    ].filter(Boolean).join("\n"),
+    status: "PENDING",
+    source: "MANUAL",
+    assignedAttendantId: visit.assignedStaffId || actor.id,
+    metadata: { sourceLabel: "SITE_VISIT", siteVisitId: visit.id, siteVisitRef: visit.visitRef, siteVisitCreditAvailable: visit.quotationCreditStatus === "AVAILABLE" ? visit.visitFee : 0 },
+  });
+  if (!quote) throw new Error("Unable to create quotation draft.");
+  await prisma.$executeRaw(Prisma.sql`UPDATE "SiteVisit" SET "quoteRequestId" = ${quote.id}, "quoteRef" = ${quote.quoteRef}, "outcome" = 'QUOTATION_CREATED', "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${visit.id}`);
+  await recordSiteVisitEvent({ siteVisitId: visit.id, eventType: "QUOTATION_DRAFT_CREATED", eventLabel: "Quotation draft created", eventDetail: quote.quoteRef, actorUserId: actor.id, actorName: actor.name ?? actor.email ?? "Betech Staff", metadata: { quoteRequestId: quote.id, quoteRef: quote.quoteRef } });
+  await recordQuotationEvent({ quoteRequestId: quote.id, eventType: "SITE_VISIT_LINKED", eventLabel: "Site visit assessment linked", eventDetail: visit.visitRef, actorUserId: actor.id, actorName: actor.name ?? actor.email ?? "Betech Staff", metadata: { siteVisitId: visit.id, siteVisitRef: visit.visitRef } });
+  return quote;
+}
+
+export async function applySiteVisitCredit(
+  visit: SerializedSiteVisit,
+  actor: { id: string; name: string | null; email: string | null },
+) {
+  if (visit.paymentStatus !== "PAID" || visit.quotationCreditStatus !== "AVAILABLE") throw new Error("This visit has no available paid credit.");
+  if (!visit.quoteRequestId || !visit.quoteRef) throw new Error("Create and link a quotation before applying the credit.");
+  const quote = await getQuoteRequestByRef(visit.quoteRef);
+  if (!quote || !["APPROVED", "CONVERTED"].includes(quote.status)) throw new Error("Credit can only be applied after the quotation is approved or converted.");
+  const quotationData = quote.quotationData && typeof quote.quotationData === "object" ? quote.quotationData as Record<string, unknown> : {};
+  const currentTotal = Number(quotationData.total || 0);
+  const amount = Math.min(visit.paymentAmount || visit.visitFee, currentTotal || visit.visitFee);
+  const nextData = { ...quotationData, siteVisitCredit: { visitId: visit.id, visitRef: visit.visitRef, amount, label: "Less: Site Visit Fee Already Paid" }, totalBeforeSiteVisitCredit: currentTotal, total: Math.max(0, currentTotal - amount), balanceAmount: Math.max(0, Number(quotationData.balanceAmount ?? currentTotal) - amount) };
+  await prisma.$transaction(async (tx) => {
+    const claimed = await tx.$executeRaw(Prisma.sql`UPDATE "SiteVisit" SET "quotationCreditStatus" = 'APPLIED', "creditedQuotationId" = ${quote.id}, "creditedQuotationRef" = ${quote.quoteRef}, "creditedAmount" = ${amount}, "creditedAt" = CURRENT_TIMESTAMP, "creditAppliedById" = ${actor.id}, "creditAppliedByName" = ${actor.name ?? actor.email ?? "Betech Staff"}, "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${visit.id} AND "quotationCreditStatus" = 'AVAILABLE'`);
+    if (claimed !== 1) throw new Error("This Site Visit credit has already been used.");
+    await tx.$executeRaw(Prisma.sql`UPDATE "QuoteRequest" SET "quotationData" = ${nextData as Prisma.JsonObject}, "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${quote.id}`);
+  });
+  await recordSiteVisitEvent({ siteVisitId: visit.id, eventType: "SITE_VISIT_CREDIT_APPLIED", eventLabel: "Site Visit credit applied", eventDetail: `KES ${amount.toLocaleString("en-KE")} applied to ${quote.quoteRef}`, actorUserId: actor.id, actorName: actor.name ?? actor.email ?? "Betech Staff" });
+  await recordQuotationEvent({ quoteRequestId: quote.id, eventType: "SITE_VISIT_CREDIT_APPLIED", eventLabel: "Site Visit Fee Credit applied", eventDetail: `Less: Site Visit Fee Already Paid · KES ${amount.toLocaleString("en-KE")}`, actorUserId: actor.id, actorName: actor.name ?? actor.email ?? "Betech Staff", metadata: { siteVisitId: visit.id, amount } });
+  return getSiteVisitById(visit.id);
 }

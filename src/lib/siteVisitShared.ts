@@ -13,6 +13,15 @@ export type SiteVisitOutcome = (typeof SITE_VISIT_OUTCOMES)[number];
 export const SITE_VISIT_PAYMENT_STATUSES = ["UNPAID", "PAID", "WAIVED"] as const;
 export type SiteVisitPaymentStatus = (typeof SITE_VISIT_PAYMENT_STATUSES)[number];
 
+export const SITE_VISIT_SOURCES = ["STAFF", "CUSTOMER_REQUEST"] as const;
+export type SiteVisitSource = (typeof SITE_VISIT_SOURCES)[number];
+
+export const SITE_VISIT_CREDIT_STATUSES = ["NOT_ELIGIBLE", "AVAILABLE", "APPLIED"] as const;
+export type SiteVisitCreditStatus = (typeof SITE_VISIT_CREDIT_STATUSES)[number];
+
+export const SITE_VISIT_PAYMENT_VERIFICATION_STATUSES = ["NONE", "PENDING", "VERIFIED", "REJECTED"] as const;
+export type SiteVisitPaymentVerificationStatus = (typeof SITE_VISIT_PAYMENT_VERIFICATION_STATUSES)[number];
+
 export const SITE_VISIT_REASONS = [
   "LOAD_ASSESSMENT",
   "ROOF_INSPECTION",
@@ -60,6 +69,33 @@ export type SerializedSiteVisit = {
   visitFee: number;
   paymentStatus: SiteVisitPaymentStatus;
   paymentReference: string | null;
+  source: SiteVisitSource;
+  feeRegion: "NAIROBI" | "OUTSIDE_NAIROBI" | null;
+  standardVisitFee: number | null;
+  feeOverrideReason: string | null;
+  paymentMethod: string | null;
+  paymentAmount: number | null;
+  paymentSubmittedAt: string | null;
+  paymentPaidAt: string | null;
+  paymentRecordedById: string | null;
+  paymentRecordedByName: string | null;
+  paymentVerificationStatus: SiteVisitPaymentVerificationStatus;
+  waiverReason: string | null;
+  waiverAuthorizedById: string | null;
+  waiverAuthorizedByName: string | null;
+  quotationCreditStatus: SiteVisitCreditStatus;
+  creditedQuotationId: string | null;
+  creditedQuotationRef: string | null;
+  creditedAmount: number | null;
+  creditedAt: string | null;
+  creditAppliedById: string | null;
+  creditAppliedByName: string | null;
+  rescheduleRequestedAt: string | null;
+  rescheduleRequestedDate: string | null;
+  rescheduleRequestedTimeLabel: string | null;
+  rescheduleReason: string | null;
+  cancellationRequestedAt: string | null;
+  cancellationReason: string | null;
   customerRequirements: string | null;
   appliancesToInspect: string | null;
   specialInstructions: string | null;
@@ -80,6 +116,38 @@ export type SerializedSiteVisit = {
   createdAt: string;
   updatedAt: string;
 };
+
+export type CustomerSiteVisit = Pick<
+  SerializedSiteVisit,
+  | "id"
+  | "visitRef"
+  | "quoteRef"
+  | "projectType"
+  | "visitReason"
+  | "status"
+  | "preferredDate"
+  | "preferredTimeLabel"
+  | "scheduledAt"
+  | "county"
+  | "town"
+  | "location"
+  | "mapUrl"
+  | "landmark"
+  | "assignedTechnicianName"
+  | "assignedStaffName"
+  | "visitFee"
+  | "paymentStatus"
+  | "paymentReference"
+  | "paymentVerificationStatus"
+  | "quotationCreditStatus"
+  | "outcome"
+  | "rescheduleRequestedAt"
+  | "rescheduleRequestedDate"
+  | "rescheduleRequestedTimeLabel"
+  | "cancellationRequestedAt"
+  | "createdAt"
+  | "updatedAt"
+>;
 
 export type SerializedSiteVisitEvent = {
   id: string;

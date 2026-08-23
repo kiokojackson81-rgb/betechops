@@ -1,4 +1,4 @@
-import SiteVisitsAdminClient from "@/app/admin/quotation-center/site-visits/SiteVisitsAdminClient";
+import SiteVisitsWorkspaceClient from "@/app/admin/quotation-center/site-visits/SiteVisitsWorkspaceClient";
 import { getOrderedQuoteStaffUsers } from "@/lib/quoteRequests";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export default async function TechnicalSiteVisitsPage() {
         </p>
       </div>
 
-      <SiteVisitsAdminClient staffOptions={staffOptions} />
+      <SiteVisitsWorkspaceClient staffOptions={staffOptions} basePath="/technical/site-visits" />
     </div>
   );
 }

@@ -1,21 +1,20 @@
 import { NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import { auth } from "@/lib/auth";
-import { createSiteVisitAttachment, getSiteVisitById, updateSiteVisit } from "@/lib/siteVisits";
+import { createSiteVisitAttachment, getSiteVisitById } from "@/lib/siteVisits";
+import { canAccessSiteVisit, getSiteVisitAccessActor } from "@/lib/siteVisitAccess";
+import { isAllowedSiteVisitAttachment } from "@/lib/siteVisitPolicy";
 
 export const runtime = "nodejs";
-
-function isAdminRole(role: string | null | undefined) {
-  return role === "ADMIN" || role === "SUPERVISOR";
-}
 
 export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   const session = await auth().catch(() => null);
-  const user = session?.user as { id?: string; role?: string; name?: string | null; email?: string | null } | undefined;
-  if (!session || !isAdminRole(user?.role)) {
+  const user = session?.user as { id?: string; role?: string; name?: string | null; email?: string | null; attendantCategory?: string | null } | undefined;
+  const actor = await getSiteVisitAccessActor(user);
+  if (!session || !actor) {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
@@ -28,12 +27,15 @@ export async function POST(
   if (!visit) {
     return NextResponse.json({ ok: false, error: "Site visit not found." }, { status: 404 });
   }
+  if (!canAccessSiteVisit(actor, visit)) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
   const form = await request.formData();
   const file = form.get("file");
   if (!(file instanceof File)) {
     return NextResponse.json({ ok: false, error: "Attachment file is required." }, { status: 400 });
   }
+  const fileError = isAllowedSiteVisitAttachment(file);
+  if (fileError) return NextResponse.json({ ok: false, error: fileError }, { status: 400 });
 
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "-");
   const arrayBuffer = await file.arrayBuffer();
@@ -51,29 +53,14 @@ export async function POST(
     contentType: file.type || "application/octet-stream",
     fileSizeBytes: file.size,
   }, {
-    id: user?.id || "",
-    name: user?.name || null,
-    email: user?.email || null,
+    id: actor.id,
+    name: actor.name,
+    email: actor.email,
   });
 
   if (!attachment) {
     return NextResponse.json({ ok: false, error: "Failed to save attachment." }, { status: 500 });
   }
 
-  const actor = {
-    id: user?.id || "",
-    name: user?.name || null,
-    email: user?.email || null,
-  };
-
-  const updatedVisit =
-    visit.status === "PENDING" || visit.status === "SCHEDULED"
-      ? await updateSiteVisit(id, {
-        customerName: visit.customerName,
-        customerPhone: visit.customerPhone,
-        status: "VISITED",
-      }, actor)
-      : visit;
-
-  return NextResponse.json({ ok: true, attachment, visit: updatedVisit || visit });
+  return NextResponse.json({ ok: true, attachment, visit });
 }
