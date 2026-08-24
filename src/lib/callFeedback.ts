@@ -359,6 +359,7 @@ function buildFeedbackWhere(filters: {
   contactReason?: string | null;
   wantsContact?: boolean | null;
   lowRatingOnly?: boolean;
+  submitted?: boolean | null;
   startDate?: Date | null;
   endDate?: Date | null;
 }) {
@@ -368,6 +369,7 @@ function buildFeedbackWhere(filters: {
   if (filters.contactReason) where.serviceType = filters.contactReason;
   if (typeof filters.wantsContact === "boolean") where.wantsContact = filters.wantsContact;
   if (filters.lowRatingOnly) where.rating = { lte: 3 };
+  if (typeof filters.submitted === "boolean") where.submitted = filters.submitted;
   if (filters.startDate || filters.endDate) {
     where.createdAt = {};
     if (filters.startDate) where.createdAt.gte = filters.startDate;
@@ -384,6 +386,7 @@ export async function listCallFeedback(args: {
   contactReason?: string | null;
   wantsContact?: boolean | null;
   lowRatingOnly?: boolean;
+  submitted?: boolean | null;
   startDate?: Date | null;
   endDate?: Date | null;
   agentId?: string | null;

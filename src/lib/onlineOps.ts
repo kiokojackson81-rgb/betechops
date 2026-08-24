@@ -12,6 +12,7 @@ import {
   computeBrendahDirectCommission,
   computeOnlinePeriodCommission,
   resolveDirectCommissionMode,
+  splitMarketplaceCommission,
 } from "@/lib/onlineCommission";
 import { resolveOnlinePosOwnershipMode } from "@/lib/onlineCommission";
 import { summarizeMarketingReportsForPeriod } from "@/lib/marketingPeriodTotals";
@@ -772,6 +773,17 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
           .filter((line) => line.channel === "JUMIA" || line.channel === "KILIMALL")
           .reduce((sum, line) => sum + Number(line.commission ?? 0), 0)
       : calculateCumulativeCommission(Math.max(0, marketplaceSales)).commission;
+  const marketplaceCommissionSplit =
+    profit10Commission != null
+      ? {
+          jumiaCommission: Number(
+            profit10Commission.lines.find((line) => line.channel === "JUMIA")?.commission ?? 0,
+          ),
+          kilimallCommission: Number(
+            profit10Commission.lines.find((line) => line.channel === "KILIMALL")?.commission ?? 0,
+          ),
+        }
+      : splitMarketplaceCommission(payoutJumiaSales, payoutKilimallSales, marketplaceCommission);
   const supervisorBonus = isSupervisor ? computeSupervisorBonus(marketplaceSales) : 0;
 
   let directSalesCommission: number;
@@ -876,10 +888,8 @@ export async function getOnlineEarningsSummary(attendantId: string, opts?: { per
     marketplaceSales,
     directCommission: directSalesCommission,
     commissionDirect: directSalesCommission,
-    commissionMarketplaceJumia:
-      profit10Commission?.lines.find((line) => line.channel === "JUMIA")?.commission ?? 0,
-    commissionMarketplaceKilimall:
-      profit10Commission?.lines.find((line) => line.channel === "KILIMALL")?.commission ?? 0,
+    commissionMarketplaceJumia: marketplaceCommissionSplit.jumiaCommission,
+    commissionMarketplaceKilimall: marketplaceCommissionSplit.kilimallCommission,
     marketplaceCommission,
     supervisorBonus,
     returnsDeduction,

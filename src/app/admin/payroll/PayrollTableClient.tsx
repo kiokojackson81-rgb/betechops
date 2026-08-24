@@ -86,6 +86,62 @@ export default function PayrollTableClient({
   const [categoryFilter, setCategoryFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "INACTIVE">("ALL");
   const [search, setSearch] = useState("");
+  const [bulkSending, setBulkSending] = useState(false);
+  const [sendingByAttendant, setSendingByAttendant] = useState<Record<string, boolean>>({});
+  const [sendMessage, setSendMessage] = useState<string | null>(null);
+
+  async function handleSend(attendantId?: string) {
+    setSendMessage(null);
+    if (attendantId) {
+      setSendingByAttendant((current) => ({ ...current, [attendantId]: true }));
+    } else {
+      setBulkSending(true);
+    }
+
+    try {
+      const response = await fetch("/api/admin/payroll/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(attendantId ? { attendantId, periodKey } : { periodKey }),
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        result?: { attendantName?: string; channels?: Array<{ channel: string; status: string }> };
+        results?: Array<{ attendantName?: string; channels?: Array<{ channel: string; status: string }> }>;
+      };
+
+      if (!response.ok || payload.ok === false) {
+        throw new Error(payload.error || "Unable to send payroll notification");
+      }
+
+      if (attendantId && payload.result) {
+        const sentChannels = (payload.result.channels || [])
+          .filter((channel) => channel.status === "sent")
+          .map((channel) => channel.channel)
+          .join(", ");
+        setSendMessage(
+          sentChannels
+            ? `${payload.result.attendantName || "Attendant"} notification sent: ${sentChannels}`
+            : `${payload.result.attendantName || "Attendant"} notification processed.`,
+        );
+      } else {
+        const sentCount = (payload.results || []).filter((entry) =>
+          (entry.channels || []).some((channel) => channel.status === "sent"),
+        ).length;
+        setSendMessage(`Payroll notifications processed for ${payload.results?.length || 0} attendants. ${sentCount} had at least one successful channel.`);
+      }
+    } catch (error) {
+      setSendMessage(error instanceof Error ? error.message : "Unable to send payroll notification");
+    } finally {
+      if (attendantId) {
+        setSendingByAttendant((current) => ({ ...current, [attendantId]: false }));
+      } else {
+        setBulkSending(false);
+      }
+    }
+  }
 
   const availableCategories = useMemo(() => {
     const seen = new Set<string>(
@@ -171,6 +227,14 @@ export default function PayrollTableClient({
           </a>
           <div className="rounded-full border border-slate-700 bg-slate-900/40 px-3 py-1 text-slate-200">Marketing Ops highlight</div>
           <div className="rounded-full border border-rose-500/40 bg-rose-500/10 px-3 py-1 text-rose-200">Brendah focus</div>
+          <button
+            type="button"
+            onClick={() => void handleSend()}
+            disabled={bulkSending}
+            className="rounded-full border border-fuchsia-500/30 bg-fuchsia-500/10 px-3 py-1 text-fuchsia-100 transition hover:border-fuchsia-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {bulkSending ? "Sending payslips..." : "Send all payslips"}
+          </button>
           <a
             href="#performances"
             className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-emerald-200 transition hover:border-emerald-400 hover:text-emerald-100"
@@ -179,6 +243,11 @@ export default function PayrollTableClient({
           </a>
         </div>
       </div>
+      {sendMessage && (
+        <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-3 text-sm text-slate-200">
+          {sendMessage}
+        </div>
+      )}
 
       <Card className="divide-y divide-white/5 bg-slate-900/60 border-slate-800">
         <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-5">
@@ -438,6 +507,14 @@ export default function PayrollTableClient({
                         >
                           View
                         </Link>
+                        <button
+                          type="button"
+                          onClick={() => void handleSend(row.attendantId)}
+                          disabled={Boolean(sendingByAttendant[row.attendantId])}
+                          className="text-xs rounded-full border border-fuchsia-500/30 bg-fuchsia-500/10 px-3 py-1 text-fuchsia-100 transition hover:border-fuchsia-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {sendingByAttendant[row.attendantId] ? "Sending..." : "Send payslip"}
+                        </button>
                       </div>
                     </td>
                   </tr>

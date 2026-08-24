@@ -5,6 +5,7 @@ import {
   computeOnlinePeriodCommission,
   progressiveAmount,
   resolveOnlinePosOwnershipMode,
+  splitMarketplaceCommission,
 } from "@/lib/onlineCommission";
 
 describe("onlineCommission helpers", () => {
@@ -96,5 +97,55 @@ describe("onlineCommission helpers", () => {
 
     expect(result.totalCommission).toBe(39_000);
     expect(result.lines.find((l) => l.channel === "DIRECT")?.commission).toBe(39_000);
+  });
+
+  test("marketplace commission split preserves the payslip total", () => {
+    expect(splitMarketplaceCommission(1_200_000, 800_000, 25_000)).toEqual({
+      jumiaCommission: 15_000,
+      kilimallCommission: 10_000,
+    });
+    expect(splitMarketplaceCommission(2_000_000, 0, 25_000)).toEqual({
+      jumiaCommission: 25_000,
+      kilimallCommission: 0,
+    });
+  });
+
+  test("profit-share marketplace commission retains platform attribution", () => {
+    const result = computeOnlinePeriodCommission(
+      {
+        attendantId: "online-user",
+        periodStart: new Date("2026-07-25T00:00:00.000Z"),
+        periodEnd: new Date("2026-08-24T23:59:59.999Z"),
+        directSales: 0,
+        directProfit: 0,
+        jumiaSales: 1_200_000,
+        kilimallSales: 800_000,
+      },
+      { directCommissionMode: "PROFIT_10" },
+    );
+
+    expect(result.lines.find((line) => line.channel === "JUMIA")?.commission).toBe(15_000);
+    expect(result.lines.find((line) => line.channel === "KILIMALL")?.commission).toBe(10_000);
+    expect(result.totalCommission).toBe(25_000);
+  });
+
+  test("Benjamin payroll retains the 45K marketplace tier above 3M", () => {
+    const result = computeOnlinePeriodCommission(
+      {
+        attendantId: "benjamin",
+        periodStart: new Date("2026-07-25T00:00:00.000Z"),
+        periodEnd: new Date("2026-08-24T23:59:59.999Z"),
+        directSales: 22_000,
+        directProfit: 6_350,
+        jumiaSales: 3_044_274,
+        kilimallSales: 0,
+      },
+      { directCommissionMode: "PROFIT_10" },
+    );
+
+    expect(result.lines.find((line) => line.channel === "DIRECT")?.commission).toBe(635);
+    expect(result.lines.find((line) => line.channel === "JUMIA")?.commission).toBe(45_000);
+    expect(result.lines.find((line) => line.channel === "KILIMALL")?.commission).toBe(0);
+    expect(result.totalCommission).toBe(45_635);
   });
 });

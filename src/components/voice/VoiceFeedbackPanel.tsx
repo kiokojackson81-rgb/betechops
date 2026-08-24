@@ -143,6 +143,7 @@ export default function VoiceFeedbackPanel({ mode = "admin" }: { mode?: "admin" 
     contactReason: "all",
     wantsContact: "all",
     lowRatingOnly: false,
+    submitted: "all",
   });
 
   useEffect(() => {
@@ -158,6 +159,7 @@ export default function VoiceFeedbackPanel({ mode = "admin" }: { mode?: "admin" 
         if (filters.contactReason !== "all") params.set("contactReason", filters.contactReason);
         if (filters.wantsContact !== "all") params.set("wantsContact", filters.wantsContact);
         if (filters.lowRatingOnly) params.set("lowRatingOnly", "true");
+        if (filters.submitted !== "all") params.set("submitted", filters.submitted);
         const response = await fetch(`/api/admin/feedback?${params.toString()}`, { cache: "no-store" });
         const payload = await response.json().catch(() => null);
         if (!response.ok) throw new Error(String(payload?.error || "Unable to load feedback."));
@@ -206,22 +208,58 @@ export default function VoiceFeedbackPanel({ mode = "admin" }: { mode?: "admin" 
     }
   };
 
+  const hasActiveFilters =
+    filters.rating !== "all" ||
+    filters.contactReason !== "all" ||
+    filters.wantsContact !== "all" ||
+    filters.lowRatingOnly ||
+    filters.submitted !== "all";
+
+  const summaryCards = [
+    { label: "Average Rating", value: stats.averageRating ? stats.averageRating.toFixed(1) : "0.0" },
+    { label: "SMS Sent", value: String(stats.smsSentCount) },
+    { label: "Links Clicked", value: String(stats.clickedCount) },
+    {
+      label: "Responses",
+      value: String(stats.respondedCount),
+      onClick: () =>
+        setFilters((current) => ({
+          ...current,
+          submitted: current.submitted === "true" ? "all" : "true",
+        })),
+      active: filters.submitted === "true",
+      helper: filters.submitted === "true" ? "Showing submitted feedback" : "Click to view submitted feedback",
+    },
+    { label: "Click Rate", value: `${stats.clickRate}%` },
+    { label: "Response Rate", value: `${stats.responseRate}%` },
+  ];
+
   return (
     <section className="space-y-4">
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
-        {[
-          { label: "Average Rating", value: stats.averageRating ? stats.averageRating.toFixed(1) : "0.0" },
-          { label: "SMS Sent", value: String(stats.smsSentCount) },
-          { label: "Links Clicked", value: String(stats.clickedCount) },
-          { label: "Responses", value: String(stats.respondedCount) },
-          { label: "Click Rate", value: `${stats.clickRate}%` },
-          { label: "Response Rate", value: `${stats.responseRate}%` },
-        ].map((card) => (
-          <div key={card.label} className="rounded-xl border border-slate-800/90 bg-slate-950/85 px-3 py-3">
-            <div className="text-xs text-slate-500">{card.label}</div>
-            <div className="mt-1 text-2xl font-semibold text-white">{card.value}</div>
-          </div>
-        ))}
+        {summaryCards.map((card) =>
+          card.onClick ? (
+            <button
+              key={card.label}
+              type="button"
+              onClick={card.onClick}
+              className={`rounded-xl border px-3 py-3 text-left transition ${
+                card.active
+                  ? "border-cyan-400/40 bg-cyan-500/10 shadow-[0_0_0_1px_rgba(34,211,238,0.18)_inset]"
+                  : "border-slate-800/90 bg-slate-950/85 hover:border-cyan-500/30 hover:bg-cyan-500/5"
+              }`}
+            >
+              <div className="text-xs text-slate-500">{card.label}</div>
+              <div className="mt-1 text-2xl font-semibold text-white">{card.value}</div>
+              <div className="mt-1 text-[11px] text-slate-400">{card.helper}</div>
+            </button>
+          ) : (
+            <div key={card.label} className="rounded-xl border border-slate-800/90 bg-slate-950/85 px-3 py-3">
+              <div className="text-xs text-slate-500">{card.label}</div>
+              <div className="mt-1 text-2xl font-semibold text-white">{card.value}</div>
+            </div>
+          ),
+        )}
       </div>
 
       <div className="rounded-[24px] border border-slate-800/90 bg-slate-950/96 p-4">
@@ -275,6 +313,31 @@ export default function VoiceFeedbackPanel({ mode = "admin" }: { mode?: "admin" 
             </label>
           </div>
         </div>
+
+        {hasActiveFilters ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {filters.submitted === "true" ? (
+              <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-100">
+                Responses only
+              </span>
+            ) : null}
+            <button
+              type="button"
+              onClick={() =>
+                setFilters({
+                  rating: "all",
+                  contactReason: "all",
+                  wantsContact: "all",
+                  lowRatingOnly: false,
+                  submitted: "all",
+                })
+              }
+              className="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-slate-500 hover:text-white"
+            >
+              Clear filters
+            </button>
+          </div>
+        ) : null}
 
         {error ? <div className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">{error}</div> : null}
 

@@ -548,7 +548,7 @@ export async function summarizePosReceiptsForPeriod(period: {
     ),
   );
 
-  const supportProfitByReceipt = new Map<string, { profit: number; buyingTotal: number }>();
+  const supportProfitByReceipt = new Map<string, { profit: number; buyingTotal: number; sellingTotal: number }>();
   if (candidateReceiptNumbers.length > 0) {
     const supportRows = await prisma.supportSale.findMany({
       where: {
@@ -574,12 +574,14 @@ export async function summarizePosReceiptsForPeriod(period: {
           supportProfitByReceipt.set(canonical, {
             profit: selling - buying,
             buyingTotal: buying,
+            sellingTotal: selling,
           });
           continue;
         }
         supportProfitByReceipt.set(canonical, {
           profit: existing.profit + (selling - buying),
           buyingTotal: existing.buyingTotal + buying,
+          sellingTotal: existing.sellingTotal + selling,
         });
       }
     }
@@ -604,7 +606,11 @@ export async function summarizePosReceiptsForPeriod(period: {
       canonicalReceiptNumber(receipt.order?.orderNumber ?? undefined) ??
       canonicalReceiptNumber(receipt.receiptNumber ?? undefined) ??
       null;
-    const supportContext = canonicalOrderNumber ? supportProfitByReceipt.get(canonicalOrderNumber) : undefined;
+    const supportContextCandidate = canonicalOrderNumber ? supportProfitByReceipt.get(canonicalOrderNumber) : undefined;
+    const supportContext =
+      supportContextCandidate && Math.round(supportContextCandidate.sellingTotal) === Math.round(sales)
+        ? supportContextCandidate
+        : undefined;
     const profit =
       supportContext
         ? supportContext.profit - (Number((receipt?.data as any)?.agentSale?.commissionAmount ?? 0) || 0)

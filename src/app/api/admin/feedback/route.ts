@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
     const contactReason = url.searchParams.get("contactReason");
     const wantsContact = parseOptionalBoolean(url.searchParams.get("wantsContact"));
     const lowRatingOnly = url.searchParams.get("lowRatingOnly") === "true";
+    const submitted = parseOptionalBoolean(url.searchParams.get("submitted"));
     const startDate = parseDate(url.searchParams.get("startDate"), "start");
     const endDate = parseDate(url.searchParams.get("endDate"), "end");
 
@@ -44,6 +45,7 @@ export async function GET(req: NextRequest) {
       contactReason,
       wantsContact,
       lowRatingOnly,
+      submitted,
       startDate,
       endDate,
       agentId: ["ADMIN", "SUPERVISOR"].includes(role) ? null : userId,

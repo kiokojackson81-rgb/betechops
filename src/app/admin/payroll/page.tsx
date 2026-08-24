@@ -77,6 +77,14 @@ export default async function AdminPayrollPage({
             >
               Export all payslips
             </a>
+            <button
+              type="button"
+              disabled
+              className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-400 border border-fuchsia-500/20 bg-fuchsia-500/5"
+              title="Use the Send all payslips action inside the payroll table."
+            >
+              Payroll notifications
+            </button>
             <Link
               href={`/admin/payroll/openfloat?period=${encodeURIComponent(period.key)}`}
               className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-100 border border-sky-500/30 bg-sky-500/10 hover:bg-sky-500/20"

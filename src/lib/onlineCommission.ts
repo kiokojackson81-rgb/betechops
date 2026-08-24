@@ -65,7 +65,7 @@ export interface PeriodCommissionResult {
   totalCommission: Money;
 }
 
-function splitMarketplaceCommission(jumiaSales: Money, kilimallSales: Money, totalCommission: Money) {
+export function splitMarketplaceCommission(jumiaSales: Money, kilimallSales: Money, totalCommission: Money) {
   const totalSales = Math.max(0, jumiaSales) + Math.max(0, kilimallSales);
   if (totalCommission <= 0 || totalSales <= 0) {
     return { jumiaCommission: 0, kilimallCommission: 0 };

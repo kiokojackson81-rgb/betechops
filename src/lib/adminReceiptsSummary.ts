@@ -400,7 +400,7 @@ async function computePosOnlyReceiptSummary({
 
   const supportPendingByReceipt = new Map<string, { hasPendingItems: boolean }>();
   const supportBuyingByReceipt = new Map<string, { buyingTotal: number; recognizedAt: Date | null }>();
-  const supportProfitByReceipt = new Map<string, { buyingTotal: number; profit: number }>();
+  const supportProfitByReceipt = new Map<string, { buyingTotal: number; profit: number; sellingTotal: number }>();
   if (candidateReceiptNumbers.length > 0) {
     const [supportRows, supportSales] = await Promise.all([
       prisma.supportReceipt.findMany({
@@ -479,12 +479,14 @@ async function computePosOnlyReceiptSummary({
           supportProfitByReceipt.set(canonical, {
             buyingTotal: Number(sale.buyingPrice ?? 0),
             profit: Number(sale.sellingPrice ?? 0) - Number(sale.buyingPrice ?? 0),
+            sellingTotal: Number(sale.sellingPrice ?? 0),
           });
           continue;
         }
         supportProfitByReceipt.set(canonical, {
           buyingTotal: existing.buyingTotal + Number(sale.buyingPrice ?? 0),
           profit: existing.profit + (Number(sale.sellingPrice ?? 0) - Number(sale.buyingPrice ?? 0)),
+          sellingTotal: existing.sellingTotal + Number(sale.sellingPrice ?? 0),
         });
       }
     }
@@ -519,7 +521,11 @@ async function computePosOnlyReceiptSummary({
       null;
     const supportPending = canonicalOrderNumber ? supportPendingByReceipt.get(canonicalOrderNumber) : undefined;
     const supportBuying = canonicalOrderNumber ? supportBuyingByReceipt.get(canonicalOrderNumber) : undefined;
-    const supportProfit = canonicalOrderNumber ? supportProfitByReceipt.get(canonicalOrderNumber) : undefined;
+    const supportProfitCandidate = canonicalOrderNumber ? supportProfitByReceipt.get(canonicalOrderNumber) : undefined;
+    const supportProfit =
+      supportProfitCandidate && Math.round(supportProfitCandidate.sellingTotal) === Math.round(salesValue)
+        ? supportProfitCandidate
+        : undefined;
 
     const items = (receipt.order?.items ?? []).map((item: any) => {
       const costs = Array.isArray(item?.orderCosts) ? item.orderCosts : [];
@@ -938,6 +944,35 @@ export async function computeAdminReceiptSummary({
     return applySalesOnly(posReceipts as any[]);
   })();
 
+  // Marketing/support receipts mirror POS receipts for operational pricing. They
+  // must inherit the linked POS receipt's sales eligibility and canonical key;
+  // otherwise an incomplete project can enter totals through its ledger mirror,
+  // or receipt/order number variants can make the same sale appear twice.
+  const eligiblePosIds = new Set(
+    (posReceiptsFinal as any[])
+      .filter((receipt) => isDateInRange(getReceiptSalesRecognitionDate(receipt), start, end))
+      .map((receipt) => String(receipt.id)),
+  );
+  const posIdentityByVariant = new Map<string, { eligible: boolean; preferredKey: string }>();
+  for (const receipt of posReceipts as any[]) {
+    const orderKey = canonicalReceiptNumber(receipt.order?.orderNumber ?? undefined);
+    const receiptKey = canonicalReceiptNumber(receipt.receiptNumber ?? undefined);
+    const preferredKey = orderKey || receiptKey || buildReceiptKey(null, receipt.id);
+    const eligible = eligiblePosIds.has(String(receipt.id));
+    for (const variant of [orderKey, receiptKey].filter((value): value is string => Boolean(value))) {
+      const existing = posIdentityByVariant.get(variant);
+      posIdentityByVariant.set(variant, {
+        eligible: Boolean(existing?.eligible || eligible),
+        preferredKey: existing?.preferredKey || preferredKey,
+      });
+    }
+  }
+
+  const resolveLedgerIdentity = (receiptNumber?: string | null) => {
+    const variant = canonicalReceiptNumber(receiptNumber ?? undefined);
+    return variant ? posIdentityByVariant.get(variant) : undefined;
+  };
+
   // Best-effort cost lookup: ProductCost.latest per productId (used when orderCosts are missing).
   const productCostMap = new Map<string, number>();
   try {
@@ -967,41 +1002,49 @@ export async function computeAdminReceiptSummary({
     console.warn("[adminReceiptsSummary] failed to load ProductCost fallbacks", e instanceof Error ? e.message : String(e));
   }
 
-  const marketingRecords: ReceiptSummaryRecord[] = marketingReceipts.map((receipt) => ({
-    source: "marketing" as const,
-    id: receipt.id,
-    // Prefer receiptNumber, fall back to receiptKey (if present) before id.
-    key: buildReceiptKey((receipt as any).receiptNumber ?? (receipt as any).receiptKey ?? null, receipt.id),
-    receiptNumber: (receipt as any).receiptNumber ?? null,
-    paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
-    sellingTotal: Number(receipt.sellingTotal ?? 0),
-    items: (receipt.items ?? []).map((it: any) => ({ quantity: it?.quantity, buyingPrice: Number(it?.buyingPrice ?? it?.buyingPrice ?? 0) })),
-    buyingTotal: Number(receipt.buyingTotal ?? (receipt.data as any)?.buyingTotal ?? 0),
-    profit: (() => {
-      const p = (receipt as any).profit ?? (receipt as any).data?.profit;
-      if (typeof p === 'number' && Number.isFinite(p)) return Number(p);
-      if (typeof p === 'string' && p.trim() !== '' && !Number.isNaN(Number(p))) return Number(p);
-      return undefined;
-    })(),
-  }));
+  const marketingRecords: ReceiptSummaryRecord[] = marketingReceipts
+    .filter((receipt) => !salesOnly || resolveLedgerIdentity(receipt.receiptNumber)?.eligible !== false)
+    .map((receipt) => ({
+      source: "marketing" as const,
+      id: receipt.id,
+      // Prefer receiptNumber, fall back to receiptKey (if present) before id.
+      key:
+        resolveLedgerIdentity(receipt.receiptNumber)?.preferredKey ??
+        buildReceiptKey((receipt as any).receiptNumber ?? (receipt as any).receiptKey ?? null, receipt.id),
+      receiptNumber: (receipt as any).receiptNumber ?? null,
+      paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
+      sellingTotal: Number(receipt.sellingTotal ?? 0),
+      items: (receipt.items ?? []).map((it: any) => ({ quantity: it?.quantity, buyingPrice: Number(it?.buyingPrice ?? 0) })),
+      buyingTotal: Number(receipt.buyingTotal ?? (receipt as any).data?.buyingTotal ?? 0),
+      profit: (() => {
+        const p = (receipt as any).profit ?? (receipt as any).data?.profit;
+        if (typeof p === "number" && Number.isFinite(p)) return Number(p);
+        if (typeof p === "string" && p.trim() !== "" && !Number.isNaN(Number(p))) return Number(p);
+        return undefined;
+      })(),
+    }));
 
-  const supportRecords: ReceiptSummaryRecord[] = supportReceipts.map((receipt) => ({
-    source: "support" as const,
-    id: receipt.id,
-    // Prefer receiptNumber, fall back to receiptKey (if present) before id.
-    key: buildReceiptKey((receipt as any).receiptNumber ?? (receipt as any).receiptKey ?? null, receipt.id),
-    receiptNumber: (receipt as any).receiptNumber ?? null,
-    paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
-    sellingTotal: Number(receipt.sellingTotal ?? 0),
-    items: (receipt.items ?? []).map((it: any) => ({ quantity: it?.quantity, buyingPrice: Number(it?.buyingPrice ?? it?.buyingPrice ?? 0) })),
-    buyingTotal: Number(receipt.buyingTotal ?? (receipt.data as any)?.buyingTotal ?? 0),
-    profit: (() => {
-      const p = (receipt as any).profit ?? (receipt as any).data?.profit;
-      if (typeof p === 'number' && Number.isFinite(p)) return Number(p);
-      if (typeof p === 'string' && p.trim() !== '' && !Number.isNaN(Number(p))) return Number(p);
-      return undefined;
-    })(),
-  }));
+  const supportRecords: ReceiptSummaryRecord[] = supportReceipts
+    .filter((receipt) => !salesOnly || resolveLedgerIdentity(receipt.receiptNumber)?.eligible !== false)
+    .map((receipt) => ({
+      source: "support" as const,
+      id: receipt.id,
+      // Prefer receiptNumber, fall back to receiptKey (if present) before id.
+      key:
+        resolveLedgerIdentity(receipt.receiptNumber)?.preferredKey ??
+        buildReceiptKey((receipt as any).receiptNumber ?? (receipt as any).receiptKey ?? null, receipt.id),
+      receiptNumber: (receipt as any).receiptNumber ?? null,
+      paymentMethod: normalizePaymentMethod(receipt.paymentMethod) ?? null,
+      sellingTotal: Number(receipt.sellingTotal ?? 0),
+      items: (receipt.items ?? []).map((it: any) => ({ quantity: it?.quantity, buyingPrice: Number(it?.buyingPrice ?? 0) })),
+      buyingTotal: Number(receipt.buyingTotal ?? (receipt as any).data?.buyingTotal ?? 0),
+      profit: (() => {
+        const p = (receipt as any).profit ?? (receipt as any).data?.profit;
+        if (typeof p === "number" && Number.isFinite(p)) return Number(p);
+        if (typeof p === "string" && p.trim() !== "" && !Number.isNaN(Number(p))) return Number(p);
+        return undefined;
+      })(),
+    }));
 
   const posRecords: ReceiptSummaryRecord[] = posReceiptsFinal
     .filter((receipt) => isDateInRange(getReceiptSalesRecognitionDate(receipt), start, end))
