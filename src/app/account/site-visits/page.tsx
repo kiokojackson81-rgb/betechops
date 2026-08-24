@@ -8,8 +8,19 @@ export const metadata: Metadata = buildShopMetadata({
   title: "Site Visits",
   description: "Review scheduled Betech Solar site visits.",
 });
-export default async function AccountSiteVisitsPage() {
+export default async function AccountSiteVisitsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ new?: string }>;
+}) {
+  const query = await searchParams;
   const { identity, profile } = await getCustomerAccountContext();
   const visits = await listCustomerSiteVisits({ ...identity, take: 50 });
-  return <CustomerSiteVisitsClient initialVisits={visits.map(toCustomerSiteVisit)} profile={profile} />;
+  return (
+    <CustomerSiteVisitsClient
+      initialVisits={visits.map(toCustomerSiteVisit)}
+      profile={profile}
+      initialOpenBooking={query.new === "1"}
+    />
+  );
 }

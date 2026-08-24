@@ -10,7 +10,8 @@ export const SHOP_LIPA_POLE_POLE_HREF = "/lipa-pole-pole";
 export const SHOP_WARRANTY_SUPPORT_HREF = "/warranty-support";
 export const SHOP_DELIVERY_PAYMENT_HREF = "/delivery-installation-payment";
 export const SHOP_SITE_VISIT_HREF = "/site-visit";
-export const SHOP_SITE_VISIT_BOOKING_HREF = "/login/phone?callbackUrl=/account/site-visits";
+export const SHOP_SITE_VISIT_BOOKING_HREF =
+  "/login/phone?callbackUrl=%2Faccount%2Fsite-visits%3Fnew%3D1";
 export const SHOP_ORDER_SUCCESS_HREF = "/order-success";
 export const SHOP_QUOTE_SUCCESS_HREF = "/quote-success";
 

@@ -63,12 +63,14 @@ const displayDate = (value?: string | null) =>
 export default function CustomerSiteVisitsClient({
   initialVisits,
   profile,
+  initialOpenBooking = false,
 }: {
   initialVisits: CustomerSiteVisit[];
   profile: Profile;
+  initialOpenBooking?: boolean;
 }) {
   const [visits, setVisits] = useState(initialVisits);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initialOpenBooking);
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormState>(() => emptyForm(profile));
   const [busy, setBusy] = useState(false);
