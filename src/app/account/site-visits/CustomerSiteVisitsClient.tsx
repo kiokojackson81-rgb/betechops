@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { CalendarCheck2, CreditCard, MapPin, Plus, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import {
   getServiceZone,
   getTownsForCounty,
@@ -69,6 +70,7 @@ export default function CustomerSiteVisitsClient({
   profile: Profile;
   initialOpenBooking?: boolean;
 }) {
+  const router = useRouter();
   const [visits, setVisits] = useState(initialVisits);
   const [open, setOpen] = useState(initialOpenBooking);
   const [step, setStep] = useState(1);
@@ -84,6 +86,18 @@ export default function CustomerSiteVisitsClient({
   const update = (key: keyof FormState, value: string) =>
     setForm((current) => ({ ...current, [key]: value }));
 
+  function openBooking() {
+    setMessage("");
+    setOpen(true);
+  }
+
+  function closeBooking() {
+    setOpen(false);
+    if (initialOpenBooking) {
+      router.replace("/account/site-visits", { scroll: false });
+    }
+  }
+
   async function createVisit() {
     setBusy(true);
     setMessage("");
@@ -94,12 +108,16 @@ export default function CustomerSiteVisitsClient({
     });
     const payload = await response.json().catch(() => ({}));
     setBusy(false);
-    if (!response.ok)
+    if (!response.ok || !payload.visit)
       return setMessage(payload.error || "Unable to request the visit.");
     setVisits((current) => [payload.visit, ...current]);
     setOpen(false);
     setStep(1);
     setForm(emptyForm(profile));
+    setMessage(
+      `${payload.visit.visitRef} was submitted successfully. Complete payment to confirm scheduling.`,
+    );
+    router.replace("/account/site-visits", { scroll: false });
   }
 
   async function action(id: string, body: Record<string, string>) {
@@ -160,7 +178,7 @@ export default function CustomerSiteVisitsClient({
           </div>
         </div>
         <button
-          onClick={() => setOpen(true)}
+          onClick={openBooking}
           className="inline-flex min-h-12 items-center gap-2 rounded-full bg-[#8f0000] px-5 font-black text-white"
         >
           <Plus className="h-5 w-5" /> Request site visit
@@ -312,7 +330,7 @@ export default function CustomerSiteVisitsClient({
                 <h2 className="text-xl font-black">Request a site visit</h2>
               </div>
               <button
-                onClick={() => setOpen(false)}
+                onClick={closeBooking}
                 aria-label="Close"
                 className="rounded-full border p-3"
               >
@@ -320,6 +338,14 @@ export default function CustomerSiteVisitsClient({
               </button>
             </header>
             <div className="p-5 sm:p-7">
+              {message ? (
+                <div
+                  role="alert"
+                  className="mb-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-800"
+                >
+                  {message}
+                </div>
+              ) : null}
               {step === 1 ? (
                 <div className="grid gap-4">
                   <Field label="Project type">
