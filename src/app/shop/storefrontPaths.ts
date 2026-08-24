@@ -31,6 +31,11 @@ export function getShopLipaPolePoleProductHref(slug: string, opsProductId?: stri
   return `${href}${href.includes("?") ? "&" : "?"}lpp=1`;
 }
 
+export function getShopSiteVisitProductHref(slug: string, opsProductId?: string | null) {
+  const href = getShopProductHref(slug, opsProductId);
+  return `${href}${href.includes("?") ? "&" : "?"}siteVisit=1`;
+}
+
 export function getShopRequestQuoteHref(product?: string) {
   if (!product) return SHOP_REQUEST_QUOTE_HREF;
   return `${SHOP_REQUEST_QUOTE_HREF}?product=${encodeURIComponent(product)}`;

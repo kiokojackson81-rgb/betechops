@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { BadgeCheck, CreditCard, Headphones, MapPin, Truck } from "lucide-react";
 import ShopAnalyticsTracker from "@/app/shop/_components/ShopAnalyticsTracker";
 import FloatingWhatsApp from "@/app/shop/_components/FloatingWhatsApp";
@@ -217,6 +217,9 @@ export default async function ShopProductDetailPage({
     siteVisit: "1",
   }).toString()}`;
   const siteVisitLoginHref = `/login/phone?callbackUrl=${encodeURIComponent(siteVisitReturnHref)}`;
+  if (resolvedSearchParams.siteVisit === "1" && !sessionUser?.id) {
+    redirect(siteVisitLoginHref);
+  }
   const supportItems = [
     {
       icon: <Truck className="h-4 w-4" />,

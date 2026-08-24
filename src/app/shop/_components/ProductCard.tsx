@@ -2,14 +2,18 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { MessageCircle, WalletCards } from "lucide-react";
+import { CalendarCheck2, MessageCircle, WalletCards } from "lucide-react";
 import type { ShopProduct } from "@/app/shop/shopData";
 import AddToCartButton from "@/app/shop/_components/AddToCartButton";
 import ShopProductVisual from "@/app/shop/_components/ShopProductVisual";
 import TrackedWhatsAppLink from "@/app/shop/_components/TrackedWhatsAppLink";
 import { formatCurrency } from "@/app/shop/_components/shopStyles";
 import { getProductAvailabilityBadge } from "@/app/shop/shopAvailability";
-import { getShopLipaPolePoleProductHref, getShopProductHref } from "@/app/shop/storefrontPaths";
+import {
+  getShopLipaPolePoleProductHref,
+  getShopProductHref,
+  getShopSiteVisitProductHref,
+} from "@/app/shop/storefrontPaths";
 
 const WHATSAPP_PHONE = "254722151083";
 
@@ -74,8 +78,20 @@ export default function ProductCard({ product }: ProductCardProps) {
           </div>
         </div>
 
-        <div className="mt-2 inline-flex w-fit rounded-full border border-[#0f9d58]/14 bg-[#effcf4] px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-[#0f9d58]">
-          {stockLabelMap[product.stockStatus]}
+        <div className={`mt-2 ${product.price > 100_000 ? "grid grid-cols-2 gap-1.5" : "flex"}`}>
+          <div className="inline-flex min-h-7 items-center justify-center rounded-full border border-[#0f9d58]/14 bg-[#effcf4] px-2.5 py-1 text-center text-[9px] font-black uppercase tracking-[0.08em] text-[#0f9d58] sm:tracking-[0.12em]">
+            {stockLabelMap[product.stockStatus]}
+          </div>
+          {product.price > 100_000 ? (
+            <Link
+              href={getShopSiteVisitProductHref(product.slug, product.opsProductId)}
+              className="inline-flex min-h-7 items-center justify-center gap-1 rounded-full border border-amber-500/35 bg-amber-50 px-2 py-1 text-center text-[8px] font-black uppercase tracking-[0.04em] text-[#7a0000] transition hover:border-amber-500/60 hover:bg-amber-100 sm:text-[9px] sm:tracking-[0.06em]"
+            >
+              <CalendarCheck2 className="hidden h-3 w-3 shrink-0 sm:block" />
+              <span className="sm:hidden">Site Visit</span>
+              <span className="hidden sm:inline">Request Site Visit</span>
+            </Link>
+          ) : null}
         </div>
         <div className="mt-1.5 inline-flex w-fit rounded-full border border-[#7a0000]/10 bg-[#fcfaf7] px-2.5 py-1 text-[9px] font-black tracking-[0.08em] text-[#7a0000]">
           {availabilityBadge}
