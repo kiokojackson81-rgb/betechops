@@ -26,6 +26,10 @@ type ShopInformationPageProps = {
   supportTitle: string;
   supportCopy: string;
   whatsappMessage: string;
+  primaryAction?: {
+    label: string;
+    href: string;
+  };
 };
 
 export default function ShopInformationPage({
@@ -38,6 +42,7 @@ export default function ShopInformationPage({
   supportTitle,
   supportCopy,
   whatsappMessage,
+  primaryAction,
 }: ShopInformationPageProps) {
   const whatsappHref = `https://wa.me/254722151083?text=${encodeURIComponent(whatsappMessage)}`;
 
@@ -55,6 +60,15 @@ export default function ShopInformationPage({
                 </div>
                 <h1 className="mt-5 max-w-3xl text-3xl font-black tracking-tight sm:text-4xl lg:text-5xl">{title}</h1>
                 <p className="mt-4 max-w-3xl text-sm leading-7 text-white/78 sm:text-base sm:leading-8">{introduction}</p>
+                {primaryAction ? (
+                  <Link
+                    href={primaryAction.href}
+                    className="mt-6 inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[#f2b20f] px-5 py-3 text-sm font-black text-slate-950 shadow-[0_14px_30px_rgba(242,178,15,0.22)] transition hover:-translate-y-0.5 hover:bg-[#ffd15a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                  >
+                    {primaryAction.label}
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                ) : null}
               </div>
               <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
                 {highlights.map((highlight) => (
@@ -120,10 +134,21 @@ export default function ShopInformationPage({
                   <h2 className="text-xl font-black text-slate-950 sm:text-2xl">{supportTitle}</h2>
                   <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-600">{supportCopy}</p>
                 </div>
-                <Link href={whatsappHref} target="_blank" rel="noreferrer" className={`${shopStyles.whatsappButton} mt-5 shrink-0 sm:mt-0`}>
-                  <MessageCircle className="h-4 w-4" />
-                  Contact customer service
-                </Link>
+                <div className="mt-5 flex shrink-0 flex-col gap-2 sm:mt-0 sm:items-end">
+                  {primaryAction ? (
+                    <Link
+                      href={primaryAction.href}
+                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-[#8f0000] px-5 py-3 text-sm font-black text-white transition hover:bg-[#650000] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2b20f]"
+                    >
+                      {primaryAction.label}
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  ) : null}
+                  <Link href={whatsappHref} target="_blank" rel="noreferrer" className={`${shopStyles.whatsappButton} shrink-0`}>
+                    <MessageCircle className="h-4 w-4" />
+                    Contact customer service
+                  </Link>
+                </div>
               </section>
             </div>
           </div>

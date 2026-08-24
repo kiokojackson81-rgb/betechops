@@ -5,6 +5,7 @@ import {
   FolderOpen,
   Globe2,
   Mail,
+  MapPinned,
   MapPin,
   MessageCircle,
   Phone,
@@ -36,6 +37,7 @@ const footerIcons = {
   external: ArrowUpRight,
   location: MapPin,
   complaint: MessageSquareWarning,
+  siteVisit: MapPinned,
 } as const;
 
 export default function ShopFooter() {
