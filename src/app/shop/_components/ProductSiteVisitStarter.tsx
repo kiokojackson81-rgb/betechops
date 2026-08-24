@@ -330,13 +330,13 @@ export default function ProductSiteVisitStarter({
       </button>
       {open ? (
         <div
-          className="fixed inset-0 z-[120] flex items-end justify-center bg-slate-950/70 p-0 backdrop-blur-sm sm:items-center sm:p-5"
+          className="fixed inset-0 z-[1000] flex items-stretch justify-center bg-slate-950/70 p-0 backdrop-blur-sm sm:items-center sm:p-4"
           role="dialog"
           aria-modal="true"
           aria-label="Book product site visit"
         >
-          <div className="flex max-h-[96dvh] w-full max-w-5xl flex-col overflow-hidden rounded-t-[28px] bg-[#fffdf9] shadow-2xl sm:max-h-[92dvh] sm:rounded-[32px]">
-            <header className="flex items-start justify-between gap-4 border-b border-[#7a0000]/10 px-5 py-4 sm:px-7">
+          <div className="flex h-[100dvh] w-full max-w-5xl flex-col overflow-hidden bg-[#fffdf9] shadow-2xl sm:h-[calc(100dvh-2rem)] sm:max-h-[900px] sm:rounded-[32px]">
+            <header className="flex shrink-0 items-start justify-between gap-4 border-b border-[#7a0000]/10 bg-white px-5 py-4 sm:px-7">
               <div>
                 <div className="text-[11px] font-black uppercase tracking-[0.2em] text-[#7a0000]">
                   Product-linked site visit
@@ -354,7 +354,7 @@ export default function ProductSiteVisitStarter({
                 <X className="h-5 w-5" />
               </button>
             </header>
-            <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[0.36fr_0.64fr] lg:overflow-hidden">
+            <div className="site-visit-scroll grid min-h-0 flex-1 overflow-y-auto overscroll-contain lg:grid-cols-[0.36fr_0.64fr] lg:overflow-hidden">
               <aside className="border-b border-[#7a0000]/10 bg-[linear-gradient(150deg,#fff5df,#fffdf8)] p-5 lg:overflow-y-auto lg:border-b-0 lg:border-r lg:p-7">
                 <div className="rounded-[24px] border border-amber-300/40 bg-white p-4">
                   <div className="text-xs font-black uppercase tracking-[0.14em] text-[#7a0000]">
@@ -387,7 +387,7 @@ export default function ProductSiteVisitStarter({
                   ))}
                 </div>
               </aside>
-              <main className="min-h-[32rem] p-5 sm:p-7 lg:overflow-y-auto">
+              <main className="site-visit-scroll min-h-0 p-5 pb-0 sm:p-7 sm:pb-0 lg:overflow-y-auto lg:overscroll-contain">
                 {createdVisit ? (
                   <div className="mx-auto max-w-2xl py-4">
                     <div className="grid h-14 w-14 place-items-center rounded-full bg-emerald-100 text-emerald-700">
@@ -748,7 +748,7 @@ export default function ProductSiteVisitStarter({
                         {error}
                       </p>
                     ) : null}
-                    <footer className="mt-7 flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:justify-between">
+                    <footer className="sticky bottom-0 z-20 -mx-5 mt-7 flex flex-col-reverse gap-3 border-t border-slate-200 bg-[#fffdf9]/95 px-5 py-4 shadow-[0_-14px_30px_rgba(15,23,42,0.08)] backdrop-blur sm:-mx-7 sm:flex-row sm:justify-between sm:px-7">
                       <button
                         type="button"
                         onClick={() =>
@@ -801,6 +801,22 @@ export default function ProductSiteVisitStarter({
             }
             .input:focus {
               border-color: #7a0000;
+            }
+            .site-visit-scroll {
+              scrollbar-color: #8f0000 #f5e9dc;
+              scrollbar-width: auto;
+              scrollbar-gutter: stable;
+            }
+            .site-visit-scroll::-webkit-scrollbar {
+              width: 12px;
+            }
+            .site-visit-scroll::-webkit-scrollbar-track {
+              background: #f5e9dc;
+            }
+            .site-visit-scroll::-webkit-scrollbar-thumb {
+              border: 3px solid #f5e9dc;
+              border-radius: 999px;
+              background: #8f0000;
             }
           `}</style>
         </div>
