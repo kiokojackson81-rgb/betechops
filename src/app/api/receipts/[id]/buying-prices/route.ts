@@ -29,10 +29,19 @@ export async function PATCH(request: NextRequest, context: ParamsContext) {
 
   const { id } = await resolveParams(context);
   const actorId = (await getActorId()) ?? "system";
-  const body = (await request.json().catch(() => null)) as { items?: BuyingPriceInput[] } | null;
+  const body = (await request.json().catch(() => null)) as {
+    mode?: unknown;
+    buyingTotal?: unknown;
+    items?: BuyingPriceInput[];
+  } | null;
+  const mode = String(body?.mode ?? "ITEMS").trim().toUpperCase() === "TOTAL" ? "TOTAL" : "ITEMS";
+  const requestedBuyingTotal = Number(body?.buyingTotal);
   const requestedItems = Array.isArray(body?.items) ? body.items : [];
 
-  if (!requestedItems.length || requestedItems.length > 100) {
+  if (mode === "TOTAL" && (!Number.isFinite(requestedBuyingTotal) || requestedBuyingTotal <= 0)) {
+    return NextResponse.json({ error: "Provide a valid total buying price greater than zero" }, { status: 400 });
+  }
+  if (mode === "ITEMS" && (!requestedItems.length || requestedItems.length > 100)) {
     return NextResponse.json({ error: "Provide between 1 and 100 receipt items" }, { status: 400 });
   }
 
@@ -44,7 +53,7 @@ export async function PATCH(request: NextRequest, context: ParamsContext) {
     (item) => !item.orderItemId || !Number.isFinite(item.buyingPrice) || item.buyingPrice < 0,
   );
   const duplicateIds = new Set(updates.map((item) => item.orderItemId)).size !== updates.length;
-  if (invalid || duplicateIds) {
+  if (mode === "ITEMS" && (invalid || duplicateIds)) {
     return NextResponse.json({ error: "Each item needs a unique valid buying price" }, { status: 400 });
   }
 
@@ -70,7 +79,7 @@ export async function PATCH(request: NextRequest, context: ParamsContext) {
 
   const orderItems = receipt.order.items ?? [];
   const orderItemIds = new Set(orderItems.map((item) => item.id));
-  if (updates.some((item) => !orderItemIds.has(item.orderItemId))) {
+  if (mode === "ITEMS" && updates.some((item) => !orderItemIds.has(item.orderItemId))) {
     return NextResponse.json({ error: "One or more items do not belong to this receipt" }, { status: 400 });
   }
 
@@ -95,7 +104,99 @@ export async function PATCH(request: NextRequest, context: ParamsContext) {
   }
   const singleItemCost = orderItems.length === 1 ? resolvedCosts.get(orderItems[0].id) ?? 0 : null;
 
+  if (mode === "TOTAL") {
+    const buyingTotal = Math.round(requestedBuyingTotal);
+    const previousTotals =
+      receipt.totals && typeof receipt.totals === "object" && !Array.isArray(receipt.totals)
+        ? (receipt.totals as Record<string, unknown>)
+        : {};
+    const previousData =
+      receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
+        ? (receipt.data as Record<string, unknown>)
+        : {};
+    const total = Number(previousTotals.total ?? receipt.order.totalAmount ?? 0);
+    const commission = Math.max(0, Number(previousTotals.posCommission ?? 0));
+    const profit = total - buyingTotal - commission;
+    const nextTotals = {
+      ...previousTotals,
+      buyingTotal,
+      buyingPriceMode: "TOTAL",
+      profit,
+    };
+    const nextData = {
+      ...previousData,
+      buyingPriceMode: "TOTAL",
+      buyingPriceUpdatedAt: new Date().toISOString(),
+      buyingPriceUpdatedById: actorId,
+      totals: nextTotals,
+    };
+
+    await prisma.$transaction(async (tx) => {
+      await tx.receipt.update({
+        where: { id },
+        data: { totals: nextTotals, data: nextData },
+      });
+
+      if (receiptKeys.length) {
+        const supportReceipts = await tx.supportReceipt.findMany({
+          where: {
+            OR: [
+              ...receiptKeys.map((value) => ({ receiptNumber: value })),
+              ...receiptKeys.map((value) => ({ receiptKey: value })),
+            ],
+          },
+        });
+        for (const supportReceipt of supportReceipts) {
+          await tx.supportReceipt.update({ where: { id: supportReceipt.id }, data: { buyingTotal } });
+          if (supportReceipt.dailyEntryId) await recalcSupportEntry(tx, supportReceipt.dailyEntryId);
+        }
+
+        const marketingReceipts = await tx.marketingReceipt.findMany({
+          where: {
+            OR: [
+              ...receiptKeys.map((value) => ({ receiptNumber: value })),
+              ...receiptKeys.map((value) => ({ receiptKey: value })),
+            ],
+          },
+        });
+        for (const marketingReceipt of marketingReceipts) {
+          await tx.marketingReceipt.update({ where: { id: marketingReceipt.id }, data: { buyingTotal } });
+          if (marketingReceipt.dailyEntryId) await recalcMarketingEntry(tx, marketingReceipt.dailyEntryId);
+        }
+      }
+
+      await tx.actionLog.create({
+        data: {
+          actorId,
+          entity: "Receipt",
+          entityId: id,
+          action: "UPDATE_TOTAL_BUYING_PRICE",
+          before: { buyingTotal: Number(previousTotals.buyingTotal ?? 0), mode: previousTotals.buyingPriceMode ?? null },
+          after: { buyingTotal, mode: "TOTAL" },
+        },
+      });
+    });
+
+    return NextResponse.json({ ok: true, mode, updatedItems: 0, buyingTotal, profit });
+  }
+
   await prisma.$transaction(async (tx) => {
+    const previousTotals =
+      receipt.totals && typeof receipt.totals === "object" && !Array.isArray(receipt.totals)
+        ? (receipt.totals as Record<string, unknown>)
+        : {};
+    const previousData =
+      receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
+        ? (receipt.data as Record<string, unknown>)
+        : {};
+    const nextTotals = { ...previousTotals, buyingPriceMode: "ITEMS" };
+    await tx.receipt.update({
+      where: { id },
+      data: {
+        totals: nextTotals,
+        data: { ...previousData, buyingPriceMode: "ITEMS", totals: nextTotals },
+      },
+    });
     for (const item of updates) {
       await tx.orderCost.create({
         data: {

@@ -439,6 +439,8 @@ export default function ReceiptsAdminClient({
   const [recalculatingReceiptId, setRecalculatingReceiptId] = useState<string | null>(null);
   const [buyingPriceEditorOpen, setBuyingPriceEditorOpen] = useState(false);
   const [buyingPriceDraft, setBuyingPriceDraft] = useState<Record<string, string>>({});
+  const [buyingPriceMode, setBuyingPriceMode] = useState<"ITEMS" | "TOTAL">("ITEMS");
+  const [buyingTotalDraft, setBuyingTotalDraft] = useState("");
   const [buyingPriceSaving, setBuyingPriceSaving] = useState(false);
   const [commissionEditorOpen, setCommissionEditorOpen] = useState(false);
   const [commissionInput, setCommissionInput] = useState("");
@@ -1430,6 +1432,27 @@ export default function ReceiptsAdminClient({
     const hasCompleteCosts = allItemCostsKnown && !supportHasUnknown;
     const hasAuthoritativeBuyingTotal =
       receiptBuyingTotal !== null || supportReceiptBuyingTotal !== null;
+    const authoritativeBuyingTotal = receiptBuyingTotal ?? supportReceiptBuyingTotal;
+    const aggregateSellingTotal = Number(
+      detail?.receipt?.totals?.total ?? detail?.receipt?.order?.totalAmount ?? 0,
+    );
+    const commissionTotal = Number(detail?.posCommissionTotal ?? 0);
+    const recognized =
+      authoritativeBuyingTotal !== null
+        ? {
+            recognizedSellingTotal: aggregateSellingTotal,
+            recognizedProfit: aggregateSellingTotal - authoritativeBuyingTotal - commissionTotal,
+          }
+        : computeRecognizedReceiptProfit({
+            items: itemsWithCost.map((item) => ({
+              quantity: item.quantity,
+              sellingPrice: item.sellingPrice,
+              buyingPrice: item.buyingPrice,
+            })),
+            aggregateSellingTotal,
+            aggregateBuyingTotal: matchedCost + supportCostSum,
+            commissionTotal,
+          });
 
     return {
       itemsWithCost,
@@ -1439,36 +1462,8 @@ export default function ReceiptsAdminClient({
           : supportReceiptBuyingTotal !== null
             ? supportReceiptBuyingTotal
             : matchedCost + supportCostSum,
-      recognizedSellingTotal: computeRecognizedReceiptProfit({
-        items: itemsWithCost.map((item) => ({
-          quantity: item.quantity,
-          sellingPrice: item.sellingPrice,
-          buyingPrice: item.buyingPrice,
-        })),
-        aggregateSellingTotal: Number(detail?.receipt?.totals?.total ?? detail?.receipt?.order?.totalAmount ?? 0),
-        aggregateBuyingTotal:
-          receiptBuyingTotal !== null
-            ? receiptBuyingTotal
-            : supportReceiptBuyingTotal !== null
-              ? supportReceiptBuyingTotal
-              : matchedCost + supportCostSum,
-        commissionTotal: Number(detail?.posCommissionTotal ?? 0),
-      }).recognizedSellingTotal,
-      recognizedProfit: computeRecognizedReceiptProfit({
-        items: itemsWithCost.map((item) => ({
-          quantity: item.quantity,
-          sellingPrice: item.sellingPrice,
-          buyingPrice: item.buyingPrice,
-        })),
-        aggregateSellingTotal: Number(detail?.receipt?.totals?.total ?? detail?.receipt?.order?.totalAmount ?? 0),
-        aggregateBuyingTotal:
-          receiptBuyingTotal !== null
-            ? receiptBuyingTotal
-            : supportReceiptBuyingTotal !== null
-              ? supportReceiptBuyingTotal
-              : matchedCost + supportCostSum,
-        commissionTotal: Number(detail?.posCommissionTotal ?? 0),
-      }).recognizedProfit,
+      recognizedSellingTotal: recognized.recognizedSellingTotal,
+      recognizedProfit: recognized.recognizedProfit,
       hasCompleteCosts,
       hasAuthoritativeBuyingTotal,
     };
@@ -1655,20 +1650,38 @@ export default function ReceiptsAdminClient({
   const profitColor =
     canShowReceiptProfit && profitAmount >= 0 ? "text-emerald-300" : canShowReceiptProfit ? "text-rose-400" : "text-slate-400";
   const hasSupportItems = Boolean(detail?.supportItems?.length);
-  const buyingPricePreview = itemsWithCost.reduce((sum, item) => {
-    const draftValue = buyingPriceDraft[item.id];
-    const unitCost = draftValue === undefined ? Number(item.buyingPrice ?? 0) : Number(draftValue);
-    return sum + (Number.isFinite(unitCost) ? Math.max(0, unitCost) : 0) * Math.max(1, Number(item.quantity ?? 1));
-  }, 0);
+  const buyingPricePreview =
+    buyingPriceMode === "TOTAL"
+      ? Math.max(0, Number(buyingTotalDraft) || 0)
+      : itemsWithCost.reduce((sum, item) => {
+          const draftValue = buyingPriceDraft[item.id];
+          const unitCost = draftValue === undefined ? Number(item.buyingPrice ?? 0) : Number(draftValue);
+          return sum + (Number.isFinite(unitCost) ? Math.max(0, unitCost) : 0) * Math.max(1, Number(item.quantity ?? 1));
+        }, 0);
   const profitPreview = receiptGrandTotal - buyingPricePreview - posCommissionTotal;
   const openBuyingPriceEditor = () => {
     setBuyingPriceDraft(
       Object.fromEntries(itemsWithCost.map((item) => [item.id, item.buyingPrice === null ? "" : String(item.buyingPrice)])),
     );
+    const savedMode = String(
+      (detail?.receipt as any)?.totals?.buyingPriceMode ??
+        (detail?.receipt as any)?.data?.buyingPriceMode ??
+        "ITEMS",
+    ).toUpperCase();
+    setBuyingPriceMode(savedMode === "TOTAL" ? "TOTAL" : "ITEMS");
+    setBuyingTotalDraft(supportBuyingTotal > 0 ? String(supportBuyingTotal) : "");
     setBuyingPriceEditorOpen(true);
   };
   const saveBuyingPrices = async () => {
     if (!selected?.id || !itemsWithCost.length) return;
+    const aggregateBuyingTotal = Number(buyingTotalDraft);
+    if (
+      buyingPriceMode === "TOTAL" &&
+      (buyingTotalDraft.trim() === "" || !Number.isFinite(aggregateBuyingTotal) || aggregateBuyingTotal <= 0)
+    ) {
+      showToast("Enter a valid total buying price greater than zero", "warn");
+      return;
+    }
     const items = itemsWithCost.map((item) => ({
       orderItemId: item.id,
       buyingPrice: Number(buyingPriceDraft[item.id]),
@@ -1676,7 +1689,7 @@ export default function ReceiptsAdminClient({
     const hasInvalidPrice = items.some(
       (item) => buyingPriceDraft[item.orderItemId]?.trim() === "" || !Number.isFinite(item.buyingPrice) || item.buyingPrice < 0,
     );
-    if (hasInvalidPrice) {
+    if (buyingPriceMode === "ITEMS" && hasInvalidPrice) {
       showToast("Enter a valid buying price for every item", "warn");
       return;
     }
@@ -1687,7 +1700,11 @@ export default function ReceiptsAdminClient({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ items }),
+        body: JSON.stringify(
+          buyingPriceMode === "TOTAL"
+            ? { mode: "TOTAL", buyingTotal: aggregateBuyingTotal }
+            : { mode: "ITEMS", items },
+        ),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload?.error || "Failed to update buying prices");
@@ -1698,6 +1715,7 @@ export default function ReceiptsAdminClient({
       );
       setBuyingPriceEditorOpen(false);
       setBuyingPriceDraft({});
+      setBuyingTotalDraft("");
       await loadRows(page, { silent: true });
       await fetchSummary();
       await fetchReceiptDetail(selected.id);
@@ -2455,12 +2473,48 @@ export default function ReceiptsAdminClient({
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">Edit buying prices</p>
-                        <p className="mt-1 text-xs leading-5 text-slate-400">Update unit costs only. Selling prices and customer totals will not change.</p>
+                        <p className="mt-1 text-xs leading-5 text-slate-400">Choose one total cost for the complete receipt or enter unit costs per item. Selling prices will not change.</p>
                       </div>
                       <button type="button" onClick={() => setBuyingPriceEditorOpen(false)} disabled={buyingPriceSaving} className="rounded-lg border border-white/10 px-2 py-1 text-xs text-slate-300 disabled:opacity-50">Cancel</button>
                     </div>
-                    <div className="mt-4 space-y-3">
-                      {itemsWithCost.map((item) => (
+                    <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-slate-950/40 p-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setBuyingPriceMode("TOTAL")}
+                        className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${buyingPriceMode === "TOTAL" ? "bg-cyan-300 text-slate-950" : "text-slate-300 hover:bg-white/5"}`}
+                      >
+                        Price all at once
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBuyingPriceMode("ITEMS")}
+                        className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${buyingPriceMode === "ITEMS" ? "bg-cyan-300 text-slate-950" : "text-slate-300 hover:bg-white/5"}`}
+                      >
+                        Price item by item
+                      </button>
+                    </div>
+                    {buyingPriceMode === "TOTAL" ? (
+                      <label className="mt-4 block rounded-xl border border-cyan-400/20 bg-slate-950/50 p-4">
+                        <span className="block text-sm font-semibold text-white">Total buying price for the complete receipt</span>
+                        <span className="mt-1 block text-xs leading-5 text-slate-400">Enter one combined cost covering every product, service, transport, and installation line.</span>
+                        <span className="relative mt-3 block">
+                          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">KES</span>
+                          <input
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            inputMode="decimal"
+                            value={buyingTotalDraft}
+                            onChange={(event) => setBuyingTotalDraft(event.target.value)}
+                            className="w-full rounded-lg border border-white/15 bg-slate-950 py-3 pl-11 pr-3 text-right text-base font-semibold text-white outline-none focus:border-cyan-400"
+                            aria-label="Total buying price for the complete receipt"
+                            autoFocus
+                          />
+                        </span>
+                      </label>
+                    ) : (
+                      <div className="mt-4 space-y-3">
+                        {itemsWithCost.map((item) => (
                         <label key={item.id} className="grid gap-2 rounded-xl border border-white/10 bg-slate-950/50 p-3 sm:grid-cols-[1fr_150px] sm:items-center">
                           <span>
                             <span className="block text-sm font-semibold text-white">{item.displayName || "Item"}</span>
@@ -2480,14 +2534,19 @@ export default function ReceiptsAdminClient({
                             />
                           </span>
                         </label>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    )}
                     <div className="mt-4 grid grid-cols-2 gap-3 rounded-xl border border-white/10 bg-slate-950/40 p-3 text-sm">
                       <div><p className="text-xs text-slate-500">New buying total</p><p className="font-semibold text-white">{formatCurrency(buyingPricePreview)}</p></div>
                       <div><p className="text-xs text-slate-500">Estimated profit</p><p className={`font-semibold ${profitPreview >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{formatCurrency(profitPreview)}</p></div>
                     </div>
                     <button type="button" onClick={() => void saveBuyingPrices()} disabled={buyingPriceSaving} className="mt-4 w-full rounded-xl bg-cyan-300 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:opacity-50">
-                      {buyingPriceSaving ? "Saving and recalculating..." : "Save prices and recalculate profit"}
+                      {buyingPriceSaving
+                        ? "Saving and recalculating..."
+                        : buyingPriceMode === "TOTAL"
+                          ? "Save total cost and recalculate profit"
+                          : "Save item prices and recalculate profit"}
                     </button>
                   </section>
                 )}

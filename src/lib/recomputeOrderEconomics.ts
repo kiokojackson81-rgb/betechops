@@ -36,14 +36,24 @@ export async function recomputeOrderEconomics(orderId: string) {
     if (order.receipt) {
       const existingTotals = (order.receipt.totals as any) || {};
       const total = Number(existingTotals.total ?? existingTotals.totalAmount ?? 0);
-      const recognized = computeRecognizedReceiptProfit({
-        items: profitItems,
-        aggregateSellingTotal: total,
-        aggregateBuyingTotal: buyingTotal,
-      });
+      const usesAggregateCost =
+        String(existingTotals.buyingPriceMode ?? "").toUpperCase() === "TOTAL" &&
+        Number(existingTotals.buyingTotal ?? 0) > 0;
+      if (usesAggregateCost) buyingTotal = Number(existingTotals.buyingTotal);
+      const recognized = usesAggregateCost
+        ? {
+            recognizedProfit:
+              total - buyingTotal - Math.max(0, Number(existingTotals.posCommission ?? 0)),
+          }
+        : computeRecognizedReceiptProfit({
+            items: profitItems,
+            aggregateSellingTotal: total,
+            aggregateBuyingTotal: buyingTotal,
+          });
       const newTotals = {
         ...(existingTotals || {}),
         buyingTotal,
+        buyingPriceMode: usesAggregateCost ? "TOTAL" : "ITEMS",
         profit: recognized.recognizedProfit,
       };
       try {

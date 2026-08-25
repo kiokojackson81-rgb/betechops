@@ -69,6 +69,23 @@ export async function POST(_req: NextRequest, context: ParamsContext) {
     let updatedItems = 0;
     const itemCosts = new Map<string, number>();
 
+    const previousTotals =
+      receipt.totals && typeof receipt.totals === "object" && !Array.isArray(receipt.totals)
+        ? (receipt.totals as Record<string, unknown>)
+        : {};
+    const previousData =
+      receipt.data && typeof receipt.data === "object" && !Array.isArray(receipt.data)
+        ? (receipt.data as Record<string, unknown>)
+        : {};
+    const itemModeTotals = { ...previousTotals, buyingPriceMode: "ITEMS" };
+    await tx.receipt.update({
+      where: { id },
+      data: {
+        totals: itemModeTotals,
+        data: { ...previousData, buyingPriceMode: "ITEMS", totals: itemModeTotals },
+      },
+    });
+
     for (const item of orderItems) {
       const latestProductCost = Number(item.product?.lastBuyingPrice ?? 0);
       const fallbackExistingCost = Number(item.orderCosts?.[0]?.unitCost ?? 0);
