@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   CalendarCheck2,
   Check,
@@ -101,12 +102,17 @@ export default function ProductSiteVisitStarter({
   const [paymentReference, setPaymentReference] = useState("");
   const [paymentSubmitted, setPaymentSubmitted] = useState(false);
   const [bookingAttemptId] = useState(() => crypto.randomUUID());
+  const [portalReady, setPortalReady] = useState(false);
 
   const productId = product.opsProductId || product.id;
   const towns = getTownsForCounty(county);
   const minDate = new Date(Date.now() + 24 * 60 * 60 * 1000)
     .toISOString()
     .slice(0, 10);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -328,14 +334,15 @@ export default function ProductSiteVisitStarter({
         <CalendarCheck2 className="h-4 w-4" />
         Request Site Visit
       </button>
-      {open ? (
+      {open && portalReady
+        ? createPortal(
         <div
-          className="fixed inset-0 z-[1000] flex items-stretch justify-center bg-slate-950/70 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+          className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/75 p-2 backdrop-blur-sm sm:p-4 lg:p-6"
           role="dialog"
           aria-modal="true"
           aria-label="Book product site visit"
         >
-          <div className="flex h-[100dvh] w-full max-w-5xl flex-col overflow-hidden bg-[#fffdf9] shadow-2xl sm:h-[calc(100dvh-2rem)] sm:max-h-[900px] sm:rounded-[32px]">
+          <div className="flex h-[calc(100dvh-1rem)] w-full max-w-[1500px] flex-col overflow-hidden rounded-[24px] bg-[#fffdf9] shadow-2xl sm:h-[calc(100dvh-2rem)] sm:rounded-[32px] lg:h-[min(900px,calc(100dvh-3rem))]">
             <header className="flex shrink-0 items-start justify-between gap-4 border-b border-[#7a0000]/10 bg-white px-5 py-4 sm:px-7">
               <div>
                 <div className="text-[11px] font-black uppercase tracking-[0.2em] text-[#7a0000]">
@@ -819,8 +826,10 @@ export default function ProductSiteVisitStarter({
               background: #8f0000;
             }
           `}</style>
-        </div>
-      ) : null}
+          </div>,
+          document.body,
+        )
+        : null}
     </>
   );
 }
