@@ -24,7 +24,12 @@ const ATTEMPTED_CALL_THRESHOLD_SECONDS = 14;
 const CALLBACK_REQUEST_TOKEN_EXPIRY_DAYS = 14;
 
 type VoicePayload = Record<string, string>;
-type VoiceRouteLabel = "BRENDAH" | "JENNIFER" | "ADMIN" | "OVERFLOW";
+type VoiceRouteLabel =
+  | "BRENDAH"
+  | "JENNIFER"
+  | "ADMIN"
+  | "OVERFLOW"
+  | "QUOTATION_OWNER";
 
 export type VoiceRouteTarget = {
   label: VoiceRouteLabel;
@@ -254,7 +259,7 @@ async function resolveRoutingUsers() {
 }
 
 async function buildVoiceTargets(): Promise<
-  Record<VoiceRouteTarget["label"], VoiceRouteTarget>
+  Record<Exclude<VoiceRouteTarget["label"], "QUOTATION_OWNER">, VoiceRouteTarget>
 > {
   const brendahPhone = getConfiguredPhone("BRENDAH");
   const jenniferPhone = getConfiguredPhone("JENNIFER");
@@ -508,11 +513,152 @@ type VoiceRouteSelection = {
   orderedTargets: VoiceRouteTarget[];
   routeReason:
     | "after_hours"
+    | "quotation_owner"
     | "returning_customer"
     | "round_robin"
     | "admin_only"
     | "assigned_owner";
 };
+
+type QuotationOwnerRow = {
+  ownerId: string | null;
+  quoteRef: string;
+};
+
+async function buildQuotationOwnerVoiceTarget(
+  ownerId: string,
+): Promise<VoiceRouteTarget | null> {
+  const [user, presence, routingPreference, activeCall] = await Promise.all([
+    prisma.user.findFirst({
+      where: { id: ownerId, isActive: true },
+      select: { phone: true },
+    }),
+    prisma.voiceAgentPresence.findUnique({ where: { userId: ownerId } }),
+    prisma.voiceAgentRoutingPreference.findUnique({ where: { userId: ownerId } }),
+    prisma.voiceCall.findFirst({
+      where: {
+        assignedToId: ownerId,
+        OR: [
+          { isActive: true },
+          {
+            status: {
+              in: [
+                "queued",
+                "ringing",
+                "initiated",
+                "dialing",
+                "in_progress",
+                "answered",
+                "connected",
+                "processing",
+                "transferred",
+              ],
+            },
+          },
+        ],
+      },
+      select: { id: true, isActive: true, status: true },
+    }),
+  ]);
+  const phoneNumber = normalizeVoiceNumber(user?.phone || "");
+  const routingEnabled = routingPreference?.routingEnabled ?? true;
+  if (!phoneNumber || !routingEnabled) return null;
+
+  const presenceStatus = safeString(presence?.status).toUpperCase() || "OFFLINE";
+  const lastSeenAt = presence?.lastSeenAt ?? null;
+  const hasBusyCall = Boolean(
+    presence?.currentCallId ||
+      (activeCall &&
+        (activeCall.isActive || isRoutingBlockingVoiceStatus(activeCall.status))),
+  );
+  const hasRecentPresence = Boolean(
+    lastSeenAt &&
+      Date.now() - lastSeenAt.getTime() <= VOICE_PRESENCE_ROUTING_WINDOW_MS,
+  );
+  const isAvailable =
+    presenceStatus === "AVAILABLE" && hasRecentPresence && !hasBusyCall;
+  const skipReasons: string[] = [];
+  if (!presence) skipReasons.push("missing_presence");
+  if (presenceStatus !== "AVAILABLE") {
+    skipReasons.push(`status_${presenceStatus.toLowerCase()}`);
+  }
+  if (!hasRecentPresence) skipReasons.push("stale_or_missing_presence");
+  if (hasBusyCall) skipReasons.push("active_call_in_progress");
+
+  return {
+    label: "QUOTATION_OWNER",
+    phoneNumber,
+    userId: ownerId,
+    presenceStatus,
+    isAvailable,
+    routingEnabled,
+    allowAfterHoursCalls: routingPreference?.allowAfterHoursCalls ?? false,
+    lastSeenAt,
+    webRtcIdentity: null,
+    isWebrtcRegistered: false,
+    dialValue: phoneNumber,
+    dialValues: [phoneNumber],
+    skipReasons,
+  };
+}
+
+async function findQuotationOwnerTarget(
+  callerNumber: string | null,
+  targets: VoiceRouteTarget[],
+): Promise<VoiceRouteTarget | null> {
+  if (!callerNumber) return null;
+  const phoneVariants = getKenyanPhoneVariants(callerNumber);
+  if (!phoneVariants.length) return null;
+  const phoneDigitVariants = phoneVariants
+    .map((phone) => phone.replace(/\D/g, ""))
+    .filter(Boolean);
+
+  try {
+    const rows = await prisma.$queryRaw<QuotationOwnerRow[]>(Prisma.sql`
+      SELECT
+        COALESCE(
+          "respondedById",
+          NULLIF("responseMetadata"->>'createdById', ''),
+          "assignedAttendantId"
+        ) AS "ownerId",
+        "quoteRef"
+      FROM "QuoteRequest"
+      WHERE (
+        "customerPhone" IN (${Prisma.join(phoneVariants)})
+        OR "manualCustomerPhone" IN (${Prisma.join(phoneVariants)})
+        OR REGEXP_REPLACE(COALESCE("customerPhone", ''), '[^0-9]', '', 'g')
+          IN (${Prisma.join(phoneDigitVariants)})
+        OR REGEXP_REPLACE(COALESCE("manualCustomerPhone", ''), '[^0-9]', '', 'g')
+          IN (${Prisma.join(phoneDigitVariants)})
+      )
+        AND UPPER(COALESCE("status", '')) NOT IN ('CLOSED', 'REJECTED', 'EXPIRED')
+      ORDER BY COALESCE("respondedAt", "updatedAt", "createdAt") DESC
+      LIMIT 1
+    `);
+    const owner = rows[0];
+    if (!owner?.ownerId) return null;
+
+    const target =
+      targets.find((candidate) => candidate.userId === owner.ownerId) ??
+      (await buildQuotationOwnerVoiceTarget(owner.ownerId));
+    if (target) {
+      console.info("[voice.routing.quotation_owner]", {
+        callerNumber,
+        quoteRef: owner.quoteRef,
+        ownerId: owner.ownerId,
+        target: target.label,
+      });
+    }
+    return target;
+  } catch (error) {
+    // Quotation routing must fail open so inbound calls still use normal routing.
+    console.warn("[voice.routing.quotation_owner_unavailable]", {
+      callerNumber,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
 
 async function findAssignedLeadTarget(
   callerNumber: string | null,
@@ -842,6 +988,11 @@ export async function getVoiceRouteTargets(
   );
   const adminTarget = targets.ADMIN;
   const overflowTarget = targets.OVERFLOW;
+  const quotationOwnerTargets = [
+    targets.BRENDAH,
+    targets.JENNIFER,
+    targets.ADMIN,
+  ].filter((target) => target.phoneNumber && target.routingEnabled);
   const directFallbackTargets = [adminTarget, overflowTarget].filter(
     (target) => target.phoneNumber && target.routingEnabled,
   );
@@ -894,30 +1045,29 @@ export async function getVoiceRouteTargets(
     };
   }
 
-  const assignedFollowUpTarget = await findAssignedFollowUpTarget(
-    callerNumber,
-    agentTargets,
-  );
-  const assignedLeadTarget = await findAssignedLeadTarget(
-    callerNumber,
-    agentTargets,
-  );
-  const previousAgentTarget = await findPreviousAgentTarget(
-    callerNumber,
-    agentTargets,
-  );
-  const stickyOwnerTarget = await findStickyOwnerTarget(
-    callerNumber,
-    agentTargets,
-  );
-  const lastAnsweredTarget = await findLastAnsweredTarget(
-    callerNumber,
-    [targets.BRENDAH, targets.JENNIFER, targets.ADMIN, targets.OVERFLOW].filter(
-      (target) => target.phoneNumber && target.routingEnabled,
+  const [
+    quotationOwnerTarget,
+    assignedFollowUpTarget,
+    assignedLeadTarget,
+    previousAgentTarget,
+    stickyOwnerTarget,
+    lastAnsweredTarget,
+  ] = await Promise.all([
+    findQuotationOwnerTarget(callerNumber, quotationOwnerTargets),
+    findAssignedFollowUpTarget(callerNumber, agentTargets),
+    findAssignedLeadTarget(callerNumber, agentTargets),
+    findPreviousAgentTarget(callerNumber, agentTargets),
+    findStickyOwnerTarget(callerNumber, agentTargets),
+    findLastAnsweredTarget(
+      callerNumber,
+      [targets.BRENDAH, targets.JENNIFER, targets.ADMIN, targets.OVERFLOW].filter(
+        (target) => target.phoneNumber && target.routingEnabled,
+      ),
+      date,
     ),
-    date,
-  );
+  ]);
   const stickyTarget =
+    quotationOwnerTarget ??
     lastAnsweredTarget ??
     stickyOwnerTarget ??
     assignedFollowUpTarget ??
@@ -968,11 +1118,13 @@ export async function getVoiceRouteTargets(
           agentTargets,
           adminTarget,
         }),
-        routeReason: lastAnsweredTarget
-          ? ("assigned_owner" as const)
-          : stickyOwnerTarget
+        routeReason: quotationOwnerTarget
+          ? ("quotation_owner" as const)
+          : lastAnsweredTarget
             ? ("assigned_owner" as const)
-            : ("returning_customer" as const),
+            : stickyOwnerTarget
+              ? ("assigned_owner" as const)
+              : ("returning_customer" as const),
       }
     : buildWorkingHoursSelection({
         preferredTarget: roundRobinTarget,
@@ -982,7 +1134,17 @@ export async function getVoiceRouteTargets(
         preferAdminFirst: false,
       });
 
-  const workingTargets = [targets.BRENDAH, targets.JENNIFER, targets.ADMIN];
+  const workingTargets = [
+    targets.BRENDAH,
+    targets.JENNIFER,
+    targets.ADMIN,
+    ...(quotationOwnerTarget &&
+    ![targets.BRENDAH, targets.JENNIFER, targets.ADMIN].some(
+      (target) => target.userId === quotationOwnerTarget.userId,
+    )
+      ? [quotationOwnerTarget]
+      : []),
+  ];
   const orderedTargets = selection.orderedTargets.length
     ? selection.orderedTargets
     : directFallbackTargets;
@@ -999,6 +1161,7 @@ export async function getVoiceRouteTargets(
       routeType: "WORKING_HOURS",
       reason: selection.routeReason,
       callerNumber,
+      quotationOwnerTarget: quotationOwnerTarget?.label ?? null,
       assignedFollowUpTarget: assignedFollowUpTarget?.label ?? null,
       assignedLeadTarget: assignedLeadTarget?.label ?? null,
       stickyOwnerTarget: stickyOwnerTarget?.label ?? null,
