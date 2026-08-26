@@ -344,6 +344,12 @@ export default async function ShopProductDetailPage({
                     <div className="rounded-[22px] border border-[#7a0000]/8 bg-[#fcfaf7] px-4 py-3 text-sm leading-6 text-slate-700">
                       {availabilityMessage}
                     </div>
+                    {product.catalogueConfiguration ? <div className="grid gap-2 rounded-[22px] border border-amber-300/40 bg-amber-50 px-4 py-4 text-sm text-slate-800 sm:grid-cols-2">
+                      <div><span className="font-black text-[#7a0000]">Installation:</span> {product.catalogueConfiguration.installationType.replaceAll("_", " ").toLowerCase()}</div>
+                      <div><span className="font-black text-[#7a0000]">Delivery:</span> {product.catalogueConfiguration.transportMode.replaceAll("_", " ").toLowerCase()}</div>
+                      <div className="sm:col-span-2"><span className="font-black text-[#7a0000]">Price includes:</span> {product.catalogueConfiguration.priceIncludes.map((item) => item.replaceAll("_", " ").toLowerCase()).join(", ")}</div>
+                      {product.catalogueConfiguration.accessoriesMode !== "INCLUDED" ? <div className="sm:col-span-2 text-xs leading-5 text-slate-600"><span className="font-bold">Installation accessories:</span> Additional site-specific materials may be confirmed before installation.</div> : null}
+                    </div> : null}
                     <ShopProductDetailActions
                       product={product}
                       openLipaPolePole={resolvedSearchParams.lpp === "1"}

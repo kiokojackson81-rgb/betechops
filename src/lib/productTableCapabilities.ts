@@ -27,6 +27,9 @@ export type ProductTableCapabilities = {
   status: boolean;
   availabilityType: boolean;
   pickupDelayDays: boolean;
+  productType: boolean;
+  posEnabled: boolean;
+  catalogueConfiguration: boolean;
   defaultWarranty: boolean;
   modernPricing: boolean;
   legacyPricing: boolean;
@@ -71,6 +74,9 @@ export async function getProductTableCapabilities(prisma: PrismaClient): Promise
     status: available.has("status"),
     availabilityType: available.has("availabilityType"),
     pickupDelayDays: available.has("pickupDelayDays"),
+    productType: available.has("productType"),
+    posEnabled: available.has("posEnabled"),
+    catalogueConfiguration: available.has("catalogueConfiguration"),
     defaultWarranty: available.has("defaultWarranty"),
     modernPricing: available.has("sellingPrice"),
     legacyPricing: available.has("sellPrice"),

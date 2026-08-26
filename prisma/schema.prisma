@@ -1067,6 +1067,9 @@ model Product {
   status                     String             @default("ACTIVE")
   availabilityType           String             @default("SHOP")
   pickupDelayDays            Int                @default(0)
+  productType                String?
+  posEnabled                 Boolean            @default(true)
+  catalogueConfiguration     Json?
   variableCost               Boolean            @default(false)
   commissionEnabled          Boolean            @default(false)
   commissionAmount           Decimal?           @db.Decimal(12, 2)
@@ -1084,6 +1087,23 @@ model Product {
   lipaPolePoleAccounts       LipaPolePole[]
   orders                     OrderItem[]
   websiteOrderItems          WebsiteOrderItem[]
+}
+
+model ProductCatalogueSettings {
+  id                   String   @id @default("default")
+  installationBand1Max Float    @default(50000)
+  installationBand1Fee Float    @default(8000)
+  installationBand2Max Float    @default(100000)
+  installationBand2Fee Float    @default(15000)
+  installationBand3Max Float    @default(350000)
+  installationBand3Fee Float    @default(25000)
+  installationBand4Max Float    @default(800000)
+  installationBand4Fee Float    @default(35000)
+  zone1TransportFee    Float    @default(3000)
+  zone2TransportFee    Float    @default(7500)
+  zone3TransportFee    Float    @default(15000)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 }
 
 model Order {

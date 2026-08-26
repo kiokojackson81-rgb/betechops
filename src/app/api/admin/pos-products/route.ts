@@ -3,6 +3,7 @@ import { resolveProductActivityActor } from "@/lib/productActivityActor";
 import { prisma } from "@/lib/prisma";
 import { getProductTableCapabilities } from "@/lib/productTableCapabilities";
 import { resolveCanonicalProductBrand } from "@/lib/productBrands";
+import { productCatalogueConfigurationSchema } from "@/lib/productCataloguePolicy";
 import { Prisma } from "@prisma/client";
 import { randomUUID } from "crypto";
 import { z } from "zod";
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 const MAX_SKU_LENGTH = 80;
 const productStatusEnum = z.enum(["ACTIVE", "INACTIVE"]);
-const availabilityTypeEnum = z.enum(["SHOP", "WAREHOUSE"]);
+const availabilityTypeEnum = z.enum(["SHOP", "WAREHOUSE", "ORDER_ON_REQUEST", "OUT_OF_STOCK"]);
 
 const productSchema = z.object({
   sku: z.string().trim().min(1).max(255).optional(),
@@ -49,6 +50,9 @@ const productSchema = z.object({
   shopSpecs: z.string().trim().max(2000).nullable().optional(),
   shopImageUrl: z.string().trim().max(500).nullable().optional(),
   shopBrand: z.string().trim().max(120).nullable().optional(),
+  productType: z.string().trim().max(120).nullable().optional(),
+  posEnabled: z.boolean().optional().default(true),
+  catalogueConfiguration: productCatalogueConfigurationSchema.nullable().optional(),
 }).superRefine((data, ctx) => {
   const expectedPickupDelay = data.availabilityType === "WAREHOUSE" ? 1 : 0;
   if (data.pickupDelayDays !== undefined && data.pickupDelayDays !== expectedPickupDelay) {
@@ -57,7 +61,7 @@ const productSchema = z.object({
       path: ["pickupDelayDays"],
       message: data.availabilityType === "WAREHOUSE"
         ? "Warehouse products must use a 1 day pickup delay"
-        : "Shop products must use a 0 day pickup delay",
+        : "This availability type must use a 0 day pickup delay",
     });
   }
 });
@@ -105,7 +109,7 @@ function normalizeJsonStringArray(value: string[] | null | undefined) {
   return list.length ? JSON.stringify(list) : null;
 }
 
-const JSONB_PRODUCT_COLUMNS = new Set(["specifications", "galleryImageUrls"]);
+const JSONB_PRODUCT_COLUMNS = new Set(["specifications", "galleryImageUrls", "catalogueConfiguration"]);
 
 async function findExistingSku(capabilities: Awaited<ReturnType<typeof getProductTableCapabilities>>, sku: string) {
   if (capabilities.schemaMode === "modern") {
@@ -187,6 +191,15 @@ function buildShopInsertFragments(
   }
   if (capabilities.pickupDelayDays) {
     pushColumn("pickupDelayDays", pickupDelayDays);
+  }
+  if (capabilities.productType) {
+    pushColumn("productType", normalizeOptionalText(data.productType));
+  }
+  if (capabilities.posEnabled) {
+    pushColumn("posEnabled", Boolean(data.posEnabled));
+  }
+  if (capabilities.catalogueConfiguration) {
+    pushColumn("catalogueConfiguration", data.catalogueConfiguration ? JSON.stringify(data.catalogueConfiguration) : null);
   }
 
   if (capabilities.showInShop) {
@@ -312,6 +325,9 @@ export async function GET(req: Request) {
             ${capabilities.status ? `COALESCE("status", CASE WHEN COALESCE("isActive", true) THEN 'ACTIVE' ELSE 'INACTIVE' END)` : `NULL::text`} AS "status",
             ${capabilities.availabilityType ? `COALESCE("availabilityType", 'SHOP')` : `NULL::text`} AS "availabilityType",
             ${capabilities.pickupDelayDays ? `COALESCE("pickupDelayDays", 0)` : `NULL::int`} AS "pickupDelayDays",
+            ${capabilities.productType ? `"productType"` : `NULL::text`} AS "productType",
+            ${capabilities.posEnabled ? `COALESCE("posEnabled", true)` : `TRUE`} AS "posEnabled",
+            ${capabilities.catalogueConfiguration ? `"catalogueConfiguration"` : `NULL::jsonb`} AS "catalogueConfiguration",
             ${capabilities.showInShop ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
             ${capabilities.shopCategory ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
             ${capabilities.shopSubcategory ? `"shopSubcategory"` : `NULL::text`} AS "shopSubcategory",
@@ -381,6 +397,9 @@ export async function GET(req: Request) {
             ${capabilities.status ? `COALESCE("status", CASE WHEN COALESCE("active", true) THEN 'ACTIVE' ELSE 'INACTIVE' END)` : `NULL::text`} AS "status",
             ${capabilities.availabilityType ? `COALESCE("availabilityType", 'SHOP')` : `NULL::text`} AS "availabilityType",
             ${capabilities.pickupDelayDays ? `COALESCE("pickupDelayDays", 0)` : `NULL::int`} AS "pickupDelayDays",
+            ${capabilities.productType ? `"productType"` : `NULL::text`} AS "productType",
+            ${capabilities.posEnabled ? `COALESCE("posEnabled", true)` : `TRUE`} AS "posEnabled",
+            ${capabilities.catalogueConfiguration ? `"catalogueConfiguration"` : `NULL::jsonb`} AS "catalogueConfiguration",
             ${capabilities.showInShop ? `COALESCE("showInShop", false)` : `NULL::boolean`} AS "showInShop",
             ${capabilities.shopCategory ? `"shopCategory"` : `NULL::text`} AS "shopCategory",
             ${capabilities.shopSubcategory ? `"shopSubcategory"` : `NULL::text`} AS "shopSubcategory",

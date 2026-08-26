@@ -52,7 +52,7 @@ export type ShopProduct = {
   specs: string[];
   warranty: string;
   warrantyNotes?: string;
-  availabilityType?: "SHOP" | "WAREHOUSE";
+  availabilityType?: "SHOP" | "WAREHOUSE" | "ORDER_ON_REQUEST" | "OUT_OF_STOCK";
   pickupDelayDays?: number;
   availabilityMessage?: string;
   checkoutAvailabilityMessage?: string;
@@ -72,6 +72,8 @@ export type ShopProduct = {
   lipaPolePoleMaxDays?: number | null;
   lipaPolePoleDefaultDays?: number | null;
   lipaPolePoleTerms?: string | null;
+  productType?: string | null;
+  catalogueConfiguration?: import("@/lib/productCataloguePolicy").ProductCatalogueConfiguration | null;
 };
 
 export type ShopProductSection = {

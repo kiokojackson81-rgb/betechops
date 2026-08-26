@@ -16,6 +16,7 @@ import {
   normalizeAvailabilityType,
 } from "@/app/shop/shopAvailability";
 import { sanitizeProductDescription, sanitizeProductSpecificationLines } from "@/lib/productDescriptionFormatting";
+import { productCatalogueConfigurationSchema, type ProductCatalogueConfiguration } from "@/lib/productCataloguePolicy";
 
 type OpsCatalogueProduct = {
   id: string;
@@ -61,6 +62,8 @@ type OpsCatalogueProduct = {
   lipaPolePoleMaxDays?: number | null;
   lipaPolePoleDefaultDays?: number | null;
   lipaPolePoleTerms?: string | null;
+  productType?: string | null;
+  catalogueConfiguration?: ProductCatalogueConfiguration | null;
 };
 
 type ShopCategoryDefinition = {
@@ -250,6 +253,8 @@ async function queryOpsCatalogueProducts(whereClause = "", params: unknown[] = [
         ${available.has("lipaPolePoleMaxDays") ? `"lipaPolePoleMaxDays"` : `NULL::int`} AS "lipaPolePoleMaxDays",
         ${available.has("lipaPolePoleDefaultDays") ? `"lipaPolePoleDefaultDays"` : `NULL::int`} AS "lipaPolePoleDefaultDays",
         ${available.has("lipaPolePoleTerms") ? `"lipaPolePoleTerms"` : `NULL::text`} AS "lipaPolePoleTerms"
+        ${available.has("productType") ? `, "productType"` : `, NULL::text`} AS "productType",
+        ${available.has("catalogueConfiguration") ? `"catalogueConfiguration"` : `NULL::jsonb`} AS "catalogueConfiguration"
       FROM "Product"
       WHERE COALESCE("isActive", true) = true
       ${whereClause}
@@ -306,6 +311,8 @@ async function queryOpsCatalogueProducts(whereClause = "", params: unknown[] = [
         ${available.has("lipaPolePoleMaxDays") ? `"lipaPolePoleMaxDays"` : `NULL::int`} AS "lipaPolePoleMaxDays",
         ${available.has("lipaPolePoleDefaultDays") ? `"lipaPolePoleDefaultDays"` : `NULL::int`} AS "lipaPolePoleDefaultDays",
         ${available.has("lipaPolePoleTerms") ? `"lipaPolePoleTerms"` : `NULL::text`} AS "lipaPolePoleTerms"
+        ${available.has("productType") ? `, "productType"` : `, NULL::text`} AS "productType",
+        ${available.has("catalogueConfiguration") ? `"catalogueConfiguration"` : `NULL::jsonb`} AS "catalogueConfiguration"
       FROM "Product"
       WHERE COALESCE("active", true) = true
       ${whereClause}
@@ -682,6 +689,10 @@ function mapOpsProduct(
         lipaPolePoleDefaultDays:
           product.lipaPolePoleDefaultDays == null ? null : Number(product.lipaPolePoleDefaultDays),
         lipaPolePoleTerms: normalizeOptionalText(product.lipaPolePoleTerms),
+        productType: normalizeOptionalText(product.productType),
+        catalogueConfiguration: productCatalogueConfigurationSchema.safeParse(product.catalogueConfiguration).success
+          ? productCatalogueConfigurationSchema.parse(product.catalogueConfiguration)
+          : null,
       }
     : null;
 

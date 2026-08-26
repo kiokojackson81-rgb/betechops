@@ -1,7 +1,9 @@
-export type ShopAvailabilityType = "SHOP" | "WAREHOUSE";
+export type ShopAvailabilityType = "SHOP" | "WAREHOUSE" | "ORDER_ON_REQUEST" | "OUT_OF_STOCK";
 
 export function normalizeAvailabilityType(value: string | null | undefined): ShopAvailabilityType {
-  return String(value || "").trim().toUpperCase() === "WAREHOUSE" ? "WAREHOUSE" : "SHOP";
+  const normalized = String(value || "").trim().toUpperCase();
+  if (normalized === "WAREHOUSE" || normalized === "ORDER_ON_REQUEST" || normalized === "OUT_OF_STOCK") return normalized;
+  return "SHOP";
 }
 
 export function getProductAvailabilityMessage(product: {
@@ -17,6 +19,8 @@ export function getProductAvailabilityMessage(product: {
   if (availabilityType === "WAREHOUSE") {
     return "🚚 Available from warehouse. Pickup or delivery available after 1 day.";
   }
+  if (availabilityType === "ORDER_ON_REQUEST") return "Order on request. Our team will confirm stock and lead time.";
+  if (availabilityType === "OUT_OF_STOCK") return "Currently out of stock.";
 
   return "Availability will be confirmed before delivery or pickup.";
 }
@@ -34,6 +38,8 @@ export function getProductCheckoutAvailabilityMessage(product: {
   if (availabilityType === "WAREHOUSE") {
     return "This item is available from warehouse. Pickup or delivery will be available after 1 day.";
   }
+  if (availabilityType === "ORDER_ON_REQUEST") return "Order on request. Availability will be confirmed before payment.";
+  if (availabilityType === "OUT_OF_STOCK") return "This item is currently out of stock.";
 
   return "Availability will be confirmed before delivery or pickup.";
 }
@@ -50,6 +56,8 @@ export function getProductAvailabilityBadge(product: {
   if (availabilityType === "WAREHOUSE") {
     return "🚚 Warehouse Stock — Available after 1 day";
   }
+  if (availabilityType === "ORDER_ON_REQUEST") return "Order on Request";
+  if (availabilityType === "OUT_OF_STOCK") return "Out of Stock";
 
   return "Availability to Confirm";
 }

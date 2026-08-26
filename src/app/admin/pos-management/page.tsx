@@ -50,6 +50,7 @@ export default async function PosManagementPage({ searchParams }: PosManagementP
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-3">
+            {hasFullAccess ? <Link href="/admin/pos-management/settings" className="inline-flex min-h-[2.75rem] items-center justify-center rounded-2xl border border-amber-500/35 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/15">Installation & Delivery Rules</Link> : null}
             <Link
               href="/admin/customers"
               className="inline-flex min-h-[2.75rem] items-center justify-center rounded-2xl border border-cyan-500/35 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/15"

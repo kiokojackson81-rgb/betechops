@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { buildAdminCustomerProfileHref } from "@/lib/adminCustomerProfileLinks";
 import { findSimilarProducts } from "@/lib/posProductSimilarity";
 import { showToast } from "@/lib/ui/toast";
@@ -14,6 +14,7 @@ import {
   PRODUCT_GALLERY_AI_WIDTH,
 } from "@/lib/images/productGalleryAi";
 import { getShopSubcategoryOptions, SHOP_CATEGORY_DEFINITIONS, SHOP_CATEGORY_OPTIONS, resolveShopSubcategory } from "@/app/shop/shopCatalogConfig";
+import type { ProductCatalogueConfiguration } from "@/lib/productCataloguePolicy";
 
 type PosProduct = {
   id: string;
@@ -52,6 +53,9 @@ type PosProduct = {
   shopSpecs?: string | null;
   shopImageUrl?: string | null;
   shopBrand?: string | null;
+  productType?: string | null;
+  posEnabled?: boolean | null;
+  catalogueConfiguration?: ProductCatalogueConfiguration | null;
 };
 
 type PosCatalogueCapabilities = {
@@ -72,6 +76,9 @@ type PosCatalogueCapabilities = {
   status: boolean;
   availabilityType: boolean;
   pickupDelayDays: boolean;
+  productType: boolean;
+  posEnabled: boolean;
+  catalogueConfiguration: boolean;
   showInShop: boolean;
   shopCategory: boolean;
   shopSubcategory: boolean;
@@ -84,7 +91,7 @@ type PosCatalogueCapabilities = {
   specs: boolean;
 };
 
-type ProductAvailabilityType = "SHOP" | "WAREHOUSE";
+type ProductAvailabilityType = "SHOP" | "WAREHOUSE" | "ORDER_ON_REQUEST" | "OUT_OF_STOCK";
 
 type CommissionApproval = {
   id: string;
@@ -134,6 +141,10 @@ type ProductDraft = {
   shopSpecs: string;
   shopImageUrl: string;
   shopBrand: string;
+  productType: string;
+  posEnabled: boolean;
+  policyConfigured: boolean;
+  catalogueConfiguration: ProductCatalogueConfiguration;
 };
 
 type AiProductPrefill = {
@@ -191,6 +202,29 @@ const emptyDraft: ProductDraft = {
   shopSpecs: "",
   shopImageUrl: "",
   shopBrand: "",
+  productType: "",
+  posEnabled: true,
+  policyConfigured: false,
+  catalogueConfiguration: {
+    installationType: "NOT_REQUIRED",
+    installationFeeMode: "UNAVAILABLE",
+    customInstallationFee: null,
+    accessoriesMode: "NOT_INCLUDED",
+    includedAccessories: "",
+    installationNotes: "",
+    transportMode: "PICKUP",
+    useDefaultTransportRates: true,
+    zone1TransportFee: null,
+    zone2TransportFee: null,
+    zone3TransportFee: null,
+    priceIncludes: ["EQUIPMENT"],
+    allInclusive: false,
+    allInclusiveItems: [],
+    structuredSpecifications: [],
+    componentWarranties: [],
+    projectImageUrls: [],
+    requiresSiteAssessment: false,
+  },
 };
 
 function createDraftDefaults(mode: "admin" | "product-desk"): ProductDraft {
@@ -219,6 +253,9 @@ const defaultCapabilities: PosCatalogueCapabilities = {
   status: false,
   availabilityType: false,
   pickupDelayDays: false,
+  productType: false,
+  posEnabled: false,
+  catalogueConfiguration: false,
   showInShop: false,
   shopCategory: false,
   shopSubcategory: false,
@@ -237,13 +274,16 @@ const fieldClass =
 const warrantyOptions = ["", "1 Year", "2 Years", "3 Years", "5 Years", "6 Years", "10 Years"];
 
 function normalizeAvailabilityType(value: string | null | undefined): ProductAvailabilityType {
-  return String(value || "").trim().toUpperCase() === "WAREHOUSE" ? "WAREHOUSE" : "SHOP";
+  const normalized = String(value || "").trim().toUpperCase();
+  if (normalized === "WAREHOUSE" || normalized === "ORDER_ON_REQUEST" || normalized === "OUT_OF_STOCK") return normalized;
+  return "SHOP";
 }
 
 function getAvailabilityPreviewMessage(type: ProductAvailabilityType) {
-  return type === "WAREHOUSE"
-    ? "Customer will see: Available from warehouse. Pickup or delivery available after 1 day."
-    : "Customer will see: Available at shop for immediate pickup.";
+  if (type === "WAREHOUSE") return "Customer will see: Available from warehouse. Pickup or delivery available after 1 day.";
+  if (type === "ORDER_ON_REQUEST") return "Customer will see: Order on request. Our team will confirm availability.";
+  if (type === "OUT_OF_STOCK") return "Customer will see: Out of stock.";
+  return "Customer will see: Available at shop for immediate pickup.";
 }
 
 function detectShopCategoryAndSubcategory(input: Pick<ProductDraft, "name" | "category" | "brand" | "specifications" | "shopCategory">) {
@@ -326,6 +366,10 @@ function createDraftFromProduct(product: PosProduct): ProductDraft {
     shopSpecs: product.shopSpecs ?? "",
     shopImageUrl: product.shopImageUrl ?? "",
     shopBrand: product.shopBrand ?? "",
+    productType: product.productType ?? "",
+    posEnabled: product.posEnabled !== false,
+    policyConfigured: Boolean(product.catalogueConfiguration),
+    catalogueConfiguration: product.catalogueConfiguration ?? emptyDraft.catalogueConfiguration,
   };
 }
 
@@ -406,6 +450,8 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
   const [brandLoading, setBrandLoading] = useState(false);
   const [brandSaving, setBrandSaving] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [editorSection, setEditorSection] = useState("basic");
+  const [expandedProductId, setExpandedProductId] = useState<string | null>(null);
   const initialEditHandledRef = useRef(false);
   const formSectionRef = useRef<HTMLElement | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
@@ -414,6 +460,15 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
   const productApiBase = "/api/admin/pos-products";
   const imageUploadAccept = getAcceptedImageUploadValue();
   const imageUploadFormats = getAcceptedImageUploadHint();
+
+  useEffect(() => {
+    if (!editorOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [editorOpen]);
 
   const loadData = useCallback(async (productQuery = activeQuery) => {
     setLoading(true);
@@ -698,6 +753,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
   const openCreateEditor = useCallback(() => {
     setDraft(createDraftDefaults(mode));
     setEditorOpen(true);
+    setEditorSection("basic");
     window.requestAnimationFrame(() => {
       formSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
@@ -1072,6 +1128,11 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
         ...(capabilities.shopSpecs ? { shopSpecs: (draft.specifications || draft.shopSpecs).trim().slice(0, 2000) || null } : {}),
         ...(capabilities.shopImageUrl ? { shopImageUrl: draft.shopImageUrl.trim() || null } : {}),
         ...(capabilities.shopBrand ? { shopBrand: draft.shopBrand.trim() || null } : {}),
+        ...(capabilities.productType ? { productType: draft.productType.trim() || null } : {}),
+        ...(capabilities.posEnabled ? { posEnabled: draft.posEnabled } : {}),
+        ...(capabilities.catalogueConfiguration
+          ? { catalogueConfiguration: draft.policyConfigured ? draft.catalogueConfiguration : null }
+          : {}),
       };
 
       const baseUrl = draft.id ? `${productApiBase}/${draft.id}` : productApiBase;
@@ -1089,6 +1150,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
       showToast(draft.id ? "Product updated" : "Product created", "success");
       setDraft(createDraftDefaults(mode));
       setEditorOpen(false);
+      setEditorSection("basic");
       await loadData(query);
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Failed to save product", "error");
@@ -1100,6 +1162,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
   const startEdit = (product: PosProduct) => {
     setDraft(createDraftFromProduct(product));
     setEditorOpen(true);
+    setEditorSection("basic");
     formSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     showToast(`Editing ${product.name}`, "success");
   };
@@ -1276,6 +1339,93 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
     setActiveQuery(nextQuery);
   }, [query]);
 
+  const updatePolicy = <K extends keyof ProductCatalogueConfiguration>(key: K, value: ProductCatalogueConfiguration[K]) => {
+    setDraft((current) => ({
+      ...current,
+      policyConfigured: true,
+      catalogueConfiguration: { ...current.catalogueConfiguration, [key]: value },
+    }));
+  };
+
+  const editorSections = [
+    ["basic", "1 Basic"],
+    ["pricing", "2 Pricing"],
+    ["category", "3 Category"],
+    ["installation", "4 Installation"],
+    ["delivery", "5 Delivery"],
+    ["details", "6 Details"],
+    ["images", "7 Images"],
+    ["website", "8 Website"],
+    ["commission", "9 Commission"],
+    ["review", "10 Review"],
+  ] as const;
+
+  const sectionComplete: Record<string, boolean> = {
+    basic: Boolean(draft.name.trim() && draft.productType.trim()),
+    pricing: Boolean(draft.sellingPrice.trim()),
+    category: Boolean(draft.shopCategory || draft.category),
+    installation: draft.policyConfigured,
+    delivery: draft.policyConfigured,
+    details: Boolean(draft.shortDescription.trim() || draft.description.trim()),
+    images: Boolean(draft.mainImageUrl || draft.shopImageUrl),
+    website: !draft.ecommerceVisible || Boolean(draft.shopCategory && (draft.mainImageUrl || draft.shopImageUrl)),
+    commission: !draft.commissionEnabled || Boolean(draft.commissionAmount.trim()),
+    review: Boolean(draft.name.trim() && draft.sellingPrice.trim()),
+  };
+
+  const renderStructuredSection = () => {
+    const policy = draft.catalogueConfiguration;
+    if (editorSection === "basic") {
+      return <div className="grid gap-4 md:grid-cols-2">
+        <label className="text-sm text-slate-300">Product type
+          <select className={`${fieldClass} mt-1`} value={draft.productType} onChange={(event) => setDraft((current) => ({ ...current, productType: event.target.value }))}>
+            <option value="">Select product type</option>
+            {["Solar System", "Solar Panel", "Inverter", "Battery", "Solar Water Heater", "Water Pump", "Power Station", "Solar Lighting", "Installation Accessory", "Electrical Accessory", "Service", "Other"].map((value) => <option key={value}>{value}</option>)}
+          </select>
+        </label>
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+          <div className="text-sm font-semibold text-white">Sales channels</div>
+          <label className="mt-3 flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={draft.posEnabled} onChange={(event) => setDraft((current) => ({ ...current, posEnabled: event.target.checked }))} /> POS and receipts</label>
+          <label className="mt-2 flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={draft.ecommerceVisible} onChange={(event) => setDraft((current) => ({ ...current, ecommerceVisible: event.target.checked, showInShop: event.target.checked }))} /> Online shop</label>
+        </div>
+      </div>;
+    }
+    if (editorSection === "pricing") {
+      const includes = ["EQUIPMENT", "INSTALLATION", "ACCESSORIES", "TRANSPORT", "COMMISSIONING", "REMOTE_SUPPORT"] as const;
+      return <div>
+        <h3 className="font-semibold text-white">What does this price include?</h3>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{includes.map((item) => <label key={item} className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-3 text-sm text-slate-200"><input type="checkbox" checked={policy.priceIncludes.includes(item)} onChange={(event) => updatePolicy("priceIncludes", event.target.checked ? [...policy.priceIncludes, item] : policy.priceIncludes.filter((entry) => entry !== item))} /> {item.replaceAll("_", " ")}</label>)}</div>
+        <label className="mt-4 flex items-center gap-2 text-sm font-semibold text-amber-100"><input type="checkbox" checked={policy.allInclusive} onChange={(event) => updatePolicy("allInclusive", event.target.checked)} /> Mark as an all-inclusive solar package</label>
+      </div>;
+    }
+    if (editorSection === "installation") {
+      return <div className="grid gap-4 md:grid-cols-2">
+        <label className="text-sm text-slate-300">Installation classification<select className={`${fieldClass} mt-1`} value={policy.installationType} onChange={(event) => updatePolicy("installationType", event.target.value as ProductCatalogueConfiguration["installationType"])}>{["INCLUDED", "OPTIONAL_AUTO", "LOCAL_RECOMMENDED", "NOT_REQUIRED", "SITE_ASSESSMENT"].map((value) => <option key={value} value={value}>{value.replaceAll("_", " ")}</option>)}</select></label>
+        <label className="text-sm text-slate-300">Fee rule<select className={`${fieldClass} mt-1`} value={policy.installationFeeMode} onChange={(event) => updatePolicy("installationFeeMode", event.target.value as ProductCatalogueConfiguration["installationFeeMode"])}>{["STANDARD", "CUSTOM", "INCLUDED", "UNAVAILABLE"].map((value) => <option key={value}>{value}</option>)}</select></label>
+        {policy.installationFeeMode === "CUSTOM" ? <label className="text-sm text-slate-300">Custom installation fee<input className={`${fieldClass} mt-1`} type="number" min="0" value={policy.customInstallationFee ?? ""} onChange={(event) => updatePolicy("customInstallationFee", event.target.value ? Number(event.target.value) : null)} /></label> : null}
+        <label className="text-sm text-slate-300">Accessories<select className={`${fieldClass} mt-1`} value={policy.accessoriesMode} onChange={(event) => updatePolicy("accessoriesMode", event.target.value as ProductCatalogueConfiguration["accessoriesMode"])}>{["INCLUDED", "NOT_INCLUDED", "PARTIAL"].map((value) => <option key={value}>{value.replaceAll("_", " ")}</option>)}</select></label>
+        <label className="text-sm text-slate-300 md:col-span-2">Installation notes<textarea className={`${fieldClass} mt-1 min-h-24`} value={policy.installationNotes} onChange={(event) => updatePolicy("installationNotes", event.target.value)} /></label>
+      </div>;
+    }
+    if (editorSection === "delivery") {
+      return <div className="grid gap-4 md:grid-cols-2">
+        <label className="text-sm text-slate-300">Transport rule<select className={`${fieldClass} mt-1`} value={policy.transportMode} onChange={(event) => updatePolicy("transportMode", event.target.value as ProductCatalogueConfiguration["transportMode"])}>{["INCLUDED", "ZONE", "FREE", "CUSTOM", "PICKUP"].map((value) => <option key={value}>{value.replaceAll("_", " ")}</option>)}</select></label>
+        <label className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/60 px-4 text-sm text-slate-200"><input type="checkbox" checked={policy.useDefaultTransportRates} onChange={(event) => updatePolicy("useDefaultTransportRates", event.target.checked)} /> Use default Betech zone pricing</label>
+        {!policy.useDefaultTransportRates && policy.transportMode === "ZONE" ? ([1, 2, 3] as const).map((zone) => <label key={zone} className="text-sm text-slate-300">Zone {zone} fee<input className={`${fieldClass} mt-1`} type="number" min="0" value={policy[`zone${zone}TransportFee`] ?? ""} onChange={(event) => updatePolicy(`zone${zone}TransportFee`, event.target.value ? Number(event.target.value) : null)} /></label>) : null}
+      </div>;
+    }
+    if (editorSection === "details") {
+      const addRow = (key: "structuredSpecifications" | "componentWarranties") => updatePolicy(key, [...policy[key], { label: "", value: "" }]);
+      return <div className="grid gap-5 lg:grid-cols-2">{(["structuredSpecifications", "componentWarranties"] as const).map((key) => <div key={key} className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4"><div className="flex items-center justify-between"><h3 className="font-semibold text-white">{key === "structuredSpecifications" ? "Key specifications" : "Component warranties"}</h3><button type="button" className="rounded-lg border border-emerald-400/30 px-3 py-1 text-xs text-emerald-200" onClick={() => addRow(key)}>+ Add row</button></div><div className="mt-3 space-y-2">{policy[key].map((row, index) => <div key={index} className="grid grid-cols-[1fr_1fr_auto] gap-2"><input className={fieldClass} placeholder="Label" value={row.label} onChange={(event) => updatePolicy(key, policy[key].map((entry, rowIndex) => rowIndex === index ? { ...entry, label: event.target.value } : entry))} /><input className={fieldClass} placeholder="Value" value={row.value} onChange={(event) => updatePolicy(key, policy[key].map((entry, rowIndex) => rowIndex === index ? { ...entry, value: event.target.value } : entry))} /><button type="button" className="px-2 text-rose-300" onClick={() => updatePolicy(key, policy[key].filter((_, rowIndex) => rowIndex !== index))}>Remove</button></div>)}</div></div>)}</div>;
+    }
+    if (editorSection === "review") {
+      return <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{[
+        ["Product", draft.name || "Not named"], ["Price", formatMoney(draft.sellingPrice)], ["Installation", draft.policyConfigured ? policy.installationType.replaceAll("_", " ") : "Not configured"], ["Transport", draft.policyConfigured ? policy.transportMode.replaceAll("_", " ") : "Not configured"], ["Availability", draft.availabilityType.replaceAll("_", " ")], ["Website", draft.ecommerceVisible ? "Visible" : "Hidden"], ["Warranty", draft.warrantyPeriod || "Not set"], ["Commission", draft.commissionEnabled ? formatMoney(draft.commissionAmount) : "Disabled"],
+      ].map(([label, value]) => <div key={label} className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4"><div className="text-[11px] uppercase tracking-widest text-slate-500">{label}</div><div className="mt-2 font-semibold text-white">{value}</div></div>)}</div>;
+    }
+    return <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-300">Use the detailed controls below for {editorSection}. Your entries remain available while moving between sections.</div>;
+  };
+
   return (
     <div className={shellSpacingClass}>
       <section className={isProductDeskMode ? "rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.96)_0%,rgba(15,23,42,0.88)_100%)] p-4 shadow-xl shadow-black/35" : "rounded-3xl border border-white/10 bg-slate-900/80 p-5 shadow-xl shadow-black/40"}>
@@ -1345,7 +1495,14 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
         </div>
       </section>
 
-      <section ref={formSectionRef} className={sectionClass}>
+      <section ref={formSectionRef} className={editorOpen ? "fixed inset-2 z-[100] overflow-y-auto rounded-[28px] border border-cyan-400/20 bg-slate-950 p-4 shadow-2xl shadow-black/70 sm:inset-4 sm:p-6" : sectionClass}>
+        {editorOpen ? <div className="sticky top-0 z-30 -mx-4 -mt-4 mb-5 border-b border-slate-800 bg-slate-950/95 px-4 py-4 backdrop-blur sm:-mx-6 sm:-mt-6 sm:px-6">
+          <div className="flex items-center justify-between gap-4">
+            <div><div className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-300">Product workspace</div><div className="mt-1 text-lg font-semibold text-white">{draft.id ? `Edit ${draft.name || "product"}` : "Create product"}</div></div>
+            <button type="button" aria-label="Close product editor" className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-700 text-2xl text-slate-200 hover:bg-white/5" onClick={() => setEditorOpen(false)}>×</button>
+          </div>
+          <div className="mt-4 flex gap-2 overflow-x-auto pb-1">{editorSections.map(([key, label]) => <button key={key} type="button" onClick={() => setEditorSection(key)} className={`shrink-0 rounded-full border px-3 py-2 text-xs font-semibold ${editorSection === key ? "border-cyan-400 bg-cyan-400/10 text-cyan-100" : "border-slate-800 text-slate-400 hover:text-white"}`}>{label} {sectionComplete[key] ? "✓" : ""}</button>)}</div>
+        </div> : null}
         <div className={`grid ${isProductDeskMode ? "gap-4 xl:grid-cols-[1.45fr_0.55fr]" : "gap-6 xl:grid-cols-[1.25fr_0.75fr]"}`}>
           <div>
             <div className="flex items-start justify-between gap-3">
@@ -1407,6 +1564,13 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                     : ""}
                 </span>
               ) : null}
+            </div>
+            <div className="mt-4 rounded-3xl border border-cyan-400/20 bg-cyan-400/[0.04] p-4 sm:p-5">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div><div className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">{editorSections.find(([key]) => key === editorSection)?.[1]}</div><div className="mt-1 text-sm text-slate-400">Structured catalogue data used by POS, shop, quotations and checkout.</div></div>
+                <label className="flex items-center gap-2 rounded-full border border-amber-400/25 px-3 py-2 text-xs font-semibold text-amber-100"><input type="checkbox" checked={draft.policyConfigured} onChange={(event) => setDraft((current) => ({ ...current, policyConfigured: event.target.checked }))} /> Structured pricing configured</label>
+              </div>
+              {renderStructuredSection()}
             </div>
             <div className={`mt-5 grid ${isProductDeskMode ? "gap-3 md:grid-cols-2" : "gap-4 md:grid-cols-2"}`}>
               <div className="text-sm text-slate-300">
@@ -1814,6 +1978,14 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                         Available in Warehouse
                       </div>
                       <div className="mt-2 text-xs text-slate-500">Warn customer about 1 day pickup or delivery delay.</div>
+                    </label>
+                    <label className="rounded-xl border border-slate-800 bg-slate-950/80 p-3 text-sm text-slate-200">
+                      <div className="flex items-center gap-2"><input type="radio" name="availabilityType" checked={draft.availabilityType === "ORDER_ON_REQUEST"} disabled={!capabilities.availabilityType} onChange={() => setDraft((current) => ({ ...current, availabilityType: "ORDER_ON_REQUEST", pickupDelayDays: 0 }))} /> Order on Request</div>
+                      <div className="mt-2 text-xs text-slate-500">Staff confirms availability before fulfilment.</div>
+                    </label>
+                    <label className="rounded-xl border border-slate-800 bg-slate-950/80 p-3 text-sm text-slate-200">
+                      <div className="flex items-center gap-2"><input type="radio" name="availabilityType" checked={draft.availabilityType === "OUT_OF_STOCK"} disabled={!capabilities.availabilityType} onChange={() => setDraft((current) => ({ ...current, availabilityType: "OUT_OF_STOCK", pickupDelayDays: 0 }))} /> Out of Stock</div>
+                      <div className="mt-2 text-xs text-slate-500">Keep the product visible but unavailable to order.</div>
                     </label>
                   </div>
                   <div className="mt-2 rounded-xl border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-amber-100">
@@ -2329,17 +2501,19 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                   <input type="checkbox" checked={allOnPageSelected} onChange={toggleAllOnPage} disabled={!filteredProducts.length || !!bulkBusy} />
                 </th> : null}
                 <th className={compactCellClass}>Product</th>
-                <th className={compactCellClass}>Seller SKU</th>
+                <th className={compactCellClass}>Category</th>
                 <th className={compactCellClass}>Price</th>
-                <th className={compactCellClass}>Shop</th>
-                <th className={compactCellClass}>Active</th>
+                <th className={compactCellClass}>Installation</th>
+                <th className={compactCellClass}>Transport</th>
+                <th className={compactCellClass}>Website</th>
+                <th className={compactCellClass}>Stock / Status</th>
                 <th className={`${compactCellClass} text-right`}>Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800 bg-slate-950/40">
               {loading ? (
                 <tr>
-                  <td colSpan={canUseBulkActions ? 7 : 6} className={`${compactCellClass} py-6 text-center text-slate-400`}>Loading products...</td>
+                  <td colSpan={canUseBulkActions ? 9 : 8} className={`${compactCellClass} py-6 text-center text-slate-400`}>Loading products...</td>
                 </tr>
               ) : filteredProducts.length ? (
                 filteredProducts.map((product) => {
@@ -2347,8 +2521,10 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                   const availabilityType = normalizeAvailabilityType(product.availabilityType);
                   const displayImage = product.mainImageUrl || product.shopImageUrl || "";
                   const shopHref = `/shop/product/${slugifyShopProductName(product.name)}`;
+                  const policy = product.catalogueConfiguration;
+                  const expanded = expandedProductId === product.id;
 
-                  return <tr key={product.id} className={draft.id === product.id ? "bg-emerald-500/5" : undefined}>
+                  return <Fragment key={product.id}><tr className={draft.id === product.id ? "bg-emerald-500/5" : undefined}>
                     {canUseBulkActions ? (
                       <td className={`${compactCellClass} align-top`}>
                         <input
@@ -2361,6 +2537,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                     ) : null}
                     <td className={`${compactCellClass} align-top`}>
                       <div className={`flex items-start ${isProductDeskMode ? "gap-2.5" : "gap-3"}`}>
+                        <button type="button" aria-label={expanded ? "Collapse product" : "Expand product"} onClick={() => setExpandedProductId(expanded ? null : product.id)} className="mt-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-700 text-slate-300 hover:bg-white/5">{expanded ? "−" : "+"}</button>
                         {displayImage ? (
                           <img src={displayImage} alt={product.name} className={`${isProductDeskMode ? "h-12 w-12" : "h-14 w-14"} rounded-xl border border-slate-800 object-cover`} />
                         ) : (
@@ -2409,6 +2586,8 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                         {product.commissionEnabled ? `Commission ${formatMoney(product.commissionAmount)}` : "No commission"}
                       </div> : null}
                     </td>
+                    <td className={`${compactCellClass} align-top`}><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${policy ? "bg-cyan-500/15 text-cyan-100" : "bg-amber-500/10 text-amber-100"}`}>{policy ? policy.installationType.replaceAll("_", " ") : "NOT CONFIGURED"}</span></td>
+                    <td className={`${compactCellClass} align-top`}><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${policy ? "bg-emerald-500/15 text-emerald-100" : "bg-slate-800 text-slate-400"}`}>{policy ? policy.transportMode.replaceAll("_", " ") : "LEGACY"}</span></td>
                     <td className={`${compactCellClass} align-top`}>
                       <div className="space-y-2">
                         <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${visibleInShop ? "bg-emerald-500/15 text-emerald-200" : "bg-slate-800 text-slate-400"}`}>
@@ -2472,11 +2651,16 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                         </button> : null}
                       </div>
                     </td>
-                  </tr>;
+                  </tr>{expanded ? <tr className="bg-slate-900/80"><td colSpan={canUseBulkActions ? 9 : 8} className="px-5 py-5"><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div><div className="text-[10px] uppercase tracking-widest text-slate-500">Pricing</div><div className="mt-2 text-sm text-white">Selling {formatMoney(product.sellingPrice)}</div><div className="text-sm text-slate-400">Buying {product.variableCost ? "Variable" : formatMoney(product.lastBuyingPrice)}</div><div className="text-sm text-emerald-300">Profit {product.lastBuyingPrice == null ? "Pending buying price" : formatMoney(Number(product.sellingPrice) - Number(product.lastBuyingPrice))}</div></div>
+                    <div><div className="text-[10px] uppercase tracking-widest text-slate-500">Catalogue</div><div className="mt-2 text-sm text-white">{product.shopCategory || product.category}{product.shopSubcategory ? ` / ${product.shopSubcategory}` : ""}</div><div className="text-sm text-slate-400">SKU {product.sku}</div><div className="text-sm text-slate-400">{product.productType || "Product type not set"}</div></div>
+                    <div><div className="text-[10px] uppercase tracking-widest text-slate-500">Fulfilment policy</div><div className="mt-2 text-sm text-white">Installation: {policy ? policy.installationType.replaceAll("_", " ") : "Not configured"}</div><div className="text-sm text-slate-400">Transport: {policy ? policy.transportMode.replaceAll("_", " ") : "Not configured"}</div><div className="text-sm text-slate-400">Availability: {availabilityType.replaceAll("_", " ")}</div></div>
+                    <div><div className="text-[10px] uppercase tracking-widest text-slate-500">Publishing</div><div className="mt-2 text-sm text-white">{visibleInShop ? "Visible online" : "Hidden online"}</div><div className="text-sm text-slate-400">Warranty {product.warrantyPeriod || product.shopWarranty || "not set"}</div><button type="button" onClick={() => startEdit(product)} className="mt-3 rounded-xl bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950">Edit full product</button></div>
+                  </div></td></tr> : null}</Fragment>;
                 })
               ) : (
                 <tr>
-                  <td colSpan={canUseBulkActions ? 7 : 6} className={`${compactCellClass} py-6 text-center text-slate-400`}>No POS products match the current filters.</td>
+                  <td colSpan={canUseBulkActions ? 9 : 8} className={`${compactCellClass} py-6 text-center text-slate-400`}>No POS products match the current filters.</td>
                 </tr>
               )}
             </tbody>
