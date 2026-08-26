@@ -5,6 +5,7 @@ import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 import { buildReceiptKey as buildDatedReceiptKey } from "@/lib/receipts/utils";
 import { adjustProfitForPodDeliveryFee, getPodDeliveryFee } from "@/lib/podDeliveryFee";
 import { computeRecognizedReceiptProfit } from "@/lib/recognizedReceiptProfit";
+import { calculateAggregateReceiptProfit, readReceiptAggregatePricing } from "@/lib/receiptAggregatePricing";
 import {
   getReceiptProjectCompletionDate,
   isReceiptProjectRecognizedForSales,
@@ -459,8 +460,9 @@ export async function summarizePosReceiptsForPeriod(period: {
 
   const computeProfitFromCosts = (row: PosReceiptRow) => {
     const selling = extractSales(row);
+    const aggregatePricing = readReceiptAggregatePricing(row);
     const persistedProfit = extractProfit(row, selling);
-    if (persistedProfit > 0) {
+    if (!aggregatePricing.isAuthoritativeTotal && persistedProfit > 0) {
       return persistedProfit;
     }
     const agentSaleCommission = Number((row?.data as any)?.agentSale?.commissionAmount ?? 0) || 0;
@@ -483,13 +485,11 @@ export async function summarizePosReceiptsForPeriod(period: {
       }
     }
 
-    const totals = row.totals ?? {};
-    const data = row.data ?? {};
-    const aggregateCostRaw =
-      toNumber((row as any)?.buyingTotal) ||
-      toNumber((data as any)?.buyingTotal) ||
-      toNumber((totals as any)?.buyingTotal);
-    const aggregateCost = supportBuying && supportBuying > 0 ? supportBuying : aggregateCostRaw;
+    const aggregateCost = aggregatePricing.isAuthoritativeTotal
+      ? aggregatePricing.buyingTotal
+      : supportBuying && supportBuying > 0
+        ? supportBuying
+        : aggregatePricing.buyingTotal;
 
     const items = row.order?.items ?? [];
     const perItemUnitCosts = items.map((item: any) => {
@@ -503,17 +503,25 @@ export async function summarizePosReceiptsForPeriod(period: {
         snapUnitCost > 0 ? snapUnitCost : productLastBuying > 0 ? productLastBuying : productCost > 0 ? productCost : 0;
       return buyingSum > 0 ? buyingSum : fallbackUnitCost;
     });
+    if (aggregatePricing.isAuthoritativeTotal) {
+      return calculateAggregateReceiptProfit({
+        sellingTotal: selling,
+        buyingTotal: aggregateCost,
+        commissionTotal: agentSaleCommission,
+        deliveryFee,
+      });
+    }
     return computeRecognizedReceiptProfit({
-      items: items.map((item: any, idx: number) => ({
-        quantity: item?.quantity,
-        sellingPrice: item?.sellingPrice ?? item?.unitPrice ?? 0,
-        buyingPrice: Number(perItemUnitCosts[idx] ?? 0),
-      })),
-      aggregateSellingTotal: selling,
-      aggregateBuyingTotal: aggregateCost,
-      commissionTotal: agentSaleCommission,
-      deliveryFee,
-    }).recognizedProfit;
+        items: items.map((item: any, idx: number) => ({
+          quantity: item?.quantity,
+          sellingPrice: item?.sellingPrice ?? item?.unitPrice ?? 0,
+          buyingPrice: Number(perItemUnitCosts[idx] ?? 0),
+        })),
+        aggregateSellingTotal: selling,
+        aggregateBuyingTotal: aggregateCost,
+        commissionTotal: agentSaleCommission,
+        deliveryFee,
+      }).recognizedProfit;
   };
 
   const seen = new Map<string, string>();

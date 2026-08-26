@@ -4,6 +4,7 @@ import { buildReceiptKey } from "@/lib/receiptKey";
 import { Prisma } from "@prisma/client";
 import { adjustProfitForPodDeliveryFee, getPodDeliveryFee } from "@/lib/podDeliveryFee";
 import { computeRecognizedReceiptProfit } from "@/lib/recognizedReceiptProfit";
+import { calculateAggregateReceiptProfit, readReceiptAggregatePricing } from "@/lib/receiptAggregatePricing";
 import {
   getReceiptProjectCompletionDate,
   isReceiptProjectRecognizedForSales,
@@ -23,9 +24,11 @@ type ReceiptSummaryRecord = {
   sellingTotal: number;
   items: Array<{ quantity?: number; buyingPrice?: number | null; sellingPrice?: number | null } | null>;
   buyingTotal?: number;
+  buyingPriceMode?: "TOTAL" | "ITEMS" | null;
   supportBuyingTotal?: number;
   profit?: number;
   deliveryFee?: number;
+  commissionTotal?: number;
 };
 
 export type ProfitReceiptContributor = {
@@ -547,22 +550,46 @@ async function computePosOnlyReceiptSummary({
     });
 
     const supportBuyingTotal = Number(supportProfit?.buyingTotal ?? supportBuying?.buyingTotal ?? 0);
-    const aggregateBuyingTotal = Number((receipt as any)?.buyingTotal ?? (receipt.data as any)?.buyingTotal ?? 0);
-    const resolvedBuyingTotal = supportBuyingTotal > 0 ? supportBuyingTotal : aggregateBuyingTotal;
-    const recognized = computeRecognizedReceiptProfit({
-      items: items.map((item: any) => ({
-        quantity: item?.quantity,
-        sellingPrice: item?.sellingPrice ?? 0,
-        buyingPrice: item?.buyingPrice ?? 0,
-      })),
-      aggregateSellingTotal: salesValue,
-      aggregateBuyingTotal: resolvedBuyingTotal,
-    });
-    const hasPendingItems = supportPending?.hasPendingItems ?? recognized.hasPendingItems;
+    const aggregatePricing = readReceiptAggregatePricing(receipt);
+    const resolvedBuyingTotal = aggregatePricing.isAuthoritativeTotal
+      ? aggregatePricing.buyingTotal
+      : supportBuyingTotal > 0
+        ? supportBuyingTotal
+        : aggregatePricing.buyingTotal;
+    const deliveryFee = getPodDeliveryFee(receipt.data);
+    const commissionTotal = Number((receipt.data as any)?.agentSale?.commissionAmount ?? 0) || 0;
+    const recognized = aggregatePricing.isAuthoritativeTotal
+      ? {
+          recognizedSellingTotal: salesValue,
+          recognizedBuyingTotal: resolvedBuyingTotal,
+          recognizedProfit: calculateAggregateReceiptProfit({
+            sellingTotal: salesValue,
+            buyingTotal: resolvedBuyingTotal,
+            commissionTotal,
+            deliveryFee,
+          }),
+          hasAnyPricedItems: true,
+          hasPendingItems: false,
+        }
+      : computeRecognizedReceiptProfit({
+          items: items.map((item: any) => ({
+            quantity: item?.quantity,
+            sellingPrice: item?.sellingPrice ?? 0,
+            buyingPrice: item?.buyingPrice ?? 0,
+          })),
+          aggregateSellingTotal: salesValue,
+          aggregateBuyingTotal: resolvedBuyingTotal,
+          commissionTotal,
+          deliveryFee,
+        });
+    const hasPendingItems = aggregatePricing.isAuthoritativeTotal
+      ? false
+      : supportPending?.hasPendingItems ?? recognized.hasPendingItems;
     const buyingTotalForContributor = recognized.recognizedBuyingTotal;
     const supportRecognizedAt = supportBuying?.recognizedAt ?? null;
-    const hasRecognizableProfit = Boolean(supportProfit) || recognized.hasAnyPricedItems;
-    const profitRecognizedAt = supportProfit
+    const useSupportProfit = Boolean(supportProfit) && !aggregatePricing.isAuthoritativeTotal;
+    const hasRecognizableProfit = useSupportProfit || recognized.hasAnyPricedItems;
+    const profitRecognizedAt = useSupportProfit
       ? start
       : supportRecognizedAt instanceof Date
         ? supportRecognizedAt
@@ -571,7 +598,7 @@ async function computePosOnlyReceiptSummary({
           : null;
 
     let receiptProfit = 0;
-    if (supportProfit) {
+    if (useSupportProfit && supportProfit) {
       receiptProfit = supportProfit.profit;
       totalCost += supportProfit.buyingTotal;
       totalProfitPriced += receiptProfit;
@@ -1064,6 +1091,7 @@ export async function computeAdminReceiptSummary({
         break;
       }
     }
+      const aggregatePricing = readReceiptAggregatePricing(receipt);
       return {
         source: "pos" as const,
         id: receipt.id,
@@ -1073,9 +1101,11 @@ export async function computeAdminReceiptSummary({
         sellingTotal: Number((receipt.totals as any)?.total ?? receipt.order?.totalAmount ?? 0),
         // Prefer an explicit aggregate buying total stored on the receipt (if present),
         // otherwise fall back to item-level costs computed below.
-        buyingTotal: Number((receipt as any)?.buyingTotal ?? (receipt.data as any)?.buyingTotal ?? 0),
+        buyingTotal: aggregatePricing.buyingTotal,
+        buyingPriceMode: aggregatePricing.mode,
         supportBuyingTotal: supportBuyingTotal,
         deliveryFee: getPodDeliveryFee(receipt.data),
+        commissionTotal: Number((receipt.data as any)?.agentSale?.commissionAmount ?? 0) || 0,
         profit: (() => {
           const agentSaleCommission = Number((receipt.data as any)?.agentSale?.commissionAmount ?? 0) || 0;
           const p = (receipt as any).profit ?? (receipt.data as any)?.profit;
@@ -1218,19 +1248,35 @@ export async function computeAdminReceiptSummary({
     const items = Array.isArray(receipt.items) ? receipt.items : [];
     const supportBuying = Number(receipt.supportBuyingTotal ?? 0);
     const aggregateCostRaw = Number(receipt.buyingTotal ?? 0);
-    const aggregateCost = supportBuying > 0 ? supportBuying : aggregateCostRaw;
+    const usesAggregateCost = receipt.buyingPriceMode === "TOTAL" && aggregateCostRaw > 0;
+    const aggregateCost = usesAggregateCost ? aggregateCostRaw : supportBuying > 0 ? supportBuying : aggregateCostRaw;
     const deliveryFee = Number(receipt.deliveryFee ?? 0);
+    const commissionTotal = Number(receipt.commissionTotal ?? 0);
     const sell = Number(receipt.sellingTotal ?? 0);
-    const recognized = computeRecognizedReceiptProfit({
-      items: items.map((it: any) => ({
-        quantity: it?.quantity,
-        sellingPrice: it?.sellingPrice ?? sell,
-        buyingPrice: it?.buyingPrice ?? 0,
-      })),
-      aggregateSellingTotal: sell,
-      aggregateBuyingTotal: aggregateCost,
-      deliveryFee,
-    });
+    const recognized = usesAggregateCost
+      ? {
+          recognizedSellingTotal: sell,
+          recognizedBuyingTotal: aggregateCost,
+          recognizedProfit: calculateAggregateReceiptProfit({
+            sellingTotal: sell,
+            buyingTotal: aggregateCost,
+            commissionTotal,
+            deliveryFee,
+          }),
+          hasAnyPricedItems: true,
+          hasPendingItems: false,
+        }
+      : computeRecognizedReceiptProfit({
+          items: items.map((it: any) => ({
+            quantity: it?.quantity,
+            sellingPrice: it?.sellingPrice ?? sell,
+            buyingPrice: it?.buyingPrice ?? 0,
+          })),
+          aggregateSellingTotal: sell,
+          aggregateBuyingTotal: aggregateCost,
+          commissionTotal,
+          deliveryFee,
+        });
     const hasPendingItems = recognized.hasPendingItems;
 
     let receiptProfit = 0;

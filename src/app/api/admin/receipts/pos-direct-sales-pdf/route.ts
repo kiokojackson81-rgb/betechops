@@ -10,7 +10,9 @@ import { computeBrendahDirectCommission } from "@/lib/onlineCommission";
 import { canonicalReceiptNumber } from "@/lib/receiptGuard";
 import { buildReceiptKey } from "@/lib/receiptKey";
 import { computeRecognizedReceiptProfit } from "@/lib/recognizedReceiptProfit";
+import { calculateAggregateReceiptProfit, readReceiptAggregatePricing } from "@/lib/receiptAggregatePricing";
 import { isReceiptProjectRecognizedForSales, readReceiptProjectFlow } from "@/lib/receiptProjects";
+import { getPodDeliveryFee } from "@/lib/podDeliveryFee";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -410,8 +412,12 @@ export async function GET(req: Request) {
       }
     }
 
-    const aggregateCostRaw = Number((receipt as any)?.buyingTotal ?? (receipt.data as any)?.buyingTotal ?? 0);
-    const aggregateCost = supportBuying && supportBuying > 0 ? supportBuying : aggregateCostRaw;
+    const aggregatePricing = readReceiptAggregatePricing(receipt);
+    const aggregateCost = aggregatePricing.isAuthoritativeTotal
+      ? aggregatePricing.buyingTotal
+      : supportBuying && supportBuying > 0
+        ? supportBuying
+        : aggregatePricing.buyingTotal;
 
     const items = (receipt?.order?.items ?? []) as any[];
     const perItemUnitCosts = items.map((item: any) => {
@@ -432,15 +438,29 @@ export async function GET(req: Request) {
       return buyingSum > 0 ? buyingSum : fallbackUnitCost;
     });
 
-    const recognized = computeRecognizedReceiptProfit({
-      items: items.map((item: any, idx: number) => ({
-        quantity: item?.quantity,
-        sellingPrice: item?.sellingPrice ?? item?.unitPrice ?? 0,
-        buyingPrice: Number(perItemUnitCosts[idx] ?? 0),
-      })),
-      aggregateSellingTotal: selling,
-      aggregateBuyingTotal: aggregateCost,
-    });
+    const deliveryFee = getPodDeliveryFee(receipt.data);
+    const commissionTotal = Number((receipt.data as any)?.agentSale?.commissionAmount ?? 0) || 0;
+    const recognized = aggregatePricing.isAuthoritativeTotal
+      ? {
+          recognizedProfit: calculateAggregateReceiptProfit({
+            sellingTotal: selling,
+            buyingTotal: aggregateCost,
+            commissionTotal,
+            deliveryFee,
+          }),
+          hasAnyPricedItems: true,
+        }
+      : computeRecognizedReceiptProfit({
+          items: items.map((item: any, idx: number) => ({
+            quantity: item?.quantity,
+            sellingPrice: item?.sellingPrice ?? item?.unitPrice ?? 0,
+            buyingPrice: Number(perItemUnitCosts[idx] ?? 0),
+          })),
+          aggregateSellingTotal: selling,
+          aggregateBuyingTotal: aggregateCost,
+          commissionTotal,
+          deliveryFee,
+        });
     return { profit: recognized.recognizedProfit, hasCost: recognized.hasAnyPricedItems };
   };
 
