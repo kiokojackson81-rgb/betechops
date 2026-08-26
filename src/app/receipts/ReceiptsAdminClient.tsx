@@ -2,7 +2,9 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import ReceiptsSummary from "./list/ReceiptsSummary";
 import RowActions from "./list/RowActions";
 import MarkdownRendererClient, { RichFormattingToggle } from "@/components/MarkdownRendererClient";
@@ -432,6 +434,9 @@ export default function ReceiptsAdminClient({
   const [hasMore, setHasMore] = useState(false);
   const [selected, setSelected] = useState<ReceiptRow | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [inlineDetailHost, setInlineDetailHost] = useState<HTMLDivElement | null>(null);
+  const detailCacheRef = useRef(new Map<string, ReceiptDetailPayload>());
+  const detailRequestIdRef = useRef<string | null>(null);
   const [triggerSummaryLoading, setTriggerSummaryLoading] = useState(false);
   const [triggerSummaryResult, setTriggerSummaryResult] = useState<string | null>(null);
   const [detail, setDetail] = useState<ReceiptDetailPayload | null>(null);
@@ -840,44 +845,51 @@ export default function ReceiptsAdminClient({
       captureProfitReceipts: true,
     });
   };
+  const applyReceiptDetailPayload = useCallback((payload: ReceiptDetailPayload) => {
+    setDetail(payload);
+    const nextProjectFlow = readReceiptProjectFlow(payload?.receipt?.data?.projectFlow);
+    setProjectEditor(
+      nextProjectFlow
+        ? {
+            stage: nextProjectFlow.stage,
+            paymentTerm: nextProjectFlow.paymentTerm,
+            depositType: nextProjectFlow.depositType || "PERCENT",
+            depositValue: String(
+              nextProjectFlow.depositType === "AMOUNT"
+                ? nextProjectFlow.depositRequiredAmount || 0
+                : nextProjectFlow.depositValue || nextProjectFlow.depositPercent || 30,
+            ),
+            depositPaidAmount: String(nextProjectFlow.depositPaidAmount || 0),
+            depositPaymentMethod: nextProjectFlow.depositPaymentMethod || "UNSPECIFIED",
+            depositReference: nextProjectFlow.depositReference || "",
+            balancePaidAmount: String(nextProjectFlow.balancePaidAmount || 0),
+            balancePaymentMethod: nextProjectFlow.balancePaymentMethod || "UNSPECIFIED",
+            balanceReference: nextProjectFlow.balanceReference || "",
+            scheduledDate: nextProjectFlow.scheduledDate ? nextProjectFlow.scheduledDate.slice(0, 10) : "",
+            internalNotes: nextProjectFlow.internalNotes || "",
+            paymentNotes: nextProjectFlow.paymentNotes || "",
+          }
+        : null,
+    );
+  }, []);
+
   const fetchReceiptDetail = useCallback(async (id: string) => {
+    detailRequestIdRef.current = id;
     setDetailLoading(true);
     try {
       const res = await fetch(`/api/receipts/${id}`, { cache: "no-store" });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(payload?.error || "Failed to load receipt");
-      setDetail(payload as ReceiptDetailPayload);
-      const nextProjectFlow = readReceiptProjectFlow(payload?.receipt?.data?.projectFlow);
-      setProjectEditor(
-        nextProjectFlow
-          ? {
-              stage: nextProjectFlow.stage,
-              paymentTerm: nextProjectFlow.paymentTerm,
-              depositType: nextProjectFlow.depositType || "PERCENT",
-              depositValue: String(
-                nextProjectFlow.depositType === "AMOUNT"
-                  ? nextProjectFlow.depositRequiredAmount || 0
-                  : nextProjectFlow.depositValue || nextProjectFlow.depositPercent || 30,
-              ),
-              depositPaidAmount: String(nextProjectFlow.depositPaidAmount || 0),
-              depositPaymentMethod: nextProjectFlow.depositPaymentMethod || "UNSPECIFIED",
-              depositReference: nextProjectFlow.depositReference || "",
-              balancePaidAmount: String(nextProjectFlow.balancePaidAmount || 0),
-              balancePaymentMethod: nextProjectFlow.balancePaymentMethod || "UNSPECIFIED",
-              balanceReference: nextProjectFlow.balanceReference || "",
-              scheduledDate: nextProjectFlow.scheduledDate ? nextProjectFlow.scheduledDate.slice(0, 10) : "",
-              internalNotes: nextProjectFlow.internalNotes || "",
-              paymentNotes: nextProjectFlow.paymentNotes || "",
-            }
-          : null,
-      );
+      detailCacheRef.current.set(id, payload as ReceiptDetailPayload);
+      if (detailRequestIdRef.current !== id) return;
+      applyReceiptDetailPayload(payload as ReceiptDetailPayload);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load receipt";
       showToast(message, "error");
     } finally {
-      setDetailLoading(false);
+      if (detailRequestIdRef.current === id) setDetailLoading(false);
     }
-  }, [showToast]);
+  }, [applyReceiptDetailPayload, showToast]);
   const handleMarkPodDelivered = useCallback(
     async (receiptId: string) => {
       setPodActionId(receiptId);
@@ -966,19 +978,32 @@ export default function ReceiptsAdminClient({
     [fetchReceiptDetail, fetchSummary, loadRows, page, selected, showToast],
   );
 
-  const handleRowClick = (row: ReceiptRow) => {
+  const handleRowClick = (row: ReceiptRow, forceOpen = false) => {
     if (!canTreatAsSalesReceipt(row)) {
       showToast("Receipt detail view is only available for sales or delivered POD receipts", "info");
       return;
     }
+    if (!forceOpen && drawerOpen && selected?.id === row.id) {
+      closeDrawer();
+      return;
+    }
     setSelected(row);
     setDrawerOpen(true);
-    setDetail(null);
-    void fetchReceiptDetail(row.id);
+    const cached = detailCacheRef.current.get(row.id);
+    if (cached) {
+      detailRequestIdRef.current = row.id;
+      applyReceiptDetailPayload(cached);
+      setDetailLoading(false);
+    } else {
+      setDetail(null);
+      void fetchReceiptDetail(row.id);
+    }
   };
 
   const closeDrawer = () => {
+    detailRequestIdRef.current = null;
     setDrawerOpen(false);
+    setInlineDetailHost(null);
     setSelected(null);
     setDetail(null);
     setProjectEditor(null);
@@ -2129,9 +2154,10 @@ export default function ReceiptsAdminClient({
           </div>
         ) : null}
         <div className="overflow-x-auto rounded-[28px] border border-white/5 bg-slate-950/60">
-          <table className="min-w-[900px] text-sm">
+          <table className="w-full min-w-[900px] text-sm">
             <thead className="text-xs uppercase tracking-wide text-slate-400 whitespace-nowrap">
               <tr>
+                <th className="w-14 px-3 py-2 text-center whitespace-nowrap" aria-label="Expand receipt" />
                 <th className="px-3 py-2 text-left whitespace-nowrap">Order</th>
                 <th className="px-3 py-2 text-left whitespace-nowrap">Doc</th>
                 <th className="px-3 py-2 text-left whitespace-nowrap">Customer</th>
@@ -2146,7 +2172,7 @@ export default function ReceiptsAdminClient({
             <tbody className="divide-y divide-white/5 whitespace-nowrap">
               {displayRows.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-3 py-6 text-center text-slate-400">
+                  <td colSpan={10} className="px-3 py-6 text-center text-slate-400">
                     {loading
                       ? "Loading receipts..."
                       : profitViewActive
@@ -2163,11 +2189,25 @@ export default function ReceiptsAdminClient({
                   displayName: row.customerName,
                 });
                 return (
+                  <Fragment key={row.id}>
                   <tr
-                    key={row.id}
                     className={`cursor-pointer transition hover:bg-white/5 ${isSelected ? "bg-white/5" : ""}`}
                     onClick={() => handleRowClick(row)}
+                    aria-expanded={isSelected}
                   >
+                  <td className="px-3 py-3 text-center">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleRowClick(row);
+                      }}
+                      className="inline-flex rounded-xl border border-white/10 p-2 text-slate-200 transition hover:border-cyan-400/30 hover:bg-cyan-400/10 hover:text-cyan-100"
+                      aria-label={isSelected ? "Collapse receipt details" : "Expand receipt details"}
+                    >
+                      {isSelected ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    </button>
+                  </td>
                   <td className="px-3 py-3 whitespace-nowrap">
                   <div className="font-semibold text-white">{row.orderRef || "-"}</div>
                   <div className="text-xs text-slate-400">#{row.id.slice(0, 6)}</div>
@@ -2178,7 +2218,11 @@ export default function ReceiptsAdminClient({
                     </span>
                   </td>
                   <td className="px-3 py-3">
-                    <Link href={customerProfileHref} className="text-white transition hover:text-cyan-200">
+                    <Link
+                      href={customerProfileHref}
+                      onClick={(event) => event.stopPropagation()}
+                      className="text-white transition hover:text-cyan-200"
+                    >
                       {row.customerName || "Walk-in"}
                     </Link>
                   </td>
@@ -2212,17 +2256,11 @@ export default function ReceiptsAdminClient({
                       <RowActions
                         onEdit={() => {
                           setPendingEditId(row.id);
-                          setSelected(row);
-                          setDrawerOpen(true);
-                          setDetail(null);
-                          void fetchReceiptDetail(row.id);
+                          handleRowClick(row, true);
                         }}
                         onEditItems={() => {
                           setPendingEditId(row.id);
-                          setSelected(row);
-                          setDrawerOpen(true);
-                          setDetail(null);
-                          void fetchReceiptDetail(row.id);
+                          handleRowClick(row, true);
                         }}
                         onDelete={() => void deleteReceiptById(row.id)}
                         onDownload={() => void downloadReceiptById(row)}
@@ -2252,6 +2290,16 @@ export default function ReceiptsAdminClient({
                       />
                     </td>
                   </tr>
+                  {isSelected ? (
+                    <tr className="bg-slate-950/80">
+                      <td colSpan={10} className="border-t border-cyan-400/15 p-0 whitespace-normal">
+                        <div className="sticky left-0 w-[calc(100vw-2rem)] max-w-[calc(100vw-2rem)] p-3 sm:p-4 lg:static lg:w-auto lg:max-w-none lg:p-5">
+                          <div ref={setInlineDetailHost} />
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null}
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -2284,10 +2332,9 @@ export default function ReceiptsAdminClient({
           )}
         </div>
       </section>
-      {drawerOpen && (
-        <>
-          <div className="fixed inset-0 z-40 bg-black/60" onClick={closeDrawer} />
-          <aside className="fixed inset-y-0 right-0 z-50 w-full max-w-xl transform overflow-y-auto bg-slate-950 p-6 text-slate-100 shadow-2xl shadow-black/60 transition-transform">
+      {drawerOpen && inlineDetailHost
+        ? createPortal(
+          <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,.98),rgba(2,6,23,.98))] p-4 text-slate-100 shadow-[0_24px_80px_rgba(0,0,0,.35)] sm:p-5">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Receipt detail</p>
@@ -2941,9 +2988,10 @@ export default function ReceiptsAdminClient({
                 )}
               </div>
             )}
-          </aside>
-        </>
-      )}
+          </div>,
+          inlineDetailHost,
+        )
+        : null}
       <EditModal
         open={editState.open}
         draft={editState.draft}
