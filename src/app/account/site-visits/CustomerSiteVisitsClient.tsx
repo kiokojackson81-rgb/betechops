@@ -32,6 +32,7 @@ type FormState = {
   preferredDate: string;
   preferredTimeLabel: "MORNING" | "AFTERNOON";
 };
+type InitialBooking = Partial<FormState> & { preferredProduct?: string };
 
 const emptyForm = (profile: Profile): FormState => ({
   projectType: "SOLAR_HOME_SYSTEM",
@@ -47,6 +48,24 @@ const emptyForm = (profile: Profile): FormState => ({
   preferredDate: "",
   preferredTimeLabel: "MORNING",
 });
+const prefilledForm = (profile: Profile, initialBooking?: InitialBooking): FormState => {
+  const base = emptyForm(profile);
+  const supplied = Object.fromEntries(
+    Object.entries(initialBooking || {}).filter(
+      ([key, value]) => key !== "preferredProduct" && typeof value === "string" && value.trim(),
+    ),
+  ) as Partial<FormState>;
+  const preferredProduct = initialBooking?.preferredProduct?.trim();
+  return {
+    ...base,
+    ...supplied,
+    customerRequirements:
+      supplied.customerRequirements ||
+      (preferredProduct
+        ? `Assess the site and recommend installation requirements for ${preferredProduct}.`
+        : base.customerRequirements),
+  };
+};
 const money = (value: number) => `KES ${value.toLocaleString("en-KE")}`;
 const label = (value?: string | null, fallback = "Pending") =>
   (value || fallback)
@@ -65,16 +84,18 @@ export default function CustomerSiteVisitsClient({
   initialVisits,
   profile,
   initialOpenBooking = false,
+  initialBooking,
 }: {
   initialVisits: CustomerSiteVisit[];
   profile: Profile;
   initialOpenBooking?: boolean;
+  initialBooking?: InitialBooking;
 }) {
   const router = useRouter();
   const [visits, setVisits] = useState(initialVisits);
   const [open, setOpen] = useState(initialOpenBooking);
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState<FormState>(() => emptyForm(profile));
+  const [form, setForm] = useState<FormState>(() => prefilledForm(profile, initialBooking));
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const availableTowns = useMemo(

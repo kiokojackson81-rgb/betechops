@@ -11,7 +11,15 @@ export const metadata: Metadata = buildShopMetadata({
 export default async function AccountSiteVisitsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ new?: string }>;
+  searchParams: Promise<{
+    new?: string;
+    projectType?: string;
+    requirements?: string;
+    product?: string;
+    county?: string;
+    town?: string;
+    location?: string;
+  }>;
 }) {
   const query = await searchParams;
   const { identity, profile } = await getCustomerAccountContext();
@@ -21,6 +29,14 @@ export default async function AccountSiteVisitsPage({
       initialVisits={visits.map(toCustomerSiteVisit)}
       profile={profile}
       initialOpenBooking={query.new === "1"}
+      initialBooking={{
+        projectType: query.projectType,
+        customerRequirements: query.requirements,
+        preferredProduct: query.product,
+        county: query.county,
+        town: query.town,
+        location: query.location,
+      }}
     />
   );
 }

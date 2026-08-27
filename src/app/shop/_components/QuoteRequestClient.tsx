@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { type FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { CalendarCheck2 } from "lucide-react";
 import { createQuoteRequest, type ShopApiError } from "@/app/shop/shopSubmitApi";
 import { trackQuoteSubmitted } from "@/app/shop/shopAnalytics";
 import { shopStyles } from "@/app/shop/_components/shopStyles";
@@ -173,6 +174,31 @@ export default function QuoteRequestClient({
 
   const availableTowns = useMemo(() => getTownsForCounty(form.county), [form.county]);
   const serviceZone = getServiceZone(form.county, form.town);
+  const siteVisitHref = useMemo(() => {
+    const params = new URLSearchParams({
+      new: "1",
+      projectType: form.projectType,
+    });
+    const product = form.preferredProducts.trim();
+    const location = form.exactLocation.trim();
+    if (form.county) params.set("county", form.county);
+    if (form.town) params.set("town", form.town);
+    if (location) params.set("location", location);
+    if (product) params.set("product", product);
+    params.set(
+      "requirements",
+      product
+        ? `Assess the site and recommend installation requirements for ${product}.`
+        : `Assess the site and recommend the right ${projectTypeLabel(form.projectType).toLowerCase()} solution.`,
+    );
+    return `/account/site-visits?${params.toString()}`;
+  }, [
+    form.county,
+    form.exactLocation,
+    form.preferredProducts,
+    form.projectType,
+    form.town,
+  ]);
   const inputBaseClass = "min-h-[3.4rem] rounded-2xl border bg-white px-4 outline-none transition";
   const resolveFieldClass = (fieldName: string) =>
     `${inputBaseClass} ${fieldErrors[fieldName] ? "border-red-300 ring-2 ring-red-100" : "border-[#7a0000]/10 focus:border-[#7a0000]/30"}`;
@@ -907,6 +933,14 @@ export default function QuoteRequestClient({
             {submitting ? "Sending..." : "Submit Quote Request"}
           </button>
         )}
+
+        <Link
+          href={siteVisitHref}
+          className="inline-flex min-h-[3.35rem] items-center justify-center gap-2 rounded-[20px] border border-amber-400 bg-amber-50 px-5 py-3 text-center text-sm font-black text-[#7a0000] shadow-[0_14px_30px_rgba(242,178,15,0.12)] transition hover:-translate-y-0.5 hover:bg-amber-100 sm:ml-auto"
+        >
+          <CalendarCheck2 className="h-4 w-4 shrink-0" />
+          <span>Not sure what you need? Request a site visit</span>
+        </Link>
       </div>
 
       <p className="mt-4 text-sm leading-6 text-slate-500">
