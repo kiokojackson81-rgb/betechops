@@ -12,6 +12,7 @@ import { getProductAvailabilityBadge } from "@/app/shop/shopAvailability";
 import {
   getShopLipaPolePoleProductHref,
   getShopProductHref,
+  getShopRequestQuoteHref,
   getShopSiteVisitProductHref,
 } from "@/app/shop/storefrontPaths";
 
@@ -79,9 +80,19 @@ export default function ProductCard({ product }: ProductCardProps) {
         </div>
 
         <div className={`mt-2 ${product.price > 100_000 ? "grid grid-cols-2 gap-1.5" : "flex"}`}>
-          <div className="inline-flex min-h-7 items-center justify-center rounded-full border border-[#0f9d58]/14 bg-[#effcf4] px-2.5 py-1 text-center text-[9px] font-black uppercase tracking-[0.08em] text-[#0f9d58] sm:tracking-[0.12em]">
-            {stockLabelMap[product.stockStatus]}
-          </div>
+          {product.stockStatus === "quote_only" ? (
+            <Link
+              href={getShopRequestQuoteHref(product.name)}
+              className="inline-flex min-h-7 items-center justify-center rounded-full border border-[#0f9d58]/20 bg-[#effcf4] px-2.5 py-1 text-center text-[9px] font-black uppercase tracking-[0.08em] text-[#0f9d58] transition hover:border-[#0f9d58]/45 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f9d58]/40 sm:tracking-[0.12em]"
+              aria-label={`Request a quote for ${product.name}`}
+            >
+              Request Quote
+            </Link>
+          ) : (
+            <div className="inline-flex min-h-7 items-center justify-center rounded-full border border-[#0f9d58]/14 bg-[#effcf4] px-2.5 py-1 text-center text-[9px] font-black uppercase tracking-[0.08em] text-[#0f9d58] sm:tracking-[0.12em]">
+              {stockLabelMap[product.stockStatus]}
+            </div>
+          )}
           {product.price > 100_000 ? (
             <Link
               href={getShopSiteVisitProductHref(product.slug, product.opsProductId)}
