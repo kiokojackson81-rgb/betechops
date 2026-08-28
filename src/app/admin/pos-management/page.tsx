@@ -44,9 +44,9 @@ export default async function PosManagementPage({ searchParams }: PosManagementP
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.25em] text-slate-400">POS Management</p>
-            <h1 className="mt-2 text-3xl font-semibold text-white">Products, buying price, and commission approvals</h1>
+            <h1 className="mt-2 text-3xl font-semibold text-white">Products, pricing, installation, and transport</h1>
             <p className="mt-2 max-w-3xl text-sm text-slate-400">
-              Manage the catalog used on the receipts desk, define buying prices and per-product commission, and release or reject pending POS commission approvals.
+              Manage the catalogue used by the receipts desk and online shop, including buying prices, installation requirements, and zone transport fees.
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-3">

@@ -344,12 +344,26 @@ export default async function ShopProductDetailPage({
                     <div className="rounded-[22px] border border-[#7a0000]/8 bg-[#fcfaf7] px-4 py-3 text-sm leading-6 text-slate-700">
                       {availabilityMessage}
                     </div>
-                    {product.catalogueConfiguration ? <div className="grid gap-2 rounded-[22px] border border-amber-300/40 bg-amber-50 px-4 py-4 text-sm text-slate-800 sm:grid-cols-2">
-                      <div><span className="font-black text-[#7a0000]">Installation:</span> {product.catalogueConfiguration.installationType.replaceAll("_", " ").toLowerCase()}</div>
-                      <div><span className="font-black text-[#7a0000]">Delivery:</span> {product.catalogueConfiguration.transportMode.replaceAll("_", " ").toLowerCase()}</div>
-                      <div className="sm:col-span-2"><span className="font-black text-[#7a0000]">Price includes:</span> {product.catalogueConfiguration.priceIncludes.map((item) => item.replaceAll("_", " ").toLowerCase()).join(", ")}</div>
-                      {product.catalogueConfiguration.accessoriesMode !== "INCLUDED" ? <div className="sm:col-span-2 text-xs leading-5 text-slate-600"><span className="font-bold">Installation accessories:</span> Additional site-specific materials may be confirmed before installation.</div> : null}
-                    </div> : null}
+                    {product.catalogueConfiguration ? (() => {
+                      const policy = product.catalogueConfiguration;
+                      const installationRequired = policy.installationType !== "NOT_REQUIRED" && policy.installationFeeMode !== "UNAVAILABLE";
+                      const installationIncluded = installationRequired && (policy.installationType === "INCLUDED" || policy.installationFeeMode === "INCLUDED" || policy.priceIncludes.includes("INSTALLATION"));
+                      const transportIncluded = policy.transportMode === "INCLUDED" || policy.transportMode === "FREE" || policy.priceIncludes.includes("TRANSPORT");
+                      return <div className="rounded-[22px] border border-amber-300/40 bg-amber-50 px-4 py-4 text-sm text-slate-800">
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div><span className="font-black text-[#7a0000]">Installation:</span> {!installationRequired ? "Not required" : installationIncluded ? "Required and included in price" : "Required and charged separately"}</div>
+                          <div><span className="font-black text-[#7a0000]">Transport:</span> {transportIncluded ? "Included in price" : "Charged by delivery zone"}</div>
+                        </div>
+                        {!transportIncluded && policy.transportMode === "ZONE" ? <div className="mt-3 grid gap-2 border-t border-amber-300/50 pt-3 sm:grid-cols-3">
+                          {([1, 2, 3] as const).map((zone) => {
+                            const fee = policy[`zone${zone}TransportFee`];
+                            return <div key={zone} className="rounded-xl bg-white/70 px-3 py-2"><span className="font-bold text-[#7a0000]">Zone {zone}:</span> {fee == null ? "Confirm fee" : formatCurrency(fee)}</div>;
+                          })}
+                        </div> : null}
+                        {policy.installationNotes ? <div className="mt-3 border-t border-amber-300/50 pt-3 text-xs leading-5 text-slate-600">{policy.installationNotes}</div> : null}
+                        {policy.accessoriesMode !== "INCLUDED" ? <div className="mt-2 text-xs leading-5 text-slate-600"><span className="font-bold">Installation accessories:</span> Additional site-specific materials may be confirmed before installation.</div> : null}
+                      </div>;
+                    })() : null}
                     <ShopProductDetailActions
                       product={product}
                       openLipaPolePole={resolvedSearchParams.lpp === "1"}

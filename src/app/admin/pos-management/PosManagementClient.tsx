@@ -212,11 +212,11 @@ const emptyDraft: ProductDraft = {
     accessoriesMode: "NOT_INCLUDED",
     includedAccessories: "",
     installationNotes: "",
-    transportMode: "PICKUP",
-    useDefaultTransportRates: true,
-    zone1TransportFee: null,
-    zone2TransportFee: null,
-    zone3TransportFee: null,
+    transportMode: "ZONE",
+    useDefaultTransportRates: false,
+    zone1TransportFee: 3000,
+    zone2TransportFee: 7500,
+    zone3TransportFee: 15000,
     priceIncludes: ["EQUIPMENT"],
     allInclusive: false,
     allInclusiveItems: [],
@@ -227,7 +227,7 @@ const emptyDraft: ProductDraft = {
   },
 };
 
-function createDraftDefaults(mode: "admin" | "product-desk"): ProductDraft {
+function createDraftDefaults(): ProductDraft {
   return {
     ...emptyDraft,
     ecommerceVisible: true,
@@ -417,7 +417,7 @@ function getApiErrorMessage(json: unknown, fallback: string) {
 export default function PosManagementClient({ mode = "admin", initialEditProductId = null, activityOwnerId = null }: PosManagementClientProps) {
   const isProductDeskMode = mode === "product-desk";
   const canManagePricing = !isProductDeskMode;
-  const canManageCommissions = !isProductDeskMode;
+  const canManageCommissions = false;
   const canManageActivation = !isProductDeskMode;
   const canDeleteProducts = !isProductDeskMode;
   const canUseBulkActions = !isProductDeskMode;
@@ -426,7 +426,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
   const [capabilities, setCapabilities] = useState<PosCatalogueCapabilities>(defaultCapabilities);
   const [approvals, setApprovals] = useState<CommissionApproval[]>([]);
   const [releasedApprovals, setReleasedApprovals] = useState<CommissionApproval[]>([]);
-  const [draft, setDraft] = useState<ProductDraft>(() => createDraftDefaults(mode));
+  const [draft, setDraft] = useState<ProductDraft>(() => createDraftDefaults());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingKind, setUploadingKind] = useState<"main" | "gallery" | "brand" | null>(null);
@@ -751,13 +751,13 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
   }, [loadImageElement]);
 
   const openCreateEditor = useCallback(() => {
-    setDraft(createDraftDefaults(mode));
+    setDraft(createDraftDefaults());
     setEditorOpen(true);
     setEditorSection("basic");
     window.requestAnimationFrame(() => {
       formSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
-  }, [mode]);
+  }, []);
 
   const applySuggestedShopTaxonomy = useCallback(() => {
     setDraft((current) => ({
@@ -827,7 +827,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
       };
     });
     setEditorOpen(true);
-  }, [mode]);
+  }, []);
 
   const quickPatchProduct = useCallback(async (product: PosProduct, patch: Record<string, unknown>, successMessage: string) => {
     try {
@@ -1076,9 +1076,24 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
   const submitDraft = async () => {
     if (!draft.name.trim()) return showToast("Product name is required", "error");
     if (!draft.sellingPrice.trim()) return showToast("Selling price is required", "error");
-    if (canManageCommissions && draft.commissionEnabled && !draft.commissionAmount.trim()) {
-      return showToast("Commission amount is required when product commission is enabled", "error");
+    const transportIncluded = draft.catalogueConfiguration.transportMode === "INCLUDED"
+      || draft.catalogueConfiguration.transportMode === "FREE"
+      || draft.catalogueConfiguration.priceIncludes.includes("TRANSPORT");
+    if (draft.policyConfigured && !transportIncluded && [
+      draft.catalogueConfiguration.zone1TransportFee,
+      draft.catalogueConfiguration.zone2TransportFee,
+      draft.catalogueConfiguration.zone3TransportFee,
+    ].some((fee) => fee === null || fee === undefined)) {
+      return showToast("Enter transport fees for Zone 1, Zone 2, and Zone 3", "error");
     }
+    const catalogueConfiguration = transportIncluded
+      ? draft.catalogueConfiguration
+      : {
+          ...draft.catalogueConfiguration,
+          transportMode: "ZONE" as const,
+          useDefaultTransportRates: false,
+          priceIncludes: draft.catalogueConfiguration.priceIncludes.filter((item) => item !== "TRANSPORT"),
+        };
     setSaving(true);
     try {
       const canSetBuyingPriceOnThisSave = canManagePricing || (isProductDeskMode && !draft.id);
@@ -1099,12 +1114,9 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
             }
           : {}),
         isActive: isProductDeskMode ? true : draft.status === "ACTIVE" && draft.isActive,
-        commissionEnabled: isProductDeskMode ? false : draft.commissionEnabled,
-        commissionAmount:
-          canManageCommissions && draft.commissionEnabled && draft.commissionAmount.trim()
-            ? Number(draft.commissionAmount)
-            : null,
-        commissionRequiresApproval: canManageCommissions && draft.commissionEnabled ? draft.commissionRequiresApproval : false,
+        commissionEnabled: false,
+        commissionAmount: null,
+        commissionRequiresApproval: false,
         ...(capabilities.brand ? { brand: draft.brand.trim() || null } : {}),
         ...(capabilities.shortDescription ? { shortDescription: draft.shortDescription.trim() || null } : {}),
         ...(capabilities.description ? { description: draft.description.trim() || null } : {}),
@@ -1131,7 +1143,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
         ...(capabilities.productType ? { productType: draft.productType.trim() || null } : {}),
         ...(capabilities.posEnabled ? { posEnabled: draft.posEnabled } : {}),
         ...(capabilities.catalogueConfiguration
-          ? { catalogueConfiguration: draft.policyConfigured ? draft.catalogueConfiguration : null }
+          ? { catalogueConfiguration: draft.policyConfigured ? catalogueConfiguration : null }
           : {}),
       };
 
@@ -1148,7 +1160,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(getApiErrorMessage(json, "Failed to save product"));
       showToast(draft.id ? "Product updated" : "Product created", "success");
-      setDraft(createDraftDefaults(mode));
+      setDraft(createDraftDefaults());
       setEditorOpen(false);
       setEditorSection("basic");
       await loadData(query);
@@ -1188,7 +1200,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(getApiErrorMessage(json, "Failed to delete product"));
       if (draft.id === product.id) {
-        setDraft(createDraftDefaults(mode));
+        setDraft(createDraftDefaults());
         setEditorOpen(false);
       }
       showToast(json?.message || "Product deleted", "success");
@@ -1317,7 +1329,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
       const json = await bulkRequest("delete");
       showToast(json?.message || "Bulk catalog cleanup complete", "success");
       if (draft.id && selectedIds[draft.id]) {
-        setDraft(createDraftDefaults(mode));
+        setDraft(createDraftDefaults());
       }
       clearSelection();
       await loadData(query);
@@ -1347,17 +1359,61 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
     }));
   };
 
+  const updateFulfilmentPolicy = (updates: Partial<ProductCatalogueConfiguration>) => {
+    setDraft((current) => ({
+      ...current,
+      policyConfigured: true,
+      catalogueConfiguration: {
+        ...current.catalogueConfiguration,
+        ...updates,
+      },
+    }));
+  };
+
+  const setInstallationRequired = (required: boolean) => {
+    const included = draft.catalogueConfiguration.priceIncludes.includes("INSTALLATION");
+    updateFulfilmentPolicy({
+      installationType: required ? (included ? "INCLUDED" : "LOCAL_RECOMMENDED") : "NOT_REQUIRED",
+      installationFeeMode: required ? (included ? "INCLUDED" : "STANDARD") : "UNAVAILABLE",
+      customInstallationFee: required ? draft.catalogueConfiguration.customInstallationFee : null,
+      priceIncludes: required
+        ? draft.catalogueConfiguration.priceIncludes
+        : draft.catalogueConfiguration.priceIncludes.filter((item) => item !== "INSTALLATION"),
+    });
+  };
+
+  const setInstallationIncluded = (included: boolean) => {
+    updateFulfilmentPolicy({
+      installationType: included ? "INCLUDED" : "LOCAL_RECOMMENDED",
+      installationFeeMode: included ? "INCLUDED" : "STANDARD",
+      priceIncludes: included
+        ? Array.from(new Set([...draft.catalogueConfiguration.priceIncludes, "INSTALLATION" as const]))
+        : draft.catalogueConfiguration.priceIncludes.filter((item) => item !== "INSTALLATION"),
+    });
+  };
+
+  const setTransportIncluded = (included: boolean) => {
+    updateFulfilmentPolicy({
+      transportMode: included ? "INCLUDED" : "ZONE",
+      useDefaultTransportRates: false,
+      zone1TransportFee: included ? draft.catalogueConfiguration.zone1TransportFee : draft.catalogueConfiguration.zone1TransportFee ?? 3000,
+      zone2TransportFee: included ? draft.catalogueConfiguration.zone2TransportFee : draft.catalogueConfiguration.zone2TransportFee ?? 7500,
+      zone3TransportFee: included ? draft.catalogueConfiguration.zone3TransportFee : draft.catalogueConfiguration.zone3TransportFee ?? 15000,
+      priceIncludes: included
+        ? Array.from(new Set([...draft.catalogueConfiguration.priceIncludes, "TRANSPORT" as const]))
+        : draft.catalogueConfiguration.priceIncludes.filter((item) => item !== "TRANSPORT"),
+    });
+  };
+
   const editorSections = [
     ["basic", "1 Basic"],
     ["pricing", "2 Pricing"],
     ["category", "3 Category"],
-    ["installation", "4 Installation"],
-    ["delivery", "5 Delivery"],
-    ["details", "6 Details"],
-    ["images", "7 Images"],
-    ["website", "8 Website"],
-    ["commission", "9 Commission"],
-    ["review", "10 Review"],
+    ["installation", "4 Installation & transport"],
+    ["details", "5 Details"],
+    ["images", "6 Images"],
+    ["website", "7 Website"],
+    ["review", "8 Review"],
   ] as const;
 
   const sectionComplete: Record<string, boolean> = {
@@ -1365,11 +1421,9 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
     pricing: Boolean(draft.sellingPrice.trim()),
     category: Boolean(draft.shopCategory || draft.category),
     installation: draft.policyConfigured,
-    delivery: draft.policyConfigured,
     details: Boolean(draft.shortDescription.trim() || draft.description.trim()),
     images: Boolean(draft.mainImageUrl || draft.shopImageUrl),
     website: !draft.ecommerceVisible || Boolean(draft.shopCategory && (draft.mainImageUrl || draft.shopImageUrl)),
-    commission: !draft.commissionEnabled || Boolean(draft.commissionAmount.trim()),
     review: Boolean(draft.name.trim() && draft.sellingPrice.trim()),
   };
 
@@ -1391,7 +1445,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
       </div>;
     }
     if (editorSection === "pricing") {
-      const includes = ["EQUIPMENT", "INSTALLATION", "ACCESSORIES", "TRANSPORT", "COMMISSIONING", "REMOTE_SUPPORT"] as const;
+      const includes = ["EQUIPMENT", "ACCESSORIES", "COMMISSIONING", "REMOTE_SUPPORT"] as const;
       return <div>
         <h3 className="font-semibold text-white">What does this price include?</h3>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{includes.map((item) => <label key={item} className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-3 text-sm text-slate-200"><input type="checkbox" checked={policy.priceIncludes.includes(item)} onChange={(event) => updatePolicy("priceIncludes", event.target.checked ? [...policy.priceIncludes, item] : policy.priceIncludes.filter((entry) => entry !== item))} /> {item.replaceAll("_", " ")}</label>)}</div>
@@ -1399,19 +1453,30 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
       </div>;
     }
     if (editorSection === "installation") {
-      return <div className="grid gap-4 md:grid-cols-2">
-        <label className="text-sm text-slate-300">Installation classification<select className={`${fieldClass} mt-1`} value={policy.installationType} onChange={(event) => updatePolicy("installationType", event.target.value as ProductCatalogueConfiguration["installationType"])}>{["INCLUDED", "OPTIONAL_AUTO", "LOCAL_RECOMMENDED", "NOT_REQUIRED", "SITE_ASSESSMENT"].map((value) => <option key={value} value={value}>{value.replaceAll("_", " ")}</option>)}</select></label>
-        <label className="text-sm text-slate-300">Fee rule<select className={`${fieldClass} mt-1`} value={policy.installationFeeMode} onChange={(event) => updatePolicy("installationFeeMode", event.target.value as ProductCatalogueConfiguration["installationFeeMode"])}>{["STANDARD", "CUSTOM", "INCLUDED", "UNAVAILABLE"].map((value) => <option key={value}>{value}</option>)}</select></label>
-        {policy.installationFeeMode === "CUSTOM" ? <label className="text-sm text-slate-300">Custom installation fee<input className={`${fieldClass} mt-1`} type="number" min="0" value={policy.customInstallationFee ?? ""} onChange={(event) => updatePolicy("customInstallationFee", event.target.value ? Number(event.target.value) : null)} /></label> : null}
-        <label className="text-sm text-slate-300">Accessories<select className={`${fieldClass} mt-1`} value={policy.accessoriesMode} onChange={(event) => updatePolicy("accessoriesMode", event.target.value as ProductCatalogueConfiguration["accessoriesMode"])}>{["INCLUDED", "NOT_INCLUDED", "PARTIAL"].map((value) => <option key={value}>{value.replaceAll("_", " ")}</option>)}</select></label>
-        <label className="text-sm text-slate-300 md:col-span-2">Installation notes<textarea className={`${fieldClass} mt-1 min-h-24`} value={policy.installationNotes} onChange={(event) => updatePolicy("installationNotes", event.target.value)} /></label>
-      </div>;
-    }
-    if (editorSection === "delivery") {
-      return <div className="grid gap-4 md:grid-cols-2">
-        <label className="text-sm text-slate-300">Transport rule<select className={`${fieldClass} mt-1`} value={policy.transportMode} onChange={(event) => updatePolicy("transportMode", event.target.value as ProductCatalogueConfiguration["transportMode"])}>{["INCLUDED", "ZONE", "FREE", "CUSTOM", "PICKUP"].map((value) => <option key={value}>{value.replaceAll("_", " ")}</option>)}</select></label>
-        <label className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/60 px-4 text-sm text-slate-200"><input type="checkbox" checked={policy.useDefaultTransportRates} onChange={(event) => updatePolicy("useDefaultTransportRates", event.target.checked)} /> Use default Betech zone pricing</label>
-        {!policy.useDefaultTransportRates && policy.transportMode === "ZONE" ? ([1, 2, 3] as const).map((zone) => <label key={zone} className="text-sm text-slate-300">Zone {zone} fee<input className={`${fieldClass} mt-1`} type="number" min="0" value={policy[`zone${zone}TransportFee`] ?? ""} onChange={(event) => updatePolicy(`zone${zone}TransportFee`, event.target.value ? Number(event.target.value) : null)} /></label>) : null}
+      const installationRequired = policy.installationType !== "NOT_REQUIRED" && policy.installationFeeMode !== "UNAVAILABLE";
+      const installationIncluded = installationRequired && (policy.installationType === "INCLUDED" || policy.installationFeeMode === "INCLUDED" || policy.priceIncludes.includes("INSTALLATION"));
+      const transportIncluded = policy.transportMode === "INCLUDED" || policy.transportMode === "FREE" || policy.priceIncludes.includes("TRANSPORT");
+      const choiceClass = "flex min-h-20 cursor-pointer items-start gap-3 rounded-2xl border border-slate-700 bg-slate-950/60 p-4 text-sm text-slate-200 transition hover:border-emerald-400/50";
+      return <div className="space-y-5">
+        <div>
+          <h3 className="text-lg font-semibold text-white">Installation and transport</h3>
+          <p className="mt-1 text-sm text-slate-400">Use these simple settings to tell customers exactly what the product price covers.</p>
+        </div>
+        <div className="grid gap-3 lg:grid-cols-3">
+          <label className={choiceClass}><input className="mt-1 size-5" type="checkbox" checked={installationRequired} onChange={(event) => setInstallationRequired(event.target.checked)} /><span><strong className="block text-white">Requires installation</strong><span className="mt-1 block text-slate-400">The product or system must be installed by a technician.</span></span></label>
+          <label className={`${choiceClass} ${!installationRequired ? "opacity-50" : ""}`}><input className="mt-1 size-5" type="checkbox" disabled={!installationRequired} checked={installationIncluded} onChange={(event) => setInstallationIncluded(event.target.checked)} /><span><strong className="block text-white">Installation included</strong><span className="mt-1 block text-slate-400">The selling price already covers installation.</span></span></label>
+          <label className={choiceClass}><input className="mt-1 size-5" type="checkbox" checked={transportIncluded} onChange={(event) => setTransportIncluded(event.target.checked)} /><span><strong className="block text-white">Transport included</strong><span className="mt-1 block text-slate-400">No additional delivery or transport fee is charged.</span></span></label>
+        </div>
+        {installationRequired && !installationIncluded ? <div className="grid gap-4 rounded-2xl border border-slate-800 bg-slate-950/40 p-4 md:grid-cols-2">
+          <label className="text-sm text-slate-300">Installation pricing<select className={`${fieldClass} mt-1`} value={policy.installationFeeMode === "CUSTOM" ? "CUSTOM" : "STANDARD"} onChange={(event) => updateFulfilmentPolicy({ installationFeeMode: event.target.value as "STANDARD" | "CUSTOM", customInstallationFee: event.target.value === "CUSTOM" ? policy.customInstallationFee : null })}><option value="STANDARD">Use standard Betech rate</option><option value="CUSTOM">Set a product-specific fee</option></select></label>
+          {policy.installationFeeMode === "CUSTOM" ? <label className="text-sm text-slate-300">Installation fee (KES)<input className={`${fieldClass} mt-1`} type="number" min="0" value={policy.customInstallationFee ?? ""} onChange={(event) => updatePolicy("customInstallationFee", event.target.value ? Number(event.target.value) : null)} /></label> : null}
+        </div> : null}
+        {!transportIncluded ? <div className="rounded-2xl border border-amber-400/25 bg-amber-400/5 p-4">
+          <h4 className="font-semibold text-amber-100">Transport fees by service zone</h4>
+          <p className="mt-1 text-sm text-slate-400">These fees are shown on the storefront and used when the customer selects a delivery zone.</p>
+          <div className="mt-4 grid gap-4 md:grid-cols-3">{([1, 2, 3] as const).map((zone) => <label key={zone} className="text-sm text-slate-300">Zone {zone} fee (KES)<input className={`${fieldClass} mt-1`} type="number" min="0" required value={policy[`zone${zone}TransportFee`] ?? ""} onChange={(event) => updatePolicy(`zone${zone}TransportFee`, event.target.value ? Number(event.target.value) : null)} /></label>)}</div>
+        </div> : null}
+        <label className="block text-sm text-slate-300">Customer-facing installation or transport notes<textarea className={`${fieldClass} mt-1 min-h-24`} value={policy.installationNotes} onChange={(event) => updatePolicy("installationNotes", event.target.value)} placeholder="Optional: special installation requirements, access limits, or delivery guidance." /></label>
       </div>;
     }
     if (editorSection === "details") {
@@ -1420,7 +1485,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
     }
     if (editorSection === "review") {
       return <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{[
-        ["Product", draft.name || "Not named"], ["Price", formatMoney(draft.sellingPrice)], ["Installation", draft.policyConfigured ? policy.installationType.replaceAll("_", " ") : "Not configured"], ["Transport", draft.policyConfigured ? policy.transportMode.replaceAll("_", " ") : "Not configured"], ["Availability", draft.availabilityType.replaceAll("_", " ")], ["Website", draft.ecommerceVisible ? "Visible" : "Hidden"], ["Warranty", draft.warrantyPeriod || "Not set"], ["Commission", draft.commissionEnabled ? formatMoney(draft.commissionAmount) : "Disabled"],
+        ["Product", draft.name || "Not named"], ["Price", formatMoney(draft.sellingPrice)], ["Installation", draft.policyConfigured ? policy.installationType.replaceAll("_", " ") : "Not configured"], ["Transport", draft.policyConfigured ? policy.transportMode.replaceAll("_", " ") : "Not configured"], ["Availability", draft.availabilityType.replaceAll("_", " ")], ["Website", draft.ecommerceVisible ? "Visible" : "Hidden"], ["Warranty", draft.warrantyPeriod || "Not set"],
       ].map(([label, value]) => <div key={label} className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4"><div className="text-[11px] uppercase tracking-widest text-slate-500">{label}</div><div className="mt-2 font-semibold text-white">{value}</div></div>)}</div>;
     }
     return <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-300">Use the detailed controls below for {editorSection}. Your entries remain available while moving between sections.</div>;
@@ -1528,7 +1593,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                     type="button"
                     className="rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-200 hover:bg-white/5"
                     onClick={() => {
-                      setDraft(createDraftDefaults(mode));
+                      setDraft(createDraftDefaults());
                       setEditorOpen(false);
                     }}
                   >
@@ -1685,19 +1750,6 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                         onChange={(e) => setDraft((s) => ({ ...s, isActive: e.target.checked, status: e.target.checked ? "ACTIVE" : "INACTIVE" }))}
                       />
                       Active in POS catalog
-                    </label>
-                    <label className="flex items-center gap-2 text-sm text-slate-200">
-                      <input type="checkbox" checked={draft.commissionEnabled} onChange={(e) => setDraft((s) => ({ ...s, commissionEnabled: e.target.checked }))} />
-                      Enable product commission
-                    </label>
-                    <label className="flex items-center gap-2 text-sm text-slate-200">
-                      <input
-                        type="checkbox"
-                        checked={draft.commissionRequiresApproval}
-                        onChange={(e) => setDraft((s) => ({ ...s, commissionRequiresApproval: e.target.checked }))}
-                        disabled={!draft.commissionEnabled}
-                      />
-                      Require approval
                     </label>
                   </div>
                 </>
@@ -2171,21 +2223,6 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
               </div>
             </div>
 
-            {draft.commissionEnabled ? (
-              <div className="mt-4">
-                <label className="text-sm text-slate-300">
-                  Commission per sold item
-                  <input
-                    className={`${fieldClass} mt-1`}
-                    type="number"
-                    min="0"
-                    value={draft.commissionAmount}
-                    onChange={(e) => setDraft((s) => ({ ...s, commissionAmount: e.target.value }))}
-                  />
-                </label>
-              </div>
-            ) : null}
-
             <div className={`mt-5 flex flex-wrap items-center gap-3 ${isProductDeskMode ? "border-t border-slate-800 pt-4" : ""}`}>
               <button
                 type="button"
@@ -2206,7 +2243,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
               <div className={`mt-4 rounded-2xl border border-slate-800 bg-slate-950/60 ${isProductDeskMode ? "px-3.5 py-3 text-[13px]" : "px-4 py-4 text-sm"} text-slate-300`}>
                 {isProductDeskMode
                   ? "Open the editor only when needed, then keep routine publishing and corrections moving from the catalog below."
-                  : "Open the editor when you want to add a new product, update ecommerce details, or fix pricing and commission data."}
+                  : "Open the editor when you want to add a new product, update ecommerce details, or fix pricing and fulfilment data."}
               </div>
             )}
           </div>
@@ -2229,7 +2266,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                 <div className="mt-1 text-[13px] text-emerald-100/80">Keep focus on content quality, images, and correct shop classification.</div>
               </div>
             ) : null}
-            {!isProductDeskMode ? (
+            {canManageCommissions ? (
               <>
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
                   <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Pending approvals</div>
@@ -2239,7 +2276,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                 <Link href="/admin/receipts/missing-buying" className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 hover:bg-amber-400/15">
                   <div className="text-xs uppercase tracking-[0.2em] text-amber-200">Admin pricing</div>
                   <div className="mt-3 text-lg font-semibold text-white">Price variable-cost sales</div>
-                  <div className="mt-1 text-sm text-amber-100/80">Set buying prices after POS project sales so profit and commissions update.</div>
+                  <div className="mt-1 text-sm text-amber-100/80">Set buying prices after POS project sales so profit reporting updates accurately.</div>
                 </Link>
               </>
             ) : null}
@@ -2247,7 +2284,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
         </div>
       </section>
 
-      {!isProductDeskMode ? (
+      {canManageCommissions ? (
       <div className="space-y-6">
         <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/40">
           <div className="flex items-start justify-between gap-3">
@@ -2398,7 +2435,7 @@ export default function PosManagementClient({ mode = "admin", initialEditProduct
                   Search
                 </button>
               </form>
-            {!isProductDeskMode ? <select
+            {canManageCommissions ? <select
               className="rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-slate-100"
               value={buyingPriceFilter}
               onChange={(e) => setBuyingPriceFilter(e.target.value as "all" | "missing" | "set")}

@@ -12,9 +12,6 @@ type PosProduct = {
   sellingPrice: number;
   lastBuyingPrice?: number | null;
   isActive: boolean;
-  commissionEnabled: boolean;
-  commissionAmount?: number | string | null;
-  commissionRequiresApproval: boolean;
 };
 
 type ProductDraft = {
@@ -188,7 +185,7 @@ export default function BrendahProductDesk() {
                   {draft.id ? "Edit product" : "Create product"}
                 </h2>
                 <p className="mt-2 max-w-2xl text-sm text-slate-400">
-                  Add the product name and selling price here. Admin will complete buying price and commission later.
+                  Add the product name and selling price here. Admin will complete buying price and fulfilment settings later.
                 </p>
               </div>
               {draft.id ? (
@@ -263,7 +260,7 @@ export default function BrendahProductDesk() {
               <div className="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3 text-sm text-slate-300">
                 <div className="font-medium text-slate-100">Admin completes later</div>
                 <div className="mt-1 text-slate-400">
-                  Buying price, commission amount, and approval rules stay under admin control.
+                  Buying price, installation, and transport rules stay under admin control.
                 </div>
               </div>
             </div>
@@ -333,7 +330,6 @@ export default function BrendahProductDesk() {
               <tr>
                 <th className="px-4 py-3">Product</th>
                 <th className="px-4 py-3">Selling</th>
-                <th className="px-4 py-3">Commission</th>
                 <th className="px-4 py-3">State</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
@@ -341,7 +337,7 @@ export default function BrendahProductDesk() {
             <tbody className="divide-y divide-slate-800 bg-slate-950/40">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
+                  <td colSpan={4} className="px-4 py-6 text-center text-slate-400">
                     Loading products...
                   </td>
                 </tr>
@@ -356,18 +352,6 @@ export default function BrendahProductDesk() {
                     </td>
                     <td className="px-4 py-3 align-top text-slate-200">
                       {formatMoney(product.sellingPrice)}
-                    </td>
-                    <td className="px-4 py-3 align-top text-slate-200">
-                      {product.commissionEnabled ? (
-                        <div>
-                          <div>{formatMoney(product.commissionAmount)}</div>
-                          <div className="text-xs text-slate-400">
-                            {product.commissionRequiresApproval ? "Approval required" : "Auto release"}
-                          </div>
-                        </div>
-                      ) : (
-                        <span className="text-slate-500">Admin pending</span>
-                      )}
                     </td>
                     <td className="px-4 py-3 align-top">
                       <span
@@ -395,7 +379,7 @@ export default function BrendahProductDesk() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
+                  <td colSpan={4} className="px-4 py-6 text-center text-slate-400">
                     No products found.
                   </td>
                 </tr>

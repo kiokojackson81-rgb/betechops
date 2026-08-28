@@ -327,13 +327,11 @@ export async function PATCH(req: Request, context: ParamsContext) {
     if (data.defaultWarranty !== undefined) pushSet("defaultWarranty", normalizeOptionalText(data.defaultWarranty));
     if (data.variableCost !== undefined) pushSet("variableCost", data.variableCost);
     if (data.isActive !== undefined || data.status !== undefined) pushSet("isActive", nextStatus === "ACTIVE" && Boolean(data.isActive ?? existing.isActive));
-    if (data.commissionEnabled !== undefined) pushSet("commissionEnabled", data.commissionEnabled);
-    if (data.commissionAmount !== undefined || data.commissionEnabled === false) {
-      pushSet("commissionAmount", data.commissionEnabled === false ? null : data.commissionAmount ?? null);
-    }
-    if (data.commissionRequiresApproval !== undefined || data.commissionEnabled === false) {
-      pushSet("commissionRequiresApproval", data.commissionEnabled === false ? false : Boolean(data.commissionRequiresApproval));
-    }
+    // Product-level commission has been retired. Keep the columns disabled for
+    // backwards compatibility while historical commission ledgers remain intact.
+    pushSet("commissionEnabled", false);
+    pushSet("commissionAmount", null);
+    pushSet("commissionRequiresApproval", false);
   } else {
     if (nextSku !== undefined) pushSet("key", nextSku);
     if (data.name !== undefined) pushSet("name", data.name);

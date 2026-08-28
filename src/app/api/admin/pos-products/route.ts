@@ -522,9 +522,9 @@ export async function POST(req: Request) {
         normalizeOptionalText(data.defaultWarranty),
         Boolean(data.variableCost),
         normalizedIsActive,
-        Boolean(data.commissionEnabled),
-        data.commissionEnabled ? data.commissionAmount ?? 0 : null,
-        data.commissionEnabled ? Boolean(data.commissionRequiresApproval) : false,
+        false,
+        null,
+        false,
         ...shopFragments.values,
       ))[0]
     : (await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
